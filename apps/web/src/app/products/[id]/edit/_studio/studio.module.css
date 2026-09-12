@@ -1,0 +1,309 @@
+/**
+ * PES.1 — the studio frame's layout, and nothing else.
+ *
+ * Everything is on the `--nds-*` namespace. The platform aliases (`--text-*`, `--surface-*`,
+ * `--border-*`) are RGB CHANNELS inside `.h10-shell`, where `var(--border-default)` is invalid and
+ * silently dropped (reference_ds_channel_tokens_used_raw). Colour and chrome come from the DS
+ * components; this file positions them.
+ *
+ * 🔴 The frame does not scroll, on purpose.
+ *
+ * `GridSheet` — the host PES.2's sheet mounts in — sizes itself to "the viewport below my top
+ * edge" from `getBoundingClientRect().top + window.scrollY`, re-measured by a ResizeObserver on
+ * `document.body` and by `window.resize`. NEITHER of those fires when an inner container scrolls.
+ * So a sheet inside a scrolling `.h10-main` measures once and then lies about its own height for
+ * the rest of the session. The frame is therefore a fixed flex column: the bands are `flex: none`,
+ * the tab body gets the remainder, and whatever scrolls does so INSIDE the tab.
+ */
+
+/* The frame replaces `.h10-main` rather than living in it: `.h10-main` is `overflow-y: auto` with
+   26px/30px padding, which is the scrolling page the note above rules out. It is a flex child of
+   `.h10-shell` exactly as `.h10-main` is. */
+.shell {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--nds-surface);
+}
+
+/* header · scope bar · tab strip — fixed tracks above the body. */
+.bands {
+  flex: none;
+}
+
+/* PES.4's dock request, granted as asked: the tab body and the drawer are SIBLINGS in one flex
+   row, so opening a record SHRINKS the sheet instead of covering it. */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.tabBody {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The frame reserves the track and owns nothing inside it. PES.4 publishes `--studio-dock-w`;
+   until it does, the track is 0 wide and invisible. */
+.dock {
+  /* The global header is visible; the record panel inherits its actual header offset. */
+  flex: none;
+  width: var(--studio-dock-w, 0px);
+  min-width: 0;
+  overflow: hidden;
+}
+.dock:not(:empty) {
+  border-left: 1px solid var(--nds-border-subtle);
+}
+
+/* ── the thin tab strip ──────────────────────────────────────────── */
+.tabStrip {
+  display: flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 16px;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+/* The DS bar draws its own hairline; the band already has one, and two 1px rules 0px apart read
+   as a 2px rule nobody asked for. */
+.tabStrip :global(.nds-tabs) {
+  border-bottom: none;
+  align-self: stretch;
+}
+.tabStrip :global(.nds-tab) {
+  padding: 0 12px;
+  align-self: stretch;
+}
+
+/* ── header pieces ───────────────────────────────────────────────── */
+.identity {
+  font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.saveState {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.saveState.error {
+  color: var(--nds-danger-text);
+}
+.saveSpinner {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: var(--nds-radius-round);
+  border: 1.5px solid var(--nds-border-strong);
+  border-top-color: var(--nds-text-link);
+  animation: studioSpin 0.7s linear infinite;
+}
+@keyframes studioSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* A reduced-motion setting must not leave a spinner that never resolves visually: the ring stops
+   turning and states its progress through colour alone. */
+@media (prefers-reduced-motion: reduce) {
+  .saveSpinner {
+    animation: none;
+    border-top-color: var(--nds-border-strong);
+    background: var(--nds-primary-soft);
+  }
+}
+
+/* ── tab placeholders ────────────────────────────────────────────── */
+/* A surface another lane owns. It says so, in full, rather than rendering an empty box that reads
+   as a broken page — placeholder surfaces are the roadmap, kept visible on purpose. */
+.placeholder {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px 24px;
+  text-align: center;
+  background: var(--nds-surface-sunken);
+}
+.placeholderTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--nds-text);
+}
+.placeholderBody {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--nds-text-2);
+  max-width: 46ch;
+}
+.placeholderLane {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* Measured 3.2:1 on the sunken ground with --nds-text-3, which is the ICON token. Text needs
+     4.5:1 (reference_grey_500_is_not_a_text_token). */
+  color: var(--nds-text-2);
+}
+
+/* ── whole-frame states ──────────────────────────────────────────── */
+.centered {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+}
+
+
+
+/* ── route skeleton ──────────────────────────────────────────────── */
+/* The frame's own shape — three bands at the exact heights the real ones use, so the first paint
+   does not move when the data lands. */
+.skelHeader,
+.skelScope,
+.skelTabs {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.skelHeader {
+  height: 48px;
+}
+.skelScope {
+  height: 44px;
+  gap: 8px;
+}
+.skelTabs {
+  height: 34px;
+  gap: 20px;
+}
+
+/* The ARIA tabpanel wrapper must not become a layout box of its own — the tab's own surface owns
+   the space, so this is a transparent flex passthrough. */
+.tabPanel {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* The way up to the family, in the identity line. A link, not a pill: it navigates. */
+.familyLink {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nds-text-link);
+  text-decoration: none;
+}
+.familyLink:hover {
+  text-decoration: underline;
+}
+
+
+/* ── v2: the merged chips + tabs row (spec §3) ───────────────────── */
+/* `--nds-toolbar-h` (40px) is DS.1's #182 mint and `--nds-control-h-sm` (28px) is CT.1's: every
+   band in this frame is the bar token and every control in it is the tier. Both resolve in this
+   app (tokens.css) and `check-token-resolution` fails the push if either ever stops. */
+.mergedRow :global(.nds-scopebar) {
+  height: var(--nds-toolbar-h);
+  gap: 12px;
+}
+/* The DS bar's right slot now carries the tabs AND the switchers. It STRETCHES to the row so the
+   tab strip inside it can reach the row's bottom edge (the slot's own `align-items: center` keeps
+   the 28px switchers centred); at content height the tabs measured 28px with their indicator 6px
+   above the hairline, while the drawer's identical strip met its edge (CT.1, 2026-09-04). */
+.mergedRow :global(.nds-scopebar-right) {
+  gap: 14px;
+  align-self: stretch;
+}
+/* The tab bar sits inline in the 40px row as the DS `sm` strip: it stretches to the row, draws no
+   hairline of its own (the row has one), and its indicator meets the row's bottom edge. Type and
+   padding come from `.nds-tabs.sm` — nothing is restated here. */
+.mergedRow :global(.nds-tabs) {
+  align-self: stretch;
+}
+
+/* Tier B — non-active tabs are icon-only. The label stays in the DOM (sr-only) so the accessible
+   name is unchanged; only its box collapses to the glyph. */
+.tabsCompact :global(.nds-tab) {
+  padding: 0 11px;
+}
+
+/* Tier C — below a 1000px container the tabs drop to their own line. */
+.tierC :global(.nds-scopebar) {
+  height: var(--nds-toolbar-h);
+}
+.tabRow {
+  display: flex;
+  align-items: stretch;
+  height: var(--nds-toolbar-h);
+  padding: 0 16px;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.tabRow :global(.nds-tabs) {
+  border-bottom: none;
+  flex: 1;
+}
+
+/* ── v2: the collapsing header (spec §4) ─────────────────────────── */
+/* 🔴 The HEIGHT SNAPS. `GridSheet` re-measures its top through a ResizeObserver on document.body,
+   so animating 48 → 32 would make AG re-virtualise on every frame of the transition. Only the
+   header's CONTENTS animate. */
+.shell.collapsed :global(.nds-detailhdr.dense) {
+  height: 32px;
+}
+/* What the collapsed strip drops: the SKU/ASIN pair and the pills. The name, status, autosave and
+   Publish ▾ stay — see spec §4.1. */
+.shell.collapsed :global(.nds-detailhdr-meta) > *:not(:first-child),
+.shell.collapsed :global(.nds-detailhdr-meta) :global(.nds-pill) {
+  opacity: 0;
+  transform: translateY(-2px);
+  pointer-events: none;
+}
+.shell :global(.nds-detailhdr-meta) > *,
+.shell :global(.nds-detailhdr-meta) :global(.nds-pill) {
+  /* 150ms; a literal easing because `--nds-ease-standard` does not exist and an undefined var
+     would invalidate the whole declaration. */
+  transition: opacity 150ms cubic-bezier(0.2, 0, 0.2, 1), transform 150ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+.shell.collapsed :global(.nds-detailhdr.dense) :global(h1) {
+  font-size: 13.5px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell :global(.nds-detailhdr-meta) > * {
+    transition: none;
+  }
+}
+
+@media (max-width: 719px) {
+  .shell.collapsed :global(.nds-detailhdr.dense) { height: auto; }
+}

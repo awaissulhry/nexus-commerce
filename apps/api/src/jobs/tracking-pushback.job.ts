@@ -366,8 +366,8 @@ export function startTrackingPushbackCron(): void {
     logger.error('tracking-pushback cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('tracking-pushback', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('tracking-pushback', async () => {
       const stats = await runTrackingPushbackSweep()
       return `processed=${stats.processed} succeeded=${stats.succeeded} failed=${stats.failed} dead=${stats.dead} reaped=${stats.reaped}`
     }).catch((err) => {

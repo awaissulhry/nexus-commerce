@@ -8,7 +8,7 @@
  * launch → per-item results + "what happens next" timeline.
  */
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { CheckCircle2 } from 'lucide-react'
 import { money, pct } from '../../../../../campaigns/_grid/format'
 
@@ -17,7 +17,8 @@ import { OverrideReasonModal } from '../../../../_modals/OverrideReasonModal'
 import { effRate, includedListings, type CampaignPlan, type PlanListing } from '../plan'
 import { clearDraft } from '../draft'
 import { Button, Input, Pill, Checkbox } from '@/design-system/primitives'
-import { Listbox, DataGrid } from '@/design-system/components'
+import { Listbox } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 
 interface LaunchOut {
   ok: boolean; mode: string; campaignId: string

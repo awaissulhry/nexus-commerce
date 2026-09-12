@@ -9,6 +9,11 @@
  */
 import { palette, pill, badge } from './colors'
 import { gridVars, gridVarsDark } from './grid'
+import { workspaceVars } from './workspace'
+import { fontSize, fontWeight } from './typography'
+import { duration, easing } from './motion'
+import { space } from './spacing'
+import { radius } from './radius'
 
 export interface CssVar {
   /** when set, a section-comment is emitted before this row */
@@ -16,6 +21,48 @@ export interface CssVar {
   name: string
   value: string
 }
+
+const kebab = (k: string) =>
+  k.replace(/^px/, '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase()
+
+const spacingVars: ReadonlyArray<CssVar> = Object.entries(space).map(([k, v], i) => ({
+  ...(i === 0 ? { section: 'Dimension: spacing (scale lives in tokens/spacing.ts)' } : {}),
+  name: `--nds-space-${kebab(k)}`,
+  value: v,
+}))
+
+/**
+ * Type scale — ported from apps/web (hub #633). The fork carried colour + grid but never the type
+ * dimension, while components.css already referenced six of these tokens
+ * (`--nds-font-size-{micro,sm,xs-plus}`, `--nds-font-weight-semibold`). An undefined custom property
+ * makes the declaration invalid at computed-value time, so `font-size` silently INHERITS — measured
+ * on :3100 before this landed. Derived from ./typography rather than restated, exactly as apps/web
+ * does it, so the scale is defined once per fork and the two cannot drift apart.
+ */
+const typeVars: ReadonlyArray<CssVar> = [
+  ...Object.entries(fontSize).map(([k, v], i) => ({
+    ...(i === 0 ? { section: 'Dimension: type scale (tokens/typography.ts)' } : {}),
+    name: `--nds-font-size-${kebab(k)}`,
+    value: v,
+  })),
+  ...Object.entries(fontWeight).map(([k, v], i) => ({
+    ...(i === 0 ? { section: 'Dimension: type weight' } : {}),
+    name: `--nds-font-weight-${kebab(k)}`,
+    value: String(v),
+  })),
+]
+
+/**
+ * Radius — DERIVED from ./radius (hub #648), not restated. See apps/web for why: the scale existed
+ * twice, hand-synced with no guard, so minting a step in `radius.ts` alone regenerated tokens.css
+ * successfully and added nothing. `--nds-radius-round` had also drifted to the end of the
+ * note-severity block here; deriving returns it to the scale.
+ */
+const radiusVars: ReadonlyArray<CssVar> = Object.entries(radius).map(([k, v], i) => ({
+  ...(i === 0 ? { section: 'Radius' } : {}),
+  name: `--nds-radius-${kebab(k)}`,
+  value: v,
+}))
 
 export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 1: primitive ramps ──────────────────────────────────────
@@ -83,14 +130,30 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // the moment the card is removed. #1a60c4 clears AA on every ground. See apps/web's copy.
   { name: '--nds-text-link', value: '#1a60c4' },
   { name: '--nds-tooltip-light-fg', value: 'var(--nds-grey-900)' },
-  { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-600)' },
+  { name: '--nds-tooltip-light-bg', value: 'var(--nds-white)' },
+  { name: '--nds-tooltip-light-border', value: 'var(--nds-grey-150)' },
+  { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-700)' },
+  { name: '--nds-tip-bg', value: 'var(--nds-grey-800)' },
+  { name: '--nds-tip-fg', value: 'var(--nds-white)' },
 
   { name: '--nds-bg', value: 'var(--nds-grey-50)' },
   { name: '--nds-surface', value: 'var(--nds-white)' },
   { name: '--nds-surface-raised', value: 'var(--nds-grey-25)' },
   { name: '--nds-surface-sunken', value: 'var(--nds-grey-100)' },
+  // `--nds-surface-2` is a NAME this fork's app code already uses for the sunken surface — six
+  // fallback-less consumers (analytics/charts.tsx tooltip cursors, TeamClient and ShippingClient
+  // count badges), and `background` does not inherit, so those badges have been painting nothing.
+  // It is NOT mirrored from apps/web: the name is defined nowhere in that fork either (checked
+  // repo-wide), so there was no value to copy — it aliases the role it is being used AS, which
+  // introduces no new colour. Hub #687/P2 (extended).
+  { name: '--nds-surface-2', value: 'var(--nds-surface-sunken)' },
   { name: '--nds-surface-hover', value: 'var(--nds-grey-75)' },
   { name: '--nds-wash-primary', value: 'var(--nds-blue-50)' },
+  // Same story: `--nds-primary-subtle` is consumed as the wash BEHIND a primary-bordered row
+  // (ShippingClient.tsx:344 selected rate, no fallback; TeamClient.tsx:110 with one), which is
+  // exactly `--nds-wash-primary`. Aliased rather than given a new hex — a fresh "subtle primary"
+  // value is how --nds-primary-soft ended up at 1.15:1.
+  { name: '--nds-primary-subtle', value: 'var(--nds-wash-primary)' },
   { name: '--nds-rail-bg', value: 'var(--nds-rail-surface)' },
 
   { name: '--nds-border', value: 'var(--nds-grey-200)' },
@@ -126,8 +189,20 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-warning', value: 'var(--nds-amber-600)' },
   { name: '--nds-warning-strong', value: 'var(--nds-amber-700)' },
   { name: '--nds-warning-border', value: '#f0d9a8' },
+  // The `-text` tier, LIGHT. Values mirror apps/web (tokens.css:109/:110) rather than being
+  // re-derived: #146034 measures 6.95:1 on --nds-success-soft and #6d3f10 8.27:1 on
+  // --nds-warning-soft, and a second opinion about a contrast number is how two forks stop being
+  // one design system. This fork carried them ONLY in `.dark` (below), while three LIGHT consumers
+  // already read them with no fallback — `styles/tokens.css` (--nds-pill-warning-fg, in :root),
+  // `styles/components.css:847` and `styles/primitives.css:956` — so in light each declaration was
+  // invalid at computed-value time and the colour fell through to inherit. Hub #687/P2.
+  { name: '--nds-success-text', value: '#146034' },
+  { name: '--nds-warning-text', value: '#6d3f10' },
   { name: '--nds-info-soft', value: 'var(--nds-blue-100)' },
+  { name: '--nds-info-text-light', value: '#10457f' },
+  { name: '--nds-info-text', value: 'var(--nds-info-text-light)' },
   { name: '--nds-info', value: 'var(--nds-blue-600)' },
+  { name: '--nds-info-strong', value: 'var(--nds-blue-700)' },
 
   // status pills
   // FilterChip engaged — mirrors apps/web. blue-900 on blue-50 = 7.41:1.
@@ -145,6 +220,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-neutral-fg', value: 'var(--nds-text-2)' },
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
+  // Provenance marks (D-#533/#563) — semantic, because a palette step is not where a theme lives.
+  // Light was never the defect; these keep the shipped values. Dark is in the .dark list below.
+  { name: '--nds-prov-ai-fg', value: '#6d28d9' },
+  { name: '--nds-prov-formula-fg', value: '#0e7490' },
+  { name: '--nds-prov-inherited-fg', value: '#1a60c4' },
   // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays
   // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text
   // has no dark override: 6.27:1 in BOTH themes (was 4.63 light / 1.9 dark).
@@ -174,18 +254,26 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-z-actionbar', value: '20' },
   { name: '--nds-z-rail', value: '50' },
   { name: '--nds-z-overlay', value: '1400' },
-  { name: '--nds-z-modal', value: '1410' },
+  // The drawer layer, above `--nds-z-overlay` (1400) so a confirmation opened FROM a drawer is not
+  // painted behind it. `.nds-drawer` (styles/components.css:299) already consumed this name — PES
+  // ruling #136 renamed `--nds-z-modal` on the web fork and the rename reached this fork's
+  // stylesheet but not its token layer, so the declaration resolved to nothing and the drawer fell
+  // to `z-index: auto`, under the rail and the action bar. Minted per hub #684; the dead
+  // `--nds-z-modal` entry that sat above it — zero consumers here, dropped from apps/web's token
+  // layer at [PES.1c] — was deleted per hub #687/P3, which finishes the rename on this fork.
+  { name: '--nds-z-drawer', value: '1410' },
   { name: '--nds-z-popover', value: '1450' },
+  // ── Popover geometry (D18) ──────────────────────────────────────────────────────────────────
+  // The widest a closed-list popover may grow. Three declarations in styles/components.css already
+  // read it — `.nds-pop-clamp` (:624, :641) from hub #676 and `.nds-hovercard-card` (:881) from
+  // #678 — and this fork defined it nowhere, so each `max-width: var(--nds-popover-max-w)` was
+  // invalid at computed-value time and took the initial `none`: the cap both rulings landed was
+  // silently absent on exactly the fork that received the fix. Value mirrors apps/web (320px) so
+  // the two forks cap at one number. Minted per hub #684.
+  { name: '--nds-popover-max-w', value: '320px' },
   { name: '--nds-z-toast', value: '1600' },
   { name: '--nds-z-tooltip', value: '1700' },
-  { section: 'Radius', name: '--nds-radius-pill', value: '4px' },
-  { name: '--nds-radius-sm', value: '6px' },
-  { name: '--nds-radius-md', value: '7px' },
-  { name: '--nds-radius-lg', value: '8px' },
-  { name: '--nds-radius-xl', value: '10px' },
-  { name: '--nds-radius-2xl', value: '12px' },
-  { name: '--nds-radius-3xl', value: '14px' },
-  { name: '--nds-radius-full', value: '999px' },
+  ...radiusVars,
   // Inline-note severities, one pair each. Values are the HIGHEST-contrast variant found among
   // the six that existed, so adopting them raises contrast everywhere and lowers it nowhere:
   // error 6.24/9.16/9.23 → 9.23, caution 5.79/5.89/6.63 → 6.63.
@@ -198,7 +286,6 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // The note trios shipped no BORDER step — see apps/web.
   { name: '--nds-note-warn-border', value: '#e0d4a8' },
   { name: '--nds-note-error-border', value: '#eec9c4' },
-  { name: '--nds-radius-round', value: '999px' },
 
   // ── Elevation + focus ────────────────────────────────────────────
   { section: 'Elevation + focus', name: '--nds-shadow-card', value: '0 6px 22px rgb(var(--nds-shadow-rgb) / 0.16)' },
@@ -210,10 +297,22 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-focus-ring', value: '0 0 0 2px rgb(var(--nds-focus-rgb) / 0.12)' },
 
   // ── Structural dimensions ────────────────────────────────────────
+  // Frozen Web comparison grid: mirrored roles preserve its measured rectangular shapes.
+  { name: '--nds-wsgrid-legacy-badge-radius', value: '4px' },
+  { name: '--nds-wsgrid-legacy-control-radius', value: '5px' },
+  { section: 'Secondary navigation', name: '--nds-secondary-nav-w', value: '224px' },
+  { name: '--nds-secondary-nav-toggle-w', value: 'var(--nds-space-48)' },
+  { name: '--nds-duration-panel', value: duration.panel },
+  { name: '--nds-easing-standard', value: easing.standard },
   { section: 'Structural dimensions', name: '--nds-rail-collapsed', value: '66px' },
   { name: '--nds-rail-expanded', value: '344px' },
   { name: '--nds-row-nav', value: '46px' },
   { name: '--nds-icon-zone', value: '50px' },
+  // Mirrors apps/web (CT.1, 2026-09-04): the bar height DS.1 minted under #182 had never reached
+  // this fork, and the two control tiers are new in both. See the web file for the reasoning.
+  { name: '--nds-toolbar-h', value: '40px' },
+  { name: '--nds-control-h-sm', value: '28px' },
+  { name: '--nds-control-h-md', value: '30px' },
 
   // ── Type ─────────────────────────────────────────────────────────
   { section: 'Type', name: '--nds-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
@@ -222,6 +321,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // ── Platform-semantic aliases (components consume THESE; bridge to globals.css) ──
   // ── Tier 3: grid (GDS) — defined once in ./grid.ts; every colour a semantic role, no .dark entry ──
   ...gridVars,
+  ...workspaceVars,
 
   { section: 'Platform-semantic aliases', name: '--text-primary', value: 'var(--nds-text)' },
   { name: '--text-secondary', value: 'var(--nds-text-2)' },
@@ -248,10 +348,20 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--status-info-soft', value: 'var(--nds-info-soft)' },
   { name: '--status-info-line', value: 'var(--nds-info)' },
   { name: '--status-info-strong', value: 'var(--nds-blue-700)' },
+
+  ...spacingVars,
+  ...typeVars,
 ]
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */
 export const cssVarsDark: ReadonlyArray<CssVar> = [
+  // Mapping status pills and selected controls share readable dark semantic roles.
+  { name: '--nds-info-strong', value: 'var(--nds-text)' },
+  { name: '--nds-tonal-bg', value: 'var(--nds-primary-soft)' },
+  { name: '--nds-tonal-border', value: 'var(--nds-border-strong)' },
+  { name: '--nds-tonal-fg', value: 'var(--nds-text)' },
+  { name: '--nds-info-soft', value: 'var(--nds-primary-soft)' },
+  { name: '--nds-info-text', value: 'var(--nds-text)' },
   { name: '--nds-text', value: '#e7ebf1' },
   { name: '--nds-text-2', value: '#aab6c2' },
   { name: '--nds-text-3', value: '#8a94a6' },
@@ -262,6 +372,9 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-surface', value: '#18263b' },
   { name: '--nds-surface-raised', value: '#1f2c3d' },
   { name: '--nds-surface-sunken', value: '#1a2330' },
+  // Re-declared in .dark for the reason check-dark-alias-scope exists: a var() alias resolves in
+  // the scope where it is DECLARED, so a :root-only alias keeps its LIGHT value inside .dark.
+  { name: '--nds-surface-2', value: 'var(--nds-surface-sunken)' },
   { name: '--nds-rail-bg', value: '#18263b' },
 
   // ── the dark palette, measured 2026-08-26 ────────────────────────────────────────────────────
@@ -276,10 +389,18 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-primary', value: '#6d9ee8' },
   { name: '--nds-primary-soft', value: '#1c2f4d' },      // link on it 6.42
   { name: '--nds-wash-primary', value: '#182a44' },      // link on it 6.90
+  { name: '--nds-primary-subtle', value: 'var(--nds-wash-primary)' },
   { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 6.32
   { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
   { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
   { name: '--nds-danger-text', value: '#ef9c93' },       // on surface 7.14
+  // App chrome in dark (D-#540): the page is #14223a and this ground was #18263b — 1.05:1.
+  { name: '--nds-chrome-bg', value: '#1e3050' },
+  // Provenance marks in dark (D-#533/#563). The light values are dark by construction, so on
+  // #18263b they measured 2.14 / 2.00 / 2.55 — the failure a semantic token exists to prevent.
+  { name: '--nds-prov-ai-fg', value: '#c4b5fd' },
+  { name: '--nds-prov-formula-fg', value: '#22d3ee' },
+  { name: '--nds-prov-inherited-fg', value: '#93c5fd' },
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
   { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 7.67

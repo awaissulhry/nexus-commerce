@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * MC.10.1 — Brand Kit CRUD.
  *
@@ -58,7 +59,7 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/brand-kits/:brand', async (request, reply) => {
     const { brand } = request.params as { brand: string }
     const kit = await prisma.brandKit.findUnique({
-      where: { brand },
+      where: { workspace_brand: workspaceKey({ brand: brand }) },
       include: { watermarks: { orderBy: { createdAt: 'asc' } } },
     })
     if (!kit)
@@ -104,7 +105,7 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const kit = await prisma.brandKit.upsert({
-      where: { brand },
+      where: { workspace_brand: workspaceKey({ brand: brand }) },
       update: data,
       create: {
         brand,
@@ -132,7 +133,7 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/brand-kits/:brand/watermarks', async (request, reply) => {
     const { brand } = request.params as { brand: string }
     const kit = await prisma.brandKit.findUnique({
-      where: { brand },
+      where: { workspace_brand: workspaceKey({ brand: brand }) },
       select: { id: true },
     })
     if (!kit)
@@ -160,7 +161,7 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'type is required' })
 
       const kit = await prisma.brandKit.findUnique({
-        where: { brand },
+        where: { workspace_brand: workspaceKey({ brand: brand }) },
         select: { id: true },
       })
       if (!kit)
@@ -232,7 +233,7 @@ const brandKitRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/brand-kits/:brand', async (request, reply) => {
     const { brand } = request.params as { brand: string }
     try {
-      await prisma.brandKit.delete({ where: { brand } })
+      await prisma.brandKit.delete({ where: { workspace_brand: workspaceKey({ brand: brand }) } })
       return { ok: true, brand }
     } catch (err: any) {
       if (err?.code === 'P2025')

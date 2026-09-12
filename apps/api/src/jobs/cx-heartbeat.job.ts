@@ -1,3 +1,5 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CX.1 — the connection heartbeat (docs/2026-08-29-cx1-connection-core.md §7).
  *
@@ -24,7 +26,7 @@ import { recordCronRun } from '../utils/cron-observability.js'
 import '../services/cx/connectors/index.js'
 import { channelKeyOf, getChannelSpec, scopeDriftOf, type ChannelKey } from '../services/cx/catalog.js'
 import { recordConnectionEvent, CRON_ACTOR, type Actor } from '../services/cx/events.service.js'
-import { getAccessToken, handleOf, transition, type AuthStatus } from '../services/cx/token.service.js'
+import { getAccessToken, handleOf, statusAfterConnectionFailure, transition, type AuthStatus } from '../services/cx/token.service.js'
 import { sweepSessions } from '../services/cx/oauth.service.js'
 import { alertService, AlertType } from '../services/monitoring/alert.service.js'
 
@@ -53,7 +55,12 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
   }
   const spec = getChannelSpec(key)
   const handle = handleOf(row)
-  const result = await spec.heartbeat(handle)
+  let result = await spec.heartbeat(handle)
+  // A successful request made as a different seller is not a successful test
+  // of this connection. Never adopt its identity, permissions or marketplaces.
+  if (result.ok === true && result.identity?.userId && handle.identity?.userId && result.identity.userId !== handle.identity.userId) {
+    result = { ok: false, latencyMs: result.latencyMs, errorClass: 'identity_mismatch', message: 'The credentials belong to a different account. Reconnect the expected account before continuing.' }
+  }
   const drift = scopeDriftOf(spec, row.grantedScopes)
 
   // `=== true`, not truthiness: apps/api compiles WITHOUT strictNullChecks, and
@@ -61,13 +68,13 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
   if (result.ok === true) {
     const data: Prisma.ChannelConnectionUpdateInput = { lastHeartbeatAt: new Date(), consecutiveFailures: 0, lastError: null, lastErrorAt: null }
     if (result.identity && !row.identity) data.identity = result.identity as unknown as Prisma.InputJsonValue
-    if (result.scopes?.length) data.grantedScopes = result.scopes
+    if (result.scopes !== undefined) data.grantedScopes = result.scopes
     await prisma.channelConnection.update({ where: { id: row.id }, data })
     await transition(row, 'connected', 'heartbeat ok', actor)
     await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'heartbeat_ok', actor, detail: { latencyMs: result.latencyMs } })
     if (spec.discoverScopes) {
       try {
-        const scopes = await spec.discoverScopes(handle)
+        const scopes = await spec.discoverScopes({ ...handle, identity: result.identity ?? handle.identity, grantedScopes: result.scopes ?? handle.grantedScopes })
         /**
          * MERGE the metadata, never replace it.
          *
@@ -89,7 +96,7 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
         for (const s of scopes) {
           const merged = { ...(existing.get(`${s.kind}:${s.externalId}`) ?? {}), ...(s.metadata ?? {}) }
           await prisma.connectionScope.upsert({
-            where: { connectionId_kind_externalId: { connectionId: row.id, kind: s.kind, externalId: s.externalId } },
+            where: { connectionId_kind_externalId: workspaceKey({ connectionId: row.id, kind: s.kind, externalId: s.externalId }) },
             create: { connectionId: row.id, kind: s.kind, externalId: s.externalId, label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
             update: { label: s.label ?? null, region: s.region ?? null, isActive: s.isActive ?? true, metadata: merged as Prisma.InputJsonValue },
           })
@@ -99,7 +106,7 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
       }
     }
     const fresh = await prisma.channelConnection.findUnique({ where: { id: row.id }, select: { authStatus: true } })
-    return { ok: true, connectionId: row.id, channelType: row.channelType, latencyMs: result.latencyMs, authStatus: (fresh?.authStatus ?? 'connected') as AuthStatus, scopeDrift: drift }
+    return { ok: true, connectionId: row.id, channelType: row.channelType, latencyMs: result.latencyMs, authStatus: (fresh?.authStatus ?? 'connected') as AuthStatus, scopeDrift: scopeDriftOf(spec, result.scopes ?? row.grantedScopes) }
   }
 
   const failures = row.consecutiveFailures + 1
@@ -108,8 +115,9 @@ export async function runHeartbeatFor(row: Row, actor: Actor = CRON_ACTOR): Prom
     data: { lastHeartbeatAt: new Date(), consecutiveFailures: failures, lastError: `${result.errorClass}: ${result.message}`.slice(0, 500), lastErrorAt: new Date() },
   })
   await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'heartbeat_failed', actor, detail: { errorClass: result.errorClass, status: result.status ?? null, message: result.message, failures } })
-  const next: AuthStatus =
-    result.errorClass === 'auth_revoked' || result.errorClass === 'auth_expired' ? 'needs_reauth' : failures >= 10 ? 'needs_reauth' : failures >= 3 ? 'degraded' : (row.authStatus as AuthStatus)
+  // Repeated outages, permission denials and signing/configuration defects do
+  // not prove the grant expired. Reconnecting cannot repair those failures.
+  const next = statusAfterConnectionFailure(row.authStatus as AuthStatus, result.errorClass, failures)
   await transition({ ...row, consecutiveFailures: failures }, next, result.message, actor)
   return { ok: false, connectionId: row.id, channelType: row.channelType, latencyMs: result.latencyMs, authStatus: next, scopeDrift: drift, message: result.message, errorClass: result.errorClass }
 }
@@ -183,12 +191,12 @@ export function startCxHeartbeatCron(): void {
     logger.error('[cx-heartbeat] invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runHeartbeatSweep().catch((err) => logger.error('[cx-heartbeat] sweep failed', { error: err instanceof Error ? err.message : String(err) }))
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runHeartbeatSweep().catch((err) => logger.error('[cx-heartbeat] sweep failed', { error: err instanceof Error ? err.message : String(err) }))
   })
   logger.info('[cx-heartbeat] cron started', { schedule })
   // First pass shortly after boot so a fresh deploy reports real state within a minute.
-  setTimeout(() => void runHeartbeatSweep().catch(() => undefined), 45_000).unref()
+  setTimeout(() => { void runProfileTimer('cx-heartbeat', async () => { await runHeartbeatSweep().catch(() => undefined) }, INTERVAL_MIN * 60_000) }, 45_000).unref()
 }
 
 export type { ChannelKey }

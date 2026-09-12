@@ -18,8 +18,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
   ArrowLeft,

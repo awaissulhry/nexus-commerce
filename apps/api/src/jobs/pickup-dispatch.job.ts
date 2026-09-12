@@ -193,8 +193,8 @@ export function startPickupDispatchCron(): void {
     logger.error('pickup-dispatch cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('pickup-dispatch', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('pickup-dispatch', async () => {
       const r = await runPickupDispatchSweep()
       return `scanned=${r.scanned} dispatched=${r.dispatched} failed=${r.failed} skipped=${r.skipped}`
     }).catch((err) => {

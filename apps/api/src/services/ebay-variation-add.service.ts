@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Add variations to a LIVE eBay listing (2026-07-18).
  *
@@ -179,7 +180,7 @@ export async function addVariationsToListing(
     if (!parentSku) parentSku = itemId
     for (const a of additions) {
       await prisma.sharedListingMembership.upsert({
-        where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: a.sku } },
+        where: { marketplace_itemId_sku: workspaceKey({ marketplace: market, itemId, sku: a.sku }) },
         update: {
           productId: productIdBySku.get(a.sku) ?? null,
           variationSpecifics: a.specifics,

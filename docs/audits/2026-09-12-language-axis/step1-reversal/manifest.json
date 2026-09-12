@@ -1,0 +1,119 @@
+{
+  "at": "2026-09-11T23:47:30.498652+00:00",
+  "files": [
+    {
+      "file": "packages/database/prisma/migrations/20260912_lx1_remove_legacy_content_guard/migration.sql",
+      "mtime": "2026-09-11T23:36:38.837940+00:00",
+      "sha256": "ad9fa613bdbd0fa324c8f35972e8abad18ec353e88c74138982fc827ba195824",
+      "bytes": 390
+    },
+    {
+      "file": "packages/database/prisma/schema.prisma",
+      "mtime": "2026-09-11T23:39:06.554543+00:00",
+      "sha256": "1f1e4f9a80e51d381c54958ab831d4815312fd624a80e458a1b7ea02d77533b0",
+      "bytes": 855687
+    },
+    {
+      "file": "apps/api/src/services/pim/language-axis-schema.vitest.test.ts",
+      "mtime": "2026-09-11T23:42:01.999485+00:00",
+      "sha256": "17058724ceaab411a38ba756a814cb571099383f8cdd9100c21701f904372216",
+      "bytes": 4267
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/checks.json",
+      "mtime": "2026-09-11T23:47:30.499216+00:00",
+      "sha256": "4637ef447cca74fdec9861161ff78617cb26bc44a651d99719b3264b55ec0f95",
+      "bytes": 1201
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/commands.json",
+      "mtime": "2026-09-11T23:47:30.499041+00:00",
+      "sha256": "b7467f54f6d990d0d5d8bfddf32615f30d545a443f12ed94598a28b85b743e84",
+      "bytes": 854
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/inspect.mjs",
+      "mtime": "2026-09-11T23:37:35.341721+00:00",
+      "sha256": "9604b5e7ba779b71bb3bbbd689bbfd27d784819027286ab70070e7b77dc7ceee",
+      "bytes": 3473
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/local-receipt.json",
+      "mtime": "2026-09-11T23:39:25.987290+00:00",
+      "sha256": "7ef70cc70b1d30b7878839f8c191b97b562a905ace952896de35370956a54f3f",
+      "bytes": 259160
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/media-rehearsal.json",
+      "mtime": "2026-09-11T23:43:50.235579+00:00",
+      "sha256": "af2cb96e16e28de4808161539f30a7acfdb92a8fb8729e4efcd8d6fe7badd6a2",
+      "bytes": 2866
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/preflight-revision-mismatch.json",
+      "mtime": "2026-09-11T23:43:33.645258+00:00",
+      "sha256": "1051b3dabefc66351670a30ca38206529a039ab3a0578ce5f2469f81c59c49e4",
+      "bytes": 685
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/production-receipt.json",
+      "mtime": "2026-09-11T23:38:17.502432+00:00",
+      "sha256": "e4350efe1ca269fe001bbf41676eb9b2ab1999521a63e52b05eecace1d5db944",
+      "bytes": 254123
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/production-value-comparison.json",
+      "mtime": "2026-09-11T23:44:43.143961+00:00",
+      "sha256": "3aedfabddec016c01ac6e6ec9877f2c03600695941c051d98d9f1cbf39106d8b",
+      "bytes": 1188
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/rehearse.mjs",
+      "mtime": "2026-09-11T23:43:33.729621+00:00",
+      "sha256": "944700cf5541a6de7966c3a303e6318169f9f22f1b2b62b11e8784e29d77b436",
+      "bytes": 10488
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/schema-command.mjs",
+      "mtime": "2026-09-11T23:36:38.838135+00:00",
+      "sha256": "8733d70d8584e9b186ac3841e1502e63696e7af33da31005a0161f8e854202bf",
+      "bytes": 1207
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/screen.png",
+      "mtime": "2026-09-11T23:46:01.194636+00:00",
+      "sha256": "79b688001db48a969e21e4b26086cfd160ae33f3ec1a9a48da9f36797d287856",
+      "bytes": 129977
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/screen.txt",
+      "mtime": "2026-09-11T23:46:01.037206+00:00",
+      "sha256": "5e6cc8f524374cd5fbf40a119a5bd7b559cfc6a77f7b160c318d9302de3c13de",
+      "bytes": 17099
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/tests.json",
+      "mtime": "2026-09-11T23:40:07.803315+00:00",
+      "sha256": "9e7ba397e8d0d9c5d790d027bae31551fed8639056fa8ba2abba5ab866dffe81",
+      "bytes": 3042
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/translation-rehearsal.json",
+      "mtime": "2026-09-11T23:44:30.135699+00:00",
+      "sha256": "f2e780da74873eaced007c94ca7372a6c39a039cac086a02d808a5e0d2421bd1",
+      "bytes": 2945
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step1-reversal/typecheck-final.log",
+      "mtime": "2026-09-11T23:42:25.576603+00:00",
+      "sha256": "30c794c79d46e0817b69ae26c1a09dc81583b352202f2c0849e0602be82d0b5f",
+      "bytes": 285
+    },
+    {
+      "file": "docs/pes-claims.md",
+      "mtime": "2026-09-11T23:48:00.715342+00:00",
+      "sha256": "75751b8e55a9a73131880df55bd607c3d85066d64be192612d9b746dd580a3f2",
+      "bytes": 3539524
+    }
+  ]
+}

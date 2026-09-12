@@ -1,0 +1,155 @@
+/* IO.1 — the import drawer. Page-local, DS tokens only.
+
+   Every token below was checked against `design-system/styles/tokens.css` before it was used, not
+   assumed from its name. An undefined custom property is SILENT — `var(--nope)` resolves to
+   `rgba(0,0,0,0)` and no guard in the push suite parses CSS — so a typo here is an invisible cell,
+   not a build error (reference_undefined_css_class_is_silent).
+
+   NOTE on comments in this file: no token glob may be written with an asterisk before a slash.
+   `--nds-grid-*` followed by a slash closes the comment early and silently unstyles everything
+   after it (reference_css_comment_glob_breaks_stylesheet, which took out grid.css for a whole
+   session while all ten DS guards stayed green). */
+
+/* ── the drawer's own column ───────────────────────────────────────────────────────────────── */
+
+.body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.step { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.stepHead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.scope { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+/* The counts line. Big enough to be the first thing read, because it is the thing being agreed to. */
+.summary {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The sentences that stop silence reading as good news — the sync console's rule (#357). Quiet,
+   never hidden, and never behind a hover. */
+.note {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+.noteStrong { color: var(--nds-text); }
+
+/* A problem the operator must read before applying. Not a toast: a toast is dismissible and this
+   is a precondition. */
+.problem {
+  padding: 10px 12px;
+  border: 1px solid var(--nds-danger);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-grid-refused-bg);
+  color: var(--nds-danger-strong);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fixtureBanner { margin-bottom: 2px; }
+
+/* ── the blank-cell option (D15.5) ─────────────────────────────────────────────────────────── */
+
+.option {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+}
+.optionRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.optionLabel { font-size: var(--nds-font-size-sm); color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+
+/* ── the diff grid ─────────────────────────────────────────────────────────────────────────── */
+
+.grid { min-width: 0; }
+
+.identity { display: inline-flex; align-items: baseline; gap: 8px; min-width: 0; }
+.identitySku { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.identityLine { flex: none; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); }
+.identityUnmatched {
+  flex: none;
+  color: var(--nds-warning-strong);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* `inline-flex`, not `block` + inline children. The DS reset sets `svg { display: block }`, so the
+   ProvenanceMark's ✎ inside a plain inline container stacks onto its own line and the cell renders
+   two lines tall with the glyph orphaned above the value. The tell is a width that does not change
+   when the icon is removed (reference_inline_svg_display_block_trap). */
+.diffCell { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* The old value, on its way out. Struck through and receded — but still legible, because "what it
+   was" is half of what the operator is checking. */
+.diffBefore {
+  color: var(--nds-text-3);
+  text-decoration: line-through;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 45%;
+}
+.diffArrow { flex: none; color: var(--nds-text-3); }
+.diffAfter {
+  color: var(--nds-text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+
+/* The quietest of the three cell states, deliberately. A change is the EXPECTED case: 412 shouting
+   cells would bury the 7 refusals that actually need a decision. Refused and pinned keep the
+   sheet's own treatments and are not restated here. */
+.cellChanged { background: color-mix(in srgb, var(--nds-info-strong) 6%, transparent); }
+
+/* A row that will not be written at all — greyed whole, so its confident-looking changes cannot be
+   read as an apply that is going to happen. */
+.cellSkipped { opacity: 0.55; }
+
+/* ── the job (D15.6) ───────────────────────────────────────────────────────────────────────── */
+
+.job { display: flex; flex-direction: column; gap: 10px; }
+.jobHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.jobState {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.jobStateQuiet { color: var(--nds-success-text); }
+.jobStateLoud { color: var(--nds-warning-strong); }
+/* An unrecognised state is neither. It gets the refusal colour because this build cannot vouch for
+   what happened, and "cannot vouch" must never be drawn in the reassuring palette. */
+.jobStateUnknown { color: var(--nds-danger-strong); }
+.jobProgress { display: flex; align-items: center; gap: 10px; }
+.jobCount { flex: none; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-variant-numeric: tabular-nums; }
+
+.outcomes { list-style: none; margin: 0; padding: 0; border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-md); }
+.outcome {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+.outcome:last-child { border-bottom: 0; }
+.outcomeRow { flex: 0 0 40%; color: var(--nds-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outcomeField { flex: 0 0 22%; font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.outcomeReason { flex: 1 1 auto; min-width: 0; }
+.outcomeRefused { color: var(--nds-danger-strong); }
+.outcomeLeftAlone { color: var(--nds-warning-strong); }
+
+/* ── lists of things the diff could not attach ─────────────────────────────────────────────── */
+
+.unmatched { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.unmatchedItem { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); line-height: 1.5; }
+.unmatchedKey { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+
+.footer { display: flex; align-items: center; gap: 10px; justify-content: flex-end; }
+.footerNote { flex: 1 1 auto; min-width: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+
+/* A column the file did not carry for this row. Deliberately NOT the DS `EmptyValue` em-dash: that
+   component distinguishes a MEASURED zero from an unmeasured one, and "this column was not in the
+   file" is neither. Reusing it would have made the diff assert a measurement it never took — the
+   DS type refused the call, which is the guard working. */
+.absentCell { color: var(--nds-text-3); font-style: italic; font-size: var(--nds-font-size-xs); }

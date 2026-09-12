@@ -20,7 +20,7 @@
  * Writes: POST /advertising/recommendations/apply  { kind, payload }  (gated).
  */
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Sparkles, AlertTriangle, Check, X, ArrowUpRight, ChevronRight } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AccountPlanPanel } from './AccountPlanPanel'

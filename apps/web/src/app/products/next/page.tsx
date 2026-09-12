@@ -1,5 +1,5 @@
-// /products/next — additive, design-system-first rebuild of the products list.
-// The existing /products page is 100% untouched.
+// Legacy entry point. next.config.js redirects bookmarks to /products, including
+// query parameters and workspace-prefixed URLs, before this page renders.
 
 import { ProductsNextClient } from './ProductsNextClient'
 

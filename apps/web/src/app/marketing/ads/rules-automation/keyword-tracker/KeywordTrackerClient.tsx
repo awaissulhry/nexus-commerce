@@ -45,7 +45,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, FilterChip, SegmentedControl, Select } from '@/design-system/primitives'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info, ListPlus } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'

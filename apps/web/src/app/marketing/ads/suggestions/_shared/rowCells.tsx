@@ -7,7 +7,7 @@
  */
 
 import type { ReactNode } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronRight, ExternalLink, RotateCcw } from 'lucide-react'
 import { ToolbarButton } from '@/design-system/primitives'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'

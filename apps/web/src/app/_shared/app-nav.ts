@@ -113,6 +113,7 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       Icon: Package,
       badge: n(counts.catalog?.products),
       children: [
+        { label: 'Categories', href: '/catalog/categories' },
         { label: 'Matrix', href: '/catalog/matrix' },
         { label: 'Drafts', href: '/products/drafts' },
         {
@@ -310,7 +311,7 @@ export function buildAppNav(counts: SidebarCounts, conn: Connections): RailNavIt
       Icon: Plug,
       badge: n(counts.system?.connectedChannels),
     },
-    { label: 'Mappings', href: '/settings/mappings', Icon: Shuffle },
+    { label: 'Mappings', href: '/channels/mapping', Icon: Shuffle },
     { label: 'Settings', href: '/settings', Icon: Settings },
     { label: 'Recycle Bin', href: '/admin/recycle-bin', Icon: Trash2 },
   ]

@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Truck, ArrowLeft, RefreshCw, AlertCircle, X } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'

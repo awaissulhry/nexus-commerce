@@ -10,7 +10,7 @@
  * New code should import from `@/design-system/components/EmptyState` and pass real nodes.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { type LucideIcon } from 'lucide-react'
 import { EmptyState as DsEmptyState } from '@/design-system/components/EmptyState'
 

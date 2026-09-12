@@ -1,0 +1,38 @@
+{
+  "production": {
+    "execute": {
+      "at": "2026-09-11T23:36:59.656Z",
+      "exitCode": 0,
+      "output": "Script executed successfully."
+    },
+    "resolve": {
+      "at": "2026-09-11T23:37:41.034Z",
+      "exitCode": 0,
+      "output": "Migration 20260912_lx1_remove_legacy_content_guard marked as applied."
+    }
+  },
+  "local": {
+    "execute": {
+      "at": "2026-09-11T23:38:30.254Z",
+      "exitCode": 0
+    },
+    "resolve": {
+      "at": "2026-09-11T23:39:05.792Z",
+      "exitCode": 0
+    }
+  },
+  "failedPreflightCommands": [
+    {
+      "target": "production",
+      "action": "execute",
+      "exitCode": 1,
+      "reason": "sandbox Railway DNS failure; no SQL ran"
+    },
+    {
+      "target": "local",
+      "action": "execute",
+      "exitCode": 1,
+      "reason": "sandbox PostgreSQL connection failure; no SQL ran"
+    }
+  ]
+}

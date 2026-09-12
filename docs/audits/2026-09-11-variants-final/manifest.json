@@ -1,0 +1,342 @@
+[
+  {
+    "file": "README.md",
+    "bytes": 4707,
+    "sha256": "c91ea50bd1f44c36b63a856f8363c982caedf06650fc368bbb95043f30360793"
+  },
+  {
+    "file": "account-navigation.json",
+    "bytes": 245,
+    "sha256": "e1d9aad58b487c979b13fdf7b9ac1e5fdca636a6f0f7436acff4a455b7a449cd"
+  },
+  {
+    "file": "add-child-readback.json",
+    "bytes": 7212,
+    "sha256": "5905c0fec42d9d3dafe994474a624a795e68864a85dcd648ee98e6ec64bd4f2a"
+  },
+  {
+    "file": "after-ebay.json",
+    "bytes": 57367,
+    "sha256": "ca1dce7e3f19c06c7f19b0c3998ca84f8ddc5cab9ad03e711b9e6505e639f12e"
+  },
+  {
+    "file": "after-ebay.png",
+    "bytes": 164323,
+    "sha256": "2a239e229056077cea30d15d98c7ea0e01777372a19ebe1d9ad335cd39abd796"
+  },
+  {
+    "file": "after-generate.json",
+    "bytes": 63976,
+    "sha256": "7a5488bf1d26f19d793a07e854f08d2e3a475ca84c4d55ff3289c7543444249f"
+  },
+  {
+    "file": "after-generate.png",
+    "bytes": 152505,
+    "sha256": "a846fe8e8148f8169789f7156f7f8ac74eb09c59f6f0d335fe78a03080bfecb4"
+  },
+  {
+    "file": "after-mapping-dark.json",
+    "bytes": 62431,
+    "sha256": "a6ad5059606201fa67697995f03d17f6360d268f40543d6265c0db29138ca579"
+  },
+  {
+    "file": "after-mapping-dark.png",
+    "bytes": 137220,
+    "sha256": "cb77e0f8ab6ac48643d6f4867fbd8040f39be9db3334c2a601e3835a85a5ed2d"
+  },
+  {
+    "file": "after-mapping.json",
+    "bytes": 62425,
+    "sha256": "6440c66751d4d4360aeb4b7776da450c6eaebddf736d8b4405be3a86bf5ac675"
+  },
+  {
+    "file": "after-mapping.png",
+    "bytes": 140950,
+    "sha256": "50de28ecc7797fda3a675eb2977b9c333cdbceca912b52725757e3a611031826"
+  },
+  {
+    "file": "after-master.json",
+    "bytes": 61444,
+    "sha256": "d3174d5fcfdd8bc10e7c91209c88b587cf4c2464345e02d078f2fc60f2b82fd0"
+  },
+  {
+    "file": "after-master.png",
+    "bytes": 194883,
+    "sha256": "bc3d6b58d5f65408a57afcb42c857b269b066792c719f73fa26744d0e58babbe"
+  },
+  {
+    "file": "after-navigation.json",
+    "bytes": 65278,
+    "sha256": "6e75e83823495f959accbd64fb257a3dc9a6092654f63b6993f6ce52ad821c9e"
+  },
+  {
+    "file": "after-navigation.png",
+    "bytes": 174331,
+    "sha256": "86f20d384246a8fd4536da1f903d47d33485fdc12546376146c20d8c2f60d70f"
+  },
+  {
+    "file": "after-tables.md",
+    "bytes": 8612,
+    "sha256": "a1c02f6d61b11f199716facdbb1fa1a615d841c2e9c55b99c3333a38496a8aaf"
+  },
+  {
+    "file": "api-failures.json",
+    "bytes": 138393,
+    "sha256": "ebc30005a56ae26fbf6b3344e41a63b2cd5678861633b5ace931b36eed2a746a"
+  },
+  {
+    "file": "attach-readback.json",
+    "bytes": 6773,
+    "sha256": "9306ffdeceaf7f5be9bd0f9cbf5cf294ca7d2b242a74c0bc00e41c6a65460ac0"
+  },
+  {
+    "file": "before-ebay.json",
+    "bytes": 26469,
+    "sha256": "c3d3924a05a66eab97d899b329e4c595869e4eaa169e1e820517d8febcf519ba"
+  },
+  {
+    "file": "before-ebay.png",
+    "bytes": 164615,
+    "sha256": "8b131fe3daf10869dbdc67e5f3292ab20b25ce4302533ebfab60a151ac12721d"
+  },
+  {
+    "file": "before-generate.json",
+    "bytes": 76730,
+    "sha256": "52bc090645b60a403fa76a90a473461513869366add5b06c428cdf7628b9d087"
+  },
+  {
+    "file": "before-generate.png",
+    "bytes": 148516,
+    "sha256": "6f78e7b223bd13775a974fba263da36c332b168c0696c725a188889f62ff0cc2"
+  },
+  {
+    "file": "before-mapping.json",
+    "bytes": 31907,
+    "sha256": "a50ea1f27d8882d27e88d1ef1a48fc837481fab78dd00cc13b089f1ce9c60bce"
+  },
+  {
+    "file": "before-mapping.png",
+    "bytes": 190968,
+    "sha256": "af9eec1e44a9d02a0e03d42b9aaaf5a52f44b7e9509a9e87e7c64f4eb06271e7"
+  },
+  {
+    "file": "before-master.json",
+    "bytes": 73769,
+    "sha256": "61e8a0af2ea96b104c8ddc0553f9146bc2a82743c513ca1a2459582a66d4bc92"
+  },
+  {
+    "file": "before-master.png",
+    "bytes": 176920,
+    "sha256": "af315671833ad16b0a61620271a3f642233d473bfc112ff745d9029310b5ed39"
+  },
+  {
+    "file": "before-navigation.json",
+    "bytes": 75570,
+    "sha256": "44e5bb3489175aec7025e87bb6fbd658e8a9585118ccfa03c111534365612ad3"
+  },
+  {
+    "file": "before-navigation.png",
+    "bytes": 158560,
+    "sha256": "01577f6549b10b14365466c9dd868cba8f532de28f28b981cb2394679dc57d07"
+  },
+  {
+    "file": "channel-navigation-controls.json",
+    "bytes": 8125,
+    "sha256": "958b0a5b3668afab3a0cde4191d5d75f7aa51efc9a94732bfa3c5d750ab0f62b"
+  },
+  {
+    "file": "cleanup-readback.json",
+    "bytes": 6750,
+    "sha256": "6c16eff29d74cd27a1250e64c37553574e4a56dee986de38180c8d8378e0a655"
+  },
+  {
+    "file": "contrast-dark.json",
+    "bytes": 3175,
+    "sha256": "754511eeed7582c65f128487773deecba56bb7c7471accd0ce39c8bbc73eaedd"
+  },
+  {
+    "file": "contrast-light.json",
+    "bytes": 3188,
+    "sha256": "738534391c9736ebd1574cbe89f4150f2324d39777b5d9e1dec475199cfff23a"
+  },
+  {
+    "file": "ds-mirrors.json",
+    "bytes": 1162,
+    "sha256": "5b8fb169d35ce9c94d09196bd0dcac0b8f2df5c2a4f544a949e1d374e5433e6f"
+  },
+  {
+    "file": "export-ebay.csv",
+    "bytes": 1205,
+    "sha256": "0cbb8a69a70dbf08b47b116c5a7dd1caa9a1fecb6e4808f399ffb1d769f53f08"
+  },
+  {
+    "file": "export-master.csv",
+    "bytes": 1804,
+    "sha256": "33371a59421a09941f1ab41d92478afb779c0ad21d5cf139498d3dab489607c1"
+  },
+  {
+    "file": "final-cleanup-readback.json",
+    "bytes": 8415,
+    "sha256": "c72ec71909c980945fb18c2b1953702d6db4e2d722d9bac428b70c8ffaa23612"
+  },
+  {
+    "file": "final-gates.json",
+    "bytes": 10758,
+    "sha256": "16e26be3b3e0c526c11f9b57fa3aeedf30f1946642e30ea2e62252ae7620fb3d"
+  },
+  {
+    "file": "functionality-matrix.md",
+    "bytes": 16558,
+    "sha256": "2759ab760b5b751e5fc41dca86d0ae0248935e00f08d2bc8ec2364cfae18529d"
+  },
+  {
+    "file": "generate-readback.json",
+    "bytes": 2558,
+    "sha256": "5604d30864a9fcff69e895d9f039dc091368192ce869bf160a12965ccc2a6171"
+  },
+  {
+    "file": "generate-token-readback.json",
+    "bytes": 8461,
+    "sha256": "9daac42e1a4cb72cd2892d610428b420d1a5bd73b8206fefc12abc01dc511f9d"
+  },
+  {
+    "file": "import-apply-readback.json",
+    "bytes": 3169,
+    "sha256": "15a29d8f84cd2acabdd3d8f6d785dec2e5244d5945a74bac239071b6fe72d845"
+  },
+  {
+    "file": "import-fixed-apply-readback.json",
+    "bytes": 6802,
+    "sha256": "e84d879d706218aa030226c6fef56a053c63234d81d64b2816c50e25bc08e6eb"
+  },
+  {
+    "file": "import-fixed-revert-readback.json",
+    "bytes": 6762,
+    "sha256": "db7c08263f93403924706a9887b53bc7f9007e67e380b0766d548d175c53ad19"
+  },
+  {
+    "file": "import-fixture.csv",
+    "bytes": 257,
+    "sha256": "2a00b82faf7b9274f62e854547d86db1c3c0b791c81b718adda5f412d5114929"
+  },
+  {
+    "file": "import-revert-readback.json",
+    "bytes": 3170,
+    "sha256": "8ca0d2647c88a01d27e92052b126fda5e646cfcc67cac6181dfb856a16f6c506"
+  },
+  {
+    "file": "inclusion-readback.json",
+    "bytes": 3096,
+    "sha256": "46e30d7c4d15f2ef72edfb6184b887845186a89a69693cb7840fec5aec27c2ac"
+  },
+  {
+    "file": "information-ebay-pills.json",
+    "bytes": 2836,
+    "sha256": "a0cf61f14ee7e718942c46724fdbce5e15f21628351be458b8a5be7643fc8ebf"
+  },
+  {
+    "file": "information-master-pills.json",
+    "bytes": 2709,
+    "sha256": "84cbc6ce790b2cee183cdfe24e255e14c7adf1b623a461ed46c995566a0ecaad"
+  },
+  {
+    "file": "intermediate-mapping.png",
+    "bytes": 199061,
+    "sha256": "9519db047dac94520754982912460d5f4a06e2663b5636069e28f3a22b035d11"
+  },
+  {
+    "file": "mapping-order-readback.json",
+    "bytes": 6803,
+    "sha256": "554c3a258a74a319867a6ae889d4df84af4483bd6832e3800442349dd216c62d"
+  },
+  {
+    "file": "mapping-restored-readback.json",
+    "bytes": 6803,
+    "sha256": "c1dcf7914d5f7d8f1e5de9019a0cee9cee4472bdc73c25db01b26fbcf4114448"
+  },
+  {
+    "file": "mapping-values-readback.json",
+    "bytes": 6803,
+    "sha256": "1969cace4e3e3a00223c20af4fe719e70bfb2c83c4c5f91850c499b86eeff886"
+  },
+  {
+    "file": "navigation-controls.json",
+    "bytes": 7224,
+    "sha256": "f9b02bf0a3281962b21950216c7b185bf3f0b6c45a3563a0088abd7dd060ca1d"
+  },
+  {
+    "file": "pin-readback.json",
+    "bytes": 3168,
+    "sha256": "9adefc8ccf350aa2352c11805c503985b0c6b53433b3de13252fca9cf29ba652"
+  },
+  {
+    "file": "rehearsal-readback.json",
+    "bytes": 8476,
+    "sha256": "87f422eaa5d85f942cfa9568b8ec423316aa315803a82b5fd8c2984857b1e887"
+  },
+  {
+    "file": "rehearsal-readback.mts",
+    "bytes": 2940,
+    "sha256": "7ff10c5a08ef8b56446372711b3f03539e2cd223200de55ccebb02ce1b91f598"
+  },
+  {
+    "file": "reset-readback.json",
+    "bytes": 3129,
+    "sha256": "b35b6d845fd255dd473015e4e41f9b110727bf54f6dce4f8169d0b9715e7498e"
+  },
+  {
+    "file": "responsive.json",
+    "bytes": 958,
+    "sha256": "cae16754f8fd5b211fd96898049ff7f4121e3d8e66002206524d08e482dedfbe"
+  },
+  {
+    "file": "select-editor-readback.json",
+    "bytes": 6797,
+    "sha256": "17f361f88ab2379334f74767c8ba778c8c0b78c6a5bd2270057b1591f473f518"
+  },
+  {
+    "file": "select-reset-readback.json",
+    "bytes": 6762,
+    "sha256": "bfdcab2ef3549da19afd30f950d3dc1c06ba0f22772499fc2481f7c3c33e9474"
+  },
+  {
+    "file": "shared-axis-order-readback.json",
+    "bytes": 8476,
+    "sha256": "d2e97e8d3d48e9a284b050133c33b90c5cbce4e29a01f5a6ac30707548ba9357"
+  },
+  {
+    "file": "shared-axis-order-restored-readback.json",
+    "bytes": 8476,
+    "sha256": "f4673b227bfc42607e96f9a34845eae847ace0c410f80399c75470d7186522d8"
+  },
+  {
+    "file": "shared-axis-readback.json",
+    "bytes": 2662,
+    "sha256": "917de080f2105142675b6af07f330f7dc78587a0c52b77638fc67f13617247e2"
+  },
+  {
+    "file": "sheet-parity.json",
+    "bytes": 883,
+    "sha256": "2bb65f4a1366c6ccd1f986ee6d89975979ecec28d3a7eab625e8e8aa9f033572"
+  },
+  {
+    "file": "variation-order-navigation.png",
+    "bytes": 99008,
+    "sha256": "0408ce7a20f86cc0be4c20d028b5f28cfa70fb06f626ba40a8b84e4f0329a081"
+  },
+  {
+    "file": "variation-order-restoration.json",
+    "bytes": 3204,
+    "sha256": "56b59b4dbbfe130c04c49e4faaf128ecf44232a901c54b76d434dbbade86205c"
+  },
+  {
+    "file": "variation-order-restored.png",
+    "bytes": 96057,
+    "sha256": "55a476f0737c20c46b9ca46db9c260a286fd8d6c696aacdba2944f15bcc08089"
+  },
+  {
+    "file": "visual-row-parity.json",
+    "bytes": 4014,
+    "sha256": "ef8f76162d46c77ca37c45fdcb5eb758dd70f61d70580a62d49acb6e7d5d55fd"
+  }
+]

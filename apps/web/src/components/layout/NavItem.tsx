@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from '@/lib/workspaces/Link';
+import { usePathname } from '@/lib/workspaces/navigation';
 import type { NavItemConfig } from "@/types/navigation";
 
 interface NavItemProps {

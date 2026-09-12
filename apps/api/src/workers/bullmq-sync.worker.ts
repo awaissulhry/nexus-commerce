@@ -8,7 +8,8 @@
  * - Automatic retry with exponential backoff
  */
 
-import { Worker, Job } from 'bullmq'
+import { Job } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'

@@ -1,0 +1,1667 @@
+{
+  "taxonomyRead": {
+    "ok": true,
+    "sources": [
+      {
+        "channel": "AMAZON",
+        "market": "BE",
+        "state": "ready",
+        "nodeCount": 1644
+      },
+      {
+        "channel": "AMAZON",
+        "market": "DE",
+        "state": "ready",
+        "nodeCount": 1876
+      },
+      {
+        "channel": "AMAZON",
+        "market": "ES",
+        "state": "ready",
+        "nodeCount": 1877
+      },
+      {
+        "channel": "AMAZON",
+        "market": "FR",
+        "state": "ready",
+        "nodeCount": 1876
+      },
+      {
+        "channel": "AMAZON",
+        "market": "IE",
+        "state": "ready",
+        "nodeCount": 1583
+      },
+      {
+        "channel": "AMAZON",
+        "market": "IT",
+        "state": "ready",
+        "nodeCount": 1875
+      },
+      {
+        "channel": "AMAZON",
+        "market": "NL",
+        "state": "ready",
+        "nodeCount": 1866
+      },
+      {
+        "channel": "AMAZON",
+        "market": "PL",
+        "state": "ready",
+        "nodeCount": 1870
+      },
+      {
+        "channel": "AMAZON",
+        "market": "SE",
+        "state": "ready",
+        "nodeCount": 1871
+      },
+      {
+        "channel": "AMAZON",
+        "market": "TR",
+        "state": "ready",
+        "nodeCount": 1840
+      },
+      {
+        "channel": "AMAZON",
+        "market": "UK",
+        "state": "ready",
+        "nodeCount": 1878
+      },
+      {
+        "channel": "EBAY",
+        "market": "DE",
+        "state": "ready",
+        "nodeCount": 17051
+      },
+      {
+        "channel": "EBAY",
+        "market": "ES",
+        "state": "ready",
+        "nodeCount": 10444
+      },
+      {
+        "channel": "EBAY",
+        "market": "FR",
+        "state": "ready",
+        "nodeCount": 12036
+      },
+      {
+        "channel": "EBAY",
+        "market": "IT",
+        "state": "ready",
+        "nodeCount": 11187
+      },
+      {
+        "channel": "EBAY",
+        "market": "UK",
+        "state": "ready",
+        "nodeCount": 15993
+      },
+      {
+        "channel": "ETSY",
+        "market": "GLOBAL",
+        "state": "ready",
+        "nodeCount": 3065
+      },
+      {
+        "channel": "SHOPIFY",
+        "market": "GLOBAL",
+        "state": "ready",
+        "nodeCount": 14606
+      },
+      {
+        "channel": "WOOCOMMERCE",
+        "market": "GLOBAL",
+        "state": "unsupported",
+        "nodeCount": null
+      },
+      {
+        "channel": "AMAZON_ADS",
+        "market": "GLOBAL",
+        "state": "unsupported",
+        "nodeCount": null
+      }
+    ]
+  },
+  "observedAt": "2026-09-11T00:03:03.238Z",
+  "readOnly": true,
+  "taxonomyTables": [
+    {
+      "source": "\"MarketplaceTaxonomy\"",
+      "snapshot": "\"MarketplaceTaxonomySnapshot\"",
+      "node": "\"MarketplaceTaxonomyNode\""
+    }
+  ],
+  "products": 338,
+  "roots": 37,
+  "unclassifiedRoots": 23,
+  "populatedNativeFields": {
+    "manufacturer": 0,
+    "description": 0,
+    "keywords": 0,
+    "weightValue": 0,
+    "dimLength": 0,
+    "dimWidth": 0,
+    "dimHeight": 0
+  },
+  "contentLocales": {
+    "it": 2
+  },
+  "legacyTranslationCounts": [
+    {
+      "language": "en",
+      "count": 1
+    }
+  ],
+  "mappings": {
+    "total": 12,
+    "unreviewed": 12,
+    "coordinates": [
+      {
+        "channel": "EBAY",
+        "marketplace": "IT",
+        "channelCategoryId": "177104",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelCategoryId": "GLOVES",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "channelCategoryId": "SUIT",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelCategoryId": "SUIT",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "channelCategoryId": "AUTO_ACCESSORY",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelCategoryId": "AUTO_ACCESSORY",
+        "reviewedAt": null
+      },
+      {
+        "channel": "EBAY",
+        "marketplace": "IT",
+        "channelCategoryId": "177101",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "DE",
+        "channelCategoryId": "OUTERWEAR",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "ES",
+        "channelCategoryId": "OUTERWEAR",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelCategoryId": "OUTERWEAR",
+        "reviewedAt": null
+      },
+      {
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelCategoryId": "OUTERWEAR",
+        "reviewedAt": null
+      },
+      {
+        "channel": "EBAY",
+        "marketplace": "IT",
+        "channelCategoryId": "177104",
+        "reviewedAt": null
+      }
+    ]
+  },
+  "markets": [
+    {
+      "channel": "AMAZON",
+      "code": "BE",
+      "language": "nl",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "DE",
+      "language": "de",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "ES",
+      "language": "es",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "FR",
+      "language": "fr",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "IE",
+      "language": "en",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "IT",
+      "language": "it",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "NL",
+      "language": "nl",
+      "currency": "EUR"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "PL",
+      "language": "pl",
+      "currency": "PLN"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "SE",
+      "language": "sv",
+      "currency": "SEK"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "TR",
+      "language": "tr",
+      "currency": "TRY"
+    },
+    {
+      "channel": "AMAZON",
+      "code": "UK",
+      "language": "en",
+      "currency": "GBP"
+    },
+    {
+      "channel": "EBAY",
+      "code": "DE",
+      "language": "de",
+      "currency": "EUR"
+    },
+    {
+      "channel": "EBAY",
+      "code": "ES",
+      "language": "es",
+      "currency": "EUR"
+    },
+    {
+      "channel": "EBAY",
+      "code": "FR",
+      "language": "fr",
+      "currency": "EUR"
+    },
+    {
+      "channel": "EBAY",
+      "code": "IT",
+      "language": "it",
+      "currency": "EUR"
+    },
+    {
+      "channel": "EBAY",
+      "code": "UK",
+      "language": "en",
+      "currency": "GBP"
+    },
+    {
+      "channel": "ETSY",
+      "code": "GLOBAL",
+      "language": "en",
+      "currency": "EUR"
+    },
+    {
+      "channel": "SHOPIFY",
+      "code": "GLOBAL",
+      "language": "en",
+      "currency": "EUR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "code": "GLOBAL",
+      "language": "en",
+      "currency": "EUR"
+    }
+  ],
+  "example": {
+    "sku": "GALE-JACKET",
+    "rows": 21,
+    "family": "jackets",
+    "effectiveDefinitions": [
+      {
+        "code": "material",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "model_number",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "color",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "size",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "target_gender",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "age_range_description",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fabric_type",
+        "type": "textarea",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fit_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "care_instructions",
+        "type": "textarea",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "water_resistance_level",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "countryOfOrigin",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "hsCode",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "ppeCategory",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "garmentClass",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "notifiedBodyNumber",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "notifiedBodyName",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "declarationOfConformityUrl",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "hazmatClass",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "hazmatUnNumber",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "impactProtectors",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_closure_orientation",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_fabric_stretch",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_fabric_weight_class",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_size__height_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_size__size_class",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "apparel_size__size_to",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "athlete",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "band",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "batteries_included",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "batteries_required",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery__cell_composition",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery__cell_composition_other_than_listed",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "battery__iec_code",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery__weightUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery__weightValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery_contains_free_unabsorbed_liquid",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "battery_installation_device_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "body_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "bottoms_size__height_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "bottoms_size__inseam_size",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "bottoms_size__size_class",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "bottoms_size__size_to",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "bottoms_size__waist_size",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "chestUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "chestValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "climate_suitability",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "closure",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "coat_silhouette_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "coat_weather_protection",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "collar_style",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "collection_item",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "color__standardized_values",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "compliance_age_range",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_down_plumage_weight",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_embellishment_feature",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_fastening_method",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_is_furskin_present",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_is_handmade",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_other_material_additions",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_outer_surface_material",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_printing_method",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "compliance_weave_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "configuration",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "contains_battery_or_cell",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "cup",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "customer_package_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "department",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "edition",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "embellishment_feature",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "exact_color",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fabric_distressing",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fabric_stretchability",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fabric_wash",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "fashion_decade",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fc_shelf_lifeUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fc_shelf_lifeValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "fit_to_size_sentiment",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "flavor",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "formality_level",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "front_pocket_count",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "front_style",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "fur",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "garment_size_country",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "ghs",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "ghs_chemical_h_code",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "gpsr_safety_attestation",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "grip",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "hand_orientation",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "handmade_classification",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "has_coat_weather_resistance",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "has_less_than_30_percent_state_of_charge",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_type_name",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "has_multiple_battery_powered_components",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "has_pockets",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "has_replaceable_battery",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "hazmat",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "inner",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "inseamUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "inseamValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "is_battery_non_spillable",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "is_expiration_dated_product",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "is_green_purchasing_law_compliant",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "is_oem_sourced_product",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "is_this_product_subject_to_buyer_age_restrictions",
+        "type": "boolean",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_display_dimensions__depthUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_display_dimensions__depthValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_display_dimensions__diameterUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_display_dimensions__diameterValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_length_description",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "item_package_quantity",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_shape",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "item_specific_quantity",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "item_specific_unit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "language",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "league_name",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "leg",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "leg__decimal_value",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "leg__unit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "leg_hem_opening_widthUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "leg_hem_opening_widthValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "length",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lens__color",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "lens__widthUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lens__widthValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lifestyle",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "lining_description",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "lithium_battery__energy_contentUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lithium_battery__energy_contentValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lithium_battery__packaging",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lithium_battery__weightUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "lithium_battery__weightValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "manufacturer_warranty",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "metal_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "model_name",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "neckline",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "non_lithium_battery_energy_content",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "non_lithium_battery_energy_content__unit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "non_lithium_battery_packaging",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "num_batteries",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "number_of_items",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "number_of_lithium_ion_cells",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "number_of_lithium_metal_cells",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "number_of_pockets",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "outer",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "packageDimensionUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageHeight",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageLength",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageType",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageWeightUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageWeightValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "packageWidth",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "pants_form_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "part_number",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "pattern",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "pattern_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "platform_for_display",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "pocket_description",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "product_expiration_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "protection",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "regulatory_compliance_certification",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "ring",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "rise__heightUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "rise__heightValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "rise__style",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "safety_data_sheet_url",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "scent",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "seasons",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "shoulder_to_bottom_hem_lengthUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "shoulder_to_bottom_hem_lengthValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "sleeve__length_description",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "sleeve__type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "special_feature",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "special_size_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "specific_color",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "specific_uses_for_product",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "sport_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "style",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "subject_character",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "suitable_for",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "supplier_declared_dg_hz_regulation",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "team_name",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "temperature_rating",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "theme",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "title_differentiation",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "ultraviolet_protection_factor",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "unit_count",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "unit_count__type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "version_for_country",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "waist__sizeUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "waist__sizeValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "waist__style",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "waist__widthUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "waist__widthValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "weave_type",
+        "type": "text",
+        "localizable": true,
+        "required": false
+      },
+      {
+        "code": "width",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "temperature_minimumUnit",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "temperature_minimumValue",
+        "type": "number",
+        "localizable": false,
+        "required": false
+      },
+      {
+        "code": "shopify_product_type",
+        "type": "text",
+        "localizable": false,
+        "required": false
+      }
+    ],
+    "savedAttributeKeys": [
+      {
+        "key": "variations",
+        "populatedRows": 20,
+        "shapes": [
+          "object"
+        ]
+      },
+      {
+        "key": "brand",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "armorType",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "item_name",
+        "populatedRows": 2,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "skip_offer",
+        "populatedRows": 1,
+        "shapes": [
+          "boolean"
+        ]
+      },
+      {
+        "key": "weave_type",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "fabric_type",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "condition_type",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "parentage_level",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "country_of_origin",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "batteries_required",
+        "populatedRows": 1,
+        "shapes": [
+          "boolean"
+        ]
+      },
+      {
+        "key": "water_resistance_level",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "merchant_shipping_group",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "merchant_suggested_asin",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "recommended_browse_nodes",
+        "populatedRows": 2,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "supplier_declared_dg_hz_regulation",
+        "populatedRows": 1,
+        "shapes": [
+          "string"
+        ]
+      },
+      {
+        "key": "supplier_declared_has_product_identifier_exemption",
+        "populatedRows": 1,
+        "shapes": [
+          "boolean"
+        ]
+      }
+    ]
+  }
+}

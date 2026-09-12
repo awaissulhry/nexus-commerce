@@ -14,9 +14,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const productFindFirst = vi.fn()
 const productUpdate = vi.fn()
 const productEventCreate = vi.fn().mockResolvedValue({})
+const listingFindMany = vi.fn().mockResolvedValue([])
+const listingUpdateMany = vi.fn().mockResolvedValue({ count: 1 })
 
 vi.mock('../../db.js', () => ({
   default: {
+    channelListing: { findMany: (...args: unknown[]) => listingFindMany(...args), updateMany: (...args: unknown[]) => listingUpdateMany(...args) },
     product: {
       findFirst: (...args: unknown[]) => productFindFirst(...args),
       update: (...args: unknown[]) => productUpdate(...args),
@@ -48,6 +51,8 @@ describe('Shopify webhooks → SSE bus (P-RT.2)', () => {
     productFindFirst.mockReset()
     productUpdate.mockReset()
     productEventCreate.mockClear()
+    listingFindMany.mockReset().mockResolvedValue([])
+    listingUpdateMany.mockClear()
   })
   afterEach(() => {
     unsubscribe()
@@ -85,6 +90,12 @@ describe('Shopify webhooks → SSE bus (P-RT.2)', () => {
     expect(productUpdate).not.toHaveBeenCalled()
     expect(productEventCreate).not.toHaveBeenCalled()
     expect(received).toHaveLength(0)
+  })
+  it('marks managed remote edits for review without overwriting the family master', async () => {
+    listingFindMany.mockResolvedValueOnce([{ id: 'native', version: 4, platformAttributes: { _nexusContent: { version: 1 }, _nexusContentPublish: { status: 'VERIFIED', remoteUpdatedAt: '2026-09-08T10:00:00Z' } } }])
+    await dispatchShopifyWebhook('product/update', { id: '9876543210', title: 'Remote edit', updated_at: '2026-09-08T11:00:00Z' })
+    expect(productUpdate).not.toHaveBeenCalled()
+    expect(listingUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ platformAttributes: expect.objectContaining({ _nexusContentPublish: expect.objectContaining({ status: 'REMOTE_CHANGED' }) }) }) }))
   })
 
   it('product/delete on a known product publishes product.deleted', async () => {

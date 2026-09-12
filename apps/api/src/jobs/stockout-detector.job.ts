@@ -50,7 +50,7 @@ export function startStockoutDetectorCron(): void {
     logger.error('stockout-detector cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runStockoutCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runStockoutCronOnce() })
   logger.info('stockout-detector cron: scheduled', { schedule })
 }
 

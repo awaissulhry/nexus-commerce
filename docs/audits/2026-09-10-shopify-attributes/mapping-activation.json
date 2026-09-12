@@ -1,0 +1,20 @@
+{
+  "jobId": "cmtv69mnb0007njxn2gg63g7x",
+  "changes": 10,
+  "definitionAdded": true,
+  "state": "MAPPING_APPLIED",
+  "counts": {
+    "changed": 0,
+    "invalid": 0,
+    "missing": 2030,
+    "scanned": 338,
+    "excluded": 0,
+    "conflicts": 0,
+    "matchedListings": 1,
+    "matchedProducts": 338,
+    "affectedListings": 0,
+    "introducedInvalid": 0,
+    "preservedOverrides": 0
+  },
+  "errors": null
+}

@@ -1,0 +1,288 @@
+{% comment %}
+  Breadcrumb navigation for Impact theme by Maestroo
+  Uses exact Impact theme container structure and padding
+{% endcomment %}
+
+{%- unless template.name == 'index' -%}
+  <nav class="ba-breadcrumb" role="navigation" aria-label="breadcrumbs" style="
+    box-sizing: border-box;
+    border-style: solid;
+    border-width: 0;
+    border-color: rgb(var(--text-color) / 0.12);
+    padding-inline-start: max(var(--calculated-section-spacing-inline, var(--container-gutter)), 50% - var(--container-max-width) / 2);
+    padding-inline-end: max(var(--calculated-section-spacing-inline, var(--container-gutter)), 50% - var(--container-max-width) / 2);
+    padding-block-start: var(--spacing-4);
+    padding-block-end: var(--spacing-2);
+    font-family: var(--text-font-family);
+    font-size: var(--text-sm);
+    font-weight: var(--text-font-weight);
+    color: rgb(var(--text-color));
+    line-height: 1.6;
+    letter-spacing: var(--text-letter-spacing);
+  ">
+    
+    <a href="{{ routes.root_url }}" title="Home" style="
+      color: rgb(var(--text-color));
+      text-decoration: none;
+      transition: color 0.2s ease;
+    ">Home</a>
+    <span style="color: rgb(var(--text-color) / 0.6);">&nbsp;›&nbsp;</span>
+    
+    {%- case template.name -%}
+      {%- when 'collection' -%}
+        {%- if collection.handle -%}
+          <a href="{{ routes.collections_url }}" title="{{ 'collection.general.all_collections' | t }}" style="
+            color: rgb(var(--text-color));
+            text-decoration: none;
+            transition: color 0.2s ease;
+          ">{{ 'collection.general.all_collections' | t }}</a>
+          <span style="color: rgb(var(--text-color) / 0.6);">&nbsp;›&nbsp;</span>
+          <span class="ba-last-crumb" style="
+            color: rgb(var(--text-color));
+            font-weight: var(--heading-font-weight);
+          ">{{ collection.title }}</span>
+        {%- endif -%}
+
+      {%- when 'product' -%}
+        {%- if collection -%}
+          <a href="{{ collection.url }}" title="{{ collection.title }}" style="
+            color: rgb(var(--text-color));
+            text-decoration: none;
+            transition: color 0.2s ease;
+          ">{{ collection.title }}</a>
+          <span style="color: rgb(var(--text-color) / 0.6);">&nbsp;›&nbsp;</span>
+        {%- else -%}
+          <a href="{{ routes.all_products_collection_url }}" title="{{ 'general.on_boarding.product_title' | t }}" style="
+            color: rgb(var(--text-color));
+            text-decoration: none;
+            transition: color 0.2s ease;
+          ">{{ 'general.on_boarding.product_title' | t }}</a>
+          <span style="color: rgb(var(--text-color) / 0.6);">&nbsp;›&nbsp;</span>
+        {%- endif -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ product.title }}</span>
+
+      {%- when 'blog' -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ blog.title }}</span>
+
+      {%- when 'article' -%}
+        <a href="{{ blog.url }}" title="{{ blog.title }}" style="
+          color: rgb(var(--text-color));
+          text-decoration: none;
+          transition: color 0.2s ease;
+        ">{{ blog.title }}</a>
+        <span style="color: rgb(var(--text-color) / 0.6);">&nbsp;›&nbsp;</span>
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ article.title }}</span>
+
+      {%- when 'page' -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ page.title }}</span>
+
+      {%- when 'search' -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">
+          {{ 'search.general.title' | t }}
+          {%- if search.terms -%}
+            : "{{ search.terms | escape }}"
+          {%- endif -%}
+        </span>
+
+      {%- when 'cart' -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ 'cart.general.title' | t }}</span>
+
+      {%- when '404' -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ '404.general.title' | t }}</span>
+
+      {%- else -%}
+        <span class="ba-last-crumb" style="
+          color: rgb(var(--text-color));
+          font-weight: var(--heading-font-weight);
+        ">{{ page_title }}</span>
+    {%- endcase -%}
+
+    {%- comment -%} Schema markup for SEO {%- endcomment -%}
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "{{ shop.url }}"
+        }
+        {%- assign position = 2 -%}
+        {%- case template.name -%}
+          {%- when 'collection' -%}
+            {%- if collection.handle -%}
+              , {
+                "@type": "ListItem",
+                "position": {{ position }},
+                "name": "{{ 'collection.general.all_collections' | t }}",
+                "item": "{{ routes.collections_url }}"
+              }
+              {%- assign position = position | plus: 1 -%}
+              , {
+                "@type": "ListItem",
+                "position": {{ position }},
+                "name": "{{ collection.title | escape }}",
+                "item": "{{ collection.url }}"
+              }
+            {%- endif -%}
+          {%- when 'product' -%}
+            {%- if collection -%}
+              , {
+                "@type": "ListItem",
+                "position": {{ position }},
+                "name": "{{ collection.title | escape }}",
+                "item": "{{ collection.url }}"
+              }
+              {%- assign position = position | plus: 1 -%}
+            {%- endif -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ product.title | escape }}",
+              "item": "{{ product.url }}"
+            }
+          {%- when 'blog' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ blog.title | escape }}",
+              "item": "{{ blog.url }}"
+            }
+          {%- when 'article' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ blog.title | escape }}",
+              "item": "{{ blog.url }}"
+            }
+            {%- assign position = position | plus: 1 -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ article.title | escape }}",
+              "item": "{{ article.url }}"
+            }
+          {%- when 'page' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ page.title | escape }}",
+              "item": "{{ page.url }}"
+            }
+          {%- when 'search' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ 'search.general.title' | t }}",
+              "item": "{{ routes.search_url }}"
+            }
+          {%- when 'cart' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ 'cart.general.title' | t }}",
+              "item": "{{ routes.cart_url }}"
+            }
+          {%- when '404' -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ '404.general.title' | t }}",
+              "item": "{{ request.url }}"
+            }
+          {%- else -%}
+            , {
+              "@type": "ListItem",
+              "position": {{ position }},
+              "name": "{{ page_title | escape }}",
+              "item": "{{ request.url }}"
+            }
+        {%- endcase -%}
+      ]
+    }
+    </script>
+
+  </nav>
+
+  {%- comment -%} Add hover effects and responsive styles {%- endcomment -%}
+  <style>
+    .ba-breadcrumb a:hover {
+      color: rgb(var(--accent)) !important;
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 768px) {
+      .ba-breadcrumb {
+        padding-inline-start: var(--spacing-4) !important;
+        padding-inline-end: var(--spacing-4) !important;
+        padding-block-start: var(--spacing-3) !important;
+        font-size: var(--text-xs) !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .ba-breadcrumb {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      
+      .ba-breadcrumb span:nth-child(n+6),
+      .ba-breadcrumb a:nth-child(n+6) {
+        display: none;
+      }
+      
+      .ba-breadcrumb span:nth-child(5)::before {
+        content: "...";
+        margin-right: var(--spacing-1);
+      }
+    }
+  </style>
+{%- endunless -%}
+{% schema %}
+{
+  "name": "Breadcrumb",
+  "tag": "section",
+  "class": "shopify-section--breadcrumb",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Breadcrumb Navigation"
+    },
+    {
+      "type": "checkbox",
+      "id": "show_breadcrumb",
+      "label": "Show breadcrumb",
+      "default": true
+    }
+  ],
+  "presets": [
+    {
+      "name": "Breadcrumb"
+    }
+  ]
+}
+{% endschema %}

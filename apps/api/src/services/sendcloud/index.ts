@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * O.6 — Sendcloud public surface.
  *
@@ -72,7 +73,7 @@ export async function resolveCredentials(warehouseId?: string | null): Promise<S
   }
 
   const carrier = await prisma.carrier.findUnique({
-    where: { code: 'SENDCLOUD' },
+    where: { workspace_code: workspaceKey({ code: 'SENDCLOUD' }) },
   })
   if (!carrier?.isActive || !carrier.credentialsEncrypted) {
     throw new SendcloudError(
@@ -119,7 +120,7 @@ function parseEncryptedCreds(
       const reEncrypted = encryptSecret(plaintext)
       if (source === 'Carrier') {
         void prisma.carrier
-          .update({ where: { code: 'SENDCLOUD' }, data: { credentialsEncrypted: reEncrypted } })
+          .update({ where: { workspace_code: workspaceKey({ code: 'SENDCLOUD' }) }, data: { credentialsEncrypted: reEncrypted } })
           .catch(() => { /* non-fatal */ })
       } else {
         // CarrierAccount: we don't know the id from the ciphertext
@@ -183,7 +184,7 @@ export async function resolveServiceMap(
   //   6. defaultServiceMap[channel_GLOBAL]                — legacy fallback
   // Returns the Sendcloud shipping_method id or null when nothing maps.
   const carrier = await prisma.carrier.findUnique({
-    where: { code: 'SENDCLOUD' },
+    where: { workspace_code: workspaceKey({ code: 'SENDCLOUD' }) },
     select: { id: true, defaultServiceMap: true, preferences: true },
   })
   if (!carrier) return null

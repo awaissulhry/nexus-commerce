@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Flat-file feed reconcile + processing-report parsing (FFS.2).
  *
@@ -282,7 +283,7 @@ export interface ReconcileResult {
  * still returns live status, just doesn't persist.
  */
 export async function reconcileFeedJob(feedId: string, opts?: { force?: boolean }): Promise<ReconcileResult> {
-  const job = await prisma.amazonFlatFileFeedJob.findUnique({ where: { feedId } }).catch(() => null)
+  const job = await prisma.amazonFlatFileFeedJob.findUnique({ where: { workspace_feedId: workspaceKey({ feedId: feedId }) } }).catch(() => null)
 
   // FFS.9 — fast path: a feed that already reached a terminal state never changes
   // again (a re-submit gets a brand-new feedId). Return the persisted result

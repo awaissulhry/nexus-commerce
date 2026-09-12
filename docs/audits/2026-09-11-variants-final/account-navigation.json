@@ -1,0 +1,5 @@
+{
+  "ebay": "?market=IT&scope=EBAY&tab=variants&account=cmr4aaqb00025nz016k18rup9",
+  "afterSwitch": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=GLOBAL&scope=SHOPIFY&tab=variants",
+  "priorAccountCleared": true
+}

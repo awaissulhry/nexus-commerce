@@ -63,6 +63,10 @@ import {
   type ColDef,
   type GridDensityName,
   type GridState,
+  useActionPress,
+  AVAILABLE,
+  ROW,
+  type ActionImpact,
 } from '@/design-system/grid'
 
 import { registerLabModules } from './labModules'
@@ -432,10 +436,105 @@ const EMPTY_ROWS: ReportRow[] = []
 const ONE_ROW = REPORT.slice(0, 1)
 const NO_ROWS_PARAMS = { title: 'No campaigns match', message: 'Clear a filter, or create the first one.', action: { label: 'New campaign', onClick: () => undefined } }
 const LOADING_PARAMS = { rows: 6, media: true }
+const PRODUCT_LOADING_PARAMS = { rows: 6, rowKind: 'media-line' }
 const LONG_COLS: ColDef<ReportRow>[] = [
   { colId: 'campaign', headerName: 'Campaign', width: 360, ...textColumn<ReportRow>('campaign'), tooltipField: 'campaign' },
   { colId: 'spendCents', headerName: 'Spend', width: 110, ...moneyColumn<ReportRow>('spendCents', { decimals: true }) },
 ]
+
+/* ── the action-confirm scenario ───────────────────────────────────────────────────────────── */
+
+/**
+ * The one surface a destructive verb is judged on.
+ *
+ * Here rather than only inside a lane because it is SUBSTRATE: every lane's verbs ask through this
+ * dialog, and a confirmation nobody can look at is a confirmation nobody has checked. The three
+ * shapes below are the three that actually occur, with the impacts a real preflight produces.
+ */
+const CONFIRM_CASES: Array<{ id: string; label: string; note: string; impact: ActionImpact }> = [
+  {
+    id: 'reload-unknown',
+    label: 'Reload an unconfirmed save',
+    note: 'An interrupted acknowledgement is not proof that a write failed. Cancel preserves local typing and recovery.',
+    impact: {
+      level: 'confirm', title: '1 unconfirmed change — reload and discard it?',
+      consequences: ['The connection dropped before this save was confirmed. It may already be stored. Reload replaces local values and stops recovery; it does not undo a server write.'],
+    },
+  },
+  {
+    id: 'plain',
+    label: 'Nothing is listed',
+    note: 'A plain confirm. The preflight looked and found no marketplace listing, so it asks once and lets go.',
+    impact: {
+      level: 'confirm',
+      title: 'Delete GALE-JACKET-BLACK-MEN-XS?',
+      consequences: ['GALE-JACKET-BLACK-MEN-XS is deleted permanently — there is no undo and no trash', 'It is not listed on any channel'],
+      sideEffects: ['Its channel listings are deleted with it, by database cascade'],
+    },
+  },
+  {
+    id: 'typed',
+    label: 'Demote a parent with children',
+    note: 'The confirmation names each child and requires the parent SKU. The server must still compare the reviewed children before applying it.',
+    impact: {
+      level: 'type-to-confirm',
+      confirmPhrase: 'GALE-JACKET',
+      title: 'Demote GALE-JACKET and detach 2 children?',
+      consequences: ['GALE-JACKET-BLACK-MEN-L becomes standalone', 'GALE-JACKET-BLACK-MEN-M becomes standalone'],
+      sideEffects: ['The variation theme is cleared; both children retain their existing values.'],
+    },
+  },
+  {
+    id: 'cancelled',
+    label: 'Cancel a product picker',
+    note: 'A cancelled picker returns silently: no confirmation, refusal or write.',
+    impact: { level: 'none', title: 'Choose a product', cancelled: true },
+  },
+  {
+    id: 'refused',
+    label: 'A malformed impact',
+    note: '🔴 Asks to be typed but names no phrase. That is a BUG in the preflight, and runAction REFUSES the verb rather than softening it to a click — which is how a five-listing delete becomes one.',
+    impact: { level: 'type-to-confirm', title: 'Delete GALE-JACKET-BLACK-MEN-M?' },
+  },
+]
+
+function ActionConfirmScenario() {
+  const [outcome, setOutcome] = useState<string | null>(null)
+  const { press, problem, confirmElement } = useActionPress<{ id: string }>((r) => setOutcome(`ran · ok=${r.ok}`))
+
+  return (
+    <Scenario
+      id="action-confirm"
+      title="How a verb asks — the action confirmation"
+      hint={<>Every grid verb asks through one dialog (<code>design-system/grid/actions</code>). Consequences are itemised rather than counted, the things the endpoint <em>also</em> does are kept visually apart from the ones you asked for, and a typed confirm will not enable until the phrase matches. The dialog never decides severity — the preflight does.</>}
+    >
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        {CONFIRM_CASES.map((c) => (
+          <Button
+            key={c.id}
+            size="sm"
+            variant={c.id === 'typed' ? 'danger' : 'secondary'}
+            onClick={() => {
+              setOutcome(null)
+              void press(
+                { id: c.id, label: 'Family action', scope: ROW, danger: true, available: () => AVAILABLE, preflight: async () => c.impact, run: async () => ({ ok: true }) },
+                [{ id: 'r1' }],
+              )
+            }}
+          >
+            {c.label}
+          </Button>
+        ))}
+        {outcome && <span className="nds-cell-muted text-sm">{outcome}</span>}
+        {problem && <span className="nds-cell-stock-out text-sm" role="alert">{problem}</span>}
+      </div>
+      <ul className="text-sm" style={{ margin: 0, paddingLeft: 18, color: 'var(--nds-text-2)' }}>
+        {CONFIRM_CASES.map((c) => <li key={c.id}><b>{c.label}</b> — {c.note}</li>)}
+      </ul>
+      {confirmElement}
+    </Scenario>
+  )
+}
 
 /* ── the tab panel scenario ───────────────────────────────────────────────────────────────── */
 
@@ -510,8 +609,18 @@ export function GdsScenarios() {
   const [measured, setMeasured] = useState<string | null>(null)
 
   useEffect(() => {
-    window.__gdsProbe = probe
-    return () => { delete window.__gdsProbe }
+    /* 🔴 Dev only. The sibling of `GdsSheetScenario`'s `__gdsSheet` (#497) and found by DS.1's sweep
+       rather than by me: I guarded one and did not grep for the pattern, which is the same
+       fix-the-site-not-the-class miss this programme has now paid for four times.
+       `grid:conformance` calls this in dev, which is the only place it needs to exist. */
+    /* The BLOCK form, not an early `return` — same effect, and it is what the door can see.
+       `check-global-exposure` looks for an enclosing `NODE_ENV !== 'production'` block, so the
+       equivalent `if (=== 'production') return` read as unguarded. Matching the sibling at
+       `GdsSheetScenario.tsx:202` is the better reason anyway: one shape for one idea. */
+    if (process.env.NODE_ENV !== 'production') {
+      window.__gdsProbe = probe
+      return () => { delete window.__gdsProbe }
+    }
   }, [])
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark)
@@ -587,6 +696,8 @@ export function GdsScenarios() {
           </GridCard>
         </Scenario>
 
+        <ActionConfirmScenario />
+
         <Scenario id="empty" title="A 0-row grid" hint="The header stays; the empty state says what to do next.">
           <GridCard>
             <NexusGrid<ReportRow> domLayout="autoHeight" rowData={EMPTY_ROWS} getRowId={rowId} columnDefs={REPORT_COLS} noRowsOverlayComponent={GridNoRowsOverlay} noRowsOverlayComponentParams={NO_ROWS_PARAMS} />
@@ -614,6 +725,12 @@ export function GdsScenarios() {
         <Scenario id="loading" title="Loading" hint="The skeleton is drawn at the current density — a loading Spacious grid is the height of a loaded one, so nothing jumps when the data lands.">
           <GridCard>
             <NexusGrid<ReportRow> rows="media" height={gridDensity[density].header + 6 * gridDensity[density].rowMedia + 2} rowData={EMPTY_ROWS} getRowId={rowId} columnDefs={REPORT_COLS} loading loadingOverlayComponent={GridLoadingOverlay} loadingOverlayComponentParams={LOADING_PARAMS} />
+          </GridCard>
+        </Scenario>
+
+        <Scenario id="loading-products" title="Loading product rows" hint="Single-line thumbnail rows use the same height as the Information grid at every density.">
+          <GridCard>
+            <NexusGrid<ReportRow> rows="media-line" height={gridDensity[density].header + 6 * gridDensity[density].rowMediaLine + 2} rowData={EMPTY_ROWS} getRowId={rowId} columnDefs={REPORT_COLS} loading loadingOverlayComponent={GridLoadingOverlay} loadingOverlayComponentParams={PRODUCT_LOADING_PARAMS} />
           </GridCard>
         </Scenario>
 

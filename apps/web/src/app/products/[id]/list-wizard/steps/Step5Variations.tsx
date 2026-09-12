@@ -29,6 +29,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import MatrixVariantBuilder from './_MatrixVariantBuilder'
 import { Listbox } from '@/design-system/components/Listbox'
+import { changedVariationSelection, effectiveVariationTheme } from './variation-selection'
 
 // Mirrors backend types from variations.service.ts.
 interface ThemeOption {
@@ -69,7 +70,7 @@ interface VariationsSlice {
   /** Common-theme pick that applies to all channels by default. */
   commonTheme?: string
   /** Per-channel selected theme (overrides commonTheme for that
-   *  channel). Empty/absent → falls back to commonTheme. */
+   *  channel). Only absence falls back to commonTheme. */
   themeByChannel?: Record<string, string>
   /** Custom-theme attribute lists keyed by channel. Set when a
    *  channel uses a CUSTOM_* theme id; the live-annotation logic
@@ -97,6 +98,7 @@ interface AiThemeRecommendation {
   reason: string
   alternatives: Array<{ themeId: string; reason: string }>
 }
+type SaveVariationChoices = (variations: Record<string, unknown>, channelStates: Record<string, Record<string, unknown>>) => Promise<boolean>
 
 export default function Step5Variations({
   wizardState,
@@ -106,7 +108,8 @@ export default function Step5Variations({
   product,
   reportValidity,
   setJumpToBlocker,
-}: StepProps) {
+  saveChoices,
+}: StepProps & { saveChoices: SaveVariationChoices }) {
   const { t } = useTranslations()
   const { toast } = useToast()
   const slice = (wizardState.variations ?? {}) as VariationsSlice
@@ -126,12 +129,13 @@ export default function Step5Variations({
   )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [choicesSaving, setChoicesSaving] = useState(false)
   // VV — single-product setup writes (link-to-parent, promote-to-parent,
   // add-variants) refetch the variations payload via this counter.
   const [refetchKey, setRefetchKey] = useState(0)
 
   const [commonTheme, setCommonTheme] = useState<string | null>(
-    slice.commonTheme ?? null,
+    typeof slice.commonTheme === 'string' ? slice.commonTheme : null,
   )
   const [themeByChannel, setThemeByChannel] = useState<Record<string, string>>(
     slice.themeByChannel ?? {},
@@ -140,8 +144,13 @@ export default function Step5Variations({
     Record<string, string[]>
   >(slice.customAttributesByChannel ?? {})
   const [includedSkus, setIncludedSkus] = useState<Set<string>>(
-    new Set(slice.includedSkus ?? []),
+    new Set(Array.isArray(slice.includedSkus) ? slice.includedSkus : []),
   )
+  const originalSelection = useRef({ ...slice })
+  const initialSelection = useRef({ commonTheme, themeByChannel, customAttributesByChannel: customAttrsByChannel, includedSkus: Array.from(includedSkus) })
+  const savedSelection = useRef(JSON.stringify(initialSelection.current))
+  const selectionSaveGeneration = useRef(0)
+  const pendingSelectionSaves = useRef(0)
   // N.1 — per-marketplace themes always visible. The expandable
   // collapse is gone; the grid below renders inline so the seller
   // can see what each channel will publish under at a glance.
@@ -182,12 +191,12 @@ export default function Step5Variations({
         const p = json as MultiChannelVariationsPayload
         setPayload(p)
         // First-render seed: include every child by default.
-        if (includedSkus.size === 0 && p.children.length > 0) {
+        if (!wizardState.productPresetScope && !Object.prototype.hasOwnProperty.call(slice, 'includedSkus') && includedSkus.size === 0 && p.children.length > 0) {
           setIncludedSkus(new Set(p.children.map((c) => c.sku)))
         }
         // Default-pick a common theme if one isn't set yet AND there
         // are common themes available.
-        if (!commonTheme && p.commonThemes.length > 0) {
+        if (!wizardState.productPresetScope && !Object.prototype.hasOwnProperty.call(slice, 'commonTheme') && !Object.keys(slice.themeByChannel ?? {}).length && !commonTheme && p.commonThemes.length > 0) {
           const best = pickDefaultCommonTheme(
             p.commonThemes,
             p.presentAttributes,
@@ -265,14 +274,22 @@ export default function Step5Variations({
   // so toggling chips doesn't fire one PATCH per click.
   useEffect(() => {
     if (loading || !payload) return
+    const generation = ++selectionSaveGeneration.current
+    const selectionKey = JSON.stringify({ commonTheme, themeByChannel, customAttributesByChannel: customAttrsByChannel, includedSkus: Array.from(includedSkus) })
+    if (savedSelection.current === selectionKey && pendingSelectionSaves.current === 0) { setChoicesSaving(false); return }
+    setChoicesSaving(true)
     const t = window.setTimeout(() => {
-      void persistThemes(wizardId, {
+      pendingSelectionSaves.current++
+      void persistThemes(saveChoices, {
         commonTheme,
         themeByChannel,
         customAttrsByChannel,
         includedSkus: Array.from(includedSkus),
         channelKeys: Object.keys(payload.themesByChannel),
-      })
+      }, originalSelection.current, initialSelection.current)
+        .then(() => { savedSelection.current = selectionKey })
+        .catch(e => { if (generation === selectionSaveGeneration.current) setError(e instanceof Error ? e.message : 'Could not save variation choices.') })
+        .finally(() => { pendingSelectionSaves.current--; if (generation === selectionSaveGeneration.current) setChoicesSaving(false) })
     }, SAVE_DEBOUNCE_MS)
     return () => window.clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -281,7 +298,8 @@ export default function Step5Variations({
   // Effective theme per channel: per-channel override → commonTheme.
   const effectiveTheme = useCallback(
     (channelKey: string): string | null => {
-      return themeByChannel[channelKey] || commonTheme || null
+      const value = effectiveVariationTheme(themeByChannel, commonTheme, channelKey)
+      return typeof value === 'string' ? value : null
     },
     [themeByChannel, commonTheme],
   )
@@ -412,11 +430,11 @@ export default function Step5Variations({
   // an effective theme on at least one channel, ≥1 included child,
   // and no children with unfilled required attributes.
   useEffect(() => {
-    if (loading) {
+    if (loading || choicesSaving) {
       reportValidity({
         valid: false,
         blockers: 1,
-        reasons: ['Loading variations…'],
+        reasons: [choicesSaving ? 'Saving variation choices…' : 'Loading variations…'],
       })
       return
     }
@@ -431,7 +449,7 @@ export default function Step5Variations({
     const reasons: string[] = []
     let blockers = 0
     const anyThemeSet = Object.keys(effectivePayload.themesByChannel).some(
-      (ch) => effectiveTheme(ch) !== null,
+      (ch) => !!effectiveTheme(ch),
     )
     if (!anyThemeSet) {
       reasons.push('Pick a variation theme')
@@ -451,8 +469,9 @@ export default function Step5Variations({
     reportValidity({ valid: blockers === 0, blockers, reasons })
   }, [
     loading,
+    choicesSaving,
     error,
-    payload,
+    effectivePayload,
     includedChildren.length,
     blockingChildren,
     effectiveTheme,
@@ -461,18 +480,24 @@ export default function Step5Variations({
 
   const onContinue = useCallback(async () => {
     if (!effectivePayload) return
+    if (loading || choicesSaving || error) return
+    if (effectivePayload.isParent && !channelKeys.some(key => !!effectiveTheme(key))) return
     if (effectivePayload.isParent && includedChildren.length === 0) return
     if (blockingChildren.length > 0) return
     // Persist before advance — bypass debounce.
-    await persistThemes(wizardId, {
+    try { await persistThemes(saveChoices, {
       commonTheme,
       themeByChannel,
       customAttrsByChannel,
       includedSkus: Array.from(includedSkus),
       channelKeys,
-    })
+    }, originalSelection.current, initialSelection.current) } catch (e) { setError(e instanceof Error ? e.message : 'Could not save variation choices.'); return }
     await updateWizardState({}, { advance: true })
   }, [
+    loading,
+    choicesSaving,
+    error,
+    effectiveTheme,
     blockingChildren.length,
     channelKeys,
     commonTheme,
@@ -481,6 +506,7 @@ export default function Step5Variations({
     includedChildren.length,
     includedSkus,
     themeByChannel,
+    saveChoices,
     updateWizardState,
     wizardId,
   ])
@@ -1022,8 +1048,7 @@ export default function Step5Variations({
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <ContinueStatus
-              commonTheme={commonTheme}
-              channelKeys={channelKeys}
+              hasTheme={channelKeys.some(key => !!effectiveTheme(key))}
               includedCount={includedChildren.length}
               blockingCount={blockingChildren.length}
               hasChildren={effectivePayload.children.length > 0}
@@ -1034,6 +1059,8 @@ export default function Step5Variations({
               onClick={onContinue}
               disabled={
                 !effectivePayload ||
+                loading || choicesSaving || !!error ||
+                (effectivePayload.isParent && !channelKeys.some(key => !!effectiveTheme(key))) ||
                 (effectivePayload.children.length > 0 &&
                   (includedChildren.length === 0 ||
                     blockingChildren.length > 0))
@@ -1476,14 +1503,12 @@ function AddVariantRow({
 }
 
 function ContinueStatus({
-  commonTheme,
-  channelKeys,
+  hasTheme,
   includedCount,
   blockingCount,
   hasChildren,
 }: {
-  commonTheme: string | null
-  channelKeys: string[]
+  hasTheme: boolean
   includedCount: number
   blockingCount: number
   hasChildren: boolean
@@ -1506,7 +1531,7 @@ function ContinueStatus({
       </span>
     )
   }
-  if (!commonTheme && channelKeys.length > 0) {
+  if (!hasTheme) {
     return (
       <span className="text-base text-slate-500 dark:text-slate-400">
         {includedCount} included — pick a theme to continue
@@ -1534,7 +1559,7 @@ function pickDefaultCommonTheme(
 }
 
 async function persistThemes(
-  wizardId: string,
+  saveChoices: SaveVariationChoices,
   args: {
     commonTheme: string | null
     themeByChannel: Record<string, string>
@@ -1542,17 +1567,19 @@ async function persistThemes(
     includedSkus: string[]
     channelKeys: string[]
   },
+  original: Record<string, unknown>,
+  initial: Record<string, unknown>,
 ): Promise<void> {
   // Base slice: commonTheme + themeByChannel + customAttributes +
   // includedSkus.
   const basePatch = {
     state: {
-      variations: {
+      variations: changedVariationSelection(original, initial, {
         commonTheme: args.commonTheme,
         themeByChannel: args.themeByChannel,
         customAttributesByChannel: args.customAttrsByChannel,
         includedSkus: args.includedSkus,
-      },
+      }),
     },
   }
   // Per-channel slice: theme that should be used for that channel
@@ -1562,12 +1589,12 @@ async function persistThemes(
   // themes carry the attribute list alongside.
   const channelStates: Record<string, Record<string, unknown>> = {}
   for (const channelKey of args.channelKeys) {
-    const effective =
-      args.themeByChannel[channelKey] || args.commonTheme || null
-    if (effective) {
+    const savedSelection = basePatch.state.variations
+    const effective = effectiveVariationTheme((savedSelection.themeByChannel ?? {}) as Record<string, unknown>, savedSelection.commonTheme, channelKey)
+    if (effective !== undefined) {
       const slice: Record<string, unknown> = { theme: effective }
       if (
-        effective.startsWith(CUSTOM_PREFIX) &&
+        typeof effective === 'string' && effective.startsWith(CUSTOM_PREFIX) &&
         args.customAttrsByChannel[channelKey]
       ) {
         slice.customAttributes = args.customAttrsByChannel[channelKey]
@@ -1575,15 +1602,7 @@ async function persistThemes(
       channelStates[channelKey] = { variations: slice }
     }
   }
-  try {
-    await fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...basePatch, channelStates }),
-    })
-  } catch {
-    /* swallow — caller's debounce will retry */
-  }
+  if (!await saveChoices(basePatch.state.variations, channelStates)) throw new Error('Could not save variation choices. Reload the draft before continuing.')
 }
 
 // ── VV — single-product setup ───────────────────────────────────────

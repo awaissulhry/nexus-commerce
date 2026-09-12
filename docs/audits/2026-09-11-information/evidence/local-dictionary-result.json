@@ -1,0 +1,13 @@
+{
+  "target": "127.0.0.1:55439/nexus_development",
+  "revision": "2026-09-11-information-v1",
+  "fingerprint": "6b9cde5d591817799434900bbc719ed5ae476d1eff5bfcdd9f4c4627f3465a51",
+  "familyIds": [
+    "cmtny43jv002jnjfbb6hnijqx"
+  ],
+  "applied": true,
+  "productsChanged": 0,
+  "assignmentsChanged": 0,
+  "productionChanged": false,
+  "evidenceRecordedAt": "2026-09-11T03:52:08.188607+00:00"
+}

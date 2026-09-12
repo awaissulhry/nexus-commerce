@@ -21,7 +21,8 @@
 //     packing").
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Loader2,
   CheckCircle2,

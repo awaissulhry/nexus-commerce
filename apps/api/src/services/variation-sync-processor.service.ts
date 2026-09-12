@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * Variation Sync Processor Service
  * Phase 12f: Live Amazon SP-API Connection
@@ -6,13 +7,12 @@
  * Builds Amazon SP-API payloads and submits them to production.
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js';
 import { amazonMapperService } from './amazon-mapper.service.js';
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js';
 import { outboundSyncServicePhase9 } from './outbound-sync-phase9.service.js';
 
-const prisma = new PrismaClient();
 
 export class VariationSyncProcessor {
   /**
@@ -88,7 +88,7 @@ export class VariationSyncProcessor {
       });
 
       // Get seller ID from environment
-      const sellerId = process.env.AMAZON_SELLER_ID;
+      const sellerId = (await getAmazonSellerId());
       if (!sellerId) {
         throw new Error('AMAZON_SELLER_ID not configured in environment');
       }

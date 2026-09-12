@@ -1,0 +1,131 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.press_product_page
+  if nexus_contract.fields contains 'custom.press_product_page'
+    assign nexus_field = nexus_variant.metafields.custom.press_product_page
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_blocks = nexus_entry -%}
+{%- if nexus_entry != blank -%}
+{%- if nexus_blocks.size > 0 -%}
+  {%- render 'section-spacing-collapsing' -%}
+
+  {%- comment -%}
+    ------------------------------------------------------------------------------------------------------------------------
+    CSS
+    ------------------------------------------------------------------------------------------------------------------------
+  {%- endcomment -%}
+
+  <style>
+    #shopify-section-{{ section.id }} {
+      --press-items-border: {{ section.settings.logo_item_border.rgb }} / {{ section.settings.logo_item_border.alpha }};
+      --press-max-width: {% if section.settings.content_size == 'small' %}760{% elsif section.settings.content_size == 'medium' %}1000{% elsif section.settings.content_size == 'large' %}1260{% endif %}px;
+    }
+  </style>
+
+  {%- comment -%}
+    ------------------------------------------------------------------------------------------------------------------------
+    LIQUID
+    ------------------------------------------------------------------------------------------------------------------------
+  {%- endcomment -%}
+
+  <div {% render 'section-properties' %}>
+    <div class="section-stack">
+      <div class="press">
+        <press-carousel id="carousel-{{ section.id }}" class="press__list full-bleed text-center sm:unbleed" role="region">
+          {%- for block in nexus_blocks -%}
+{%- assign nexus_block_author = block.author.value -%}
+{%- assign nexus_block_content = block.quote.value -%}
+{%- assign nexus_block_logo = block.logo.value -%}
+{%- assign nexus_block_logo_width = 100 -%}
+{%- assign nexus_block_rating = 4 -%}
+{%- assign nexus_block_show_rating = false -%}
+            <div
+              id="block-{{ section.id }}-{{ block.system.id }}"
+              class="press__list-item snap-center {% if forloop.first %}is-selected{% endif %}"
+              role="group"
+              aria-label="{{ 'general.accessibility.item_nth_of_count' | t: index: forloop.index, count: nexus_blocks.size }}"
+              
+            >
+              {%- if nexus_block_show_rating -%}
+                <div class="rating">
+                  <div class="rating__stars" role="img" aria-label="{{ 'general.rating.info' | t: rating_value: nexus_block_rating, rating_max: 5 }}">
+                    {%- for i in (1..5) -%}
+                      {%- if i <= nexus_block_rating -%}
+                        {%- render 'icon' with 'rating-star', class: 'rating__star' -%}
+                      {%- else -%}
+                        {%- render 'icon' with 'rating-star', class: 'rating__star rating__star--empty' -%}
+                      {%- endif -%}
+                    {%- endfor -%}
+                  </div>
+                </div>
+              {%- endif -%}
+
+              {%- if nexus_block_content != blank -%}
+                <blockquote class="blockquote h3" reveal-on-scroll="true">
+                  {%- render 'styled-text', content: nexus_block_content, text_color: section.settings.heading_color, gradient: section.settings.heading_gradient -%}
+                </blockquote>
+              {%- endif -%}
+
+              {%- if nexus_block_logo != blank or nexus_block_author != blank -%}
+                <div class="v-stack gap-2">
+                  {%- if nexus_block_logo != blank -%}
+                    {%- liquid
+                      assign loading_strategy = null
+
+                      if section.index > 3 or forloop.first == false
+                        assign loading_strategy = 'lazy'
+                      endif
+                    -%}
+
+                    <div {% render 'surface', class: 'press__logo rounded', background: section.settings.logo_item_background %}>
+                      {%- capture sizes -%}{{ nexus_block_logo_width }}px{%- endcapture -%}
+                      {%- capture widths -%}{{ nexus_block_logo_width }}, {{ nexus_block_logo_width | times: 2 | at_most: nexus_block_logo.width }}{%- endcapture -%}
+                      {%- capture max_width -%}--press-image-max-width: {{ nexus_block_logo_width }}px{%- endcapture -%}
+                      {{-
+                        nexus_block_logo
+                        | image_url: width: nexus_block_logo.width
+                        | image_tag: style: max_width, loading: loading_strategy, widths: widths, class: 'press__image', sizes: sizes
+                      -}}
+                    </div>
+                  {%- endif -%}
+
+                  {%- if nexus_block_author != blank -%}
+                    <p class="press__author text-subdued">{{ nexus_block_author }}</p>
+                  {%- endif -%}
+                </div>
+              {%- endif -%}
+            </div>
+          {%- endfor -%}
+        </press-carousel>
+
+        {%- if nexus_blocks.size > 1 -%}
+          <div class="press__controls">
+            <button class="circle-button ring group" is="prev-button" aria-controls="carousel-{{ section.id }}">
+              <span class="sr-only">{{ 'general.accessibility.previous' | t }}</span>
+              <span class="animated-arrow animated-arrow--reverse"></span>
+            </button>
+
+            <page-dots aria-controls="carousel-{{ section.id }}" class="page-dots">
+              {%- for index in (1..nexus_blocks.size) -%}
+                <button type="button" class="tap-area" aria-current="{% if forloop.first %}true{% else %}false{% endif %}">
+                  <span class="sr-only">{{ 'general.accessibility.go_to_item' | t: index: index }}</span>
+                </button>
+              {%- endfor -%}
+            </page-dots>
+
+            <button class="circle-button ring group" is="next-button" aria-controls="carousel-{{ section.id }}">
+              <span class="sr-only">{{ 'general.accessibility.next' | t }}</span>
+              <span class="animated-arrow"></span>
+            </button>
+          </div>
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+{%- endif -%}
+
+
+{%- endif -%}

@@ -18,39 +18,7 @@ import type { CellClassParams, CellValueChangedEvent, ColDef, ColGroupDef, GridA
 import { Download, Search, Upload } from 'lucide-react'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
-import {
-  CellSaveTracker,
-  EmptyValue,
-  ExpandButton,
-  ExpandSlot,
-  FollowsCell,
-  GridSearchSlot,
-  GridSelectionActions,
-  GridSheet,
-  GridSheetStatus,
-  GridToolbar,
-  IdentityChip,
-  LongTextCell,
-  NexusGrid,
-  ReadinessCell,
-  SHEET_GRID_OPTIONS,
-  SelectionLabel,
-  SkuTag,
-  euroColumn,
-  gridSelection,
-  lengthValidation,
-  longTextEditor,
-  numericColumn,
-  numericEditor,
-  roundTripClassRules,
-  saveCell,
-  selectEditor,
-  selectValidation,
-  sheetClassRules,
-  sheetPasteProcessor,
-  statusColumn,
-  type ReadinessValue,
-} from '@/design-system/grid'
+import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, FollowsCell, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SelectionLabel, SkuTag, euroColumn, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, statusColumn, type ReadinessValue } from '@/design-system/grid'
 
 import { registerLabModules } from './labModules'
 import { SHEET_SCHEMA, attrValue, completenessOf, isInherited, makeSheet, readinessOf, type SheetAttr, type SheetRow } from './sheetFixture'
@@ -152,7 +120,7 @@ export function GdsSheetScenario() {
   const columnDefs = useMemo<(ColDef<SheetRow> | ColGroupDef<SheetRow>)[]>(() => {
     const rt = roundTripClassRules<SheetRow>(tracker, (r) => r.id)
     const attrCol = (a: SheetAttr): ColDef<SheetRow> => {
-      const base_validation = a.kind === 'select' ? selectValidation<SheetRow>(a.options ?? [], a.mode ?? 'open', !!a.requiredBy?.length) : lengthValidation<SheetRow>(a.maxLength ?? 4000, !!a.requiredBy?.length)
+      const base_validation = a.kind === 'select' ? selectValidation<SheetRow>(a.options ?? [], a.mode ?? 'open', !!a.requiredBy?.length) : lengthValidation<SheetRow>(lengthCapOf(a), !!a.requiredBy?.length)
       // A parent has no colour, size or EAN of its own: those cells are LOCKED on it, never flagged.
       const notApplicable = (d: SheetRow) => !d.parentSku && a.scope === 'per_variant'
       const validation: typeof base_validation = { validate: (v, d, key) => (notApplicable(d) ? { level: null } : base_validation.validate(v, d, key)) }
@@ -167,12 +135,27 @@ export function GdsSheetScenario() {
         valueSetter: (p: ValueSetterParams<SheetRow>) => { if (!p.data) return false; if (!p.data.parentSku && a.scope === 'per_variant') return false; write(p.data, a.key, p.newValue); return true },
         editable: (p) => !!p.data && !(!p.data.parentSku && a.scope === 'per_variant'),
         cellClassRules: classRules,
-        tooltipValueGetter: (p) => { if (!p.data) return ''; const v = validation.validate(p.value, p.data, a.key); if (v.message) return v.message; const e = tracker.get(p.data.id, a.key); if (e?.reason) return e.reason; return isInherited(p.data, a.key) ? 'Inherited from the parent — edit to pin this variation\'s own value' : '' },
+        /* COMPOSED, reason FIRST (#662). This one also had the order inverted — validation before
+           the save reason — so a refused write was hidden behind a warning about the value. The lab
+           is where the substrate is demonstrated; it cannot demonstrate a different rule. */
+        tooltipValueGetter: (p) => {
+          if (!p.data) return ''
+          const v = validation.validate(p.value, p.data, a.key)
+          const own = v.message || (isInherited(p.data, a.key) ? 'Inherited from the parent — edit to pin this variation\'s own value' : '')
+          return composeCellTooltip(
+            tracker.get(p.data.id, a.key)?.reason,
+            own,
+            a.kind === 'longtext' ? longTextTooltipLine(p.value, { maxLength: a.maxLength, maxBytes: a.maxBytes, capFrom: a.capFrom }) : undefined,
+          )
+        },
         cellClass: (p) => (p.data && notApplicable(p.data) ? 'nds-ag-cell' : 'nds-ag-cell nds-cell-is-editable'),
       }
       if (a.kind === 'select') return { ...base, ...selectEditor((a.options ?? []).map((o) => ({ value: o, label: o }))), cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && !(p.data && !p.data.parentSku && a.scope === 'per_variant') ? <span className="nds-cell-required">⚠ required</span> : <EmptyValue />) : <span>{String(p.value)}</span>) }
       if (a.kind === 'boolean') return { ...base, ...selectEditor([{ value: 'true', label: 'Yes' }, { value: 'false', label: 'No' }]), valueGetter: (p) => (p.data ? (attrValue(p.data, a.key, rowsRef.current) === null ? null : String(attrValue(p.data, a.key, rowsRef.current))) : null), valueSetter: (p) => { if (!p.data) return false; patchRow(p.data.id, (r) => { r.attrs[a.key] = p.newValue === 'true' }); return true }, cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null ? <EmptyValue /> : <span>{p.value === 'true' ? 'Yes' : 'No'}</span>) }
-      if (a.kind === 'longtext') return { ...base, ...longTextEditor({ maxLength: Math.max(a.maxLength ?? 2000, 200) }), cellRenderer: LongTextCell, cellRendererParams: { maxLength: a.maxLength, required: !!a.requiredBy?.length } }
+      // 🔴 The FIFTH invented cap (`?? 2000`) and the retired renderer shape, both here on one line.
+      // `cellRendererParams` dropped `maxBytes`/`capFrom`, so a byte-capped column rendered as
+      // uncapped in the very place built to demonstrate the substrate. Raw caps, no default.
+      if (a.kind === 'longtext') return { ...base, ...longTextEditor(a.maxLength ? { maxLength: Math.max(a.maxLength, 200) } : {}), cellRenderer: LongTextCell, cellRendererParams: { maxLength: a.maxLength, maxBytes: a.maxBytes, capFrom: a.capFrom, required: !!a.requiredBy?.length } }
       return { ...base, editable: base.editable, cellEditor: 'agTextCellEditor', cellRenderer: (p: ICellRendererParams<SheetRow>) => (p.value == null || p.value === '' ? (a.requiredBy?.length && p.data?.parentSku ? <span className="nds-cell-required">⚠ required</span> : <EmptyValue />) : <span>{String(p.value)}</span>) }
     }
     const groups = new Map<string, SheetAttr[]>()
@@ -217,8 +200,19 @@ export function GdsSheetScenario() {
   const onSelectionChanged = useCallback((e: { api: GridApi<SheetRow> }) => setSelected(e.api.getSelectedNodes().map((n) => n.data!.id)), [])
   const onGridReady = useCallback((e: GridReadyEvent<SheetRow>) => {
     apiRef.current = e.api
-    // Lab probe: the conformance runner and a browser session read the tracker and the API here.
-    ;(window as unknown as { __gdsSheet?: unknown }).__gdsSheet = { api: e.api, tracker, rows: () => rowsRef.current, log: SAVE_LOG }
+    /* Lab probe: the conformance runner and a browser session read the tracker and the API here.
+       `api` is the real `GridApi`, so a probe can drive AG's OWN paths headlessly — including
+       `api.pasteFromClipboard()`, which is the only way to exercise paste: AG reads the system
+       clipboard, so a synthetic paste event reaches the DOM and the cell never changes (AG.1
+       measured that, with a positive control).
+
+       🔴 Guarded out of production. It was unguarded, which put a live `GridApi` — `applyTransaction`,
+       `setGridOption`, the lot — on `window` for anyone who opened `/design/grid-lab` on a deployed
+       build. A lab affordance is for the lab; nothing in the conformance runner or any probe needs
+       it to exist in a production bundle. */
+    if (process.env.NODE_ENV !== 'production') {
+      ;(window as unknown as { __gdsSheet?: unknown }).__gdsSheet = { api: e.api, tracker, rows: () => rowsRef.current, log: SAVE_LOG }
+    }
   }, [tracker])
   const processDataFromClipboard = useMemo(() => sheetPasteProcessor<SheetRow>(SHEET_SCHEMA.map((a) => ({ colId: a.key, headerName: a.label }))), [])
   const defaultColDef = useMemo<ColDef<SheetRow>>(() => ({ sortable: false, resizable: true, suppressHeaderMenuButton: true }), [])

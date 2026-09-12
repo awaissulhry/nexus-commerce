@@ -27,10 +27,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { AgGridReact, type AgGridReactProps } from 'ag-grid-react'
-import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, GetMainMenuItems, GridApi, GridReadyEvent, MenuItemDef } from 'ag-grid-community'
+import type { ColDef, ColumnPinnedEvent, DefaultMenuItem, GetMainMenuItems, GridApi, GridReadyEvent, MenuItemDef, NewColumnsLoadedEvent } from 'ag-grid-community'
 
 import { gridDensity, gridGeometry, type GridDensityName } from '../tokens/grid'
 import { compareSortValues, type SortValue } from './sortValues'
+import { fillHandleHit } from './editors/openGesture'
 import { registerGridModules } from './modules'
 import { workspaceGridTheme } from './theme/theme'
 import { useAgThemeMode } from './hooks/useAgThemeMode'
@@ -46,6 +47,7 @@ registerGridModules()
  * package names, so an upgrade or a swap is one folder's problem.
  */
 export type {
+  CellClassParams,
   ColDef,
   ColGroupDef,
   ColumnState,
@@ -69,7 +71,19 @@ export type {
 
 export type GridDensity = GridDensityName
 /** `text`: a one-line row. `media`: the identity cell carries a thumbnail (photo · title · sub-line). */
-export type GridRowKind = 'text' | 'media'
+/**
+ * Three row kinds, not three densities.
+ *
+ * `text` is a plain one-line row. `media` is the /products/next shape — a thumbnail beside a STACK
+ * (photo · title · sub-line), which is what buys the 52. `media-line` is the studio's: a thumbnail
+ * on a ONE-LINE row, because the sheet's identity cell has no stack (SKU and Name are separate
+ * columns). 36 = 32px thumbnail + 2 above + 2 below.
+ *
+ * 🔴 Height driven by a row's CONTENT is a property of the row; density is an operator preference
+ * applied across every grid. A fourth density tier would have given the ads console a thumbnail row
+ * the moment someone picked "compact" (DS.1 + PES.2, hub #184).
+ */
+export type GridRowKind = 'text' | 'media' | 'media-line'
 
 /** KT.3 — a blank sinks to the BOTTOM in both directions, pre-inverted for AG's descending flip. */
 const blankSafeComparator = (a: SortValue, b: SortValue, _na: unknown, _nb: unknown, desc: boolean) => {
@@ -134,13 +148,30 @@ export function NexusGrid<T>({
   selectionColumnDef,
   onColumnPinned,
   onGridReady,
+  /* 🔴 Destructured like its siblings, and for the same reason: `onNewColumnsLoaded` is WRAPPED
+     below (it re-runs `keepSelectionFirst`, because new columns can land the selection column back
+     behind the first one). Left inside `agProps`, the `{...agProps}` spread further down overwrote
+     the wrapper with the caller's raw handler — so the first caller ever to pass one would have
+     silently lost checkbox-first ordering, with nothing to see in review. Nobody passes one today
+     (found latent by the hub, #323). Taking it out of the spread also removes the `as never` and
+     the exhaustive-deps disable the old shape needed. */
+  onNewColumnsLoaded,
+  /* 🔴 Destructured for the same reason as `onNewColumnsLoaded` above, and a different one on top:
+     the fill-handle interception below CALLS it. AG never dispatches `cellDoubleClicked` for a
+     gesture that landed on the handle (its own listener stops propagation first), so a host that
+     answers a refused double-click — "this column is read-only", ruling 1 — would go silent again
+     on exactly the corner this file exists to fix. Left inside `agProps` it would also be handed
+     straight to AG by the spread and never reach this call. ONE host path for "a double-click on
+     this cell", wherever in the cell it landed. */
+  onCellDoubleClicked,
   ...agProps
 }: NexusGridProps<T>) {
   const themeMode = useAgThemeMode()
   const contextDensity = useGridDensity()
   const density = densityProp ?? contextDensity
   const tier = gridDensity[density]
-  const rowHeight = agProps.rowHeight ?? (rows === 'media' ? tier.rowMedia : tier.rowText)
+  const rowHeight =
+    agProps.rowHeight ?? (rows === 'media' ? tier.rowMedia : rows === 'media-line' ? tier.rowMediaLine : tier.rowText)
   const headerHeight = agProps.headerHeight ?? tier.header
 
   /**
@@ -202,13 +233,83 @@ export function NexusGrid<T>({
     [onGridReady, keepSelectionFirst],
   )
   const handleNewColumnsLoaded = useCallback(
-    (e: { api: GridApi<T> }) => {
+    (e: NewColumnsLoadedEvent<T>) => {
       keepSelectionFirst(e.api)
-      agProps.onNewColumnsLoaded?.(e as never)
+      onNewColumnsLoaded?.(e)
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keepSelectionFirst, agProps.onNewColumnsLoaded],
+    [keepSelectionFirst, onNewColumnsLoaded],
   )
+
+  /**
+   * 🔴 A DOUBLE-CLICK ON THE FILL HANDLE OPENS THE CELL'S EDITOR. It is the P0 of 2026-09-03 — the
+   * Owner's *"I double-click a cell and sometimes no editor opens"* — and the whole mechanism, the
+   * measurements and the ruling are in `editors/openGesture.ts`. In one line: AG parents a 6×6px
+   * `.ag-fill-handle` INSIDE the selected cell's own bottom-right corner and binds its own
+   * `dblclick` that begins `_stopPropagationForAgGrid(e)`, so the cell never sees the gesture and
+   * no editor opens; the rest of that handler fills the value down to the last row of the grid,
+   * which is a silent unconfirmed overwrite of the column (measured: one corner double-click on
+   * `basePrice` armed 20 `PATCH /api/products/bulk` calls onto other rows).
+   *
+   * 🔴 CAPTURE PHASE, on the wrapper. AG's listener is a native one bound to the handle element
+   * itself, in the BUBBLE phase and therefore deeper than anything here; only a capture-phase
+   * listener on an ancestor runs before it, and only `stopPropagation()` there keeps the event from
+   * reaching it at all. A bubble-phase handler — React's `onDoubleClick` included — would run after
+   * the fill had already been dispatched. Native rather than React's `onDoubleClickCapture` so the
+   * ordering does not depend on where React's delegated root happens to sit relative to AG's DOM.
+   *
+   * 🔴 THIS IS IN THE ENGINE, not in a sheet. Every AG grid in the product that turns the fill
+   * handle on inherits the same answer — the master sheet, PES.3's channel scopes, the inventory
+   * editor, the lab — and the "shared = exactly the same" rule is why a copy per sheet is not an
+   * option. `mode: 'fill'` is opt-in per grid, so a grid without a handle never runs this.
+   *
+   * DRAG-TO-FILL IS UNTOUCHED: that is `mousedown`/`mousemove` on the same element, it is the
+   * affordance the sheet's footer advertises, and nothing here listens for it.
+   */
+  const wrapRef = useRef<HTMLDivElement | null>(null)
+  /* Through a ref so the listener is installed ONCE per mount: a handler prop that re-identifies
+     would otherwise add and remove a document listener on every render of the host. */
+  const onCellDoubleClickedRef = useRef(onCellDoubleClicked)
+  onCellDoubleClickedRef.current = onCellDoubleClicked
+  useEffect(() => {
+    const root = wrapRef.current
+    if (!root) return
+    const onDblClickCapture = (e: MouseEvent) => {
+      const hit = fillHandleHit(e.target)
+      if (!hit) return
+      e.preventDefault()
+      e.stopPropagation()
+      const api = apiRef.current
+      if (!api || api.isDestroyed()) return
+      /* `startEditingCell` honours `colDef.editable` and returns silently when the cell is not
+         editable — the same answer a double-click on the cell body gets, which is what "the same
+         column always opens the same way" requires. It takes no `key`, so `cellEditorSelector`
+         sees no `eventKey` and the column's ORDINARY editor opens, never the `=` one. */
+      api.startEditingCell({ rowIndex: hit.rowIndex, colKey: hit.colKey, rowPinned: hit.rowPinned })
+      /* …and tell the host the same thing AG would have told it. `startEditingCell` returns in
+         silence when the cell is not editable, so without this a corner double-click on a LOCKED
+         cell would be the one gesture left with nothing to say — the defect's own shape, reopened
+         by its fix. The host decides what to say; the engine only guarantees it is asked. */
+      const column = api.getColumn(hit.colKey)
+      /* AG names the two pinned sections separately — there is no `getPinnedRow(section, i)`, and
+         reaching for one typechecks nowhere and would have been a runtime `undefined` if it had. */
+      const node = hit.rowPinned === 'top'
+        ? api.getPinnedTopRow(hit.rowIndex)
+        : hit.rowPinned === 'bottom'
+          ? api.getPinnedBottomRow(hit.rowIndex)
+          : api.getDisplayedRowAtIndex(hit.rowIndex)
+      if (column && node) {
+        const event = {
+          ...node.data !== undefined ? { data: node.data } : {},
+          node, column, colDef: column.getColDef(), value: api.getCellValue({ rowNode: node, colKey: hit.colKey }),
+          api, context: api.getGridOption('context'), event: e, type: 'cellDoubleClicked',
+        } as never
+        column.getColDef().onCellDoubleClicked?.(event)
+        onCellDoubleClickedRef.current?.(event)
+      }
+    }
+    root.addEventListener('dblclick', onDblClickCapture, { capture: true })
+    return () => root.removeEventListener('dblclick', onDblClickCapture, { capture: true })
+  }, [])
   useEffect(() => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return
@@ -270,13 +371,30 @@ export function NexusGrid<T>({
       // param cannot know the row's height — a spanning cell under a column-group strip is taller
       // than the row. The wrapper tells it.
       ['--nds-grid-header-h' as string]: `${headerHeight}px`,
+      /**
+       * 🔴 Publish the row height the grid is ACTUALLY using, overriding AG's own
+       * `--ag-row-height` on this wrapper.
+       *
+       * AG's variable is a Theming API **input**, not a readback: it holds the theme's expression
+       * (measured `calc(max(16px,13px) + 8px*3.25*1)` = 42px) while the rendered row was 28,
+       * because the real height goes to AG through the `rowHeight` grid OPTION in JS and nothing
+       * writes it back. So it looks like a readback, resembles a plausible number, and is wrong.
+       *
+       * That cost a real defect: a thumbnail cap written as
+       * `min(thumb, calc(var(--ag-row-height) - 4px))` was silently inert — no error, no warning,
+       * a sensible-looking rule that never bound. Setting it here closes the CLASS rather than
+       * patching that one expression: any CSS in any consumer can now trust `--ag-row-height` to
+       * mean what the grid rendered. (DS.1 + UX.1's durable fix, 2026-09-02.)
+       */
+      ['--ag-row-height' as string]: `${rowHeight}px`,
     }),
-    [agProps.domLayout, height, fill, headerHeight],
+    [agProps.domLayout, height, fill, headerHeight, rowHeight],
   )
 
   return (
     <>
       <div
+        ref={wrapRef}
         // `nds-ag-nexus` marks the DS grid: the column-group strip and the DataGrid-parity rules
         // in grid.css key on it, so EVERY NexusGrid — in a card, in a modal, anywhere — reads
         // the same.
@@ -301,6 +419,7 @@ export function NexusGrid<T>({
           getMainMenuItems={getMainMenuItems}
           selectionColumnDef={mergedSelectionColumnDef}
           onColumnPinned={handleColumnPinned}
+          onCellDoubleClicked={onCellDoubleClicked}
           // Popups (header menus, dialogs, tooltips) go on the document, not inside the grid. AG
           // fits a popup to its popup parent's box; under `autoHeight` that box is the whole
           // grid and can run past the viewport, so a header menu opened low on the page ended

@@ -7,7 +7,13 @@
  *
  *   GET    /api/products/:productId/scheduled-image-publishes
  *     query: ?status=PENDING (default) | FIRED | FAILED | CANCELLED | ALL
- *     → { rows: ScheduledImagePublish[] }
+ *     → { rows: ScheduledImagePublish[], executionEnabled: boolean }
+ *
+ *     🔴 `executionEnabled` reports whether the cron that FIRES these rows is actually running on
+ *     this deployment (`NEXUS_ENABLE_SCHEDULED_IMAGE_PUBLISH=1`). Creating a schedule succeeds
+ *     regardless — the row is stored either way — so without this field a UI has no way to tell
+ *     the operator that the time they picked will pass with nothing happening. A queue that
+ *     accepts work it will never run must say so. (Added by PES.7, additive.)
  *
  *   DELETE /api/scheduled-image-publishes/:id
  *     Cancels a PENDING row. FIRED/FAILED/CANCELLED rows can't be
@@ -104,7 +110,10 @@ const scheduledImagePublishesRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: [{ scheduledFor: 'asc' }],
         take: 100,
       })
-      return reply.send({ rows })
+      // Read at request time, not at boot: the same flag the cron itself checks
+      // (`scheduled-image-publish.job.ts`), so the two can never drift apart.
+      const executionEnabled = process.env.NEXUS_ENABLE_SCHEDULED_IMAGE_PUBLISH === '1'
+      return reply.send({ rows, executionEnabled })
     },
   )
 

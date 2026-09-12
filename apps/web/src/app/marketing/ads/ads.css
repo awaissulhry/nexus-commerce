@@ -2134,36 +2134,26 @@
    header do its job, rather than growing the page to five screens. */
 .h10-rep-pane .h10-rep-tblwrap { max-height: 620px; overflow: auto; }
 /* DS Checkbox puts className on the wrapping label, not the input. */
-.h10-rep-tbl th.chk .part input { accent-color: #9aa4b1; }
-.h10-rep-tbl { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12.5px; }
-.h10-rep-tbl th { position: sticky; top: 0; z-index: 1; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #7c8794; background: var(--nds-white); border-bottom: 1px solid var(--nds-grey-100); }
-.h10-rep-tbl th .srt { font: inherit; color: inherit; text-transform: inherit; letter-spacing: inherit; background: none; border: none; padding: 0; cursor: pointer; }
-.h10-rep-tbl th .srt.on { color: var(--nds-blue-600); }
-.h10-rep-tbl th .ar { margin-left: 3px; }
-.h10-rep-tbl td { padding: 7px 10px; border-bottom: 1px solid var(--nds-grey-50); color: var(--nds-grey-700); }
-.h10-rep-tbl tbody tr:hover td { background: var(--nds-white); }
-.h10-rep-tbl tr.conflict td { background: var(--nds-note-warn-bg); }
-.h10-rep-tbl tr.conflict:hover td { background: #fcf3d9; }
-.h10-rep-tbl tr.added td { background: #f6fbf8; }
-.h10-rep-tbl tr.cut td { background: var(--nds-grey-25); }
-.h10-rep-tbl tr.cut code, .h10-rep-tbl tr.cut b { text-decoration: line-through; color: #a4adba; }
-.h10-rep-tbl th.chk, .h10-rep-tbl td.chk { width: 34px; padding-right: 0; }
-.h10-rep-tbl th.mt, .h10-rep-tbl td.mt { width: 118px; }
-.h10-rep-tbl th.bid, .h10-rep-tbl td.bid { width: 94px; }
-.h10-rep-tbl th.whr, .h10-rep-tbl td.whr { width: 132px; }
+.h10-rep-tbl { width: 100%; font-size: 12.5px; }
+.h10-rep-tbl .nds-dg-tr.conflict .nds-dg-td { background: var(--nds-note-warn-bg); }
+.h10-rep-tbl .nds-dg-tr.conflict:hover .nds-dg-td { background: var(--nds-note-warn-bg); }
+.h10-rep-tbl .nds-dg-tr.added .nds-dg-td { background: var(--nds-success-soft); }
+.h10-rep-tbl .nds-dg-tr.cut .nds-dg-td { background: var(--nds-surface-raised); }
+.h10-rep-tbl .nds-dg-tr.cut code, .h10-rep-tbl .nds-dg-tr.cut b { text-decoration: line-through; color: var(--nds-text-disabled); }
+.h10-rep-tbl .nds-dg-td.chk { padding-right: 0; }
 /* The status cell holds a sentence AND the button that resolves it. Without
    `overflow: hidden` the inline-flex sizes to its content and pushes the button
    past the cell — which is how the resolve control ends up off-screen again. */
-.h10-rep-tbl th.st, .h10-rep-tbl td.st { width: 300px; overflow: hidden; }
-.h10-rep-tbl th.act, .h10-rep-tbl td.act { width: 46px; text-align: right; }
-.h10-rep-tbl th.ct, .h10-rep-tbl td.ct { width: 86px; text-align: center; }
+.h10-rep-tbl .nds-dg-td.st { overflow: hidden; }
+.h10-rep-tbl .nds-dg-td.act { text-align: right; }
+.h10-rep-tbl .nds-dg-td.ct { text-align: center; }
 /* "PLACEMENTS" is the one header that does not fit the count width, and the
    bidding strategy is a phrase rather than a number. */
-.h10-rep-tbl th.plc, .h10-rep-tbl td.plc { width: 104px; text-align: center; }
-.h10-rep-tbl th.strat, .h10-rep-tbl td.strat { width: 116px; text-align: center; }
-.h10-rep-tbl td.strat .tag, .h10-rep-tbl td.plc .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: middle; }
-.h10-rep-tbl th.bud, .h10-rep-tbl td.bud { width: 120px; text-align: right; }
-.h10-rep-tbl td.exp { min-width: 0; }
+.h10-rep-tbl .nds-dg-td.plc { text-align: center; }
+.h10-rep-tbl .nds-dg-td.strat { text-align: center; }
+.h10-rep-tbl .nds-dg-td.strat .tag, .h10-rep-tbl .nds-dg-td.plc .tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
+.h10-rep-tbl .nds-dg-td.bud { text-align: right; }
+.h10-rep-tbl .nds-dg-td.exp { min-width: 0; }
 .h10-rep-tbl .expbtn { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; font: inherit; background: none; border: none; padding: 1px 3px; margin-left: -3px; border-radius: 5px; cursor: pointer; text-align: left; }
 .h10-rep-tbl .expbtn:hover { background: var(--nds-grey-100); }
 .h10-rep-tbl .expbtn code, .h10-rep-tbl .expbtn b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2191,7 +2181,6 @@
 .h10-rep-tbl .mini { flex: none; font: inherit; font-size: 11.5px; font-weight: 600; color: var(--nds-grey-700); background: var(--nds-white); border: 1px solid #e0d4a8; border-radius: 5px; padding: 2px 8px; cursor: pointer; }
 .h10-rep-tbl .mini:hover { background: #fffdf5; }
 .h10-rep-tbl .nds-select select { font-size: 12px; padding: 3px 22px 3px 8px; }
-.h10-rep-tbl tfoot td { border-bottom: none; border-top: 1px solid var(--nds-grey-100); background: var(--nds-white); }
 .h10-rep-tbl .lnk { font: inherit; color: #9aa4b1; background: none; border: none; cursor: pointer; padding: 2px; }
 .h10-rep-tbl .lnk:hover { color: var(--nds-blue-600); }
 .h10-rep-tblbar { display: flex; align-items: center; gap: 10px; padding: 9px 12px; font-size: 12px; color: #7c8794; border-bottom: 1px solid var(--nds-grey-100); }
@@ -2307,7 +2296,6 @@
 .h10-rep-blockers .lnk:hover { text-decoration: underline; }
 
 .h10-rep-manifest h3, .h10-rep-changesum h3, .h10-rep-launch .h10-rep-dest h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 11px; font-size: 14px; font-weight: 700; color: var(--nds-grey-900); }
-.h10-rep-manifest .h10-rep-tbl th { background: var(--nds-white); }
 .h10-rep-changesum .hd { display: flex; align-items: baseline; gap: 10px; }
 .h10-rep-changesum .hd h3 { margin: 0; }
 .h10-rep-changesum .hd .n { flex: 1; font-size: 12.5px; color: #7c8794; }
@@ -2674,13 +2662,13 @@ a.h10-rc-bud.one:focus-visible { outline: 2px solid var(--nds-blue-600); outline
    reads it reads like it governs everything.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 .h10-bset { display: flex; flex-direction: column; gap: 22px; }
-.h10-bset-sec h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--nds-text-1); }
+.h10-bset-sec h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: var(--nds-text); }
 .h10-bset-why { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--nds-text-2); }
 .h10-bset-why svg { flex: none; margin-top: 2px; color: var(--nds-live); }
 .h10-bset-grid { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 8px 12px; align-items: center; max-width: 420px; }
 .h10-bset-grid .h10-bset-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--nds-text-3); }
 .h10-bset-row { display: contents; }
-.h10-bset-mkt { font-size: 13px; font-weight: 700; color: var(--nds-text-1); }
+.h10-bset-mkt { font-size: 13px; font-weight: 700; color: var(--nds-text); }
 .h10-bset-acts { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
 .h10-bset-quiet { font-size: 12.5px; color: var(--nds-text-3); }
 .h10-bset-pct { max-width: 110px; }

@@ -1,0 +1,51 @@
+import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { createServer } from 'vite'
+const root = fileURLToPath(new URL('.', import.meta.url)), repo = resolve(root, '../../../..')
+const sheets = Object.fromEntries(['SHOPIFY', 'ETSY'].map(channel => [channel, JSON.parse(readFileSync(`${root}/${channel.toLowerCase()}.json`, 'utf8'))]))
+const writes = []
+const server = await createServer({ configFile: false, root, resolve: { alias: [
+  { find: '@/lib/auth/AuthProvider', replacement: root + '/auth.ts' },
+  { find: '@/lib/backend-url', replacement: root + '/backend.ts' },
+  { find: 'next/navigation', replacement: root + '/navigation.tsx' },
+  { find: 'next/link', replacement: root + '/link.tsx' },
+  { find: 'next/dynamic', replacement: root + '/dynamic.tsx' },
+  { find: '@', replacement: repo + '/apps/web/src' },
+  { find: '@nexus/shared', replacement: repo + '/packages/shared' },
+  { find: 'react-dom', replacement: repo + '/node_modules/react-dom' },
+  { find: 'react', replacement: repo + '/node_modules/react' },
+] }, esbuild: { jsx: 'automatic' }, define: { 'process.env.NODE_ENV': '"development"' },
+  server: { host: '127.0.0.1', port: 3136, strictPort: true, fs: { allow: [root, repo] } },
+  plugins: [{ name: 'isolated-store-api', configureServer(vite) {
+    vite.middlewares.use(async (req, res, next) => {
+      const url = new URL(req.url, 'http://127.0.0.1:3136')
+      if (!url.pathname.startsWith('/api/')) return next()
+      const send = (data, code = 200) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(data)) }
+      let body = {}; if (req.method !== 'GET') { let text = ''; for await (const chunk of req) text += chunk; body = text ? JSON.parse(text) : {} }
+      const channel = url.searchParams.get('channel') ?? 'SHOPIFY'
+      if (url.pathname.endsWith('/studio/sheet')) return send(sheets[channel])
+      if (url.pathname.endsWith('/studio/destination')) return send({ productId: 'store-demo', familyId: 'store-demo', channel, marketplace: 'GLOBAL', accountId: channel.toLowerCase(), aliasKey: null, listing: null })
+      if (url.pathname.endsWith('/readiness')) return send({ market: 'GLOBAL', scopes: [], computedAt: new Date().toISOString() })
+      if (url.pathname.endsWith('/products/bulk')) {
+        writes.push(body)
+        const sheet = sheets[body.marketplaceContexts?.[0]?.channel]
+        if (!sheet) return send({ error: 'Choose the store destination.' }, 400)
+        for (const change of body.changes ?? []) {
+          const row = sheet.rows.find(r => r.id === change.id), key = change.field.replace(/^attr_/, '')
+          if (!row?.values[key]) return send({ error: 'Unknown fixture cell' }, 400)
+          row.values[key] = { ...row.values[key], value: change.value, pinned: true, follows: false, source: 'channelExplicit', layer: 'channel' }
+          row.listing.version++
+        }
+        return send({ success: true, updated: body.changes.length, errors: [], versionOf: 'channelListing', currentVersion: sheet.rows.find(r => r.id === body.changes[0].id).listing.version })
+      }
+      if (url.pathname.endsWith('/fixture/evidence')) return send({ writes })
+      if (url.pathname.endsWith('/formulas/batch')) return send({ products: {}, formulas: [] })
+      if (url.pathname.endsWith('/formulas/functions')) return send({ functions: [] })
+      if (url.pathname.includes('/grid-views')) return send({ views: [] })
+      if (url.pathname.includes('/reference-labels')) return send({ labels: {} })
+      return send({ items: [], views: [], rules: [], fields: [], families: [], counts: {}, jobs: [], sources: [] })
+    })
+  } }], optimizeDeps: { include: ['react', 'react-dom/client'] } })
+await server.listen()
+console.log('Store product information QA: http://127.0.0.1:3136/products/store-demo/edit/studio?scope=SHOPIFY&market=GLOBAL')

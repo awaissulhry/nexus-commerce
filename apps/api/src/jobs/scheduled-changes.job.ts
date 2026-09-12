@@ -184,12 +184,12 @@ export function startScheduledChangesCron(): void {
     logger.error('scheduled-changes cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
+  scheduledTask = cron.schedule(schedule, async () => {
     if (process.env.NEXUS_ENABLE_SCHEDULED_CHANGES === '0') {
       // Skip silently — runScheduledChangesOnce also no-ops on this gate.
       return
     }
-    void recordCronRun('scheduled-changes', async () => {
+    await recordCronRun('scheduled-changes', async () => {
       const r = await runScheduledChangesOnce()
       return `picked=${r.picked} applied=${r.applied} failed=${r.failed}`
     }).catch((err) => {

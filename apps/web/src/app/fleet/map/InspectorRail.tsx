@@ -30,7 +30,7 @@
  * marketplace scope, which IS enforced, and says plainly what that means.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowRight, ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
 import { ago } from '../_shared/run-health'

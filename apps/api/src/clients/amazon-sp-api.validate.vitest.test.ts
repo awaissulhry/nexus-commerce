@@ -15,7 +15,7 @@ function stub(client: AmazonSpApiClient, mockResponse: Record<string, unknown>) 
   ;(client as any).fetchWithRetry = async (url: string, init: any) => {
     captured.url = url
     captured.init = init
-    return { json: async () => mockResponse }
+    return { ok: true, status: 200, json: async () => ({ sku: 'SKU1', ...mockResponse }) }
   }
   return captured
 }

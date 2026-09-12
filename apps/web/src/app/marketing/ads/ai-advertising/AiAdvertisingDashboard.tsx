@@ -15,8 +15,9 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
-import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Plus, Archive } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { useAdsMarketplace, ALL_MARKETS } from '../_shell/MarketplaceContext'

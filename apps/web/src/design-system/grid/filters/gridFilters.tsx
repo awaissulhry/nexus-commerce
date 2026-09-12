@@ -14,14 +14,22 @@
  * `api.setFilterModel`, and these components receive it as `props.model` — so the header's funnel
  * icon, the accordion, a saved view and the request can never disagree about what is filtered.
  *
- * Under the Server-Side Row Model the grid never evaluates a filter itself; `doesFilterPass` is
- * required by the hook and returns true, because the server has already answered.
+ * BOTH ROW MODELS, one component. Under the Server-Side Row Model the grid never evaluates a filter
+ * itself — the server has already answered, and `doesFilterPass` is never called. Under the
+ * Client-Side Row Model it is the ONLY thing that filters. These used to share a single
+ * `{ doesFilterPass: () => true }`, which was right for SSRM and silently wrong everywhere else: on
+ * a client-side grid (the Product Edit Studio's sheet) the funnel lit, the header showed an active
+ * filter, and every row passed. The predicates now live in `filterPredicates.ts`, pure and tested,
+ * so a filter means the same thing wherever it is mounted.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useGridFilter, type CustomFilterProps } from 'ag-grid-react'
 import { Search } from 'lucide-react'
 
 import type { GridNumberFilterModel, GridSetFilterModel, GridTextFilterModel } from '@nexus/shared/products-grid'
+
+import { numberFilterPasses, setFilterPasses, textFilterPasses } from './filterPredicates'
+import { GridNumberRangeFloatingFilter, GridSetFloatingFilter, GridTextFloatingFilter } from './gridFloatingFilters'
 
 import { OptionList } from '@/design-system/components/OptionList'
 import { Button, Input } from '@/design-system/primitives'
@@ -41,8 +49,23 @@ export interface NumberRangeFilterParams {
   unit?: string
 }
 
-/** The server filters; nothing is evaluated in the browser. */
-const SERVER_FILTERS = { doesFilterPass: () => true }
+/**
+ * A filter's `doesFilterPass`, bound to the model it is currently showing.
+ *
+ * `props.getValue(node)` is AG's own accessor, so a column with a `valueGetter` (every attribute
+ * column on the sheet reads out of `row.values`) is filtered on the value the operator can SEE,
+ * not on a field that does not exist on the row object.
+ */
+function usePasses<TModel>(
+  model: TModel | null,
+  getValue: (node: never) => unknown,
+  predicate: (model: TModel | null, value: unknown) => boolean,
+) {
+  return useCallback(
+    (p: { node: unknown }) => predicate(model, getValue(p.node as never)),
+    [model, getValue, predicate],
+  )
+}
 
 /** A draft that commits after a pause, and follows the model when it changes from outside. */
 function useDebouncedDraft(applied: string, commit: (draft: string) => void, ms = 250) {
@@ -76,7 +99,7 @@ function useDebouncedDraft(applied: string, commit: (draft: string) => void, ms 
  * filtered", which is what clears the funnel and drops the entry from the request.
  */
 export function GridSetFilter(props: CustomFilterProps<unknown, unknown, GridSetFilterModel>) {
-  useGridFilter(SERVER_FILTERS)
+  useGridFilter({ doesFilterPass: usePasses(props.model, props.getValue, setFilterPasses) })
   const params = (props.colDef.filterParams ?? {}) as Partial<SetFilterParams>
   const options = params.options ?? []
   const selected = props.model?.values ?? []
@@ -109,7 +132,7 @@ const bound = (s: string): number | null => {
 const boundText = (n: number | null | undefined) => (n == null ? '' : String(n))
 
 export function GridNumberRangeFilter(props: CustomFilterProps<unknown, unknown, GridNumberFilterModel>) {
-  useGridFilter(SERVER_FILTERS)
+  useGridFilter({ doesFilterPass: usePasses(props.model, props.getValue, numberFilterPasses) })
   const { unit } = (props.colDef.filterParams ?? {}) as Partial<NumberRangeFilterParams>
   // The two fields commit together: a draft on either side re-reads the other from its input.
   const maxRef = useRef<HTMLInputElement>(null)
@@ -145,7 +168,7 @@ export function GridNumberRangeFilter(props: CustomFilterProps<unknown, unknown,
 }
 
 export function GridTextFilter(props: CustomFilterProps<unknown, unknown, GridTextFilterModel>) {
-  useGridFilter(SERVER_FILTERS)
+  useGridFilter({ doesFilterPass: usePasses(props.model, props.getValue, textFilterPasses) })
   const { onModelChange } = props
   const [draft, edit] = useDebouncedDraft(props.model?.filter ?? '', (d) =>
     onModelChange(d.trim() ? { filterType: 'text', type: 'contains', filter: d.trim() } : null),
@@ -162,11 +185,32 @@ export function GridTextFilter(props: CustomFilterProps<unknown, unknown, GridTe
   )
 }
 
-/** The `ColDef` fragment that mounts one of these on a column. */
-export function gridFilterDef(kind: 'set', params: SetFilterParams): Pick<ColDef, 'filter' | 'filterParams'>
-export function gridFilterDef(kind: 'number', params?: NumberRangeFilterParams): Pick<ColDef, 'filter' | 'filterParams'>
-export function gridFilterDef(kind: 'text'): Pick<ColDef, 'filter' | 'filterParams'>
-export function gridFilterDef(kind: 'set' | 'number' | 'text', params?: SetFilterParams | NumberRangeFilterParams): Pick<ColDef, 'filter' | 'filterParams'> {
+/**
+ * The `ColDef` fragment that mounts one of these on a column — and, with `floating: true`, its
+ * inline counterpart in the floating filter row.
+ *
+ * The floating component is chosen HERE rather than by the caller so the two halves can never be
+ * mismatched: a text filter with a number floating filter would write a model its own predicate
+ * rejects, and nothing on screen would say why.
+ */
+export type GridFilterDef = Pick<ColDef, 'filter' | 'filterParams' | 'floatingFilter' | 'floatingFilterComponent'>
+
+export function gridFilterDef(kind: 'set', params: SetFilterParams, opts?: GridFilterOptions): GridFilterDef
+export function gridFilterDef(kind: 'number', params?: NumberRangeFilterParams, opts?: GridFilterOptions): GridFilterDef
+export function gridFilterDef(kind: 'text', params?: undefined, opts?: GridFilterOptions): GridFilterDef
+export function gridFilterDef(
+  kind: 'set' | 'number' | 'text',
+  params?: SetFilterParams | NumberRangeFilterParams,
+  opts: GridFilterOptions = {},
+): GridFilterDef {
   const filter = kind === 'set' ? GridSetFilter : kind === 'number' ? GridNumberRangeFilter : GridTextFilter
-  return { filter, filterParams: params ?? {} }
+  const def: GridFilterDef = { filter, filterParams: params ?? {} }
+  if (!opts.floating) return def
+  const floatingFilterComponent = kind === 'set' ? GridSetFloatingFilter : kind === 'number' ? GridNumberRangeFloatingFilter : GridTextFloatingFilter
+  return { ...def, floatingFilter: true, floatingFilterComponent }
+}
+
+export interface GridFilterOptions {
+  /** Also mount the inline input under the header. Sheets do; paginated lists generally do not. */
+  floating?: boolean
 }

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.E — E1: nightly per-charter scorecards (spec Part 7 / model
  * AgentScorecard). Deterministic — no model calls, $0 — and honest about
@@ -279,7 +280,7 @@ export async function computeScorecards(
       }
       await prisma.agentScorecard.upsert({
         where: {
-          charterKey_periodStart_periodEnd: { charterKey, periodStart, periodEnd },
+          charterKey_periodStart_periodEnd: workspaceKey({ charterKey, periodStart, periodEnd }),
         },
         create: row,
         update: row,

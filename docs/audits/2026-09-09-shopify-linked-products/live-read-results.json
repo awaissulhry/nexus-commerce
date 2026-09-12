@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-09",
+  "mode": "read-only",
+  "store": "xaviaracing.myshopify.com",
+  "apiVersion": "2026-07",
+  "definitions": 39,
+  "metaobjectTypes": 22,
+  "locales": [
+    "de",
+    "en",
+    "es",
+    "fr",
+    "it"
+  ],
+  "themeRelationshipField": "custom.variation_products",
+  "productRead": {
+    "metafields": 14,
+    "nativeVariants": 5
+  },
+  "exactFieldReadCompared": 14,
+  "referenceSearches": {
+    "products": 40,
+    "files": 40,
+    "collections": 30,
+    "pages": 28,
+    "variants": 40
+  },
+  "metaobjectRead": {
+    "fields": 3,
+    "references": 2
+  },
+  "writesPerformed": 0
+}

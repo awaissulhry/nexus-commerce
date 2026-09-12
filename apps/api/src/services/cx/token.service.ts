@@ -22,6 +22,7 @@
  */
 
 import { randomUUID } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob, onCredentialsKmsFallback } from '../../lib/crypto.js'
@@ -37,6 +38,7 @@ import {
   type ErrorClass,
 } from './catalog.js'
 import { alertService, AlertType } from '../monitoring/alert.service.js'
+import { parseTokenResponse, tokenLifetime, TOKEN_REQUEST_TIMEOUT_MS } from './token-response.js'
 
 // ── types ────────────────────────────────────────────────────────────────────
 
@@ -52,7 +54,8 @@ export interface Credentials {
 export interface GrantResult {
   accessToken: string
   refreshToken?: string | null
-  expiresInSec: number
+  /** null for a provider-issued non-expiring access token. */
+  expiresInSec: number | null
   /** Seconds, when the channel reports it (eBay `refresh_token_expires_in`). */
   refreshExpiresInSec?: number | null
   grantedScopes: string[]
@@ -93,7 +96,6 @@ const LEASE_WAIT_MS = 12_000
 const LEASE_POLL_MS = 250
 const FAILURE_COOLDOWN_MS = 30_000
 const DEGRADED_AFTER = 3
-const NEEDS_REAUTH_AFTER = 10
 const OWNER = `${process.env.RAILWAY_REPLICA_ID ?? process.env.HOSTNAME ?? 'local'}:${process.pid}:${randomUUID().slice(0, 8)}`
 
 const inflight = new Map<string, Promise<string>>()
@@ -135,25 +137,43 @@ async function readCredentials(row: ConnRow): Promise<Credentials | null> {
 }
 
 /** Write credentials as an envelope and null every plaintext column in the same UPDATE. */
-async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}) {
+async function writeCredentials(connectionId: string, creds: Credentials, extraData: Record<string, unknown> = {}, expected?: ConnRow) {
   const { blob, keyId } = await encryptCredentials(creds as unknown as Record<string, unknown>)
-  await prisma.channelConnection.update({
-    where: { id: connectionId },
-    data: {
-      credentialsEnc: blob,
-      credentialsKeyId: keyId,
-      accessTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
-      refreshTokenExpiresAt: creds.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : undefined,
-      // Legacy display/expiry columns keep a DATE (not a secret) so pre-CX.2 readers still render.
-      tokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
-      ebayTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
-      accessToken: null,
-      refreshToken: null,
-      ebayAccessToken: null,
-      ebayRefreshToken: null,
-      ...extraData,
-    },
-  })
+  const data = {
+    credentialsEnc: blob,
+    credentialsKeyId: keyId,
+    accessTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
+    refreshTokenExpiresAt: creds.refreshTokenExpiresAt ? new Date(creds.refreshTokenExpiresAt) : null,
+    // Legacy display/expiry columns keep a DATE (not a secret) so pre-CX.2 readers still render.
+    tokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
+    ebayTokenExpiresAt: creds.accessTokenExpiresAt ? new Date(creds.accessTokenExpiresAt) : null,
+    accessToken: null,
+    refreshToken: null,
+    ebayAccessToken: null,
+    ebayRefreshToken: null,
+    ...extraData,
+  }
+  if (expected) {
+    const saved = await prisma.channelConnection.updateMany({ where: refreshSnapshot(expected), data })
+    if (saved.count !== 1) throw new RefreshContended(connectionId)
+  } else {
+    await prisma.channelConnection.update({ where: { id: connectionId }, data })
+  }
+}
+
+/** A late response must never overwrite a new grant or resurrect a disconnected account. */
+function refreshSnapshot(row: ConnRow): Prisma.ChannelConnectionWhereInput {
+  return {
+    id: row.id, credentialsEnc: row.credentialsEnc, accessToken: row.accessToken,
+    refreshToken: row.refreshToken, ebayAccessToken: row.ebayAccessToken, ebayRefreshToken: row.ebayRefreshToken,
+    isActive: row.isActive, authStatus: row.authStatus, refreshLeaseOwner: row.refreshLeaseOwner,
+  }
+}
+
+function assertRefreshable(row: ConnRow): void {
+  if (!row.isActive || ['disconnected', 'revoked', 'needs_reauth'].includes(row.authStatus)) {
+    throw new ConnectionNeedsReauth(row.id, row.authStatus as AuthStatus)
+  }
 }
 
 /**
@@ -164,13 +184,13 @@ async function writeCredentials(connectionId: string, creds: Credentials, extraD
  * connection's access token. The Amazon Ads client is not on the leased refresh
  * yet — it runs its own LWA exchange behind its own in-process token cache
  * (`services/advertising/ads-api-client.ts`), and CX.3b is what moves it onto
- * `getAccessToken`. Until then it needs exactly one field to read the core
- * instead of the nine duplicated `AmazonAdsConnection` credential blobs, so this
- * returns the refresh token and nothing else. Delete it when CX.3b lands.
+ * `getAccessToken`. This also supplies the verified seller grant required by
+ * the SP-API SDK constructor even when its automatic token renewal is disabled.
+ * Returns only the refresh token; decryption remains owned by the token service.
  */
 export async function readRefreshToken(connectionId: string): Promise<string | null> {
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
-  if (!row) return null
+  if (!row || row.isActive === false || ['disconnected', 'revoked', 'needs_reauth'].includes(row.authStatus)) return null
   const creds = await readCredentials(row)
   return creds?.refreshToken ?? null
 }
@@ -195,12 +215,14 @@ export function handleOf(row: {
   region: string | null
   grantedScopes: string[]
   identity: unknown
+  connectionMetadata?: unknown
 }): ConnectionHandle {
   const key = channelKeyOf(row.channelType) as ChannelKey
   return {
     id: row.id,
     channelKey: key,
     channelType: row.channelType,
+    environment: (row.connectionMetadata as { environment?: string } | null)?.environment === 'sandbox' ? 'sandbox' : 'production',
     region: row.region,
     grantedScopes: row.grantedScopes,
     identity: (row.identity as ConnectionIdentity | null) ?? null,
@@ -223,13 +245,21 @@ export async function getAccessToken(connectionId: string, opts: { forceRefresh?
   }
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
   if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
+  if (row.isActive === false) throw new ConnectionNeedsReauth(connectionId, 'disconnected')
+  if (row.managedBy === 'env' && row.channelType === 'AMAZON') return (await import('../../lib/amazon-sp-client.js')).getAmazonAccessToken(row.id)
   if (row.managedBy === 'env') {
     throw new Error(`Connection ${connectionId} is env-managed; its token is minted by the channel client from env until CX.3.`)
+  }
+  // Authentication state also gates cached tokens. A later diagnostic can
+  // replace lastError, but cannot make a rejected/disconnected grant usable.
+  if (['needs_reauth', 'revoked', 'disconnected'].includes(row.authStatus)) {
+    throw new ConnectionNeedsReauth(connectionId, row.authStatus as AuthStatus)
   }
   const creds = await readCredentials(row)
   if (!creds) throw new Error(`Connection ${connectionId} has no credentials — reconnect the account.`)
 
   const { spec } = specFor(row)
+  if (!creds.accessTokenExpiresAt && spec.auth.accessTokenLifetimeSec === null) return creds.accessToken
   const bufferMs = (spec.tokenExpirationBufferSec ?? DEFAULT_BUFFER_SEC) * 1000
   const exp = creds.accessTokenExpiresAt ? Date.parse(creds.accessTokenExpiresAt) : 0
   if (!opts.forceRefresh && exp > Date.now() + bufferMs) return creds.accessToken
@@ -293,6 +323,7 @@ async function refreshUnderLease(connectionId: string, stale: Credentials, force
       await new Promise((r) => setTimeout(r, LEASE_POLL_MS))
       const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
       if (!row) break
+      assertRefreshable(row)
       const exp = row.accessTokenExpiresAt?.getTime() ?? 0
       if (exp > staleExp && exp > Date.now()) {
         const fresh = await readCredentials(row)
@@ -311,9 +342,11 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
     // Double-check: a peer may have refreshed between our read and our lease.
     const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
     if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
+    assertRefreshable(row)
     const creds = await readCredentials(row)
     if (!creds) throw new Error(`Connection ${connectionId} has no credentials`)
     const { key, spec } = specFor(row)
+    if (!creds.accessTokenExpiresAt && spec.auth.accessTokenLifetimeSec === null) return creds.accessToken
     const bufferMs = (spec.tokenExpirationBufferSec ?? DEFAULT_BUFFER_SEC) * 1000
     const exp = creds.accessTokenExpiresAt ? Date.parse(creds.accessTokenExpiresAt) : 0
     if (!force && exp > Date.now() + bufferMs) return creds.accessToken
@@ -336,37 +369,53 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       headers.Authorization = `Basic ${Buffer.from(`${app.clientId}:${app.clientSecret}`).toString('base64')}`
     } else {
       body.set('client_id', app.clientId)
-      if (app.clientSecret) body.set('client_secret', app.clientSecret)
+      if (app.clientSecret && spec.auth.includeClientSecretInTokenRequest !== false) body.set('client_secret', app.clientSecret)
     }
     const started = Date.now()
     let res: Response
+    let text: string
     try {
-      res = await fetch(url, { method: 'POST', headers, body: body.toString() })
+      res = await fetch(url, { method: 'POST', headers, body: body.toString(), signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS), redirect: 'error' })
+      text = await res.text()
     } catch (err) {
       await failRefresh(row, 'network', err instanceof Error ? err.message : String(err))
       throw new RefreshFailed(connectionId, 'network', 'Token endpoint unreachable')
     }
-    const text = await res.text()
     if (!res.ok) {
       const cls = classifyAuthError(res.status, text)
-      await failRefresh(row, cls, `Token endpoint ${res.status}: ${text.slice(0, 300)}`)
+      // Provider error bodies can echo credentials; keep them out of logs and account cards.
+      await failRefresh(row, cls, `Token endpoint ${res.status} rejected the refresh (${cls}).`)
       throw new RefreshFailed(connectionId, cls, `Token refresh failed with ${res.status}`)
     }
-    const json = JSON.parse(text) as Record<string, unknown>
-    const accessToken = String(json.access_token ?? '')
-    if (!accessToken) {
-      await failRefresh(row, 'unknown', 'Token endpoint returned no access_token')
-      throw new RefreshFailed(connectionId, 'unknown', 'No access_token in refresh response')
+    let json: ReturnType<typeof parseTokenResponse>
+    try {
+      json = parseTokenResponse(text)
+    } catch {
+      await failRefresh(row, 'unknown', 'Token endpoint returned an invalid JSON response')
+      throw new RefreshFailed(connectionId, 'unknown', 'Invalid token response')
     }
-    const expiresIn = Number(json.expires_in ?? spec.auth.accessTokenLifetimeSec ?? 3600)
+    const accessToken = json.access_token
+    let expiresIn: number
+    let refreshLife: number | null
+    try {
+      expiresIn = tokenLifetime(json.expires_in, spec.auth.accessTokenLifetimeSec ?? 3600)!
+      refreshLife = tokenLifetime(json.refresh_token_expires_in, spec.auth.refreshTokenLifetimeSec ?? null)
+    } catch {
+      await failRefresh(row, 'unknown', 'Token endpoint returned an invalid access-token lifetime')
+      throw new RefreshFailed(connectionId, 'unknown', 'Invalid access-token lifetime')
+    }
     const rotated = typeof json.refresh_token === 'string' && json.refresh_token.length > 0
+    if (spec.auth.rotatesRefreshToken && !rotated) {
+      await failRefresh(row, 'unknown', 'Token endpoint did not return the required rotated refresh token')
+      throw new RefreshFailed(connectionId, 'unknown', 'No rotated refresh token in response')
+    }
     const next: Credentials = {
       accessToken,
       refreshToken: rotated ? String(json.refresh_token) : creds.refreshToken,
       accessTokenExpiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
       refreshTokenExpiresAt:
-        rotated && spec.auth.refreshTokenLifetimeSec
-          ? new Date(Date.now() + spec.auth.refreshTokenLifetimeSec * 1000).toISOString()
+        rotated && refreshLife
+          ? new Date(Date.now() + refreshLife * 1000).toISOString()
           : creds.refreshTokenExpiresAt ?? null,
       extra: creds.extra,
     }
@@ -375,8 +424,10 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
       consecutiveFailures: 0,
       lastError: null,
       lastErrorAt: null,
-    })
-    await transition(row, 'connected', 'refresh succeeded')
+      authStatus: 'connected',
+      ...(typeof json.scope === 'string' ? { grantedScopes: json.scope.split(/[\s,]+/).filter(Boolean) } : {}),
+    }, row)
+    if (row.authStatus !== 'connected') await announceTransition(row, 'connected', 'refresh succeeded', SYSTEM_ACTOR)
     await recordConnectionEvent({
       connectionId,
       channelKey: key,
@@ -391,34 +442,42 @@ async function refreshOwned(connectionId: string, force: boolean): Promise<strin
 }
 
 async function failRefresh(row: ConnRow, errorClass: ErrorClass, message: string): Promise<void> {
-  lastFailureAt.set(row.id, Date.now())
   const failures = row.consecutiveFailures + 1
-  await prisma.channelConnection.update({
-    where: { id: row.id },
-    data: { consecutiveFailures: failures, lastError: `${errorClass}: ${message}`.slice(0, 500), lastErrorAt: new Date() },
+  const next = statusAfterConnectionFailure(row.authStatus as AuthStatus, errorClass, failures)
+  const saved = await prisma.channelConnection.updateMany({
+    where: refreshSnapshot(row),
+    data: { ...(row.authStatus !== next ? { authStatus: next } : {}), consecutiveFailures: failures, lastError: `${errorClass}: ${message}`.slice(0, 500), lastErrorAt: new Date() },
   })
+  if (saved.count !== 1) return
+  lastFailureAt.set(row.id, Date.now())
   const { key } = specFor(row)
   await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'refresh_failed', detail: { errorClass, message, failures } })
-  const next: AuthStatus =
-    errorClass === 'auth_revoked' || errorClass === 'auth_expired'
-      ? 'needs_reauth'
-      : failures >= NEEDS_REAUTH_AFTER
-        ? 'needs_reauth'
-        : failures >= DEGRADED_AFTER
-          ? 'degraded'
-          : (row.authStatus as AuthStatus)
-  await transition({ ...row, consecutiveFailures: failures }, next, message)
+  if (row.authStatus !== next) await announceTransition(row, next, message, SYSTEM_ACTOR)
   logger.warn('[cx-token] refresh failed', { connectionId: row.id, errorClass, failures })
 }
 
 // ── state machine ────────────────────────────────────────────────────────────
 
+/** Both refresh and heartbeat report the same recovery action for a failure. */
+export function statusAfterConnectionFailure(current: AuthStatus, errorClass: ErrorClass, failures: number): AuthStatus {
+  if (['needs_reauth', 'revoked', 'disconnected'].includes(current)) return current
+  if (errorClass === 'auth_revoked' || errorClass === 'auth_expired' || errorClass === 'identity_mismatch') return 'needs_reauth'
+  if (errorClass === 'configuration' || failures >= DEGRADED_AFTER) return 'degraded'
+  return current
+}
+
 export async function transition(row: Pick<ConnRow, 'id' | 'channelType' | 'authStatus' | 'displayName'> & { consecutiveFailures?: number }, next: AuthStatus, reason: string, actor: Actor = SYSTEM_ACTOR): Promise<void> {
   const prev = row.authStatus as AuthStatus
   if (prev === next) return
   // Terminal states are left only by a new grant (storeGrant) or a disconnect.
-  if ((prev === 'revoked' || prev === 'disconnected') && next !== 'connected' && next !== 'disconnected' && next !== 'revoked') return
-  await prisma.channelConnection.update({ where: { id: row.id }, data: { authStatus: next } })
+  if ((prev === 'revoked' || prev === 'disconnected') && next !== 'disconnected' && next !== 'revoked') return
+  const saved = await prisma.channelConnection.updateMany({ where: { id: row.id, authStatus: prev }, data: { authStatus: next } })
+  if (saved.count !== 1) return
+  await announceTransition(row, next, reason, actor)
+}
+
+async function announceTransition(row: Pick<ConnRow, 'id' | 'channelType' | 'authStatus' | 'displayName'>, next: AuthStatus, reason: string, actor: Actor): Promise<void> {
+  const prev = row.authStatus as AuthStatus
   const key = channelKeyOf(row.channelType) ?? row.channelType
   await recordConnectionEvent({ connectionId: row.id, channelKey: key, type: 'status_change', actor, detail: { from: prev, to: next, reason } })
   const label = row.displayName ?? row.id
@@ -454,7 +513,7 @@ export async function storeGrant(
   const creds: Credentials = {
     accessToken: grant.accessToken,
     refreshToken: grant.refreshToken ?? null,
-    accessTokenExpiresAt: new Date(now + grant.expiresInSec * 1000).toISOString(),
+    accessTokenExpiresAt: grant.expiresInSec === null ? null : new Date(now + grant.expiresInSec * 1000).toISOString(),
     refreshTokenExpiresAt: refreshLife ? new Date(now + refreshLife * 1000).toISOString() : null,
     extra: grant.tokenResponseMetadata,
   }
@@ -532,6 +591,7 @@ export async function revoke(connectionId: string, actor: Actor, reason: 'operat
       tokenExpiresAt: null,
       ebayTokenExpiresAt: null,
       accessTokenExpiresAt: null,
+      refreshTokenExpiresAt: null,
       isActive: false,
       isPrimary: false,
       authStatus: next,

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Banner } from '@/design-system/components'
 import { Button } from '@/design-system/primitives'
 import '@/design-system/styles/tokens.css'

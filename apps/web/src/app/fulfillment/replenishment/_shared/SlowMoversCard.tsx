@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Snowflake, Clock, ExternalLink, Tag, Trash2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmProvider'

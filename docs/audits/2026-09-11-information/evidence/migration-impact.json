@@ -1,0 +1,516 @@
+{
+  "readOnly": true,
+  "generatedAt": "2026-09-11T02:40:39.682Z",
+  "revision": "2026-09-11-information-v1",
+  "formulaDestinations": [],
+  "dictionary": [
+    {
+      "code": "care_instructions",
+      "definitionId": "cmtny3xsz000jnjfbha3udwvs",
+      "before": {
+        "type": "textarea",
+        "localizable": false,
+        "scope": "global",
+        "validation": null,
+        "options": []
+      },
+      "proposed": {
+        "code": "care_instructions",
+        "localizable": true,
+        "type": "textarea",
+        "description": "Care instructions in the selected content language. Historical unlocalized content remains a marked source-language fallback."
+      },
+      "families": [
+        "cmtny40uf001lnjfbgn2elvi8"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "fabric_type",
+      "definitionId": "cmtny3xj3000fnjfb92xlpv2k",
+      "before": {
+        "type": "textarea",
+        "localizable": false,
+        "scope": "global",
+        "validation": null,
+        "options": []
+      },
+      "proposed": {
+        "code": "fabric_type",
+        "localizable": true,
+        "type": "textarea",
+        "description": "Fabric description in the selected content language. Historical unlocalized content remains a marked source-language fallback."
+      },
+      "families": [
+        "cmtny40uf001lnjfbgn2elvi8",
+        "cmtny45st0033njfbhlsr7kg2"
+      ],
+      "populatedRows": 1,
+      "affectedProducts": [
+        {
+          "id": "cmokmy3a40078pm0p1fvnu523",
+          "sku": "GALE-JACKET",
+          "parent": true,
+          "familyId": "cmtny43jv002jnjfbb6hnijqx",
+          "saved": "Polyester"
+        }
+      ]
+    },
+    {
+      "code": "manufacturer_warranty",
+      "definitionId": "cmtqv3ayq003tnj236gok2czv",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "manufacturer_warranty",
+        "localizable": true,
+        "type": "textarea",
+        "description": "Warranty prose in the selected content language. Historical unlocalized content remains a marked source-language fallback."
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx",
+        "cmtny45st0033njfbhlsr7kg2",
+        "cmtnyl3pf002jnjtjsn8y75lu"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "color",
+      "definitionId": "cmtny3wug0007njfb00ia87s4",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "per_variant",
+        "validation": null,
+        "options": []
+      },
+      "proposed": {
+        "code": "color",
+        "scope": "per_variant",
+        "description": "Canonical variant color code. Channel schemas and mappings supply their own labels and value projections."
+      },
+      "families": [
+        "cmtny40uf001lnjfbgn2elvi8",
+        "cmtny45st0033njfbhlsr7kg2"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "size",
+      "definitionId": "cmtny3wzo0009njfbv7wrynn6",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "per_variant",
+        "validation": null,
+        "options": []
+      },
+      "proposed": {
+        "code": "size",
+        "scope": "per_variant",
+        "description": "Canonical variant size code. Channel schemas and mappings supply their own labels and value projections."
+      },
+      "families": [
+        "cmtny40uf001lnjfbgn2elvi8",
+        "cmtny45st0033njfbhlsr7kg2"
+      ],
+      "populatedRows": 1,
+      "affectedProducts": [
+        {
+          "id": "cmokmy36j006zpm0p0xgz0m5g",
+          "sku": "xriser-bla-l",
+          "parent": false,
+          "familyId": null,
+          "saved": null
+        }
+      ]
+    },
+    {
+      "code": "chestValue",
+      "definitionId": "cmtqv3ayp000wnj23z2581zuf",
+      "before": {
+        "type": "number",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "chestValue",
+        "validation": {
+          "minimum": 0
+        }
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx",
+        "cmtny44pa002vnjfbweu6dhen"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "waist__sizeValue",
+      "definitionId": "cmtqv3ayr005tnj23vpoydrkn",
+      "before": {
+        "type": "number",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "waist__sizeValue",
+        "validation": {
+          "minimum": 0
+        }
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "waist__widthValue",
+      "definitionId": "cmtqv3ayr005wnj236b5dzmst",
+      "before": {
+        "type": "number",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "waist__widthValue",
+        "validation": {
+          "minimum": 0
+        }
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "shoulder_to_bottom_hem_lengthValue",
+      "definitionId": "cmtqv3ayr0050nj23je5pkj12",
+      "before": {
+        "type": "number",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "shoulder_to_bottom_hem_lengthValue",
+        "validation": {
+          "minimum": 0
+        }
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx",
+        "cmtny44pa002vnjfbweu6dhen"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "rise__heightValue",
+      "definitionId": "cmtqv3ayr004unj235nqwkjtv",
+      "before": {
+        "type": "number",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "rise__heightValue",
+        "validation": {
+          "minimum": 0
+        }
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "chestUnit",
+      "definitionId": "cmtqv3ayp000vnj23s5h4bqyr",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "chestUnit",
+        "type": "select",
+        "options": [
+          {
+            "code": "cm",
+            "label": "Centimetres"
+          },
+          {
+            "code": "in",
+            "label": "Inches"
+          }
+        ]
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx",
+        "cmtny44pa002vnjfbweu6dhen"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "waist__sizeUnit",
+      "definitionId": "cmtqv3ayr005snj23anz9q407",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "waist__sizeUnit",
+        "type": "select",
+        "options": [
+          {
+            "code": "cm",
+            "label": "Centimetres"
+          },
+          {
+            "code": "in",
+            "label": "Inches"
+          }
+        ]
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "waist__widthUnit",
+      "definitionId": "cmtqv3ayr005vnj23slw6g1zy",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "waist__widthUnit",
+        "type": "select",
+        "options": [
+          {
+            "code": "cm",
+            "label": "Centimetres"
+          },
+          {
+            "code": "in",
+            "label": "Inches"
+          }
+        ]
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "shoulder_to_bottom_hem_lengthUnit",
+      "definitionId": "cmtqv3ayr004znj23mltew8zr",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "shoulder_to_bottom_hem_lengthUnit",
+        "type": "select",
+        "options": [
+          {
+            "code": "cm",
+            "label": "Centimetres"
+          },
+          {
+            "code": "in",
+            "label": "Inches"
+          }
+        ]
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx",
+        "cmtny44pa002vnjfbweu6dhen"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "rise__heightUnit",
+      "definitionId": "cmtqv3ayr004tnj23wotn8zhn",
+      "before": {
+        "type": "text",
+        "localizable": false,
+        "scope": "global",
+        "validation": {
+          "shape": "scalar"
+        },
+        "options": []
+      },
+      "proposed": {
+        "code": "rise__heightUnit",
+        "type": "select",
+        "options": [
+          {
+            "code": "cm",
+            "label": "Centimetres"
+          },
+          {
+            "code": "in",
+            "label": "Inches"
+          }
+        ]
+      },
+      "families": [
+        "cmtny43jv002jnjfbb6hnijqx"
+      ],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "material_composition",
+      "definitionId": null,
+      "before": null,
+      "proposed": {
+        "code": "material_composition",
+        "label": "Material composition",
+        "type": "text",
+        "scope": "global",
+        "localizable": false,
+        "description": "Material codes paired with percentages. Localized fabric wording is separate. Unknown saved properties are preserved.",
+        "validation": {
+          "shape": "list",
+          "minItems": 0,
+          "maxItems": 30,
+          "uniqueBy": "material",
+          "sum": {
+            "field": "percentage",
+            "total": 100
+          },
+          "recordFields": [
+            {
+              "key": "material",
+              "label": "Material code",
+              "kind": "text",
+              "required": true
+            },
+            {
+              "key": "percentage",
+              "label": "Percentage",
+              "kind": "number",
+              "required": true,
+              "min": 0,
+              "max": 100
+            }
+          ]
+        }
+      },
+      "families": [],
+      "populatedRows": 0,
+      "affectedProducts": []
+    },
+    {
+      "code": "size_system",
+      "definitionId": null,
+      "before": null,
+      "proposed": {
+        "code": "size_system",
+        "label": "Size system",
+        "type": "select",
+        "scope": "global",
+        "localizable": false,
+        "description": "System used by the canonical size codes. Provider scales remain channel mappings. A garment country label is a distinct historical fact.",
+        "options": [
+          {
+            "code": "INT",
+            "label": "International letters"
+          },
+          {
+            "code": "EU",
+            "label": "European"
+          },
+          {
+            "code": "UK",
+            "label": "United Kingdom"
+          },
+          {
+            "code": "US",
+            "label": "United States"
+          },
+          {
+            "code": "IT",
+            "label": "Italy"
+          },
+          {
+            "code": "FR",
+            "label": "France"
+          },
+          {
+            "code": "DE",
+            "label": "Germany"
+          }
+        ],
+        "validation": {}
+      },
+      "families": [],
+      "populatedRows": 0,
+      "affectedProducts": []
+    }
+  ],
+  "unboundRecoveryOperations": [],
+  "productsChanged": 0,
+  "familyAssignmentsChanged": 0,
+  "mappingsChanged": 0
+}

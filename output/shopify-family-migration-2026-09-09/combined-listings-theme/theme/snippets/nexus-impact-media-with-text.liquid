@@ -1,0 +1,267 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.media_with_text_product_page
+  if nexus_contract.fields contains 'custom.media_with_text_product_page'
+    assign nexus_field = nexus_variant.metafields.custom.media_with_text_product_page
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_blocks = nexus_entry -%}
+{%- if nexus_entry != blank -%}
+{%- render 'section-spacing-collapsing' -%}
+
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  CSS
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+
+<style>
+  #shopify-section-{{ section.id }} {
+    --media-with-text-gap: {% if section.settings.spacing == 'none' %}0{% else %}var(--grid-gutter){% endif %};
+    --media-with-text-item-grid-template: "media" "content" / auto;
+  }
+
+  @media screen and (min-width: 1000px) {
+    #shopify-section-{{ section.id }} {
+      --media-with-text-gap: {% if section.settings.spacing == 'none' %}0{% elsif section.settings.spacing == 'small' %}var(--spacing-6){% elsif section.settings.spacing == 'medium' %}var(--spacing-12){% else %}var(--spacing-18){% endif %};
+    }
+  }
+
+  {%- for block in nexus_blocks -%}
+{%- assign nexus_block_autoplay = nil -%}
+{%- assign nexus_block_background = block.background_color.value -%}
+{%- assign nexus_block_background_gradient = "" -%}
+{%- assign nexus_block_button_background = block.button_background_color.value -%}
+{%- assign nexus_block_button_text_color = block.button_text_color.value -%}
+{%- assign nexus_block_content = block.content | metafield_tag -%}
+{%- assign nexus_block_custom_icon = block.custom_icon.value -%}
+{%- assign nexus_block_external_video_url = nil -%}
+{%- assign nexus_block_icon = "none" -%}
+{%- assign nexus_block_icon_width = 48 -%}
+{%- assign nexus_block_image = block.image.value -%}
+{%- assign nexus_block_link_text = block.button_text.value -%}
+{%- assign nexus_block_link_url = block.button_url.value -%}
+{%- assign nexus_block_media_position = "start" -%}
+{%- assign nexus_block_media_width = 50 -%}
+{%- assign nexus_block_poster_image = nil -%}
+{%- assign nexus_block_subheading = block.subheading.value -%}
+{%- assign nexus_block_text_color = block.text_color.value -%}
+{%- assign nexus_block_text_gradient = "" -%}
+{%- assign nexus_block_text_position = "place-self-center text-center" -%}
+{%- assign nexus_block_title = block.heading.value -%}
+{%- assign nexus_block_video = nil -%}
+    {%- assign media_ratio = nexus_block_media_width | divided_by: 50.0 -%}
+    {%- assign content_ratio = 2.0 | minus: media_ratio -%}
+
+    #block-{{ section.id }}-{{ block.system.id }} {
+      --media-with-text-item-icon-width: {{ nexus_block_icon_width }}px;
+    }
+
+    @media screen and (min-width: 1000px) {
+      #block-{{ section.id }}-{{ block.system.id }} {
+        {%- if section.settings.alternate_media_position -%}
+          {% assign modulo = forloop.index0 | modulo: 2 %}
+
+          {% if modulo == 0 %}
+            --media-with-text-item-grid-template: "media content" / minmax(0, {{ media_ratio }}fr) minmax(0, {{ content_ratio }}fr);
+          {%- else -%}
+            --media-with-text-item-grid-template: "content media" / minmax(0, {{ content_ratio }}fr) minmax(0, {{ media_ratio }}fr);
+          {%- endif -%}
+        {%- else -%}
+          {%- if nexus_block_media_position == 'start' -%}
+            --media-with-text-item-grid-template: "media content" / minmax(0, {{ media_ratio }}fr) minmax(0, {{ content_ratio }}fr);
+          {%- else -%}
+            --media-with-text-item-grid-template: "content media" / minmax(0, {{ content_ratio }}fr) minmax(0, {{ media_ratio }}fr);
+          {%- endif -%}
+        {%- endif -%}
+      }
+    }
+  {%- endfor -%}
+</style>
+
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  LIQUID
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+
+<div {% render 'section-properties' %}>
+  <div class="section-stack">
+    {%- assign section_header_text_alignment = section.settings.text_alignment | replace: 'left', 'start' | replace: 'right', 'end' -%}
+
+    {%- render 'section-header',
+      subheading: section.settings.subheading,
+      heading: section.settings.title,
+      heading_color: section.settings.heading_color,
+      heading_gradient: section.settings.heading_gradient,
+      content: section.settings.content,
+      text_alignment: section_header_text_alignment
+    -%}
+
+    <media-with-text class="media-with-text {% if section.settings.spacing == 'none' %}{% if section.settings.full_width %}full-bleed{% else %}rounded{% endif %}{% endif %}">
+      {%- for block in nexus_blocks -%}
+{%- assign nexus_block_autoplay = nil -%}
+{%- assign nexus_block_background = block.background_color.value -%}
+{%- assign nexus_block_background_gradient = "" -%}
+{%- assign nexus_block_button_background = block.button_background_color.value -%}
+{%- assign nexus_block_button_text_color = block.button_text_color.value -%}
+{%- assign nexus_block_content = block.content | metafield_tag -%}
+{%- assign nexus_block_custom_icon = block.custom_icon.value -%}
+{%- assign nexus_block_external_video_url = nil -%}
+{%- assign nexus_block_icon = "none" -%}
+{%- assign nexus_block_icon_width = 48 -%}
+{%- assign nexus_block_image = block.image.value -%}
+{%- assign nexus_block_link_text = block.button_text.value -%}
+{%- assign nexus_block_link_url = block.button_url.value -%}
+{%- assign nexus_block_media_position = "start" -%}
+{%- assign nexus_block_media_width = 50 -%}
+{%- assign nexus_block_poster_image = nil -%}
+{%- assign nexus_block_subheading = block.subheading.value -%}
+{%- assign nexus_block_text_color = block.text_color.value -%}
+{%- assign nexus_block_text_gradient = "" -%}
+{%- assign nexus_block_text_position = "place-self-center text-center" -%}
+{%- assign nexus_block_title = block.heading.value -%}
+{%- assign nexus_block_video = nil -%}
+        <div id="block-{{ section.id }}-{{ block.system.id }}" class="media-with-text__item" >
+          <div class="media-with-text__media {% unless section.settings.spacing == 'none' %}rounded{% endunless %}" reveal-on-scroll="true">
+            {%- liquid
+              assign loading_strategy = null
+
+              if section.index > 3 or forloop.index > 3
+                assign loading_strategy = 'lazy'
+              endif
+            -%}
+
+            {%- if "image" == 'image' -%}
+              {%- if nexus_block_image != blank -%}
+                {%- assign width_ratio = 100.0 | divided_by: nexus_block_media_width -%}
+                {%- assign maximum_image_width = settings.page_width | divided_by: width_ratio -%}
+
+                {%- capture sizes -%}(max-width: 999px) 100vw, min({{ maximum_image_width | ceil }}px, {{ nexus_block_media_width }}vw){% endcapture %}
+
+                {{-
+                  nexus_block_image
+                  | image_url: width: nexus_block_image.width
+                  | image_tag: loading: loading_strategy, sizes: sizes, widths: '300,400,500,600,700,800,1000,1200,1400,1600,1800,2000,2200,2400,2600'
+                -}}
+              {%- else -%}
+                {{- 'image' | placeholder_svg_tag: 'aspect-short placeholder' -}}
+              {%- endif -%}
+            {%- else -%}
+              {%- capture poster -%}
+                {%- assign poster_image = nexus_block_poster_image | default: nexus_block_video.preview_image -%}
+
+                {%- if poster_image -%}
+                  {{- poster_image | image_url: width: poster_image.width | image_tag: loading: loading_strategy, sizes: '(max-width: 699px) 400px, 800px', widths: '200,300,400,500,600,700,800,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200', class: 'rounded' -}}
+                {%- else -%}
+                  {{ 'image' | placeholder_svg_tag: 'rounded' }}
+                {%- endif -%}
+              {%- endcapture -%}
+
+              {%- if nexus_block_video -%}
+                <video-media
+                  {% if nexus_block_autoplay %}
+                    autoplay
+                  {% else %}
+                    show-play-button
+                  {% endif %}
+                  style="--aspect-ratio: {{ nexus_block_video.aspect_ratio }}"
+                >
+                  {%- unless nexus_block_autoplay -%}
+                    {{- poster -}}
+                  {%- endunless -%}
+
+                  {%- if nexus_block_autoplay -%}
+                    {{- nexus_block_video | video_tag: playslinline: true, muted: true, loop: true, preload: 'metadata' -}}
+                  {%- else -%}
+                    {{- nexus_block_video | video_tag: playslinline: true, controls: true, muted: false, loop: false, preload: 'metadata' -}}
+                  {%- endif -%}
+                </video-media>
+              {%- else -%}
+                <video-media
+                  host="{{ nexus_block_external_video_url.type }}"
+                  {% if nexus_block_autoplay %}
+                    autoplay
+                  {% else %}
+                    show-play-button
+                  {% endif %}
+                >
+                  {%- unless nexus_block_autoplay -%}
+                    {{- poster -}}
+                  {%- endunless -%}
+
+                  <template>
+                    {%- if nexus_block_external_video_url.type == 'youtube' -%}
+                      <iframe
+                        src="https://www.youtube.com/embed/{{ nexus_block_external_video_url.id }}?playsinline=1&autoplay=1&controls=0&mute={% if nexus_block_autoplay %}1{% else %}0{% endif %}&loop=1&playlist={{ nexus_block_external_video_url.id }}&enablejsapi=1&rel=0&modestbranding=1&origin={{ 'https://' | append: request.host | url_encode }}"
+                        allow="autoplay; encrypted-media"
+                        allowfullscreen="allowfullscreen"
+                      ></iframe>
+                    {%- elsif nexus_block_external_video_url.type == 'vimeo' -%}
+                      <iframe
+                        src="https://player.vimeo.com/video/{{ nexus_block_external_video_url.id }}?autoplay=1&autopause=1&background={% if nexus_block_autoplay %}1{% else %}0{% endif %}&loop=1&muted={% if nexus_block_autoplay %}1{% else %}0{% endif %}&transparent=0&responsive=1&portrait=0&title=0&byline=0&color={{ settings.text_color | remove_first: '#' }}"
+                        allow="autoplay; encrypted-media;"
+                        allowfullscreen="allowfullscreen"
+                      ></iframe>
+                    {%- endif -%}
+                  </template>
+                </video-media>
+              {%- endif -%}
+            {%- endif -%}
+          </div>
+
+          {%- capture content_class -%}media-with-text__content {% unless section.settings.spacing == 'none' %}rounded{% endunless %}{%- endcapture -%}
+          <div
+            {% render 'surface',
+              class: content_class,
+              background: nexus_block_background,
+              background_gradient: nexus_block_background_gradient,
+              text_color: nexus_block_text_color
+            %}
+          >
+            <div class="prose break-all {{ nexus_block_text_position }}" reveal-on-scroll="true">
+              {%- if nexus_block_custom_icon != blank -%}
+                {%- capture sizes -%}{{ nexus_block_icon_width }}px{%- endcapture -%}
+                {%- capture widths -%}{{ nexus_block_icon_width }}, {{ nexus_block_icon_width | times: 2 | at_most: nexus_block_custom_icon.width }}{%- endcapture -%}
+                {{-
+                  nexus_block_custom_icon
+                  | image_url: width: nexus_block_custom_icon.width
+                  | image_tag: loading: loading_strategy, sizes: sizes, widths: widths, class: 'media-with-text__icon'
+                -}}
+              {%- elsif nexus_block_icon != 'none' -%}
+                {%- render 'icon' with nexus_block_icon, width: nexus_block_icon_width, height: nexus_block_icon_width, class: 'media-with-text__icon' -%}
+              {%- endif -%}
+
+              {%- if nexus_block_subheading != blank -%}
+                <p class="subheading">{{ nexus_block_subheading | escape }}</p>
+              {%- endif -%}
+
+              {%- if nexus_block_title != blank -%}
+                <p class="h2">
+                  {%- render 'styled-text', content: nexus_block_title, gradient: nexus_block_text_gradient -%}
+                </p>
+              {%- endif -%}
+
+              {{- nexus_block_content -}}
+
+              {%- if nexus_block_link_text != blank -%}
+                {%- render 'button',
+                  href: nexus_block_link_url,
+                  content: nexus_block_link_text,
+                  size: 'xl',
+                  background: nexus_block_button_background,
+                  text_color: nexus_block_button_text_color
+                -%}
+              {%- endif -%}
+            </div>
+          </div>
+        </div>
+      {%- endfor -%}
+    </media-with-text>
+  </div>
+</div>
+
+
+{%- endif -%}

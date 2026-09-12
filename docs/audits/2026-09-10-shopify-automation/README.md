@@ -1,0 +1,33 @@
+# Shopify family automation and content workspace
+
+Implemented in the local Nexus workspace. Existing separate Shopify products remain the model: one family controls their relationship lists, while native variants, independent content and shared entries retain their identities.
+
+The family screen now places the ordered products beside automation controls. The content screen has a searchable library, All / Shared / Changed filters, a focused editor, visible sharing sources, individual overrides, and an inventory of pending field edits. Technical field details are available in disclosures.
+
+Automation covers these repeated tasks:
+
+- Discover an existing family from attributed Nexus listing IDs and reciprocal Shopify product references. A missing or ambiguous relationship requires review; titles and colour names never establish membership. Discovery reads data and proposes a draft.
+- Find matching content across family members and propose sharing rules in bulk. Different or empty values become explicit overrides. Equally common conflicting values and fields with pending individual edits are excluded from suggestions.
+- Keep selected fields synchronized from one source product. Rules support metafield values and references to existing reusable entries, files and pages. A product can stop following a field independently. A reference override does not clone a shared entry; the existing separate-copy workflow remains available.
+- Run monitoring or automatic synchronization every five minutes through the existing clustered, business-scoped scheduler. Checks continue without an open browser. Each automatic tick advances at most one 25-value batch; saved operations recover lost acknowledgements by readback rather than blindly repeating writes.
+- Preserve control through exact plan review, publish permissions, pause, product overrides, and the existing connection/server write gates. Saving a draft or refreshing its remote baselines pauses automation until the new intent is reviewed. Pausing from an editor preserves unsaved changes. A request already sent to Shopify can still complete; further automatic batches wait.
+
+The planner validates the latest field definitions, source values and reference availability. An independently changed follower, changed relationship, unavailable product, malformed response, empty source or schema conflict requires review. Sources and unchanged followers participate in final verification. Persisted baselines are the observations actually verified, avoiding a later read silently accepting a concurrent edit.
+
+The new automation endpoints require `products.publish`; discovery and sharing suggestions require `products.view`. Tests cover the broad advertising `/automation` permission matcher so it cannot capture these Shopify routes. Ordinary draft editing cannot keep automation enabled after changing the reviewed draft. Generic listing patches, mapped field writes and import mutations cannot change the internal linked-family draft, automation settings or operation checkpoints; ordinary attribute changes preserve that state. Automation configuration generations prevent an older check from replacing the status of a newly configured run.
+
+All controls use existing Nexus design-system exports: Card, Banner, Field, Disclosure, Modal, OrderedList, Button, Select, Input, Checkbox, Pill and SegmentedControl. Feature CSS handles layout and domain content using semantic `--nds-*` tokens. No shared design-system source was changed and no missing shared control required a Factory mirror, catalog entry, changelog entry or gap entry. The primary `sm` button measured 28px high with the canonical 12.5px font.
+
+Verification:
+
+- **136 focused tests passed:** [78 API, scheduler and write-guard tests](api-tests.log), [38 web tests](web-tests.log), and [20 shared-contract tests](shared-tests.log). Includes repeated source updates, idempotency, preserved overrides, source/follower conflicts, empty sources, ambiguous discovery, incomplete identities/references, lost acknowledgements, pause, schedule registration, pagination, store isolation and permissions. Database and Shopify responses are simulated.
+- TypeScript passed for [API](api-types.log), [web](web-types.log) and [Factory](factory-types.log).
+- Web and Factory generated-token checks passed. [Token resolution](token-resolution.log), [CSS parsing](css-parse.log), [raw primitives](primitives.log), [raw colours](hex.log), [shared-control styling](shadow.log) and [design-system conformance](conformance.log) checks passed. Existing fallback-token notices are recorded in the resolution log; no failing guard was suppressed.
+- The real StudioClient and feature components were exercised in an isolated [browser fixture](browser-fixture/server.mjs). Checks covered bulk sharing suggestions, saving rules, follower overrides, keyboard filtering, keyboard ordering, automation review/enable, pausing with unsaved changes, and the exact before/after synchronization review. [Captured requests](browser-evidence.json) show the preserved override, automation configuration and both sibling updates reaching VERIFIED in the fixture.
+- Light/dark desktop and mobile layouts were inspected at 1440×1000 and 390×844, with an additional 768px tablet check. Document width equaled viewport width. No browser warnings/errors were recorded at the final inspection. See [family mobile](screenshots/family-mobile-light.jpg), [family dark](screenshots/family-mobile-dark.jpg), [content desktop](screenshots/content-desktop-light.jpg), [content dark](screenshots/content-desktop-dark.jpg), and [content mobile](screenshots/content-mobile-dark.jpg).
+
+Run the fixture from the repository root with `node docs/audits/2026-09-10-shopify-automation/browser-fixture/server.mjs`, then open `http://127.0.0.1:3143/products/store-demo/edit/studio?scope=SHOPIFY&market=GLOBAL&tab=shopify-family`.
+
+No production deployment, real Shopify mutation, theme change, product migration, or server write-gate change occurred. This automates the existing family/metafield workflow; it does not automatically author new content, create standalone Shopify pages, manage translations, or certify the storefront theme. Those are distinct from sharing existing page/content references. Live store and storefront verification remain required for rollout.
+
+Shopify's [metafieldsSet contract](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metafieldsSet) provides atomic sets of up to 25 values with compare digests. A multi-batch family update is not globally atomic. These checks detect and surface conflicts; they are not a guarantee that concurrent external changes or every possible storefront inconsistency are impossible.

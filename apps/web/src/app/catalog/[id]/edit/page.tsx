@@ -1,6 +1,6 @@
 import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import MatrixEditor from './MatrixEditor'
 
 export const dynamic = 'force-dynamic'

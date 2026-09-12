@@ -16,7 +16,8 @@
 // engagement rule.
 
 import { useCallback, useEffect, useRef } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import type { MarketChip } from './types'
 import { announce } from '../announce/useAnnounce'
 import { postCockpitEvent } from '../telemetry/cockpit-telemetry'

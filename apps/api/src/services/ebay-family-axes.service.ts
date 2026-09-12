@@ -38,6 +38,9 @@ import {
 import { parseThemeAxes, axisSynonymKey } from './ebay-theme-axes.js'
 import { readImageAxisPreference } from './ebay-image-axis-preference.service.js'
 import { EbayCategoryService } from './ebay-category.service.js'
+import { resolveChannelConnectionId } from './connection-resolver.service.js'
+import { resolveBatch } from './pim/mapping/resolve-batch.service.js'
+import { applyPresentationOrder } from './pim/mapping/presentation-rules.js'
 
 const ebayCategoryService = new EbayCategoryService()
 
@@ -152,7 +155,10 @@ function resolveCategoryId(
 export async function resolveFamilyAxes(
   parentProductId: string,
   marketplace: string,
+  destination?: { channelConnectionId: string | null; aliasKey?: string },
 ): Promise<ResolveFamilyAxesResult> {
+  const channelConnectionId = await resolveChannelConnectionId('EBAY', destination?.channelConnectionId)
+  const aliasKey = destination?.aliasKey ?? ''
   const parent = await prisma.product.findUnique({
     where: { id: parentProductId },
     select: {
@@ -171,7 +177,7 @@ export async function resolveFamilyAxes(
   // exactly. Drop the parent container row (buildFlatRow sets _isParent from
   // !parentId); fall back to the full set if nothing else is present.
   // Market-scoped: axis resolution must read the ACTIVE market's specifics.
-  const familyRows = await buildEbayFamilyRows(parentProductId, marketplace)
+  const familyRows = await buildEbayFamilyRows(parentProductId, marketplace, { channelConnectionId, aliasKey })
   let variantRows = familyRows.filter((r) => r._isParent !== true)
 
   // Incident #37 — EXTRA-LISTING SHELLS have no product children: their
@@ -180,9 +186,16 @@ export async function resolveFamilyAxes(
   // variant' on every shell (pre-publish dialog + images drawer). Source the
   // variant rows from the memberships' flatFileSnapshots (the operator's
   // pushed rows — same aspect_* shape as buildFlatRow output).
-  if (variantRows.length === 0 && parent.sku) {
+  const parentListing = await prisma.channelListing.findFirst({
+    where: { productId: parentProductId, channel: 'EBAY', marketplace, channelConnectionId, aliasKey },
+    select: { platformAttributes: true, externalListingId: true, variationTheme: true },
+  })
+  const membershipWhere = { channelConnectionId, marketplace, itemId: parentListing?.externalListingId ?? '__no_listing__', status: 'ACTIVE' }
+  // An explicitly selected live destination can contain a subset of the product tree or
+  // shared SKUs from another family. Its active membership is the buyer-facing variant set.
+  if ((destination || variantRows.length === 0) && parent.sku) {
     const memberships = await prisma.sharedListingMembership.findMany({
-      where: { parentSku: parent.sku, ...(marketplace ? { marketplace: marketplace.toUpperCase() } : {}) },
+      where: membershipWhere,
       select: { sku: true, flatFileSnapshot: true, variationSpecifics: true },
     })
     if (memberships.length > 0) {
@@ -207,10 +220,6 @@ export async function resolveFamilyAxes(
 
   // Parent listing platformAttributes (marketplace-specific) → the SAME label /
   // stored-order opts the push pulls (ebay-variation-push.service.ts ~697-706).
-  const parentListing = await prisma.channelListing.findFirst({
-    where: { productId: parentProductId, channel: 'EBAY', marketplace },
-    select: { platformAttributes: true },
-  })
   const pa = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
   const nameLabels = (pa._axisNameLabels ?? {}) as Record<string, string>
   const valueLabels = (pa._axisValueLabels ?? {}) as Record<string, Record<string, string>>
@@ -218,9 +227,9 @@ export async function resolveFamilyAxes(
     ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
     : []
 
-  // EFX D2 — theme wins; else the parent's stored _variationAxes; else LEGACY
-  // (null) — byte-identical to the push's declaredAxes resolution (~708-714).
-  const themeAxes = parseThemeAxes(parent.variationTheme)
+  // The selected listing's theme overrides the family default. When neither declares
+  // axes, use this listing's stored order, then legacy discovery.
+  const themeAxes = parseThemeAxes(parentListing?.variationTheme ?? parent.variationTheme)
   const declaredAxes: string[] | null = themeAxes.length > 0
     ? themeAxes
     : storedAxisOrder.length > 0
@@ -230,7 +239,7 @@ export async function resolveFamilyAxes(
   // D8 — the operator's explicit image-axis pick (Product.imageAxisPreference),
   // the SAME source the push passes as pictureAxisOverride.
   // Per-market pick wins over the legacy global column (ONE shared definition).
-  const pictureAxisOverride = await readImageAxisPreference(parentProductId, marketplace)
+  const pictureAxisOverride = await readImageAxisPreference(parentProductId, marketplace, { channelConnectionId, aliasKey })
 
   const resolved = resolveVariationAxes(rowsForAxes, declaredAxes, {
     nameLabels,
@@ -249,7 +258,7 @@ export async function resolveFamilyAxes(
   const driftWarnings: string[] = []
   if (parent.sku && resolved.validSpecs.length > 0) {
     const liveMemb = await prisma.sharedListingMembership.findMany({
-      where: { parentSku: parent.sku, status: 'ACTIVE', ...(marketplace ? { marketplace: marketplace.toUpperCase() } : {}) },
+      where: membershipWhere,
       select: { variationSpecifics: true },
     })
     const liveNames = new Set<string>()
@@ -273,11 +282,13 @@ export async function resolveFamilyAxes(
     values: [...s.values],
   }))
 
-  const candidates = await buildAxisCandidates(parentProductId, marketplace, pa, rowsForAxes)
+  const candidates = await buildAxisCandidates(parentProductId, marketplace, pa, rowsForAxes, { channelConnectionId, aliasKey })
 
+  const mapped = await resolveBatch({ channel: 'EBAY', marketplace, productIds: [parentProductId], channelConnectionId, aliasKey, includePresentation: true, fieldKeys: [], includeCatalogue: false })
+  const order = mapped.products[0]?.presentationOrder
   return {
-    axes,
-    warnings: [...resolved.warnings, ...driftWarnings],
+    axes: applyPresentationOrder(axes, order?.value),
+    warnings: [...resolved.warnings, ...driftWarnings, ...(order?.conflicts ?? [])],
     suppressed: resolved.suppressed,
     candidates,
   }
@@ -290,6 +301,7 @@ async function buildAxisCandidates(
   marketplace: string,
   parentPlatform: Record<string, unknown>,
   rowsForAxes: Array<Record<string, unknown>>,
+  destination: { channelConnectionId: string | null; aliasKey: string },
 ): Promise<string[]> {
   const children = await prisma.product.findMany({
     where: { parentId: parentProductId },
@@ -298,7 +310,7 @@ async function buildAxisCandidates(
   // Each child's eBay itemSpecifics (first market with specs wins) — a third
   // observed source (mirrors images-workspace EFX P5.1).
   const childListings = await prisma.channelListing.findMany({
-    where: { product: { parentId: parentProductId }, channel: 'EBAY' },
+    where: { product: { parentId: parentProductId }, channel: 'EBAY', marketplace, ...destination },
     orderBy: { marketplace: 'asc' },
     select: { productId: true, platformAttributes: true },
   })

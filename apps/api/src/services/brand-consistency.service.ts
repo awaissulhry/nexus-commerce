@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * MC.10.4 — Brand consistency monitoring.
  *
@@ -61,7 +62,7 @@ export async function checkBrandConsistency(
   const issues: ConsistencyIssue[] = []
 
   const kit = await prisma.brandKit.findUnique({
-    where: { brand },
+    where: { workspace_brand: workspaceKey({ brand: brand }) },
     include: { watermarks: true },
   })
   if (!kit) {

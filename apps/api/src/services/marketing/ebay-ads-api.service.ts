@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
 /**
  * E2 (eBay Ads) — typed Sell Marketing API client: entity reads, the async
  * report-task calls, and (since E4) the thin write wrappers. Callers must
@@ -460,7 +461,7 @@ export const suggestBidsApi = async (token: string, campaignId: string, adGroupI
 }
 
 /** GET /ad_report_metadata/{reportType} — valid dimensions/metrics. Cached 6h. */
-const _metaCache = new Map<string, { at: number; meta: Record<string, unknown> }>()
+const _metaCache = new WorkspaceCache<string, { at: number; meta: Record<string, unknown> }>()
 export async function getReportMetadata(token: string, reportType: string): Promise<Record<string, unknown>> {
   const hit = _metaCache.get(reportType)
   if (hit && Date.now() - hit.at < 6 * 3600_000) return hit.meta

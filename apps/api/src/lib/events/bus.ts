@@ -27,6 +27,8 @@ import { isEventType, type EventEnvelope, type EventType } from '@nexus/events'
 import { isSelfPublished, publishEphemeralDynamic } from './ephemeral.js'
 import { subscribeBroadcastEvents } from './subscribe.js'
 import { getBroker } from './index.js'
+import prisma from '../../db.js'
+import { workspaceContext, requireWorkspace, withWorkspace, LEGACY_WORKSPACE_ID, type WorkspaceContext } from '../workspace-context.js'
 
 /** Every bus event is a tagged union member carrying its own emit time. */
 export interface BusEvent {
@@ -74,29 +76,57 @@ export interface CrossReplicaBus<T extends BusEvent> {
 export function createCrossReplicaBus<T extends BusEvent>(
   options: CrossReplicaBusOptions<T>,
 ): CrossReplicaBus<T> {
-  const listeners = new Set<(event: T) => void>()
-  const buffer: T[] = []
+  const listeners = new Map<(event: T) => void, WorkspaceContext | undefined>()
+  const buffer: { event: T; workspaceId: string }[] = []
   let stopRemote: (() => Promise<void>) | null = null
 
   function trim(): void {
     if (!options.replay) return
     const cutoff = Date.now() - options.replay.ttlMs
-    while (buffer.length > 0 && buffer[0]!.ts < cutoff) buffer.shift()
+    while (buffer.length > 0 && buffer[0]!.event.ts < cutoff) buffer.shift()
     while (buffer.length > options.replay.max) buffer.shift()
   }
 
   /** Deliver to this process's listeners. A misbehaving one must not break the bus. */
-  function deliverLocally(event: T): void {
+  function deliverLocally(event: T, workspaceId = workspaceContext()?.workspaceId ?? LEGACY_WORKSPACE_ID): void {
     if (options.replay && event.type !== 'ping') {
-      buffer.push(event)
+      buffer.push({ event, workspaceId })
       trim()
     }
-    for (const listener of listeners) {
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+      void deliverVerified(event, workspaceId).catch(error => logger.warn(`${options.name} bus: profile access could not be checked`, { error: error instanceof Error ? error.message : String(error) }))
+      return
+    }
+    for (const listener of listeners.keys()) {
       try {
         listener(event)
       } catch {
         // Swallowed on purpose: one bad subscriber cannot silence the rest.
       }
+    }
+  }
+
+  async function deliverVerified(event: T, workspaceId: string) {
+    const candidates = [...listeners].filter(([, scope]) => scope?.workspaceId === workspaceId)
+    if (!candidates.length) return
+    const membershipIds = candidates.flatMap(([, scope]) => scope?.membershipId ? [scope.membershipId] : [])
+    const sessionIds = candidates.flatMap(([, scope]) => scope?.sessionId ? [scope.sessionId] : [])
+    const now = new Date()
+    const [members, sessions] = await Promise.all([
+      prisma.workspaceMembership.findMany({ where: { id: { in: membershipIds }, workspaceId, status: 'active', user: { status: 'active' }, workspace: { status: 'active' } }, select: { id: true, userId: true, version: true } }),
+      prisma.userSession.findMany({ where: { id: { in: sessionIds }, revokedAt: null, AND: [{ OR: [{ idleExpiry: null }, { idleExpiry: { gt: now } }] }, { OR: [{ absoluteExpiry: null }, { absoluteExpiry: { gt: now } }] }] }, select: { id: true, userId: true } }),
+    ])
+    for (const [listener, scope] of candidates) {
+      if (!scope) continue
+      const member = members.find(row => row.id === scope.membershipId && row.userId === scope.actorUserId)
+      let allowed = !!member && (scope.membershipVersion === undefined || member.version === scope.membershipVersion) && (!scope.sessionId || sessions.some(session => session.id === scope.sessionId && session.userId === scope.actorUserId))
+      if (scope.apiKeyId) {
+        const key = await withWorkspace(scope, () => prisma.apiKey.findUnique({ where: { id: scope.apiKeyId! }, select: { revokedAt: true, expiresAt: true, rotatedAt: true, rotationGraceUntil: true } }))
+        allowed = !!key && !key.revokedAt && (!key.expiresAt || key.expiresAt > now) && (!key.rotatedAt || !!key.rotationGraceUntil && key.rotationGraceUntil > now)
+      }
+      if (!allowed) { listeners.delete(listener); continue }
+      if (!listeners.has(listener)) continue
+      try { withWorkspace(scope, () => listener(event)) } catch { /* A failed subscriber cannot silence another tab. */ }
     }
   }
 
@@ -123,6 +153,7 @@ export function createCrossReplicaBus<T extends BusEvent>(
 
   return {
     publish(event: T): void {
+      if (process.env.NEXUS_WORKSPACES_ENABLED === '1') requireWorkspace()
       // Local first and synchronously — a subscriber in this process must not
       // wait on a network round trip to learn about a mutation it just made.
       deliverLocally(event)
@@ -144,7 +175,8 @@ export function createCrossReplicaBus<T extends BusEvent>(
     },
 
     subscribe(listener: (event: T) => void): () => void {
-      listeners.add(listener)
+      const scope = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? requireWorkspace() : workspaceContext()
+      listeners.set(listener, scope)
       return () => {
         listeners.delete(listener)
       }
@@ -155,7 +187,8 @@ export function createCrossReplicaBus<T extends BusEvent>(
     replaySince(sinceMs: number): T[] {
       if (!options.replay) return []
       trim()
-      return buffer.filter((event) => event.ts > sinceMs)
+      const workspaceId = workspaceContext()?.workspaceId ?? (process.env.NEXUS_WORKSPACES_ENABLED === '1' ? requireWorkspace().workspaceId : LEGACY_WORKSPACE_ID)
+      return buffer.filter(item => item.workspaceId === workspaceId && item.event.ts > sinceMs).map(item => item.event)
     },
 
     bufferDepth: () => buffer.length,
@@ -177,7 +210,7 @@ export function createCrossReplicaBus<T extends BusEvent>(
             // Remote events do NOT re-run onPublish: the publishing replica
             // already did it, and repeating it would duplicate the side effect
             // once per instance.
-            deliverLocally(fromEnvelope(envelope))
+            deliverLocally(fromEnvelope(envelope), envelope.workspaceId ?? LEGACY_WORKSPACE_ID)
           },
         })
       } catch (error) {

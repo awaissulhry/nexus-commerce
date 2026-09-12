@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AI-2.2 — per-feature model selection.
  *
@@ -174,7 +175,7 @@ export interface SetPrefInput {
 
 export async function setFeaturePref(input: SetPrefInput) {
   const row = await prisma.aiFeatureModelPref.upsert({
-    where: { featureKey: input.featureKey },
+    where: { workspace_featureKey: workspaceKey({ featureKey: input.featureKey }) },
     create: {
       featureKey: input.featureKey,
       provider: input.provider,

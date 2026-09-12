@@ -12,6 +12,7 @@ import { deriveSyncStatus, ACTIVE_CHANNELS } from '../services/sync-status.servi
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { logger } from '../utils/logger.js'
 import { allowApiKeyScope } from '../lib/api-key-hook.js'
+import savedViewPersistenceRoutes from './saved-view-persistence.routes.js'
 
 // ProductReadCache (ES.3) mirrors Product into a flat row used by the
 // /products grid. Every mutation here must refresh the affected rows
@@ -877,123 +878,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
   // SAVED VIEWS
   // ═══════════════════════════════════════════════════════════════════
-  fastify.get('/saved-views', async (request, reply) => {
-    try {
-      const q = request.query as { surface?: string }
-      const userId = userIdFor(request)
-      const views = await prisma.savedView.findMany({
-        where: { userId, surface: q.surface ?? 'products' },
-        orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
-      })
-      // P.3 — attach an alert summary per view so the SavedViewsButton
-      // can show "Stockouts (2 alerts)" + a fired-recently dot. One
-      // groupBy keeps it cheap (single round-trip, indexed by
-      // savedViewId). No N+1.
-      let alertSummary = new Map<
-        string,
-        { active: number; total: number; firedRecently: number }
-      >()
-      if (views.length > 0) {
-        const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
-        const rows = await prisma.savedViewAlert.findMany({
-          where: { savedViewId: { in: views.map((v) => v.id) } },
-          select: {
-            savedViewId: true,
-            isActive: true,
-            lastFiredAt: true,
-          },
-        })
-        for (const r of rows) {
-          const cur = alertSummary.get(r.savedViewId) ?? {
-            active: 0,
-            total: 0,
-            firedRecently: 0,
-          }
-          cur.total++
-          if (r.isActive) cur.active++
-          if (r.lastFiredAt && r.lastFiredAt >= since24h) cur.firedRecently++
-          alertSummary.set(r.savedViewId, cur)
-        }
-      }
-      const items = views.map((v) => ({
-        ...v,
-        alertSummary: alertSummary.get(v.id) ?? {
-          active: 0,
-          total: 0,
-          firedRecently: 0,
-        },
-      }))
-      return { items }
-    } catch (err: any) {
-      return reply.code(500).send({ error: err?.message ?? String(err) })
-    }
-  })
-
-  fastify.post('/saved-views', async (request, reply) => {
-    try {
-      const body = request.body as { name?: string; surface?: string; filters?: any; isDefault?: boolean }
-      if (!body.name?.trim()) return reply.code(400).send({ error: 'name required' })
-      const userId = userIdFor(request)
-      // Setting isDefault clears the previous default for this (user, surface)
-      if (body.isDefault) {
-        await prisma.savedView.updateMany({
-          where: { userId, surface: body.surface ?? 'products' },
-          data: { isDefault: false },
-        })
-      }
-      const view = await prisma.savedView.create({
-        data: {
-          userId,
-          surface: body.surface ?? 'products',
-          name: body.name.trim(),
-          filters: body.filters ?? {},
-          isDefault: !!body.isDefault,
-        },
-      })
-      return view
-    } catch (err: any) {
-      if (err?.code === 'P2002') return reply.code(409).send({ error: 'A view with this name already exists' })
-      return reply.code(500).send({ error: err?.message ?? String(err) })
-    }
-  })
-
-  fastify.patch('/saved-views/:id', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const body = request.body as { name?: string; filters?: any; isDefault?: boolean }
-      const userId = userIdFor(request)
-      const existing = await prisma.savedView.findFirst({ where: { id, userId } })
-      if (!existing) return reply.code(404).send({ error: 'View not found' })
-      if (body.isDefault) {
-        await prisma.savedView.updateMany({
-          where: { userId, surface: existing.surface, id: { not: id } },
-          data: { isDefault: false },
-        })
-      }
-      const view = await prisma.savedView.update({
-        where: { id },
-        data: {
-          name: body.name ?? existing.name,
-          filters: body.filters ?? (existing.filters as any),
-          isDefault: body.isDefault ?? existing.isDefault,
-        },
-      })
-      return view
-    } catch (err: any) {
-      return reply.code(500).send({ error: err?.message ?? String(err) })
-    }
-  })
-
-  fastify.delete('/saved-views/:id', async (request, reply) => {
-    try {
-      const { id } = request.params as { id: string }
-      const userId = userIdFor(request)
-      await prisma.savedView.deleteMany({ where: { id, userId } })
-      return { ok: true }
-    } catch (err: any) {
-      return reply.code(500).send({ error: err?.message ?? String(err) })
-    }
-  })
+  await fastify.register(savedViewPersistenceRoutes)
 
   // ═══════════════════════════════════════════════════════════════════
   // BULK CATALOG ACTIONS — promote to parent / attach as child / set status

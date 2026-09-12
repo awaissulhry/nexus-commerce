@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Shopify Sync Service
  * Handles product, inventory, and order synchronization with parent-child hierarchy
@@ -516,10 +517,10 @@ export class ShopifySyncService {
     try {
       const existing = await prisma.order.findUnique({
         where: {
-          channel_channelOrderId: {
+          channel_channelOrderId: workspaceKey({
             channel: 'SHOPIFY',
             channelOrderId: shopifyOrder.orderId,
-          },
+          }),
         },
         select: { id: true, status: true },
       });
@@ -566,7 +567,7 @@ export class ShopifySyncService {
       const createdItems: Array<{ productId: string | null; quantity: number; sku: string }> = [];
       for (const item of shopifyOrder.items) {
         const product = item.sku
-          ? await prisma.product.findUnique({ where: { sku: item.sku }, select: { id: true } })
+          ? await prisma.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: item.sku }) }, select: { id: true } })
           : null;
         const created = await prisma.orderItem.create({
           data: {

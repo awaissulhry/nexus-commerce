@@ -1,0 +1,136 @@
+{
+  "date": "2026-09-08",
+  "zip": "nexus-impact-7.2.0-review.zip",
+  "zipSha256": "3c88288af4dbeff646dba04f016adc3fb2d018b285370b31be994c6fcbc40572",
+  "sourceSha256": "2892f02545ac15f9eaf699015f3b65e92a51223e8720bc9f10fffceed636b9ec",
+  "customizationSourceSha256": "2e6c87df0157ef14a02419765113650b1cf4ed61b3bceafb42bcae5c5d346b70",
+  "changedOrAddedFiles": 70,
+  "checks": {
+    "apiTests": {
+      "files": 8,
+      "passed": 46
+    },
+    "collectionOrderTests": {
+      "passed": 3
+    },
+    "types": {
+      "api": "passed",
+      "web": "passed",
+      "factory": "passed"
+    },
+    "tokens": {
+      "web": "passed",
+      "factory": "passed"
+    },
+    "themeCheck": {
+      "errors": 0,
+      "warnings": 18,
+      "baselineErrors": 0,
+      "baselineWarnings": 18
+    },
+    "javascriptSyntax": "passed",
+    "shopifyUpload": "initial package imported as theme 200481964359",
+    "shopifyPublication": "Theme 200486879559 confirmed Active; public t/95 product confirms restored cards, shared divider and native variant retention. Previous themes retained.",
+    "realManagedProductVerification": "not run",
+    "patchRoundTrip": "passed: clean application reproduces generated files byte for byte",
+    "zipReproducibility": "passed",
+    "zipIntegrity": "passed",
+    "pageSpeed": {
+      "samples": 26,
+      "pages": [
+        "home",
+        "collection",
+        "product"
+      ],
+      "devices": [
+        "mobile",
+        "desktop"
+      ],
+      "status": "audit complete; performance target not met; app optimization pending",
+      "finalThemeInterfaceEdits": "Two fresh product samples cover the published card release (mobile64, desktop81). The final shared-divider CSS cleanup followed that benchmark and has functional desktop/mobile verification, not a separate speed score."
+    }
+  },
+  "evidence": [
+    "evidence/mobile-menu-unobstructed.png",
+    "evidence/nexus-desktop-light.png",
+    "evidence/nexus-mobile-dark.png",
+    "evidence/sticky-gallery-pinned.png",
+    "evidence/live-sticky-gallery.png",
+    "evidence/live-collection-hover.png",
+    "evidence/live-mobile-menu.png",
+    "evidence/refined-gallery-features-desktop.png",
+    "evidence/refined-live-mobile-menu.png",
+    "evidence/refined-live-collection-hover.png",
+    "evidence/refined-live-gallery-1000.png",
+    "evidence/refined-live-gallery-features-desktop.png",
+    "evidence/feature-cards-desktop.png",
+    "evidence/feature-dividers-collapsed-desktop.png"
+  ],
+  "refinement": {
+    "themeId": "200483930439",
+    "themeName": "Nexus Impact 7.2.0 - refined",
+    "method": "duplicated first release; 11 refinement files saved through Shopify draft code editor, preview tested, published; final card-layout adapter subsequently saved and retested",
+    "status": "live",
+    "assetPrefix": "/cdn/shop/t/94/",
+    "finalCardAssetVersion": "73890345124055936801788897361",
+    "finalGalleryInset": "published and verified at1000x700 to clear the observed loyalty launcher",
+    "finalLocales": "English, Italian, French, German and Spanish added UI strings published; other installed locales use English fallback"
+  },
+  "liveTests": {
+    "sizeAndCart": "refined Italian mobile: M variant52531150553415 atEUR99, real cart line/link verified, removed, cart empty",
+    "stickyGallery": "desktop at scroll520: gallery top100 bottom886, all five thumbnail bottoms876 inside906px viewport; mobile390x844 thumbnails inside wrapper and page overflow0; at1000x700 gallery top100 bottom680, thumbnails610..670, first left96 clears loyalty launcher right80",
+    "newFamilyModel": "not verified on Shopify; current colour products remain separate",
+    "collectionHover": "after final layout batching: Yellow52516557881671 EUR99, complete card replacement retains position",
+    "mobileMenu": "real chat/loyalty hosts hidden and inert while open, restored when closed; native US USD118 -> Italy EUR99; Italiano /it/products/giacca-gale",
+    "performance": "26 samples across the audit; latest product mobile64 anddesktop81; requested speed target not met.",
+    "features": "Active t/95: restored cards/native dialogs and counted disclosure verified; interim row results apply only to retained t/94.",
+    "runtimeErrors": "no error-level entries in refined product/mobile test runs",
+    "locales": "English/Italian product, French /fr/products/veste-gale, German /de/products/gale-jacke, Spanish /es/products/chaqueta-gale: real Features headings and new error messages resolve in each language"
+  },
+  "zipBytes": 1307755,
+  "initialPublishedTheme": {
+    "id": "200481964359",
+    "zipSha256": "f65705e744906a36fe55ec0f1c12768b26221a1650c061cde99850ffba4301e2"
+  },
+  "featureCardReview": {
+    "themeId": "200486879559",
+    "themeName": "Nexus Impact 7.2.0 - feature cards",
+    "status": "live",
+    "assetPrefix": "/cdn/shop/t/95/",
+    "method": "duplicated interim theme; four revised files saved through Shopify code editor; real preview tested; published under existing authorization; shared-divider CSS subsequently corrected and retested",
+    "previewUrl": "https://xaviaracing.it/products/gale-jacket?preview_theme_id=200486879559",
+    "tests": {
+      "initialCards": 4,
+      "expandedCards": 8,
+      "remainingCount": 4,
+      "keyboardExpansion": "focus moves to first revealed card",
+      "popupKeyboard": "Tab and Shift+Tab remain inside; Escape returns focus to opener",
+      "popupImages": "zero src attributes before opening; one popup image requested after opening one",
+      "mobileDisclosure": "350px wide, 48px high at390x844; collapse retains exact top502.625px",
+      "mobilePopup": "358px wide, left16 right374; height483.27px; 44px close control; no horizontal overflow",
+      "localization": "English and Italian: Mostra di pi\u00f9 4, Mostra meno, Caratteristiche; English restored",
+      "publicProduct": "Eight cards, four initially visible, zero interim feature rows, t/95 assets; Show more and popup keyboard checks passed",
+      "nativeVariantRetention": "Native size M selects52531150553415; all8 feature cards remain and interim rows remain absent",
+      "sharedDivider": "Desktop and390px mobile, expanded andcollapsed: gap0px, Features bottom border1px, Description top border0px",
+      "runtimeErrors": "No error-level entries in final desktop product test"
+    },
+    "pending": "Real Nexus-managed variant content overrides and publisher acceptance still require the connected Nexus account/environment.",
+    "verifiedEditorCharacterCounts": {
+      "assets/nexus-xavia-customizations.css": 15740,
+      "assets/nexus-impact.js": 6944,
+      "assets/nexus-menu-widgets.js": 2264,
+      "snippets/nexus-impact-features.liquid": 4790
+    }
+  },
+  "mobileWidgetFix": {
+    "liveThemeId": "200483930439",
+    "file": "live-mobile-widget-fix.css",
+    "sha256": "d5bb336116d21795bc72cf1f6291180aff777fad9c92bca017c2513c54a3feb3",
+    "cause": "Klaviyo child visibility:visible defeats hidden host visibility; inert did not prevent painting",
+    "change": "display:none on floating hosts during menu lifecycle; teaser width between 88px side reservations, inside 44px close target",
+    "draftTest": "At390x844, observed chat/loyalty hosts display:none with zero layout rects; currency/language controls receive pointer hits",
+    "promotionRetest": "After source diagnosis, the app stopped rendering the teaser in existing browser tabs. Compact teaser geometry and its reappearance still need verification when the app displays it again.",
+    "currentLiveThemeId": "200486879559",
+    "liveTest": "Observed t/94 mobile CSS fix then included in active t/95: at390x844 and320x700 selectors unobstructed; chat/loyalty zero rectangles while open and restored when closed; embedded newsletter unmarked."
+  }
+}

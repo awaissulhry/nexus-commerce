@@ -47,8 +47,8 @@ export async function runFeedExportCron(): Promise<void> {
 export function startFeedExportCron(): void {
   if (scheduledTask) return
   const schedule = process.env.NEXUS_FEED_EXPORT_SCHEDULE ?? '0 6 * * *'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runFeedExportCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runFeedExportCron()
   })
   logger.info('feed-export cron: scheduled', { schedule })
 }

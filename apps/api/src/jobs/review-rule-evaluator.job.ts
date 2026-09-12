@@ -150,8 +150,8 @@ export function startReviewRuleEvaluatorCron(): void {
     logger.error('review-rule-evaluator cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runReviewRuleEvaluatorCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runReviewRuleEvaluatorCron()
   })
   logger.info('review-rule-evaluator cron: scheduled', { schedule })
 }

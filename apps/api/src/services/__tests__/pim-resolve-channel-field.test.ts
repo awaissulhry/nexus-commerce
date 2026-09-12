@@ -120,11 +120,11 @@ describe('resolveChannelField — provenance', () => {
     expect(r.legacySource).toBe('source')
   })
 
-  it('fallback when source is empty but fallback resolves', () => {
+  it('fallback when source is absent but fallback resolves', () => {
     const r = resolveChannelField({
       fieldKey: 'item_name',
       rule: rule({ fallback: 'name' }),
-      resolvedAttrs: attrs({ title: { value: '' }, name: { value: 'Backup' } }),
+      resolvedAttrs: attrs({ name: { value: 'Backup' } }),
       product: PROD,
       locale: 'en',
     })
@@ -146,8 +146,14 @@ describe('resolveChannelField — provenance', () => {
     expect(r.legacySource).toBe('default')
   })
 
+  it.each(['', [], null])('preserves an explicit empty source instead of using its fallback: %j', value => {
+    const result = resolveChannelField({ fieldKey: 'item_name', rule: rule({ fallback: 'name' }),
+      resolvedAttrs: attrs({ title: { value }, name: { value: 'Backup' } }), product: PROD, locale: 'en' })
+    expect(result.value).toEqual(value)
+  })
+
   it('missing when source, fallback and default are all empty', () => {
-    const r = resolveChannelField({ fieldKey: 'item_name', rule: rule(), resolvedAttrs: attrs({ title: { value: '' } }), product: PROD, locale: 'en' })
+    const r = resolveChannelField({ fieldKey: 'item_name', rule: rule(), resolvedAttrs: {}, product: PROD, locale: 'en' })
     expect(r.value).toBeNull()
     expect(r.source).toBe('missing')
     expect(r.legacySource).toBe('missing')
@@ -233,9 +239,9 @@ describe('resolveChannelField — value identity vs legacy formula', () => {
   const cases: Array<{ name: string; rule: FieldMappingRule; resolvedAttrs: ResolvedAttributes; link?: FieldLinkMembership; locked?: boolean }> = [
     { name: 'plain source', rule: { source: 'title' }, resolvedAttrs: attrs({ title: { value: 'Hello' } }) },
     { name: 'source + truncate', rule: { source: 'title', transforms: [{ type: 'truncate', max: 4 }] }, resolvedAttrs: attrs({ title: { value: 'HelloWorld' } }) },
-    { name: 'fallback path', rule: { source: 'title', fallback: 'name' }, resolvedAttrs: attrs({ title: { value: '' }, name: { value: 'Backup' } }) },
+    { name: 'fallback path', rule: { source: 'title', fallback: 'name' }, resolvedAttrs: attrs({ name: { value: 'Backup' } }) },
     { name: 'default transform', rule: { source: 'title', transforms: [{ type: 'default', value: 'D' }] }, resolvedAttrs: attrs({ title: { value: '' } }) },
-    { name: 'all empty → null', rule: { source: 'title' }, resolvedAttrs: attrs({ title: { value: '' } }) },
+    { name: 'absent → null', rule: { source: 'title' }, resolvedAttrs: {} },
     { name: 'override value', rule: { source: 'title' }, resolvedAttrs: attrs({ title: { value: 'Pinned', source: 'channelOverride' } }) },
     { name: 'linked member', rule: { source: 'title' }, resolvedAttrs: attrs({ title: { value: 'Hello' } }), link: { translatePolicy: 'TRANSLATE', sourceLanguage: 'it', targetLanguage: 'de' } },
     { name: 'locked identity', rule: { source: 'gtin' }, resolvedAttrs: attrs({ gtin: { value: '123' } }), locked: true },
@@ -277,7 +283,7 @@ describe('linkForCoordinate', () => {
   }
 
   it('returns membership with the target market language for a member coordinate', () => {
-    const m = linkForCoordinate([parentGroup], 'item_name', 'AMAZON', 'DE')
+    const m = linkForCoordinate([parentGroup], 'item_name', 'AMAZON', 'DE', null, 'de')
     expect(m).not.toBeNull()
     expect(m!.translatePolicy).toBe('TRANSLATE')
     expect(m!.sourceLanguage).toBe('it')
@@ -285,11 +291,11 @@ describe('linkForCoordinate', () => {
   })
 
   it('returns null for a non-member coordinate', () => {
-    expect(linkForCoordinate([parentGroup], 'item_name', 'AMAZON', 'FR')).toBeNull()
+    expect(linkForCoordinate([parentGroup], 'item_name', 'AMAZON', 'FR', null, 'fr')).toBeNull()
   })
 
   it('returns null when the field key does not match', () => {
-    expect(linkForCoordinate([parentGroup], 'description', 'AMAZON', 'IT')).toBeNull()
+    expect(linkForCoordinate([parentGroup], 'description', 'AMAZON', 'IT', null, 'it')).toBeNull()
   })
 
   it('scopes CHILD groups by variantId', () => {
@@ -300,16 +306,16 @@ describe('linkForCoordinate', () => {
       sourceLanguage: null,
       members: [{ channel: 'AMAZON', marketplace: 'IT', variantId: 'v1' }],
     }
-    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', 'v1')).not.toBeNull()
+    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', 'v1', 'it')).not.toBeNull()
     // wrong variant → not a member
-    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', 'v2')).toBeNull()
+    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', 'v2', 'it')).toBeNull()
     // product-level query → not a CHILD member
-    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', null)).toBeNull()
+    expect(linkForCoordinate([childGroup], 'purchasable_offer.our_price', 'AMAZON', 'IT', null, 'it')).toBeNull()
   })
 
   it('tolerates malformed members without throwing', () => {
     const bad: FieldLinkGroupLike = { fieldKey: 'item_name', variantId: null, translatePolicy: 'VERBATIM', sourceLanguage: null, members: 'not-an-array' as unknown }
-    expect(linkForCoordinate([bad], 'item_name', 'AMAZON', 'IT')).toBeNull()
+    expect(linkForCoordinate([bad], 'item_name', 'AMAZON', 'IT', null, 'it')).toBeNull()
   })
 })
 

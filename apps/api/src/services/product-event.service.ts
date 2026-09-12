@@ -120,6 +120,13 @@ function ssePayloadFor(
 }
 
 export class ProductEventService {
+  /** Call only after a transaction containing emitTx has committed. */
+  notifyCommitted(input: ProductEventInput): void {
+    this.enqueueRefresh(input)
+    const sse = ssePayloadFor(input)
+    if (sse) publishListingEvent({ ...sse, productId: input.aggregateId, ts: Date.now() } as Parameters<typeof publishListingEvent>[0])
+  }
+
   /** Enqueue a debounced cache refresh for a product aggregate. */
   private enqueueRefresh(input: ProductEventInput): void {
     if (input.aggregateType !== 'Product') return

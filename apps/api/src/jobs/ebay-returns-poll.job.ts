@@ -55,8 +55,8 @@ export function startEbayReturnsPollCron(): void {
     logger.error('ebay-returns-poll cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runPollSweep()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runPollSweep()
   })
   logger.info('ebay-returns-poll cron: scheduled', { schedule })
 }

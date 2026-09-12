@@ -38,6 +38,7 @@ export interface MasterContentChanges {
 }
 
 export interface MasterContentUpdateContext {
+  locale?: string
   actor?: string | null
   reason?: string
   idempotencyKey?: string
@@ -63,6 +64,8 @@ export interface MasterContentUpdateResult {
 
 interface ListingForContentCascade {
   id: string
+  channelConnectionId: string | null
+  aliasKey: string
   channel: string
   region: string
   marketplace: string
@@ -151,7 +154,7 @@ export class MasterContentService {
       const listings = (await tx.channelListing.findMany({
         where: { productId },
         select: {
-          id: true, channel: true, region: true, marketplace: true, externalListingId: true,
+          id: true, channelConnectionId: true, aliasKey: true, channel: true, region: true, marketplace: true, externalListingId: true,
           platformAttributes: true,
           followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true,
         },
@@ -161,7 +164,9 @@ export class MasterContentService {
       const snapshottedListingIds: string[] = []
       const queueRows: Prisma.OutboundSyncQueueCreateManyInput[] = []
 
+      const locales = ctx.locale ? await tx.marketplace.findMany({ select: { channel: true, code: true, language: true } }) : []
       for (const listing of listings) {
+        if (ctx.locale && !locales.some(market => market.channel === listing.channel && market.code === listing.marketplace && market.language.toLowerCase() === ctx.locale!.toLowerCase())) continue
         const { snapshot, push } = resolveContentCascade(changed, changes, listing)
         const pushable = Object.keys(push).length > 0 && CONTENT_CHANNELS.has(listing.channel)
 
@@ -189,6 +194,7 @@ export class MasterContentService {
               productSku: product.sku,
               channel: listing.channel,
               marketplace: listing.marketplace,
+              channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, locale: ctx.locale ?? null,
               productType: (listing.platformAttributes as any)?.productType ?? null,
               ...push,
               reason: ctx.reason ?? null,

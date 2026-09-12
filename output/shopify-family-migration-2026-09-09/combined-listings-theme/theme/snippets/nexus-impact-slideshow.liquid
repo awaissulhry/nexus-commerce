@@ -1,0 +1,286 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.slideshow_product_page
+  if nexus_contract.fields contains 'custom.slideshow_product_page'
+    assign nexus_field = nexus_variant.metafields.custom.slideshow_product_page
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_blocks = nexus_entry -%}
+{%- if nexus_entry != blank -%}
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  CSS
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+<style>
+  {%- if section.settings.controls_type == 'filled_arrows' -%}
+    {%- assign controls_background = nexus_blocks.first.settings.button_background -%}
+    {%- assign controls_color = nexus_blocks.first.settings.button_text_color -%}
+  {%- else -%}
+    {%- assign controls_color = nexus_blocks.first.settings.text_color -%}
+  {%- endif -%}
+
+  #shopify-section-{{ section.id }} {
+    --slideshow-background: {{ nexus_blocks.first.settings.background_gradient | default: nexus_blocks.first.settings.background | default: section.settings.background_gradient | default: section.settings.background }};
+    --slideshow-controls-background: {{ controls_background.rgb }};
+    --slideshow-controls-color: {{ controls_color.rgb }};
+
+    {%- if section.settings.allow_transparent_header -%}
+      margin-block-start: calc(-1 * var(--header-height) * var(--section-is-first));
+    {%- endif -%}
+  }
+
+  {%- for block in nexus_blocks -%}
+{%- assign nexus_block_background = "" -%}
+{%- assign nexus_block_background_gradient = "" -%}
+{%- assign nexus_block_button_background = block.button_background.value -%}
+{%- assign nexus_block_button_link = block.button_link.value -%}
+{%- assign nexus_block_button_text = block.button_text.value -%}
+{%- assign nexus_block_button_text_color = block.button_text_color.value -%}
+{%- assign nexus_block_content_max_width = 780 -%}
+{%- assign nexus_block_desktop_text_position = "sm:place-self-center sm:text-center" -%}
+{%- assign nexus_block_heading_tag = "h0" -%}
+{%- assign nexus_block_image = block.image.value -%}
+{%- assign nexus_block_mobile_image = block.mobile_image.value -%}
+{%- assign nexus_block_mobile_text_position = "place-self-center text-center" -%}
+{%- assign nexus_block_mobile_video = nil -%}
+{%- assign nexus_block_overlay_color = block.overlay.value -%}
+{%- assign nexus_block_overlay_opacity = 30 -%}
+{%- assign nexus_block_subheading = block.subheading.value -%}
+{%- assign nexus_block_text_color = block.text.value -%}
+{%- assign nexus_block_title = block.heading.value -%}
+{%- assign nexus_block_video = nil -%}
+    #block-{{ block.system.id }} {
+      {%- if section.settings.controls_type == 'filled_arrows' -%}
+        {%- assign controls_background = nexus_block_button_background -%}
+        {%- assign controls_color = nexus_block_button_text_color -%}
+      {%- else -%}
+        {%- assign controls_color = nexus_block_text_color -%}
+      {%- endif -%}
+
+      --slideshow-slide-background: {{ nexus_block_background_gradient | default: nexus_block_background | default: section.settings.background_gradient | default: section.settings.background }};
+      --slideshow-slide-controls-background: {{ controls_background.rgb }};
+      --slideshow-slide-controls-color: {{ controls_color.rgb }};
+    }
+  {%- endfor -%}
+</style>
+
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  LIQUID
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+
+{%- assign slideshow_id = 'slideshow-' | append: section.id -%}
+
+<x-slideshow
+  class="slideshow {% unless section.settings.full_width %}slideshow--boxed{% endunless %} {% if nexus_blocks.size > 1 %}slideshow--multiple-slides{% endif %}"
+  {% if section.settings.allow_transparent_header %}
+    allow-transparent-header
+  {% endif %}
+>
+  {%- unless section.settings.full_width -%}
+    <span class="slideshow__slide-background"></span>
+  {%- endunless -%}
+
+  <slideshow-carousel
+    id="{{ slideshow_id }}"
+    class="slideshow__carousel"
+    {% if section.settings.show_initial_transition and section.index != 1 %}
+      reveal-on-scroll="true"
+    {% endif %}
+    selector=".slideshow__slide"
+    transition="{{ section.settings.transition_type }}"
+    {% if section.settings.autoplay %}
+      autoplay="{{ section.settings.cycle_speed }}"
+    {% endif %}
+    role="region"
+  >
+    {%- unless nexus_blocks.size == 1 or section.settings.controls_type contains 'arrows' -%}
+      <custom-cursor class="slideshow__cursor circle-button circle-button--lg circle-button--fill" aria-hidden="true">
+        {%- render 'icon' with 'chevron-right' -%}
+
+        <svg class="slideshow__cursor-ring" viewBox="-28 -28 56 56" width="56" height="56" fill="none" stroke="currentColor" stroke-width="2">
+          <circle r="27" stroke-dasharray="158.33626974092556" stroke-dashoffset="158.33626974092556px"></circle>
+        </svg>
+      </custom-cursor>
+    {%- endunless -%}
+
+    {%- for block in nexus_blocks -%}
+{%- assign nexus_block_background = "" -%}
+{%- assign nexus_block_background_gradient = "" -%}
+{%- assign nexus_block_button_background = block.button_background.value -%}
+{%- assign nexus_block_button_link = block.button_link.value -%}
+{%- assign nexus_block_button_text = block.button_text.value -%}
+{%- assign nexus_block_button_text_color = block.button_text_color.value -%}
+{%- assign nexus_block_content_max_width = 780 -%}
+{%- assign nexus_block_desktop_text_position = "sm:place-self-center sm:text-center" -%}
+{%- assign nexus_block_heading_tag = "h0" -%}
+{%- assign nexus_block_image = block.image.value -%}
+{%- assign nexus_block_mobile_image = block.mobile_image.value -%}
+{%- assign nexus_block_mobile_text_position = "place-self-center text-center" -%}
+{%- assign nexus_block_mobile_video = nil -%}
+{%- assign nexus_block_overlay_color = block.overlay.value -%}
+{%- assign nexus_block_overlay_opacity = 30 -%}
+{%- assign nexus_block_subheading = block.subheading.value -%}
+{%- assign nexus_block_text_color = block.text.value -%}
+{%- assign nexus_block_title = block.heading.value -%}
+{%- assign nexus_block_video = nil -%}
+      {%- capture slide -%}
+        <div class="content-over-media content-over-media--{{ section.settings.image_size }} {% unless section.settings.full_width %}rounded{% endunless %}" style="--content-over-media-content-max-width: {{ nexus_block_content_max_width }}px; --content-over-media-overlay: {{ nexus_block_overlay_color.rgb }} / {{ nexus_block_overlay_opacity | divided_by: 100.0 }}">
+          {%- comment -%}---------------- MEDIA ----------------{%- endcomment -%}
+          {%- capture sizes -%}{% if section.settings.full_width %}100vw{% else %}min({{ settings.page_width }}px, 100vw){% endif %}{%- endcapture -%}
+
+          {%- if "image" == 'image' -%}
+            {%- if nexus_block_image != blank -%}
+              {%- capture loading_strategy -%}{% if forloop.first %}eager{% else %}lazy{% endif %}{%- endcapture -%}
+              {%- capture fetch_priority -%}{% if forloop.first %}high{% else %}low{% endif %}{%- endcapture -%}
+
+              <picture>
+                {%- if nexus_block_mobile_image != blank -%}
+                  <source
+                    media="(max-width: 699px)"
+                    srcset="{{ nexus_block_mobile_image | image_url: width: 400 }} 400w, {{ nexus_block_mobile_image | image_url: width: 600 }} 600w, {{ nexus_block_mobile_image | image_url: width: 800 }} 800w, {{ nexus_block_mobile_image | image_url: width: 1000 }} 1000w, {{ nexus_block_mobile_image | image_url: width: 1200 }} 1200w"
+                    width="{{ nexus_block_mobile_image.width }}"
+                    height="{{ nexus_block_mobile_image.height }}"
+                  >
+                {%- endif -%}
+
+                {{- nexus_block_image | image_url: width: nexus_block_image.width | image_tag: loading: loading_strategy, fetchpriority: fetch_priority, sizes: sizes, widths: '200,300,400,500,600,700,800,900,1000,1200,1400,1600,1800,2000,2200,2400,2600,2800,3000,3200' -}}
+              </picture>
+            {%- else -%}
+              {%- capture placeholder_image -%}{% cycle 'placeholder': 'lifestyle-1', 'lifestyle-2' %}{%- endcapture -%}
+              {{- placeholder_image | placeholder_svg_tag: 'placeholder' | replace: '<svg', '<svg preserveAspectRatio="xMinYMin slice"' -}}
+            {%- endif -%}
+          {%- elsif "image" == 'video' -%}
+            {%- if section.settings.autoplay -%}
+              {%- assign video_loop = false -%}
+            {%- else -%}
+              {%- assign video_loop = true -%}
+            {%- endif -%}
+
+            {%- if nexus_block_video != blank -%}
+              {%- if nexus_block_mobile_video != blank -%}
+                <video-media class="sm:hidden" {% if section.settings.image_size == 'auto' %}style="--aspect-ratio: {{ nexus_block_mobile_video.aspect_ratio }}"{% endif %}>
+                  {{- nexus_block_mobile_video | video_tag: class: 'object-cover sm:hidden', controls: false, autoplay: false, playsinline: true, muted: true, loop: video_loop, preload: 'metadata', image_size: '400x' -}}
+                </video-media>
+              {%- endif -%}
+
+              <video-media {% if nexus_block_mobile_video != blank %}class="hidden sm:block"{% endif %} {% if section.settings.image_size == 'auto' %}style="--aspect-ratio: {{ nexus_block_video.aspect_ratio }}"{% endif %}>
+                {{- nexus_block_video | video_tag: playsinline: true, preload: 'metadata', muted: true, loop: video_loop, autoplay: false, controls: false, image_size: '800x' -}}
+              </video-media>
+            {%- else -%}
+              {%- capture placeholder_image -%}{% cycle 'placeholder': 'lifestyle-1', 'lifestyle-2' %}{%- endcapture -%}
+              {{- placeholder_image | placeholder_svg_tag: 'placeholder' | replace: '<svg', '<svg preserveAspectRatio="xMinYMin slice"' -}}
+            {%- endif -%}
+          {%- endif -%}
+
+          {%- comment -%}---------------- CONTENT ----------------{%- endcomment -%}
+          {%- capture content_class -%}{{ nexus_block_mobile_text_position }} {{ nexus_block_desktop_text_position }}{%- endcapture -%}
+
+          <div {% render 'surface', class: content_class, text_color: nexus_block_text_color %}>
+            <div class="prose">
+              {%- if nexus_block_subheading != blank -%}
+                <p class="subheading" data-sequence="subheading">{{ nexus_block_subheading | escape }}</p>
+              {%- endif -%}
+
+              {%- if nexus_block_title != blank -%}
+                <p class="{{ nexus_block_heading_tag }}" data-sequence="heading">
+                  {%- render 'styled-text', content: nexus_block_title, apparition_effect: true -%}
+                </p>
+              {%- endif -%}
+
+              {%- if nexus_block_button_text != blank -%}
+                {%- render 'button', href: nexus_block_button_link, content: nexus_block_button_text, size: 'xl', background: nexus_block_button_background, text_color: nexus_block_button_text_color -%}
+              {%- endif -%}
+            </div>
+          </div>
+        </div>
+      {%- endcapture -%}
+
+      {%- if nexus_block_button_link != blank and nexus_block_button_text == blank -%}
+        <a
+          id="block-{{ block.system.id }}"
+          href="{{ nexus_block_button_link }}"
+          class="slideshow__slide {% if forloop.first %}is-selected{% endif %}"
+          data-slide-type="{{ "image" }}"
+          role="group"
+          
+        >
+          {{- slide -}}
+        </a>
+      {%- else -%}
+        <div
+          id="block-{{ block.system.id }}"
+          class="slideshow__slide {% if forloop.first %}is-selected{% endif %}"
+          data-slide-type="{{ "image" }}"
+          role="group"
+          
+        >
+          {{- slide -}}
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+
+    {%- if nexus_blocks.size > 1 and section.settings.controls_type != 'none' -%}
+      <div class="slideshow__controls">
+        {%- case section.settings.controls_type -%}
+          {%- when 'filled_arrows', 'outline_arrows' -%}
+            <div class="prev-next-buttons">
+              <button
+                is="prev-button"
+                aria-controls="{{ slideshow_id }}"
+                class="circle-button circle-button--lg {% if section.settings.controls_type == 'filled_arrows' %}circle-button--fill{% else %}circle-button--bordered{% endif %} group"
+              >
+                <span class="sr-only">{{ 'general.accessibility.previous' | t }}</span>
+                <span class="animated-arrow animated-arrow--reverse"></span>
+              </button>
+
+              <button
+                is="next-button"
+                aria-controls="{{ slideshow_id }}"
+                class="circle-button circle-button--lg {% if section.settings.controls_type == 'filled_arrows' %}circle-button--fill{% else %}circle-button--bordered{% endif %} group"
+              >
+                <span class="sr-only">{{ 'general.accessibility.next' | t }}</span>
+                <span class="animated-arrow"></span>
+              </button>
+            </div>
+
+          {%- when 'numbers' -%}
+            <page-dots class="numbered-dots" aria-controls="{{ slideshow_id }}">
+              {%- for i in (1..nexus_blocks.size) -%}
+                <button type="button" class="numbered-dots__item" aria-current="{% if forloop.first %}true{% else %}false{% endif %}">
+                  <svg
+                    width="100%"
+                    height="100%"
+                    {% if section.settings.autoplay %}
+                      style="--percent: 0"
+                    {% endif %}
+                  >
+                    <circle cx="50%" cy="50%" r="15"></circle>
+                    <circle cx="50%" cy="50%" r="15"></circle>
+                  </svg>
+
+                  <span>{{- forloop.index -}}</span>
+                </button>
+              {%- endfor -%}
+            </page-dots>
+
+          {%- when 'dots' -%}
+            <page-dots class="stretching-dots" aria-controls="{{ slideshow_id }}">
+              {%- for i in (1..nexus_blocks.size) -%}
+                <button type="button" class="tap-area" aria-current="{% if forloop.first %}true{% else %}false{% endif %}">
+                  <span class="sr-only">{{ 'general.accessibility.go_to_item' | t: index: forloop.index }}</span>
+                </button>
+              {%- endfor -%}
+            </page-dots>
+        {%- endcase -%}
+      </div>
+    {%- endif -%}
+  </slideshow-carousel>
+</x-slideshow>
+
+
+{%- endif -%}

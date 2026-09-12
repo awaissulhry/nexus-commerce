@@ -1,0 +1,1032 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to dark mode":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+        - generic: Home
+      - link "Products 37 pending":
+        - /url: /products
+        - generic: Products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic: Listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+        - generic: Stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+        - generic: Inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic: Outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+        - generic: Replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+        - generic: Purchase Orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+        - generic: Suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+        - generic: Carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+        - generic: Returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic: Orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+        - generic: Pricing
+      - link "Insights":
+        - /url: /insights
+        - generic: Insights
+      - link "Advertising":
+        - /url: /marketing/ads
+        - generic: Advertising
+      - link "Calendar":
+        - /url: /marketing/calendar
+        - generic: Calendar
+      - link "Content":
+        - /url: /marketing/content
+        - generic: Content
+      - link "Reviews":
+        - /url: /marketing/reviews
+        - generic: Reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+        - generic: Agent Fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic: Inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+        - generic: Sync Logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic: Connections
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+        - generic: Mappings
+      - link "Settings":
+        - /url: /settings
+        - generic: Settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+        - generic: Recycle Bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic: Active
+  - generic: Parent
+  - generic "Information edits save as Nexus drafts. Saving does not publish or deliver them to Etsy.": Nexus draft autosave
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Blocked 0%":
+      - generic: Shared product
+      - generic: ·
+      - generic: Blocked
+      - generic: 0%
+    - radio "Amazon":
+      - generic: Amazon
+    - radio "eBay":
+      - generic: eBay
+    - radio "Shopify Not set up":
+      - generic: Shopify
+      - generic: ·
+      - generic: Not set up
+    - radio "Etsy Blocked —" [checked] [active]:
+      - generic: Etsy
+      - generic: ·
+      - generic: Blocked
+      - generic: —
+  - button "Market":
+    - generic: GLOBAL
+  - button "Content language":
+    - generic: German (de)
+  - region "Information":
+    - text: 21 rows
+    - generic: · 1 listing · 20 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (56)":
+      - text: All attributes (56)
+    - button "Required 8 columns":
+      - generic: Required
+      - generic: 8 columns
+    - button "Essentials 8 columns":
+      - generic: Essentials
+      - generic: 8 columns
+    - button "Localized content 4 columns":
+      - generic: Localized content
+      - generic: 4 columns
+    - 'button "Missing required: 126 affected cells across 6 columns and 21 rows"':
+      - generic: Missing required
+      - generic: 6 columns
+    - 'button "Mapping errors: 1 affected cell across 1 column and 1 row. The mapping result has an error. Open Channel mapping to review the source rule and preview value."':
+      - text: Mapping errors
+      - generic: 1 column
+    - 'button "Invalid values: 1 affected cell across 1 column and 1 row"':
+      - text: Invalid values
+      - generic: 1 column
+    - button "Requirements incomplete"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product role Parent SKU Title Description Product media Featured rank Is customizable Materials Styles 1":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product role":
+            - generic: Product role
+          - columnheader "Parent SKU":
+            - generic: Parent SKU
+          - columnheader "Title":
+            - generic: Title
+          - columnheader "Description":
+            - generic: Description
+          - columnheader "Product media":
+            - generic: Product media
+          - columnheader "Featured rank":
+            - generic: Featured rank
+          - columnheader "Is customizable":
+            - generic: Is customizable
+          - columnheader "Materials":
+            - generic: Materials
+          - columnheader "Styles 1":
+            - generic: Styles 1
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: GALE-JACKET
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET, Description"':
+          - 'gridcell "GALE-JACKET, 24 media items Edit product media: GALE-JACKET"':
+            - group "GALE-JACKET, 24 media items":
+              - button "MAIN, position 1 of 24"
+              - button "Image, position 2 of 24"
+              - button "Image, position 3 of 24"
+              - button "Image, position 4 of 24"
+              - button "Image, position 5 of 24"
+              - generic: "+19"
+            - 'button "Edit product media: GALE-JACKET"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL GALE-JACKET-BLACK-MEN-3XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-3XL
+            - img "GALE-JACKET-BLACK-MEN-3XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-3XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+            - group "GALE-JACKET-BLACK-MEN-3XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL GALE-JACKET-BLACK-MEN-4XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-4XL
+            - img "GALE-JACKET-BLACK-MEN-4XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-4XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+            - group "GALE-JACKET-BLACK-MEN-4XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL GALE-JACKET-BLACK-MEN-5XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-5XL
+            - img "GALE-JACKET-BLACK-MEN-5XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-5XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+            - group "GALE-JACKET-BLACK-MEN-5XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L GALE-JACKET-BLACK-MEN-L — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-L
+            - img "GALE-JACKET-BLACK-MEN-L — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-L, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-L"':
+            - group "GALE-JACKET-BLACK-MEN-L, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-L"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M GALE-JACKET-BLACK-MEN-M — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-M
+            - img "GALE-JACKET-BLACK-MEN-M — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-M, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-M"':
+            - group "GALE-JACKET-BLACK-MEN-M, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-M"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S GALE-JACKET-BLACK-MEN-S — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-S
+            - img "GALE-JACKET-BLACK-MEN-S — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-S, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-S"':
+            - group "GALE-JACKET-BLACK-MEN-S, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-S"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL GALE-JACKET-BLACK-MEN-XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XL
+            - img "GALE-JACKET-BLACK-MEN-XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+            - group "GALE-JACKET-BLACK-MEN-XL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT02, position 2 of 7"
+              - button "PT01, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS GALE-JACKET-BLACK-MEN-XS — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XS
+            - img "GALE-JACKET-BLACK-MEN-XS — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XS, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+            - group "GALE-JACKET-BLACK-MEN-XS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL GALE-JACKET-BLACK-MEN-XXL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXL
+            - img "GALE-JACKET-BLACK-MEN-XXL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+            - group "GALE-JACKET-BLACK-MEN-XXL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS GALE-JACKET-BLACK-MEN-XXS — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXS
+            - img "GALE-JACKET-BLACK-MEN-XXS — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero) Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXS, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+            - group "GALE-JACKET-BLACK-MEN-XXS, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL GALE-JACKET-YELLOW-MEN-3XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-3XL
+            - img "GALE-JACKET-YELLOW-MEN-3XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-3XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+            - group "GALE-JACKET-YELLOW-MEN-3XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL GALE-JACKET-YELLOW-MEN-4XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-4XL
+            - img "GALE-JACKET-YELLOW-MEN-4XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-4XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+            - group "GALE-JACKET-YELLOW-MEN-4XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL GALE-JACKET-YELLOW-MEN-5XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-5XL
+            - img "GALE-JACKET-YELLOW-MEN-5XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-5XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+            - group "GALE-JACKET-YELLOW-MEN-5XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L GALE-JACKET-YELLOW-MEN-L — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-L
+            - img "GALE-JACKET-YELLOW-MEN-L — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-L, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+            - group "GALE-JACKET-YELLOW-MEN-L, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M GALE-JACKET-YELLOW-MEN-M — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-M
+            - img "GALE-JACKET-YELLOW-MEN-M — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-M, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+            - group "GALE-JACKET-YELLOW-MEN-M, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S GALE-JACKET-YELLOW-MEN-S — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-S
+            - img "GALE-JACKET-YELLOW-MEN-S — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-S, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+            - group "GALE-JACKET-YELLOW-MEN-S, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL GALE-JACKET-YELLOW-MEN-XL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XL
+            - img "GALE-JACKET-YELLOW-MEN-XL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+            - group "GALE-JACKET-YELLOW-MEN-XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS GALE-JACKET-YELLOW-MEN-XS — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XS
+            - img "GALE-JACKET-YELLOW-MEN-XS — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XS, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+            - group "GALE-JACKET-YELLOW-MEN-XS, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL GALE-JACKET-YELLOW-MEN-XXL — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXL
+            - img "GALE-JACKET-YELLOW-MEN-XXL — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+            - group "GALE-JACKET-YELLOW-MEN-XXL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Styles 1"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS GALE-JACKET-YELLOW-MEN-XXS — 3 of 55 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXS
+            - img "GALE-JACKET-YELLOW-MEN-XXS — 3 of 55 channel fields filled (including optional fields) · errors":
+              - generic: 5%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo) Near the Etsy · GLOBAL cap Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)
+            - img "Near the Etsy · GLOBAL cap": ◆
+            - 'button "Language fallback. Showing it content. de content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+          - 'gridcell "Required Field validation: Required by the category schema: the description attribute. Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+            - img "Required": ⚠ required
+            - 'generic "Field validation: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Field validation: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXS, 8 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+            - group "GALE-JACKET-YELLOW-MEN-XXS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "MAIN, position 2 of 8"
+              - button "PT01, position 3 of 8"
+              - button "PT02, position 4 of 8"
+              - button "PT03, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Featured rank"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Featured rank"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Is customizable"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Is customizable"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Materials"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Materials"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Styles 1"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Styles 1"':
+    - status:
+      - generic: 21 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

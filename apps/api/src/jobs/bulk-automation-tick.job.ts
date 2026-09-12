@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * W7.2 — Bulk-ops automation `bulk_cron_tick` emitter.
  *
@@ -40,9 +41,9 @@ export function startBulkAutomationTickCron(): void {
   // at boot, and double-firing every 'cron_tick' family at startup
   // could surprise operators with two runs in close succession on
   // the audit log. Wait one interval.
-  tickTimer = setInterval(() => {
-    void runBulkAutomationTickOnce()
-  }, TICK_INTERVAL_MS)
+  tickTimer = setInterval(() => { void runProfileTimer('bulk-automation-tick', async () => {
+    await runBulkAutomationTickOnce()
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
 }
 
 export function stopBulkAutomationTickCron(): void {

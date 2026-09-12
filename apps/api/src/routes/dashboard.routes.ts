@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * ZZ — /api/dashboard/overview
  *
@@ -2615,7 +2616,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
       const [layout, savedViews] = await Promise.all([
         prisma.dashboardLayout
           .findUnique({
-            where: { userId: 'default-user' },
+            where: { workspace_userId: workspaceKey({ userId: 'default-user' }) },
             select: {
               hiddenWidgets: true,
               widgetOrder: true,
@@ -3761,7 +3762,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
         })
         if (!view) return reply.code(404).send({ error: 'view not found' })
         const row = await prisma.dashboardLayout.upsert({
-          where: { userId: 'default-user' },
+          where: { workspace_userId: workspaceKey({ userId: 'default-user' }) },
           create: {
             userId: 'default-user',
             hiddenWidgets: view.hiddenWidgets,
@@ -3866,7 +3867,7 @@ const dashboardRoutes: FastifyPluginAsync = async (fastify) => {
     const order = sanitiseList(request.body?.widgetOrder)
     try {
       const row = await prisma.dashboardLayout.upsert({
-        where: { userId: 'default-user' },
+        where: { workspace_userId: workspaceKey({ userId: 'default-user' }) },
         create: {
           userId: 'default-user',
           hiddenWidgets: hidden,

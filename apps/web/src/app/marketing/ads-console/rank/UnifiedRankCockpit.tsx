@@ -22,7 +22,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Crosshair, Search, ChevronRight, Undo2, Redo2, Layers, Zap, AlertTriangle, History as HistoryIcon, Info, Package, Lock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, Kbd, ToolbarButton } from '@/design-system/primitives'

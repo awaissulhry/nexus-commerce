@@ -92,8 +92,8 @@ export function startBudgetPoolRebalanceCron(): void {
     logger.error('budget-pool-rebalance cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runBudgetPoolRebalanceCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runBudgetPoolRebalanceCron()
   })
   logger.info('budget-pool-rebalance cron: scheduled', { schedule })
 }

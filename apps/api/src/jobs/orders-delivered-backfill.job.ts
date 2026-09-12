@@ -54,8 +54,8 @@ export function startOrdersDeliveredBackfillCron(): void {
     })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runOrdersDeliveredBackfillCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runOrdersDeliveredBackfillCron()
   })
   logger.info('orders-delivered-backfill cron: started', { schedule })
 }

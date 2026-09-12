@@ -27,7 +27,8 @@
  * The pacing band, the six section cards, the inspector rail and the plan editor are PARKED
  * (`docs/2026-08-16-ra-parked-sections.md`), headed for Budget Manager and Control Room.
  */
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { SchedulesSection } from './SchedulesSection'

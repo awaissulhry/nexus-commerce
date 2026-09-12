@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Amazon orders sync — SP-API getOrders + getOrderItems → Phase-26 unified Order.
  *
@@ -242,8 +243,8 @@ interface SyncSummary {
 }
 
 export class AmazonOrdersService {
-  isConfigured(): boolean {
-    return amazonService.isConfigured()
+  async isConfigured(): Promise<boolean> {
+    return (await amazonService.isConfigured())
   }
 
   /**
@@ -640,10 +641,10 @@ export class AmazonOrdersService {
     // order, which shouldn't re-trigger the cleanup cascade).
     const existing = await prisma.order.findUnique({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'AMAZON',
           channelOrderId: raw.AmazonOrderId,
-        },
+        }),
       },
       select: { id: true, status: true, deliveredAt: true, deliveredAtSource: true, shippedAt: true },
     })
@@ -752,10 +753,10 @@ export class AmazonOrdersService {
 
     const order = await prisma.order.upsert({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'AMAZON',
           channelOrderId: raw.AmazonOrderId,
-        },
+        }),
       },
       update: updateData,
       create: {
@@ -1029,7 +1030,7 @@ export class AmazonOrdersService {
     let productId: string | null = null
     if (item.SellerSKU) {
       const prod = await prisma.product.findUnique({
-        where: { sku: item.SellerSKU },
+        where: { workspace_sku: workspaceKey({ sku: item.SellerSKU }) },
         select: { id: true },
       })
       productId = prod?.id ?? null
@@ -1044,7 +1045,7 @@ export class AmazonOrdersService {
 
     const upserted = await prisma.orderItem.upsert({
       where: {
-        orderId_externalLineItemId: { orderId, externalLineItemId },
+        orderId_externalLineItemId: workspaceKey({ orderId, externalLineItemId }),
       },
       create: {
         orderId,

@@ -8,7 +8,7 @@
 // endpoint that R7.1 added.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, TrendingUp, TrendingDown, Clock, Tag, Box, Loader2, BarChart3, AlertTriangle } from 'lucide-react'
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 import PageHeader from '@/components/layout/PageHeader'

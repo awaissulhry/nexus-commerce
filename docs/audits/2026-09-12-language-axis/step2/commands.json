@@ -1,0 +1,23 @@
+{
+  "production": {
+    "execute": {
+      "at": "2026-09-11T23:57:05.659Z",
+      "exitCode": 0
+    },
+    "resolve": {
+      "at": "2026-09-11T23:58:12.459Z",
+      "exitCode": 0
+    }
+  },
+  "local": {
+    "execute": {
+      "at": "2026-09-11T23:59:07.839Z",
+      "exitCode": 0
+    },
+    "resolve": {
+      "at": "2026-09-11T23:59:17.099Z",
+      "exitCode": 0
+    }
+  },
+  "prismaGenerateExitCode": 0
+}

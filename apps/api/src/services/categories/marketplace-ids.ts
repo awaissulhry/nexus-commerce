@@ -1,3 +1,4 @@
+import { marketLanguages, languageTag } from '../pim/market-languages.js'
 // Map internal 2-letter marketplace codes to Amazon's marketplaceId.
 // Existing call-sites use raw IDs from env; this lookup centralises
 // the mapping so the schema-sync service can accept the same
@@ -16,23 +17,9 @@ const CODE_TO_AMAZON_ID: Record<string, string> = {
   MX: 'A1AM78C64UM0Y8',
 }
 
-// Map marketplace code to the locale Amazon uses for schema labels / enumNames.
-const CODE_TO_LOCALE: Record<string, string> = {
-  IT: 'it_IT',
-  DE: 'de_DE',
-  FR: 'fr_FR',
-  ES: 'es_ES',
-  NL: 'nl_NL',
-  UK: 'en_GB',
-  GB: 'en_GB',
-  US: 'en_US',
-  CA: 'en_CA',
-  MX: 'es_MX',
-}
-
-export function amazonLocale(code: string | null | undefined): string {
-  if (!code) return 'en_US'
-  return CODE_TO_LOCALE[code.toUpperCase()] ?? 'en_US'
+export async function amazonLocale(code: string | null | undefined): Promise<string> {
+  const market = code || 'US'
+  return languageTag((await marketLanguages('AMAZON', market))[0], market)
 }
 
 export function amazonMarketplaceId(code: string | null | undefined): string {

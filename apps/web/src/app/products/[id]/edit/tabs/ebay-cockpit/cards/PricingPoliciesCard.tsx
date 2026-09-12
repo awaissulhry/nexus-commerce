@@ -24,7 +24,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { DollarSign, ShieldCheck, Sparkles, Save, Loader2, ExternalLink } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'

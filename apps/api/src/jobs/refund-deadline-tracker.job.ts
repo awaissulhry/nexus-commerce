@@ -56,8 +56,8 @@ export function startRefundDeadlineTrackerCron(): void {
     logger.error('refund-deadline-tracker cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runScan()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runScan()
   })
   logger.info('refund-deadline-tracker cron: scheduled', { schedule })
 }

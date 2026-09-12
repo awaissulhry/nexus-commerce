@@ -16,6 +16,10 @@
  *      size in its FILENAME (`<id>._SL112_.jpg`) — a bare Amazon URL serves the 2560×2560 master,
  *      measured at 2112ms to paint a 56px box vs 264ms sized. eBay/Shopify pass through.
  *
+ * The two CDN transforms it used to own now live in `lib/cdn-image.ts` — the studio's master
+ * gallery needed the same rule at a size this component does not offer, and a second copy of
+ * "how to ask a CDN for a smaller picture" is a fork by construction. Behaviour is unchanged.
+ *
  * Not carried over: the drag-to-upload overlay. It has no consumer on a DS grid; the grid-lens
  * copy keeps it for the workspaces that still use that kit.
  */
@@ -23,7 +27,8 @@ import { memo, useCallback, useEffect, useRef, useState, type CSSProperties, typ
 import { createPortal } from 'react-dom'
 import { Image as ImageIcon } from 'lucide-react'
 
-import { useGridDensity } from '../grid/hooks/useGridDensity'
+import { cdnFit, cdnSquare } from '../lib/cdn-image'
+import { useGridDensity } from '../lib/density'
 import { gridDensity } from '../tokens/grid'
 
 export interface ThumbnailProps {
@@ -45,29 +50,9 @@ const PREVIEW_SIZE_PX = 320
 /** The empty-placeholder icon per density — scaled with the box it sits in. */
 const ICON_PX = { compact: 12, cozy: 14, spacious: 18 } as const
 
-function withCloudinaryTransform(url: string, transform: string): string {
-  if (!url.includes('res.cloudinary.com')) return url
-  return url.replace(/\/image\/upload\//, `/image/upload/${transform}/`)
-}
+const sizedFor = (url: string, px: number): string => cdnSquare(url, px)
 
-/**
- * Ask Amazon's CDN for a sized rendition. The size is a filename segment, not a query param:
- * `<id>.jpg` → `<id>._SL112_.jpg`. Any modifier block already present (`._AC_SX679_`) is REPLACED
- * rather than appended — Amazon honours the last one, and stacking them is how you get a 404.
- */
-function withAmazonTransform(url: string, px: number): string {
-  if (!/(?:m\.media-amazon|images-amazon|ssl-images-amazon)\.com/.test(url)) return url
-  return url.replace(
-    /(\._[A-Za-z0-9,]+_)?\.(jpg|jpeg|png|gif|webp)(\?.*)?$/i,
-    (_m, _mod, ext: string, qs: string | undefined) => `._SL${px}_.${ext}${qs ?? ''}`,
-  )
-}
-
-const sizedFor = (url: string, px: number): string =>
-  withAmazonTransform(withCloudinaryTransform(url, `w_${px},h_${px},c_fill,f_auto,q_auto,dpr_2.0`), px)
-
-const previewFor = (url: string): string =>
-  withAmazonTransform(withCloudinaryTransform(url, `w_${PREVIEW_SIZE_PX},c_fit,f_auto,q_auto`), PREVIEW_SIZE_PX)
+const previewFor = (url: string): string => cdnFit(url, PREVIEW_SIZE_PX)
 
 function ThumbnailImpl({ src, photoCount = 0, alt = '', hoverPreview = true, onClick, title }: ThumbnailProps) {
   const density = useGridDensity()

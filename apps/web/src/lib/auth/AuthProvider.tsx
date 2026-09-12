@@ -16,10 +16,11 @@
  */
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { installAuthFetch } from './install-fetch'
 import { setCsrfToken } from './csrf-store'
+import { setBrowserUserId } from '../workspaces/browser-identity'
 
 export interface AuthUser {
   id: string
@@ -50,7 +51,7 @@ const AuthContext = createContext<AuthContextValue>({
   refresh: async () => {},
 })
 
-const ENFORCE = process.env.NEXT_PUBLIC_AUTH_ENFORCE === '1'
+const ENFORCE = process.env.NEXT_PUBLIC_AUTH_ENFORCE === '1' || process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1'
 
 // Routes reachable without a session. Keep in sync with the API manifest's
 // PUBLIC set + the auth pages.
@@ -58,6 +59,7 @@ const PUBLIC_PREFIXES = [
   '/login',
   '/403',
   '/accept-invite',
+  '/accept-workspace-invite',
   '/reset-password',
   '/forgot-password',
   '/r/',
@@ -92,16 +94,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = await res.json()
         setUser(data.user ?? null)
+        setBrowserUserId(data.user?.id ?? null)
         setIsOwner(!!data.isOwner)
         setPermissions(new Set<string>(data.permissions ?? []))
         setStatus('authed')
       } else {
+        setBrowserUserId(null)
         setUser(null)
         setIsOwner(false)
         setPermissions(new Set())
         setStatus('anon')
       }
     } catch {
+      setBrowserUserId(null)
       setUser(null)
       setIsOwner(false)
       setPermissions(new Set())

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * F5 — bulk product-image upload from a folder of files.
  *
@@ -187,7 +188,7 @@ const productsImagesRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const product = await prisma.product.findUnique({
-        where: { sku },
+        where: { workspace_sku: workspaceKey({ sku: sku }) },
         select: { id: true },
       })
       if (!product) {

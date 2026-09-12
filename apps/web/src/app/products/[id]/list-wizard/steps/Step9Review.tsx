@@ -218,6 +218,7 @@ interface MultiChannelValidation {
 }
 
 interface ChannelPayloadEntry {
+  language?: string
   channelKey: string
   platform: string
   marketplace: string
@@ -1043,6 +1044,7 @@ function ChannelCard({
           platform={report.platform}
           marketplace={report.marketplace}
           payload={payload.payload}
+          language={payload.language}
         />
       )}
 
@@ -1216,20 +1218,17 @@ const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
   UK: 'GBP', GB: 'GBP', US: 'USD', CA: 'CAD', MX: 'MXN', AU: 'AUD', JP: 'JPY',
   GLOBAL: 'EUR',
 }
-const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
-  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', NL: 'nl', SE: 'sv', PL: 'pl',
-  UK: 'en', GB: 'en', US: 'en', CA: 'en', MX: 'es', AU: 'en', JP: 'ja',
-  GLOBAL: 'en',
-}
 
 function ListingSummary({
   platform,
   marketplace,
   payload,
+  language,
 }: {
   platform: string
   marketplace: string
   payload: any
+  language?: string
 }) {
   const mp = marketplace.toUpperCase()
   const isAmazon = platform.toUpperCase() === 'AMAZON'
@@ -1238,7 +1237,6 @@ function ListingSummary({
   if (!payload) return null
 
   const currency = MARKETPLACE_TO_CURRENCY[mp] ?? '—'
-  const language = MARKETPLACE_TO_LANGUAGE[mp] ?? '—'
 
   // Amazon shape (from submission.service.ts AmazonListingPayload):
   //   parentSku, children[{masterSku, channelSku, channelProductId,...}],
@@ -1297,7 +1295,7 @@ function ListingSummary({
           />
         )}
         <SummaryField label="Currency" value={currency} />
-        <SummaryField label="Language" value={language} />
+        <SummaryField label="Language" value={language ?? '—'} />
       </div>
 
       {/* Variation summary */}

@@ -1,0 +1,88 @@
+{
+  "date": "2026-09-08",
+  "environment": "local-disposable-fixtures",
+  "businessName": "Xavia Racing",
+  "productionChanged": false,
+  "implementation": {
+    "directory": "server search, cursor pagination, current profile fetched independently of shortlist",
+    "profileCountLimit": null,
+    "uiPageSize": 24,
+    "apiMaximumPageSize": 100,
+    "accountOwnership": "one owning business profile per verified seller identity",
+    "assignment": "unused disconnected accounts; owner of both; new inactive ID and fresh sign-in; retired source history preserved"
+  },
+  "tests": {
+    "postgresProfiles": {
+      "files": 1,
+      "passed": 37
+    },
+    "oauthIdentityDisconnect": {
+      "files": 3,
+      "passed": 77
+    },
+    "webProfilesChannelsControls": {
+      "files": 7,
+      "passed": 137
+    },
+    "factorySharedControls": {
+      "files": 1,
+      "passed": 61,
+      "configuration": "Web Vitest config, Factory root; default Factory test glob excludes shared specs"
+    }
+  },
+  "types": {
+    "api": "passed",
+    "web": "passed",
+    "factory": "passed"
+  },
+  "tokens": {
+    "web": "passed",
+    "factory": "passed"
+  },
+  "rawControlRatchet": "passed",
+  "changedSharedFilesParity": "passed",
+  "widerDsParity": {
+    "existingDrifted": 13,
+    "upstreamOnly": 141,
+    "factoryOnly": 1
+  },
+  "database": {
+    "forcedRlsTables": 409,
+    "migrationRehearsal": "directory-assignment-migration-rehearsal.json",
+    "functionOwnerWithoutRlsBypass": "passed",
+    "scopeRestoredWithinTransaction": "passed",
+    "ordinaryOwnershipEditsRemainForbidden": true,
+    "repeatAssignmentAfterAnotherMove": "refused as stale"
+  },
+  "browser": {
+    "fixtureProfiles": 27,
+    "paginationAndSearchBeyondFirstPage": "passed",
+    "headerCurrentBeyondShortlist": "passed",
+    "headerKeyboardSwitch": "passed",
+    "nestedAccountDestinationSearch": "passed",
+    "assignmentAndDestinationVisibility": "passed",
+    "activeAccountRefusal": "passed",
+    "reconnectPinsDestination": "passed",
+    "escapeRestoresOpenerFocus": "passed",
+    "lightAndDarkMobileWidth": 390,
+    "dialogWidth": 350,
+    "horizontalDocumentOverflow": false,
+    "providerConsentPerformed": false,
+    "screenshots": [
+      "assignment-mobile-light.png",
+      "assignment-mobile-dark-blocked.png"
+    ]
+  },
+  "releasePending": [
+    "Identify deployment target from app URL",
+    "Reconcile and rehearse the actual environment database; coordinate migrations a-e and API/worker/Web flags",
+    "Verify configured provider applications and real authorized seller sign-in",
+    "Resolve or triage previously recorded unrelated full-API assertions and wider design-system drift"
+  ],
+  "limits": [
+    "No account business-history migration or simultaneous ownership across profiles",
+    "Reference checks do not rewrite JSON references or external queue payloads; retired IDs remain inactive in their original profile",
+    "No unmeasured capacity or zero-error guarantee",
+    "Prior full-suite results in verification.json were not rerun as part of this follow-up"
+  ]
+}

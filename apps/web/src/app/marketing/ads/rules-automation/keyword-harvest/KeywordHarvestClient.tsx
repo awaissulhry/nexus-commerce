@@ -51,7 +51,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { SegmentedControl } from '@/design-system/primitives'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, ArrowUpRight, Check, Copy, Info } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { useAdsMarketplace } from '../../_shell/MarketplaceContext'

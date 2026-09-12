@@ -64,10 +64,10 @@ export class EbayAccountService {
   async getSnapshot(
     connectionId: string,
     marketplaceId: string,
-    options?: { forceRefresh?: boolean },
+    options?: { forceRefresh?: boolean; requireComplete?: boolean },
   ): Promise<EbayAccountSnapshot> {
     const key = `${connectionId}:${marketplaceId}`
-    if (!options?.forceRefresh) {
+    if (!options?.forceRefresh && !options?.requireComplete) {
       const cached = this.cache.get(key)
       if (cached && cached.expiresAt > Date.now()) return cached.data
     }
@@ -86,6 +86,7 @@ export class EbayAccountService {
         'getFulfillmentPolicies',
         marketplaceId,
         connectionId,
+        options?.requireComplete,
       ),
       fetchPolicy(
         `${apiBase}/sell/account/v1/payment_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`,
@@ -95,6 +96,7 @@ export class EbayAccountService {
         'getPaymentPolicies',
         marketplaceId,
         connectionId,
+        options?.requireComplete,
       ),
       fetchPolicy(
         `${apiBase}/sell/account/v1/return_policy?marketplace_id=${encodeURIComponent(marketplaceId)}`,
@@ -104,8 +106,9 @@ export class EbayAccountService {
         'getReturnPolicies',
         marketplaceId,
         connectionId,
+        options?.requireComplete,
       ),
-      fetchLocations(
+      options?.requireComplete ? Promise.resolve([]) : fetchLocations(
         `${apiBase}/sell/inventory/v1/location`,
         headers,
         connectionId,
@@ -117,7 +120,8 @@ export class EbayAccountService {
       returnPolicies: returnRes,
       locations,
     }
-    this.cache.set(key, {
+    // Strict assignment reads need only policies; do not replace a full display snapshot's locations.
+    if (!options?.requireComplete) this.cache.set(key, {
       data: snapshot,
       expiresAt: Date.now() + CACHE_TTL,
     })
@@ -137,6 +141,7 @@ async function fetchPolicy(
   operation: string,
   marketplaceId: string,
   connectionId: string,
+  requireComplete = false,
 ): Promise<EbayPolicySummary[]> {
   let json:
     | (Record<string, unknown> | null)
@@ -152,7 +157,7 @@ async function fetchPolicy(
         triggeredBy: 'api',
       },
       async () => {
-        const res = await fetch(url, { headers })
+        const res = await fetch(url, { headers, ...(requireComplete ? { signal: AbortSignal.timeout(15_000) } : {}) })
         if (!res.ok) {
           const errorBody = await res.text().catch(() => '')
           const err = new Error(
@@ -169,6 +174,7 @@ async function fetchPolicy(
       },
     )
   } catch (err) {
+    if (requireComplete) throw err
     console.warn(
       `[EbayAccountService] ${arrayKey} error: ${
         err instanceof Error ? err.message : String(err)
@@ -176,6 +182,7 @@ async function fetchPolicy(
     )
     return []
   }
+  if (requireComplete && (!json || !Array.isArray(json[arrayKey]))) throw new Error('Incomplete eBay policy response')
   const list = json && Array.isArray(json[arrayKey]) ? (json[arrayKey] as Array<{
     fulfillmentPolicyId?: string
     paymentPolicyId?: string
@@ -183,6 +190,7 @@ async function fetchPolicy(
     name?: string
     marketplaceId?: string
   }>) : []
+  if (requireComplete && list.some(p => !p || typeof (p.fulfillmentPolicyId ?? p.paymentPolicyId ?? p.returnPolicyId) !== 'string' || !(p.fulfillmentPolicyId ?? p.paymentPolicyId ?? p.returnPolicyId) || typeof p.name !== 'string' || !p.name.trim() || typeof p.marketplaceId !== 'string')) throw new Error('Incomplete eBay policy response')
   return list.map((p) => ({
     id:
       p.fulfillmentPolicyId ??

@@ -5,7 +5,7 @@
  * Campaigns (status pills → Ad Manager) · Coverage (bar) · Data (attribution
  * + freshness + the 72h note). Replaces the v1 raw key/value dump.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { StatusPill } from '../../_shared/StatusPill'
 import { ebayStatusPill } from '../_lib/status'
 import type { SummaryPayload } from '../_lib'

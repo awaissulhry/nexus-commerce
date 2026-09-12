@@ -146,8 +146,8 @@
    it is not decided by which stylesheet loads last. */
 .nds-grid-wrap.cvf-grid { border: 0; border-radius: 0; background: transparent; }
 .cvf-grid .nds-grid { font-variant-numeric: tabular-nums; }
-.cvf-grid tr.champ td { background: #f5faf7; }
-.cvf-grid tr.dormant td { color: #a6b0bd; }
+.cvf-grid .nds-dg-tr.champ .nds-dg-td { background: var(--nds-success-soft); }
+.cvf-grid .nds-dg-tr.dormant .nds-dg-td { color: var(--nds-text-disabled); }
 .cvf-grid .bad { color: var(--nds-danger-text); font-weight: 600; }
 .cvf-grid .tos { color: #94501c; font-weight: 600; }
 .cvf-pfcell { color: var(--nds-text-muted); }

@@ -1,0 +1,106 @@
+{
+  "before": [
+    {
+      "id": "ag-Grid-SelectionColumn",
+      "sort": null,
+      "width": 43
+    },
+    {
+      "id": "ag-Grid-AutoColumn",
+      "sort": "none",
+      "width": 272
+    },
+    {
+      "id": "name",
+      "sort": "ascending",
+      "width": 220
+    },
+    {
+      "id": "description",
+      "sort": "none",
+      "width": 110
+    },
+    {
+      "id": "taxonomy_id",
+      "sort": "none",
+      "width": 100
+    },
+    {
+      "id": "is_supply",
+      "sort": "none",
+      "width": 90
+    },
+    {
+      "id": "when_made",
+      "sort": "none",
+      "width": 130
+    },
+    {
+      "id": "who_made",
+      "sort": "none",
+      "width": 130
+    },
+    {
+      "id": "price",
+      "sort": "none",
+      "width": 100
+    },
+    {
+      "id": "quantity",
+      "sort": "none",
+      "width": 100
+    }
+  ],
+  "after": [
+    {
+      "id": "ag-Grid-SelectionColumn",
+      "sort": null,
+      "width": 43
+    },
+    {
+      "id": "ag-Grid-AutoColumn",
+      "sort": "none",
+      "width": 272
+    },
+    {
+      "id": "name",
+      "sort": "ascending",
+      "width": 220
+    },
+    {
+      "id": "description",
+      "sort": "none",
+      "width": 110
+    },
+    {
+      "id": "taxonomy_id",
+      "sort": "none",
+      "width": 100
+    },
+    {
+      "id": "is_supply",
+      "sort": "none",
+      "width": 90
+    },
+    {
+      "id": "when_made",
+      "sort": "none",
+      "width": 130
+    },
+    {
+      "id": "who_made",
+      "sort": "none",
+      "width": 130
+    },
+    {
+      "id": "price",
+      "sort": "none",
+      "width": 100
+    },
+    {
+      "id": "quantity",
+      "sort": "none",
+      "width": 100
+    }
+  ]
+}

@@ -15,7 +15,7 @@
  * automation) · SB.7 (review + launch).
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ChevronDown, Pencil, Trash2, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { Button, Checkbox, Input, Radio, Toggle, ToolbarButton } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'

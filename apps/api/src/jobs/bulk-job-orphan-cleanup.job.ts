@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * W1.3 — Orphan-PENDING bulk-job cleanup.
  *
@@ -83,10 +84,10 @@ export function startOrphanBulkJobCleanupCron(): void {
   if (cleanupTimer) return
   const ONE_HOUR = ORPHAN_THRESHOLD_MS
 
-  void recordCronRun('bulk-job-orphan-cleanup', async () => {
+  void runProfileTimer('bulk-job-orphan-cleanup', () => recordCronRun('bulk-job-orphan-cleanup', async () => {
     const r = await runOrphanBulkJobCleanupOnce()
     return `cancelled=${r.cancelled}`
-  }).catch((err) => {
+  }), ONE_HOUR).catch((err) => {
     console.warn(
       '[bulk-job-orphan-cleanup] initial run failed:',
       err instanceof Error ? err.message : String(err),
@@ -94,10 +95,10 @@ export function startOrphanBulkJobCleanupCron(): void {
   })
 
   cleanupTimer = setInterval(() => {
-    void recordCronRun('bulk-job-orphan-cleanup', async () => {
+    void runProfileTimer('bulk-job-orphan-cleanup', () => recordCronRun('bulk-job-orphan-cleanup', async () => {
       const r = await runOrphanBulkJobCleanupOnce()
       return `cancelled=${r.cancelled}`
-    }).catch((err) => {
+    }), ONE_HOUR).catch((err) => {
       console.warn(
         '[bulk-job-orphan-cleanup] tick failed:',
         err instanceof Error ? err.message : String(err),

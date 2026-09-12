@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { currencyForMarket, marketLanguage, type ListingRuleContext } from './triggers.js'
+import { currencyForMarket, type ListingRuleContext } from './triggers.js'
 import { matchesAllConditions, type Condition } from '../automation-rule.service.js'
 
 describe('listing-automation market maps', () => {
@@ -20,12 +20,7 @@ describe('listing-automation market maps', () => {
     expect(currencyForMarket('US')).toBe('USD')
     expect(currencyForMarket('zz')).toBe('EUR')
   })
-  it('marketLanguage', () => {
-    expect(marketLanguage('DE')).toBe('de')
-    expect(marketLanguage('IT')).toBe('it')
-    expect(marketLanguage('UK')).toBe('en')
-    expect(marketLanguage('XX')).toBe('en')
-  })
+
 })
 
 describe('listing-automation condition ↔ context contract', () => {

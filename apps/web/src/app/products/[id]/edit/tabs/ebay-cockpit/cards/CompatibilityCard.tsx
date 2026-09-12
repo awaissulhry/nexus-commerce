@@ -22,7 +22,7 @@
 // XML round-trip ships separately.
 
 import { useCallback, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Package, Loader2, Save, Plus, Trash2, FileText, Sparkles, AlertTriangle, ExternalLink,
 } from 'lucide-react'

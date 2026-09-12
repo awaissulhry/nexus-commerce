@@ -1,0 +1,22 @@
+{
+  "date": "2026-09-08",
+  "environment": "local-disposable-fixtures",
+  "productionChanged": false,
+  "types": { "api": "passed", "web": "passed", "factory": "passed" },
+  "tokens": { "web": "passed", "factory": "passed" },
+  "rawPrimitiveRatchet": "passed",
+  "focused": {
+    "postgresql": { "files": 4, "passed": 86 },
+    "redisLeasesAndCacheIsolation": { "files": 2, "passed": 6 },
+    "timersCronHeartbeat": { "files": 3, "passed": 44 },
+    "jobsAuthOAuthBatch": { "files": 5, "passed": 72 },
+    "webSettingsNavigationAccountsStudio": { "files": 4, "passed": 71 },
+    "apiProxy": { "files": 1, "passed": 2 }
+  },
+  "fullWeb": { "filesPassed": 262, "testsPassed": 3524, "testsSkipped": 18, "sandboxSocketSuiteSetupFailures": 1, "socketSuiteRerunPassed": 5 },
+  "fullApi": { "filesPassed": 554, "testsPassed": 7028, "testsSkipped": 29, "unrelatedAssertionsFailed": 4, "sandboxSocketSuiteSetupFailures": 3, "socketSuitesRerun": "passed in focused PostgreSQL run" },
+  "sharedAccountComponentParity": "passed",
+  "widerDesignSystemParity": { "drifted": 13, "upstreamOnly": 142, "factoryOnly": 1 },
+  "scopedLegacyRedirectsVerified": 57,
+  "notes": "Counts belong to distinct runs and must not be summed as a deduplicated total. See README.md for limits and production release conditions."
+}

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AX-ZD.2 — consumers for the two non-performance AMS families.
  *
@@ -175,7 +176,7 @@ export async function ingestBudgetUsage(records: Array<Record<string, unknown>>)
       // the span it was observed over rather than duplicating the reading — the same shape the
       // pull sampler relies on to count hours.
       await prisma.adBudgetUsageSample.upsert({
-        where: { campaignId_source_usageUpdatedAt: { campaignId: local.id, source: 'stream', usageUpdatedAt: ev.asOf } },
+        where: { campaignId_source_usageUpdatedAt: workspaceKey({ campaignId: local.id, source: 'stream', usageUpdatedAt: ev.asOf }) },
         create: {
           campaignId: local.id,
           externalCampaignId: ev.campaignId,

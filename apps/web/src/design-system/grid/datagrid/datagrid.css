@@ -1,0 +1,205 @@
+/**
+ * AGD — the DS `DataGrid` on AG Grid: every legacy `.nds-grid` rule that keyed on `<table>`,
+ * `<tr>`, `<td>` (components.css:1399-2343) restated for AG's DOM, with the same tokens. The
+ * mapping (the class contract, lane-owner decision 5):
+ *
+ *   div.nds-grid-wrap            → the SAME wrapper, still `.nds-grid-wrap` (the frame: components.css:1393 keeps
+ *   table.nds-grid[.sm|…]          applying) + `.nds-grid` (so `.x .nds-grid { tabular-nums }` page rules still
+ *                                  inherit into the cells) + `.nds-ag-dg` + the consumer's className; `data-size`
+ *   tbody tr                     → .ag-row.nds-dg-tr (AG 36.1 renders ONE row element per row, the pinned
+ *                                  sections inside it, so `:hover` on the row reaches every cell)
+ *   tr.sel / tr.nds-grid-kid /   → .nds-dg-tr.sel / .nds-grid-kid / .nds-grid-sub / .nds-dg-totals (+ `first`,
+ *   tr.nds-grid-sub / tr.totals    `last` on the first / last row for `tr:last-child` page rules)
+ *   td                           → .ag-cell.nds-dg-td (+ `r` / `c` / `num` / the column's className / `sticky` /
+ *                                  `sticky-right` / `ck`, and `first` / `last` on the edge DATA columns)
+ *   td.nds-grid-empty            → .nds-dg-empty.nds-grid-empty (a div under the header)
+ *   th …                         → the engine's header (the Owner's exemption) — nothing restated but the
+ *                                  checkbox header and the two per-column marks the legacy th carried
+ *
+ * GEOMETRY comes from `geometry.ts` as custom properties on the wrapper (`--nds-dg-pad-y/-x`, `--nds-dg-font`,
+ * `--nds-dg-line`): ONE source, never a pixel restated here. Every colour is the token the legacy rule bound.
+ * This is the one sheet in the folder allowed to address `.ag-*` (it lives in `design-system/grid/`).
+ *
+ * SPECIFICITY (for page sheets rewritten to the contract): AG injects its own stylesheet at runtime, AFTER every
+ * bundled sheet, so a rule that must beat an AG cell rule (`padding`, `display`, `align-items`, `line-height`,
+ * `border`, `height`) sits at (0,3,0) — `.nds-ag-dg .ag-cell.nds-dg-td`. A page rule on one of THOSE properties
+ * needs (0,3,0) and a later position (a page sheet imported after the DS import, the usual order) or (0,4,0).
+ * Properties this sheet does not restate on the cell — `white-space`, `overflow`, `color`, `background`,
+ * `font-variant-numeric`, `max-width`, `text-overflow`, and `font-size` at `md` — are AG's (0,1,0) or inherited,
+ * so a (0,2,0) page rule (`.page .nds-dg-td`) wins them regardless of order, as it did against the legacy td.
+ */
+
+/* ── the frame: `.nds-grid-wrap` draws it (kept on the wrapper); AG's root draws none — `.nds-gridcard` does the
+   same in grid.css. The engine's `.nds-ag-wrap` sits INSIDE this wrapper. ── */
+.nds-ag-dg .ag-root-wrapper {
+  --ag-wrapper-border: none;
+  --ag-wrapper-border-radius: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+/* `.nds-grid { width: 100% }` restated for the engine's wrapper inside ours. */
+.nds-ag-dg .nds-ag-wrap {
+  width: 100%;
+  /* The row rule — `tbody td { border-bottom: 1px solid var(--nds-border-subtle) }`. AG draws it on the row's
+     cell sections; the engine binds the same token, restated here so this grid cannot drift from the legacy. */
+  --ag-row-border: 1px solid var(--nds-border-subtle);
+}
+/* An empty grid keeps no body: the empty state is rendered under the header by the component. */
+.nds-ag-dg.is-empty .ag-root-wrapper {
+  --ag-auto-height-min-body-height: 0px;
+}
+
+/* ── cells: `tbody td { background; border-bottom; padding: 11px 14px; color; weight 500; nowrap }` + `vertical-align:
+   top` (components.css:1423, 2331) and the `.sm/.xs/.lg/.xl` tiers (2247-2326).
+   The background is the ROW's (AG paints `--ag-background-color` = `--nds-grid-bg` = `--nds-surface` on the row; a
+   cell is transparent, so the hover and selected paints below it show through — the same colours the legacy
+   painted on the `td`). The colour is inherited from AG's root (`--nds-grid-cell-fg` = `--nds-text`). AG's own
+   cell has a 1px transparent border on every side and paints its horizontal padding one pixel under the theme
+   value to compensate; here the side and top borders go, the BOTTOM one stays transparent because AG's row
+   auto-height measures the cell as wrapper + padding + borders — so a row measures padY + content + padY + 1,
+   exactly the legacy `td` with its rule, and the visible rule is the section's `--ag-row-border`. ── */
+.nds-ag-dg .ag-cell.nds-dg-td {
+  display: flex;
+  align-items: flex-start;
+  height: 100%;
+  padding: var(--nds-dg-pad-y) var(--nds-dg-pad-x);
+  border-width: 0 0 1px 0;
+  border-color: transparent;
+  line-height: var(--nds-dg-line);
+  font-weight: 500;
+  overflow: visible;
+}
+/* The engine sheet sets `line-height: normal` on the value box (PN.1); the legacy td inherited the page's 1.5. */
+.nds-ag-dg .ag-cell.nds-dg-td .ag-cell-value,
+.nds-ag-dg .ag-cell.nds-dg-td .ag-cell-wrapper {
+  line-height: var(--nds-dg-line);
+}
+/* `.nds-grid.sm tbody td { font-size: sm-plus }` · `.xs { xs-plus }` — the tier's font on the cell, NOT the
+   header (the engine's) and NOT the totals row (the table's 13px, see below). `md` sets nothing: the cell inherits
+   AG's root (`--nds-grid-cell-size` = 13px), as the legacy td inherited the table's, so a page's (0,2,0) font rule
+   still wins at md (`.h10-plc3-rows`). */
+.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td,
+.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td {
+  font-size: var(--nds-dg-font);
+}
+/* `th.r, td.r { text-align: right }` · `th.c, td.c { center }` (1444-1450). The cell's wrapper is full width
+   (engine), so `text-align` alone lays the content out as the td did. */
+.nds-ag-dg .ag-cell.nds-dg-td.r { text-align: right; }
+.nds-ag-dg .ag-cell.nds-dg-td.c { text-align: center; }
+/* `td.num { font-variant-numeric: tabular-nums }` (2239) */
+.nds-ag-dg .ag-cell.nds-dg-td.num { font-variant-numeric: tabular-nums; }
+/* `th.ck, td.ck { width: 40px; text-align: center; padding-left: 0; padding-right: 0 }` (1437) and
+   `tbody td.ck { vertical-align: middle }` (2341) — the width is the column's. */
+.nds-ag-dg .ag-cell.nds-dg-td.ck {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+.nds-ag-dg .ag-cell.nds-dg-td.ck .ag-cell-wrapper,
+.nds-ag-dg .ag-cell.nds-dg-td.ck .ag-cell-value { justify-content: center; text-align: center; }
+/* `td.sticky-right { box-shadow: inset 1px 0 0 var(--nds-border-subtle) }` (1464) — a 1px hairline on the left of
+   EVERY right-sticky cell, and of its header (`th.sticky-right`). A left-sticky column drew nothing. */
+.nds-ag-dg .ag-cell.nds-dg-td.sticky-right,
+.nds-ag-dg .ag-header-cell.nds-dg-th.sticky-right { box-shadow: inset 1px 0 0 var(--nds-border-subtle); }
+/* `.nds-grid.sm tbody td .nds-pill, .nds-tag { font-size: micro }` (2270) · `.xs … { micro; padding: 1px 6px }` (2265) */
+.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td .nds-pill,
+.nds-ag-dg[data-size='sm'] .ag-cell.nds-dg-td .nds-tag { font-size: var(--nds-font-size-micro); }
+.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td .nds-pill,
+.nds-ag-dg[data-size='xs'] .ag-cell.nds-dg-td .nds-tag { font-size: var(--nds-font-size-micro); padding: 1px 6px; }
+
+/* ── the checkbox header: `th.ck` — the native box centred in the 40px header cell. The header cell itself is
+   the engine's; only the content box the legacy th centred is restated. ── */
+.nds-ag-dg .ag-header-cell.nds-dg-th.ck { padding-left: 0; padding-right: 0; }
+.nds-ag-dg .ag-header-cell.nds-dg-th.ck .ag-header-cell-comp-wrapper { justify-content: center; }
+/* `th.c { text-align: center }` on the header label (the engine offers the right-aligned mark, `nds-ag-head-num`). */
+.nds-ag-dg .ag-header-cell.nds-dg-th.c .ag-header-cell-label { justify-content: center; }
+
+/* ── rows ── */
+/* The hover contract for page sheets (lane-owner decision 3): `tr:hover td { … }` becomes a variable read.
+   0 → 1 on the hovered row; `none` → `inline-flex` for a control revealed on hover. Published on every row. */
+.nds-ag-dg .ag-row { --nds-dg-hover: 0; --nds-dg-reveal: none; }
+.nds-ag-dg .ag-row.ag-row-hover,
+.nds-ag-dg .ag-row:hover { --nds-dg-hover: 1; --nds-dg-reveal: inline-flex; }
+/* `tbody tr:hover td { background: var(--nds-surface-raised) }` (1431) is the theme's `rowHoverColor`
+   (`--nds-grid-hover-bg` = raised), painted by AG under the cells. */
+/* `tbody tr.sel td { background: var(--nds-wash-primary) }` (1434) — later than the hover rule, so it holds on
+   hover: the hover colour is set to the same wash on a selected row. */
+.nds-ag-dg .ag-row.sel { background-color: var(--nds-wash-primary); --ag-row-hover-color: var(--nds-wash-primary); }
+/* `tbody tr.nds-grid-kid > td { background: var(--nds-surface-sunken) }` (2307) · `:hover { surface-hover }` (2313) */
+.nds-ag-dg .ag-row.nds-grid-kid { background-color: var(--nds-surface-sunken); --ag-row-hover-color: var(--nds-surface-hover); }
+/* `tr.nds-grid-kid > td:first-of-type { box-shadow: inset 3px 0 0 var(--nds-border) }` (2310) — the rail, on the
+   ROW so it runs through the row rule (grid.css PN.1 measured why: a cell is 1px shorter than its row). Above the
+   cell sections (`z-index: 1`), inside the cell's padding, so no content is covered. */
+.nds-ag-dg .ag-row.nds-grid-kid::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 3px;
+  background-color: var(--nds-border);
+  z-index: 1;
+  pointer-events: none;
+}
+/* `tbody tr.nds-grid-sub > td { padding: 0; background: var(--nds-surface-sunken); border-bottom: 1px solid
+   var(--nds-border-subtle) }` (2231) — a full-width AG row (no hover overlay on a non-group full-width row, as the
+   legacy rule held on hover); AG draws its rule on the row, the cell is the adapter's div. */
+.nds-ag-dg .ag-row.nds-grid-sub { background-color: var(--nds-surface-sunken); }
+.nds-ag-dg .ag-row.nds-grid-sub .nds-dg-td.nds-dg-sub {
+  display: block;
+  padding: 0;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: var(--nds-dg-font);
+  line-height: var(--nds-dg-line);
+  font-weight: 500;
+}
+/* AG hides the LAST row's rule when a pinned-bottom row follows (`ag-body-vertical-content-no-gap`), and a last
+   full-width row's. The legacy `tbody td` always drew its rule — the last data row's subtle rule sits directly
+   above the totals row's stronger top rule (`border-collapse: separate`: two lines). Restated at AG's own
+   specificity + 1. */
+.nds-ag-dg .ag-body-vertical-content-no-gap .ag-has-bottom-pinned-rows .ag-grid-scrolling-container .ag-row-last > .ag-grid-pinned-left-cells,
+.nds-ag-dg .ag-body-vertical-content-no-gap .ag-has-bottom-pinned-rows .ag-grid-scrolling-container .ag-row-last > .ag-grid-pinned-right-cells,
+.nds-ag-dg .ag-body-vertical-content-no-gap .ag-has-bottom-pinned-rows .ag-grid-scrolling-container .ag-row-last > .ag-grid-scrolling-cells {
+  border-bottom: var(--ag-row-border);
+}
+.nds-ag-dg .ag-body-vertical-content-no-gap > .ag-grid-viewport > .ag-grid-scrollable-area > .ag-grid-scrolling-rows > .ag-grid-scrolling-container > .ag-row-last.ag-full-width-row {
+  border-bottom-color: var(--nds-border-subtle);
+}
+
+/* ── the totals row: `tr.totals td { position: sticky; bottom: 0; font-weight: 700; background: raised; color:
+   text; border-top: 1px solid var(--nds-border); border-bottom: none }` (1496) — AG's pinned-bottom row; the
+   background and weight are the theme's (`pinnedRowBackgroundColor` = totals-bg = raised, 700). The DS gave a
+   `tfoot` cell NO padding and none of the size tiers (they are `tbody`-scoped), and the app's reset zeroes the
+   UA's `td` padding — measured in the parity lab: `padding: 0px`, 20.5px tall at the TABLE's 13px. A page pads
+   it (`.h10-rep-tbl td { 7px 10px }`); the row is measured from its cells.
+   No hover: the legacy hover rule was `tbody`-scoped. The section rule is off — the top rule is the CELL's. ── */
+.nds-ag-dg .ag-row.nds-dg-totals { --ag-row-hover-color: transparent; --ag-row-border: none; }
+.nds-ag-dg .ag-row.nds-dg-totals .ag-cell.nds-dg-td {
+  padding: 0;
+  border-top: 1px solid var(--nds-border);
+  border-bottom-width: 0;
+  font-size: var(--nds-font-size-base);
+  font-weight: 700;
+  color: var(--nds-text);
+}
+.nds-ag-dg .ag-row.nds-dg-totals .ag-cell.nds-dg-td.ck { padding-left: 0; padding-right: 0; }
+.nds-ag-dg .nds-dg-total { display: block; min-width: 0; }
+
+/* ── the empty state: `td.nds-grid-empty` (1505) — by the legacy cascade `.nds-grid tbody td` (0,1,2) outranked
+   `.nds-grid-empty` (0,1,0) on padding, ink, weight and white-space, so the cell that shipped is one line at the
+   tier's padding in body ink, centred, with its rule; the 40px grey intent never rendered. ── */
+.nds-ag-dg .nds-dg-empty {
+  display: block;
+  padding: var(--nds-dg-pad-y) var(--nds-dg-pad-x);
+  text-align: center;
+  color: var(--nds-text);
+  font-weight: 500;
+  font-size: var(--nds-dg-font);
+  line-height: var(--nds-dg-line);
+  white-space: nowrap;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}

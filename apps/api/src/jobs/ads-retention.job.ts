@@ -198,10 +198,10 @@ export function startAdsRetentionCron(): void {
   }
   // Daily, off-peak. Nothing here is time-sensitive: a row a day past its window is harmless.
   const schedule = process.env.NEXUS_ADS_RETENTION_SCHEDULE ?? '25 4 * * *'
-  task = cron.schedule(schedule, () => {
-    if (running) { logger.warn('[ads-retention] previous sweep still in flight — skipping'); return }
+  task = cron.schedule(schedule, async () => {
+    if (running) { await logger.warn('[ads-retention] previous sweep still in flight — skipping'); return }
     running = true
-    void runAdsRetentionCron().finally(() => { running = false })
+    await runAdsRetentionCron().finally(() => { running = false })
   })
   logger.info(`ads-retention cron scheduled (${schedule})`)
 }

@@ -12,7 +12,7 @@
  * checkbox area, divider, and the SKU/name lines).
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Factory, ShoppingCart, X, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { URGENCY_TONE } from './UrgencyTiles'

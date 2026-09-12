@@ -11,7 +11,7 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Stepper } from '@/design-system/components'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { H10Modal } from '../../../_lib/modal'
 
 export interface WizardStep { key: string; label: string }

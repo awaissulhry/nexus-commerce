@@ -53,7 +53,7 @@ export function startCycleCountSchedulerCron(): void {
     logger.error('cycle-count-scheduler cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runCycleCountSchedulerOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runCycleCountSchedulerOnce() })
   logger.info('cycle-count-scheduler cron: scheduled', { schedule })
 }
 

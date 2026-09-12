@@ -18,7 +18,8 @@
  * what an operator who just opened one will press.
  */
 import { useCallback, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { applyUrlState, parseUrlState, type RdUrlState } from './scope'
 
 export interface RdUrlApi {

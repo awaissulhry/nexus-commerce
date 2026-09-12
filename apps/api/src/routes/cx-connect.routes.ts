@@ -15,8 +15,9 @@
 import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { tryGetChannelSpec, type ChannelKey } from '../services/cx/catalog.js'
-import { complete, OAuthFlowError, start, type Intent } from '../services/cx/oauth.service.js'
-import { recordConnectionEvent } from '../services/cx/events.service.js'
+import { complete, connectionReadiness, OAuthFlowError, start, type Intent } from '../services/cx/oauth.service.js'
+import { WorkspaceError } from '../lib/workspace-context.js'
+import { oauthCallbackNonce } from '../lib/api-content-security-policy.js'
 
 const WEB_ORIGIN = (process.env.NEXUS_WEB_URL ?? 'https://nexus-commerce-three.vercel.app').replace(/\/$/, '')
 
@@ -31,42 +32,57 @@ function esc(s: string): string {
 
 /** Design-system-toned page (tokens inlined: the popup has no app shell). */
 function callbackPage(input: {
+  nonce: string
   ok: boolean
   title: string
   body: string
   payload?: Record<string, unknown>
 }): string {
-  const message = input.payload ? JSON.stringify({ type: 'nexus:channel-connected', ...input.payload }) : 'null'
+  // Provider account labels are untrusted text inside an inline script.
+  const message = input.payload ? JSON.stringify({ type: 'nexus:channel-connected', ...input.payload }).replace(/</g, '\\u003c') : 'null'
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(input.title)} · Nexus</title>
-<style>
+<style nonce="${input.nonce}">
 :root{color-scheme:light dark;--bg:#f6f7f9;--card:#fff;--text:#111827;--muted:#4b5563;--ok:#15803d;--err:#b91c1c;--border:#e5e7eb}
 @media(prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#161a22;--text:#e5e7eb;--muted:#9ca3af;--ok:#4ade80;--err:#f87171;--border:#2a2f3a}}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;display:grid;place-items:center;min-height:100vh}
-main{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px 32px;max-width:440px;width:calc(100% - 48px)}
+main{box-sizing:border-box;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:28px 24px;max-width:440px;width:calc(100% - 32px);overflow-wrap:anywhere}
 h1{font-size:18px;margin:0 0 8px}p{margin:0 0 12px;color:var(--muted)}.ok h1{color:var(--ok)}.err h1{color:var(--err)}
 a{color:inherit}.small{font-size:12px}
 </style></head><body><main class="${input.ok ? 'ok' : 'err'}"><h1>${esc(input.title)}</h1><p>${esc(input.body)}</p>
 <p class="small" id="hint">${input.ok ? 'Returning you to Nexus…' : ''}</p>
 ${input.ok ? '' : `<p class="small"><a href="${esc(WEB_ORIGIN)}/settings/channels">Back to Channels</a></p>`}
 </main>
-<script>
+<script nonce="${input.nonce}">
 (function(){
-  var msg=${message}; var origin=${JSON.stringify(WEB_ORIGIN)}; var acked=false;
-  function done(){ try{window.close()}catch(e){} setTimeout(function(){ if(!window.closed){ var h=document.getElementById('hint'); if(h) h.innerHTML='You can close this window. <a href="'+origin+'/settings/channels">Back to Channels</a>'; } },600); }
+  var msg=${message}; var origin=${JSON.stringify(WEB_ORIGIN)}; var acked=false; var channelsPath=(msg&&msg.workspaceId?'/w/'+encodeURIComponent(msg.workspaceId):'')+'/settings/channels';
+  function done(){ try{window.close()}catch(e){} setTimeout(function(){ if(!window.closed){ var h=document.getElementById('hint'); if(h) h.innerHTML='You can close this window. <a href="'+origin+channelsPath+'">Back to Channels</a>'; } },600); }
   if(!msg){ return; }
-  var bc=null; try{ bc=new BroadcastChannel('nexus-oauth'); bc.onmessage=function(e){ if(e.data&&e.data.type==='nexus:ack'){acked=true;done();} }; }catch(e){}
-  window.addEventListener('message',function(e){ if(e.origin===origin&&e.data&&e.data.type==='nexus:ack'){acked=true;done();} });
+  function isAck(data){return data&&data.type==='nexus:ack'&&data.state===msg.state;}
+  var bc=null; try{ bc=new BroadcastChannel('nexus-oauth'); bc.onmessage=function(e){ if(isAck(e.data)){acked=true;done();} }; }catch(e){}
+  window.addEventListener('message',function(e){ if(e.origin===origin&&isAck(e.data)){acked=true;done();} });
   var notified=false;
   try{ if(window.opener&&!window.opener.closed){ window.opener.postMessage(msg,origin); notified=true; } }catch(e){}
   try{ if(bc){ bc.postMessage(msg); notified=true; } }catch(e){}
-  if(!notified){ window.location.replace(origin+'/settings/channels'); return; }
+  if(!notified){ window.location.replace(origin+channelsPath); return; }
   setTimeout(function(){ if(!acked) done(); },1500);
 })();
 </script></body></html>`
 }
 
 export default async function cxConnectRoutes(app: FastifyInstance): Promise<void> {
+  app.get<{ Params: { channel: string } }>('/cx/connect/:channel/readiness', async (request, reply) => {
+    reply.header('Cache-Control', 'no-store')
+    const key = channelKeyFromParam(request.params.channel)
+    if (!key) return reply.code(404).send({ ready: false, error: 'Unknown channel.' })
+    try {
+      return await connectionReadiness(key)
+    } catch (err) {
+      logger.error('[cx-connect] setup check failed', { channel: key, error: err instanceof Error ? err.message : String(err) })
+      return reply.code(503).send({ ready: false, code: 'setup_check_failed', error: 'Nexus could not check the connection setup. Try again in a moment.' })
+    }
+  })
+
   app.post<{ Params: { channel: string }; Body: { intent?: Intent; targetConnectionId?: string; region?: string } }>(
     '/cx/connect/:channel/start',
     async (request, reply) => {
@@ -83,19 +99,21 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
           region: body.region ?? null,
           actor: { kind: 'operator', userId },
         })
+        const secureCookie = r.cookie.secure ?? process.env.COOKIE_SECURE !== 'false'
         reply.setCookie(r.cookie.name, r.cookie.value, {
           path: '/api/cx/callback',
           httpOnly: true,
-          secure: true,
-          sameSite: 'none',
+          secure: secureCookie,
+          sameSite: secureCookie ? 'none' : 'lax',
           maxAge: r.cookie.maxAgeSec,
         })
         return reply.send({ success: true, authUrl: r.authorizeUrl, authorizeUrl: r.authorizeUrl, state: r.state, expiresIn: r.expiresInSec })
       } catch (err) {
+        if (err instanceof WorkspaceError) return reply.code(err.statusCode).send({ success: false, error: err.message, code: err.code })
         if (err instanceof OAuthFlowError) return reply.code(err.status).send({ success: false, error: err.message, code: err.code })
         const message = err instanceof Error ? err.message : String(err)
         logger.error('[cx-connect] start failed', { channel: key, error: message })
-        return reply.code(500).send({ success: false, error: message })
+        return reply.code(500).send({ success: false, error: 'Nexus could not start sign-in. Try again in a moment.' })
       }
     },
   )
@@ -103,17 +121,28 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
   app.get<{ Params: { channel: string }; Querystring: Record<string, string | undefined> }>(
     '/cx/callback/:channel',
     async (request, reply) => {
+      const nonce = oauthCallbackNonce(reply)
       const key = channelKeyFromParam(request.params.channel)
       reply.header('Referrer-Policy', 'no-referrer')
       reply.header('Cache-Control', 'no-store')
       if (!key) {
-        return reply.code(404).type('text/html').send(callbackPage({ ok: false, title: 'Unknown channel', body: `No connector is registered for "${request.params.channel}".` }))
+        return reply.code(404).type('text/html').send(callbackPage({ nonce, ok: false, title: 'Unknown channel', body: `No connector is registered for "${request.params.channel}".` }))
       }
       const spec = tryGetChannelSpec(key)!
+      // The same-origin web proxy owns the browser nonce when profiles are enabled.
+      // A provider's existing API callback URL can safely relay once to that fixed origin.
+      if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && !request.cookies?.[`nexus_oauth_${request.query.state ?? ''}`] && request.query.nexus_callback_relay !== '1') {
+        const destination = new URL(`/backend/api/cx/callback/${request.params.channel}`, WEB_ORIGIN)
+        for (const [name, value] of Object.entries(request.query)) if (value !== undefined) destination.searchParams.set(name, value)
+        destination.searchParams.set('nexus_callback_relay', '1')
+        return reply.redirect(destination.href)
+      }
       try {
+        // This marker belongs to Nexus, not the provider's signed query string.
+        const { nexus_callback_relay: _relay, ...providerQuery } = request.query
         const result = await complete({
           channelKey: key,
-          query: request.query,
+          query: providerQuery,
           cookies: (request as { cookies?: Record<string, string | undefined> }).cookies ?? {},
           actorUserId: (request as { authUser?: { id?: string } }).authUser?.id ?? null,
         })
@@ -123,21 +152,22 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
         const drift = result.scopeDrift.length
         return reply.type('text/html').send(
           callbackPage({
+            nonce,
             ok: true,
             title: `${spec.displayName} connected`,
             body: `${who ? `Account: ${who}. ` : ''}${result.placement === 'new' ? 'A new account was added.' : result.placement === 'adopt' ? 'The grant was attached to the account you chose.' : 'The existing account was re-authorised.'}${drift ? ` ${drift} permission${drift === 1 ? '' : 's'} could not be granted — see the account card.` : ''}`,
-            payload: { channel: spec.channelType, channelKey: key, connectionId: result.connectionId, sellerName: who, placement: result.placement, scopeDrift: result.scopeDrift },
+            payload: { state: request.query.state, workspaceId: result.workspaceId, channel: spec.channelType, channelKey: key, connectionId: result.connectionId, sellerName: who, placement: result.placement, scopeDrift: result.scopeDrift },
           }),
         )
       } catch (err) {
+        if (err instanceof WorkspaceError) return reply.code(err.statusCode).type('text/html').send(callbackPage({ nonce, ok: false, title: `${spec.displayName} was not connected`, body: err.message }))
         if (err instanceof OAuthFlowError) {
           logger.warn('[cx-connect] callback refused', { channel: key, code: err.code })
-          return reply.code(err.status).type('text/html').send(callbackPage({ ok: false, title: `${spec.displayName} was not connected`, body: err.message }))
+          return reply.code(err.status).type('text/html').send(callbackPage({ nonce, ok: false, title: `${spec.displayName} was not connected`, body: err.message }))
         }
         const message = err instanceof Error ? err.message : String(err)
         logger.error('[cx-connect] callback failed', { channel: key, error: message })
-        await recordConnectionEvent({ channelKey: key, type: 'status_change', detail: { oauth: 'callback_failed', error: message } })
-        return reply.code(500).type('text/html').send(callbackPage({ ok: false, title: `${spec.displayName} was not connected`, body: 'Something went wrong while finishing the sign-in. The details are in the connection ledger; start the connection again.' }))
+        return reply.code(500).type('text/html').send(callbackPage({ nonce, ok: false, title: `${spec.displayName} was not connected`, body: 'The connection could not be completed. Start the connection again.' }))
       }
     },
   )

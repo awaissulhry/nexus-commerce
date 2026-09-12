@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * M2 — Adopt-first lossless import.
  *
@@ -81,7 +82,7 @@ export function categorizeReconcile(live: ImgRef[], nexus: ImgRef[]): ReconcileR
 }
 
 async function resolveVariationId(externalSku: string): Promise<string | null> {
-  const v = await prisma.productVariation.findUnique({ where: { sku: externalSku }, select: { id: true } })
+  const v = await prisma.productVariation.findUnique({ where: { workspace_sku: workspaceKey({ sku: externalSku }) }, select: { id: true } })
   return v?.id ?? null
 }
 

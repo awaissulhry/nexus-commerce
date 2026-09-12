@@ -5,7 +5,7 @@ import {
   type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle, AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight,
   FileSpreadsheet,

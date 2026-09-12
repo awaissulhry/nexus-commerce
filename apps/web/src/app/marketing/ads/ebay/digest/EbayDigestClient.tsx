@@ -8,8 +8,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Button, FilterChip } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
-import Link from 'next/link'
+import { DataGrid } from '@/design-system/grid/datagrid'
+import Link from '@/lib/workspaces/Link'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import '../ebay.css'
 import { postEbayAds, getEbayAds, eurC, pctP, intlN } from '../_lib'

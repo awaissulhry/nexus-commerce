@@ -12,7 +12,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertCircle, Loader2, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { getBackendUrl } from '@/lib/backend-url'

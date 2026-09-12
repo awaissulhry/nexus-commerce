@@ -1,0 +1,368 @@
+{
+  "mobileLight": {
+    "samples": [
+      {
+        "background": "rgb(244, 246, 249)",
+        "contrast": 9.11,
+        "foreground": "rgb(58, 68, 82)",
+        "height": 15.625,
+        "text": "Media source"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 31,
+        "text": "Shopify · Xavia Demo"
+      },
+      {
+        "background": "rgb(244, 246, 249)",
+        "contrast": 14.3,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 30,
+        "text": "store-a.myshopify.com · Files load directly from Shopify"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 9.87,
+        "foreground": "rgb(58, 68, 82)",
+        "height": 30.296875,
+        "text": "Refresh"
+      },
+      {
+        "background": "rgb(19, 77, 163)",
+        "contrast": 8.02,
+        "foreground": "rgb(255, 255, 255)",
+        "height": 30.296875,
+        "text": "Upload to Shopify"
+      },
+      {
+        "background": "rgb(244, 246, 249)",
+        "contrast": 9.11,
+        "foreground": "rgb(58, 68, 82)",
+        "height": 15.625,
+        "text": "Search files"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 29,
+        "text": "Search by filename"
+      },
+      {
+        "background": "rgb(244, 246, 249)",
+        "contrast": 9.11,
+        "foreground": "rgb(58, 68, 82)",
+        "height": 15.625,
+        "text": "File type"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 31,
+        "text": "All files"
+      },
+      {
+        "background": "rgb(244, 246, 249)",
+        "contrast": 14.3,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 15,
+        "text": "4 files loaded · More available"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 38,
+        "text": "Forest jacket — front.jpgImage"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 38,
+        "text": "Forest jacket — detail.jpgImage"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 38,
+        "text": "Product demonstration.mp4Video"
+      },
+      {
+        "background": "rgb(255, 255, 255)",
+        "contrast": 15.48,
+        "foreground": "rgb(28, 37, 48)",
+        "height": 39.1953125,
+        "text": "Ready181 KiB"
+      }
+    ],
+    "scrollWidth": 320,
+    "theme": "",
+    "viewport": {
+      "height": 800,
+      "width": 320
+    }
+  },
+  "desktopDark": {
+    "samples": [
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "Media source"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 31,
+        "text": "Shopify · Xavia Demo"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15,
+        "text": "store-a.myshopify.com · Files load directly from Shopify"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 30.296875,
+        "text": "Refresh"
+      },
+      {
+        "background": "rgb(19, 77, 163)",
+        "contrast": 8.02,
+        "foreground": "rgb(255, 255, 255)",
+        "height": 30.296875,
+        "text": "Upload to Shopify"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "Search files"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 29,
+        "text": "Search by filename"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "File type"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 31,
+        "text": "All files"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15,
+        "text": "4 files loaded · More available"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Forest jacket — front.jpgImage"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Forest jacket — detail.jpgImage"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Product demonstration.mp4Video"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready181 KiB"
+      }
+    ],
+    "scrollWidth": 1280,
+    "theme": "dark",
+    "viewport": {
+      "height": 900,
+      "width": 1280
+    }
+  },
+  "tabletDark": {
+    "samples": [
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "Media source"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 31,
+        "text": "Shopify · Xavia Demo"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15,
+        "text": "store-a.myshopify.com · Files load directly from Shopify"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 30.296875,
+        "text": "Refresh"
+      },
+      {
+        "background": "rgb(19, 77, 163)",
+        "contrast": 8.02,
+        "foreground": "rgb(255, 255, 255)",
+        "height": 30.296875,
+        "text": "Upload to Shopify"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "Search files"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 29,
+        "text": "Search by filename"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15.625,
+        "text": "File type"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 31,
+        "text": "All files"
+      },
+      {
+        "background": "rgb(20, 34, 58)",
+        "contrast": 13.3,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 15,
+        "text": "4 files loaded · More available"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Forest jacket — front.jpgImage"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Forest jacket — detail.jpgImage"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready1600 × 2000 px181 KiB"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 46,
+        "text": "Product demonstration.mp4Video"
+      },
+      {
+        "background": "rgb(24, 38, 59)",
+        "contrast": 12.73,
+        "foreground": "rgb(231, 235, 241)",
+        "height": 39.1953125,
+        "text": "Ready181 KiB"
+      }
+    ],
+    "scrollWidth": 768,
+    "theme": "dark",
+    "viewport": {
+      "height": 900,
+      "width": 768
+    }
+  }
+}

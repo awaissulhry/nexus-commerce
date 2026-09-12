@@ -44,11 +44,19 @@ export interface ChromeCssVar {
 export const chromeVars: ReadonlyArray<ChromeCssVar> = [
   {
     section:
-      'Tier 3: app chrome (tokens/chrome.ts — top bar + rail, ONE dark surface, theme-independent by design; literals so there is no .dark block and no alias scope to resolve)',
+      'Tier 3: app chrome (tokens/chrome.ts — top bar + rail, ONE dark surface; literals so there is no alias scope to resolve. 🔴 NO LONGER FULLY THEME-INDEPENDENT: --nds-chrome-bg takes a DARK value from the dark list in css-vars.ts (D-#540), because in dark the page is #14223a and this ground was #18263b — 1.05:1, a rail with no boundary. Every OTHER chrome token here is still theme-independent by design.)',
     name: '--nds-chrome-bg',
     value: '#18263b',
   },
-  { name: '--nds-chrome-border', value: '#26323f' },
+  // 🔴 #6b7f99, not #26323f. The old value was 1.17:1 against its own chrome ground in BOTH themes
+  // — a border invisible on the surface it divides. That went unnoticed because the rail's OUTER
+  // edge is read against the page (12.04 light), and nobody measured the pair that three of its six
+  // production sites actually draw: `.h10-subsub`'s left rule, `.h10-ws`'s button border and
+  // `.h10-railft-wrap`'s footer divider are all edges INSIDE the chrome, where the page is not the
+  // ground. One value clears 3:1 on all four grounds — light chrome 3.71 / light page 3.79 / dark
+  // chrome 3.21 / dark page 3.88 — so this token stays theme-independent and only `--nds-chrome-bg`
+  // needed a dark step (D-#540/#559).
+  { name: '--nds-chrome-border', value: '#6b7f99' },
 
   // Type + icons
   { name: '--nds-chrome-fg', value: '#aab6c2' },

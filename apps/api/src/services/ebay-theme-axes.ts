@@ -341,3 +341,12 @@ export function axisValueSynonymKey(value: string): string {
   const v = String(value ?? '').trim().toLowerCase()
   return VALUE_SYNONYM_KEY_BY_WORD.get(v) ?? v
 }
+/** Canonical synonym-keyed customizations win over legacy entries for the same dimension. */
+export function storedPresentationValues(pa: Record<string, unknown>): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  for (const raw of [pa._axisSortOrder, pa._axisValueOrder]) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue
+    for (const [axis, values] of Object.entries(raw)) if (Array.isArray(values) && values.every(v => typeof v === 'string')) result[axisSynonymKey(axis)] = values
+  }
+  return result
+}

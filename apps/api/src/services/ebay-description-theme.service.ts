@@ -1,3 +1,6 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
+import { resolveChannelConnectionId } from './connection-resolver.service.js'
+import { resolveBatch } from './pim/mapping/resolve-batch.service.js'
 /**
  * ED.1/ED.2 (eBay dynamic descriptions) — theme storage + render orchestration.
  *
@@ -26,6 +29,8 @@ import {
 } from './ebay-description-render.js'
 
 export interface RenderListingDescriptionArgs {
+  channelConnectionId?: string | null
+  aliasKey?: string
   productId: string
   /** Flat-file market code (IT/DE/FR/ES/UK…). UK maps to region GB like P9e. */
   marketplace: string
@@ -85,7 +90,7 @@ export async function ensureBuiltInThemes(prisma: PrismaClient): Promise<void> {
     const isUneditedPrevious = row.builtIn && row.html !== t.html && (BUILT_IN_PREVIOUS[t.name] ?? []).includes(row.html)
     if (isUneditedPrevious) {
       await prisma.ebayDescriptionTheme.update({
-        where: { name: t.name },
+        where: { workspace_name: workspaceKey({ name: t.name }) },
         data: { html: t.html, notes: t.notes, version: { increment: 1 } },
       })
     }
@@ -104,6 +109,9 @@ export async function setDefaultTheme(prisma: PrismaClient, id: string | null) {
   })
 }
 
+export interface DescriptionDestination { channelConnectionId: string | null; aliasKey?: string; marketplace: string }
+const galleryMarket = (market?: string) => market ? { OR: [{ marketplace: null }, { marketplace: market.toUpperCase() }] } : {}
+
 // ── Render-data assembly ─────────────────────────────────────────────────────
 
 /**
@@ -113,12 +121,12 @@ export async function setDefaultTheme(prisma: PrismaClient, id: string | null) {
  * variantGroupValue; per-SKU pins via variationId. Falls back to the master
  * ProductImage gallery when nothing is curated.
  */
-async function loadGalleries(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string): Promise<{
+async function loadGalleries(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string, destination?: DescriptionDestination): Promise<{
   shared: string[]
   byGroup: DescriptionGalleryGroup[]
   rowImages?: string[]
 }> {
-  const first = await loadGalleriesForProduct(prisma, productId, sku, marketplace)
+  const first = await loadGalleriesForProduct(prisma, productId, sku, marketplace, destination)
   const isEmpty = (g: { shared: string[]; byGroup: DescriptionGalleryGroup[]; rowImages?: string[] }) =>
     g.shared.length === 0 && g.byGroup.length === 0 && (!g.rowImages || g.rowImages.length === 0)
   if (!isEmpty(first)) return first
@@ -129,9 +137,9 @@ async function loadGalleries(prisma: PrismaClient, productId: string, sku?: stri
   // parent instead — one extra pass of the same curated-then-master resolution,
   // never recursive. Fail-open: any error keeps the empty-gallery result.
   try {
-    const poolParentId = await findShellPoolParentId(prisma, productId)
+    const poolParentId = await findShellPoolParentId(prisma, productId, destination)
     if (poolParentId && poolParentId !== productId) {
-      const borrowed = await loadGalleriesForProduct(prisma, poolParentId, sku, marketplace)
+      const borrowed = await loadGalleriesForProduct(prisma, poolParentId, sku, marketplace, destination, productId)
       if (!isEmpty(borrowed)) return borrowed
     }
   } catch { /* fail-open — empty gallery stays the answer */ }
@@ -170,14 +178,15 @@ export async function resolveDescriptionMode(
   prisma: PrismaClient,
   productId: string,
   childCount?: number,
+  destination?: DescriptionDestination,
 ): Promise<'single' | 'group'> {
   const children = childCount ?? (await prisma.product.count({ where: { parentId: productId, deletedAt: null } }))
   if (children > 0) return 'group'
   try {
-    let colourBucketCount = await countColourBuckets(prisma, productId)
+    let colourBucketCount = await countColourBuckets(prisma, productId, destination?.marketplace)
     if (colourBucketCount === 0) {
-      const poolParentId = await findShellPoolParentId(prisma, productId)
-      if (poolParentId && poolParentId !== productId) colourBucketCount = await countColourBuckets(prisma, poolParentId)
+      const poolParentId = await findShellPoolParentId(prisma, productId, destination)
+      if (poolParentId && poolParentId !== productId) colourBucketCount = await countColourBuckets(prisma, poolParentId, destination?.marketplace)
     }
     return descriptionModeFor({ childCount: children, colourBucketCount })
   } catch {
@@ -187,10 +196,11 @@ export async function resolveDescriptionMode(
 
 /** Distinct curated per-colour buckets (group rows only — per-SKU pins and the
  *  shared cover pool are not colours). */
-async function countColourBuckets(prisma: PrismaClient, productId: string): Promise<number> {
+async function countColourBuckets(prisma: PrismaClient, productId: string, marketplace?: string): Promise<number> {
   const rows = await prisma.listingImage.findMany({
     where: {
       productId,
+      ...galleryMarket(marketplace),
       platform: 'EBAY',
       mediaType: 'IMAGE',
       variationId: null,
@@ -208,13 +218,15 @@ async function countColourBuckets(prisma: PrismaClient, productId: string): Prom
  * most-represented one when data is mixed) is the borrow target. Returns null
  * whenever the product isn't a shell or no pool parent is resolvable.
  */
-async function findShellPoolParentId(prisma: PrismaClient, productId: string): Promise<string | null> {
+async function findShellPoolParentId(prisma: PrismaClient, productId: string, destination?: DescriptionDestination): Promise<string | null> {
   const self = await prisma.product.findFirst({ where: { id: productId }, select: { sku: true } })
   if (!self?.sku) return null
   const childCount = await prisma.product.count({ where: { parentId: productId, deletedAt: null } })
   if (childCount > 0) return null
+  const connectionId = await resolveChannelConnectionId('EBAY', destination?.channelConnectionId)
+  const listing = destination ? await prisma.channelListing.findFirst({ where: { productId, channel: 'EBAY', marketplace: destination.marketplace, channelConnectionId: connectionId, aliasKey: destination.aliasKey ?? '' }, select: { externalListingId: true } }) : null
   const memberships = await prisma.sharedListingMembership.findMany({
-    where: { parentSku: self.sku, status: 'ACTIVE' },
+    where: { status: 'ACTIVE', channelConnectionId: connectionId, ...(destination ? { marketplace: destination.marketplace, itemId: listing?.externalListingId ?? '__no_listing__' } : { parentSku: self.sku }) },
     select: { productId: true },
   })
   const memberIds = [...new Set(memberships.map((m) => m.productId).filter((x): x is string => Boolean(x)))]
@@ -238,13 +250,13 @@ async function findShellPoolParentId(prisma: PrismaClient, productId: string): P
 
 /** One pass of the curated-then-master resolution for ONE product id (the
  *  pre-borrow body of loadGalleries, unchanged in behaviour). */
-async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string): Promise<{
+async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, sku?: string, marketplace?: string, destination?: DescriptionDestination, preferenceProductId = productId): Promise<{
   shared: string[]
   byGroup: DescriptionGalleryGroup[]
   rowImages?: string[]
 }> {
   const curated = await prisma.listingImage.findMany({
-    where: { productId, platform: 'EBAY', mediaType: 'IMAGE' },
+    where: { productId, platform: 'EBAY', mediaType: 'IMAGE', ...galleryMarket(marketplace) },
     orderBy: { position: 'asc' },
     select: { variantGroupKey: true, variantGroupValue: true, variationId: true, url: true },
   })
@@ -259,7 +271,7 @@ async function loadGalleriesForProduct(prisma: PrismaClient, productId: string, 
   let pictureAxis: string | undefined
   try {
     const { readImageAxisPreference } = await import('./ebay-image-axis-preference.service.js')
-    pictureAxis = await readImageAxisPreference(productId, marketplace)
+    pictureAxis = await readImageAxisPreference(preferenceProductId, marketplace, destination)
   } catch { /* fail-open */ }
   const { axisSynonymKey } = await import('./ebay-theme-axes.js')
   const keyMatches = (k: string) => !pictureAxis || axisSynonymKey(k) === axisSynonymKey(pictureAxis)
@@ -349,18 +361,23 @@ export async function renderListingDescriptionSafe(
   prisma: PrismaClient,
   args: RenderListingDescriptionArgs,
 ): Promise<RenderListingDescriptionResult> {
+  const connectionId = await resolveChannelConnectionId('EBAY', args.channelConnectionId)
   const raw: RenderListingDescriptionResult = { html: args.body ?? '', themed: false, warnings: [] }
+  // Theme assignment uses the same mapping/override engine as Information and its impact review.
+  const resolved = await resolveBatch({ channel: 'EBAY', marketplace: args.marketplace.toUpperCase(), productIds: [args.productId],
+    channelConnectionId: connectionId, aliasKey: args.aliasKey ?? '', fieldKeys: ['descriptionThemeId'], includeCatalogue: false })
+  const themeCell = resolved.products[0]?.cells.descriptionThemeId
+  if (themeCell?.errors.length) throw new Error(themeCell.errors.join('; '))
   try {
-    const region = regionOf(args.marketplace)
     const listing = await prisma.channelListing.findFirst({
-      where: { productId: args.productId, channel: 'EBAY', region },
+      where: { productId: args.productId, channel: 'EBAY', marketplace: args.marketplace.toUpperCase(), channelConnectionId: connectionId, aliasKey: args.aliasKey ?? '' },
       select: { title: true, description: true, platformAttributes: true, flatFileSnapshot: true },
     })
     const attrs = (listing?.platformAttributes ?? {}) as Record<string, unknown>
-    const assigned = typeof attrs.descriptionThemeId === 'string' ? attrs.descriptionThemeId : undefined
+    const assigned = typeof themeCell?.value === 'string' ? themeCell.value : undefined
 
     const buildData = async (): Promise<DescriptionRenderData> => {
-      const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace)
+      const galleries = await loadGalleries(prisma, args.productId, args.sku, args.marketplace, { channelConnectionId: connectionId, aliasKey: args.aliasKey ?? '', marketplace: args.marketplace.toUpperCase() })
       return {
         market: args.marketplace.toUpperCase(),
         title: args.title ?? listing?.title ?? '',
@@ -606,3 +623,27 @@ export function evaluateDescriptionStaleness(input: DescriptionStalenessInput): 
   }
   return { stale: reasons.length > 0, reasons, ...(stamp ? { stampedAt: stamp.at } : {}) }
 }
+
+/**
+ * DS-0 — resolve a product id to its FAMILY ROOT (mirror of the push
+ * service's walk in ebay-description-push.service.ts: ≤3 hops, deleted
+ * parents stop the walk). Unknown ids resolve to themselves so existing
+ * behaviour (render/lookup against the given id) is preserved.
+ */
+export async function resolveFamilyRootId(prisma: PrismaClient, productId: string): Promise<string> {
+  let node = await prisma.product.findFirst({
+    where: { id: productId, deletedAt: null },
+    select: { id: true, parentId: true },
+  })
+  if (!node) return productId
+  for (let hop = 0; node.parentId && hop < 3; hop++) {
+    const parent = await prisma.product.findFirst({
+      where: { id: node.parentId, deletedAt: null },
+      select: { id: true, parentId: true },
+    })
+    if (!parent) break
+    node = parent
+  }
+  return node.id
+}
+

@@ -20,7 +20,7 @@
 import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
 import { Banner } from '@/design-system/components/Banner'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives/Button'
 import { Pill } from '@/design-system/primitives/Pill'
 import type { Tone } from '@/design-system/primitives/tone'

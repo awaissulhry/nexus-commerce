@@ -496,12 +496,12 @@
 
 /* Wide content scrolls inside its own box; the drawer body never scrolls sideways. */
 .acr-dw-scroll { overflow-x: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-lg); }
-.acr-dw-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.acr-dw-tbl { width: 100%; font-size: 12px; }
 
 
-.acr-dw-tbl tr:last-child td { border-bottom: none; }
-.acr-dw-tbl tr.bad td { background: #fdf7f7; }
-.acr-dw-tbl td.nowrap { white-space: nowrap; color: #46536a; }
+.acr-dw-tbl .nds-dg-tr.last .nds-dg-td { border-bottom: none; }
+.acr-dw-tbl .nds-dg-tr.bad .nds-dg-td { background: var(--nds-danger-soft); }
+.acr-dw-tbl .nds-dg-td.nowrap { white-space: nowrap; color: var(--nds-text-2); }
 
 .acr-dw-manual {
   display: inline-block; margin-left: 6px;
@@ -573,7 +573,7 @@
    `.acr-gg-ro` is gone too — it painted #46536a (7.76:1) where the DS paints 15.48:1, and a
    substitution may only ever raise it. */
 .acr-gg-tbl { font-size: 12.5px; }
-.acr-gg-tbl tr.saving td { opacity: 0.55; }
+.acr-gg-tbl .nds-dg-tr.saving .nds-dg-td { opacity: 0.55; }
 
 /* 🔴 max-width in px on a name cell is the trap this console has hit before: the column's width
    is `Column.width`, and the cap that makes the ellipsis work is 100% OF that. */
@@ -656,10 +656,10 @@
 .acr-week-grad.ready { color: var(--nds-success-text); background: #f2fbf7; border: 1px solid #cfe8dc; }
 .acr-week-grad.unseen { color: #8a6320; background: #fdf9f2; border: 1px solid #f0dcbb; }
 
-.acr-week-table { width: 100%; border-collapse: collapse; margin: 14px 0 0; font-size: 12.5px; }
+.acr-week-table { width: 100%; margin: 14px 0 0; font-size: 12.5px; }
 
 
-.acr-week-table td:last-child, .acr-week-table th:last-child { padding-right: 0; }
+.acr-week-table .nds-dg-td.last { padding-right: 0; }
 .acr-week-table .bad { color: #a3342b; font-weight: 600; }
 .acr-week-table .acr-mode { font-size: 10px; padding: 1px 5px; }
 
@@ -718,7 +718,7 @@
 /* `.nds-grid tbody tr.sel td` paints the selected row, and the grid's own hover sits under it —
    both from the DS now, on the same `sel` class this grid already set. The selection column's
    32px and its centring are `Column.width` / `Column.align`. */
-.acr-gg-tbl td:first-child { padding-right: 0; }
+.acr-gg-tbl .nds-dg-td.first { padding-right: 0; }
 
 /* ── ACR.4.3 · undo, on the row that did the thing ───────────────────────── */
 .acr-undo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 7px 0 0; font-size: 11.5px; }
@@ -922,7 +922,7 @@
 /* All three call sites are the DS `DataGrid` now — the header and cell blocks that used to sit
    here set only what `.nds-grid thead th` / `tbody td` set at higher specificity, so none of it
    reached the page. Kept: the figures line up, which the DS does not decide. */
-.acr-fl-table td, .acr-week-table td { font-variant-numeric: tabular-nums; }
+.acr-fl-table .nds-dg-td, .acr-week-table .nds-dg-td { font-variant-numeric: tabular-nums; }
 
 /* brief */
 .acr-fl-sweeps { margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--nds-grey-700); }

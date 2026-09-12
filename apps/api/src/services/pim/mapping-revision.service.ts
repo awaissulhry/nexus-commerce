@@ -12,6 +12,7 @@
 import prisma from '../../db.js'
 import {
   getMappingForMarketplace,
+  persistMapping,
   validateMapping,
   MarketplaceNotFoundError,
   type MarketplaceSchemaMapping,
@@ -83,22 +84,5 @@ export async function rollbackMapping(
   code: string,
   revisionId: string,
 ): Promise<MarketplaceSchemaMapping> {
-  const rev = await prisma.mappingRevision.findUnique({ where: { id: revisionId } })
-  if (!rev || rev.channel !== channel || rev.code !== code) {
-    throw new Error('Revision not found for this marketplace')
-  }
-  const snapshot = rev.snapshot as unknown as MarketplaceSchemaMapping
-  const errors = validateMapping(snapshot)
-  if (errors.length > 0) {
-    throw new Error(`Revision snapshot is invalid: ${errors.join('; ')}`)
-  }
-
-  // Snapshot the current state so the rollback is reversible.
-  await recordMappingRevision(channel, code, { reason: `pre-rollback-to-v${rev.version}` })
-
-  await prisma.marketplace.update({
-    where: { channel_code: { channel, code } },
-    data: { schemaMapping: snapshot as unknown as object },
-  })
-  return snapshot
+  throw new Error('REVIEW_REQUIRED: Restore this revision through createMappingImpact, then activate the reviewed result.')
 }

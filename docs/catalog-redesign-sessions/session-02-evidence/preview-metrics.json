@@ -1,0 +1,7 @@
+{
+  "fixture": "2500 variants / 5000 listings, in-memory query instrumentation",
+  "previewMs": 2412,
+  "heapDeltaMiB": 74,
+  "productReadQueries": 50,
+  "maxProductsPerRead": 107
+}

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ExternalLink, Zap, Crosshair, Activity, TrendingUp, ShieldAlert, BarChart3, CheckCircle, AlertTriangle, Clock, Radio } from 'lucide-react'
 import { amazonCampaignsHref, marketLabel } from '../_shared/amazonLinks'
 import { getBackendUrl } from '@/lib/backend-url'

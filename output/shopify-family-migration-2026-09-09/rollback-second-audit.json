@@ -1,0 +1,26 @@
+{
+  "verifiedAt": "2026-09-09T15:35:36.523004+00:00",
+  "status": "SECOND_ROLLBACK_AUDIT_PASSED",
+  "checks": {
+    "catalogue": {
+      "same43ProductIds": true,
+      "statusStockOrVariantCountDifferences": []
+    },
+    "exactAireonIdsAndLocalSource": {
+      "helperAbsent": true,
+      "builderHooksAbsent": true,
+      "sessionDocumentationRemoved": true,
+      "fourAireonListsMatchExactOriginalIdsAndOrder": true
+    },
+    "all13RehearsalMediaIdsAlreadyExisted": true,
+    "rehearsalThemeAbsentFromExpandedLibrary": true,
+    "publishedThemeUnchangedSaveTimestamp": true,
+    "variantValuesEmpty": true,
+    "productDefinitionIdsAndOrderRestored": true,
+    "variantDefinitionIdsAndOrderRestored": true
+  },
+  "additionalStoreOrApplicationMutationsNeeded": false,
+  "remainingSessionRollbackActions": [],
+  "retainedArtifacts": "Backups, read-only audit records and canceled rehearsal packages marked DO NOT UPLOAD. None are active in Shopify or imported by the application.",
+  "verificationScope": "Recorded session mutations plus fresh catalogue, exact changed relationship values, definitions, full theme-library and media provenance checks; not a full re-export of every original field, review or translation."
+}

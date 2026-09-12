@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.A — charter resolution: code truth ⊕ DB policy.
  *
@@ -323,7 +324,7 @@ export async function seedCharters(): Promise<{ created: number }> {
   let created = 0
   for (const def of Object.values(FLEET_CHARTERS)) {
     const existing = await prisma.agentCharter.findUnique({
-      where: { key_version: { key: def.key, version: def.version } },
+      where: { key_version: workspaceKey({ key: def.key, version: def.version }) },
     })
     if (existing) continue
     await prisma.agentCharter.create({

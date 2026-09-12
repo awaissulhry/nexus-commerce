@@ -19,7 +19,7 @@
 //      target is one click via the existing version history.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   X, Loader2, Layers, ShieldCheck, Sparkles, Package, Tag,
   Check, AlertTriangle, ArrowRight,

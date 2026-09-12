@@ -67,6 +67,10 @@ export interface Column<T> {
 }
 
 export interface DataGridProps<T> {
+  /** Accessible table name, especially when multiple grids share a page. */
+  ariaLabel?: string
+  /** Offer a keyboard focus stop when the table overflows its viewport. */
+  keyboardScroll?: boolean
   columns: Array<Column<T>>
   rows: T[]
   rowKey: (row: T) => string
@@ -236,6 +240,7 @@ export interface DataGridProps<T> {
  * row, and an empty state. Generic over the row type.
  */
 export function DataGrid<T>({
+  ariaLabel, keyboardScroll = false,
   columns,
   rows,
   rowKey,
@@ -314,6 +319,19 @@ export function DataGrid<T>({
       })),
     }
   }, [columns])
+
+  const scrollViewport = useRef<HTMLDivElement>(null)
+  const [overflows, setOverflows] = useState(false)
+  useEffect(() => {
+    const element = scrollViewport.current
+    if (!keyboardScroll || !element || typeof ResizeObserver === 'undefined') return
+    const measure = () => setOverflows(element.scrollWidth > element.clientWidth || element.scrollHeight > element.clientHeight)
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    if (element.firstElementChild) observer.observe(element.firstElementChild)
+    measure()
+    return () => observer.disconnect()
+  }, [keyboardScroll, rows.length])
 
   const [prefs, setPrefs] = useState<PreferencesValue>(() => ({
     visibleColumns: togglableKeys,
@@ -535,8 +553,9 @@ export function DataGrid<T>({
     sort?.key === key ? sort.dir === 'asc' ? <ChevronUp size={13} /> : <ChevronDown size={13} /> : <ChevronsUpDown size={13} />
 
   const grid = (
-    <div className={`nds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
-      <table className={['nds-grid', size === 'md' ? '' : size].filter(Boolean).join(' ')}>
+    <div ref={scrollViewport} tabIndex={keyboardScroll && overflows ? 0 : undefined} role={keyboardScroll && overflows ? 'region' : undefined}
+      aria-label={keyboardScroll && overflows ? `${ariaLabel ?? 'Table'} scroll area` : undefined} className={`nds-grid-wrap${className ? ` ${className}` : ''}`} style={maxHeight != null ? { maxHeight } : undefined}>
+      <table aria-label={ariaLabel} className={['nds-grid', size === 'md' ? '' : size].filter(Boolean).join(' ')}>
         <thead>
           <tr>
             {selectable && (

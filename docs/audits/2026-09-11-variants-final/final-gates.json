@@ -1,0 +1,160 @@
+{
+  "status": "not complete",
+  "gates": {
+    "web-tsc": {
+      "cmd": "npx tsc --noEmit -p apps/web/tsconfig.json",
+      "result": {
+        "chunk_id": "8e43f5",
+        "wall_time_seconds": 0.000001041,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      }
+    },
+    "api-tsc": {
+      "cmd": "npx tsc --noEmit -p apps/api/tsconfig.json",
+      "result": {
+        "chunk_id": "f02f06",
+        "wall_time_seconds": 0.000001,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      }
+    },
+    "factory-tsc": {
+      "cmd": "npx tsc --noEmit -p apps/factory/tsconfig.json",
+      "result": {
+        "chunk_id": "4d3492",
+        "wall_time_seconds": 3.75e-7,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      }
+    },
+    "studio-vitest": {
+      "cmd": "npx vitest run _studio",
+      "workdir": "/Users/awais/nexus-commerce/apps/web",
+      "result": {
+        "chunk_id": "3161c8",
+        "wall_time_seconds": 5.42e-7,
+        "exit_code": 0,
+        "original_token_count": 45,
+        "output": "\n Test Files  102 passed (102)\n      Tests  1559 passed (1559)\n   Start at  01:04:34\n   Duration  9.94s (transform 42.16s, setup 0ms, import 65.40s, tests 8.49s, environment 8ms)\n\n"
+      }
+    },
+    "api-vitest": {
+      "cmd": "npx vitest run",
+      "workdir": "/Users/awais/nexus-commerce/apps/api",
+      "result": {
+        "chunk_id": "58fb3c",
+        "wall_time_seconds": 3.34e-7,
+        "exit_code": 0,
+        "original_token_count": 0,
+        "output": ""
+      }
+    },
+    "ag-boundary": {
+      "cmd": "node scripts/check-ag-grid-import-boundary.mjs",
+      "result": {
+        "chunk_id": "4e144e",
+        "wall_time_seconds": 7.5e-7,
+        "exit_code": 0,
+        "original_token_count": 37,
+        "output": "✓ ag-grid import boundary: only the engine and the labs import AG Grid; no stylesheet outside the engine addresses it (5787 ts + 107 css scanned)\n"
+      }
+    },
+    "raw-ratchet": {
+      "cmd": "node scripts/check-raw-primitives-ratchet.mjs",
+      "result": {
+        "chunk_id": "cb822b",
+        "wall_time_seconds": 0.405545333,
+        "exit_code": 0,
+        "original_token_count": 223,
+        "output": "740 file(s) hold 4340 raw control(s) the DS already ships\n\n    98  apps/web/src/app/fulfillment/inbound/InboundWorkspace.tsx\n    75  apps/web/src/app/fulfillment/returns/ReturnsWorkspace.tsx\n    55  apps/web/src/app/fulfillment/stock/StockWorkspace.tsx\n    49  apps/web/src/app/fulfillment/suppliers/SuppliersClient.tsx\n    45  apps/web/src/app/fulfillment/purchase-orders/[id]/PurchaseOrderDetailClient.tsx\n    45  apps/web/src/app/listings/ListingsWorkspace.tsx\n    42  apps/web/src/app/fulfillment/outbound/PendingShipmentsClient.tsx\n    40  apps/web/src/app/products/[id]/list-wizard/steps/Step5Variations.tsx\n    39  apps/web/src/app/products/_shared/ProductDrawer.tsx\n    35  apps/web/src/app/orders/reviews/rules/RulesClient.tsx\n    34  apps/web/src/app/fulfillment/suppliers/development/[id]/ProjectDetailClient.tsx\n    34  apps/web/src/app/reconciliation/ReconciliationClient.tsx\n"
+      }
+    },
+    "dark-alias": {
+      "cmd": "node scripts/check-dark-alias-scope.mjs",
+      "result": {
+        "chunk_id": "7694ea",
+        "wall_time_seconds": 0.000004125,
+        "exit_code": 0,
+        "original_token_count": 23,
+        "output": "✓ dark-alias scope: every :root alias of a dark-overridden token is re-declared in .dark\n"
+      }
+    },
+    "required-keys": {
+      "cmd": "node --test scripts/studio-required-columns.test.mjs",
+      "result": {
+        "chunk_id": "dc1c30",
+        "wall_time_seconds": 0.0198505,
+        "exit_code": 0,
+        "original_token_count": 94,
+        "output": "✔ measures each coordinate without imposing another coordinate’s denominator (1.243375ms)\n✔ a missing required declaration cannot produce a passing witness (0.975166ms)\n✔ absent, duplicate and empty measurements never certify required fit (0.222083ms)\nℹ tests 3\nℹ suites 0\nℹ pass 3\nℹ fail 0\nℹ cancelled 0\nℹ skipped 0\nℹ todo 0\nℹ duration_ms 93.036542\n"
+      }
+    },
+    "parity": {
+      "cmd": "node scripts/check-variants-sheet-parity.mjs",
+      "result": {
+        "chunk_id": "180517",
+        "wall_time_seconds": 0.000004458,
+        "exit_code": 0,
+        "original_token_count": 221,
+        "output": "{\n  \"at\": \"2026-09-11T23:06:22.247Z\",\n  \"product\": \"cmokmy3a40078pm0p1fvnu523\",\n  \"market\": \"IT\",\n  \"locale\": \"it\",\n  \"coordinates\": [\n    {\n      \"channel\": \"master\",\n      \"rows\": 21\n    },\n    {\n      \"channel\": \"AMAZON\",\n      \"market\": \"IT\",\n      \"accountId\": \"cmothu9bo0000nz01asw6wx8j\",\n      \"aliasKey\": \"\",\n      \"rows\": 21,\n      \"axes\": 0\n    },\n    {\n      \"channel\": \"EBAY\",\n      \"market\": \"IT\",\n      \"accountId\": \"cmr4aaqb00025nz016k18rup9\",\n      \"aliasKey\": \"\",\n      \"rows\": 21,\n      \"axes\": 2\n    },\n    {\n      \"channel\": \"SHOPIFY\",\n      \"market\": \"GLOBAL\",\n      \"accountId\": \"cmtugfpaa0006njhq8m2nvnxx\",\n      \"aliasKey\": \"\",\n      \"rows\": 21,\n      \"axes\": 0\n    },\n    {\n      \"channel\": \"ETSY\",\n      \"market\": \"GLOBAL\",\n      \"accountId\": \"cmtvy3wta00fjnjpxl22lly3k\",\n      \"aliasKey\": \"\",\n      \"rows\": 21,\n      \"axes\": 0\n    }\n  ],\n  \"failures\": []\n}\n"
+      }
+    },
+    "census": {
+      "cmd": "node scripts/check-control-census.mjs",
+      "result": {
+        "chunk_id": "5e982b",
+        "wall_time_seconds": 0.000001375,
+        "exit_code": 2,
+        "original_token_count": 76,
+        "output": "control census · http://localhost:3000 · product cmokmy3a40078pm0p1fvnu523 · 12/12 surface(s) · load 8.95 · 2026-09-11T23:04:37.476Z\nA signed-in studio session is required. Set STUDIO_STORAGE_STATE to an existing test session, or STUDIO_TEST_EMAIL and STUDIO_TEST_PASSWORD for normal local sign-in.\n"
+      }
+    },
+    "editor": {
+      "cmd": "node scripts/check-editor-open.mjs",
+      "result": {
+        "chunk_id": "cee130",
+        "wall_time_seconds": 0.000001459,
+        "exit_code": 2,
+        "original_token_count": 42,
+        "output": "A signed-in studio session is required. Set STUDIO_STORAGE_STATE to an existing test session, or STUDIO_TEST_EMAIL and STUDIO_TEST_PASSWORD for normal local sign-in.\n"
+      }
+    },
+    "layout": {
+      "cmd": "node scripts/check-layout-v2.mjs",
+      "result": {
+        "chunk_id": "f5636c",
+        "wall_time_seconds": 3.33e-7,
+        "exit_code": 2,
+        "original_token_count": 900,
+        "output": "   ✅ W-1 master DE/de: 235/235 columns, same order true · 21 rows · 0 short · 0 missing a declared key\n   ✅ W-2 master DE/de: every non-editable cell states a reason\n   ✅ W-4 master DE/de: 1 required [name]; sheet 1; missing 0; extra 0\n   ✅ W-1 AMAZON·IT/it: 160/160 columns, same order true · 21 rows · 0 short · 0 missing a declared key\n   ✅ W-2 AMAZON·IT/it: every non-editable cell states a reason\n   ✅ W-4 AMAZON·IT/it: 8 required [productType, brand, name, description, bulletPoints_1, fabric_type, country_of_origin, supplier_declared_dg_hz_regulation]; sheet 8; missing 0; extra 0\n   ✅ W-1 Amazon·DE/de: 162/162 columns, same order true · 21 rows · 0 short · 0 missing a declared key\n   ✅ W-2 Amazon·DE/de: every non-editable cell states a reason\n   ✅ W-4 Amazon·DE/de: 8 required [productType, brand, name, description, bulletPoints_1, fabric_type, country_of_origin, supplier_declared_dg_hz_regulation]; sheet 8; missing 0; extra 0\n   ✅ W-1 eBay·IT/it: 51/51 columns, same order true · 21 rows · 0 short · 0 missing a declared key\n   ✅ W-2 eBay·IT/it: every non-editable cell states a reason\n   ✅ W-4 eBay·IT/it: 6 required [name, description, brand, conditionId, price, quantity]; sheet 6; missing 0; extra 0\n\n📌 BUILD STAMP — every file whose change can invalidate a number below (digests are sha1, first 8):\n   18:30:45  sha1:7ea5a27d  apps/web/src/app/products/[id]/edit/_studio/drawer/StudioDock.tsx\n   18:18:35  sha1:73c3f8f6  apps/web/src/app/products/[id]/edit/_studio/sheet/master/MasterSheet.tsx\n   18:18:58  sha1:15f80663  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx\n   05:47:50  sha1:dad3739b  apps/web/src/app/products/[id]/edit/_studio/sheet/views.ts\n   03:23:01  sha1:e63dbd62  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx\n   14:32:33  sha1:db6c54d4  apps/web/src/design-system/grid/columns/presets.ts\n   06:07:17  sha1:083bfe5b  apps/web/src/app/products/[id]/edit/_studio/sheet/flaggedColumns.ts\n   18:04:35  sha1:292f0f61  apps/web/src/design-system/grid/renderers/bandWidth.ts\n   16:50:47  sha1:b61425c6  apps/web/src/design-system/grid/renderers/IdentityBand.tsx\n   16:51:04  sha1:94c924f5  apps/web/src/design-system/grid/renderers/readiness.ts\n   18:24:28  sha1:743035f8  apps/web/src/design-system/grid/renderers/index.ts\n   09:03:09  sha1:8d4acacb  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/AliasBandCell.tsx\n   18:17:51  sha1:2ff45537  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/rows.ts\n   05:44:13  sha1:368f550b  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts\n   06:51:25  sha1:061fa8de  apps/web/src/app/products/[id]/edit/_studio/drawer/revealHost.ts\n   18:36:32  sha1:a296231e  apps/web/src/app/products/[id]/edit/_studio/drawer/revealCell.ts\n   06:45:41  sha1:f9587426  apps/web/src/app/products/[id]/edit/_studio/drawer/index.ts\n   22:21:30  sha1:1b209798  apps/web/src/app/products/[id]/edit/_studio/contracts.tsx\n   04:54:07  sha1:0ab6f791  apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx\n   07:14:05  sha1:0e0eea6f  apps/web/src/app/products/[id]/edit/_studio/StudioHeader.tsx\n   03:32:46  sha1:9efeb88c  apps/web/src/app/products/[id]/edit/_studio/studio.module.css\n   00:53:48  sha1:1ee0bc55  apps/web/src/design-system/grid/theme/grid.css\n   00:09:09  sha1:a3fb04f6  apps/web/src/design-system/grid/hosts/GridSheet.tsx\nA signed-in studio session is required. Set STUDIO_STORAGE_STATE to an existing test session, or STUDIO_TEST_EMAIL and STUDIO_TEST_PASSWORD for normal local sign-in.\n"
+      }
+    }
+  },
+  "counts": {
+    "studio": {
+      "files": 102,
+      "passed": 1559
+    },
+    "api": {
+      "files": 631,
+      "passed": 7725,
+      "skipped": 11
+    },
+    "census": {
+      "planned": 12,
+      "measured": 0
+    },
+    "contractWitnesses": {
+      "coordinates": 4,
+      "failures": 0
+    },
+    "parity": {
+      "coordinates": 5,
+      "rowsPerCoordinate": 21
+    }
+  }
+}

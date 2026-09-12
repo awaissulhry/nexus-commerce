@@ -1,0 +1,42 @@
+{
+  "api": {
+    "passed": 284,
+    "files": 38,
+    "databaseIntegrationSocketRetry": true
+  },
+  "web": {
+    "passed": 3,
+    "files": 1
+  },
+  "tokenScannerSelfTests": 12,
+  "types": [
+    "api",
+    "web",
+    "factory"
+  ],
+  "generatedTokens": [
+    "web",
+    "factory"
+  ],
+  "tokenResolution": "passed",
+  "sharedFileDrift": "passed",
+  "localQueueDelivery": "passed",
+  "schemaCompilation": {
+    "documents": 117,
+    "errors": 0
+  },
+  "browser": {
+    "keyboardSkuSelection": true,
+    "errorDetails": true,
+    "escapeDismissal": true,
+    "clearPreviewState": true,
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "narrowViewport": 390,
+    "documentOverflowAt390": false
+  },
+  "liveListingWrites": 0,
+  "codeDeployed": false
+}

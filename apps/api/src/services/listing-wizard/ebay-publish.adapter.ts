@@ -1,3 +1,5 @@
+import { marketLanguages, languageTag } from '../pim/market-languages.js'
+import { assertLegacyPresentationPublishAllowed } from '../ebay-presentation-consumer.service.js'
 /**
  * DD.4 — eBay publish adapter (Inventory API).
  *
@@ -289,6 +291,9 @@ export class EbayPublishAdapter {
       }
     }
 
+    try { await assertLegacyPresentationPublishAllowed({ sku: payload.sku, marketplace: payload.marketplaceId }) }
+    catch (e) { return { ok: false, sku: payload.sku, failedStep: 'presentationReview', error: e instanceof Error ? e.message : String(e) } }
+
     // MAP.3 — DECLARED. The old comment said multi-account "keys off
     // marketplaceId once that lands"; it does not — marketplace and account are
     // different axes, and a wizard publishing a NEW listing has no row to derive
@@ -432,7 +437,7 @@ export class EbayPublishAdapter {
     // ("Invalid value for header Accept-Language") — every eBay publish died here.
     // Set Accept-Language to the same marketplace locale (it-IT/de-DE/…). This one
     // headers object is reused across the inventory/offer/publish steps.
-    const acceptLang = contentLanguageFor(payload.marketplaceId)
+    const acceptLang = await contentLanguageFor(payload.marketplaceId)
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -744,19 +749,9 @@ export class EbayPublishAdapter {
   }
 }
 
-const MARKETPLACE_LANG: Record<string, string> = {
-  EBAY_IT: 'it-IT',
-  EBAY_DE: 'de-DE',
-  EBAY_FR: 'fr-FR',
-  EBAY_ES: 'es-ES',
-  EBAY_GB: 'en-GB',
-  EBAY_US: 'en-US',
-  EBAY_AU: 'en-AU',
-  EBAY_CA: 'en-CA',
-}
-
-function contentLanguageFor(marketplaceId: string): string {
-  return MARKETPLACE_LANG[marketplaceId] ?? 'en-US'
+export async function contentLanguageFor(marketplaceId: string): Promise<string> {
+  const code = marketplaceId.replace(/^EBAY_/, '')
+  return languageTag((await marketLanguages('EBAY', code))[0], code).replace('_', '-')
 }
 
 const MARKETPLACE_HOST: Record<string, string> = {

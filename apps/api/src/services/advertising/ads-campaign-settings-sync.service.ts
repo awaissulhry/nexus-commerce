@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * B — live campaign-settings sync from Amazon (v3).
  *
@@ -143,7 +144,7 @@ async function recordCampaignDrift(
       now,
     })
     await prisma.adDrift.upsert({
-      where: { entityType_entityId_field: { entityType: 'CAMPAIGN', entityId: existing.id, field: d.field } },
+      where: { entityType_entityId_field: workspaceKey({ entityType: 'CAMPAIGN', entityId: existing.id, field: d.field }) },
       create: {
         entityType: 'CAMPAIGN', entityId: existing.id, externalId: amazon.campaignId,
         marketplace: existing.marketplace, entityName: existing.name,

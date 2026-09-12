@@ -1,0 +1,39 @@
+.page {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--nds-space-24);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-20);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+}
+.page > * { flex-shrink: 0; }
+.page p, .editor p { margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.intro { max-width: 80ch; }
+.descriptionLayout { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr); gap: var(--nds-space-20); align-items: start; }
+.stack, .editor { display: grid; gap: var(--nds-space-16); min-width: 0; color: var(--nds-text); }
+.sectionTitle { font: inherit; margin: 0; color: var(--nds-text); }
+.destination { display: grid; grid-template-columns: minmax(220px, 1fr) 2fr; gap: var(--nds-space-24); align-items: end; }
+.facts { display: flex; flex-wrap: wrap; gap: var(--nds-space-24); margin: 0; }
+.facts div { min-width: 0; }
+.facts dt { font-weight: var(--nds-font-weight-semibold); }
+.facts dd { margin: var(--nds-space-6) 0 0; overflow-wrap: anywhere; }
+.preview { width: 100%; min-height: 540px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); }
+.actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--nds-space-8); }
+.orderLayout { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2fr); gap: var(--nds-space-20); align-items: start; }
+.valueLayout { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--nds-space-16); }
+.saveBar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--nds-space-16); padding: var(--nds-space-16) 0; border-top: 1px solid var(--nds-border); }
+.drawerContent { padding: var(--nds-space-16); }
+@media (max-width: 1000px) {
+  .descriptionLayout, .orderLayout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 600px) {
+  .page { padding: var(--nds-space-16); }
+  .destination { grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-16); }
+  .facts { gap: var(--nds-space-16); }
+  .preview { min-height: 400px; }
+  .saveBar, .actions { justify-content: flex-start; }
+}

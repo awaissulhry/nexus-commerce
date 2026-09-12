@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Listing Reconciliation Service (Phase RECON)
  *
@@ -268,7 +269,7 @@ export async function runAmazonReconciliation(
   logger.info('[recon] Starting Amazon reconciliation', { marketplace, runId })
 
   const amazonService = new AmazonService()
-  if (!amazonService.isConfigured()) {
+  if (!(await amazonService.isConfigured())) {
     throw new Error('Amazon SP-API credentials not configured — check AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN')
   }
 
@@ -361,11 +362,11 @@ export async function runAmazonReconciliation(
 
     return prisma.listingReconciliation.upsert({
       where: {
-        channel_marketplace_externalSku: {
+        channel_marketplace_externalSku: workspaceKey({
           channel: 'AMAZON',
           marketplace,
           externalSku: item.sku,
-        },
+        }),
       },
       create: {
         channel: 'AMAZON',
@@ -501,12 +502,14 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
     // race to create duplicate ChannelListing rows.
     await tx.channelListing.upsert({
       where: {
-        productId_channel_marketplace: {
+        productId_channel_marketplace: workspaceKey({
           productId: row.matchedProductId!,
           channel: row.channel,
           marketplace: row.marketplace,
           channelConnectionId: reconConn,
-        },
+          // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+          aliasKey: '',
+        }),
       },
       create: {
         productId: row.matchedProductId!,
@@ -540,12 +543,12 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
     if (isVariationChild) {
       await tx.variantChannelListing.upsert({
         where: {
-          variantId_channel_marketplace: {
+          variantId_channel_marketplace: workspaceKey({
             variantId: row.matchedVariationId!,
             channel: row.channel,
             marketplace: row.marketplace,
             channelConnectionId: reconConn,
-          },
+          }),
         },
         create: {
           variantId: row.matchedVariationId!,
@@ -801,7 +804,7 @@ export async function runEbayReconciliation(marketplace: string = 'IT'): Promise
     const price = offer.pricingSummary?.price?.value ? parseFloat(offer.pricingSummary.price.value) : null
 
     return prisma.listingReconciliation.upsert({
-      where: { channel_marketplace_externalSku: { channel: 'EBAY', marketplace, externalSku: offer.sku } },
+      where: { channel_marketplace_externalSku: workspaceKey({ channel: 'EBAY', marketplace, externalSku: offer.sku }) },
       create: {
         channel: 'EBAY',
         marketplace,

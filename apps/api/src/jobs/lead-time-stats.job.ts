@@ -47,7 +47,7 @@ export function startLeadTimeStatsCron(): void {
     logger.error('lead-time-stats cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runLeadTimeStatsCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runLeadTimeStatsCronOnce() })
   logger.info('lead-time-stats cron: scheduled', { schedule })
 }
 

@@ -32,6 +32,7 @@ import {
   useState,
 } from 'react'
 import { Check, Loader2, AlertCircle, RotateCcw } from 'lucide-react'
+import { registerProfileChanges } from '@/lib/workspaces/unsaved-changes'
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -67,6 +68,11 @@ export function SettingsSaveBarProvider({
   const [error, setError] = useState<string | null>(null)
   const registeredRef = useRef<RegisteredForm | null>(null)
   registeredRef.current = registered
+  useEffect(() => registerProfileChanges('settings', {
+    isDirty: () => !!registeredRef.current?.isDirty,
+    save: () => registeredRef.current?.onSave(),
+    discard: () => registeredRef.current?.onDiscard(),
+  }), [])
 
   // Pages may re-register on every render — collapse to a single
   // setState call when the relevant fields actually change. Without

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Ban, Clock, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { useConfirm } from '@/components/ui/ConfirmProvider'

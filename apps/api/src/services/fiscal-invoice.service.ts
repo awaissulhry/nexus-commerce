@@ -98,7 +98,7 @@ export async function assignInvoiceNumber(
     >`
       INSERT INTO "FiscalInvoiceCounter" ("fiscalYear", "issuer", "current", "updatedAt")
       VALUES (${fiscalYear}, ${issuer}, 1, CURRENT_TIMESTAMP)
-      ON CONFLICT ("fiscalYear", "issuer") DO UPDATE
+      ON CONFLICT ("workspaceId", "fiscalYear", "issuer") DO UPDATE
         SET "current" = "FiscalInvoiceCounter"."current" + 1,
             "updatedAt" = CURRENT_TIMESTAMP
       RETURNING "current"

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * MC.9.1 — Amazon Brand Story (Brand Registry) CRUD.
  *
@@ -183,11 +184,11 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
       if (err?.code === 'P2002') {
         const existing = await prisma.brandStory.findUnique({
           where: {
-            brand_marketplace_locale: {
+            brand_marketplace_locale: workspaceKey({
               brand: body.brand.trim(),
               marketplace: body.marketplace.trim(),
               locale: body.locale.trim(),
-            },
+            }),
           },
           select: { id: true },
         })
@@ -369,11 +370,11 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
       // unique key on BrandStory itself.
       const existing = await prisma.brandStory.findUnique({
         where: {
-          brand_marketplace_locale: {
+          brand_marketplace_locale: workspaceKey({
             brand: source.brand,
             marketplace: body.marketplace,
             locale: body.locale,
-          },
+          }),
         },
       })
       if (existing)

@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   ChevronRight,

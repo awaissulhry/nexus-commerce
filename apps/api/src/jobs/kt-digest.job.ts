@@ -55,6 +55,6 @@ export function startKtDigestCron(): void {
   // 07:30 UTC — after the nightly ads jobs have settled, before the operator's morning.
   const schedule = process.env.NEXUS_KT_DIGEST_SCHEDULE ?? '30 7 * * *'
   if (!cron.validate(schedule)) { logger.error('kt-digest cron: invalid schedule', { schedule }); return }
-  scheduledTask = cron.schedule(schedule, () => void runKtDigestCron())
+  scheduledTask = cron.schedule(schedule, async () => { await runKtDigestCron() })
   logger.info(`kt-digest cron scheduled (${schedule})`)
 }

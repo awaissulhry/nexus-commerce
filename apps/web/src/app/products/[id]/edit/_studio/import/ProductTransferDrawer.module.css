@@ -1,0 +1,7 @@
+.body { display: flex; flex-direction: column; gap: var(--nds-space-18); min-width: 0; color: var(--nds-text); font-size: var(--nds-font-size-base); line-height: 1.5; overflow-wrap: anywhere; }
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-18); }
+.choices { display: flex; flex-direction: column; gap: var(--nds-space-10); max-height: 240px; overflow: auto; padding: var(--nds-space-4); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-12); }
+.guide { margin: 0; padding-inline-start: var(--nds-space-20); }
+.guide li + li { margin-block-start: var(--nds-space-8); }
+@media (max-width: 650px) { .fields { grid-template-columns: minmax(0, 1fr); } }

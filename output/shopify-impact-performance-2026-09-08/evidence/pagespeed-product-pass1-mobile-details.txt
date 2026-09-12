@@ -1,0 +1,481 @@
+- banner:
+  - link "PageSpeed Insights logo PageSpeed Insights":
+    - /url: ./
+    - img "PageSpeed Insights logo"
+    - generic: PageSpeed Insights
+  - button "Copy Link":
+    - generic: Copy Link
+  - generic: Docs
+  - link "Docs":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+- generic: This site uses cookies from Google to deliver its services and to analyze traffic.
+- generic: Learn More.
+- link "Learn More.":
+  - /url: https://policies.google.com/technologies/cookies
+- button "Ok, Got it.":
+  - generic: Ok, Got it.
+- generic: Report from Sep 8, 2026, 11:30:31 PM
+- textbox:
+  - /placeholder: Enter a web page URL
+  - text: https://xaviaracing.it/products/gale-jacket
+- paragraph: Enter a valid URL
+- button "Analyze":
+  - generic: Analyze
+- tablist:
+  - tab "Mobile" [selected]:
+    - generic: smartphone
+    - generic: Mobile
+  - tab "Desktop":
+    - generic: computer
+    - generic: Desktop
+- tabpanel "Mobile":
+  - generic: Discover what your real users are experiencing
+  - button "button":
+  - generic: No Data
+  - separator
+  - generic: Diagnose performance issues
+  - article:
+    - link "62 Performance":
+      - /url: "#performance"
+      - generic: "62"
+      - generic: Performance
+    - link "94 Accessibility":
+      - /url: "#accessibility"
+      - generic: "94"
+      - generic: Accessibility
+    - link "92 Best Practices":
+      - /url: "#best-practices"
+      - generic: "92"
+      - generic: Best Practices
+    - link "100 SEO":
+      - /url: "#seo"
+      - generic: "100"
+      - generic: SEO
+    - link "4/4 Agentic Browsing":
+      - /url: "#agentic-browsing"
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: Values are estimated and may vary. The
+    - link "performance score is calculated":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: directly from these metrics.
+    - link "See calculator.":
+      - /url: https://googlechrome.github.io/lighthouse/scorecalc/#FCP=2926&LCP=6392&TBT=327&CLS=0&SI=5056&TTI=18461&device=mobile&version=13.4.1
+    - generic: 0–49
+    - generic: 50–89
+    - generic: 90–100
+    - img "Final Screenshot"
+    - checkbox "Toggle the display of metric descriptions"
+    - generic: Metrics
+    - generic: Expand view
+    - generic: First Contentful Paint
+    - generic: 2.9 s
+    - generic: Largest Contentful Paint
+    - generic: 6.4 s
+    - generic: Total Blocking Time
+    - generic: 330 ms
+    - generic: Cumulative Layout Shift
+    - generic: "0"
+    - generic: Speed Index
+    - generic: 5.1 s
+    - list:
+      - listitem: Captured at Sep 8, 2026, 11:30 PM GMT+2
+      - listitem: Emulated Moto G Power with Lighthouse 13.4.1
+      - listitem: Single page session
+      - listitem: Initial page load
+      - listitem: Slow 4G throttling
+      - listitem: Using HeadlessChromium 151.0.7922.71 with lr
+    - button "View Treemap"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - generic: "Show audits relevant to:"
+    - radio "All" [checked]
+    - generic: All
+    - radio "FCP"
+    - generic "First Contentful Paint": FCP
+    - radio "LCP"
+    - generic "Largest Contentful Paint": LCP
+    - radio "TBT"
+    - generic "Total Blocking Time": TBT
+    - radio "CLS"
+    - generic "Cumulative Layout Shift": CLS
+    - generic: Insights
+    - generic "Use efficient cache lifetimes —Est savings of 271 KiB":
+      - generic: Use efficient cache lifetimes
+      - text: —Est savings of 271 KiB
+    - generic "Render-blocking requests —Est savings of 310 ms":
+      - generic: Render-blocking requests
+      - text: —Est savings of 310 ms
+    - generic "Font display —Est savings of 30 ms":
+      - generic: Font display
+      - text: —Est savings of 30 ms
+    - generic "Legacy JavaScript —Est savings of 25 KiB":
+      - generic: Legacy JavaScript
+      - text: —Est savings of 25 KiB
+    - generic "Forced reflow":
+      - generic: Forced reflow
+    - generic "LCP request discovery":
+      - generic: LCP request discovery
+    - 'generic "Network dependency tree Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."':
+      - generic: Network dependency tree
+      - generic: "Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."
+    - generic "Improve image delivery —Est savings of 926 KiB":
+      - generic: Improve image delivery
+      - text: —Est savings of 926 KiB
+    - generic "Layout shift culprits":
+      - generic: Layout shift culprits
+    - generic "Optimize DOM size":
+      - generic: Optimize DOM size
+    - generic "LCP breakdown":
+      - generic: LCP breakdown
+    - text: Each
+    - link "subpart has specific improvement strategies":
+      - /url: https://developer.chrome.com/docs/performance/insights/lcp-breakdown?utm_source=lighthouse&utm_medium=lr
+    - text: . Ideally, most of the LCP time should be spent on loading the resources, not within delays.
+    - generic "Relevant to Largest Contentful Paint": LCP
+    - generic "This audit does not contribute to the overall category score.": Unscored
+    - table:
+      - rowgroup:
+        - row "Subpart Duration":
+          - columnheader "Subpart":
+            - generic: Subpart
+          - columnheader "Duration":
+            - generic: Duration
+      - rowgroup:
+        - row "Time to first byte 10 ms":
+          - cell "Time to first byte":
+            - generic: Time to first byte
+          - cell "10 ms":
+            - generic: 10 ms
+        - row "Resource load delay 710 ms":
+          - cell "Resource load delay":
+            - generic: Resource load delay
+          - cell "710 ms":
+            - generic: 710 ms
+        - row "Resource load duration 30 ms":
+          - cell "Resource load duration":
+            - generic: Resource load duration
+          - cell "30 ms":
+            - generic: 30 ms
+        - row "Element render delay 500 ms":
+          - cell "Element render delay":
+            - generic: Element render delay
+          - cell "500 ms":
+            - generic: 500 ms
+    - generic "div.product-gallery__media-list-wrapper > media-carousel#product-gallery-9326637384007-template--30465096679751__main > div.product-gallery__media > img.rounded":
+      - generic: GALE jacket
+      - generic: "<img src=\"https://xaviaracing.it/cdn/shop/files/GALE-JACKET-BLACKE.webp?v=1760007084…\" alt=\"GALE jacket\" srcset=\"//xaviaracing.it/cdn/shop/files/GALE-JACKET-BLACKE.webp?v=1760007084&amp;width…\" width=\"2000\" height=\"2000\" loading=\"eager\" fetchpriority=\"high\" sizes=\"(max-width: 740px) calc(100vw - 40px), (max-width: 999px) calc(100vw - 64p…\" class=\"rounded\">"
+    - generic "3rd parties":
+      - generic: 3rd parties
+    - text: These insights are also available in the Chrome DevTools Performance Panel -
+    - link "record a trace":
+      - /url: https://developer.chrome.com/docs/devtools/performance/reference?utm_source=lighthouse&utm_medium=lr
+    - text: to view more detailed information.
+    - generic: Diagnostics
+    - generic "Reduce JavaScript execution time —2.5 s":
+      - generic: Reduce JavaScript execution time
+      - text: —2.5 s
+    - generic "Minimize main-thread work —6.6 s":
+      - generic: Minimize main-thread work
+      - text: —6.6 s
+    - generic "Reduce unused JavaScript —Est savings of 564 KiB":
+      - generic: Reduce unused JavaScript
+      - text: —Est savings of 564 KiB
+    - generic "Reduce unused CSS —Est savings of 58 KiB":
+      - generic: Reduce unused CSS
+      - text: —Est savings of 58 KiB
+    - generic "Image elements do not have explicit width and height":
+      - text: Image elements do not have explicit
+      - code: width
+      - text: and
+      - code: height
+    - generic "Minify CSS —Est savings of 6 KiB":
+      - generic: Minify CSS
+      - text: —Est savings of 6 KiB
+    - generic "Avoid enormous network payloads —Total size was 5,009 KiB" [active]:
+      - generic: Avoid enormous network payloads
+      - text: —Total size was 5,009 KiB
+    - text: Large network payloads cost users real money and are highly correlated with long load times.
+    - link "Learn how to reduce payload sizes":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/total-byte-weight/?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "This audit does not contribute to the overall category score.": Unscored
+    - checkbox "Show 3rd-party resources (5)" [checked]
+    - text: Show 3rd-party resources (5)
+    - table:
+      - rowgroup:
+        - row "URL Transfer Size":
+          - columnheader "URL":
+            - generic: URL
+          - columnheader "Transfer Size":
+            - generic: Transfer Size
+      - rowgroup:
+        - row "xaviaracing.it 1st party 838.8 KiB":
+          - cell "xaviaracing.it 1st party":
+            - generic: xaviaracing.it
+            - generic: 1st party
+          - cell "838.8 KiB":
+            - generic "858,885 bytes": 838.8 KiB
+        - row "…files/GALE-JACKET-004.webp?v=176…&width=800(xaviaracing.it) 230.5 KiB":
+          - cell "…files/GALE-JACKET-004.webp?v=176…&width=800(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/files/GALE-JACKET-004.webp?v=1760273361&width=800":
+              - link "…files/GALE-JACKET-004.webp?v=176…&width=800":
+                - /url: https://xaviaracing.it/cdn/shop/files/GALE-JACKET-004.webp?v=1760273361&width=800
+              - text: (xaviaracing.it)
+          - cell "230.5 KiB":
+            - generic "236,080 bytes": 230.5 KiB
+        - row "…c1/hydrate.DeP6DaKs.js(xaviaracing.it) 203.4 KiB":
+          - cell "…c1/hydrate.DeP6DaKs.js(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shopifycloud/checkout-web/assets/c1/hydrate.DeP6DaKs.js":
+              - link "…c1/hydrate.DeP6DaKs.js":
+                - /url: https://xaviaracing.it/cdn/shopifycloud/checkout-web/assets/c1/hydrate.DeP6DaKs.js
+              - text: (xaviaracing.it)
+          - cell "203.4 KiB":
+            - generic "208,281 bytes": 203.4 KiB
+        - row "…assets/country-flags-2x.png?v=1193884…(xaviaracing.it) 152.8 KiB":
+          - cell "…assets/country-flags-2x.png?v=1193884…(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/t/96/assets/country-flags-2x.png?v=119388446682176363021788902357":
+              - link "…assets/country-flags-2x.png?v=1193884…":
+                - /url: https://xaviaracing.it/cdn/shop/t/96/assets/country-flags-2x.png?v=119388446682176363021788902357
+              - text: (xaviaracing.it)
+          - cell "152.8 KiB":
+            - generic "156,447 bytes": 152.8 KiB
+        - row "…files/Product-p….webp?v=176…&width=800(xaviaracing.it) 126.9 KiB":
+          - cell "…files/Product-p….webp?v=176…&width=800(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/files/Product-page-image-B.webp?v=1760268303&width=800":
+              - link "…files/Product-p….webp?v=176…&width=800":
+                - /url: https://xaviaracing.it/cdn/shop/files/Product-page-image-B.webp?v=1760268303&width=800
+              - text: (xaviaracing.it)
+          - cell "126.9 KiB":
+            - generic "129,915 bytes": 126.9 KiB
+        - row "…files/Product-p….webp?v=176…&width=800(xaviaracing.it) 125.2 KiB":
+          - cell "…files/Product-p….webp?v=176…&width=800(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/files/Product-page-image-A.webp?v=1760268302&width=800":
+              - link "…files/Product-p….webp?v=176…&width=800":
+                - /url: https://xaviaracing.it/cdn/shop/files/Product-page-image-A.webp?v=1760268302&width=800
+              - text: (xaviaracing.it)
+          - cell "125.2 KiB":
+            - generic "128,162 bytes": 125.2 KiB
+        - row "Shopify hosting 315.8 KiB":
+          - cell "Shopify hosting":
+            - generic: Shopify
+            - generic: hosting
+          - cell "315.8 KiB":
+            - generic "323,334 bytes": 315.8 KiB
+        - row "…files/IT_WOMEN.jpg?v=176…(cdn.shopify.com) 187.6 KiB":
+          - cell "…files/IT_WOMEN.jpg?v=176…(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/s/files/1/0729/9186/7207/files/IT_WOMEN.jpg?v=1763287660":
+              - link "…files/IT_WOMEN.jpg?v=176…":
+                - /url: https://cdn.shopify.com/s/files/1/0729/9186/7207/files/IT_WOMEN.jpg?v=1763287660
+              - text: (cdn.shopify.com)
+          - cell "187.6 KiB":
+            - generic "192,127 bytes": 187.6 KiB
+        - row "…files/IT_MENS_JACKET.jpg?v=176…(cdn.shopify.com) 128.1 KiB":
+          - cell "…files/IT_MENS_JACKET.jpg?v=176…(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/s/files/1/0729/9186/7207/files/IT_MENS_JACKET.jpg?v=1763287656":
+              - link "…files/IT_MENS_JACKET.jpg?v=176…":
+                - /url: https://cdn.shopify.com/s/files/1/0729/9186/7207/files/IT_MENS_JACKET.jpg?v=1763287656
+              - text: (cdn.shopify.com)
+          - cell "128.1 KiB":
+            - generic "131,207 bytes": 128.1 KiB
+        - row "loloyal.com 250.3 KiB":
+          - cell "loloyal.com":
+            - generic: loloyal.com
+          - cell "250.3 KiB":
+            - generic "256,343 bytes": 250.3 KiB
+        - row "…js/317.cc5b2e1f.js(static.loloyal.com) 142.6 KiB":
+          - cell "…js/317.cc5b2e1f.js(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js":
+              - link "…js/317.cc5b2e1f.js":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js
+              - text: (static.loloyal.com)
+          - cell "142.6 KiB":
+            - generic "146,061 bytes": 142.6 KiB
+        - row "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com) 107.7 KiB":
+          - cell "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598":
+              - link "…widget/boom-cend-referral-popup.js?v=178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598
+              - text: (static.loloyal.com)
+          - cell "107.7 KiB":
+            - generic "110,282 bytes": 107.7 KiB
+        - row "PayPal utility 180.0 KiB":
+          - cell "PayPal utility":
+            - generic: PayPal
+            - generic: utility
+          - cell "180.0 KiB":
+            - generic "184,284 bytes": 180.0 KiB
+        - row "/smart/buttons?fundingSource=…(www.paypal.com) 180.0 KiB":
+          - cell "/smart/buttons?fundingSource=…(www.paypal.com)":
+            - link "/smart/buttons?fundingSource=…":
+              - /url: https://www.paypal.com/smart/buttons?fundingSource=paypal&style.label=pay&style.layout=horizontal&style.color=gold&style.shape=sharp&style.tagline=false&style.height=54&style.menuPlacement=below&style.disableMaxWidth=true&style.borderRadius=60&style.shouldApplyRebrandedStyles=false&style.isButtonColorABTestMerchant=false&style.isPayNowOrLaterLabelEligible=false&style.shouldApplyPayNowOrLaterLabel=false&style.requestedButtonColor=gold&style.brandVersion=v1&browser_context=unknown&allowBillingPayments=true&applePaySupport=false&buttonSessionID=uid_653f7282d2_mje6mza6mzy&buttonSize=large&customerId=&clientID=AexZEtAxk09Ncgj6FSWFFyGKbxxAZ_LTyJ2DPdJWl1YUlecinmc5AfIaRF2qYjWlusWahlzz6SVkY5Ci&clientMetadataID=uid_fe42afebce_mje6mza6mzy&commit=false&components.0=buttons&currency=EUR&debug=false&disableSetCookie=true&eagerOrderCreation=false&env=production&experiment.enableVenmo=false&experiment.venmoDesktopQRCodeEnhancements=false&experiment.venmoVaultWithoutPurchase=false&experiment.spbEagerOrderCreation=false&experiment.venmoWebEnabled=false&experiment.isWebViewEnabled=false&experiment.isPaypalRebrandABTestEnabled=false&experiment.defaultBlueButtonColor=defaultBlue_darkBlue&experiment.isEdgeCacheStaleEnabled=false&experiment.isJunoCircuitBreakerEnabled=false&experiment.venmoEnableWebOnNonNativeBrowser=false&experiment.paypalCreditButtonCreateVaultSetupTokenExists=false&experiment.isPaylaterCobrandedLabelEnabled=false&experiment.isPaylaterCobrandedLabelRandomizationEnabled=true&experiment.isBfcacheEnabled=true&experiment.isStaticFallbackBundleEnabled=false&experiment.isForceStaticFallbackBundleEnabled=false&experiment.isPaypalRebrandEnabled=false&flow=purchase&fundingEligibility=eyJwYXlwYWwiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sInBheWxhdGVyIjp7ImVsaWdpYmxlIjpmYWxzZSwidmF1bHRhYmxlIjpmYWxzZSwicHJvZHVjdHMiOnsicGF5SW4zIjp7ImVsaWdpYmxlIjpmYWxzZSwidmFyaWFudCI6bnVsbH0sInBheUluNCI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhcmlhbnQiOm51bGx9LCJwYXlsYXRlciI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhcmlhbnQiOm51bGx9fX0sImNhcmQiOnsiZWxpZ2libGUiOnRydWUsImJyYW5kZWQiOnRydWUsImluc3RhbGxtZW50cyI6ZmFsc2UsInZlbmRvcnMiOnsidmlzYSI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwibWFzdGVyY2FyZCI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiYW1leCI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiZGlzY292ZXIiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sImhpcGVyIjp7ImVsaWdpYmxlIjpmYWxzZSwidmF1bHRhYmxlIjpmYWxzZX0sImVsbyI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6dHJ1ZX0sImpjYiI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwibWFlc3RybyI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiZGluZXJzIjp7ImVsaWdpYmxlIjp0cnVlLCJ2YXVsdGFibGUiOnRydWV9LCJjdXAiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sImNiX25hdGlvbmFsZSI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6dHJ1ZX19LCJndWVzdEVuYWJsZWQiOnRydWV9LCJ2ZW5tbyI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6ZmFsc2V9LCJpdGF1Ijp7ImVsaWdpYmxlIjpmYWxzZX0sImNyZWRpdCI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJhcHBsZXBheSI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJzZXBhIjp7ImVsaWdpYmxlIjpmYWxzZX0sImlkZWFsIjp7ImVsaWdpYmxlIjpmYWxzZX0sImJhbmNvbnRhY3QiOnsiZWxpZ2libGUiOmZhbHNlfSwiZ2lyb3BheSI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJlcHMiOnsiZWxpZ2libGUiOmZhbHNlfSwic29mb3J0Ijp7ImVsaWdpYmxlIjpmYWxzZX0sIm15YmFuayI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJwMjQiOnsiZWxpZ2libGUiOmZhbHNlfSwid2VjaGF0cGF5Ijp7ImVsaWdpYmxlIjpmYWxzZX0sInBheXUiOnsiZWxpZ2libGUiOmZhbHNlfSwiYmxpayI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJ0cnVzdGx5Ijp7ImVsaWdpYmxlIjpmYWxzZX0sIm94eG8iOnsiZWxpZ2libGUiOmZhbHNlfSwiYm9sZXRvIjp7ImVsaWdpYmxlIjpmYWxzZX0sImJvbGV0b2JhbmNhcmlvIjp7ImVsaWdpYmxlIjpmYWxzZX0sIm1lcmNhZG9wYWdvIjp7ImVsaWdpYmxlIjpmYWxzZX0sIm11bHRpYmFuY28iOnsiZWxpZ2libGUiOmZhbHNlfSwic2F0aXNwYXkiOnsiZWxpZ2libGUiOmZhbHNlfSwicGFpZHkiOnsiZWxpZ2libGUiOmZhbHNlfX0&intent=authorize&locale.lang=en&locale.country=US&merchantID.0=Z58HJUPVZJV3C&hasShippingCallback=false&platform=mobile&renderedButtons.0=paypal&sessionID=uid_fe42afebce_mje6mza6mzy&sdkCorrelationID=prebuild&sdkMeta=eyJ1cmwiOiJodHRwczovL3d3dy5wYXlwYWwuY29tL3Nkay9qcz9jb21wb25lbnRzPWJ1dHRvbnMmY29tbWl0PWZhbHNlJmN1cnJlbmN5PUVVUiZsb2NhbGU9ZW5fVVMmY2xpZW50LWlkPUFleFpFdEF4azA5TmNnajZGU1dGRnlHS2J4eEFaX0xUeUoyRFBkSldsMVlVbGVjaW5tYzVBZklhUkYycVlqV2x1c1dhaGx6ejZTVmtZNUNpJm1lcmNoYW50LWlkPVo1OEhKVVBWWkpWM0MmaW50ZW50PWF1dGhvcml6ZSIsImF0dHJzIjp7ImRhdGEtdWlkIjoidWlkX3RhcXZua3N5Z254emJ5ZWdhbGRnZWx2YnZmcGJybyJ9fQ&sdkVersion=5.0.570&storageID=uid_42b7d55a67_mje6mza6mzy&buttonColor.shouldApplyRebrandedStyles=false&buttonColor.color=gold&buttonColor.isButtonColorABTestMerchant=false&buttonColor.brandVersion=v1&supportedNativeBrowser=true&supportedNativeVenmoBrowser=true&supportsPopups=true&supportsVenmoPopups=true&vault=false&userAgent=Mozilla%2F5.0%20(Linux%3B%20Android%2011%3B%20moto%20g%20power%20(2022))%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F151.0.0.0%20Mobile%20Safari%2F537.36
+            - text: (www.paypal.com)
+          - cell "180.0 KiB":
+            - generic "184,284 bytes": 180.0 KiB
+    - generic "Avoid long main-thread tasks —16 long tasks found":
+      - generic: Avoid long main-thread tasks
+      - text: —16 long tasks found
+    - generic "User Timing marks and measures —16 user timings":
+      - generic: User Timing marks and measures
+      - text: —16 user timings
+    - generic "Avoid non-composited animations —2 animated elements found":
+      - generic: Avoid non-composited animations
+      - text: —2 animated elements found
+    - text: More information about the performance of your application. These numbers don't
+    - link "directly affect":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: the Performance score.
+    - generic "Passed audits (5) Show":
+      - generic: Passed audits (5)
+      - generic: Show
+    - heading "94 Accessibility" [level=2]:
+      - generic: "94"
+      - generic: Accessibility
+    - text: These checks highlight opportunities to
+    - link "improve the accessibility of your web app":
+      - /url: https://developer.chrome.com/docs/lighthouse/accessibility/?utm_source=lighthouse&utm_medium=lr
+    - text: . Automatic detection can only detect a subset of issues and does not guarantee the accessibility of your web app, so
+    - link "manual testing":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: is also encouraged.
+    - generic: Contrast
+    - generic "Background and foreground colors do not have a sufficient contrast ratio.":
+      - generic: Background and foreground colors do not have a sufficient contrast ratio.
+    - generic: These are opportunities to improve the legibility of your content.
+    - generic: Best practices
+    - generic "Touch targets do not have sufficient size or spacing.":
+      - generic: Touch targets do not have sufficient size or spacing.
+    - generic: These items highlight common accessibility best practices.
+    - generic: Names and labels
+    - generic "Image elements do not have [alt] attributes that are redundant text.":
+      - text: Image elements do not have
+      - code: "[alt]"
+      - text: attributes that are redundant text.
+    - generic: These are opportunities to improve the semantics of the controls in your application. This may enhance the experience for users of assistive technology, like a screen reader.
+    - generic "Additional items to manually check (10) Show":
+      - generic: Additional items to manually check (10)
+      - generic: Show
+    - text: These items address areas which an automated testing tool cannot cover. Learn more in our guide on
+    - link "conducting an accessibility review":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "Passed audits (33) Show":
+      - generic: Passed audits (33)
+      - generic: Show
+    - generic "Not applicable (27) Show":
+      - generic: Not applicable (27)
+      - generic: Show
+    - heading "92 Best Practices" [level=2]:
+      - generic: "92"
+      - generic: Best Practices
+    - generic: General
+    - generic "Browser errors were logged to the console":
+      - generic: Browser errors were logged to the console
+    - generic "Issues were logged in the Issues panel in Chrome Devtools":
+      - text: Issues were logged in the
+      - code: Issues
+      - text: panel in Chrome Devtools
+    - generic "Detected JavaScript libraries":
+      - generic: Detected JavaScript libraries
+    - generic: Trust and Safety
+    - generic "Ensure CSP is effective against XSS attacks":
+      - generic: Ensure CSP is effective against XSS attacks
+    - generic "Use a strong HSTS policy":
+      - generic: Use a strong HSTS policy
+    - generic "Ensure proper origin isolation with COOP":
+      - generic: Ensure proper origin isolation with COOP
+    - generic "Mitigate DOM-based XSS with Trusted Types":
+      - generic: Mitigate DOM-based XSS with Trusted Types
+    - generic: Browser Compatibility
+    - generic "Baseline Features":
+      - generic: Baseline Features
+    - generic "Passed audits (11) Show":
+      - generic: Passed audits (11)
+      - generic: Show
+    - generic "Not applicable (2) Show":
+      - generic: Not applicable (2)
+      - generic: Show
+    - heading "100 SEO" [level=2]:
+      - generic: "100"
+      - generic: SEO
+    - text: These checks ensure that your page is following basic search engine optimization advice. There are many additional factors Lighthouse does not score here that may affect your search ranking, including performance on
+    - link "Core Web Vitals":
+      - /url: https://web.dev/explore/vitals?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - link "Learn more about Google Search Essentials":
+      - /url: https://support.google.com/webmasters/answer/35769
+    - text: .
+    - generic "Additional items to manually check (1) Hide":
+      - generic: Additional items to manually check (1)
+      - generic: Hide
+    - generic "Structured data is valid":
+      - generic: Structured data is valid
+    - generic: Run these additional validators on your site to check additional SEO best practices.
+    - generic "Passed audits (10) Show":
+      - generic: Passed audits (10)
+      - generic: Show
+    - heading "4/4 Agentic Browsing" [level=2]:
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: These checks ensure high-quality,
+    - link "browsable websites for AI agents":
+      - /url: https://goo.gle/lighthouse-agentic-web
+    - text: and validate the correctness of WebMCP integrations. This category is still under development and subject to change.
+    - generic: WebMCP
+    - generic "WebMCP form coverage —12 forms missing annotations":
+      - generic: WebMCP form coverage
+      - text: —12 forms missing annotations
+    - generic "WebMCP tools registered":
+      - generic: WebMCP tools registered
+    - generic: Audits validating WebMCP integration.
+    - generic "Passed audits (4) Show":
+      - generic: Passed audits (4)
+      - generic: Show
+    - text: — —
+- contentinfo:
+  - generic: More on PageSpeed Insights
+  - link "What's new":
+    - /url: https://developers.google.com/speed/docs/insights/release_notes
+  - link "Documentation":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+  - link "Learn about Web Performance":
+    - /url: https://developers.google.com/speed
+  - link "Ask questions on Stack Overflow":
+    - /url: https://stackoverflow.com/questions/tagged/pagespeed-insights
+  - link "Mailing list":
+    - /url: https://groups.google.com/g/pagespeed-insights-discuss
+  - generic: Related Content
+  - link "Updates":
+    - /url: https://developer.chrome.com/blog
+  - link "Web Fundamentals":
+    - /url: https://developers.google.com/focus/web-development
+  - link "Case Studies":
+    - /url: https://web.dev/case-studies
+  - link "Podcasts":
+    - /url: https://web.dev/shows
+  - generic: Connect
+  - link "Twitter":
+    - /url: https://twitter.com/ChromiumDev
+  - link "Youtube":
+    - /url: https://www.youtube.com/user/ChromeDevelopers
+  - link "Google Developers Logo":
+    - /url: https://developers.google.com/
+    - img "Google Developers Logo"
+  - link "Chrome":
+    - /url: https://developer.chrome.com/
+  - link "Firebase":
+    - /url: https://firebase.google.com/
+  - link "All products":
+    - /url: https://developers.google.com/products/
+  - link "Terms and Privacy Policy":
+    - /url: https://policies.google.com/
+  - text: For details, see the
+  - link "Google Developers Site Policies":
+    - /url: https://developers.google.com/terms/site-policies
+  - text: .

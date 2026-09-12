@@ -1,3 +1,5 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Stock Import Service — IM.1
  *
@@ -178,14 +180,15 @@ interface ResolutionIndex {
 // per import. A short-TTL cache makes the second build free while keeping
 // staleness bounded; alias writes invalidate it explicitly.
 const RESOLUTION_INDEX_TTL_MS = 30 * 1000
-let cachedIndex: { index: ResolutionIndex; builtAt: number } | null = null
+const resolutionIndexes = new WorkspaceCache<string, { index: ResolutionIndex; builtAt: number }>()
 
 export function invalidateResolutionIndex(): void {
-  cachedIndex = null
+  resolutionIndexes.delete('catalog')
 }
 
 async function buildResolutionIndex(): Promise<ResolutionIndex> {
   const now = Date.now()
+  const cachedIndex = resolutionIndexes.get('catalog')
   if (cachedIndex && now - cachedIndex.builtAt < RESOLUTION_INDEX_TTL_MS) {
     return cachedIndex.index
   }
@@ -242,7 +245,7 @@ async function buildResolutionIndex(): Promise<ResolutionIndex> {
   }
 
   const index: ResolutionIndex = { products, bySku, bySkuLower, byEan, byUpc, byAlias, byChannelId, productById }
-  cachedIndex = { index, builtAt: now }
+  resolutionIndexes.set('catalog', { index, builtAt: now })
   return index
 }
 
@@ -374,7 +377,7 @@ export async function previewImport(opts: {
   const { rows, locationCode, mode, target } = opts
 
   const location = await prisma.stockLocation.findUnique({
-    where: { code: locationCode },
+    where: { workspace_code: workspaceKey({ code: locationCode }) },
     select: { id: true, type: true, code: true },
   })
   if (!location) throw new Error(`Location ${locationCode} not found`)
@@ -725,7 +728,7 @@ export async function beginApplyImport(
   const { rows, locationCode, mode, target, filename, fileKind, pinOverride = false, onProgress, shouldAbort, actor } = opts
 
   const location = await prisma.stockLocation.findUnique({
-    where: { code: locationCode },
+    where: { workspace_code: workspaceKey({ code: locationCode }) },
     select: { id: true, type: true },
   })
   if (!location) throw new Error(`Location ${locationCode} not found`)
@@ -2039,7 +2042,7 @@ export async function bulkCreateAliases(
     if (!alias) continue
     try {
       await prisma.skuAlias.upsert({
-        where: { alias },
+        where: { workspace_alias: workspaceKey({ alias: alias }) },
         create: { alias, raw: e.raw, productId: e.productId, source: e.source ?? 'IMPORT' },
         update: { productId: e.productId, source: e.source ?? 'IMPORT' },
       })

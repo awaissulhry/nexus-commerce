@@ -1,0 +1,5 @@
+.business-settings-form { max-width: 720px; display: grid; gap: var(--nds-space-20); padding-bottom: calc(var(--nds-space-48) * 2); }
+.business-settings-fields { display: grid; gap: var(--nds-space-16); }
+.business-settings-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-16); }
+.business-settings-actions { display: flex; justify-content: flex-end; gap: var(--nds-space-8); flex-wrap: wrap; }
+@media (max-width: 480px) { .business-settings-pair { grid-template-columns: minmax(0, 1fr); } }

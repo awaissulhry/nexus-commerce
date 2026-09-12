@@ -42,7 +42,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, Loader2, ShieldAlert, X } from 'lucide-react'
 import { Button, Input, Select, ToolbarButton } from '@/design-system/primitives'

@@ -69,6 +69,8 @@ export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash'
 /** Anthropic (Claude). USD per 1M tokens. */
 export const ANTHROPIC_RATES: Record<string, RateCard> = {
   'claude-fable-5': { inputPer1M: 10.0, outputPer1M: 50.0 },
+  'claude-opus-5': { inputPer1M: 5.0, outputPer1M: 25.0 },
+  'claude-sonnet-5': { inputPer1M: 2.0, outputPer1M: 10.0 },
   'claude-opus-4-8': { inputPer1M: 5.0, outputPer1M: 25.0 },
   'claude-opus-4-7': { inputPer1M: 5.0, outputPer1M: 25.0 },
   'claude-opus-4-6': { inputPer1M: 5.0, outputPer1M: 25.0 },

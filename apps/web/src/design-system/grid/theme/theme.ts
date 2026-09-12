@@ -101,6 +101,11 @@ export const workspaceGridTheme = themeQuartz
     // --- controls ---
     accentColor: 'var(--nds-grid-accent)',
     borderRadius: 'var(--nds-grid-radius)',
+    // Elevation for AG's own popups (rich select, menus). AG's default is
+    // `rgba(0,0,0,.094) 0 1px 4px 1px` — its own, not a DS token — which made the rich select read
+    // as a different product from every DS popup beside it. `--nds-shadow-menu` is byte-for-byte
+    // what the DS `Listbox` paints (measured 2026-09-02, DS.1 under PES.2's claim, ruling #219).
+    popupShadow: 'var(--nds-shadow-menu)',
     checkboxBorderRadius: 'var(--nds-grid-checkbox-radius)',
     rangeSelectionBorderColor: 'var(--nds-grid-accent)',
 

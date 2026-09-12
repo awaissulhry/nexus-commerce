@@ -18,7 +18,8 @@
  * enforce, never a client-side approximation of them.
  */
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Info, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button, SegmentedControl } from '@/design-system/primitives'
 import '../builder-ds.css'

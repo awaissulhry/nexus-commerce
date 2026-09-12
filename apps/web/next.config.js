@@ -6,6 +6,8 @@ const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rul
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Preserve the profile URL and origin while middleware rewrites the page tree.
+  skipProxyUrlNormalize: process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1',
   // Local-dev build-dir isolation. When several sessions edit this app at once,
   // any `git push` runs the pre-push hook's `rm -rf .next && next build`, which
   // nukes a running `next dev`'s build dir → 500s on the shared preview. Running
@@ -79,7 +81,10 @@ const nextConfig = {
       : {}),
   },
   async redirects() {
-    return [
+    const redirects = [
+      // The rebuilt catalog now owns /products. Next preserves query parameters,
+      // and the workspace expansion below preserves the active business profile.
+      { source: '/products/next', destination: '/products', permanent: true },
       // ── RA.SPINE S3 — one derived rule, replacing six hand-written copies ──────────────────
       //
       // `RulesAutomationClient.tsx:99` resolves an unknown OR ROUTED `?tab=` to 'rules'. So the
@@ -238,6 +243,12 @@ const nextConfig = {
       { source: '/marketing/ads/fleet', destination: '/fleet', permanent: true },
       { source: '/marketing/ads/fleet/:path*', destination: '/fleet/:path*', permanent: true },
     ];
+    // Config redirects run before the workspace rewrite. Keep legacy bookmarks
+    // and routed tabs working with their original business context.
+    if (process.env.NEXT_PUBLIC_WORKSPACES_ENABLED !== '1') return redirects;
+    return [...redirects, ...redirects.filter(rule => rule.source.startsWith('/') && rule.destination.startsWith('/') && !rule.destination.startsWith('//')).map(rule => ({
+      ...rule, source: `/w/:workspaceId${rule.source}`, destination: `/w/:workspaceId${rule.destination}`,
+    }))];
   },
 };
 

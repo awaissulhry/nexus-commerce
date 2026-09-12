@@ -23,7 +23,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Loader2, DollarSign, ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'

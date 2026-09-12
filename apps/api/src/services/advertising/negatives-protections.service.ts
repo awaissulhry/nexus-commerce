@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NEG.5 — protected terms: what can never be negated, and what already is in spite of that.
  *
@@ -537,7 +538,7 @@ export async function markReview(req: MarkReviewRequest): Promise<{ ok: true; co
   }
 
   await prisma.adNegativeReview.upsert({
-    where: { protectedTerm_campaignId: { protectedTerm: term, campaignId: req.campaignId } },
+    where: { protectedTerm_campaignId: workspaceKey({ protectedTerm: term, campaignId: req.campaignId }) },
     create: {
       protectedTerm: term, campaignId: req.campaignId, decision: DECISION_INTENDED_FUNNEL,
       reason: req.reason?.trim() || null, reviewedBy: req.reviewedBy,

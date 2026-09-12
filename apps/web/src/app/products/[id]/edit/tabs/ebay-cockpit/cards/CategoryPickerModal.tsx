@@ -23,7 +23,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Search, Sparkles, Globe2, X, ArrowRight, Loader2 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 

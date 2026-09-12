@@ -7,7 +7,8 @@
 // unified across types.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   PackageCheck, Plus, RefreshCw, Truck, X, Search,
   ArrowDownToLine, ChevronRight,
@@ -26,7 +27,7 @@ import {
   type Density,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'

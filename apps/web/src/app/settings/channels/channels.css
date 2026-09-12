@@ -15,6 +15,12 @@
   min-width: 0;
 }
 
+.nds-account-profile-form {
+  display: grid;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
 /* Connect cards */
 .nds-connect-facts {
   display: grid;

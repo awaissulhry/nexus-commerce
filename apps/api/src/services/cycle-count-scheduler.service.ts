@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * S.17 — ABC-driven recurring cycle-count scheduler.
  *
@@ -167,9 +168,9 @@ export async function scheduleAutoCount(args: {
   const startedAt = Date.now()
   const code = args.locationCode ?? 'IT-MAIN'
   const location = await prisma.stockLocation.findUnique({
-    where: { code },
+    where: { workspace_code: workspaceKey({ code: code }) },
     select: { id: true, code: true },
-  })
+  }) ?? (args.locationCode ? null : await (await import('./default-stock-location.js')).defaultStockLocation())
   if (!location) throw new Error(`scheduleAutoCount: location ${code} not found`)
   const cadence = args.cadence ?? getCadenceConfig()
 

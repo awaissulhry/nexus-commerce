@@ -21,6 +21,7 @@
 
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
+import { lockCategoryTree } from './category-lock.js'
 import { productEventService, type EventSource } from './product-event.service.js'
 
 /** Thrown for operator-correctable conditions; routes map .status → HTTP. */
@@ -67,11 +68,25 @@ type CategoryNode = {
 }
 
 export class CategoryTreeService {
+  constructor(private readonly db: Prisma.TransactionClient | typeof prisma = prisma) {}
+
+  private transaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return '$transaction' in this.db ? this.db.$transaction(work, { maxWait: 10_000, timeout: 30_000 }) : work(this.db)
+  }
+
+  /** All tree writes, including legacy routes, share one business-scoped lock. */
+  async withLock<T>(work: (service: CategoryTreeService, tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
+    return this.transaction(async tx => {
+      await lockCategoryTree(tx)
+      return work(new CategoryTreeService(tx), tx)
+    })
+  }
+
   // ── Reads ────────────────────────────────────────────────────────────
 
   /** Full tree as nested nodes, sorted by (depth, sortOrder, slug). */
   async tree(opts: { activeOnly?: boolean } = {}): Promise<CategoryNode[]> {
-    const rows = await prisma.category.findMany({
+    const rows = await this.db.category.findMany({
       where: opts.activeOnly ? { isActive: true } : undefined,
       orderBy: [{ depth: 'asc' }, { sortOrder: 'asc' }, { slug: 'asc' }],
       select: {
@@ -102,7 +117,7 @@ export class CategoryTreeService {
 
   /** Ancestor chain of a node, root→leaf (includes the node itself). */
   async breadcrumb(categoryId: string) {
-    const rows = await prisma.categoryClosure.findMany({
+    const rows = await this.db.categoryClosure.findMany({
       where: { descendantId: categoryId },
       orderBy: { depth: 'desc' },
       select: {
@@ -117,7 +132,7 @@ export class CategoryTreeService {
 
   /** All descendant category ids (includes self). */
   async descendantIds(categoryId: string): Promise<string[]> {
-    const rows = await prisma.categoryClosure.findMany({
+    const rows = await this.db.categoryClosure.findMany({
       where: { ancestorId: categoryId },
       select: { descendantId: true },
     })
@@ -127,19 +142,21 @@ export class CategoryTreeService {
   // ── Writes ───────────────────────────────────────────────────────────
 
   async create(input: CreateCategoryInput) {
+    if ('$transaction' in this.db) return this.withLock(service => service.create(input))
     const parentId = input.parentId ?? null
     let parentDepth = -1
     if (parentId) {
-      const parent = await prisma.category.findUnique({
+      const parent = await this.db.category.findUnique({
         where: { id: parentId },
         select: { depth: true },
       })
       if (!parent) throw new CategoryTreeError('Parent category not found', 404)
       parentDepth = parent.depth
     }
+    if (await this.db.category.findFirst({ where: { parentId, slug: input.slug }, select: { id: true } })) throw new CategoryTreeError('A sibling category with that URL key already exists', 409)
     const depth = parentDepth + 1
 
-    return prisma.$transaction(async (tx) => {
+    return this.transaction(async (tx) => {
       const node = await tx.category.create({
         data: {
           parentId,
@@ -166,12 +183,14 @@ export class CategoryTreeService {
   }
 
   async update(categoryId: string, patch: UpdateCategoryInput) {
-    const exists = await prisma.category.findUnique({
+    if ('$transaction' in this.db) return this.withLock(service => service.update(categoryId, patch))
+    const exists = await this.db.category.findUnique({
       where: { id: categoryId },
-      select: { id: true },
+      select: { id: true, parentId: true },
     })
     if (!exists) throw new CategoryTreeError('Category not found', 404)
-    return prisma.category.update({
+    if (patch.slug && await this.db.category.findFirst({ where: { parentId: exists.parentId, slug: patch.slug, id: { not: categoryId } }, select: { id: true } })) throw new CategoryTreeError('A sibling category with that URL key already exists', 409)
+    return this.db.category.update({
       where: { id: categoryId },
       data: {
         ...(patch.slug !== undefined ? { slug: patch.slug } : {}),
@@ -197,18 +216,26 @@ export class CategoryTreeService {
    *   3. Recompute depth on the moved subtree + update Category.parentId.
    */
   async move(categoryId: string, newParentId: string | null) {
+    if ('$transaction' in this.db) return this.withLock(async (service, tx) => {
+      const { categoryDirectory, categoryChangeImpact } = await import('./taxonomy/category-workspace.js')
+      const directory = await categoryDirectory(tx)
+      const impact = await categoryChangeImpact({ action: 'move', id: categoryId, parentId: newParentId, expectedToken: directory.token }, tx)
+      if (impact.blocked) throw new CategoryTreeError(impact.blocked, 409)
+      return service.move(categoryId, newParentId)
+    })
     if (categoryId === newParentId) {
       throw new CategoryTreeError('A category cannot be its own parent')
     }
-    const node = await prisma.category.findUnique({
+    const node = await this.db.category.findUnique({
       where: { id: categoryId },
-      select: { id: true, parentId: true },
+      select: { id: true, parentId: true, slug: true },
     })
     if (!node) throw new CategoryTreeError('Category not found', 404)
+    if (await this.db.category.findFirst({ where: { parentId: newParentId, slug: node.slug, id: { not: categoryId } }, select: { id: true } })) throw new CategoryTreeError('The destination already has a category with that URL key', 409)
 
     let newParentDepth = -1
     if (newParentId) {
-      const parent = await prisma.category.findUnique({
+      const parent = await this.db.category.findUnique({
         where: { id: newParentId },
         select: { depth: true },
       })
@@ -223,7 +250,7 @@ export class CategoryTreeService {
       newParentDepth = parent.depth
     }
 
-    await prisma.$transaction(async (tx) => {
+    await this.transaction(async (tx) => {
       // 1. Sever old cross-boundary links (old ancestors → subtree).
       await tx.$executeRaw`
         DELETE FROM "CategoryClosure"
@@ -269,11 +296,12 @@ export class CategoryTreeService {
    * ProductCategory rows would otherwise cascade-delete silently).
    */
   async remove(categoryId: string) {
-    const node = await prisma.category.findUnique({
+    if ('$transaction' in this.db) return this.withLock(service => service.remove(categoryId))
+    const node = await this.db.category.findUnique({
       where: { id: categoryId },
       select: {
         id: true,
-        _count: { select: { children: true, products: true } },
+        _count: { select: { children: true, products: true, channelMappings: true } },
       },
     })
     if (!node) throw new CategoryTreeError('Category not found', 404)
@@ -289,8 +317,9 @@ export class CategoryTreeService {
         409,
       )
     }
+    if (node._count.channelMappings > 0) throw new CategoryTreeError('Remove this category’s channel assignments through a mapping review first', 409)
     // Closure rows (self + the single parent link) cascade on delete.
-    await prisma.category.delete({ where: { id: categoryId } })
+    await this.db.category.delete({ where: { id: categoryId } })
   }
 
   // ── Product membership ────────────────────────────────────────────────
@@ -305,22 +334,30 @@ export class CategoryTreeService {
     categoryIds: string[],
     opts: { primaryId?: string | null; source?: EventSource; userId?: string | null } = {},
   ) {
+    if ('$transaction' in this.db) {
+      const result = await this.withLock(service => service.assign(productId, categoryIds, opts))
+      productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { categories: result.categoryIds, primaryCategoryId: result.primaryCategoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
+      return result
+    }
     const unique = Array.from(new Set(categoryIds))
     if (unique.length === 0) {
       throw new CategoryTreeError('At least one categoryId is required')
     }
-    const found = await prisma.category.count({
+    const found = await this.db.category.count({
       where: { id: { in: unique } },
     })
     if (found !== unique.length) {
       throw new CategoryTreeError('One or more categories do not exist', 404)
     }
+    if (opts.primaryId && !unique.includes(opts.primaryId)) throw new CategoryTreeError('The primary category must be part of the selected categories')
     const primaryId =
       opts.primaryId && unique.includes(opts.primaryId)
         ? opts.primaryId
         : unique[0]
 
-    await prisma.$transaction(async (tx) => {
+    await this.transaction(async (tx) => {
+      const changed = await tx.product.updateMany({ where: { id: productId, deletedAt: null }, data: { version: { increment: 1 } } })
+      if (changed.count !== 1) throw new CategoryTreeError('Product not found', 404)
       await tx.productCategory.deleteMany({ where: { productId } })
       await tx.productCategory.createMany({
         data: unique.map((categoryId) => ({
@@ -331,7 +368,7 @@ export class CategoryTreeService {
       })
     })
 
-    await productEventService.emit({
+    await productEventService.emitTx(this.db, {
       aggregateId: productId,
       aggregateType: 'Product',
       eventType: 'PRODUCT_UPDATED',
@@ -348,19 +385,26 @@ export class CategoryTreeService {
     categoryId: string,
     opts: { source?: EventSource; userId?: string | null } = {},
   ) {
-    const deleted = await prisma.productCategory.deleteMany({
+    if ('$transaction' in this.db) {
+      const result = await this.withLock(service => service.unassign(productId, categoryId, opts))
+      if (result.removed) productEventService.notifyCommitted({ aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED', data: { unassignedCategory: categoryId }, metadata: { source: opts.source ?? 'OPERATOR', userId: opts.userId ?? null } })
+      return result
+    }
+    const deleted = await this.db.productCategory.deleteMany({
       where: { productId, categoryId },
     })
     if (deleted.count === 0) return { productId, categoryId, removed: false }
+    const changed = await this.db.product.updateMany({ where: { id: productId, deletedAt: null }, data: { version: { increment: 1 } } })
+    if (changed.count !== 1) throw new CategoryTreeError('Product not found', 404)
 
     // If we removed the primary, promote the lowest-id remaining membership.
-    const remaining = await prisma.productCategory.findMany({
+    const remaining = await this.db.productCategory.findMany({
       where: { productId },
       orderBy: { categoryId: 'asc' },
       select: { categoryId: true, isPrimary: true },
     })
     if (remaining.length > 0 && !remaining.some((r) => r.isPrimary)) {
-      await prisma.productCategory.update({
+      await this.db.productCategory.update({
         where: {
           productId_categoryId: { productId, categoryId: remaining[0].categoryId },
         },
@@ -368,7 +412,7 @@ export class CategoryTreeService {
       })
     }
 
-    await productEventService.emit({
+    await productEventService.emitTx(this.db, {
       aggregateId: productId,
       aggregateType: 'Product',
       eventType: 'PRODUCT_UPDATED',

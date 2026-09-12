@@ -452,10 +452,10 @@ let task: ReturnType<typeof cron.schedule> | null = null
 let running = false // overlap guard
 export function startBudgetScheduleCron(): void {
   if (task) return
-  task = cron.schedule('*/15 * * * *', () => {
-    if (running) { logger.warn('[ad-budget-schedule] previous tick still in flight — skipping'); return }
+  task = cron.schedule('*/15 * * * *', async () => {
+    if (running) { await logger.warn('[ad-budget-schedule] previous tick still in flight — skipping'); return }
     running = true
-    void runBudgetScheduleCron().finally(() => { running = false })
+    await runBudgetScheduleCron().finally(() => { running = false })
   })
   logger.info('ad-budget-schedule cron scheduled (*/15 * * * *)')
 }

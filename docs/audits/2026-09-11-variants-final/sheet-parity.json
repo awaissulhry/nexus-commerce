@@ -1,0 +1,45 @@
+{
+  "at": "2026-09-11T23:06:22.247Z",
+  "product": "cmokmy3a40078pm0p1fvnu523",
+  "market": "IT",
+  "locale": "it",
+  "coordinates": [
+    {
+      "channel": "master",
+      "rows": 21
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "aliasKey": "",
+      "rows": 21,
+      "axes": 0
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "accountId": "cmr4aaqb00025nz016k18rup9",
+      "aliasKey": "",
+      "rows": 21,
+      "axes": 2
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "accountId": "cmtugfpaa0006njhq8m2nvnxx",
+      "aliasKey": "",
+      "rows": 21,
+      "axes": 0
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "accountId": "cmtvy3wta00fjnjpxl22lly3k",
+      "aliasKey": "",
+      "rows": 21,
+      "axes": 0
+    }
+  ],
+  "failures": []
+}

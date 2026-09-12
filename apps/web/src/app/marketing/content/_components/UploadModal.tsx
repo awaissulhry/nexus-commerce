@@ -282,7 +282,7 @@ export default function UploadModal({
         fd.append('file', item.file, item.filename)
         if (folderId) fd.append('folderId', folderId)
         const res = await xhrUpload({
-          url: `${apiBase}/api/assets/upload`,
+          url: `${apiBase}/api/assets/upload?source=nexus`,
           body: fd,
           onProgress,
         })

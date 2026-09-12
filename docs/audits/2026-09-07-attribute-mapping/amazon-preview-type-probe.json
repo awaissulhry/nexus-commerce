@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-09-07T16:07:18.702Z",
+  "listingWrites": 0,
+  "probe": "Brand patch with numeric value 123",
+  "result": {
+    "available": true,
+    "blocked": false,
+    "status": "VALID",
+    "issues": [],
+    "errors": null,
+    "mode": "VALIDATION_PREVIEW"
+  },
+  "conclusion": "Amazon returned VALID for this type probe. Remote preview alone cannot certify local schema/type correctness; local schema validation remains required."
+}

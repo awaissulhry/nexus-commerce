@@ -36,7 +36,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Search, Sun, Moon, Monitor } from 'lucide-react'
 import { useTheme } from '@/lib/theme/use-theme'
 import NotificationsBell from '@/components/NotificationsBell'
@@ -86,6 +86,9 @@ export function AppTopBar() {
       <div className="nds-topbar-context" />
 
       <div className="nds-topbar-search">
+        <span className="nds-topbar-search-compact">
+          <ToolbarButton icon={<Search size={16} />} label="Search — opens the command palette" onClick={openCommandPalette} />
+        </span>
         {/* DS SearchTrigger — it owns the focus dance that made the palette open UNFOCUSED, and
             the placeholder-as-label contrast. Both were bugs here first; they belong in the DS so
             the next consumer cannot reintroduce them. */}

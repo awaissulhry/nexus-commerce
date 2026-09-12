@@ -1,0 +1,104 @@
+{
+  "at": "2026-09-11T20:52:34.483Z",
+  "database": {
+    "name": "nexus_development",
+    "address": "172.17.0.3/32"
+  },
+  "parent": {
+    "id": "cmokmy3a40078pm0p1fvnu523",
+    "sku": "GALE-JACKET",
+    "version": 55
+  },
+  "products": [
+    {
+      "id": "cmokmy0mm000bpm0pm7k7eke4",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "status": "ACTIVE",
+      "version": 1,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "XS",
+        "Color": "Nero",
+        "variantAttributes": "[object Object]"
+      },
+      "categoryAttributes": {
+        "variations": {
+          "variantAttributes": "[object Object]"
+        }
+      }
+    },
+    {
+      "id": "cmtxfldam000anjl2mdym1ydc",
+      "sku": "GALE-JACKET-VPF-GIALLO-VPF",
+      "status": "DRAFT",
+      "version": 1,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF",
+        "Color": "Giallo"
+      },
+      "categoryAttributes": {
+        "armorType": null,
+        "variations": {
+          "Size": "VPF",
+          "Color": "Giallo"
+        },
+        "waterproofRating": null
+      }
+    },
+    {
+      "id": "cmtxfld9x0008njl2fv0j2h0g",
+      "sku": "GALE-JACKET-VPF-NERO-VPF",
+      "status": "DRAFT",
+      "version": 2,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF",
+        "Color": "Rosso VPF",
+        "Colore": "Rosso VPF"
+      },
+      "categoryAttributes": {
+        "color": "Rosso VPF",
+        "armorType": null,
+        "item_name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "variations": {
+          "Size": "VPF",
+          "Color": "Rosso VPF",
+          "Colore": "Rosso VPF"
+        },
+        "weave_type": null,
+        "waterproofRating": null,
+        "handmade_classification": null,
+        "recommended_browse_nodes": "2420941031"
+      }
+    },
+    {
+      "id": "cmokmy0qp000lpm0p2yxw35ku",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "status": "ACTIVE",
+      "version": 1,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "XS",
+        "Color": "Giallo",
+        "variantAttributes": "[object Object]"
+      },
+      "categoryAttributes": {
+        "variations": {
+          "variantAttributes": "[object Object]"
+        }
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+      "listings": 21
+    }
+  ],
+  "fixtureListings": []
+}

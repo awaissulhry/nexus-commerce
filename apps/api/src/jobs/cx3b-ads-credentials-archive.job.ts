@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CX.3b step C — remove the eight redundant copies of a live secret.
  *
@@ -80,7 +81,7 @@ export async function runAdsCredentialsArchive(): Promise<string> {
         continue
       }
       await prisma.amazonAdsConnection.update({
-        where: { profileId: row.profileId },
+        where: { workspace_profileId: workspaceKey({ profileId: row.profileId }) },
         data: { credentialsEncrypted: null },
       })
       archived++
@@ -115,7 +116,7 @@ export async function runAdsCredentialsRestore(): Promise<string> {
     const blob = encryptSecret(JSON.stringify(core.secret))
     for (const row of rows) {
       await prisma.amazonAdsConnection.update({
-        where: { profileId: row.profileId },
+        where: { workspace_profileId: workspaceKey({ profileId: row.profileId }) },
         data: { credentialsEncrypted: blob },
       })
     }

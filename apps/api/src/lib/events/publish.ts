@@ -27,6 +27,7 @@ import {
 } from '@nexus/events'
 import { correlationForPublish } from './correlation.js'
 import { notifyPublished } from './relay.js'
+import { workspaceIdForQuery } from '../workspace-context.js'
 
 /**
  * Structural type so this accepts PrismaClient or a TransactionClient without
@@ -71,6 +72,7 @@ export function buildEnvelope<T extends EventType>(
     version: definition.version,
     occurredAt: (options.occurredAt ?? new Date()).toISOString(),
     accountId: options.accountId ?? null,
+    workspaceId: workspaceIdForQuery(),
     subject: deriveSubject(type, validated),
     correlationId: options.correlationId ?? ambient.correlationId,
     causationId: options.causationId ?? ambient.causationId,
@@ -82,6 +84,7 @@ export function buildEnvelope<T extends EventType>(
 function toRow(envelope: EventEnvelope): Record<string, unknown> {
   return {
     eventId: envelope.id,
+    workspaceId: envelope.workspaceId,
     type: envelope.type,
     version: envelope.version,
     context: getEventDefinition(envelope.type).context,

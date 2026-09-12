@@ -1,0 +1,268 @@
+[
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      58,
+      68,
+      82
+    ],
+    "ratio": 9.87,
+    "text": "Excluded0"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      58,
+      68,
+      82
+    ],
+    "ratio": 9.87,
+    "text": "Pinned valuesPinned2"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      58,
+      68,
+      82
+    ],
+    "ratio": 9.87,
+    "text": "Mapping errorsMapping0"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "Variation specifics2 of 5 used"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Each shared axis becomes one eBay specific. Drag to set the order buye"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "Colore"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "Taglia"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "ValuesOrder values"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Specific values follow the shared axis values. Pin a different value o"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Colore · 2 values · same as shared · 20 included"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Taglia value"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "On eBay"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Included"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "XS"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "XXS"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "2"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "Other values — same as shared · 18 included"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      28,
+      37,
+      48
+    ],
+    "ratio": 15.48,
+    "text": "Listing split"
+  },
+  {
+    "bg": [
+      255,
+      255,
+      255
+    ],
+    "fg": [
+      91,
+      101,
+      115
+    ],
+    "ratio": 5.91,
+    "text": "How this family lands on eBay. Limits: 250 variations, 5 specifics per"
+  }
+]

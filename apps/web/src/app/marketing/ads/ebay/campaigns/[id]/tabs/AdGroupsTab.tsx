@@ -8,7 +8,7 @@
  */
 import { useMemo } from 'react'
 import { Button } from '@/design-system/primitives'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsDataGrid, type GridColumn } from '../../../../campaigns/_grid/AdsDataGrid'
 import { int, money } from '../../../../campaigns/_grid/format'
 import type { AdGroupRow, CampaignDetailPayload, Derived } from '../../../_lib'

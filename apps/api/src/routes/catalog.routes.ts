@@ -1,7 +1,12 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
 import type { FastifyInstance } from "fastify";
 import { amazonCatalogService } from "../services/amazon-catalog.service.js";
 import outboundSyncService from "../services/outbound-sync.service.js";
 import prisma from "../db.js";
+import { assertCanDeleteRelationshipProduct, ProductRelationshipError, relationshipParent, relationshipProduct, relationshipTransaction } from '../services/pim/product-relationship.service.js'
+import { validateAliasWriteTargets } from '../services/pim/listing-alias.service.js'
+
 import { importEbayCatalog, getEbayImportStats } from "../services/ebay-import.service.js";
 import { channelSyncQueue } from "../lib/queue.js";
 import { logger } from "../utils/logger.js";
@@ -278,7 +283,7 @@ export async function catalogRoutes(app: FastifyInstance) {
 
         // Check if SKU already exists
         const existingProduct = await prisma.product.findUnique({
-          where: { sku },
+          where: { workspace_sku: workspaceKey({ sku: sku }) },
         });
 
         if (existingProduct) {
@@ -486,7 +491,7 @@ export async function catalogRoutes(app: FastifyInstance) {
 
         // Check if master SKU already exists
         const existingMaster = await prisma.product.findUnique({
-          where: { sku: master.sku },
+          where: { workspace_sku: workspaceKey({ sku: master.sku }) },
         });
 
         if (existingMaster) {
@@ -1216,7 +1221,7 @@ export async function catalogRoutes(app: FastifyInstance) {
 
       // Check if SKU already exists
       const existingSku = await prisma.product.findUnique({
-        where: { sku },
+        where: { workspace_sku: workspaceKey({ sku: sku }) },
       });
 
       if (existingSku) {
@@ -1242,12 +1247,14 @@ export async function catalogRoutes(app: FastifyInstance) {
       }
       const hasVariantAttrs = Object.keys(cleanedVariantAttrs).length > 0
 
+      const childProduct = await relationshipTransaction(async tx => {
+      await relationshipParent(tx, parentId)
       // Create the child product. Persist axis values in BOTH places
       // the read path knows about: variantAttributes (Prisma column)
       // and categoryAttributes.variations (the structure the
       // amazon/products/:id/children GET endpoint surfaces under
       // 'variations').
-      const childProduct = await prisma.product.create({
+      const childProduct = await tx.product.create({
         data: {
           sku,
           name,
@@ -1256,8 +1263,8 @@ export async function catalogRoutes(app: FastifyInstance) {
           parentId,
           isMasterProduct: false,
           validationStatus: "VALID",
-          syncChannels: parent.syncChannels || ["AMAZON", "EBAY"],
-          status: "ACTIVE",
+          syncChannels: [],
+          status: "DRAFT",
           ...(hasVariantAttrs
             ? {
                 variantAttributes: cleanedVariantAttrs as any,
@@ -1280,6 +1287,8 @@ export async function catalogRoutes(app: FastifyInstance) {
       // so the new variant starts with shared content but its own identifiers.
       const { copyFromProductId, copyGroups: rawCopyGroups } = request.body as any
       if (copyFromProductId && typeof copyFromProductId === 'string') {
+        const source = await relationshipProduct(tx, copyFromProductId)
+        if (source.parentId !== parentId) throw new ProductRelationshipError('Choose a child from this family as the copy source.')
         const groups = new Set<string>(Array.isArray(rawCopyGroups) ? rawCopyGroups : ['content', 'attributes'])
         const AXIS_ATTRS = new Set([
           'color', 'color_name', 'colour_name',
@@ -1287,8 +1296,9 @@ export async function catalogRoutes(app: FastifyInstance) {
           'parentage_level', 'child_parent_sku_relationship',
           'purchasable_offer', 'fulfillment_availability', 'skip_offer',
         ])
-        const siblings = await prisma.channelListing.findMany({ where: { productId: copyFromProductId } })
-        await Promise.allSettled(siblings.map(async (sib) => {
+        const siblings = await tx.channelListing.findMany({ where: { productId: copyFromProductId } })
+        await validateAliasWriteTargets(siblings.filter(sib => sib.aliasKey).map(sib => ({ productId: source.id, channel: sib.channel, marketplace: sib.marketplace, connectionId: sib.channelConnectionId, aliasKey: sib.aliasKey })), tx)
+        await Promise.all(siblings.map(async (sib) => {
           const platAttrs = sib.platformAttributes as Record<string, any> | null
           const sibAttrs = (platAttrs?.attributes ?? {}) as Record<string, any>
           const cleanedAttrs: Record<string, any> = {}
@@ -1297,9 +1307,13 @@ export async function catalogRoutes(app: FastifyInstance) {
               if (!AXIS_ATTRS.has(k)) cleanedAttrs[k] = v
             }
           }
-          await prisma.channelListing.create({
+          await tx.channelListing.create({
             data: {
               productId: childProduct.id,
+              channelConnectionId: sib.channelConnectionId,
+              aliasId: sib.aliasId,
+              aliasKey: sib.aliasKey,
+              isPublished: false,
               channel: sib.channel,
               marketplace: sib.marketplace,
               region: sib.region,
@@ -1323,6 +1337,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         }))
       }
 
+      await productReadCacheService.refreshInTransaction(tx, [childProduct.id, parentId])
+      return childProduct
+      })
+
       return reply.status(201).send({
         success: true,
         data: childProduct,
@@ -1334,10 +1352,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         parentId: request.params.parentId,
       });
 
-      return reply.status(500).send({
+      return reply.status(error?.statusCode ?? (error?.code === "P2002" ? 409 : 500)).send({
         success: false,
         error: {
-          code: "INTERNAL_ERROR",
+          code: error?.code ?? "INTERNAL_ERROR",
           message: error.message || "Failed to create child product",
         },
       });
@@ -1599,7 +1617,7 @@ export async function catalogRoutes(app: FastifyInstance) {
       // Validate SKU uniqueness if changing SKU
       if (sku && sku !== child.sku) {
         const existingSku = await prisma.product.findUnique({
-          where: { sku },
+          where: { workspace_sku: workspaceKey({ sku: sku }) },
         });
         if (existingSku) {
           return reply.status(409).send({
@@ -1812,95 +1830,21 @@ export async function catalogRoutes(app: FastifyInstance) {
     try {
       const { parentId, childId } = request.params;
 
-      // Validate parent exists
-      const parent = await prisma.product.findUnique({
-        where: { id: parentId },
-      });
-
-      if (!parent) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: "NOT_FOUND",
-            message: "Parent product not found",
-          },
-        });
-      }
-
-      // Validate child exists and belongs to parent
-      const child = await prisma.product.findUnique({
-        where: { id: childId },
-      });
-
-      if (!child || child.parentId !== parentId) {
-        return reply.status(404).send({
-          success: false,
-          error: {
-            code: "NOT_FOUND",
-            message: "Child product not found or does not belong to this parent",
-          },
-        });
-      }
-
-      // Delete child product. ChannelListings on the child cascade
-      // via FK; this handles their per-channel data automatically.
-      await prisma.product.delete({
-        where: { id: childId },
-      });
-
-      // NN.17 — sweep parent's ChannelListings for any
-      // platformAttributes.variants[childId] entries. The parent's
-      // listing payload often carries a per-variant attribute map
-      // keyed by child variant id. When a variant is deleted, that
-      // map entry must be removed or the next publish push includes
-      // a stale variant reference (eBay rejects, Amazon orphans).
-      try {
-        const parentListings = await prisma.channelListing.findMany({
-          where: { productId: parentId },
-          select: { id: true, platformAttributes: true },
-        });
+      await relationshipTransaction(async tx => {
+        await relationshipParent(tx, parentId)
+        const child = await relationshipProduct(tx, childId)
+        if (child.parentId !== parentId || child._count.children) throw new ProductRelationshipError('This child no longer belongs to the selected parent. Reload the family.')
+        await assertCanDeleteRelationshipProduct(tx, [childId])
+        await tx.product.delete({ where: { id: childId } })
+        const parentListings = await tx.channelListing.findMany({ where: { productId: parentId }, select: { id: true, platformAttributes: true } })
         for (const listing of parentListings) {
-          const pa = listing.platformAttributes as
-            | { variants?: Record<string, unknown> }
-            | null;
-          if (
-            !pa ||
-            typeof pa !== 'object' ||
-            !pa.variants ||
-            typeof pa.variants !== 'object' ||
-            !(childId in pa.variants)
-          ) {
-            continue;
-          }
-          const { [childId]: _dropped, ...kept } = pa.variants;
-          await prisma.channelListing.update({
-            where: { id: listing.id },
-            data: {
-              platformAttributes: { ...pa, variants: kept } as any,
-            },
-          });
+          const attributes = listing.platformAttributes as { variants?: Record<string, unknown> } | null
+          if (!attributes?.variants || !(childId in attributes.variants)) continue
+          const { [childId]: removed, ...kept } = attributes.variants
+          await tx.channelListing.update({ where: { id: listing.id }, data: { platformAttributes: { ...attributes, variants: kept } as any, version: { increment: 1 } } })
         }
-      } catch (err) {
-        // Sweep is best-effort; the parent listing can be re-published
-        // to drop the stale entry. Log + continue.
-        request.log.warn(
-          { err, childId, parentId },
-          '[catalog] parent variants sweep failed',
-        );
-      }
-
-      // Check if parent still has children
-      const remainingChildren = await prisma.product.count({
-        where: { parentId },
-      });
-
-      // If no children left, update parent's isParent flag
-      if (remainingChildren === 0) {
-        await prisma.product.update({
-          where: { id: parentId },
-          data: { isParent: false },
-        });
-      }
+        await productReadCacheService.refreshInTransaction(tx, [childId, parentId])
+      })
 
       return reply.status(200).send({
         success: true,
@@ -1919,10 +1863,10 @@ export async function catalogRoutes(app: FastifyInstance) {
         });
       }
 
-      return reply.status(500).send({
+      return reply.status(error?.statusCode ?? 500).send({
         success: false,
         error: {
-          code: "INTERNAL_ERROR",
+          code: error?.code ?? "INTERNAL_ERROR",
           message: error.message || "Failed to delete child product",
         },
       });

@@ -1,4 +1,5 @@
-import { Worker, Job } from 'bullmq'
+import { Job } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'
 import { bulkListQueue, BulkListJobData, BulkListJobResult } from '../services/bulk-list.service.js'
 import { AiListingService } from '../services/ai/ai-listing.service.js'

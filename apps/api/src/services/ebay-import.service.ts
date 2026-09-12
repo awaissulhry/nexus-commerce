@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay Inventory Import Service
  *
@@ -119,7 +120,7 @@ export async function importEbayCatalog(): Promise<{
       const ean = item.product?.ean?.[0] ?? undefined
       const upc = item.product?.upc?.[0] ?? undefined
 
-      const existing = await prisma.product.findUnique({ where: { sku: item.sku }, select: { id: true } })
+      const existing = await prisma.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: item.sku }) }, select: { id: true } })
 
       const data = {
         name: title,

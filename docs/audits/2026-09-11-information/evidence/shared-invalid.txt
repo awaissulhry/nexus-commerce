@@ -1,0 +1,203 @@
+- generic: Disposable Information fixture
+- button "Interrupt next save"
+- button "Delay next read"
+- button "Toggle theme"
+- main:
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "Information jacket" [level=1]
+  - generic "INFO-JACKET"
+  - generic: Draft
+  - generic: Parent
+  - status "Material composition percentage values must total 100":
+    - text: 1 change not saved
+  - link "Choose listing destinations":
+    - /url: /products/store-demo/list-wizard
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Blocked —" [checked]:
+      - generic: Shared product
+      - generic: ·
+      - generic: Blocked
+      - generic: —
+    - radio "Amazon Not set up":
+      - generic: Amazon
+      - generic: ·
+      - generic: Not set up
+    - radio "eBay Not set up":
+      - generic: eBay
+      - generic: ·
+      - generic: Not set up
+    - radio "Shopify":
+      - generic: Shopify
+    - radio "Etsy":
+      - generic: Etsy
+  - button "Content language":
+    - generic: Italian (it)
+  - region "Information":
+    - generic: 3 rows
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "Family facts (11)":
+      - text: Family facts (11)
+    - button "Required 1 column":
+      - generic: Required
+      - generic: 1 column
+    - button "Essentials 7 columns":
+      - generic: Essentials
+      - generic: 7 columns
+    - button "Family facts 11 columns" [pressed]:
+      - generic: Family facts
+      - generic: 11 columns
+    - button "Localized content 8 columns":
+      - generic: Localized content
+      - generic: 8 columns
+    - button "Classification"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - generic: Press SPACE to select this row
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product batteries included battery type care instructions color fabric type manufacturer warranty released on size thermal rating Material composition Size system Readiness":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "batteries included":
+            - generic: batteries included
+          - columnheader "battery type":
+            - generic: battery type
+          - columnheader "care instructions":
+            - generic: care instructions
+          - columnheader "color":
+            - generic: color
+          - columnheader "fabric type":
+            - generic: fabric type
+          - columnheader "manufacturer warranty":
+            - generic: manufacturer warranty
+          - columnheader "released on":
+            - generic: released on
+          - columnheader "size":
+            - generic: size
+          - columnheader "thermal rating":
+            - generic: thermal rating
+          - columnheader "Material composition":
+            - generic: Material composition
+          - columnheader "Size system":
+            - generic: Size system
+          - columnheader "Readiness":
+            - generic: Readiness
+        - row "Press Space to toggle row selection (unchecked) Collapse children Parent · 2 children INFO-JACKET 34% — filled ÷ applicable master attributes Actions for INFO-JACKET No Not measured Lavare a mano Not measured Not measured Not measured Not measured Not measured Not measured cotton · 75; polyester · 20 Material composition percentage values must total 100 Not measured Errors · 1" [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse children Parent · 2 children INFO-JACKET 34% — filled ÷ applicable master attributes Actions for INFO-JACKET":
+            - button "Collapse children" [expanded]:
+            - img "Parent · 2 children": P
+            - generic: INFO-JACKET
+            - img "34% — filled ÷ applicable master attributes":
+              - generic: 34%
+            - button "Actions for INFO-JACKET":
+          - gridcell "No":
+            - generic: "No"
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Lavare a mano":
+            - generic: Lavare a mano
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "cotton · 75; polyester · 20 Material composition percentage values must total 100":
+            - generic: cotton · 75; polyester · 20
+            - generic: Material composition percentage values must total 100
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Errors · 1":
+            - generic: Errors · 1
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-ONE black · M 43% — filled ÷ applicable master attributes Actions for INFO-ONE No Not measured Lavare a mano Nero Not measured Not measured 2026-09-11 M 0 celsius cotton · 80; polyester · 20 Not measured Ready"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE black · M 43% — filled ÷ applicable master attributes Actions for INFO-ONE"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-ONE
+            - generic "black · M"
+            - img "43% — filled ÷ applicable master attributes":
+              - generic: 43%
+            - button "Actions for INFO-ONE":
+          - gridcell "No":
+            - generic: "No"
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Lavare a mano":
+            - generic: Lavare a mano
+          - gridcell "Nero":
+            - generic: Nero
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "2026-09-11":
+            - generic: 2026-09-11
+          - gridcell "M":
+            - generic: M
+          - gridcell "0 celsius":
+            - generic: "0"
+            - generic "celsius"
+          - gridcell "cotton · 80; polyester · 20" [active] [selected]:
+            - generic: cotton · 80; polyester · 20
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Ready":
+            - generic: Ready
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-TWO red · L 40% — filled ÷ applicable master attributes Actions for INFO-TWO No Not measured Lavare a mano Rosso Not measured Not measured Not measured L Not measured cotton · 80; polyester · 20 Not measured Ready"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO red · L 40% — filled ÷ applicable master attributes Actions for INFO-TWO"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-TWO
+            - generic "red · L"
+            - img "40% — filled ÷ applicable master attributes":
+              - generic: 40%
+            - button "Actions for INFO-TWO":
+          - gridcell "No":
+            - generic: "No"
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Lavare a mano":
+            - generic: Lavare a mano
+          - gridcell "Rosso":
+            - generic: Rosso
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "L":
+            - generic: L
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "cotton · 80; polyester · 20":
+            - generic: cotton · 80; polyester · 20
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Ready":
+            - generic: Ready
+    - status:
+      - generic: 3 rows
+      - generic: 1 refused
+      - button "1 cell blocked":
+        - generic: 1 cell blocked
+  - complementary "Record"

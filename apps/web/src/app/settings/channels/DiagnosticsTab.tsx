@@ -212,7 +212,7 @@ export function DiagnosticsTab({ accounts, loading, onChanged }: DiagnosticsTabP
             {heartbeat.result.latencyMs} ms · status now {STATUS_LABEL[heartbeat.result.authStatus]?.label ?? heartbeat.result.authStatus}
             {heartbeat.result.errorClass ? ` · ${heartbeat.result.errorClass}` : ''}
             {heartbeat.result.message ? ` · ${heartbeat.result.message}` : ''}
-            {heartbeat.result.scopeDrift?.length ? ` · ${heartbeat.result.scopeDrift.length} permission(s) not granted` : ''}
+            {heartbeat.result.scopeDrift?.length ? ` · ${heartbeat.result.scopeDrift.length} requested permission(s) absent from the stored grant record` : ''}
           </p>
         )}
         {heartbeat.error && (

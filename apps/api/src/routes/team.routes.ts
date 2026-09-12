@@ -33,6 +33,7 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
   // S1 auth routes). The fetch wrapper adds x-nexus-csrf, so the console is
   // unaffected.
   fastify.addHook('preHandler', async (req, reply) => {
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') return reply.code(410).send({ code: 'workspace_team_required', error: 'Use the team settings for the current business profile.' })
     const m = req.method.toUpperCase()
     if ((m === 'POST' || m === 'PUT' || m === 'PATCH' || m === 'DELETE') && !verifyCsrf(req)) {
       return reply.code(403).send({ error: 'Invalid or missing CSRF token', code: 'csrf_failed' })

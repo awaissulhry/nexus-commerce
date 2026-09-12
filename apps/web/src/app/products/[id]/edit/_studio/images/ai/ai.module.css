@@ -1,0 +1,37 @@
+/** PES.7 — lifestyle generator layout. Plain px; tokens for colour; never --nds-text-3 for text. */
+
+.block { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+.label {
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  color: var(--nds-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.counterRow { display: flex; justify-content: flex-end; }
+
+.counter { font-size: var(--nds-font-size-xs); color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+
+/* Out of bounds is amber, not red: the operator has not done anything wrong yet, they are mid-edit. */
+.counterBad {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-amber-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.openers { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.refusal {
+  margin: 0 0 12px;
+  border: 1px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  border-radius: var(--nds-radius-md);
+  padding: 8px 12px;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.hint { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); line-height: 1.5; }

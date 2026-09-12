@@ -30,7 +30,8 @@ import { getBackendUrl } from '@/lib/backend-url'
 
 import type { BidSlotProps } from './slot-contract'
 import { emitAdsChange } from '../_shared/adsBus'
-import { DataGrid, Listbox } from '@/design-system/components'
+import { Listbox } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 
 interface BidPolicy {
   id: string

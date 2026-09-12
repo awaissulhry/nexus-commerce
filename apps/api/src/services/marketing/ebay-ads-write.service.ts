@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E4 (eBay Ads) — THE audited write layer. Every mutation flows through
  * executeOp(): validate → guardrails → gate (checkMarketingWriteGate) →
@@ -106,7 +107,7 @@ async function loadBreakEvens(marketplaceShort: string, listingIds: string[]): P
 async function killSwitchCheck(marketplace: string): Promise<void> {
   const ceiling = await prisma.marketingSpendCeiling.findFirst({ where: { channel: 'EBAY', marketplace, killSwitch: true } })
   if (ceiling) throw new Error(`kill switch is ON for EBAY/${marketplace} — all ad writes are halted`)
-  const state = await prisma.marketingAutomationState.findUnique({ where: { channel: 'EBAY' } })
+  const state = await prisma.marketingAutomationState.findUnique({ where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) } })
   if (state?.halted) throw new Error(`eBay ads automation state is HALTED (${state.haltReason ?? 'no reason recorded'}) — writes blocked`)
 }
 
@@ -437,7 +438,7 @@ export async function promoteListings(ctx: OpContext, input: PromoteInput): Prom
     }
     if (ok) {
       await prisma.ebayAd.upsert({
-        where: { campaignId_listingId: { campaignId: c.id, listingId: item.listingId } },
+        where: { campaignId_listingId: workspaceKey({ campaignId: c.id, listingId: item.listingId }) },
         create: {
           campaignId: c.id, marketplace: c.marketplace, listingId: item.listingId,
           externalAdId: lr?.id ?? null, bidPercentage: isCps && item.ratePct != null ? item.ratePct.toFixed(1) : null,
@@ -680,7 +681,7 @@ export async function addKeywords(ctx: OpContext, campaignId: string, adGroupId:
     const ok = decision.mode === 'sandbox' ? true : lr?.ok ?? false
     if (ok) {
       await prisma.ebayKeyword.upsert({
-        where: { adGroupId_externalKeywordId: { adGroupId: g.id, externalKeywordId: lr?.id ?? `sandbox-kw-${k.text.trim().toLowerCase().replace(/\s+/g, '-')}` } },
+        where: { adGroupId_externalKeywordId: workspaceKey({ adGroupId: g.id, externalKeywordId: lr?.id ?? `sandbox-kw-${k.text.trim().toLowerCase().replace(/\s+/g, '-')}` }) },
         create: { campaignId: c.id, adGroupId: g.id, externalKeywordId: lr?.id ?? `sandbox-kw-${k.text.trim().toLowerCase().replace(/\s+/g, '-')}`, text: k.text.trim(), matchType: k.matchType, bidCents: k.bidCents ?? null, status: decision.mode === 'live' ? 'ACTIVE' : 'SANDBOX' },
         update: { bidCents: k.bidCents ?? null },
       })
@@ -745,7 +746,7 @@ export async function addNegatives(ctx: OpContext, campaignId: string, adGroupId
     const ok = decision.mode === 'sandbox' ? true : lr?.ok ?? false
     if (ok) {
       await prisma.ebayNegativeKeyword.upsert({
-        where: { campaignId_externalId: { campaignId: c.id, externalId: lr?.id ?? `sandbox-neg-${n.text.trim().toLowerCase().replace(/\s+/g, '-')}` } },
+        where: { campaignId_externalId: workspaceKey({ campaignId: c.id, externalId: lr?.id ?? `sandbox-neg-${n.text.trim().toLowerCase().replace(/\s+/g, '-')}` }) },
         create: { campaignId: c.id, adGroupId: g.id, externalId: lr?.id ?? `sandbox-neg-${n.text.trim().toLowerCase().replace(/\s+/g, '-')}`, text: n.text.trim(), matchType: n.matchType, status: decision.mode === 'live' ? 'ACTIVE' : 'SANDBOX' },
         update: {},
       })

@@ -178,8 +178,8 @@ export function startEbayOrdersCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runOrdersPoll()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runOrdersPoll()
   })
 
   logger.info('ebay-orders cron: scheduled', { schedule })

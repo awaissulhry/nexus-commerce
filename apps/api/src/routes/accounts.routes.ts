@@ -42,7 +42,7 @@ import {
   type ConnectionRow as ChannelConnection,
 } from "../services/connection-resolver.service.js";
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
-import { ebayAuthService } from "../services/ebay-auth.service.js";
+import { revoke } from "../services/cx/token.service.js";
 
 type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
@@ -83,6 +83,7 @@ export interface AccountRow {
   health: Health;
   healthReason: string | null;
   isPrimary: boolean;
+  isActive: boolean;
   sortOrder: number;
   /** The account's identity at the marketplace. NULL until MAP.4 captures eBay's. */
   externalAccountId: string | null;
@@ -96,10 +97,12 @@ export interface AccountRow {
   authStatus: string;
   region: string | null;
   grantedScopes: string[];
+  /** OAuth scopes, or roles approved on the channel application (Amazon SP-API). */
+  permissionModel: "oauth_scopes" | "application_roles";
   /** Scopes the catalog wants that this grant lacks — non-empty means "Reconnect to grant new permissions". */
   scopeDrift: string[];
   /** Markets / marketplaces this grant reaches (ConnectionScope rows). */
-  scopes: Array<{ kind: string; externalId: string; label: string | null }>;
+  scopes: Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }>;
   accessTokenExpiresAt: string | null;
   refreshTokenExpiresAt: string | null;
   lastRefreshAt: string | null;
@@ -193,7 +196,7 @@ function readMarkets(r: ChannelConnection): string[] {
 function toAccountRow(
   r: ChannelConnection,
   isPrimary: boolean,
-  scopes: Array<{ kind: string; externalId: string; label: string | null }> = [],
+  scopes: Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }> = [],
 ): AccountRow {
   const spec = tryGetChannelSpec(channelKeyOf(r.channelType));
   return {
@@ -204,6 +207,7 @@ function toAccountRow(
     markets: readMarkets(r),
     ...deriveHealth(r),
     isPrimary,
+    isActive: r.isActive,
     sortOrder: r.sortOrder,
     externalAccountId: r.externalAccountId,
     accountColor: r.accountColor,
@@ -214,6 +218,7 @@ function toAccountRow(
     authStatus: r.authStatus,
     region: r.region,
     grantedScopes: r.grantedScopes,
+    permissionModel: spec?.auth.permissionModel ?? "oauth_scopes",
     scopeDrift: spec ? scopeDriftOf(spec, r.grantedScopes) : [],
     scopes,
     accessTokenExpiresAt: r.accessTokenExpiresAt?.toISOString() ?? null,
@@ -244,14 +249,14 @@ async function blastRadius(connectionId: string) {
 
 const accountsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── MAP.1 — the chip's source ────────────────────────────────────
-  fastify.get("/accounts", async (_request, reply) => {
+  fastify.get<{ Querystring: { includeDisconnected?: string } }>("/accounts", async (request, reply) => {
     try {
       // ACTIVE rows only. Measured on prod 2026-08-19: 11 rows exist, 9 of them
       // revoked eBay grants from the reconnect history. Those are not accounts
       // the operator is "using", and listing them would make the panel unreadable.
       // /accounts/diagnostics reports the full population.
       const rows = await prisma.channelConnection.findMany({
-        where: { isActive: true, OR: [{ managedBy: "oauth" }, { managedBy: "env" }] },
+        where: { ...(process.env.NEXUS_WORKSPACES_ENABLED === '1' && request.query.includeDisconnected === '1' ? {} : { isActive: true }), OR: [{ managedBy: "oauth" }, { managedBy: "env" }] },
         orderBy: [{ channelType: "asc" }, { isPrimary: "desc" }, { sortOrder: "asc" }, { updatedAt: "desc" }],
       });
 
@@ -267,13 +272,13 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
             // distinction ("· sandbox").
             where: { connectionId: { in: rows.map((r) => r.id) } },
             orderBy: [{ kind: "asc" }, { externalId: "asc" }],
-            select: { connectionId: true, kind: true, externalId: true, label: true },
+            select: { connectionId: true, kind: true, externalId: true, label: true, isActive: true },
           })
         : [];
-      const scopesByConnection = new Map<string, Array<{ kind: string; externalId: string; label: string | null }>>();
+      const scopesByConnection = new Map<string, Array<{ kind: string; externalId: string; label: string | null; isActive?: boolean }>>();
       for (const s of scopeRows) {
         const list = scopesByConnection.get(s.connectionId) ?? [];
-        list.push({ kind: s.kind, externalId: s.externalId, label: s.label });
+        list.push({ kind: s.kind, externalId: s.externalId, label: s.label, isActive: s.isActive });
         scopesByConnection.set(s.connectionId, list);
       }
 
@@ -456,51 +461,56 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
+    if (row.managedBy === "env") {
+      return reply.code(409).send({
+        success: false,
+        code: "ENV_MANAGED",
+        error: "This account still uses environment credentials. Sign in through the channel first to replace them with a revocable grant.",
+      });
+    }
+
     // Deactivate; never delete. The rows that reference it (MAP.2a attributed
     // them) keep their attribution, so history still says which account it came
     // from — the FKs are ON DELETE SET NULL precisely so a delete could not
     // quietly erase that, and this path does not delete at all.
     // Tokens for OTHER accounts are untouched (feedback_preserve_sensitive_config).
     //
-    // CX.0 (S11): a disconnected account must not keep live credentials. For an
-    // eBay OAuth grant, revoke at eBay and null every token column (the same
-    // path the card's Disconnect uses); a failed remote revoke still nulls
-    // locally and is logged. Other OAuth channels null their generic columns.
-    // Env-managed rows have no grant to revoke and are left as they are.
+    // CX.0 (S11): every catalogue OAuth channel goes through the token service,
+    // which attempts the provider's revoke endpoint when one exists and always
+    // clears the encrypted envelope plus every legacy plaintext token locally.
     let revokedAtChannel = false;
-    if (row.managedBy === "oauth" && row.channelType === "EBAY") {
-      try {
-        await ebayAuthService.revokeTokens(row.id);
-        revokedAtChannel = true;
-      } catch (err) {
-        logger.warn("MAP.4 disconnect: eBay revoke failed; nulling tokens locally", {
-          accountId: row.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+    const key = channelKeyOf(row.channelType);
+    if (row.managedBy === "oauth" && key && tryGetChannelSpec(key)) {
+      ({ revokedAtChannel } = await revoke(
+        row.id,
+        { kind: "operator", userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null },
+        "operator",
+      ));
+    } else {
+      // Legacy, non-catalogue OAuth rows still lose all local credentials.
+      await prisma.channelConnection.update({
+        where: { id: row.id },
+        data: {
+          credentialsEnc: null,
+          credentialsKeyId: null,
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
+          ebayAccessToken: null,
+          ebayRefreshToken: null,
+          ebayTokenExpiresAt: null,
+          accessTokenExpiresAt: null,
+          isActive: false,
+          isPrimary: false,
+          authStatus: "disconnected",
+          lastSyncStatus: "FAILED",
+          lastSyncError: "Disconnected by operator",
+        },
+      });
     }
-    await prisma.channelConnection.update({
-      where: { id: row.id },
-      data: {
-        isActive: false,
-        isPrimary: false,
-        lastSyncStatus: "FAILED",
-        lastSyncError: "Disconnected by operator",
-        ...(row.managedBy === "oauth"
-          ? {
-              accessToken: null,
-              refreshToken: null,
-              tokenExpiresAt: null,
-              ebayAccessToken: null,
-              ebayRefreshToken: null,
-              ebayTokenExpiresAt: null,
-            }
-          : {}),
-      },
-    });
 
     logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id, revokedAtChannel });
-    return reply.send({ success: true, blastRadius: await blastRadius(row.id) });
+    return reply.send({ success: true, revokedAtChannel, blastRadius: await blastRadius(row.id) });
   });
 };
 

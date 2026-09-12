@@ -3,7 +3,7 @@
  * Offsite campaigns yet (verified: CreateCampaignInput carries no OFF_SITE
  * channel path) — an honest explainer instead of a dead flow.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import '../../../ebay.css'
 
 export default function Page() {

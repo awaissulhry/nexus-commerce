@@ -8,7 +8,7 @@
  * decide endpoint's snoozeDays.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronDown } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGrid'
 import { getEbayAds, postEbayAds } from '../../_lib'

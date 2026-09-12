@@ -16,7 +16,8 @@
  * other view state in this section is linkable, and a view you cannot send to someone is a view
  * you have to describe over the phone. `rules` is the default and writes no param.
  */
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'

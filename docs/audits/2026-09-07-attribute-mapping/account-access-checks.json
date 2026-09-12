@@ -1,0 +1,51 @@
+{
+  "tests": {
+    "api": {
+      "passed": 245,
+      "files": 11
+    },
+    "web": {
+      "passed": 98,
+      "files": 2
+    }
+  },
+  "types": {
+    "api": "passed",
+    "factory": "passed",
+    "web": "blocked: unrelated sheetGridStates.vitest.test.ts:13"
+  },
+  "guards": {
+    "generatedTokensWeb": "passed",
+    "generatedTokensFactory": "passed",
+    "cssParse": "passed: 14 stylesheets",
+    "dsConformance": "passed",
+    "tokenResolution": "blocked: unrelated datagrid/tooltip token findings",
+    "forkDrift": "blocked: unrelated components/index.ts export ordering"
+  },
+  "browser": {
+    "accountTests": {
+      "amazonSeller": "passed",
+      "xaviaracing": "passed",
+      "motovento": "passed"
+    },
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "viewportWidths": [
+      320,
+      390,
+      1728
+    ],
+    "accountRowOverflow": 0,
+    "keyboard": "Test -> Reconnect, visible focus border and ring",
+    "inactiveScopeLabels": "verified: Amazon US inactive",
+    "unrecordedPermissionLabels": "verified for both eBay accounts"
+  },
+  "limitations": [
+    "representative account/schema reads, not whole catalog validation",
+    "no listing publications",
+    "OAuth consent flow not exercised",
+    "local Redis endpoint still fails DNS"
+  ]
+}

@@ -6,9 +6,9 @@
  * comparison (benchmark-resolved since ER3.2), clamp notes. No storytelling:
  * only what the engine recorded.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Button, Pill } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { H10Modal } from '../../_lib/modal'
 import { eurC } from '../../_lib'
 import { type WhyReasoning, conditionSentence, CENTS_METRICS, PCT_METRICS, type RuleCondition } from '../_lib/rules'

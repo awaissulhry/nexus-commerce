@@ -1,0 +1,199 @@
+{
+  "checkedAt": "2026-09-07T16:15:55.298Z",
+  "listingWrites": 0,
+  "amazon": [
+    {
+      "sku": "1J-EYE5-Y0TW",
+      "listingId": "cmonwkpmb0001nq01ykxmdg59",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "GLOVES",
+      "fields": [
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    },
+    {
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "listingId": "cmozxuemx000cte016lokrkvp",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "OUTERWEAR",
+      "fields": [
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    },
+    {
+      "sku": "xracingb56",
+      "listingId": "cmp26amq7004drx01k3bp3oy5",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "SUIT",
+      "fields": [
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    },
+    {
+      "sku": "xavia-knee-slider-green",
+      "listingId": "cmp26amzx0063rx01dxxy0knm",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "AUTO_ACCESSORY",
+      "fields": [
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    },
+    {
+      "sku": "AIREON-PANT-CREMA-E-VINO-MEN-3XL",
+      "listingId": "cmp26aphc00kvrx01owcn7367",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "PANTS",
+      "fields": [
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    },
+    {
+      "sku": "AIRMESH-JACKET-BLACK-MEN-3XL",
+      "listingId": "cmp26apms00ltrx01emymfxuu",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "marketplace": "IT",
+      "productType": "COAT",
+      "fields": [
+        "color",
+        "brand"
+      ],
+      "available": true,
+      "ok": true,
+      "status": "VALID",
+      "issues": [],
+      "errors": null,
+      "mode": "VALIDATION_PREVIEW",
+      "validationScope": "selected mapped attribute patches"
+    }
+  ],
+  "ebay": [
+    {
+      "sku": "AIRMESH-JACKET-BLACK-MEN-XL",
+      "listingId": "cmrbby0yo1hpenw01l1fo212r",
+      "accountId": "cmr4aaqb00025nz016k18rup9",
+      "marketplace": "IT",
+      "validationPreview": "unsupported-by-inventory-api",
+      "inventoryStatus": 200,
+      "inventorySkuMatches": true,
+      "titleLength": 80,
+      "descriptionPresent": true,
+      "aspectNames": [
+        "Colore",
+        "Genere",
+        "Colore esatto",
+        "Paese di origine",
+        "Stile",
+        "Adatto a",
+        "Chiusura",
+        "Caratteristiche",
+        "Colore specifico",
+        "Quantità",
+        "Scollatura",
+        "Cura dell'indumento",
+        "Body type",
+        "Stagione",
+        "Livello di protezione",
+        "EAN",
+        "Taglia",
+        "Materiale",
+        "Marca",
+        "Tipo di giacca",
+        "Protezione",
+        "Paese di fabbricazione"
+      ],
+      "offerStatus": 200,
+      "categories": [
+        "177104"
+      ]
+    },
+    {
+      "sku": "1J-EYE5-Y0TW",
+      "listingId": "f67fa2a9-3155-43b7-a640-9e3287e329d8",
+      "accountId": "cmr4aaqb00025nz016k18rup9",
+      "marketplace": "IT",
+      "validationPreview": "unsupported-by-inventory-api",
+      "inventoryStatus": 200,
+      "inventorySkuMatches": true,
+      "titleLength": null,
+      "descriptionPresent": false,
+      "aspectNames": [],
+      "offerStatus": 404,
+      "categories": []
+    },
+    {
+      "sku": "UD-LVLM-1H8T",
+      "listingId": "8b622996-338e-491e-9920-3dba33fb978a",
+      "accountId": "cmr4aaqb00025nz016k18rup9",
+      "marketplace": "IT",
+      "validationPreview": "unsupported-by-inventory-api",
+      "inventoryStatus": 200,
+      "inventorySkuMatches": true,
+      "titleLength": null,
+      "descriptionPresent": false,
+      "aspectNames": [],
+      "offerStatus": 404,
+      "categories": []
+    },
+    {
+      "sku": "xracing",
+      "listingId": "cd1866bf-115e-403f-92da-4a7eeb0a0637",
+      "accountId": "cmr4aaqb00025nz016k18rup9",
+      "marketplace": "IT",
+      "validationPreview": "unsupported-by-inventory-api",
+      "inventoryStatus": 404,
+      "inventorySkuMatches": false,
+      "titleLength": null,
+      "descriptionPresent": false,
+      "aspectNames": [],
+      "offerStatus": 404,
+      "categories": []
+    }
+  ],
+  "amazonNegativeControl": {
+    "control": "incomplete full request",
+    "available": false,
+    "blocked": true,
+    "errors": "Amazon validation preview returned HTTP 400",
+    "mode": "VALIDATION_PREVIEW"
+  }
+}

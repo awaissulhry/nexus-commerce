@@ -51,8 +51,8 @@ export function startForecastCron(): void {
     logger.error('forecast cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runForecastTick()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runForecastTick()
   })
   logger.info('forecast cron: scheduled', { schedule })
 }

@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W5.49 — listing recovery orchestrator.
  *
@@ -298,9 +300,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       // env, not a per-row column. Falls back across the two legacy
       // names.
       const sellerId =
-        process.env.AMAZON_SELLER_ID ??
-        process.env.AMAZON_MERCHANT_ID ??
-        ''
+        (await getAmazonSellerId())
       if (!sellerId) {
         throw new Error(
           'AMAZON_SELLER_ID / AMAZON_MERCHANT_ID is not set — cannot call SP-API.',
@@ -363,7 +363,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       const newSku = req.newSku?.trim()
       if (!newSku) throw new Error('newSku required for this action.')
       const existing = await prisma.product.findUnique({
-        where: { sku: newSku },
+        where: { workspace_sku: workspaceKey({ sku: newSku }) },
         select: { id: true },
       })
       if (existing && existing.id !== req.productId) {

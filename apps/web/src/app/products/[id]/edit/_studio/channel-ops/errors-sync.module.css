@@ -1,0 +1,86 @@
+/* PES.3 — the Errors & Sync console. Page-local, DS tokens only (the grid engine owns no part of
+   this surface: it is a list of problems, not a grid). */
+
+.console { display: flex; flex-direction: column; gap: 12px; padding: 16px 24px 24px; min-width: 0; }
+
+.head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.scope { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.summary { color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+
+.filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.notice,
+.empty {
+  padding: 16px;
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.cause { border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); overflow: hidden; }
+
+/* The DS `PressableRow` wrapper (CT.1, 2026-09-04 — it was a `Button` restyled into a row). `.cause`
+   already draws the border and radius, so the row drops its own; the label is the row's real
+   button (`.nds-prow-action`: base size, medium weight), and the counts and the verdict are the
+   row body (`.nds-prow-body`: sm-plus, text-2). Doubled (0-2-0) so the DS base `.nds-prow` border
+   and padding cannot win on source order. */
+.causeHead.causeHead {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.causeHead.causeHead:hover { background: var(--nds-grid-child-hover-bg); }
+/* The label's own layout: chevron + name on one line, the name free to truncate. */
+.causeLabel { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chevron { flex: 0 0 auto; color: var(--nds-text-3); }
+.causeName { flex: 1 1 auto; min-width: 0; font-weight: var(--nds-font-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.causeCount { flex: 0 0 auto; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
+.causeSince { flex: 0 0 auto; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); }
+
+.rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--nds-border-subtle); }
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 6px 12px 6px 34px;
+  font-size: var(--nds-font-size-xs); color: var(--nds-text-2);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.row:last-child { border-bottom: 0; }
+.rowType { flex: 0 0 140px; color: var(--nds-text); }
+.rowRef { flex: 0 0 130px; font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.rowAge { flex: 0 0 90px; }
+.rowRetry { flex: 0 0 50px; font-variant-numeric: tabular-nums; }
+.rowNoJump { color: var(--nds-text-3); font-style: italic; }
+.more { padding: 8px 12px 8px 34px; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); }
+
+/* The two sentences that stop silence reading as good news. Quiet, but never hidden. */
+.foot { margin-top: 4px; display: flex; flex-direction: column; gap: 4px; }
+.coverage,
+.dormant { margin: 0; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); }
+.causeCodes { flex: 0 0 auto; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); }
+.rowMessage { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nds-text-3); }
+
+/* The gate banner. Warning-toned, not danger: nothing is broken — a switch is off on purpose. */
+.gate {
+  padding: 10px 12px;
+  border: 1px solid var(--nds-warning-border);
+  /* `--nds-warning-bg` does NOT exist. Written that way it resolved to transparent with no error
+     and no warning — the banner rendered as a bare outline. `--nds-warning-soft` is the DS's
+     warning surface (primitives.css:287 pairs it with -text on .nds-tag.warning). */
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  border-radius: var(--nds-radius-lg);
+  font-size: var(--nds-font-size-sm);
+}
+
+.rowSku { flex: 0 0 210px; color: var(--nds-text); font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Reason tone. `throttled` and `gated` are deliberately QUIET: nothing is wrong and no operator
+   action exists, so giving them a rejection's weight would manufacture 33 problems out of 3. */
+.reason { flex: 0 0 auto; padding: 1px 7px; border-radius: var(--nds-radius-xl); font-size: var(--nds-font-size-xs); text-transform: lowercase; background: var(--nds-grey-100); color: var(--nds-text-2); }
+.reason_quiet { background: var(--nds-grey-100); color: var(--nds-text-2); }
+.reason_needsYou { background: var(--nds-danger-soft); color: var(--nds-danger-text); }
+.verdict { margin: 0; padding: 0 12px 10px 34px; color: var(--nds-text-2); font-size: var(--nds-font-size-xs); }
+.pageNote { margin: 0; color: var(--nds-text-3); font-size: var(--nds-font-size-xs); }

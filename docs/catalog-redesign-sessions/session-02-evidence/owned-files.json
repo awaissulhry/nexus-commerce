@@ -1,0 +1,142 @@
+[
+  {
+    "path": "apps/api/src/jobs/scheduled-import.job.ts",
+    "change": "changed",
+    "sha256": "99772a8e1a787094c50a04d51f45022da7a314827894f9ab9db72a9fe046278e"
+  },
+  {
+    "path": "apps/api/src/routes/catalog-transfer.routes.ts",
+    "change": "changed",
+    "sha256": "27c4479b685e8ce3ceeda1b18aef996612d666022302507b0545e75ddef315ac"
+  },
+  {
+    "path": "apps/api/src/routes/import-wizard.routes.ts",
+    "change": "changed",
+    "sha256": "75b36437c9ee5dd391af104c38f133cae814ff8c1a14844a44e457e7d3b4bbfe"
+  },
+  {
+    "path": "apps/api/src/routes/scheduled-imports.routes.ts",
+    "change": "changed",
+    "sha256": "919fdd050d3239c58c987654e38ab412c4a10c68be566179b4d6b5cec427bf5a"
+  },
+  {
+    "path": "apps/api/src/services/import-wizard.service.ts",
+    "change": "changed",
+    "sha256": "524f9c5d6f331b8e1f14a7fd2fdb7463e397e80619a1b962db077b38b06aa1ee"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-source-fetch.ts",
+    "change": "new",
+    "sha256": "d2521eaf01f5adff5e1ae6a7233b53e0e1ad2b1b12332a3f4bde1c0fcbef60fe"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-source-file.ts",
+    "change": "new",
+    "sha256": "ce53571db9f2c86df8d607b733b737d04f2a930cb44e276c6bae05562011abb4"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-source-mapping.ts",
+    "change": "new",
+    "sha256": "c20401846790d12b4630828bef55fd7c799fe52636955ceabe8678d077dfd696"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-source-mapping.vitest.test.ts",
+    "change": "new",
+    "sha256": "3c818da61fb25edeaad2746ad2b91c3e1279924836a27d75c8c23b482a443483"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-source.service.ts",
+    "change": "new",
+    "sha256": "520b3fa0a4a31a0c2f091c7f8f14e23dd80412e09ff6b64ebddbf405c760f460"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-export.ts",
+    "change": "changed",
+    "sha256": "63e5c862ac3cc29cefb5a8822f0bc7eb3acab1b5fdbfbb6641b4c861e6ab8ae5"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-file.ts",
+    "change": "changed",
+    "sha256": "e6ccfb9002beb980492bdb88032cd1319a4086a24d31ef8f86ab2e2acf3752af"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-http.vitest.test.ts",
+    "change": "new",
+    "sha256": "0ccc160ee797a6fd72eb7c4a0f98c5663195dfc7fa40c907d8b4a7928c9e191e"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-jobs.ts",
+    "change": "new",
+    "sha256": "adcdfd80c5d63f328552050314883bd61821034810d1b18c083c8af2435eac19"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-jobs.vitest.test.ts",
+    "change": "new",
+    "sha256": "95e85327dd89d00e79eff78f7ce7ed8c89650d0ab26ef9463957ac18cd4ce752"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-plan.ts",
+    "change": "changed",
+    "sha256": "fc187ebd494362d36f5b8c9927ee24a0f0662841941f201b3280c4a81196a608"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-preserved.ts",
+    "change": "new",
+    "sha256": "38ad7c5c8bec5d85a949f3001b5c3a7429fb7605d732595ed7728dee34286dfb"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer-test/store.ts",
+    "change": "new",
+    "sha256": "78f240d03fc87e987ff53fd7af8dc76d035f36b9258e808e18bb7b871560a6ac"
+  },
+  {
+    "path": "apps/api/src/services/pim/catalog-transfer.service.ts",
+    "change": "changed",
+    "sha256": "95a8e797e2006c2c1f4d1eb44ab04420a398867127a68d5b2b617fe25ec35bb3"
+  },
+  {
+    "path": "apps/api/src/services/scheduled-import.service.ts",
+    "change": "changed",
+    "sha256": "12ddb31c6840328216fbc2a20787f3dfec5bc5a4d38a005aacae0e4fc76fc4dd"
+  },
+  {
+    "path": "apps/web/src/app/bulk-operations/imports/page.tsx",
+    "change": "changed",
+    "sha256": "de043300735573eb07c3948c6f075119041baeea7b76d0f48a3144b51c5745a2"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/SourceMappingEditor.tsx",
+    "change": "new",
+    "sha256": "0520c7eb39020fe0c974188d37c7fc2cd55aa19bfec5fa6e9283928e123aad4a"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/SourcesPanel.tsx",
+    "change": "new",
+    "sha256": "8918d8e58b0a4511dac7331c33c48791dfe79678b3c190c688aaa00fffe248aa"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/TransferReview.tsx",
+    "change": "new",
+    "sha256": "5de56560ac74af970bfa470a8022201f8fee77d2653b8b92fc33053768c31d07"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/page.tsx",
+    "change": "changed",
+    "sha256": "8e3c43bcf5b789126da3840f7aac7ba6ec78c8bd5ace8f0eba5102f973e7eca0"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/sourceMapping.ts",
+    "change": "new",
+    "sha256": "be535fcc6a0ef7b1272ddfff60671330227b4c6fd5b8e079f5219d9366a7ed1f"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/transfer.module.css",
+    "change": "changed",
+    "sha256": "af653fb5f9a10cad55b09b691d8f9d016caffd8255a6ec4f3e5e755489e4f56b"
+  },
+  {
+    "path": "apps/web/src/app/products/catalog-transfer/transferApi.ts",
+    "change": "new",
+    "sha256": "597fb35dbcf08997376f6235a08ca8b47dc367a9f4e2803b16f3759a31888fa0"
+  }
+]

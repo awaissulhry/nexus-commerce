@@ -1,0 +1,559 @@
+{
+  "startedAt": "2026-09-11T22:15:23.069Z",
+  "scriptSha256": "80d33ef63de757fe9841eef291a91f47956979b49bc6aa42766d7b1ee38b3c3e",
+  "controls": {
+    "checks": 13,
+    "passed": 13,
+    "production": {
+      "productRowsVisible": 338,
+      "namedFixtureRows": 326,
+      "marketRowsVisible": 20,
+      "listingRowsVisible": 977,
+      "transactionReadOnly": true,
+      "rlsCoverageVerified": true
+    }
+  },
+  "target": {
+    "environment": "production",
+    "service": "@nexus/api",
+    "databaseHost": "ep-purple-river-altf6t3y-pooler.c-3.eu-central-1.aws.neon.tech",
+    "database": "neondb"
+  },
+  "method": {
+    "population": "All rows, including soft-deleted products, all workspaces visible to the Railway database role. Workspace participates in every join.",
+    "comparison": "Stored text observations, grouped by workspace/product/field/language. Different bytes do not prove intentional channel customization. Strings retain whitespace, HTML, case and Unicode; arrays retain order. No application fallback is synthesized.",
+    "language": "Explicit locale/tag wins. Untagged listing columns and core overrideData fields use the unique Marketplace(workspace,channel,code).language, with region fallback only for DEFAULT/empty marketplace. Missing or ambiguous authority is reported, never guessed.",
+    "fields": "Core listing text plus every text field in explicitly localized Etsy/Shopify bags, linked sheet values, and Amazon language_tag arrays. Channel-native field names remain distinct unless mapped in coreFields.",
+    "json": "JSON is decoded by PostgreSQL: byte comparison concerns stored text values, not original JSON formatting. Media and flat-file snapshots are scanned for tags, never treated as editable text stores."
+  },
+  "coverage": [
+    {
+      "table": "Marketplace",
+      "status": "read",
+      "rows": 20,
+      "columns": [
+        "id",
+        "channel",
+        "code",
+        "language",
+        "isActive"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId",
+        "languages"
+      ]
+    },
+    {
+      "table": "Product",
+      "status": "read",
+      "rows": 338,
+      "columns": [
+        "id",
+        "sku",
+        "parentId",
+        "name",
+        "description",
+        "bulletPoints",
+        "keywords",
+        "localizedContent",
+        "categoryAttributes",
+        "deletedAt",
+        "aPlusContent"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "ProductTranslation",
+      "status": "read",
+      "rows": 1,
+      "columns": [
+        "id",
+        "productId",
+        "language",
+        "name",
+        "description",
+        "bulletPoints",
+        "keywords",
+        "source",
+        "reviewedAt"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId",
+        "attributes",
+        "sourceHash",
+        "authoredAt",
+        "version"
+      ]
+    },
+    {
+      "table": "ChannelListing",
+      "status": "read",
+      "rows": 977,
+      "columns": [
+        "id",
+        "productId",
+        "channel",
+        "marketplace",
+        "region",
+        "title",
+        "description",
+        "titleOverride",
+        "descriptionOverride",
+        "bulletPointsOverride",
+        "overrideData",
+        "platformAttributes",
+        "flatFileSnapshot",
+        "aliasId",
+        "channelConnectionId"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "ProductSeo",
+      "status": "read",
+      "rows": 0,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "APlusContent",
+      "status": "read",
+      "rows": 72,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "BrandStory",
+      "status": "read",
+      "rows": 0,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "ProductAiDraft",
+      "status": "read",
+      "rows": 0,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "CellFormula",
+      "status": "read",
+      "rows": 0,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    },
+    {
+      "table": "AssetLocaleOverlay",
+      "status": "read",
+      "rows": 0,
+      "columns": [
+        "id",
+        "locale"
+      ],
+      "optionalColumnsAbsent": [
+        "workspaceId"
+      ]
+    }
+  ],
+  "marketplaces": [
+    {
+      "id": "05b78215-6e29-4d4b-9d38-fb62b209cda4",
+      "channel": "AMAZON",
+      "code": "TR",
+      "language": "tr",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdlo0000ol01dd2h68ef",
+      "channel": "AMAZON",
+      "code": "IT",
+      "language": "it",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdns0001ol0137olt2tp",
+      "channel": "AMAZON",
+      "code": "DE",
+      "language": "de",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdo40002ol01dmw1jiud",
+      "channel": "AMAZON",
+      "code": "FR",
+      "language": "fr",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdog0003ol01c8ms6fid",
+      "channel": "AMAZON",
+      "code": "ES",
+      "language": "es",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdor0004ol01t03kjng7",
+      "channel": "AMAZON",
+      "code": "UK",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdp20005ol01cdtn3iuj",
+      "channel": "AMAZON",
+      "code": "NL",
+      "language": "nl",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdpe0006ol01tpiqv1gh",
+      "channel": "AMAZON",
+      "code": "SE",
+      "language": "sv",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdpp0007ol01qnvpu7cw",
+      "channel": "AMAZON",
+      "code": "PL",
+      "language": "pl",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdq10008ol01pye2x7zl",
+      "channel": "AMAZON",
+      "code": "US",
+      "language": "en",
+      "isActive": false,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdqe0009ol01ttftqfd9",
+      "channel": "EBAY",
+      "code": "IT",
+      "language": "it",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdqp000aol01ted9s59p",
+      "channel": "EBAY",
+      "code": "DE",
+      "language": "de",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdr0000bol01b14amo15",
+      "channel": "EBAY",
+      "code": "FR",
+      "language": "fr",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdrc000col01tlcbnnin",
+      "channel": "EBAY",
+      "code": "ES",
+      "language": "es",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdrn000dol01lz6ky07j",
+      "channel": "EBAY",
+      "code": "UK",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdrx000eol01quux3io4",
+      "channel": "SHOPIFY",
+      "code": "GLOBAL",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvds9000fol01dzf4jn64",
+      "channel": "WOOCOMMERCE",
+      "code": "GLOBAL",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "cmonjvdsk000gol01qn64kxjb",
+      "channel": "ETSY",
+      "code": "GLOBAL",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "d6b09afc-f6ff-4053-a196-fea88917a436",
+      "channel": "AMAZON",
+      "code": "BE",
+      "language": "nl",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    },
+    {
+      "id": "mkpl_amazon_ie",
+      "channel": "AMAZON",
+      "code": "IE",
+      "language": "en",
+      "isActive": true,
+      "workspaceId": "(pre-workspace-schema)",
+      "languages": null
+    }
+  ],
+  "slotsByLanguage": {
+    "en": {
+      "slots": 338,
+      "emptySlots": 338,
+      "slotsWithText": 0,
+      "fieldsPresent": 0,
+      "textFields": 0,
+      "metadataFields": 0
+    },
+    "it": {
+      "slots": 338,
+      "emptySlots": 337,
+      "slotsWithText": 1,
+      "fieldsPresent": 1,
+      "textFields": 1,
+      "metadataFields": 0
+    }
+  },
+  "translationRowsByLanguage": {
+    "en": 1
+  },
+  "slotTableOverlaps": [
+    {
+      "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "workspaceId": "(pre-workspace-schema)",
+      "slotLanguage": "en",
+      "translationId": "cmp0765q3002hlb01kmy3oa22",
+      "tableLanguage": "en",
+      "fields": []
+    }
+  ],
+  "slotSourceComparisons": [
+    {
+      "productId": "cmokmy3a40078pm0p1fvnu523",
+      "sku": "GALE-JACKET",
+      "language": "it",
+      "field": "title",
+      "identicalToNativeColumn": true,
+      "slot": {
+        "sha256": "4ad07429527da8a5bd2a74c97df158fe7e76c594901dfc365f63e6be67aa13e6",
+        "bytes": 127,
+        "kind": "string"
+      },
+      "native": {
+        "sha256": "4ad07429527da8a5bd2a74c97df158fe7e76c594901dfc365f63e6be67aa13e6",
+        "bytes": 127,
+        "kind": "string"
+      }
+    }
+  ],
+  "unknownLanguages": [],
+  "reviewMetadata": [],
+  "localeBagCounts": {
+    "_etsyInformationLocales": {
+      "listings": 0,
+      "slots": 0,
+      "languages": {}
+    },
+    "_shopifyInformationLocales": {
+      "listings": 0,
+      "slots": 0,
+      "languages": {}
+    },
+    "_productMediaLocales": {
+      "listings": 0,
+      "slots": 0,
+      "languages": {}
+    }
+  },
+  "transaction": {
+    "read_only": "on",
+    "isolation": "repeatable read",
+    "database": "neondb",
+    "role": "neondb_owner",
+    "snapshot_at": "2026-09-11T22:15:23.722Z",
+    "rolledBack": true
+  },
+  "migrations": {
+    "applied": 425,
+    "localFolders": 433,
+    "pendingLocalFolders": [
+      "20260908_amazon_media_workspace",
+      "20260908a_business_workspaces",
+      "20260908b_workspace_data_isolation",
+      "20260908c_sync_log_result_columns",
+      "20260908d_profile_directory_pagination",
+      "20260908e_guarded_account_assignment",
+      "20260911020000_information_formula_destination",
+      "20260911_category_taxonomies"
+    ],
+    "unfinished": []
+  },
+  "rls": [
+    {
+      "table": "ChannelListing",
+      "enabled": false,
+      "forced": false,
+      "owner": "neondb_owner"
+    },
+    {
+      "table": "Marketplace",
+      "enabled": false,
+      "forced": false,
+      "owner": "neondb_owner"
+    },
+    {
+      "table": "Product",
+      "enabled": false,
+      "forced": false,
+      "owner": "neondb_owner"
+    },
+    {
+      "table": "ProductTranslation",
+      "enabled": false,
+      "forced": false,
+      "owner": "neondb_owner"
+    }
+  ],
+  "databaseRole": {
+    "rolname": "neondb_owner",
+    "rolsuper": false,
+    "rolbypassrls": true
+  },
+  "population": {
+    "products": 338,
+    "activeProducts": 338,
+    "roots": 37,
+    "listings": 977,
+    "translations": 1,
+    "marketplaces": 20,
+    "marketplaceLanguages": [
+      "de",
+      "en",
+      "es",
+      "fr",
+      "it",
+      "nl",
+      "pl",
+      "sv",
+      "tr"
+    ],
+    "workspaces": [
+      "(pre-workspace-schema)"
+    ]
+  },
+  "overrides": {
+    "anyNonempty": 512,
+    "titleOverride": 0,
+    "descriptionOverride": 0,
+    "bulletPointsOverride": 512
+  },
+  "comparisonCounts": {
+    "single-channel-only": 21358,
+    "different-bytes-across-channels": 286,
+    "byte-identical-across-channels": 4
+  },
+  "regionalTagCounts": {
+    "ChannelListing:it_IT": 12518,
+    "ChannelListing:de_DE": 7190,
+    "ChannelListing:fr_FR": 2131,
+    "ChannelListing:es_ES": 2701,
+    "APlusContent:it-IT": 72
+  },
+  "regionalRowsByStore": {
+    "Marketplace": 0,
+    "Product": 0,
+    "ProductTranslation": 0,
+    "ChannelListing": 587,
+    "ProductSeo": 0,
+    "APlusContent": 72,
+    "BrandStory": 0,
+    "ProductAiDraft": 0,
+    "CellFormula": 0,
+    "AssetLocaleOverlay": 0
+  },
+  "finishedAt": "2026-09-11T22:15:36.357Z",
+  "details": {
+    "path": "production-details.json.gz",
+    "sha256": "c52f91158c28d5f921cfa05a0247c3047a91b98756cbd2b126e909f0ab35c6fe",
+    "compressedBytes": 1086144,
+    "comparisonGroups": 21648,
+    "regionalOccurrences": 24612,
+    "jsonSlots": 676
+  },
+  "comparisonBreakdown": {
+    "title:it:different-bytes-across-channels": 179,
+    "description:it:different-bytes-across-channels": 107,
+    "title:it:byte-identical-across-channels": 4
+  }
+}

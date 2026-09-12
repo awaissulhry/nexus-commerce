@@ -11,8 +11,11 @@
  * (.analysis/ds-catalog-verify.mjs captures it @2x).
  */
 
-import { useMemo, useState, type ReactNode } from 'react'
+import { ScrollingTabsExample } from './ScrollingTabsExample'
+import { MappingStatusExample } from './MappingStatusExample'
+import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
 import { GridCard, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
+import { PROJECTION_STATES, ProjectionCell, projectionMeta } from '../grid/renderers'
 import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Settings2, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
   palette,
@@ -40,10 +43,13 @@ import {
   Radio,
   RadioCard,
   Tooltip,
+  TooltipPortalProvider,
   Spinner,
   Skeleton,
   Kbd,
   Divider,
+  AxisChip,
+  MappingChip,
   SegmentedControl,
   ToolbarButton,
   ToolbarDivider,
@@ -56,12 +62,14 @@ import {
   Tabs,
   Pagination,
   ProgressBar,
+  SourceIndicator,
   Modal,
   Drawer,
   Menu,
   MultiSelect,
   Combobox,
   MetricStrip,
+  PressableRow,
   HoverCard,
   DateRangePicker,
   PerformanceGraph,
@@ -71,6 +79,7 @@ import {
   Banner,
   Stepper,
   FileDropzone,
+  Disclosure,
   type Column,
   ToastProvider,
   useToast,
@@ -80,6 +89,7 @@ import {
   AppShell,
   PageHeader,
   DetailHeader,
+  ScopeBar,
   FilterPanel,
   FilterField,
   FilterBar,
@@ -94,6 +104,15 @@ import {
   type CustomizableColumn,
 } from '@/design-system/patterns'
 
+import { FormulaEditorExample } from './FormulaEditorExample'
+import { RecordListExample } from './RecordListExample'
+import { OrderedListExample } from './OrderedListExample'
+import { AsyncListboxExample } from './AsyncListboxExample'
+import { MediaGalleryExample } from './MediaGalleryExample'
+import { EmbeddedDrawerExample } from './EmbeddedDrawerExample'
+import { DrawerFooterExample } from './DrawerFooterExample'
+import { WorkspaceSubheaderExample } from './WorkspaceSubheaderExample'
+
 const ramps: Array<[string, Record<string, string>]> = [
   ['Blue', palette.blue],
   ['Grey', palette.grey],
@@ -105,6 +124,15 @@ const ramps: Array<[string, Record<string, string>]> = [
 ]
 
 const mono = "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace"
+
+/**
+ * A catalog specimen of a grid cell. `ProjectionCell` takes AG's own `ICellRendererParams`, which
+ * only AG can build — the catalog renders it outside a grid on purpose, so the five states can be
+ * seen side by side. The cast is confined to this one function rather than sprinkled per specimen.
+ */
+function projectionSpecimen(partial: Partial<ComponentProps<typeof ProjectionCell>>): ComponentProps<typeof ProjectionCell> {
+  return { colDef: { headerName: 'eBay · IT' }, ...partial } as unknown as ComponentProps<typeof ProjectionCell>
+}
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: ReactNode }) {
   return (
@@ -153,11 +181,12 @@ function SwatchGrid({ children }: { children: ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(108px, 1fr))', gap: 12 }}>{children}</div>
 }
 
-/** Two-panel "Customise" preferences modal (sticky cols + reorder + sort). */
+/** Canonical grouped column modal, shared by product and advertising grids. */
 function PreferencesModalDemo() {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState<PreferencesValue>({
     visibleColumns: ['spend', 'acos', 'roas'],
+    lockedColumns: [],
     stickyFirstColumn: true,
     stickyLastColumn: true,
     pageSize: 100,
@@ -168,17 +197,21 @@ function PreferencesModalDemo() {
     <>
       <Button onClick={() => setOpen(true)}>Open Customise…</Button>
       <PreferencesModal
+        attributeGroups
+        groupToggles
+        inViewCount
+        title="Customise columns"
         open={open}
         onClose={() => setOpen(false)}
         value={value}
         onConfirm={setValue}
         allColumns={[
           { key: 'campaign', label: 'Campaign', locked: true },
-          { key: 'spend', label: 'Spend' },
-          { key: 'acos', label: 'ACoS' },
-          { key: 'roas', label: 'ROAS' },
-          { key: 'orders', label: 'Orders' },
-          { key: 'actions', label: 'Actions', locked: true },
+          { key: 'spend', label: 'Spend', group: 'Cost' },
+          { key: 'acos', label: 'ACoS', group: 'Cost' },
+          { key: 'roas', label: 'ROAS', group: 'Results' },
+          { key: 'orders', label: 'Orders', group: 'Results' },
+          { key: 'actions', label: 'Actions', locked: true, lockSide: 'right' },
         ]}
         defaultVisible={['spend', 'acos', 'roas']}
         sortFieldOptions={[
@@ -357,6 +390,9 @@ const GDS_COLS: ColDef<GdsRow>[] = [
 ]
 
 export function TokenCatalog() {
+  const [prowLog, setProwLog] = useState('')
+  const [prowActive, setProwActive] = useState(false)
+  const [prowExpanded, setProwExpanded] = useState(false)
   const gdsSelection = useMemo(() => gridSelection<GdsRow>(), [])
   const [dark, setDark] = useState(false)
   const [tab, setTab] = useState('overview')
@@ -473,6 +509,7 @@ export function TokenCatalog() {
             <Pill tone="warning">Paused</Pill>
             <Pill tone="neutral">Archived</Pill>
           </div>
+          <MappingStatusExample />
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Program / targeting badge</div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -545,6 +582,16 @@ export function TokenCatalog() {
           <Tooltip label="Helpful hint shown on hover">
             <Button size="sm">Hover me</Button>
           </Tooltip>
+          <div style={{ overflow: 'hidden', padding: 'var(--nds-space-8)', marginTop: 'var(--nds-space-8)' }}>
+            <Tooltip portal label="This shared tooltip layer stays above sticky headers and scroll containers.">
+              <Button size="sm">Tooltip above a scrolling grid</Button>
+            </Tooltip>
+          </div>
+          <TooltipPortalProvider disabled>
+            <Tooltip label="Details are available through an explicit action instead of hover.">
+              <Button size="sm">Quiet grid control</Button>
+            </Tooltip>
+          </TooltipPortalProvider>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Spinner</div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
@@ -632,9 +679,70 @@ export function TokenCatalog() {
             ]}
           />
 
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>PressableRow</div>
+          <div data-testid="prow-story" style={{ display: 'flex', flexDirection: 'column', gap: 8, maxWidth: 520 }}>
+            <PressableRow
+              label="Open the September restock plan"
+              onClick={() => setProwLog('row opened')}
+              actions={
+                <>
+                  <input
+                    aria-label="Include in export"
+                    type="checkbox"
+                    onChange={(e) => setProwLog(`checkbox → ${e.target.checked}`)}
+                  />
+                  <Button size="sm" variant="ghost" onClick={() => setProwLog('nested button')}>
+                    Edit
+                  </Button>
+                </>
+              }
+            >
+              <span>12 SKUs</span>
+            </PressableRow>
+            <PressableRow
+              label="Only show out of stock"
+              active={prowActive}
+              onClick={() => { setProwActive((v) => !v); setProwLog('toggled') }}
+            />
+            <PressableRow label="Disabled row" disabled onClick={() => setProwLog('should never fire')} />
+            {/* hub #657 — the three states PES.4's rows need. Each maps to a DIFFERENT aria
+                property, and supplying two throws in dev. */}
+            <PressableRow
+              label="Channel overrides"
+              expanded={prowExpanded}
+              onClick={() => { setProwExpanded((v) => !v); setProwLog('disclosure toggled') }}
+            />
+            <PressableRow
+              label="Amazon UK"
+              current
+              onClick={() => setProwLog('current row')}
+            />
+            <PressableRow
+              label="Xavia"
+              description="inherited value; activate to pin an override"
+              onClick={() => setProwLog('ghost row')}
+            />
+            {/* The spec reads this line; it is how "the nested control did not activate the row"
+                is asserted from outside the component. */}
+            <div data-testid="prow-log" style={{ fontSize: 'var(--nds-font-size-xs)', color: 'var(--nds-text-3)' }}>
+              last: {prowLog || '(nothing yet)'}
+            </div>
+          </div>
+
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>FileDropzone</div>
           <div style={{ maxWidth: 420 }}>
             <FileDropzone accept=".csv,.tsv,.xlsx,.xls,.json" maxBytes={10 * 1024 * 1024} onFiles={() => {}} />
+          </div>
+
+          <div style={{ display: 'grid', gap: 'var(--nds-space-12)', marginTop: 'var(--nds-space-18)' }}>
+            <Disclosure summary="Disclosure · supporting details">
+              Content stays hidden until requested. Use Tab, then Enter or Space to expand it.
+            </Disclosure>
+            <Disclosure summary="Disclosure · initially open" open>
+              <Field label="Optional reference" hint="Controls belong in the disclosure body.">
+                <Input placeholder="Reference" />
+              </Field>
+            </Disclosure>
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>ImageUpload</div>
@@ -685,12 +793,21 @@ export function TokenCatalog() {
           />
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Pagination</div>
+          <ScrollingTabsExample />
           <Pagination page={pg} pageCount={12} onPage={setPg} />
 
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>Progress</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 320 }}>
-            <ProgressBar value={64} />
+          <ProgressBar value={64} />
             <ProgressBar indeterminate />
+          </div>
+          <div style={{ marginTop: 18, color: 'var(--nds-text)', fontWeight: 600 }}>Value sources · compact container</div>
+          <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '4px 16px', maxWidth: 320 }} aria-label="Value source indicators">
+            <SourceIndicator showLabel kind="master" label="Follows Master" description="Uses the resolved Master value through the channel mapping" />
+            <SourceIndicator showLabel kind="override" label="Listing override" description="This listing stores its own value" />
+            <SourceIndicator showLabel kind="rule" label="Mapping rule" description="Calculated by the configured rule" />
+            <SourceIndicator showLabel kind="default" label="Channel default" description="Supplied by a configured default" />
+            <SourceIndicator showLabel kind="missing" label="No mapping" description="No source has been configured" />
           </div>
         </DSCard>
 
@@ -833,6 +950,8 @@ export function TokenCatalog() {
           (a null is a dash, a measured zero is not), presets, a toolbar and a pager. Every scenario is rendered and measured in{' '}
           <a href="/design/grid-lab?tab=gds">/design/grid-lab → GDS scenarios</a>; the spec is <code>design-system/docs/GRID.md</code>.
         </p>
+        <FormulaEditorExample />
+
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
           <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} pinnedBottomRowData={GDS_TOTALS} />
         </GridCard>
@@ -865,6 +984,15 @@ export function TokenCatalog() {
           Page-level organisms — the app shell + headers that every section adopts.
         </p>
 
+        <h3>WorkspaceSubheader · collapsible secondary navigation</h3>
+        <WorkspaceSubheaderExample />
+        <RecordListExample />
+        <OrderedListExample />
+        <AsyncListboxExample />
+        <MediaGalleryExample />
+        <EmbeddedDrawerExample />
+        <DrawerFooterExample />
+
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', marginBottom: 10 }}>PageHeader</div>
         <DSCard padded elevated>
           <PageHeader
@@ -888,6 +1016,47 @@ export function TokenCatalog() {
             badge={<Badge program="auto">A</Badge>}
             title="Helmets · Auto"
             actions={<Button variant="primary">Edit</Button>}
+          />
+        </DSCard>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
+          DetailHeader <span style={{ textTransform: 'none', fontWeight: 500 }}>· dense — a page BAND, not a section head</span>
+        </div>
+        <DSCard elevated>
+          <DetailHeader
+            dense
+            backLabel="Products"
+            onBack={() => {}}
+            title="GALE Pro Racing Suit"
+            meta={
+              <>
+                <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>GALE-KAN-PRO</span>
+                <Pill tone="success" dot>Active</Pill>
+              </>
+            }
+            status="Saved 12:41"
+            actions={<Button variant="primary">Publish</Button>}
+          />
+        </DSCard>
+
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
+          ScopeBar <span style={{ textTransform: 'none', fontWeight: 500 }}>· which LAYER of a record you are editing — not a filter bar</span>
+        </div>
+        <DSCard elevated>
+          <ScopeBar
+            label="Scope"
+            active="master"
+            onChange={() => {}}
+            items={[
+              { id: 'master', label: 'Master', readiness: { pct: 96, state: 'ready' } },
+              { id: 'AMAZON', label: 'Amazon', readiness: { pct: 92, state: 'warn' } },
+              { id: 'EBAY', label: 'eBay', readiness: { pct: 71, state: 'blocked', note: 'Missing: EAN, country of origin.' } },
+              { id: 'SHOPIFY', label: 'Shopify', readiness: { pct: null, state: 'absent', note: 'Not scored for this product type.' } },
+              { id: 'ETSY', label: 'Etsy', disabled: true, disabledReason: 'Etsy is not configured for this market.' },
+            ]}
+            onAdd={() => {}}
+            addLabel="Add a listing alias"
+            right={<Button size="sm">IT · Italy</Button>}
           />
         </DSCard>
 
@@ -1064,7 +1233,7 @@ export function TokenCatalog() {
         <ColumnCustomizer open={colCustOpen} onClose={() => setColCustOpen(false)} columns={colCustCols} onApply={setColCustCols} />
 
         <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--nds-text-3)', margin: '18px 0 10px' }}>
-          PreferencesModal <span style={{ textTransform: 'none', fontWeight: 500 }}>· two-panel Customise (sticky cols · reorder · sort)</span>
+          PreferencesModal <span style={{ textTransform: 'none', fontWeight: 500 }}>· grouped columns · bulk visibility and pins · keyboard reorder</span>
         </div>
         <PreferencesModalDemo />
       </section>
@@ -1082,6 +1251,78 @@ export function TokenCatalog() {
           </div>
         </Card>
       </Section>
+
+      <section data-cat="variants" style={{ marginBottom: 40 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 2px', letterSpacing: '-0.01em' }}>
+          Variants page <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--nds-text-3)' }}>· VP.5 · the three pieces</span>
+        </h2>
+        <p style={{ fontSize: 13, color: 'var(--nds-text-3)', margin: '0 0 14px' }}>
+          <code>AxisChip</code> and <code>MappingChip</code> are the 28px chips the Variants page&rsquo;s two 40px bands are built
+          from; <code>ProjectionCell</code> is one variant row against one channel coordinate. Every tone below is read from{' '}
+          <code>readinessMeta()</code> through <code>projectionMeta()</code> — the table declares which readiness state each word
+          borrows its colour from, and nothing here picks a colour. Spec{' '}
+          <code>docs/2026-09-11-variants-page-spec.md</code> §3.1, §3.3, §4.1.
+        </p>
+
+        <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>Family band · AxisChip</h3>
+        <div className="nds-pageband" style={{ marginBottom: 14 }}>
+          <span className="nds-pageband-label">Axes</span>
+          <div className="nds-pageband-main">
+            <AxisChip label="Colore" count="2 values" dragHandleProps={{ draggable: true }} />
+            <span style={{ fontSize: 'var(--nds-font-size-sm-plus)', color: 'var(--nds-text-3)' }}>×</span>
+            <AxisChip label="Taglia" count="10 values" dragHandleProps={{ draggable: true }} />
+            <AxisChip label="Materiale" count="1 value" pressed />
+            <AxisChip label="Stagione" count="4 values" grip={false} />
+            <span className="nds-pageband-divider" />
+            <span className="nds-pageband-note"><b>20</b> of 20 combinations exist · <b>0</b> missing</span>
+          </div>
+        </div>
+
+        <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>Mapping band · MappingChip</h3>
+        <div className="nds-pageband" style={{ marginBottom: 14 }}>
+          <span className="nds-pageband-label">Mapping</span>
+          <div className="nds-pageband-main">
+            <MappingChip from="Colore" to="Colore" title="eBay specific" />
+            <MappingChip from="Taglia" to="Size" title="eBay specific" />
+            <MappingChip from="Materiale" title="Not mapped to an eBay specific yet" />
+            <span className="nds-pageband-divider" />
+            <span className="nds-pageband-note">One listing · <b>19</b> of 20 variants included · 20 of 250 allowed</span>
+          </div>
+        </div>
+
+        <h3 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 8px' }}>Projection cells · every state, and where its tone comes from</h3>
+        <div style={{ border: '1px solid var(--nds-border-subtle)', borderRadius: 'var(--nds-radius-lg)', overflow: 'hidden' }}>
+          {PROJECTION_STATES.map((state, i) => {
+            const meta = projectionMeta(state)
+            return (
+              <div key={state} style={{ display: 'flex', alignItems: 'center', height: 36, padding: '0 9px', gap: 6, fontSize: 'var(--nds-font-size-base)', fontWeight: 500, background: 'var(--nds-surface)', borderTop: i ? '1px solid var(--nds-border-subtle)' : undefined }}>
+                <div style={{ width: 220, flex: 'none' }}>
+                  <ProjectionCell
+                    {...projectionSpecimen({
+                      value: state !== 'excluded',
+                      facts: () => ({ state }),
+                      onToggle: () => {},
+                    })}
+                  />
+                </div>
+                <code style={{ fontSize: 'var(--nds-font-size-xs)', color: 'var(--nds-text-3)' }}>{state}</code>
+                <span style={{ marginLeft: 'auto', fontSize: 'var(--nds-font-size-xs)', color: 'var(--nds-text-2)' }}>
+                  tone {meta.tone} {meta.from ? `← readinessMeta(${meta.from.split(':')[1]}, ${meta.from.split(':')[0]})` : '· paints no status colour'}
+                </span>
+              </div>
+            )
+          })}
+          <div style={{ display: 'flex', alignItems: 'center', height: 36, padding: '0 9px', gap: 6, fontSize: 'var(--nds-font-size-base)', fontWeight: 500, background: 'var(--nds-surface)', borderTop: '1px solid var(--nds-border-subtle)' }}>
+            <div style={{ width: 220, flex: 'none' }}>
+              <ProjectionCell {...projectionSpecimen({ value: null, facts: () => ({ detail: '115703481922', note: '1 listing' }) })} />
+            </div>
+            <code style={{ fontSize: 'var(--nds-font-size-xs)', color: 'var(--nds-text-3)' }}>parent row</code>
+            <span style={{ marginLeft: 'auto', fontSize: 'var(--nds-font-size-xs)', color: 'var(--nds-text-2)' }}>
+              value null · no tick, the channel&rsquo;s own id and a note instead
+            </span>
+          </div>
+        </div>
+      </section>
 
       <Section title="Typography" desc="Inter via --font-sans, rendered with H10's heavier (auto) smoothing.">
         <Card>

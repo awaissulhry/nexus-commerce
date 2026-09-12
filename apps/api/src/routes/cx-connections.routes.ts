@@ -26,6 +26,7 @@ export default async function cxConnectionsRoutes(app: FastifyInstance): Promise
       displayName: s.displayName,
       available: s.available,
       authMode: s.auth.mode,
+      permissionModel: s.auth.permissionModel ?? 'oauth_scopes',
       requiredScopes: s.auth.requiredScopes,
       reviewGatedScopes: s.auth.reviewGatedScopes ?? [],
       regions: s.regions?.map((r) => ({ key: r.key, label: r.label })) ?? [],

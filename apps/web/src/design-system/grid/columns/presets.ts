@@ -147,19 +147,58 @@ export const holdColumn = <T,>(col: ColDef<T>, end: 'left' | 'right', pinned = f
 /* ── actions ──────────────────────────────────────────────────────────────────────────────── */
 
 export interface ActionsColumnOptions<T> extends ActionsCellParams<T> {
+  /** Overrides the shape-derived default (56 for a `⋯`-only column, 120 with a `primary` button). */
   width?: number
-  /** Pin to the right edge so the verbs stay reachable however wide the metric set gets. */
+  /**
+   * Freeze at the right edge. **Defaults to `true`** — see `actionsColumn` for why the old `false`
+   * default was a bug that only appeared on wide grids.
+   */
   pinned?: boolean
   /** Shown in the Customise dialog; the header itself is blank. */
   prefsLabel?: string
 }
 
-export const actionsColumn = <T,>({ width = 120, pinned = false, prefsLabel: _prefsLabel, ...params }: ActionsColumnOptions<T>): ColDef<T> =>
+/**
+ * The `⋯` column, frozen right by default.
+ *
+ * 🔴 It used to default to `pinned = false`, which is harmless on a 12-column grid and a BUG on a
+ * 100-column one: unpinned only sets `lockPosition: 'right'`, so the column is last in the order and
+ * scrolls off the end. PES.3 measured it shipping **invisible** on the channel sheet — present in
+ * the column model, absent from the rendered col-id set, with an empty pinned-right container. A
+ * verb an operator must scroll a hundred columns to reach is not offered.
+ *
+ * The default flipped rather than being documented louder, because the asymmetry is one-sided: on a
+ * narrow grid pinning changes nothing an operator can perceive (there is no horizontal scroll to be
+ * frozen against), while on a wide one it is the difference between a working control and an
+ * invisible one. A default should be wrong in the cheap direction, and this one was wrong in the
+ * expensive direction. `pinned: false` is still available for a grid that genuinely wants it to
+ * scroll away (ruling #146).
+ */
+export const actionsColumn = <T,>({ width, pinned = true, prefsLabel: _prefsLabel, ...params }: ActionsColumnOptions<T>): ColDef<T> =>
   holdColumn<T>(
     {
       colId: 'actions',
       headerName: '',
-      width,
+      /**
+       * 🔴 THE WIDTH FOLLOWS THE SHAPE (#690, hub-ruled 2026-09-02). It was a flat 120.
+       *
+       * 120 is right for the shape this column was written for — an "Edit" button beside the ⋯ —
+       * and wrong for the one that only takes `items`. Measured on screen (Amazon·IT sheet, 1440):
+       * a `⋯`-only cell renders ONE `.nds-btn.sm.icon` at **28px** inside 9px/9px cell padding, in
+       * a **120px** column: **74px of empty pinned column on every row**, on the scope that had the
+       * least width to spare (it cost that sheet a required column at 1440).
+       *
+       * 56 = 28 + 2 × `--nds-grid-cell-pad-x` (14). Derived, not chosen by eye, and it is a DEFAULT
+       * — a caller that wants another number still passes `width`.
+       *
+       * Call sites enumerated before this changed rather than after: four outside the DS, and only
+       * the `items`-only one moves (grid-lab :145/:413 and `products/next/columns.tsx:252` all pass
+       * `primary`, so they keep 120). ⚠ No node test guards this: `presets.ts` imports
+       * `renderers/cells.tsx`, and `apps/web`'s vitest is node-only, so a test file here dies at
+       * PARSE. The evidence is the screen pair and that enumeration — stated so nobody reads the
+       * green suite as covering it.
+       */
+      width: width ?? (params.primary ? 120 : 56),
       sortable: false,
       resizable: false,
       suppressHeaderMenuButton: true,

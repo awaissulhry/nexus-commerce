@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Bell,
   Mail,

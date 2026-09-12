@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase 1 — Amazon Ads Brand Metrics ingest.
  *
@@ -311,7 +312,7 @@ export async function fetchBrandMetricsStatus(
 }
 
 async function regionFor(profileId: string): Promise<AdsRegion> {
-  const conn = await prisma.amazonAdsConnection.findUnique({ where: { profileId }, select: { region: true } })
+  const conn = await prisma.amazonAdsConnection.findUnique({ where: { workspace_profileId: workspaceKey({ profileId: profileId }) }, select: { region: true } })
   return conn?.region === 'NA' || conn?.region === 'FE' ? (conn.region as AdsRegion) : 'EU'
 }
 
@@ -398,7 +399,7 @@ export async function ingestBrandMetricsJob(jobId: string): Promise<BrandMetrics
   if (job.status !== 'COMPLETED') throw new Error(`[brand-metrics] job ${jobId} not ingestable (status=${job.status})`)
 
   const conn = await prisma.amazonAdsConnection.findUnique({
-    where: { profileId: job.profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
     select: { marketplace: true, region: true },
   })
   const marketplace = conn?.marketplace ?? 'UNKNOWN'
@@ -463,13 +464,13 @@ export async function ingestBrandMetricsJob(jobId: string): Promise<BrandMetrics
     }
     await prisma.amazonAdsBrandBuildingMetric.upsert({
       where: {
-        profileId_brandName_computationDate_lookbackPeriod_categoryNodeName: {
+        profileId_brandName_computationDate_lookbackPeriod_categoryNodeName: workspaceKey({
           profileId: job.profileId,
           brandName: r.brandName,
           computationDate: r.computationDate,
           lookbackPeriod: r.lookbackPeriod,
           categoryNodeName: r.categoryNodeName,
-        },
+        }),
       },
       create: {
         profileId: job.profileId,
@@ -579,7 +580,7 @@ export interface BrandMetricsProbeResult {
 
 export async function probeBrandMetricsAccess(profileId?: string): Promise<BrandMetricsProbeResult> {
   const conn = profileId
-    ? await prisma.amazonAdsConnection.findUnique({ where: { profileId }, select: { profileId: true, region: true } })
+    ? await prisma.amazonAdsConnection.findUnique({ where: { workspace_profileId: workspaceKey({ profileId: profileId }) }, select: { profileId: true, region: true } })
     : await prisma.amazonAdsConnection.findFirst({
         where: { isActive: true, mode: 'production' },
         select: { profileId: true, region: true },

@@ -8,7 +8,7 @@
  * same product collapse to one rebuild.
  */
 
-import { Worker } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'
 import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { logger } from '../utils/logger.js'

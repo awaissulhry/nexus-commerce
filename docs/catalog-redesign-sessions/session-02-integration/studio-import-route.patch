@@ -1,0 +1,34 @@
+--- a/apps/api/src/routes/product-studio.routes.ts
++++ b/apps/api/src/routes/product-studio.routes.ts
+@@ -317,6 +317,7 @@
+       if (!market) return missingMarket(reply, parts)
+       const sc = resolveScope(parts)
+       if (sc.error) return reply.code(sc.error.status).send(sc.error.body)
++      if (sc.scope === 'channel') return reply.code(409).send({ error: 'account_identity_required', message: 'Channel table files omit account identity and override state. Use an editable export from /products/catalog-transfer.' })
+       // Only the two ruled options; anything else is refused rather than
+       // defaulted, because a blank-cell policy the operator did not choose
+       // silently clears data.
+@@ -338,6 +339,7 @@
+       const looksLikeKeys = (r: string[]) => r.some((h) => h === 'sku') && r.filter((h) => parseHeader(h)).length > 1
+       const keyRowIndex = looksLikeKeys(grid[1] ?? []) ? 1 : 0
+       const headerRow = grid[keyRowIndex]
++      if (headerRow.some(h => parseHeader(h)?.scope.kind === 'channel')) return reply.code(409).send({ error: 'account_identity_required', message: 'Channel table columns cannot be imported under an inferred account. Use /products/catalog-transfer.' })
+       const rows = grid.slice(keyRowIndex + 1).map((line) => {
+         const o: Record<string, string> = {}
+         headerRow.forEach((h, i) => { o[h] = line[i] ?? '' })
+@@ -585,6 +587,7 @@
+       const { applyStoredJob, readJob, JobNotApplicableError } = await import('../services/pim/import-jobs.service.js')
+       const loaded = await readJob(jobId)
+       if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })
++      if (loaded.scope?.kind === 'channel' || loaded.cells.some(c => c.scope.kind === 'channel')) return reply.code(409).send({ error: 'account_identity_required', message: 'This legacy channel job has no account identity. Review explicit corrections through /products/catalog-transfer.' })
+       const w = jobWriters(id, loaded.scope, loaded.market)
+       return jobStateReply(await applyStoredJob({ jobId, ...w }))
+     } catch (err) {
+@@ -610,6 +613,7 @@
+       const { revertStoredJob, readJob, JobNotApplicableError } = await import('../services/pim/import-jobs.service.js')
+       const loaded = await readJob(jobId)
+       if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })
++      if (loaded.scope?.kind === 'channel' || loaded.cells.some(c => c.scope.kind === 'channel')) return reply.code(409).send({ error: 'account_identity_required', message: 'This legacy channel job has no account identity. Review explicit corrections through /products/catalog-transfer.' })
+       const w = jobWriters(id, loaded.scope, loaded.market)
+       return jobStateReply(await revertStoredJob({ jobId, currentOf: w.currentOf, writeCells: w.writeCells }))
+     } catch (err) {

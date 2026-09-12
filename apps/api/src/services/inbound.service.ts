@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.2 (Inbound) — receiving service.
  *
@@ -218,9 +219,9 @@ export async function receiveItems(args: ReceiveArgs) {
           }
           if (!locationId) {
             const itMain = await prisma.stockLocation.findUnique({
-              where: { code: 'IT-MAIN' },
+              where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
               select: { id: true },
-            })
+            }) ?? await (await import('./default-stock-location.js')).defaultStockLocation()
             locationId = itMain?.id ?? null
           }
           if (locationId) {

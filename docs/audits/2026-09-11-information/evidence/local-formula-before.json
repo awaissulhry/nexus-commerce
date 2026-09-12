@@ -1,0 +1,30 @@
+{
+  "target": "127.0.0.1:55439/nexus_development",
+  "migration": "20260911020000_information_formula_destination",
+  "checksum": "b7575c71b64d86a0dc07e0a1d9fa4b92f7db4385074a4bb3cea28b20e0c37dbe",
+  "formulas": [],
+  "indexes": [
+    {
+      "indexdef": "CREATE INDEX \"CellFormula_fieldKey_idx\" ON public.\"CellFormula\" USING btree (\"fieldKey\")"
+    },
+    {
+      "indexdef": "CREATE INDEX \"CellFormula_productId_idx\" ON public.\"CellFormula\" USING btree (\"productId\")"
+    },
+    {
+      "indexdef": "CREATE INDEX \"CellFormula_productId_scope_idx\" ON public.\"CellFormula\" USING btree (\"productId\", scope)"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX \"CellFormula_pkey\" ON public.\"CellFormula\" USING btree (id)"
+    },
+    {
+      "indexdef": "CREATE INDEX \"CellFormula_workspaceId_idx\" ON public.\"CellFormula\" USING btree (\"workspaceId\")"
+    },
+    {
+      "indexdef": "CREATE UNIQUE INDEX \"CellFormula_productId_scope_channel_marketplace_local_81ce279a6\" ON public.\"CellFormula\" USING btree (\"workspaceId\", \"productId\", scope, channel, marketplace, locale, \"fieldKey\")"
+    }
+  ],
+  "counts": {
+    "products": "338",
+    "listings": "999"
+  }
+}

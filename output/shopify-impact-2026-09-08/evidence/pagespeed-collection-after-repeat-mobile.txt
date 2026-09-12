@@ -1,0 +1,894 @@
+- banner:
+  - link "PageSpeed Insights logo PageSpeed Insights":
+    - /url: ./
+    - img "PageSpeed Insights logo"
+    - generic: PageSpeed Insights
+  - button "Copy Link":
+    - generic: Copy Link
+  - generic: Docs
+  - link "Docs":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+- generic: This site uses cookies from Google to deliver its services and to analyze traffic.
+- generic: Learn More.
+- link "Learn More.":
+  - /url: https://policies.google.com/technologies/cookies
+- button "Ok, Got it.":
+  - generic: Ok, Got it.
+- generic: Report from Sep 8, 2026, 9:51:03 PM
+- textbox:
+  - /placeholder: Enter a web page URL
+  - text: https://xaviaracing.it/collections/all
+- paragraph: Enter a valid URL
+- button "Analyze":
+  - generic: Analyze
+- tablist:
+  - tab "Mobile" [selected]:
+    - generic: smartphone
+    - generic: Mobile
+  - tab "Desktop":
+    - generic: computer
+    - generic: Desktop
+- tabpanel "Mobile":
+  - generic: Discover what your real users are experiencing
+  - button "button":
+  - generic: No Data
+  - separator
+  - generic: Diagnose performance issues
+  - article:
+    - link "32 Performance":
+      - /url: "#performance"
+      - generic: "32"
+      - generic: Performance
+    - link "94 Accessibility":
+      - /url: "#accessibility"
+      - generic: "94"
+      - generic: Accessibility
+    - link "92 Best Practices":
+      - /url: "#best-practices"
+      - generic: "92"
+      - generic: Best Practices
+    - link "92 SEO":
+      - /url: "#seo"
+      - generic: "92"
+      - generic: SEO
+    - link "4/4 Agentic Browsing":
+      - /url: "#agentic-browsing"
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: Values are estimated and may vary. The
+    - link "performance score is calculated":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: directly from these metrics.
+    - link "See calculator.":
+      - /url: https://googlechrome.github.io/lighthouse/scorecalc/#FCP=2407&LCP=16726&TBT=8002&CLS=0&SI=19605&TTI=18886&device=mobile&version=13.4.1
+    - generic: 0–49
+    - generic: 50–89
+    - generic: 90–100
+    - img "Final Screenshot"
+    - checkbox "Toggle the display of metric descriptions"
+    - generic: Metrics
+    - generic: Expand view
+    - generic: First Contentful Paint
+    - generic: 2.4 s
+    - generic: Largest Contentful Paint
+    - generic: 16.7 s
+    - generic: Total Blocking Time
+    - generic: 8,000 ms
+    - generic: Cumulative Layout Shift
+    - generic: "0"
+    - generic: Speed Index
+    - generic: 19.6 s
+    - list:
+      - listitem: Captured at Sep 8, 2026, 9:51 PM GMT+2
+      - listitem: Emulated Moto G Power with Lighthouse 13.4.1
+      - listitem: Single page session
+      - listitem: Initial page load
+      - listitem: Slow 4G throttling
+      - listitem: Using HeadlessChromium 151.0.7922.71 with lr
+    - button "View Treemap"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - generic: "Show audits relevant to:"
+    - radio "All" [checked]
+    - generic: All
+    - radio "FCP"
+    - generic "First Contentful Paint": FCP
+    - radio "LCP"
+    - generic "Largest Contentful Paint": LCP
+    - radio "TBT"
+    - generic "Total Blocking Time": TBT
+    - radio "CLS"
+    - generic "Cumulative Layout Shift": CLS
+    - generic: Insights
+    - generic "Font display —Est savings of 220 ms":
+      - generic: Font display
+      - text: —Est savings of 220 ms
+    - generic "Render-blocking requests —Est savings of 150 ms":
+      - generic: Render-blocking requests
+      - text: —Est savings of 150 ms
+    - generic "Improve image delivery —Est savings of 149 KiB":
+      - generic: Improve image delivery
+      - text: —Est savings of 149 KiB
+    - generic "Legacy JavaScript —Est savings of 19 KiB":
+      - generic: Legacy JavaScript
+      - text: —Est savings of 19 KiB
+    - generic "Use efficient cache lifetimes —Est savings of 37 KiB":
+      - generic: Use efficient cache lifetimes
+      - text: —Est savings of 37 KiB
+    - generic "Forced reflow":
+      - generic: Forced reflow
+    - generic "LCP breakdown":
+      - generic: LCP breakdown
+    - generic "LCP request discovery":
+      - generic: LCP request discovery
+    - 'generic "Network dependency tree Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."':
+      - generic: Network dependency tree
+      - generic: "Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."
+    - generic "Layout shift culprits":
+      - generic: Layout shift culprits
+    - generic "Optimize DOM size":
+      - generic: Optimize DOM size
+    - generic "3rd parties":
+      - generic: 3rd parties
+    - text: These insights are also available in the Chrome DevTools Performance Panel -
+    - link "record a trace":
+      - /url: https://developer.chrome.com/docs/devtools/performance/reference?utm_source=lighthouse&utm_medium=lr
+    - text: to view more detailed information.
+    - generic: Diagnostics
+    - generic "Minimize main-thread work —22.1 s":
+      - generic: Minimize main-thread work
+      - text: —22.1 s
+    - generic "Reduce JavaScript execution time —9.9 s" [active]:
+      - generic: Reduce JavaScript execution time
+      - text: —9.9 s
+    - text: Consider reducing the time spent parsing, compiling, and executing JS. You may find delivering smaller JS payloads helps with this.
+    - link "Learn how to reduce Javascript execution time":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/bootup-time/?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "Relevant to Total Blocking Time": TBT
+    - generic "This audit does not contribute to the overall category score.": Unscored
+    - checkbox "Show 3rd-party resources (30)" [checked]
+    - text: Show 3rd-party resources (30)
+    - table:
+      - rowgroup:
+        - row "URL Total CPU Time Script Evaluation Script Parse":
+          - columnheader "URL":
+            - generic: URL
+          - columnheader "Total CPU Time":
+            - generic: Total CPU Time
+          - columnheader "Script Evaluation":
+            - generic: Script Evaluation
+          - columnheader "Script Parse":
+            - generic: Script Parse
+      - rowgroup:
+        - row "xaviaracing.it 1st party 7,604 ms 1,558 ms 342 ms":
+          - cell "xaviaracing.it 1st party":
+            - generic: xaviaracing.it
+            - generic: 1st party
+          - cell "7,604 ms":
+            - generic: 7,604 ms
+          - cell "1,558 ms":
+            - generic: 1,558 ms
+          - cell "342 ms":
+            - generic: 342 ms
+        - row "/collections/all(xaviaracing.it) 5,328 ms 240 ms 137 ms":
+          - cell "/collections/all(xaviaracing.it)":
+            - generic "https://xaviaracing.it/collections/all":
+              - link "/collections/all":
+                - /url: https://xaviaracing.it/collections/all
+              - text: (xaviaracing.it)
+          - cell "5,328 ms":
+            - generic: 5,328 ms
+          - cell "240 ms":
+            - generic: 240 ms
+          - cell "137 ms":
+            - generic: 137 ms
+        - row "…assets/nexus-card-swatches.js?v=1033674…(xaviaracing.it) 566 ms 165 ms 4 ms":
+          - cell "…assets/nexus-card-swatches.js?v=1033674…(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/t/94/assets/nexus-card-swatches.js?v=103367463753736198181788895644":
+              - link "…assets/nexus-card-swatches.js?v=1033674…":
+                - /url: https://xaviaracing.it/cdn/shop/t/94/assets/nexus-card-swatches.js?v=103367463753736198181788895644
+              - text: (xaviaracing.it)
+          - cell "566 ms":
+            - generic: 566 ms
+          - cell "165 ms":
+            - generic: 165 ms
+          - cell "4 ms":
+            - generic: 4 ms
+        - row "…s/trekkie.storefront.ce2a643….min.js(xaviaracing.it) 525 ms 443 ms 57 ms":
+          - cell "…s/trekkie.storefront.ce2a643….min.js(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/s/trekkie.storefront.ce2a643c30d67cd7b828f2dda8cfc17d1d88fbb5.min.js":
+              - link "…s/trekkie.storefront.ce2a643….min.js":
+                - /url: https://xaviaracing.it/cdn/s/trekkie.storefront.ce2a643c30d67cd7b828f2dda8cfc17d1d88fbb5.min.js
+              - text: (xaviaracing.it)
+          - cell "525 ms":
+            - generic: 525 ms
+          - cell "443 ms":
+            - generic: 443 ms
+          - cell "57 ms":
+            - generic: 57 ms
+        - row "…perf-kit/shopify-perf-kit-3.8.10.min.js(xaviaracing.it) 519 ms 433 ms 39 ms":
+          - cell "…perf-kit/shopify-perf-kit-3.8.10.min.js(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shopifycloud/perf-kit/shopify-perf-kit-3.8.10.min.js":
+              - link "…perf-kit/shopify-perf-kit-3.8.10.min.js":
+                - /url: https://xaviaracing.it/cdn/shopifycloud/perf-kit/shopify-perf-kit-3.8.10.min.js
+              - text: (xaviaracing.it)
+          - cell "519 ms":
+            - generic: 519 ms
+          - cell "433 ms":
+            - generic: 433 ms
+          - cell "39 ms":
+            - generic: 39 ms
+        - row "…assets/theme.js?v=3872170…(xaviaracing.it) 293 ms 15 ms 43 ms":
+          - cell "…assets/theme.js?v=3872170…(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/t/94/assets/theme.js?v=38721707933151728431788896003":
+              - link "…assets/theme.js?v=3872170…":
+                - /url: https://xaviaracing.it/cdn/shop/t/94/assets/theme.js?v=38721707933151728431788896003
+              - text: (xaviaracing.it)
+          - cell "293 ms":
+            - generic: 293 ms
+          - cell "15 ms":
+            - generic: 15 ms
+          - cell "43 ms":
+            - generic: 43 ms
+        - row "…storefront/load_feature-1bd60354.js(xaviaracing.it) 128 ms 116 ms 10 ms":
+          - cell "…storefront/load_feature-1bd60354.js(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shopifycloud/storefront/assets/storefront/load_feature-1bd60354.js":
+              - link "…storefront/load_feature-1bd60354.js":
+                - /url: https://xaviaracing.it/cdn/shopifycloud/storefront/assets/storefront/load_feature-1bd60354.js
+              - text: (xaviaracing.it)
+          - cell "128 ms":
+            - generic: 128 ms
+          - cell "116 ms":
+            - generic: 116 ms
+          - cell "10 ms":
+            - generic: 10 ms
+        - row "…shopify_pay/storefront-bf1cdb70.js?v=20250812(xaviaracing.it) 126 ms 103 ms 23 ms":
+          - cell "…shopify_pay/storefront-bf1cdb70.js?v=20250812(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shopifycloud/storefront/assets/shopify_pay/storefront-bf1cdb70.js?v=20250812":
+              - link "…shopify_pay/storefront-bf1cdb70.js?v=20250812":
+                - /url: https://xaviaracing.it/cdn/shopifycloud/storefront/assets/shopify_pay/storefront-bf1cdb70.js?v=20250812
+              - text: (xaviaracing.it)
+          - cell "126 ms":
+            - generic: 126 ms
+          - cell "103 ms":
+            - generic: 103 ms
+          - cell "23 ms":
+            - generic: 23 ms
+        - row "…assets/vendor.min.js?v=1760753…(xaviaracing.it) 68 ms 39 ms 22 ms":
+          - cell "…assets/vendor.min.js?v=1760753…(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shop/t/94/assets/vendor.min.js?v=176075354585445912951788895644":
+              - link "…assets/vendor.min.js?v=1760753…":
+                - /url: https://xaviaracing.it/cdn/shop/t/94/assets/vendor.min.js?v=176075354585445912951788895644
+              - text: (xaviaracing.it)
+          - cell "68 ms":
+            - generic: 68 ms
+          - cell "39 ms":
+            - generic: 39 ms
+          - cell "22 ms":
+            - generic: 22 ms
+        - row "…assets/shop_events_listener-4e26a9ce.js(xaviaracing.it) 53 ms 5 ms 8 ms":
+          - cell "…assets/shop_events_listener-4e26a9ce.js(xaviaracing.it)":
+            - generic "https://xaviaracing.it/cdn/shopifycloud/storefront/assets/shop_events_listener-4e26a9ce.js":
+              - link "…assets/shop_events_listener-4e26a9ce.js":
+                - /url: https://xaviaracing.it/cdn/shopifycloud/storefront/assets/shop_events_listener-4e26a9ce.js
+              - text: (xaviaracing.it)
+          - cell "53 ms":
+            - generic: 53 ms
+          - cell "5 ms":
+            - generic: 5 ms
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "Klaviyo ad 3,761 ms 2,811 ms 268 ms":
+          - cell "Klaviyo ad":
+            - generic: Klaviyo
+            - generic: ad
+          - cell "3,761 ms":
+            - generic: 3,761 ms
+          - cell "2,811 ms":
+            - generic: 2,811 ms
+          - cell "268 ms":
+            - generic: 268 ms
+        - row "…js/1029.77b70d8753410.js?cb=2(static.klaviyo.com) 1,278 ms 999 ms 32 ms":
+          - cell "…js/1029.77b70d8753410.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/1029.77b70d8753410.js?cb=2":
+              - link "…js/1029.77b70d8753410.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/1029.77b70d8753410.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "1,278 ms":
+            - generic: 1,278 ms
+          - cell "999 ms":
+            - generic: 999 ms
+          - cell "32 ms":
+            - generic: 32 ms
+        - row "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…(static.klaviyo.com) 966 ms 806 ms 19 ms":
+          - cell "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~reviews~atlas~product_recommendations.8039a15914451.js?cb=2":
+              - link "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~reviews~atlas~product_recommendations.8039a15914451.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "966 ms":
+            - generic: 966 ms
+          - cell "806 ms":
+            - generic: 806 ms
+          - cell "19 ms":
+            - generic: 19 ms
+        - row "…js/Render.661d403fd90b2.js?cb=2(static.klaviyo.com) 842 ms 508 ms 85 ms":
+          - cell "…js/Render.661d403fd90b2.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/Render.661d403fd90b2.js?cb=2":
+              - link "…js/Render.661d403fd90b2.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/Render.661d403fd90b2.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "842 ms":
+            - generic: 842 ms
+          - cell "508 ms":
+            - generic: 508 ms
+          - cell "85 ms":
+            - generic: 85 ms
+        - row "…js/signup_forms.ad877d05ed7f2.js?cb=2(static.klaviyo.com) 294 ms 248 ms 2 ms":
+          - cell "…js/signup_forms.ad877d05ed7f2.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/signup_forms.ad877d05ed7f2.js?cb=2":
+              - link "…js/signup_forms.ad877d05ed7f2.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/signup_forms.ad877d05ed7f2.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "294 ms":
+            - generic: 294 ms
+          - cell "248 ms":
+            - generic: 248 ms
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…js/ClientStore.3227b62863a7d.js?cb=2(static.klaviyo.com) 92 ms 84 ms 7 ms":
+          - cell "…js/ClientStore.3227b62863a7d.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/ClientStore.3227b62863a7d.js?cb=2":
+              - link "…js/ClientStore.3227b62863a7d.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/ClientStore.3227b62863a7d.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "92 ms":
+            - generic: 92 ms
+          - cell "84 ms":
+            - generic: 84 ms
+          - cell "7 ms":
+            - generic: 7 ms
+        - row "…js/sharedUtils.8ae7328c4e692.js?cb=2(static.klaviyo.com) 60 ms 33 ms 27 ms":
+          - cell "…js/sharedUtils.8ae7328c4e692.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/sharedUtils.8ae7328c4e692.js?cb=2":
+              - link "…js/sharedUtils.8ae7328c4e692.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/sharedUtils.8ae7328c4e692.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "60 ms":
+            - generic: 60 ms
+          - cell "33 ms":
+            - generic: 33 ms
+          - cell "27 ms":
+            - generic: 27 ms
+        - row "…js/event_adapter.dcd7f3a30a106.js?cb=2(static.klaviyo.com) 59 ms 57 ms 2 ms":
+          - cell "…js/event_adapter.dcd7f3a30a106.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/event_adapter.dcd7f3a30a106.js?cb=2":
+              - link "…js/event_adapter.dcd7f3a30a106.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/event_adapter.dcd7f3a30a106.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "59 ms":
+            - generic: 59 ms
+          - cell "57 ms":
+            - generic: 57 ms
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2(static.klaviyo.com) 57 ms 1 ms 56 ms":
+          - cell "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~Render.348770328c1e5.js?cb=2":
+              - link "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~Render.348770328c1e5.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "57 ms":
+            - generic: 57 ms
+          - cell "1 ms":
+            - generic: 1 ms
+          - cell "56 ms":
+            - generic: 56 ms
+        - row "…js/telemetry.0150fc8ff7cd7.js?cb=2(static-tracking.klaviyo.com) 56 ms 37 ms 19 ms":
+          - cell "…js/telemetry.0150fc8ff7cd7.js?cb=2(static-tracking.klaviyo.com)":
+            - generic "https://static-tracking.klaviyo.com/onsite/js/telemetry.0150fc8ff7cd7.js?cb=2":
+              - link "…js/telemetry.0150fc8ff7cd7.js?cb=2":
+                - /url: https://static-tracking.klaviyo.com/onsite/js/telemetry.0150fc8ff7cd7.js?cb=2
+              - text: (static-tracking.klaviyo.com)
+          - cell "56 ms":
+            - generic: 56 ms
+          - cell "37 ms":
+            - generic: 37 ms
+          - cell "19 ms":
+            - generic: 19 ms
+        - row "…js/onsite-triggering-v2.866d8e053462c.js?cb=2(static.klaviyo.com) 56 ms 38 ms 18 ms":
+          - cell "…js/onsite-triggering-v2.866d8e053462c.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/onsite-triggering-v2.866d8e053462c.js?cb=2":
+              - link "…js/onsite-triggering-v2.866d8e053462c.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/onsite-triggering-v2.866d8e053462c.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "56 ms":
+            - generic: 56 ms
+          - cell "38 ms":
+            - generic: 38 ms
+          - cell "18 ms":
+            - generic: 18 ms
+        - row "Shopify hosting 3,212 ms 1,761 ms 166 ms":
+          - cell "Shopify hosting":
+            - generic: Shopify
+            - generic: hosting
+          - cell "3,212 ms":
+            - generic: 3,212 ms
+          - cell "1,761 ms":
+            - generic: 1,761 ms
+          - cell "166 ms":
+            - generic: 166 ms
+        - row "…v2/chunk.index_Jmvh7d10.esm.js(cdn.shopify.com) 718 ms 422 ms 17 ms":
+          - cell "…v2/chunk.index_Jmvh7d10.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_Jmvh7d10.esm.js":
+              - link "…v2/chunk.index_Jmvh7d10.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_Jmvh7d10.esm.js
+              - text: (cdn.shopify.com)
+          - cell "718 ms":
+            - generic: 718 ms
+          - cell "422 ms":
+            - generic: 422 ms
+          - cell "17 ms":
+            - generic: 17 ms
+        - row "…assets/avatar-C_9EyF3G.js(cdn.shopify.com) 667 ms 0 ms 19 ms":
+          - cell "…assets/avatar-C_9EyF3G.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/avatar-C_9EyF3G.js":
+              - link "…assets/avatar-C_9EyF3G.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/avatar-C_9EyF3G.js
+              - text: (cdn.shopify.com)
+          - cell "667 ms":
+            - generic: 667 ms
+          - cell "0 ms":
+            - generic: 0 ms
+          - cell "19 ms":
+            - generic: 19 ms
+        - row "…assets/checkout-DTJs6qRt.js(cdn.shopify.com) 626 ms 550 ms 34 ms":
+          - cell "…assets/checkout-DTJs6qRt.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/checkout-DTJs6qRt.js":
+              - link "…assets/checkout-DTJs6qRt.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/checkout-DTJs6qRt.js
+              - text: (cdn.shopify.com)
+          - cell "626 ms":
+            - generic: 626 ms
+          - cell "550 ms":
+            - generic: 550 ms
+          - cell "34 ms":
+            - generic: 34 ms
+        - row "…v2/chunk.debounce_Cw7GgcT5.esm.js(cdn.shopify.com) 342 ms 336 ms 0 ms":
+          - cell "…v2/chunk.debounce_Cw7GgcT5.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.debounce_Cw7GgcT5.esm.js":
+              - link "…v2/chunk.debounce_Cw7GgcT5.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.debounce_Cw7GgcT5.esm.js
+              - text: (cdn.shopify.com)
+          - cell "342 ms":
+            - generic: 342 ms
+          - cell "336 ms":
+            - generic: 336 ms
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…web-components/account.js(cdn.shopify.com) 211 ms 100 ms 6 ms":
+          - cell "…web-components/account.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account.js":
+              - link "…web-components/account.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account.js
+              - text: (cdn.shopify.com)
+          - cell "211 ms":
+            - generic: 211 ms
+          - cell "100 ms":
+            - generic: 100 ms
+          - cell "6 ms":
+            - generic: 6 ms
+        - row "…v2/chunk.index_CFUCpJst.esm.js(cdn.shopify.com) 113 ms 1 ms 11 ms":
+          - cell "…v2/chunk.index_CFUCpJst.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_CFUCpJst.esm.js":
+              - link "…v2/chunk.index_CFUCpJst.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_CFUCpJst.esm.js
+              - text: (cdn.shopify.com)
+          - cell "113 ms":
+            - generic: 113 ms
+          - cell "1 ms":
+            - generic: 1 ms
+          - cell "11 ms":
+            - generic: 11 ms
+        - row "…account/account-d….js(cdn.shopify.com) 112 ms 82 ms 1 ms":
+          - cell "…account/account-d….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/account-dialog-BC1wQr03.js":
+              - link "…account/account-d….js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/account-dialog-BC1wQr03.js
+              - text: (cdn.shopify.com)
+          - cell "112 ms":
+            - generic: 112 ms
+          - cell "82 ms":
+            - generic: 82 ms
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…v2/chunk.useEventL….esm.js(cdn.shopify.com) 112 ms 95 ms 3 ms":
+          - cell "…v2/chunk.useEventL….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useEventListener_BEs6MAnZ.esm.js":
+              - link "…v2/chunk.useEventL….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useEventListener_BEs6MAnZ.esm.js
+              - text: (cdn.shopify.com)
+          - cell "112 ms":
+            - generic: 112 ms
+          - cell "95 ms":
+            - generic: 95 ms
+          - cell "3 ms":
+            - generic: 3 ms
+        - row "…web-components/chat.js(cdn.shopify.com) 80 ms 62 ms 14 ms":
+          - cell "…web-components/chat.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/chat.js":
+              - link "…web-components/chat.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/chat.js
+              - text: (cdn.shopify.com)
+          - cell "80 ms":
+            - generic: 80 ms
+          - cell "62 ms":
+            - generic: 62 ms
+          - cell "14 ms":
+            - generic: 14 ms
+        - row "…account/observe-l….js(cdn.shopify.com) 65 ms 46 ms 2 ms":
+          - cell "…account/observe-l….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/observe-logger-impl-CvnPPqr9.js":
+              - link "…account/observe-l….js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/observe-logger-impl-CvnPPqr9.js
+              - text: (cdn.shopify.com)
+          - cell "65 ms":
+            - generic: 65 ms
+          - cell "46 ms":
+            - generic: 46 ms
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…webmcp/webmcp-0.1.1.js(cdn.shopify.com) 58 ms 0 ms 47 ms":
+          - cell "…webmcp/webmcp-0.1.1.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js":
+              - link "…webmcp/webmcp-0.1.1.js":
+                - /url: https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js
+              - text: (cdn.shopify.com)
+          - cell "58 ms":
+            - generic: 58 ms
+          - cell "0 ms":
+            - generic: 0 ms
+          - cell "47 ms":
+            - generic: 47 ms
+        - row "…web-components/login-form.js(cdn.shopify.com) 57 ms 36 ms 9 ms":
+          - cell "…web-components/login-form.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/login-form.js":
+              - link "…web-components/login-form.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/login-form.js
+              - text: (cdn.shopify.com)
+          - cell "57 ms":
+            - generic: 57 ms
+          - cell "36 ms":
+            - generic: 36 ms
+          - cell "9 ms":
+            - generic: 9 ms
+        - row "…account/store-BTEHG3Hd.js(cdn.shopify.com) 51 ms 33 ms 4 ms":
+          - cell "…account/store-BTEHG3Hd.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/store-BTEHG3Hd.js":
+              - link "…account/store-BTEHG3Hd.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/store-BTEHG3Hd.js
+              - text: (cdn.shopify.com)
+          - cell "51 ms":
+            - generic: 51 ms
+          - cell "33 ms":
+            - generic: 33 ms
+          - cell "4 ms":
+            - generic: 4 ms
+        - row "Unattributable 2,867 ms 174 ms 0 ms":
+          - cell "Unattributable":
+            - generic: Unattributable
+          - cell "2,867 ms":
+            - generic: 2,867 ms
+          - cell "174 ms":
+            - generic: 174 ms
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "Unattributable 2,812 ms 174 ms 0 ms":
+          - cell "Unattributable":
+            - generic: Unattributable
+          - cell "2,812 ms":
+            - generic: 2,812 ms
+          - cell "174 ms":
+            - generic: 174 ms
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "chrome-error://chromewebdata/ 55 ms 0 ms 0 ms":
+          - cell "chrome-error://chromewebdata/":
+            - generic: chrome-error://chromewebdata/
+          - cell "55 ms":
+            - generic: 55 ms
+          - cell "0 ms":
+            - generic: 0 ms
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "loloyal.com 2,723 ms 1,668 ms 743 ms":
+          - cell "loloyal.com":
+            - generic: loloyal.com
+          - cell "2,723 ms":
+            - generic: 2,723 ms
+          - cell "1,668 ms":
+            - generic: 1,668 ms
+          - cell "743 ms":
+            - generic: 743 ms
+        - row "…js/317.cc5b2e1f.js(static.loloyal.com) 834 ms 480 ms 334 ms":
+          - cell "…js/317.cc5b2e1f.js(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js":
+              - link "…js/317.cc5b2e1f.js":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js
+              - text: (static.loloyal.com)
+          - cell "834 ms":
+            - generic: 834 ms
+          - cell "480 ms":
+            - generic: 480 ms
+          - cell "334 ms":
+            - generic: 334 ms
+        - row "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com) 803 ms 383 ms 203 ms":
+          - cell "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598":
+              - link "…widget/boom-cend-referral-popup.js?v=178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598
+              - text: (static.loloyal.com)
+          - cell "803 ms":
+            - generic: 803 ms
+          - cell "383 ms":
+            - generic: 383 ms
+          - cell "203 ms":
+            - generic: 203 ms
+        - row "…js/index.19507595.js(static.loloyal.com) 559 ms 451 ms 107 ms":
+          - cell "…js/index.19507595.js(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/js/index.19507595.js":
+              - link "…js/index.19507595.js":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/js/index.19507595.js
+              - text: (static.loloyal.com)
+          - cell "559 ms":
+            - generic: 559 ms
+          - cell "451 ms":
+            - generic: 451 ms
+          - cell "107 ms":
+            - generic: 107 ms
+        - row "…widget/boom-cend-widget.js?v=178…(static.loloyal.com) 527 ms 354 ms 99 ms":
+          - cell "…widget/boom-cend-widget.js?v=178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/boom-cend-widget.js?v=1788841017598":
+              - link "…widget/boom-cend-widget.js?v=178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/boom-cend-widget.js?v=1788841017598
+              - text: (static.loloyal.com)
+          - cell "527 ms":
+            - generic: 527 ms
+          - cell "354 ms":
+            - generic: 354 ms
+          - cell "99 ms":
+            - generic: 99 ms
+        - row "langshop.app 595 ms 237 ms 161 ms":
+          - cell "langshop.app":
+            - generic: langshop.app
+          - cell "595 ms":
+            - generic: 595 ms
+          - cell "237 ms":
+            - generic: 237 ms
+          - cell "161 ms":
+            - generic: 161 ms
+        - row "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae(cdn.langshop.app) 595 ms 237 ms 161 ms":
+          - cell "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae(cdn.langshop.app)":
+            - generic "https://cdn.langshop.app/buckets/app/libs/storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae":
+              - link "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae":
+                - /url: https://cdn.langshop.app/buckets/app/libs/storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae
+              - text: (cdn.langshop.app)
+          - cell "595 ms":
+            - generic: 595 ms
+          - cell "237 ms":
+            - generic: 237 ms
+          - cell "161 ms":
+            - generic: 161 ms
+        - row "shop.app 146 ms 7 ms 24 ms":
+          - cell "shop.app":
+            - generic: shop.app
+          - cell "146 ms":
+            - generic: 146 ms
+          - cell "7 ms":
+            - generic: 7 ms
+          - cell "24 ms":
+            - generic: 24 ms
+        - row "/accounts/pre_auth?client_id=…(shop.app) 84 ms 5 ms 3 ms":
+          - cell "/accounts/pre_auth?client_id=…(shop.app)":
+            - generic "https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=1c9ca210-13d9-45fb-bd8a-6e7c0a8b4734&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en":
+              - link "/accounts/pre_auth?client_id=…":
+                - /url: https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=1c9ca210-13d9-45fb-bd8a-6e7c0a8b4734&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en
+              - text: (shop.app)
+          - cell "84 ms":
+            - generic: 84 ms
+          - cell "5 ms":
+            - generic: 5 ms
+          - cell "3 ms":
+            - generic: 3 ms
+        - row "/accounts/pre_auth?client_id=…(shop.app) 61 ms 2 ms 20 ms":
+          - cell "/accounts/pre_auth?client_id=…(shop.app)":
+            - generic "https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=481f7a7a-2b9c-490d-9663-5a8b0aa5ed6a&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en":
+              - link "/accounts/pre_auth?client_id=…":
+                - /url: https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=481f7a7a-2b9c-490d-9663-5a8b0aa5ed6a&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en
+              - text: (shop.app)
+          - cell "61 ms":
+            - generic: 61 ms
+          - cell "2 ms":
+            - generic: 2 ms
+          - cell "20 ms":
+            - generic: 20 ms
+    - generic "Reduce unused CSS —Est savings of 34 KiB":
+      - generic: Reduce unused CSS
+      - text: —Est savings of 34 KiB
+    - generic "Reduce unused JavaScript —Est savings of 307 KiB":
+      - generic: Reduce unused JavaScript
+      - text: —Est savings of 307 KiB
+    - generic "Avoid long main-thread tasks —20 long tasks found":
+      - generic: Avoid long main-thread tasks
+      - text: —20 long tasks found
+    - generic "User Timing marks and measures —2 user timings":
+      - generic: User Timing marks and measures
+      - text: —2 user timings
+    - generic "Avoid non-composited animations —2 animated elements found":
+      - generic: Avoid non-composited animations
+      - text: —2 animated elements found
+    - text: More information about the performance of your application. These numbers don't
+    - link "directly affect":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: the Performance score.
+    - generic "Passed audits (8) Show":
+      - generic: Passed audits (8)
+      - generic: Show
+    - text: —
+    - heading "94 Accessibility" [level=2]:
+      - generic: "94"
+      - generic: Accessibility
+    - text: These checks highlight opportunities to
+    - link "improve the accessibility of your web app":
+      - /url: https://developer.chrome.com/docs/lighthouse/accessibility/?utm_source=lighthouse&utm_medium=lr
+    - text: . Automatic detection can only detect a subset of issues and does not guarantee the accessibility of your web app, so
+    - link "manual testing":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: is also encouraged.
+    - generic: Contrast
+    - generic "Background and foreground colors do not have a sufficient contrast ratio.":
+      - generic: Background and foreground colors do not have a sufficient contrast ratio.
+    - generic: These are opportunities to improve the legibility of your content.
+    - generic: Best practices
+    - generic "Touch targets do not have sufficient size or spacing.":
+      - generic: Touch targets do not have sufficient size or spacing.
+    - generic "Identical links have the same purpose.":
+      - generic: Identical links have the same purpose.
+    - generic: These items highlight common accessibility best practices.
+    - generic: Names and labels
+    - generic "Image elements do not have [alt] attributes that are redundant text.":
+      - text: Image elements do not have
+      - code: "[alt]"
+      - text: attributes that are redundant text.
+    - generic: These are opportunities to improve the semantics of the controls in your application. This may enhance the experience for users of assistive technology, like a screen reader.
+    - generic "Additional items to manually check (10) Show":
+      - generic: Additional items to manually check (10)
+      - generic: Show
+    - text: These items address areas which an automated testing tool cannot cover. Learn more in our guide on
+    - link "conducting an accessibility review":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "Passed audits (30) Show":
+      - generic: Passed audits (30)
+      - generic: Show
+    - generic "Not applicable (29) Show":
+      - generic: Not applicable (29)
+      - generic: Show
+    - heading "92 Best Practices" [level=2]:
+      - generic: "92"
+      - generic: Best Practices
+    - generic: General
+    - generic "Browser errors were logged to the console":
+      - generic: Browser errors were logged to the console
+    - generic "Issues were logged in the Issues panel in Chrome Devtools":
+      - text: Issues were logged in the
+      - code: Issues
+      - text: panel in Chrome Devtools
+    - generic "Detected JavaScript libraries":
+      - generic: Detected JavaScript libraries
+    - generic: Trust and Safety
+    - generic "Ensure CSP is effective against XSS attacks":
+      - generic: Ensure CSP is effective against XSS attacks
+    - generic "Use a strong HSTS policy":
+      - generic: Use a strong HSTS policy
+    - generic "Ensure proper origin isolation with COOP":
+      - generic: Ensure proper origin isolation with COOP
+    - generic "Mitigate DOM-based XSS with Trusted Types":
+      - generic: Mitigate DOM-based XSS with Trusted Types
+    - generic: Browser Compatibility
+    - generic "Baseline Features":
+      - generic: Baseline Features
+    - generic "Passed audits (11) Show":
+      - generic: Passed audits (11)
+      - generic: Show
+    - generic "Not applicable (2) Show":
+      - generic: Not applicable (2)
+      - generic: Show
+    - heading "92 SEO" [level=2]:
+      - generic: "92"
+      - generic: SEO
+    - text: These checks ensure that your page is following basic search engine optimization advice. There are many additional factors Lighthouse does not score here that may affect your search ranking, including performance on
+    - link "Core Web Vitals":
+      - /url: https://web.dev/explore/vitals?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - link "Learn more about Google Search Essentials":
+      - /url: https://support.google.com/webmasters/answer/35769
+    - text: .
+    - generic: Content Best Practices
+    - generic "Document does not have a meta description":
+      - generic: Document does not have a meta description
+    - generic: Format your HTML in a way that enables crawlers to better understand your app’s content.
+    - generic "Additional items to manually check (1) Show":
+      - generic: Additional items to manually check (1)
+      - generic: Show
+    - generic: Run these additional validators on your site to check additional SEO best practices.
+    - generic "Passed audits (9) Show":
+      - generic: Passed audits (9)
+      - generic: Show
+    - heading "4/4 Agentic Browsing" [level=2]:
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: These checks ensure high-quality,
+    - link "browsable websites for AI agents":
+      - /url: https://goo.gle/lighthouse-agentic-web
+    - text: and validate the correctness of WebMCP integrations. This category is still under development and subject to change.
+    - generic: WebMCP
+    - generic "WebMCP form coverage —11 forms missing annotations":
+      - generic: WebMCP form coverage
+      - text: —11 forms missing annotations
+    - generic "WebMCP tools registered":
+      - generic: WebMCP tools registered
+    - generic: Audits validating WebMCP integration.
+    - generic "Passed audits (4) Show":
+      - generic: Passed audits (4)
+      - generic: Show
+    - text: — —
+- text: — — — — — — — — — — — — — — — —
+- contentinfo:
+  - generic: More on PageSpeed Insights
+  - link "What's new":
+    - /url: https://developers.google.com/speed/docs/insights/release_notes
+  - link "Documentation":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+  - link "Learn about Web Performance":
+    - /url: https://developers.google.com/speed
+  - link "Ask questions on Stack Overflow":
+    - /url: https://stackoverflow.com/questions/tagged/pagespeed-insights
+  - link "Mailing list":
+    - /url: https://groups.google.com/g/pagespeed-insights-discuss
+  - generic: Related Content
+  - link "Updates":
+    - /url: https://developer.chrome.com/blog
+  - link "Web Fundamentals":
+    - /url: https://developers.google.com/focus/web-development
+  - link "Case Studies":
+    - /url: https://web.dev/case-studies
+  - link "Podcasts":
+    - /url: https://web.dev/shows
+  - generic: Connect
+  - link "Twitter":
+    - /url: https://twitter.com/ChromiumDev
+  - link "Youtube":
+    - /url: https://www.youtube.com/user/ChromeDevelopers
+  - link "Google Developers Logo":
+    - /url: https://developers.google.com/
+    - img "Google Developers Logo"
+  - link "Chrome":
+    - /url: https://developer.chrome.com/
+  - link "Firebase":
+    - /url: https://firebase.google.com/
+  - link "All products":
+    - /url: https://developers.google.com/products/
+  - link "Terms and Privacy Policy":
+    - /url: https://policies.google.com/
+  - text: For details, see the
+  - link "Google Developers Site Policies":
+    - /url: https://developers.google.com/terms/site-policies
+  - text: .

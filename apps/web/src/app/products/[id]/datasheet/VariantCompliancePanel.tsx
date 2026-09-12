@@ -31,7 +31,7 @@
  * EN-1078 cert expires next month, click into its hub to update.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Check, FileText, ShieldCheck } from 'lucide-react'
 import type { getServerT } from '@/lib/i18n/server'
 

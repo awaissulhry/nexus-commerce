@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.B — shadow grading (plan D3): for every analyst finding, record what
  * the deterministic engine independently proposed for the same entity, so
@@ -158,7 +159,7 @@ export async function gradeFindings(
       continue
     }
     await prisma.agentShadowGrade.upsert({
-      where: { findingId: f.id },
+      where: { workspace_findingId: workspaceKey({ findingId: f.id }) },
       create: {
         findingId: f.id,
         engineKey: obs.key,

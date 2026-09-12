@@ -7,7 +7,7 @@
  * Steps 2-4 are scaffolded panels filled in by CB.2-CB.4.
  */
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { TrendingUp, BarChart3, Droplets, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, Select, Textarea } from '@/design-system/primitives'

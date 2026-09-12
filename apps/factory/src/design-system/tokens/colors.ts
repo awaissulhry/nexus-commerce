@@ -172,6 +172,26 @@ export const badge = {
  * palette operators recognise — a call to make deliberately, not a silent edit. Identity no
  * longer rests on colour alone regardless: every tag can carry a glyph (`Tag.icon`).
  */
+export const accountIdentity = [
+  { name: 'Blue', hex: palette.blue[600] },
+  { name: 'Teal', hex: '#0f8b8d' },
+  { name: 'Green', hex: palette.green[600] },
+  { name: 'Amber', hex: palette.amber[600] },
+  { name: 'Orange', hex: palette.amber[700] },
+  { name: 'Red', hex: palette.red[600] },
+  { name: 'Purple', hex: '#7c3aed' },
+  { name: 'Slate', hex: '#475569' },
+] as const satisfies ReadonlyArray<{ name: string; hex: string }>
+
+export const chart = {
+  actual: palette.blue[600],
+  cap: '#b3261e',
+  reference: '#667080',
+  axis: palette.grey[500],
+  grid: palette.grey[100],
+  cursor: palette.grey[300],
+} as const
+
 export const tagSwatches = [
   { name: 'Blue', hex: palette.blue[600] },
   { name: 'Green', hex: palette.green[600] },

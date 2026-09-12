@@ -21,7 +21,7 @@ import {
   Languages,
   Layers,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useInsightsLiveRefresh } from '../../_components/useInsightsLiveRefresh'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronLeft } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import {

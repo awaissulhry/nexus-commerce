@@ -9,8 +9,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Checkbox, FilterChip, Input, Pill } from '@/design-system/primitives'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
+import { useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { Plus, X } from 'lucide-react'
 import '../../ebay.css'
 

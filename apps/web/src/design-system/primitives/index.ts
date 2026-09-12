@@ -2,6 +2,9 @@ export { type Tone, TONES } from './tone'
 export { type Size } from './size'
 export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from './Button'
 export { FilterChip, type FilterChipProps } from './FilterChip'
+// VP.5 — the Variants page's two band chips (spec 2026-09-11 §3.1 / §4.1).
+export { AxisChip, type AxisChipProps } from './AxisChip'
+export { MappingChip, type MappingChipProps } from './MappingChip'
 export { CheckboxCard, type CheckboxCardProps } from './CheckboxCard'
 export { TokenChip, type TokenChipProps } from './TokenChip'
 export { NumberStepper, type NumberStepperProps } from './NumberStepper'
@@ -15,9 +18,9 @@ export { Checkbox, type CheckboxProps } from './Checkbox'
 export { Toggle, type ToggleProps } from './Toggle'
 export { Radio, type RadioProps } from './Radio'
 export { RadioCard, type RadioCardProps } from './RadioCard'
-export { Tooltip, type TooltipProps } from './Tooltip'
-/** W6 — the portal-rendered tooltip: the only one that survives an `overflow:auto` container.
- *  Prefer it over `Tooltip`/`HoverCard` anywhere near a scrolling pane. */
+export { Tooltip, TooltipPortalProvider, type TooltipProps } from './Tooltip'
+/** An info icon with a viewport-positioned tooltip. For arbitrary triggers/content,
+ *  use Tooltip with portal or TooltipPortalProvider in a scrolling host. */
 export { InfoTip } from './InfoTip'
 export { Spinner, type SpinnerProps } from './Spinner'
 export { Skeleton, type SkeletonProps } from './Skeleton'

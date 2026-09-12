@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W9.x — Workflow assignment CRUD.
  *
@@ -67,7 +68,7 @@ const workflowAssignmentsRoutes: FastifyPluginAsync = async (fastify) => {
     if (!assignee) return reply.status(404).send({ error: 'ASSIGNEE_NOT_FOUND' })
 
     const row = await prisma.workflowAssignment.upsert({
-      where: { productId_assigneeId_role: { productId: id, assigneeId, role } },
+      where: { productId_assigneeId_role: workspaceKey({ productId: id, assigneeId, role }) },
       create: {
         productId: id,
         assigneeId,

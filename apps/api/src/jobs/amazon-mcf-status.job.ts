@@ -87,7 +87,7 @@ export function startAmazonMCFStatusCron(): void {
     logger.error('amazon-mcf-status cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runMCFStatusSyncOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runMCFStatusSyncOnce() })
   logger.info('amazon-mcf-status cron: scheduled', { schedule })
 }
 

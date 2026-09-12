@@ -11,7 +11,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Search, Zap, FlaskConical, Trash2, TrendingUp, ShieldAlert, RefreshCw, Play, Pause, Copy, ChevronDown, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, FilterChip, Input, Toggle, ToolbarButton } from '@/design-system/primitives'

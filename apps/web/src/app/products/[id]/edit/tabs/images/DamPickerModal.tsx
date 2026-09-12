@@ -15,7 +15,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { Folder, ImageIcon, Loader2, Search, Tag as TagIcon, X } from 'lucide-react'
-import { Button } from '@/components/ui/Button'
+import { Button } from '@/design-system/primitives'
+import { Modal } from '@/design-system/components'
+import { MediaSourceLibrary } from '@/app/_shared/media/MediaSourceLibrary'
 import { cn } from '@/lib/utils'
 import { beFetch } from './api'
 import { useTranslations } from '@/lib/i18n/use-translations'
@@ -66,7 +68,22 @@ interface Props {
   productProductType?: string | null
 }
 
-export default function DamPickerModal({
+export default function DamPickerModal(props: Props) {
+  const [busy, setBusy] = useState(false)
+  return <Modal open size="xxl" readable title="Add from the media library" onClose={() => { if (!busy) props.onClose() }}>
+    <MediaSourceLibrary imagesOnly onBusyChange={setBusy} nexusLibrary={<NexusDamPickerContent {...props} />} onUse={async reference => {
+      const response = await beFetch(`/api/products/${props.productId}/images/import-from-dam`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assetId: reference.assetId, type: 'ALT' }),
+      })
+      const body = await response.json()
+      if (!response.ok) throw new Error(body.message ?? body.error ?? 'The image could not be added.')
+      if (!body.image?.id) throw new Error('The image was accepted but could not be read. Reload the gallery.')
+      props.onImported(body.image)
+    }} />
+  </Modal>
+}
+
+function NexusDamPickerContent({
   productId,
   onClose,
   onImported,
@@ -170,15 +187,6 @@ export default function DamPickerModal({
     [search, folderId, selectedTagIds, missingAltOnly],
   )
 
-  // Esc to close
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { e.preventDefault(); onClose() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
   async function importAsset(asset: LibraryItem) {
     setImportingId(asset.id)
     setImportError(null)
@@ -202,14 +210,7 @@ export default function DamPickerModal({
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="DAM library picker" className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-      />
-      <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden max-h-[80vh]">
+    <div>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0 gap-3">
           <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
@@ -400,7 +401,6 @@ export default function DamPickerModal({
             {t('products.edit.images.dam.done')}
           </Button>
         </div>
-      </div>
     </div>
   )
 }

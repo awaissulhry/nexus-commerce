@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   X,
   ExternalLink,
@@ -57,7 +57,8 @@ import {
   Send,
 } from 'lucide-react'
 import { Listbox } from '@/design-system/components/Listbox'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'
 import {

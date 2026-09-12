@@ -54,7 +54,7 @@ export function startAbcClassificationCron(): void {
     logger.error('abc-classification cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runAbcCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runAbcCronOnce() })
   logger.info('abc-classification cron: scheduled', { schedule })
 }
 

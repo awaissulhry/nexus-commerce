@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { useEffect, useState } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { ADS_NAV, EBAY_ADS_NAV, ADS_BASE } from './nav'

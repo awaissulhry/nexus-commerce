@@ -1,3 +1,4 @@
+import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * Amazon Financial Events Ingestion (Phase 2A — Financial)
  *
@@ -253,7 +254,7 @@ export async function syncFinancialEvents(
 ): Promise<FinancialSyncSummary> {
   const t0 = Date.now()
 
-  if (!amazonService.isConfigured()) {
+  if (!(await amazonService.isConfigured())) {
     throw new Error('Amazon SP-API not configured')
   }
 
@@ -421,27 +422,7 @@ interface NewTransaction {
   marketplaceDetails?: { marketplaceId?: string; marketplaceName?: string }
 }
 
-async function getLwaAccessToken(): Promise<string> {
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('LWA credentials missing')
-  }
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) throw new Error(`LWA failed: ${await res.text()}`)
-  const data = (await res.json()) as { access_token: string }
-  return data.access_token
-}
+async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
 function sumBreakdowns(
   breakdowns: NewBreakdown[] | undefined,

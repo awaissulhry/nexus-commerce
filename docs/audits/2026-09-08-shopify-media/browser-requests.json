@@ -1,0 +1,286 @@
+{
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "video",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-b",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-b",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/assets/shopify/upload",
+      "query": {
+        "accountId": "store-b"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-b",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": "",
+        "after": "page-2"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": "slow"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "image",
+        "search": ""
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/assets/shopify/reference",
+      "query": {}
+    },
+    {
+      "method": "POST",
+      "path": "/api/fixture/used",
+      "query": {}
+    },
+    {
+      "method": "POST",
+      "path": "/api/assets/shopify/reference",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": "front"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/media-sources",
+      "query": {}
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/shopify/files",
+      "query": {
+        "accountId": "store-a",
+        "type": "all",
+        "search": ""
+      }
+    }
+  ],
+  "uploads": [
+    {
+      "accountId": "store-b",
+      "size": 3323
+    }
+  ],
+  "used": [
+    {
+      "assetId": "store-a-reference",
+      "url": "http://127.0.0.1:4139/art/1.svg",
+      "label": "Forest jacket \u2014 front.jpg"
+    }
+  ]
+}

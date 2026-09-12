@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * PB.10 — Scheduled image publish cron.
  *
@@ -147,8 +148,8 @@ export function startScheduledImagePublishCron(): void {
     )
     return
   }
-  cronTimer = setInterval(() => {
-    void (async () => {
+  cronTimer = setInterval(() => { void runProfileTimer('scheduled-image-publish', async () => {
+    await (async () => {
       try {
         const summary = await runScheduledImagePublishOnce()
         if (summary !== 'no PENDING schedules due') {
@@ -161,7 +162,7 @@ export function startScheduledImagePublishCron(): void {
         )
       }
     })()
-  }, TICK_INTERVAL_MS)
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
   logger.info(`scheduled-image-publish: cron started (interval ${TICK_INTERVAL_MS}ms)`)
 }
 

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AX.4 — Amazon Ads CREATE service (campaigns / ad groups / keywords /
  * product ads). Local-first: writes the local Prisma row immediately
@@ -1402,7 +1403,7 @@ export async function saveRankScheduleGroup(input: RankScheduleGroupInput): Prom
     const existing = await prisma.adSchedule.findFirst({ where: { campaignId: cid }, select: { groupId: true } })
     if (existing?.groupId && existing.groupId !== group.id) moved++
     await prisma.adSchedule.upsert({
-      where: { campaignId: cid },
+      where: { workspace_campaignId: workspaceKey({ campaignId: cid }) },
       update: { ...data, groupId: group.id },
       create: { ...data, campaignId: cid, groupId: group.id },
     })

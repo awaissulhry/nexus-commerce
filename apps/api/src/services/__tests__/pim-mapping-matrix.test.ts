@@ -4,9 +4,25 @@
 
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('../../db.js', () => ({ default: {} }))
+const mocks = vi.hoisted(() => ({ product: { findUnique: vi.fn() }, channelListing: { findMany: vi.fn() }, resolve: vi.fn() }))
+vi.mock('../../db.js', () => ({ default: mocks }))
+vi.mock('../pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: mocks.resolve }))
 
-import { pivotMatrix } from '../pim/mapping-matrix.service.js'
+import { pivotMatrix, buildMappingMatrix } from '../pim/mapping-matrix.service.js'
+
+it('resolves each listing once and loads a baseline only for mapped overrides', async () => {
+  mocks.product.findUnique.mockResolvedValue({ id: 'p1', sku: 'SKU' })
+  mocks.channelListing.findMany.mockResolvedValue(['a', 'b'].map(id => ({ id, channel: 'EBAY', marketplace: 'IT', channelConnectionId: id, aliasKey: id === 'b' ? 'outlet' : '', version: 3 })))
+  mocks.resolve.mockImplementation(async input => ({ channel: input.channel, marketplace: input.marketplace, catalogue: { fields: [{ fieldKey: 'colour', label: 'Colour' }] },
+    products: [{ productId: 'p1', sku: 'SKU', category: { channelCategoryId: '123' }, cells: { colour: {
+      fieldKey: 'colour', value: input.channelConnectionId === 'b' && !input.inheritMappedFields ? 'Red' : 'Blue',
+      provenance: input.channelConnectionId === 'b' && !input.inheritMappedFields ? 'override' : 'catalogRule', rule: { source: 'color' }, warnings: [], errors: [], appliedTransforms: [],
+    } } }] }))
+  const result = await buildMappingMatrix({ productId: 'p1' })
+  expect(mocks.resolve).toHaveBeenCalledTimes(3)
+  expect(mocks.resolve.mock.calls.filter(([input]) => input.inheritMappedFields).map(([input]) => [input.channelConnectionId, input.aliasKey])).toEqual([['b', 'outlet']])
+  expect(result.fields[0]).toMatchObject({ label: 'Colour', cells: { a: { value: 'Blue', diverges: false }, b: { value: 'Red', masterValue: 'Blue', diverges: true } } })
+})
 
 function field(fieldKey: string, value: unknown, opts: Record<string, unknown> = {}) {
   return {

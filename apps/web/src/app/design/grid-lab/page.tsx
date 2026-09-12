@@ -12,6 +12,7 @@ import { GridLabClient } from './GridLabClient'
 
 export const metadata = { title: 'Grid parity lab' }
 
-export default function GridLabPage() {
-  return <GridLabClient />
+export default async function GridLabPage({ searchParams }: { searchParams: Promise<{ scenario?: string; tab?: string }> }) {
+  const { scenario, tab } = await searchParams
+  return <GridLabClient initialScenario={scenario} initialTab={tab} />
 }

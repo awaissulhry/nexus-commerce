@@ -1,0 +1,75 @@
+--- a/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
++++ b/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
+@@ -102,9 +102,9 @@
+ import { readinessMeta } from '@/design-system/grid/renderers/readiness'
+ import { getBackendUrl } from '@/lib/backend-url'
+ import { channelSurfaceKey } from './persistence'
+-import { GridExportRefused } from '@/design-system/grid/export/exportGrid'
++import { exportGridCsv, GridExportRefused } from '@/design-system/grid/export/exportGrid'
+ import { useSheetColumns } from '../useSheetColumns'
+-import { exportSheet, type SheetExportMode } from '../sheetExport'
++import type { SheetExportMode } from '../sheetExport'
+ import type { SheetColumn as StudioSheetColumn } from '../master/types'
+ import type { PrefsBridgeOptions } from '@/design-system/grid/columns/columnPrefs'
+ import { PreferencesModal, type PreferencesValue } from '@/design-system/patterns'
+@@ -1442,39 +1442,30 @@
+   }, [data, channel, marketplace, options.channels])
+ 
+   /**
+-   * Design V.5 — `exportSheet`, shared with master: D15.2's key row with this coordinate on every
+-   * key (`brand@AMAZON:IT:it`), `sku` first from row data, the VIEW or ALL attributes. Importable
+-   * either way, and the note says so.
++   * Table export reflects the current view. Editable exports use catalog-transfer's explicit
++   * account/listing identities, stored override state and record versions.
+    */
+   const onExport = useCallback(
+     (mode: SheetExportMode) => {
+       const api = apiRef.current
+       if (!api || api.isDestroyed() || !data) return
+       try {
+-        const activeView = sheetColumns.active
+-        const r = exportSheet<ChannelSheetRow>({
+-          api,
+-          mode,
+-          columns: schemaColumns,
+-          orderedKeys: sheetColumns.orderedKeys,
+-          scope: { kind: 'channel', channel: data.scope.channel, marketplace: data.scope.marketplace, locale: data.scope.locale },
+-          skuOf: (row) => row.sku,
+-          // Formulas are stored per PRODUCT (`r.id`), not per grid row — the same product under two
+-          // aliases carries one formula.
+-          formulaOf: (row, key) => row.aliasId || alternateAccount ? null : formulas.exprFor(row.id, key),
+-          rows,
+-          base: `${data.family?.sku ?? 'channel'}-${channel}-${marketplace}`,
+-          // `narrowed` because this sheet's own search filters `rowData` before AG sees it — the
+-          // grid's filter model cannot know about it, so the file name would otherwise claim to be complete.
++        const r = exportGridCsv<ChannelSheetRow>(api, `${data.family?.sku ?? 'channel'}-${channel}-${marketplace}-table`, {
++          columns: mode === 'all' ? sheetColumns.orderedKeys : 'displayed',
++          leading: [
++            { colId: '__sku', header: 'SKU', value: row => row.sku },
++            { colId: '__account', header: 'Account', value: () => accountId ?? 'Primary account' },
++            { colId: '__market', header: 'Marketplace', value: () => marketplace },
++            { colId: '__alias', header: 'Listing alias', value: row => row.aliasId ?? '' },
++          ],
+           narrowed: searchTerm.length > 0 || !!activeId,
+-          viewName: activeView.kind === 'saved' ? activeView.name : activeView.kind === 'preset' ? activeView.label : activeView.kind === 'all' ? 'all attributes' : null,
+         })
+-        setExportNote(`${r.rows} ${r.rows === 1 ? 'row' : 'rows'} · ${r.columns} columns → ${r.fileName}${r.keyed ? ' · importable' : ''}`)
++        setExportNote(`${r.rows} ${r.rows === 1 ? 'row' : 'rows'} · ${r.columns} columns → ${r.fileName} · table export for review; use Catalog export for editing`)
+       } catch (e: unknown) {
+         setExportNote(e instanceof GridExportRefused ? e.message : 'Could not build the file.')
+       }
+     },
+-    [data, channel, marketplace, searchTerm, activeId, schemaColumns, sheetColumns, rows, formulas, alternateAccount],
++    [data, channel, marketplace, accountId, searchTerm, activeId, sheetColumns],
+   )
+ 
+   /** Read the current order and pins together with the layout's group assignments. */
+@@ -2022,7 +2013,7 @@
+           exportCounts={{ view: sheetColumns.visibleAttributeKeys().length, all: sheetColumns.orderedKeys.length }}
+           exportDisabled={!data || loading}
+           onReload={reload}
+-          onImport={() => { if (alternateAccount) window.location.assign('/products/catalog-transfer'); else setImportOpen(true) }}
++          onImport={() => window.location.assign('/products/catalog-transfer')}
+           importDisabled={!data || loading}
+           loading={loading}
+           overflow={overflowItems}

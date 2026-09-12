@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, Play, Pause, Check, Rocket } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useMarketingEvents } from '@/lib/sync/use-marketing-events'

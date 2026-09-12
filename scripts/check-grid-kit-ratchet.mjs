@@ -18,6 +18,7 @@
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { execSync } from 'node:child_process'
+import { stripComments } from './lib/strip-comments.mjs'
 
 const BASELINE = 'scripts/grid-kit-baseline.json'
 const ROOT = 'apps/web/src/'
@@ -30,9 +31,12 @@ const EXEMPT_TABLE_FILES = new Set([
 ])
 
 const KITS = {
-  dsDataGrid: { label: 'DS DataGrid (<table>)', test: (src) => /from ['"][^'"]*design-system\/components(\/DataGrid)?['"]/.test(src) && /\bDataGrid\b/.test(src) && /<DataGrid\b/.test(src) },
+  // Match the imported symbol in THAT declaration. A page importing Modal from
+  // components and DataGrid from grid/datagrid has already migrated.
+  dsDataGrid: { label: 'DS DataGrid (<table>)', test: (src) => [...stripComments(src).matchAll(/import\s*\{([^}]+)\}\s*from\s*['"][^'"]*design-system\/components(?:\/DataGrid)?['"]/g)].some((m) => /(?:^|,)\s*DataGrid\s*(?:,|$|as\s)/.test(m[1])) },
   gridLens: { label: 'app/_shared/grid-lens', test: (src) => /from ['"]@\/app\/_shared\/grid-lens/.test(src) },
-  adsDataGrid: { label: 'AdsDataGrid (WorkspaceGrid shim)', test: (src) => /from ['"][^'"]*_grid\/AdsDataGrid['"]/.test(src) },
+  // AGW (2026-09-05): `_grid/AdsDataGrid` re-exports the AG Grid engine (`design-system/grid/workspace`) — it is the
+  // sanctioned import path for every ads grid now, not a retiring kit, so it is no longer counted here.
   workspaceGrid: { label: 'DS WorkspaceGrid (direct)', test: (src) => /from ['"][^'"]*workspace-grid\/WorkspaceGrid['"]/.test(src) },
   tanstack: { label: '@tanstack/react-table', test: (src) => /from ['"]@tanstack\/react-table['"]/.test(src) },
 }

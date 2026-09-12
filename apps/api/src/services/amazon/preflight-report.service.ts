@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 /**
  * ALA Phase 8 — Pre-Flight report aggregator (the capstone's data backbone).
  *
@@ -209,7 +210,7 @@ export async function buildPreflightReport(
 
     if (opts.live) {
       try {
-        const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+        const sellerId = (await getAmazonSellerId())
         const hints = await flatFileService.getFeedSchemaHints(mp, productType)
         const feedBody = flatFileService.buildJsonFeedBody([row as any], mp, sellerId, COCKPIT_EXPANDED_FIELDS, hints)
         const msg = (JSON.parse(feedBody).messages ?? [])[0]

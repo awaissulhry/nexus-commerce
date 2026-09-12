@@ -3,11 +3,9 @@
   "updatedAt": "2026-08-26",
   "sharedFiles": 91,
   "differing": [
-    "components/Drawer.tsx",
     "patterns/index.ts",
     "styles/components.css",
     "styles/patterns.css",
-    "styles/primitives.css",
     "styles/tokens.css",
     "tokens/colors.ts",
     "tokens/css-vars.ts",

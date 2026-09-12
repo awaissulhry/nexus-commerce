@@ -491,8 +491,8 @@ export function startReviewMailerCron(): void {
     logger.error('review-request-mailer cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runReviewMailerCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runReviewMailerCron()
   })
   logger.info('review-request-mailer cron: scheduled', { schedule })
 }

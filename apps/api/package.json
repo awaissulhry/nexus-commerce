@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "cd ../../packages/shared && npm run build && cd ../events && npm run build && cd ../../apps/api && npx prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "prestart": "cd ../../packages/database && node scripts/migrate-direct.mjs",
     "start": "node dist/index.js",
     "start:prod": "cd ../../packages/database && node scripts/migrate-direct.mjs && cd ../../apps/api && NODE_ENV=production node dist/index.js",
@@ -35,6 +36,8 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.19.3",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "amazon-sp-api": "^1.2.1",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.76.2",
@@ -63,6 +66,8 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.4.1",
+    "@electric-sql/pglite-socket": "^0.1.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^4.17.21",
     "@types/jszip": "^3.4.0",

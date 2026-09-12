@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Amazon FBA inventory sync — getInventorySummaries → Product.totalStock.
  *
@@ -43,8 +44,8 @@ interface SyncSummary {
 }
 
 export class AmazonInventoryService {
-  isConfigured(): boolean {
-    return amazonService.isConfigured()
+  async isConfigured(): Promise<boolean> {
+    return (await amazonService.isConfigured())
   }
 
   /** Full FBA sweep — call this from the 15-min cron. */
@@ -177,7 +178,7 @@ export class AmazonInventoryService {
     // H.1 backfill — a missing row is a configuration error worth
     // surfacing loudly rather than silently lazy-creating.
     const fbaLocation = await prisma.stockLocation.findUnique({
-      where: { code: FBA_LOCATION_CODE },
+      where: { workspace_code: workspaceKey({ code: FBA_LOCATION_CODE }) },
       select: { id: true },
     })
     if (!fbaLocation) {
@@ -190,7 +191,7 @@ export class AmazonInventoryService {
     for (const row of rows) {
       try {
         let product = await prisma.product.findUnique({
-          where: { sku: row.sku },
+          where: { workspace_sku: workspaceKey({ sku: row.sku }) },
           select: { id: true },
         })
 

@@ -1,0 +1,14 @@
+{%- if product.metafields.nexus.resolved.value.managed -%}
+  {%- assign nexus_variant = product.selected_or_first_available_variant -%}
+  {%- assign nexus_id = nexus_variant.id | append: '' -%}
+  {%- assign nexus_card = product.metafields.nexus.resolved.value.swatches.first -%}
+  {%- for nexus_chunk in (0..4) -%}
+    {%- assign nexus_offset = nexus_chunk | times: 50 -%}
+    {%- for nexus_group in product.metafields.nexus.resolved.value.swatches limit: 50 offset: nexus_offset -%}
+      {%- if nexus_group.variantIds contains nexus_id -%}{%- assign nexus_card = nexus_group -%}{%- endif -%}
+    {%- endfor -%}
+  {%- endfor -%}
+  {%- render 'nexus-impact-product-card', product: product, nexus_variant: nexus_variant, nexus_card: nexus_card, show_rating: show_rating, show_vendor: show_vendor, show_quick_buy: show_quick_buy, show_secondary_image: show_secondary_image, stacked: stacked, position: position, reveal: reveal, background: background, text_color: text_color, text_alignment: text_alignment, show_badges: show_badges -%}
+{%- else -%}
+  {%- render 'nexus-impact-legacy-card', product: product, show_rating: show_rating, show_vendor: show_vendor, show_quick_buy: show_quick_buy, show_secondary_image: show_secondary_image, show_swatches: show_swatches, stacked: stacked, position: position, reveal: reveal, background: background, text_color: text_color, text_alignment: text_alignment, show_badges: show_badges -%}
+{%- endif -%}

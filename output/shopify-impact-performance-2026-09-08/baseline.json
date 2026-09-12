@@ -1,0 +1,28 @@
+{
+  "themeId": "200486879559",
+  "themeName": "Nexus Impact 7.2.0 - feature cards",
+  "productReport": "https://pagespeed.web.dev/analysis/https-xaviaracing-it-products-gale-jacket/ygk7kh1bdk",
+  "mobile": {
+    "performance": 64,
+    "fcpSeconds": 3.2,
+    "lcpSeconds": 5.6,
+    "tbtMilliseconds": 50,
+    "cls": 0,
+    "speedIndexSeconds": 11.4
+  },
+  "desktop": {
+    "performance": 81,
+    "fcpSeconds": 0.7,
+    "lcpSeconds": 1.4,
+    "tbtMilliseconds": 180,
+    "cls": 0.004,
+    "speedIndexSeconds": 5.1
+  },
+  "shopifyHistoricalFieldData": {
+    "period": "30 days, observed 2026-09-08",
+    "lcpP75Milliseconds": 1704,
+    "inpP75Milliseconds": 112,
+    "cls": 0,
+    "warning": "Store-wide historical data; not proof of this release or a mobile-only cohort."
+  }
+}

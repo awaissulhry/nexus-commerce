@@ -17,7 +17,7 @@
  * create-stub action.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ImageOff, Plus } from 'lucide-react'
 import type { getServerT } from '@/lib/i18n/server'
 import { cellKey, type AxisResolution } from './variantAxes'

@@ -25,7 +25,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   CheckCircle2,
   EyeOff,

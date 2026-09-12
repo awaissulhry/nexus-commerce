@@ -54,7 +54,7 @@ export function startAutoPoCron(): void {
     logger.error('auto-po cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runAutoPoCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runAutoPoCronOnce() })
   logger.info('auto-po cron: scheduled', { schedule })
 }
 

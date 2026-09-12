@@ -1,0 +1,155 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.text_with_icon
+  if nexus_contract.fields contains 'custom.text_with_icon'
+    assign nexus_field = nexus_variant.metafields.custom.text_with_icon
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_blocks = nexus_entry -%}
+{%- if nexus_entry != blank -%}
+{%- if nexus_blocks.size > 0 -%}
+  {%- render 'section-spacing-collapsing' -%}
+
+  <style>
+    #shopify-section-{{ section.id }} {
+      --text-with-icons-template: {% if section.settings.stack_on_mobile %}minmax(0, 1fr){% else %}auto-flow 100%{% endif %};
+      --text-with-icons-justify: center;
+      --text-with-icons-text-align: center;
+      --text-with-icons-gap: {% if section.settings.icon_spacing == 'small' %}var(--spacing-5){% elsif section.settings.icon_spacing == 'medium' %}var(--spacing-6){% else %}var(--spacing-7){% endif %};
+    }
+
+    {%- if section.settings.stack_on_mobile -%}
+      @media screen and (min-width: 699px) {
+        #shopify-section-{{ section.id }} {
+          --text-with-icons-template: repeat(2, minmax(0, 1fr));
+        }
+      }
+    {%- endif -%}
+
+    @media screen and (min-width: 1150px) {
+      #shopify-section-{{ section.id }} {
+        --text-with-icons-gap: {% if section.settings.icon_spacing == 'small' %}var(--spacing-5){% elsif section.settings.icon_spacing == 'medium' %}var(--spacing-6){% else %}var(--spacing-8){% endif %};
+      }
+    }
+
+    {%- if nexus_blocks.size <= 3 -%}
+      @media screen and (min-width: 1000px) {
+        #shopify-section-{{ section.id }} {
+          --text-with-icons-template: repeat({{ nexus_blocks.size }}, minmax(0, 630px));
+          --text-with-icons-justify: {% if section.settings.text_alignment == 'center' %}center{% else %}start{% endif %};
+          --text-with-icons-text-align: {% if section.settings.text_alignment == 'center' %}center{% else %}start{% endif %};
+        }
+      }
+    {%- else -%}
+      @media screen and (min-width: 1150px) {
+        #shopify-section-{{ section.id }} {
+          --text-with-icons-template: repeat({{ nexus_blocks.size }}, 1fr);
+          --text-with-icons-justify: {% if section.settings.text_alignment == 'center' %}center{% else %}start{% endif %};
+          --text-with-icons-text-align: {% if section.settings.text_alignment == 'center' %}center{% else %}start{% endif %};
+        }
+      }
+    {%- endif -%}
+  </style>
+
+  <div {% render 'section-properties' %}>
+    <div class="section-stack">
+      {%- if section.settings.title != blank -%}
+        <div class="justify-self-center">
+          <h2 class="h3">{{ section.settings.title | escape }}</h2>
+        </div>
+      {%- endif -%}
+
+      <div class="text-with-icons">
+        <scroll-carousel
+          class="text-with-icons__list scroll-area full-bleed {% if nexus_blocks.size <= 3 %}md:unbleed{% else %}lg:unbleed{% endif %}"
+          id="carousel-{{ section.id }}"
+          role="region"
+        >
+          {%- for block in nexus_blocks -%}
+{%- assign nexus_block_content = block.content | metafield_tag -%}
+{%- assign nexus_block_custom_icon = block.image.value -%}
+{%- assign nexus_block_icon = "picto-coupon" -%}
+{%- assign nexus_block_icon_background = "" -%}
+{%- assign nexus_block_icon_background_type = "none" -%}
+{%- assign nexus_block_icon_color = "" -%}
+{%- assign nexus_block_icon_width = 32 -%}
+{%- assign nexus_block_mobile_icon_width = 24 -%}
+{%- assign nexus_block_title = block.heading.value -%}
+            {%- liquid
+              assign loading_strategy = null
+
+              if section.index > 3 or forloop.index > 3
+                assign loading_strategy = 'lazy'
+              endif
+            -%}
+
+            <div
+              id="block-{{ section.id }}-{{ block.system.id }}"
+              class="text-with-icons__item snap-center"
+              role="group"
+              aria-label="{{ 'general.accessibility.item_nth_of_count' | t: index: forloop.index, count: nexus_blocks.size }}"
+              
+            >
+              {%- capture icon -%}
+                {%- if nexus_block_custom_icon != blank -%}
+                  {%- capture sizes -%}{{ nexus_block_icon_width }}px{%- endcapture -%}
+                  {%- capture widths -%}{{ nexus_block_icon_width }}, {{ nexus_block_icon_width | times: 2 | at_most: nexus_block_custom_icon.width }}{%- endcapture -%}
+                  {%- capture style -%}--mobile-icon-max-width: {{ nexus_block_mobile_icon_width }}px; --icon-max-width: {{ nexus_block_icon_width }}px{%- endcapture -%}
+                  {{- nexus_block_custom_icon | image_url: width: nexus_block_custom_icon.width | image_tag: loading: loading_strategy, sizes: sizes, widths: widths, style: style, class: 'image-icon' -}}
+                {%- else -%}
+                  {%- render 'icon' with nexus_block_icon, width: nexus_block_mobile_icon_width, height: nexus_block_mobile_icon_width, class: 'sm:hidden' -%}
+                  {%- render 'icon' with nexus_block_icon, width: nexus_block_icon_width, height: nexus_block_icon_width, class: 'hidden sm:block' -%}
+                {%- endif -%}
+              {%- endcapture -%}
+
+              {%- if icon != blank -%}
+                {%- if nexus_block_icon_background_type == 'none' -%}
+                  <div {% render 'surface', text_color: nexus_block_icon_color %}>
+                    {{- icon -}}
+                  </div>
+                {%- else -%}
+                  {%- capture surface_class -%}icon-block {% if nexus_block_icon_background_type == 'circle' %}rounded-full{% endif %}{%- endcapture -%}
+                  <div
+                    {% render 'surface',
+                      class: surface_class,
+                      background: nexus_block_icon_background,
+                      text_color: nexus_block_icon_color,
+                      background_fallback: 'bg-secondary'
+                    %}
+                  >
+                    {{- icon -}}
+                  </div>
+                {%- endif -%}
+              {%- endif -%}
+
+              <div class="text-with-icons__text-wrapper">
+                <div class="prose">
+                  {%- if nexus_block_title != blank -%}
+                    <p class="{{ section.settings.heading_tag }}">{{ nexus_block_title | escape }}</p>
+                  {%- endif -%}
+
+                  {{- nexus_block_content -}}
+                </div>
+              </div>
+            </div>
+          {%- endfor -%}
+        </scroll-carousel>
+
+        {%- if nexus_blocks.size > 1 -%}
+          <page-dots aria-controls="carousel-{{ section.id }}" class="page-dots peer-not-scrollable:hidden">
+            {%- for index in (1..nexus_blocks.size) -%}
+              <button type="button" class="tap-area" aria-current="{% if forloop.first %}true{% else %}false{% endif %}">
+                <span class="sr-only">{{ 'general.accessibility.go_to_item' | t: index: index }}</span>
+              </button>
+            {%- endfor -%}
+          </page-dots>
+        {%- endif -%}
+      </div>
+    </div>
+  </div>
+{%- endif -%}
+
+
+{%- endif -%}

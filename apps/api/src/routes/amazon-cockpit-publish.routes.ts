@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { amazonSpClient } from '../lib/amazon-sp-client.js'
 /**
  * AC.12 — Amazon Listing Cockpit publish endpoint.
  *
@@ -27,6 +29,10 @@
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { primaryConnectionIds } from '../services/connection-resolver.service.js'
+import { resolveBatch } from '../services/pim/mapping/resolve-batch.service.js'
+import { loadAmazonSpec } from '../services/pim/channel-specs/index.js'
+import { applyResolvedMappingToAmazonFeed, type AttributePatch } from '../services/amazon/mapping-payload.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
@@ -42,29 +48,11 @@ const amazon = new AmazonService()
 const schemaService = new CategorySchemaService(prisma, amazon)
 const flatFileService = new AmazonFlatFileService(prisma, schemaService)
 
-function getSellerId(): string {
-  return process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+async function getSellerId(): Promise<string> {
+  return (await getAmazonSellerId())
 }
 
-function getSpClient() {
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID
-  const lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  if (!refreshToken || !lwaClientId || !lwaClientSecret) {
-    throw new Error('Amazon SP-API credentials not configured')
-  }
-  return import('amazon-sp-api').then(({ SellingPartner }) =>
-    new (SellingPartner as any)({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: refreshToken,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: lwaClientId,
-        SELLING_PARTNER_APP_CLIENT_SECRET: lwaClientSecret,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    }),
-  )
-}
+function getSpClient() { return amazonSpClient() }
 
 interface SubmissionResult {
   marketplace: string
@@ -73,6 +61,8 @@ interface SubmissionResult {
   feedDocumentId: string | null
   messageCount: number
   dryRun: boolean
+  payload?: unknown
+  validation?: 'local-only' | 'verified' | 'unavailable'
   error: string | null
   /** ALA Phase 3 — Amazon VALIDATION_PREVIEW issues array (when the pre-check ran). */
   issues?: unknown
@@ -227,7 +217,7 @@ export default async function amazonCockpitPublishRoutes(
 ) {
   fastify.post<{
     Params: { id: string }
-    Body: { marketplaces?: string[]; dryRun?: boolean }
+    Body: { marketplaces?: string[]; dryRun?: boolean; channelConnectionId?: string; aliasKey?: string }
   }>('/products/:id/publish-amazon', async (request, reply) => {
     const { id } = request.params
     const body = request.body ?? {}
@@ -251,7 +241,10 @@ export default async function amazonCockpitPublishRoutes(
       })
     }
 
-    const sellerId = getSellerId()
+    const primaryAccount = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
+    const account = body.channelConnectionId ?? primaryAccount
+    if (!dryRun && account !== primaryAccount) return reply.code(409).send({ error: 'This publisher supports the primary Amazon account. Use the account-specific publishing workflow for another account.' })
+    const sellerId = await getSellerId()
     if (!sellerId && !dryRun) {
       return reply.code(503).send({
         error: 'AMAZON_SELLER_ID not configured (set or use dryRun:true)',
@@ -311,46 +304,15 @@ export default async function amazonCockpitPublishRoutes(
 
       try {
         let listing = await prisma.channelListing.findFirst({
-          where: { productId: id, channel: 'AMAZON', marketplace: mp },
+          where: { productId: id, channel: 'AMAZON', marketplace: mp, channelConnectionId: account, aliasKey: body.aliasKey ?? '' },
         })
-        // B7 — CREATE path: when no ChannelListing exists yet, auto-create a
-        // minimal shell so the publish can proceed. The row is flagged _isNew
-        // so buildJsonFeedBody emits operationType:'UPDATE' (full create) rather
-        // than 'PARTIAL_UPDATE' (which would be rejected for a brand-new SKU).
-        // The operator doesn't need to visit the classic editor to bootstrap a
-        // listing — one cockpit publish is enough.
-        let isNewListing = false
-        if (!listing) {
-          const productType = String(product.productType ?? '').toUpperCase()
-          listing = await prisma.channelListing.create({
-            data: {
-              productId: id,
-              channel: 'AMAZON',
-              marketplace: mp,
-              channelMarket: `AMAZON_${mp}`,
-              region: mp,
-              listingStatus: 'DRAFT',
-              platformAttributes: productType ? { productType } : {},
-            },
-          })
-          isNewListing = true
-          request.log.info({ productId: id, marketplace: mp }, 'cockpit publish-amazon: created new ChannelListing shell (B7)')
-        }
-
+        if (!listing) throw new Error('Create the listing for this account and market before publishing.')
+        const isNewListing = !listing.isPublished
+        const resolved = await resolveBatch({ channel: 'AMAZON', marketplace: mp, channelConnectionId: listing.channelConnectionId,
+          aliasKey: listing.aliasKey, productIds: [id] })
         const row = buildRow({ listing, product, marketplace: mp, parentSku })
         // Mark new listings so the feed uses full UPDATE (not partial-update).
         if (isNewListing) (row as any)._isNew = true
-        if (dryRun) {
-          submissions.push({
-            ...result,
-            ok: true,
-            feedId: `dryrun-cockpit-${mp}-${Date.now()}`,
-            feedDocumentId: `dryrun-doc-${mp}-${Date.now()}`,
-            messageCount: 1,
-          })
-          continue
-        }
-
         // HIGH-3 — schema-aware build (enum codes, localized fields, number/bool
         // coercion) + bullet expansion, so cockpit publishes match the flat-file
         // path instead of submitting labels and stray bullet attributes.
@@ -360,13 +322,20 @@ export default async function amazonCockpitPublishRoutes(
         } catch (err: any) {
           request.log.warn({ err: err?.message, marketplace: mp }, 'cockpit publish: schema hints unavailable')
         }
-        const feedBody = flatFileService.buildJsonFeedBody(
+        const legacyFeedBody = flatFileService.buildJsonFeedBody(
           [row as any],
           mp,
           sellerId,
           COCKPIT_EXPANDED_FIELDS,
           feedSchema,
         )
+        const spec = await loadAmazonSpec(mp, resolved.products[0]?.category.channelCategoryId ?? String(row.product_type ?? ''))
+        const feedBody = applyResolvedMappingToAmazonFeed(legacyFeedBody, resolved, spec)
+        if (dryRun) {
+          submissions.push({ ...result, ok: true, messageCount: 1, payload: JSON.parse(feedBody), validation: 'local-only' })
+          continue
+        }
+
 
         // P0 byte-length gate — Amazon enforces maxUtf8ByteLength (UTF-8 bytes),
         // not characters. An accented IT/DE title within its char limit can still
@@ -393,26 +362,31 @@ export default async function amazonCockpitPublishRoutes(
         // what's wrong with this payload BEFORE the feed round-trip. Mirror the
         // feed's operationType (PATCH for a partial edit, PUT for a new listing)
         // so an unchanged required attr isn't falsely flagged. Non-mutating; it
-        // blocks the submit only on Amazon-confirmed ERROR issues. A pre-check
-        // that can't run (no creds / transport error) never blocks — we proceed.
+        // Publication requires a completed check. Unavailable validation is
+        // unverified, and must never be represented as a passing preflight.
         let previewWarnings: SubmissionResult['warnings'] = undefined
         try {
           const feedObj = JSON.parse(feedBody) as {
-            messages?: Array<{ operationType?: string; productType?: string; attributes?: Record<string, unknown> }>
+            messages?: Array<{ operationType?: string; productType?: string; attributes?: Record<string, unknown>; patches?: AttributePatch[] }>
           }
           const msg = feedObj.messages?.[0]
           const attrs = (msg?.attributes ?? {}) as Record<string, unknown>
           const opType = String(msg?.operationType ?? '')
           const pt = String(msg?.productType ?? row.product_type ?? '')
-          if (opType !== 'DELETE' && Object.keys(attrs).length > 0) {
+          if (opType !== 'DELETE' && (Object.keys(attrs).length > 0 || msg?.patches?.length)) {
             const preview = opType === 'UPDATE'
               ? await amazonSpApiClient.validateListing({
                   sellerId, sku: String(product.sku), marketplaceId, productType: pt, attributes: attrs,
                 })
               : await amazonSpApiClient.validateListing({
                   sellerId, sku: String(product.sku), marketplaceId, productType: pt,
-                  patches: Object.entries(attrs).map(([k, v]) => ({ op: 'replace', path: `/attributes/${k}`, value: v })),
+                  patches: msg?.patches ?? Object.entries(attrs).map(([k, v]) => ({ op: 'replace', path: `/attributes/${k}`, value: v })),
                 })
+            if (!preview.available) {
+              result.error = 'Amazon validation is unavailable. Nothing was submitted; retry the pre-check when the connection is available.'
+              submissions.push(result)
+              continue
+            }
             if (preview.available) {
               // ALA Phase 4 — mirror Amazon's verdict into ListingIssue so the
               // Pre-Flight health panel reflects this pre-check (open + resolved).
@@ -442,8 +416,11 @@ export default async function amazonCockpitPublishRoutes(
         } catch (vErr: any) {
           request.log.warn(
             { err: vErr?.message, marketplace: mp },
-            'cockpit publish: VALIDATION_PREVIEW pre-check errored, proceeding to submit',
+            'cockpit publish: VALIDATION_PREVIEW pre-check failed, submission blocked',
           )
+          result.error = 'Amazon validation could not complete. Nothing was submitted; retry the pre-check.'
+          submissions.push(result)
+          continue
         }
 
         // Step 1: create feed document.

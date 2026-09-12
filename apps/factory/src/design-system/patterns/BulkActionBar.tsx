@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Button } from '../primitives/Button'
 
 export interface BulkActionBarProps {
   count: number
@@ -25,9 +26,9 @@ export function BulkActionBar({ count, children, onClear, noun = 'selected', cla
       <span className="acts">
         {children}
         {onClear && (
-          <button type="button" className="nds-actionbar-clear" onClick={onClear}>
+          <Button size="sm" variant="quiet" onClick={onClear}>
             Clear
-          </button>
+          </Button>
         )}
       </span>
     </div>

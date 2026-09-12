@@ -24,7 +24,7 @@
  * reason that no session exists yet. Do not move a prefix from level 3 to level 2.
  */
 
-import { usePathname } from 'next/navigation'
+import { usePathname } from '@/lib/workspaces/navigation'
 import type { ReactNode } from 'react'
 // Rail styles (.h10-rail / .h10-item / .h10-sub* / chrome). These used to come from
 // ads.css, which meant every non-standalone route pulled in the whole ads cockpit —
@@ -44,8 +44,24 @@ import { AppTopBar } from '@/app/_shared/AppTopBar'
  */
 const NO_RAIL_PREFIXES = ['/marketing/ads-console', '/marketing/ads', '/products/next']
 
+/**
+ * The same family, for routes with a DYNAMIC segment.
+ *
+ * `startsWith` cannot express `/products/[id]/edit` — the id sits in the middle, so every
+ * dynamic-segment route was structurally unable to join this level no matter what was added to
+ * the list above. PES.1 (the Product Edit Studio frame) needs the /products/next shell exactly:
+ * `h10-shell` + its own rail + the top bar.
+ *
+ * Deliberately scoped to `/edit/studio`, not `/edit`: the studio is built BESIDE the old
+ * `ProductEditClient`, which stays routable at `/edit` with its chrome untouched until the Owner
+ * swaps them. At swap this pattern loses its `/studio` tail and nothing else changes.
+ */
+const NO_RAIL_PATTERNS = [/^\/products\/[^/]+\/edit\/studio(\/|$)/]
+
 /** Routes that render NO Nexus chrome whatsoever. See the privacy note above. */
 const NO_CHROME_PREFIXES = [
+  '/profiles',
+  '/accept-workspace-invite',
   '/shared',
   '/login',
   '/403',
@@ -69,7 +85,11 @@ export default function AppShell({
 }) {
   const pathname = usePathname() || ''
   const noChrome = NO_CHROME_PREFIXES.some((p) => pathname.startsWith(p))
-  const noRail = NO_RAIL_PREFIXES.some((p) => pathname.startsWith(p))
+  const noRail =
+    pathname === '/products' ||
+    NO_RAIL_PREFIXES.some((p) => pathname.startsWith(p)) ||
+    NO_RAIL_PATTERNS.some((r) => r.test(pathname))
+  const settingsShell = pathname === '/settings' || pathname.startsWith('/settings/')
 
   if (noChrome) {
     // Full-bleed: no bar, no rail, no banners, no command palette. Byte-identical to the
@@ -123,7 +143,8 @@ export default function AppShell({
             <div data-print-hide>{topBar}</div>
             <main id="main-content" className="flex-1 overflow-auto" tabIndex={-1}>
               <div data-print-hide>{banners}</div>
-              <div className="p-3 md:p-6">{children}</div>
+              {/* Settings owns its edge-to-edge subheader and page padding. */}
+              <div className={settingsShell ? 'min-h-full flex flex-col' : 'p-3 md:p-6'}>{children}</div>
             </main>
           </div>
         </div>

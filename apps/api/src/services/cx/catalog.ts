@@ -37,7 +37,7 @@ export type AuthMode = 'oauth2_code' | 'oauth2_pkce' | 'oauth2_cc' | 'api_key' |
  * signature  → OUR request signing is wrong (eBay 215000–215122) — an engineering defect, never the operator's.
  * transient  → the channel is unwell (5xx) — degrade by count.
  */
-export type ErrorClass = 'auth_revoked' | 'auth_expired' | 'forbidden' | 'signature' | 'rate_limited' | 'transient' | 'network' | 'unknown'
+export type ErrorClass = 'auth_revoked' | 'auth_expired' | 'forbidden' | 'signature' | 'configuration' | 'identity_mismatch' | 'rate_limited' | 'transient' | 'network' | 'unknown'
 
 export interface RateLimitReading {
   /** Remaining calls in the current window, when the channel reports it. */
@@ -88,6 +88,7 @@ export interface ConnectionHandle {
   id: string
   channelKey: ChannelKey
   channelType: string
+  environment?: 'production' | 'sandbox'
   region: string | null
   grantedScopes: string[]
   identity: ConnectionIdentity | null
@@ -97,6 +98,10 @@ export interface ConnectionHandle {
 
 export interface AuthSpec {
   mode: AuthMode
+  /** OAuth scopes are chosen at consent; Amazon SP-API instead grants the roles approved on the application. */
+  permissionModel?: 'oauth_scopes' | 'application_roles'
+  /** Refuse to store a grant if the connector cannot prove which external account authorised it. */
+  identityRequired?: boolean
   /** Builds the consent URL; `region` is a catalogue region key. */
   authorizeUrl?: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
   tokenUrl: (ctx: { region: string | null; environment: 'production' | 'sandbox' }) => string
@@ -106,6 +111,8 @@ export interface AuthSpec {
   refreshParams?: Record<string, string>
   /** How client credentials reach the token endpoint. */
   tokenRequestAuth: 'basic' | 'body'
+  /** Some body-auth providers (Etsy) accept the public client id but forbid the app secret in OAuth token requests. */
+  includeClientSecretInTokenRequest?: boolean
   scopeSeparator: ' ' | ','
   /** The query param that carries the authorization code on the callback. */
   codeParamInCallback: string
@@ -119,9 +126,12 @@ export interface AuthSpec {
   /** Every scope we are eligible for — rule 4 (maximal scopes). */
   requiredScopes: string[]
   reviewGatedScopes?: { scope: string; reason: string }[]
-  accessTokenLifetimeSec?: number
+  /** null = a non-expiring access token (Shopify custom-distribution offline grant). */
+  accessTokenLifetimeSec?: number | null
   /** null = never expires (Shopify offline token); undefined = unknown. */
   refreshTokenLifetimeSec?: number | null
+  /** Refuse a code exchange that would leave the connection usable for only one access-token lifetime. */
+  refreshTokenRequired?: boolean
   rotatesRefreshToken: boolean
   revokeUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string
   introspectUrl?: (ctx: { environment: 'production' | 'sandbox' }) => string
@@ -195,6 +205,7 @@ export function scopeDriftOf(spec: ChannelSpec, granted: string[]): string[] {
 export function classifyAuthError(status: number | undefined, body: string): ErrorClass {
   const b = body.toLowerCase()
   if (status === 429) return 'rate_limited'
+  if (b.includes('invalid_client') || b.includes('unauthorized_client')) return 'configuration'
   // eBay's request-signature family (215000–215122) is a defect in OUR signing,
   // not a revoked grant: it must never push a healthy connection to needs_reauth.
   if (/"errorid"\s*:\s*(?:2150\d\d|2151[01]\d|21512[0-2])(?!\d)/.test(b)) return 'signature'

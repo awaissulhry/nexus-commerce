@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * O.21a — Customers REST surface.
  *
@@ -183,7 +184,7 @@ export async function customersRoutes(app: FastifyInstance) {
     try {
       const { email } = request.params as { email: string }
       const customer = await prisma.customer.findUnique({
-        where: { email: email.toLowerCase() },
+        where: { workspace_email: workspaceKey({ email: email.toLowerCase() }) },
         select: { id: true, email: true, name: true },
       })
       if (!customer) return reply.status(404).send({ error: 'No customer for that email' })

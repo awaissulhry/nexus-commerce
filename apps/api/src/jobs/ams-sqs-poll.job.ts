@@ -10,7 +10,8 @@
  * triggering.
  */
 
-import cron from '../lib/cron/clustered.js'
+import cron, { schedulePlatform } from '../lib/cron/clustered.js'
+import { verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { isAmsSqsConfigured, pollAmsRaw, deleteAmsMessage, parseAmsBody } from '../services/ams-sqs.service.js'
@@ -45,7 +46,12 @@ export async function runAmsSqsPoll(): Promise<void> {
               // different questions. Previously everything went to the metrics
               // ingest, which SKIPped anything without traffic/conversion in
               // its id — so change and budget events were silently discarded.
-              const routed = routeRecords(records as Array<Record<string, unknown>>)
+              // IAM authenticates the shared queue; each record still needs its
+              // own advertiser/profile destination before any business write.
+              const batches = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? records.map(record => [record]) : [records]
+              for (const batchRecords of batches) {
+              const ingest = async () => {
+              const routed = routeRecords(batchRecords as Array<Record<string, unknown>>)
               if (routed.performance.length) {
                 const res = await ingestMarketingStream(routed.performance as never)
                 upserted += res.upserted
@@ -64,6 +70,15 @@ export async function runAmsSqsPoll(): Promise<void> {
                 // added one, and we should find out from a log rather than from
                 // a gap in the data months later.
                 unknownDs += routed.unknown.length
+              }
+              }
+              if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+                const record = batchRecords[0]
+                const externalId = record.profileId ?? record.profile_id ?? record.advertiser_id ?? record.advertiserId
+                if (typeof externalId !== 'string' && typeof externalId !== 'number') throw new Error('AMS record does not identify an advertiser.')
+                const owner = await verifiedChannelWorkspace('AMAZON_ADS', String(externalId))
+                await withIngressWorkspace(owner.workspaceId, ingest)
+              } else await ingest()
               }
             }
             // Ack even when 0 records (e.g. a non-perf dataset we skip) — leaving
@@ -96,6 +111,6 @@ export function startAmsSqsPollCron(): void {
     logger.info('ams-sqs-poll NOT scheduled (NEXUS_AMS_SQS_QUEUE_URL + AWS creds not set) — manual trigger still available')
     return
   }
-  scheduledTask = cron.schedule('* * * * *', () => void runAmsSqsPoll())
+  scheduledTask = schedulePlatform('* * * * *', async () => { await runAmsSqsPoll() })
   logger.info('ams-sqs-poll cron scheduled (* * * * *)')
 }

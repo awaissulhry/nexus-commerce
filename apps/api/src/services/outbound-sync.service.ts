@@ -1,3 +1,6 @@
+import { marketLanguages, languageTag } from './pim/market-languages.js'
+import { assertInformationLocale } from './pim/information-locale.js'
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 import { amazonSpApiClient } from "../clients/amazon-sp-api.client.js";
@@ -40,6 +43,7 @@ import {
 } from "./ebay-trading-api.service.js";
 import { toListingLanguage } from "./ebay-variation-push.service.js";
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { syncNativeShopifyOffer } from './shopify/offer-sync.service.js'
 
 // Phase 3 — test seam for the Trading-API network call.
 // Overridable in unit tests; defaults to the real Phase-1 fn.
@@ -219,7 +223,7 @@ export function ebayInventoryHeaders(token: string, marketplaceId: string): Reco
  *  PUT doesn't drop the rest of the listing. */
 export function mergeEbayInventoryItem(
   existing: Record<string, any>,
-  payload: { quantity?: number; title?: string; description?: string; images?: string[] },
+  payload: { quantity?: number; title?: string; description?: string; images?: string[]; mappingAspects?: Record<string, string[] | null> },
 ): Record<string, any> {
   const merged: Record<string, any> = { ...existing };
   if (payload.quantity !== undefined) {
@@ -233,6 +237,15 @@ export function mergeEbayInventoryItem(
     if (payload.title) merged.product.title = payload.title;
     if (payload.description) merged.product.description = payload.description;
     if (payload.images && payload.images.length > 0) merged.product.imageUrls = payload.images;
+  }
+  if (payload.mappingAspects) {
+    merged.product = { ...(merged.product ?? {}) };
+    const aspects = { ...(merged.product.aspects ?? {}) };
+    for (const [name, value] of Object.entries(payload.mappingAspects)) {
+      if (value === null) delete aspects[name];
+      else aspects[name] = value;
+    }
+    merged.product.aspects = aspects;
   }
   return merged;
 }
@@ -264,11 +277,6 @@ export function resolveAmazonMarketplaceId(mp: string | undefined): string {
   return AMAZON_MARKETPLACE_IDS[mp.toUpperCase()] ?? AMAZON_MARKETPLACE_IDS.IT;
 }
 
-const AMAZON_LANG_TAG: Record<string, string> = {
-  IT: "it_IT", DE: "de_DE", FR: "fr_FR", ES: "es_ES", NL: "nl_NL",
-  SE: "sv_SE", PL: "pl_PL", BE: "fr_BE", IE: "en_IE", UK: "en_GB", GB: "en_GB", US: "en_US",
-};
-
 /**
  * A4.0 — build a CORRECT Amazon Listings Items PATCH body. The old
  * constructAmazonPayload emitted non-schema attribute names (`title`, `price`,
@@ -278,15 +286,20 @@ const AMAZON_LANG_TAG: Record<string, string> = {
  * purchasable_offer / fulfillment_availability) and value shapes. Mirrors the
  * proven buildJsonFeedBody attribute shapes; same serializer semantics everywhere.
  */
-export function buildAmazonListingPatch(
+export async function buildAmazonListingPatch(
   payload: SyncPayload,
   marketplaceCode: string,
   productType: string,
   fulfillmentMethod?: string | null,
-): Record<string, any> {
-  const code = (marketplaceCode || "IT").toUpperCase();
+): Promise<Record<string, any>> {
+  const rawCode = (marketplaceCode || "IT").toUpperCase();
+  const code = Object.entries(AMAZON_MARKETPLACE_IDS).find(([, id]) => id === rawCode)?.[0] ?? rawCode;
   const marketplaceId = resolveAmazonMarketplaceId(code);
-  const language_tag = AMAZON_LANG_TAG[code] ?? "it_IT";
+  const hasContent = !!(payload.title || payload.description || payload.bulletPoints?.length);
+  const languages = hasContent ? await marketLanguages('AMAZON', code) : [];
+  const language = payload.language ?? languages[0];
+  if (hasContent) assertInformationLocale('AMAZON', language, languages);
+  const language_tag = hasContent ? languageTag(language, code) : undefined;
   const currency = code === "UK" || code === "GB" ? "GBP" : "EUR";
   const isFba = String(fulfillmentMethod ?? "").toUpperCase() === "FBA";
   const attrs: Record<string, any> = {};
@@ -318,7 +331,7 @@ export function buildAmazonListingPatch(
 
   return {
     productType,
-    patches: Object.entries(attrs).map(([k, v]) => ({ op: "replace", path: `/attributes/${k}`, value: v })),
+    patches: [...Object.entries(attrs).map(([k, v]) => ({ op: "replace", path: `/attributes/${k}`, value: v })), ...(payload.source === 'FM_CATALOG_CASCADE' ? payload.mappingAttributePatches ?? [] : [])],
   };
 }
 
@@ -592,6 +605,10 @@ export class OutboundSyncService {
 
   /** A2.1 — route one queue item to the right channel sync method. */
   private async dispatchSync(item: any): Promise<SyncResult> {
+    if (item.payload?.source === 'FM_CATALOG_CASCADE') {
+      const { prepareMappingDispatch } = await import('./pim/mapping/prepare-dispatch.js');
+      item = await prepareMappingDispatch(item);
+    }
     switch (item.targetChannel) {
       case "AMAZON": return this.syncToAmazon(item);
       case "EBAY": return this.syncToEbay(item);
@@ -860,7 +877,7 @@ export class OutboundSyncService {
     const marketplaceId =
       payload?.marketplaceId ?? process.env.AMAZON_DEFAULT_MARKETPLACE ?? "IT";
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
+      (await getAmazonSellerId());
 
     // A4.0 — resolve the Amazon product type (required by the Listings PATCH) and
     // build the CORRECT patch body (schema attribute names + value shapes),
@@ -1025,7 +1042,7 @@ export class OutboundSyncService {
         })
       }
     }
-    const amazonPayload = buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
+    const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
     // FBA stock). Don't submit an empty patch — return a terminal, no-retry skip.
@@ -1061,6 +1078,10 @@ export class OutboundSyncService {
           ? { id: sellerId }
           : { error: "AMAZON_SELLER_ID is not configured. Set the env var before enabling outbound sync." },
       execute: async ({ sellerId: sid }) => {
+        if (payload.source === 'FM_CATALOG_CASCADE') {
+          const check = await amazonSpApiClient.validateListing({ sellerId: sid, sku, marketplaceId: resolveAmazonMarketplaceId(marketplaceId), productType, patches: amazonPayload.patches });
+          if (!check.available || !check.ok) return { ok: false, error: !check.available ? 'Amazon validation is unavailable; no mapping update was submitted.' : `Amazon validation failed: ${check.errors}` };
+        }
         const res = await amazonSpApiClient.submitListingPayload({
           sellerId: sid,
           sku,
@@ -1220,7 +1241,7 @@ export class OutboundSyncService {
     // MAP.3 — DECLARED. 🔴 MAP.6/7: an outbound push SHOULD derive its account
     // from the listing it is pushing; that needs the product→account intent this
     // programme calls labels.
-    const connection = await tryResolveConnection({ channel: "EBAY", primary: true });
+    const connection = await tryResolveConnection(payload?.source === 'FM_CATALOG_CASCADE' && payload.channelConnectionId ? { accountId: payload.channelConnectionId } : { channel: "EBAY", primary: true });
     if (!connection) {
       return fail(
         "failed",
@@ -1345,7 +1366,7 @@ export class OutboundSyncService {
     try {
       // 7a. Quantity (+ any content) → inventory_item.
       const touchesItem =
-        payload.quantity !== undefined ||
+        payload.quantity !== undefined || !!payload.mappingAspects ||
         !!payload.title ||
         !!payload.description ||
         !!(payload.images && payload.images.length > 0);
@@ -1366,7 +1387,7 @@ export class OutboundSyncService {
       // offer's availableQuantity rides the same call, which retires the 25004
       // parked-offer deadlock for this path too.
       const contentTouched =
-        !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
+        !!payload.mappingAspects || !!payload.title || !!payload.description || !!(payload.images && payload.images.length > 0);
       if (payload.quantity !== undefined && !contentTouched) {
         // Offer id (read of the OFFER, never the item — zero image risk).
         let offerId: string | null = null;
@@ -1835,6 +1856,16 @@ export class OutboundSyncService {
       return { success: true, queueId, channel: "SHOPIFY", status: "SKIPPED",
         message: `Shopify ${shopifyMode} — not published (set NEXUS_ENABLE_SHOPIFY_PUBLISH=true + SHOPIFY_PUBLISH_MODE=live)`,
         dryRun: true };
+    }
+
+    if ((channelListing?.platformAttributes as Record<string, unknown> | null)?.nexusFamilyId) {
+      try {
+        const message = await syncNativeShopifyOffer(queueItem);
+        return { success: true, queueId, channel: "SHOPIFY", status: "SUCCESS", message };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { success: false, queueId, channel: "SHOPIFY", status: "FAILED", message, error: message };
+      }
     }
 
     const shopName = process.env.SHOPIFY_SHOP_NAME ?? "";

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CR.12 — nightly Sendcloud service-catalog sync.
  *
@@ -125,7 +126,7 @@ export async function runCarrierServiceSync(): Promise<{
         const tier = classifyServiceTier(m.name, m.carrier)
         await prisma.carrierService.upsert({
           where: {
-            carrierId_externalId: { carrierId: carrier.id, externalId: m.externalId },
+            carrierId_externalId: workspaceKey({ carrierId: carrier.id, externalId: m.externalId }),
           },
           create: {
             carrierId: carrier.id,
@@ -200,8 +201,8 @@ export function startCarrierServiceSyncCron(): void {
     logger.error('carrier-service-sync cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('carrier-service-sync', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('carrier-service-sync', async () => {
       const r = await runCarrierServiceSync()
       return `carriers=${r.carriersScanned} synced=${r.servicesSynced} deactivated=${r.servicesDeactivated}`
     }).catch((err) => {

@@ -1,0 +1,91 @@
+{
+  "completedAt": "2026-09-09T15:29:25.385120+00:00",
+  "status": "SESSION_CONSOLIDATION_ROLLBACK_COMPLETE",
+  "scope": "Undo only changes from the 9 September family-consolidation session; retain earlier integrations and audit/backup evidence.",
+  "catalogue": {
+    "originalProductCount": 43,
+    "currentProductCount": 43,
+    "sameProductIds": true,
+    "missingOriginalIds": [],
+    "addedIds": [],
+    "statusStockAndVariantCountDifferences": []
+  },
+  "removedRehearsalProductId": "11136277741895",
+  "rehearsalTheme": {
+    "id": "200516206919",
+    "status": "ABSENT_VERIFIED_AFTER_RELOAD",
+    "note": "Already absent on fresh library readback in this continuation; no theme delete was submitted in this continuation."
+  },
+  "publishedTheme": {
+    "id": "200489992519",
+    "name": "Nexus Impact 7.2.0 - performance",
+    "lastSavedShown": "Yesterday at 11:40 pm",
+    "sessionWrites": false
+  },
+  "removedDefinitions": [
+    {
+      "owner": "PRODUCT",
+      "id": "446807146823",
+      "key": "nexus.resolved",
+      "usageAtRemoval": 0
+    },
+    {
+      "owner": "PRODUCTVARIANT",
+      "id": "446807114055",
+      "key": "nexus.resolved",
+      "usageAtRemoval": 0
+    },
+    {
+      "owner": "PRODUCTVARIANT",
+      "id": "446808392007",
+      "key": "custom.media_with_text_product_page",
+      "usageAtRemoval": 0
+    }
+  ],
+  "definitions": {
+    "product": {
+      "beforeCount": 24,
+      "afterCount": 24,
+      "sameDefinitionIds": true,
+      "sameDefinitionOrder": true
+    },
+    "variant": {
+      "beforeCount": 14,
+      "afterCount": 14,
+      "sameDefinitionIds": true,
+      "sameDefinitionOrder": true
+    }
+  },
+  "unstructuredVariantValues": "EMPTY_VERIFIED",
+  "originalAireonRelationships": {
+    "restoredEarlier": true,
+    "fourListsRechecked": true,
+    "verification": "Second audit copied all four values from native Admin bulk cells and matched the exact original product IDs and order.",
+    "evidence": "private/rollback-aireon-comparison.json",
+    "exactIdEvidence": "private/rollback-second-aireon-exact-ids.json"
+  },
+  "localRollback": {
+    "builderSessionHunksRemoved": true,
+    "sessionLinkedProductsHelperRemoved": true,
+    "sessionReadmeBulletRemoved": true,
+    "syntaxCheck": "PASS",
+    "preSessionFullSourceSnapshotAvailable": false,
+    "note": "Surgical reversal of known session additions; unrelated and earlier untracked integration work retained."
+  },
+  "sourceSkuPriceInventoryReviewWrites": false,
+  "translationImportSubmitted": false,
+  "ordersPlaced": false,
+  "paidSubscriptionsStarted": false,
+  "retained": "Original public audit, authenticated backups, historical canceled rehearsal artifacts and rollback evidence.",
+  "limitations": [
+    "Catalogue readback verifies all product IDs, statuses, displayed stock totals and displayed variant counts; it is not a new exhaustive field-by-field export.",
+    "Restored original AIREON cross-garment links and REGAL Grey/Gray identity discrepancy remain pre-existing catalogue issues.",
+    "No original inventory snapshot was reapplied; current order/inventory activity was not rewound."
+  ],
+  "remainingSessionRollbackActions": [],
+  "secondAudit": {
+    "verifiedAt": "2026-09-09T15:35:36.523004+00:00",
+    "status": "SECOND_ROLLBACK_AUDIT_PASSED",
+    "report": "rollback-second-audit.json"
+  }
+}

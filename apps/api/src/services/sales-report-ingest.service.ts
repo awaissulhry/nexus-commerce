@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * F.3.2 — Amazon Sales & Traffic report ingest.
  *
@@ -93,7 +94,7 @@ export async function ingestSalesTrafficForDay(
   // Fail fast if the row is missing — better than calling SP-API with the
   // wrong ID and getting a confusing error back.
   const marketplaceRow = await prisma.marketplace.findUnique({
-    where: { channel_code: { channel: 'AMAZON', code: marketplaceCode } },
+    where: { channel_code: workspaceKey({ channel: 'AMAZON', code: marketplaceCode }) },
   })
   if (!marketplaceRow?.marketplaceId) {
     throw new Error(
@@ -237,12 +238,12 @@ export async function ingestSalesTrafficForDay(
     if (args.skipIfReportExists) {
       const existing = await prisma.dailySalesAggregate.findUnique({
         where: {
-          sku_channel_marketplace_day: {
+          sku_channel_marketplace_day: workspaceKey({
             sku,
             channel: 'AMAZON',
             marketplace: marketplaceCode,
             day,
-          },
+          }),
         },
         select: { source: true },
       })
@@ -251,12 +252,12 @@ export async function ingestSalesTrafficForDay(
 
     await prisma.dailySalesAggregate.upsert({
       where: {
-        sku_channel_marketplace_day: {
+        sku_channel_marketplace_day: workspaceKey({
           sku,
           channel: 'AMAZON',
           marketplace: marketplaceCode,
           day,
-        },
+        }),
       },
       create: {
         sku,

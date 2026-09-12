@@ -21,6 +21,20 @@ canonical design language for the **entire** platform.
 
 ---
 
+## Advertising grids (web)
+
+The `/marketing/ads` application uses the Nexus AG Grid adapters: `grid/workspace`
+for workspaces with search, filters, preferences and paging; `grid/datagrid` for
+smaller tables, expanded detail rows and in-cell controls. Keep feature content
+in renderers and use the published `.nds-ws-*` / `.nds-dg-*` row and cell classes.
+Saved preferences retain their existing keys and shapes. The comparison catalog
+is `/design/grid-lab`; `?tab=datagrid&scenario=dg-inline-edit` isolates a scenario.
+These adapters are currently web-only; other platforms keep their existing grids.
+
+`Tooltip portal` or `TooltipPortalProvider` places tooltip bubbles on the shared
+`--nds-z-tooltip` layer. The advertising adapters enable this automatically so
+first-row action tooltips cannot be clipped or covered by the grid header.
+
 ## Why this exists
 
 The platform grew two parallel visual languages:
@@ -76,8 +90,8 @@ import { tokens } from '@/design-system/tokens'
 ```
 
 CSS lives behind tokens — components render via `.nds-*` classes that resolve
-through the **semantic** aliases (`--text-*` / `--surface-*` / `--border-*` /
-`--status-*` / `--color-primary`), never raw hex and never a raw `--nds-*-NNN`
+through **semantic `--nds-*` tokens** (`--nds-text` / `--nds-surface` / `--nds-border` /
+`--nds-primary`), never platform aliases, raw hex or a raw `--nds-*-NNN`
 ramp.
 
 ## Phase plan
@@ -115,3 +129,9 @@ variables, both noted where used.
 - `docs/CONTENT.md` — language (English UI), formatters, iconography, voice
 - `docs/MIGRATION.md` — Phase 9 plan: rolling the system onto the app (proposal)
 - `studies/00-ads-inventory.md` — the authoritative `/marketing/ads` inventory
+
+## Column customization
+
+`PreferencesModal` is the canonical column customization dialog used by Products Next, the product editor, and advertising. Use `attributeGroups`, `groupToggles`, and `inViewCount` for the grouped registry and In view panels, bulk visibility/pinning, group moves, and keyboard reorder controls. `ColumnCustomizer` is a compatibility adapter to this same modal; it no longer implements a separate dialog.
+
+Persist `visibleColumns`, `columnOrder` (including hidden columns), `groupOrder`, `groupOverrides`, and `lockedColumns`. The modal normalizes the displayed grouped order before Save or saved-view callbacks. A host must apply locks as actual grid pins. Leave `lockedColumns` absent only for non-grid layouts that cannot pin; their lock controls stay hidden. The advertising adapters preserve existing storage keys and read older saved layouts without migration. Supply `viewSave` only when the host supports named saved views.

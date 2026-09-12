@@ -127,8 +127,8 @@ export function startFbaFlipGuardCron(): void {
     return
   }
   if (scheduledTask) return
-  scheduledTask = cron.schedule(SCHEDULE, () => {
-    void runFbaFlipGuardCron()
+  scheduledTask = cron.schedule(SCHEDULE, async () => {
+    await runFbaFlipGuardCron()
   })
   logger.info(`fba-flip-guard cron: scheduled (${SCHEDULE})`)
 }

@@ -48,7 +48,11 @@ const RW = (readPerm: RoutePermission, writePerm: RoutePermission, when: Matcher
   when,
 })
 
-const ENTRIES: Entry[] = [
+/** Exported for the order-sensitivity test — the manifest is first-match-wins,
+ *  so its ORDER is part of its meaning and needs to be assertable. */
+export const ENTRIES: Entry[] = [
+  // Workspace routes require a live session and enforce membership within their plugin.
+  P(PUBLIC, (_m, p) => p === '/api/workspaces' || p.startsWith('/api/workspaces/')),
   // ── PUBLIC: health / infra ──────────────────────────────────────
   P(PUBLIC, (_m, p) => p === '/api/health' || p === '/admin/health' || p === '/health'),
   P(PUBLIC, pfx('/api/monitoring')),
@@ -87,6 +91,8 @@ const ENTRIES: Entry[] = [
     p === '/api/auth/login' ||
     p === '/api/auth/logout' ||
     p === '/api/auth/me' ||
+    p === '/api/auth/workspace-invitations/preview' ||
+    p === '/api/auth/workspace-invitations/accept' ||
     p === '/api/auth/password/reset-request' ||
     p === '/api/auth/password/reset' ||
     p === '/api/auth/invitations/accept' ||
@@ -210,6 +216,9 @@ const ENTRIES: Entry[] = [
   // everything rather than opening the route. None of the response's fields are
   // in the financial restricted registry, so PUBLIC costs no field masking.
   P(PUBLIC, pfx('/api/internal/bidding')),
+
+  // Shopify publication controls must precede the broad advertising /automation matcher.
+  P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry|automation|automation-check)$/.test(p)),
 
   // ── Advertising ─────────────────────────────────────────────────
   // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:
@@ -359,6 +368,10 @@ const ENTRIES: Entry[] = [
   RW(F.listingsView, F.channelsSync, pfx('/ebay')),
 
   // ── Products / catalog / PIM ────────────────────────────────────
+  P(F.productsView, (m, p) => m === 'GET' && (p === '/api/catalog-transfer/readiness' || p === '/api/catalog-transfer/readiness/options')),
+  P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),
+  P(F.productsExport, (_m, p) => p === '/api/catalog-transfer/export' || /^\/api\/catalog-transfer\/products\/[^/]+\/export$/.test(p)),
+  P(F.productsImport, pfx('/api/catalog-transfer')),
   P(F.productsView, (m, p) => has('/bulk-fetch')(m, p) || has('/search')(m, p)),
 
   // PH.3 — the product graph. ONE route, so this is the only route-level
@@ -375,6 +388,20 @@ const ENTRIES: Entry[] = [
   P(F.productsExport, pfx('/api/export-wizard')),
   P(F.productsExport, pfx('/api/scheduled-exports')),
   P(F.productsExport, pfx('/api/export-jobs')),
+  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/product-media$/.test(p)),
+  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/videos$/.test(p)),
+  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/images-workspace\/ebay$/.test(p)),
+  P(F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/rebase$/.test(p)),
+  P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-linked\/cells$/.test(p)),
+  P(F.productsEdit, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/shopify-linked\/schema-subscriptions$/.test(p)),
+  P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/(schema|information|owner|references|reference-names|products|read-links|field-values|import|discover|suggest-sharing|preview|entry)$/.test(p)),
+  RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked$/.test(p)),
+  P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/(collections\/[^/]+\/)?synchronize$/.test(p)),
+  RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/collections(?:\/[^/]+)?$/.test(p)),
+  P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/preview$/.test(p)),
+  P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/import-source$/.test(p)),
+  RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content$/.test(p)),
+  RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/images-workspace\/amazon(?:\/.*)?$/.test(p)),
   P(F.productsImagesEdit, has('/images')),
   P(F.productsTranslationsEdit, pfx('/api/product-translations')),
   P(F.productsPriceEdit, (m, p) => p.startsWith('/api/products') && has('/price')(m, p)),
@@ -389,15 +416,29 @@ const ENTRIES: Entry[] = [
   RW(F.pimManage, F.pimManage, pfx('/api/value-map')),
   RW(F.pimManage, F.pimManage, pfx('/api/mapping-propagation')),
   RW(F.pimManage, F.pimManage, pfx('/api/field-links')),
+  // `/api/catalog-matrix` must precede `/api/catalog` for the same first-match
+  // reason as the products-ai case below. Both currently resolve to the same
+  // pair, so nothing is mis-permissioned TODAY — but the shadowed rule is dead
+  // code that would silently fail to apply the moment either side's permissions
+  // diverge. Found by the order-sensitivity test, not by reading.
+  RW(F.productsView, F.productsEdit, pfx('/api/catalog-matrix')),
   RW(F.productsView, F.productsEdit, pfx('/api/catalog')),
   RW(F.productsView, F.productsEdit, pfx('/api/matrix')),
-  RW(F.productsView, F.productsEdit, pfx('/api/catalog-matrix')),
+  // ⚠ ORDER-SENSITIVE. `pfx` is `startsWith` and `permissionForRoute` is
+  // FIRST-MATCH-WINS, so a prefix that is an extension of another must be
+  // listed BEFORE it. `/api/products-ai` sat below `/api/products` and was
+  // therefore unreachable: `/api/products-ai/bulk-generate` resolved to
+  // products.edit instead of ai.run, gating an AI spend route on a catalogue
+  // permission (found by PES.8, fixed by PES.5 under hub ruling #10).
+  // `permissions-manifest-order.vitest.test.ts` now fails on any new instance
+  // of this — the shadowing is invisible by reading, so it needs a test, not a
+  // convention.
+  RW(F.aiView, F.aiRun, pfx('/api/products-ai')),
   RW(F.productsView, F.productsEdit, pfx('/api/products')),
 
   // ── AI / agents ─────────────────────────────────────────────────
   RW(F.aiUsageView, F.aiRun, pfx('/api/ai-usage')),
   RW(F.aiView, F.aiRun, pfx('/api/agents')),
-  RW(F.aiView, F.aiRun, pfx('/api/products-ai')),
   RW(F.pimManage, F.pimManage, pfx('/api/terminology')),
   RW(F.aiView, F.aiRun, pfx('/ai')),
 
@@ -407,7 +448,7 @@ const ENTRIES: Entry[] = [
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-action-templates')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/scheduled-bulk-actions')),
   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-automation')),
-  RW(F.productsView, F.productsBulkRun, pfx('/api/import-jobs')),
+  RW(F.productsView, F.productsImport, pfx('/api/import-jobs')),
 
   // ── Sync / observability / notifications ────────────────────────
   RW(F.adminView, F.syncManage, pfx('/api/sync-logs')),

@@ -13,7 +13,7 @@
  * static.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronRight } from 'lucide-react'
 import { SETTINGS_NAV } from './_shell/settings-nav'
 

@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
  * IM.2 — Amazon image feed service.
  *
@@ -298,12 +300,17 @@ export async function submitAmazonImageFeed(
 ): Promise<AmazonImageFeedOutput> {
   const { productId, marketplace, variantIds, activeAxis, dryRun = false, mode = defaultMirrorMode() } = input
   const mkt = marketplace.toUpperCase()
-
   const product = await prisma.product.findUnique({
     where: { id: productId },
-    select: { sku: true, productType: true, imageAxisPreference: true },
+    select: { sku: true, productType: true, imageAxisPreference: true, parentId: true },
   })
   if (!product) throw new Error(`Product ${productId} not found`)
+  const familyId = product.parentId ?? productId
+  const managedListings = await prisma.channelListing.findMany({ where: { channel: 'AMAZON', marketplace: mkt,
+    OR: [{ productId: familyId }, { product: { parentId: familyId } }] }, select: { platformAttributes: true } })
+  if (managedListings.some(listing => (listing.platformAttributes as Record<string, unknown> | null)?._amazonMediaWorkspace !== undefined)) {
+    throw new Error('This market uses the account-scoped Amazon Images workspace. Review and publish its saved gallery there; the legacy image feed does not consume that draft.')
+  }
 
   const axis = activeAxis ?? product.imageAxisPreference ?? undefined
   const productType = product.productType ?? 'PRODUCT'
@@ -369,14 +376,17 @@ export async function submitAmazonImageFeed(
     })
     return {
       feedId: null, feedDocumentId: null, jobId: job.id,
-      skus: [], skippedNoAsin, skippedNoImages, dryRun,
+      skus: [], skippedNoAsin, skippedNoImages,
+      // Nothing was submitted — there was nothing to submit. Reporting the caller's request here
+      // would claim a live submission happened on a path that never calls Amazon at all.
+      dryRun: true,
     }
   }
 
   const marketplaceId = MARKETPLACE_IDS[mkt] ?? marketplaceCodeToId(mkt)
   if (!marketplaceId) throw new Error(`Unknown Amazon marketplace: ${mkt}`)
 
-  const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+  const sellerId = (await getAmazonSellerId())
   if (!sellerId) throw new Error('AMAZON_SELLER_ID env var required')
 
   // Create job row first so UI has a jobId to poll immediately
@@ -395,8 +405,15 @@ export async function submitAmazonImageFeed(
       marketplaceIds: [marketplaceId],
       sellerId,
       operations,
-      // Pass dryRun flag — the batch service checks NEXUS_AMAZON_BATCH_DRYRUN env or this override
-      ...(dryRun ? {} : {}),  // env-based; dryRun param passed via env in test context
+      /*
+       * 🔴 Forwarded, not spread conditionally.
+       *
+       * This was `...(dryRun ? {} : {})` — an empty object in BOTH branches — with a comment
+       * claiming the batch service took an override. It did not: `AmazonBatchSubmission` had no
+       * such field. So a caller asking for a dry run got a real feed whenever the publish gate was
+       * open, and the audit log recorded `dryRun: true` for it. Fixed 2026-09-01 (PES.7).
+       */
+      dryRun,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -540,15 +557,7 @@ export async function pollAndUpdateFeedJob(jobId: string): Promise<{
 async function fetchProcessingReport(resultFeedDocumentId: string): Promise<unknown> {
   try {
     const { SellingPartner } = await import('amazon-sp-api')
-    const sp: any = new SellingPartner({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-        SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    })
+    const sp: any = amazonSpClient()
     const docRes: any = await withTimeout(
       sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: resultFeedDocumentId } }),
       25_000,

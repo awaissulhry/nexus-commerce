@@ -6,8 +6,8 @@
  * the other types land in later phases. Reuses the shared `.h10-*` design system.
  */
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Listbox } from '@/design-system/components'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'

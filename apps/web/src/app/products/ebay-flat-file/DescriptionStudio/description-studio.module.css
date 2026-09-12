@@ -1,0 +1,25 @@
+.workspace {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  height: 100%;
+  min-height: 0;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  flex: 1;
+  min-height: 0;
+}
+
+.library, .editor, .preview { min-width: 0; }
+
+@container (max-width: 1000px) {
+  .panes { display: flex; flex-direction: column; flex: none; }
+  .library { min-height: 200px; max-height: 280px; }
+  .editor { flex: none; min-height: 480px; }
+  .preview { flex: none; min-height: 540px; }
+}

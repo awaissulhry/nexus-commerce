@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.2 — StockLevel + StockReservation operations layered on top of the
  * canonical applyStockMovement. Every state change (reserve, release,
@@ -43,9 +44,10 @@ export async function resolveLocationByCode(
   code: string,
 ): Promise<string | null> {
   const sl = await prisma.stockLocation.findUnique({
-    where: { code },
+    where: { workspace_code: workspaceKey({ code: code }) },
     select: { id: true },
   })
+  if (!sl && code === 'IT-MAIN') return (await (await import('./default-stock-location.js')).defaultStockLocation())?.id ?? null
   return sl?.id ?? null
 }
 

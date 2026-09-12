@@ -16,6 +16,7 @@
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { getCsrfToken } from './csrf-store'
+import { browserWorkspaceId, WORKSPACES_ENABLED } from '../workspaces/paths'
 
 let installed = false
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
@@ -40,13 +41,14 @@ export function installAuthFetch(): void {
       if (resolved.origin === apiOrigin) {
         const opts: RequestInit = { ...(init ?? {}) }
         opts.credentials = 'include'
+        const headers = new Headers(opts.headers ?? (input instanceof Request ? input.headers : undefined))
+        const workspaceId = browserWorkspaceId()
+        if (WORKSPACES_ENABLED && workspaceId && !headers.has('x-nexus-workspace-id')) headers.set('x-nexus-workspace-id', workspaceId)
+        opts.headers = headers
         const method = (opts.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
         if (MUTATING.has(method)) {
           const token = getCsrfToken()
           if (token) {
-            const headers = new Headers(
-              opts.headers ?? (input instanceof Request ? input.headers : undefined),
-            )
             if (!headers.has('x-nexus-csrf')) headers.set('x-nexus-csrf', token)
             opts.headers = headers
           }
@@ -69,7 +71,10 @@ export function installAuthFetch(): void {
     const PatchedES = function (this: unknown, url: string | URL, opts?: EventSourceInit) {
       try {
         if (new URL(url, window.location.href).origin === apiOrigin) {
-          return new OrigES(url, { ...(opts ?? {}), withCredentials: true })
+          const resolved = new URL(url, window.location.href)
+          const workspaceId = browserWorkspaceId()
+          if (WORKSPACES_ENABLED && workspaceId && !resolved.searchParams.has('workspaceId')) resolved.searchParams.set('workspaceId', workspaceId)
+          return new OrigES(resolved, { ...(opts ?? {}), withCredentials: true })
         }
       } catch {
         /* fall through */

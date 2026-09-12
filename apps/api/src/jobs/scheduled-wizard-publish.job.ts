@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * SP.3 (list-wizard) — scheduled wizard publish cron.
  *
@@ -326,8 +327,8 @@ export function startScheduledWizardPublishCron(): void {
   }
   // First tick fires after one interval — gives the API time to
   // boot before the cron starts touching the DB.
-  cronTimer = setInterval(() => {
-    void (async () => {
+  cronTimer = setInterval(() => { void runProfileTimer('scheduled-wizard-publish', async () => {
+    await (async () => {
       try {
         const summary = await runScheduledWizardPublishOnce()
         if (summary !== 'no PENDING schedules due') {
@@ -342,7 +343,7 @@ export function startScheduledWizardPublishCron(): void {
         )
       }
     })()
-  }, TICK_INTERVAL_MS)
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
   logger.info(
     `scheduled-wizard-publish: cron started (interval ${TICK_INTERVAL_MS}ms)`,
   )

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SG.8 — operator verbs for the A.I. Bids tab: approve / dismiss / restore one
  * AutopilotDecision, plus the status-aware list the tab reads.
@@ -208,7 +209,7 @@ export async function muteAiDecision(id: string): Promise<DecideResult> {
   if (!row.campaignId) return { ok: false, refused: true, error: 'This decision names no campaign to mute' }
   const camp = await prisma.campaign.findUnique({ where: { id: row.campaignId }, select: { name: true } })
   await prisma.adsSuggestionMute.upsert({
-    where: { scope_entityType_entityId: { scope: 'ai', entityType: 'CAMPAIGN', entityId: row.campaignId } },
+    where: { scope_entityType_entityId: workspaceKey({ scope: 'ai', entityType: 'CAMPAIGN', entityId: row.campaignId }) },
     create: {
       scope: 'ai', entityType: 'CAMPAIGN', entityId: row.campaignId, entityName: camp?.name ?? null,
       marketplace: row.plan?.marketplace ?? null, reason: 'muted from the A.I. Bids tab', createdBy: 'operator',

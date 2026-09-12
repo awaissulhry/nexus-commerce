@@ -40,7 +40,7 @@ export function startAmazonFinancialSyncCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => { void runFinancialSync() })
+  scheduledTask = cron.schedule(schedule, async () => { await runFinancialSync() })
   logger.info('amazon-financial-sync cron: scheduled', { schedule })
 }
 

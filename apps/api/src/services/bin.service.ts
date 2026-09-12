@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * BN.2 — Bin management service.
  *
@@ -128,7 +129,7 @@ export async function moveStockBetweenBins(args: {
     if (!sl) throw new Error('moveStockBetweenBins: no StockLevel for this product at the bins\' location')
 
     const fromQty = await tx.stockBinQuantity.findUnique({
-      where: { stockLevelId_binId: { stockLevelId: sl.id, binId: args.fromBinId } },
+      where: { stockLevelId_binId: workspaceKey({ stockLevelId: sl.id, binId: args.fromBinId }) },
     })
     if (!fromQty || fromQty.quantity < args.quantity) {
       throw new Error(`moveStockBetweenBins: source bin has ${fromQty?.quantity ?? 0} units, asked for ${args.quantity}`)
@@ -140,7 +141,7 @@ export async function moveStockBetweenBins(args: {
     })
 
     const existingTo = await tx.stockBinQuantity.findUnique({
-      where: { stockLevelId_binId: { stockLevelId: sl.id, binId: args.toBinId } },
+      where: { stockLevelId_binId: workspaceKey({ stockLevelId: sl.id, binId: args.toBinId }) },
     })
     if (existingTo) {
       await tx.stockBinQuantity.update({
@@ -208,7 +209,7 @@ export async function assignReceivedToBin(args: {
 
   return prisma.$transaction(async (tx) => {
     const bin = await tx.stockBin.findUnique({
-      where: { locationId_code: { locationId: args.locationId, code } },
+      where: { locationId_code: workspaceKey({ locationId: args.locationId, code }) },
     })
     if (!bin) {
       throw new Error(
@@ -234,7 +235,7 @@ export async function assignReceivedToBin(args: {
     }
 
     const existing = await tx.stockBinQuantity.findUnique({
-      where: { stockLevelId_binId: { stockLevelId: sl.id, binId: bin.id } },
+      where: { stockLevelId_binId: workspaceKey({ stockLevelId: sl.id, binId: bin.id }) },
     })
     if (existing) {
       await tx.stockBinQuantity.update({

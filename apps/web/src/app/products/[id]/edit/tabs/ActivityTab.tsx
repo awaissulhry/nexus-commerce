@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
   ChevronDown,

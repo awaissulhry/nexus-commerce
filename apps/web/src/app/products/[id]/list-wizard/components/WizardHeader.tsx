@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, X } from 'lucide-react'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { CHANNEL_TONE } from '@/lib/theme'
@@ -11,6 +11,7 @@ import AiCompleteWizardButton from './AiCompleteWizardModal'
 
 interface Props {
   productId: string
+  productHref?: string
   productSku: string
   productName: string
   channels: ChannelTuple[]
@@ -30,6 +31,7 @@ const CHANNEL_LABEL: Record<string, string> = {
 
 export default function WizardHeader({
   productId,
+  productHref,
   productSku,
   productName,
   channels,
@@ -48,7 +50,8 @@ export default function WizardHeader({
     >
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         <Link
-          href={`/products/${productId}/edit`}
+          href={productHref ?? `/products/${productId}/edit`}
+          onClick={productHref ? (event) => { event.preventDefault(); onClose() } : undefined}
           className="text-tertiary hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
           aria-label={t('listWizard.header.backToProduct')}
         >

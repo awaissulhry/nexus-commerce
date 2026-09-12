@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Card } from '@/components/ui/Card'

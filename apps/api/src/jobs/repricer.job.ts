@@ -51,7 +51,7 @@ export function startRepricerCron(): void {
     logger.error('repricer cron: invalid schedule', { schedule })
     return
   }
-  task = cron.schedule(schedule, () => void tick())
+  task = cron.schedule(schedule, async () => { await tick() })
   logger.info('G.1 repricer cron scheduled', {
     schedule,
     liveMode: process.env.NEXUS_REPRICER_LIVE === '1',

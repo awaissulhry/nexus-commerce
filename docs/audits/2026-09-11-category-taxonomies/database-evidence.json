@@ -1,0 +1,18 @@
+{
+  "engine": "PGlite PostgreSQL, isolated single connection; not a production concurrency benchmark",
+  "nodes": 100000,
+  "insertMs": 12508.482833,
+  "searchSamples": 25,
+  "searchP95Ms": 71.12799999999879,
+  "checks": [
+    "migration applies",
+    "business isolation",
+    "actor membership",
+    "cross-business references rejected",
+    "incomplete revisions rejected",
+    "atomic activation",
+    "duplicate external IDs rejected",
+    "local full-path search with RLS enabled"
+  ],
+  "queryPlan": "Limit  (cost=3939906.48..3939906.60 rows=50 width=52)\n  ->  Sort  (cost=3939906.48..3939908.47 rows=797 width=52)\n        Sort Key: \"MarketplaceTaxonomyNode\".path, \"MarketplaceTaxonomyNode\".\"externalId\"\n        ->  Seq Scan on \"MarketplaceTaxonomyNode\"  (cost=0.00..3939880.00 rows=797 width=52)\n              Filter: ((\"snapshotId\" = 'a-new'::text) AND (\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (ANY (\"workspaceId\" = (hashed SubPlan 6).col1)) AND ((path ~~* '%suit%'::text) OR (\"externalId\" ~~* '%suit%'::text)))\n              SubPlan 6\n                ->  Seq Scan on \"Workspace\" w  (cost=0.00..27466.00 rows=2 width=32)\n                      Filter: ((status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (ANY (id = (hashed SubPlan 5).col1))))\n                      SubPlan 5\n                        ->  Nested Loop  (cost=0.15..29.56 rows=1 width=32)\n                              ->  Seq Scan on \"WorkspaceMembership\" m  (cost=0.00..21.38 rows=1 width=64)\n                                    Filter: ((status = 'active'::text) AND (\"userId\" = current_setting('nexus.actor_id'::text, true)))\n                              ->  Index Scan using \"UserProfile_pkey\" on \"UserProfile\" u  (cost=0.15..8.17 rows=1 width=32)\n                                    Index Cond: (id = current_setting('nexus.actor_id'::text, true))\n                                    Filter: (status = 'active'::text)"
+}

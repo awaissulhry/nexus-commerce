@@ -7,7 +7,7 @@
  * actually flowing — and links straight to the import workflow.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Upload, CheckCircle2, CircleDashed, Database } from 'lucide-react'
 
 export interface IngestChannel {

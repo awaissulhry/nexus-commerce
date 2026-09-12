@@ -84,8 +84,8 @@ export function startOutboundLateRiskCron(): void {
     logger.error('outbound-late-risk cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('outbound-late-risk', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('outbound-late-risk', async () => {
       const stats = await runOutboundLateRiskSweep()
       return `overdue=${stats.overdue} today=${stats.today} last24h=${stats.last24h}`
     }).catch((err) => {

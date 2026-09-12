@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R.1 — Forecast accuracy service.
  *
@@ -146,12 +147,12 @@ export async function runForecastAccuracySweepForDay(targetDay: Date): Promise<{
 
     await prisma.forecastAccuracy.upsert({
       where: {
-        sku_channel_marketplace_day: {
+        sku_channel_marketplace_day: workspaceKey({
           sku: agg.sku,
           channel: agg.channel,
           marketplace: agg.marketplace,
           day: dayStart,
-        },
+        }),
       },
       create: {
         sku: agg.sku,

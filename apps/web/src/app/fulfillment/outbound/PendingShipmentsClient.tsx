@@ -10,7 +10,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Truck, Search, Crown, AlertTriangle, Clock, Package, X, Plus,
   Bookmark, BookmarkPlus, ChevronDown, Trash2, ArrowLeft, Star, ArrowRight, Sparkles,
@@ -26,7 +27,7 @@ import {
   type Density,
   type ShortcutGroup,
 } from '@/app/_shared/grid-lens'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'

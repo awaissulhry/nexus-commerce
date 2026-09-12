@@ -1,10 +1,12 @@
 'use server'
+import { requireWebPermission } from '@/lib/workspaces/server'
 
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import type { ProductEditorFormData } from './schema'
 
 export async function updateProduct(productId: string, data: ProductEditorFormData) {
+  await requireWebPermission('products.edit')
   try {
     // Update the main product record
     await prisma.product.update({

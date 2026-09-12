@@ -1,0 +1,44 @@
+--- a/apps/api/src/services/listing-wizard/submission.service.ts
++++ b/apps/api/src/services/listing-wizard/submission.service.ts
+@@ -772,9 +772,11 @@
+ 
+       // Step 6 — Variations. Theme = channelStates → state.commonTheme
+       // fallback.
+-      const channelTheme =
+-        ((slice as any).variations?.theme as string | undefined) ??
+-        (variations.commonTheme as string | undefined)
++      const channelTheme = Object.prototype.hasOwnProperty.call((slice as any).variations ?? {}, 'theme')
++        ? (slice as any).variations.theme
++        : Object.prototype.hasOwnProperty.call(variations.themeByChannel ?? {}, channelKey)
++          ? variations.themeByChannel[channelKey]
++          : variations.commonTheme
+       const includedSkus = Array.isArray(variations.includedSkus)
+         ? (variations.includedSkus as string[])
+         : []
+@@ -919,6 +921,11 @@
+     wizard: MultiChannelWizard,
+   ): Promise<ChannelPayloadEntry[]> {
+     const state = wizard.state ?? {}
++    // Product preset drafts retain an explicit account/listing binding. The legacy
++    // channel+market dispatcher cannot publish that contract, including scheduled jobs.
++    if (Object.prototype.hasOwnProperty.call(state, 'productPresetScope')) {
++      return wizard.channels.map(c => ({ channelKey: `${c.platform}:${c.marketplace}`, platform: c.platform, marketplace: c.marketplace, unsupported: true, reason: 'This destination-bound preset draft requires account-aware listing workflow integration before publication.' }))
++    }
+     const channelStates = wizard.channelStates ?? {}
+     const fallbackProductType =
+       typeof state?.productType?.productType === 'string'
+@@ -1236,9 +1243,11 @@
+       ) {
+         mergedAttrs.recommended_browse_nodes = JSON.stringify(browseNodes)
+       }
+-      const theme =
+-        ((slice as any).variations?.theme as string | undefined) ??
+-        (variations.commonTheme as string | undefined)
++      const theme = Object.prototype.hasOwnProperty.call((slice as any).variations ?? {}, 'theme')
++        ? (slice as any).variations.theme
++        : Object.prototype.hasOwnProperty.call(variations.themeByChannel ?? {}, channelKey)
++          ? variations.themeByChannel[channelKey]
++          : variations.commonTheme
+       const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
+       const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
+       const channelPricing = (slice as any).pricing ?? {}

@@ -8,8 +8,8 @@
  * HoverCard tips on template chips, class-based disabled state.
  */
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Shield, Rocket, Sparkles, Globe, ChevronDown } from 'lucide-react'
 import '../../ebay.css'
 import { EbayMark } from '../../../_shell/EbayMark'

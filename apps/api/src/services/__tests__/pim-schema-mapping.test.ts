@@ -14,9 +14,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 // the same reference.
 const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
+    $transaction: vi.fn(),
+    mappingRevision: { findFirst: vi.fn(), create: vi.fn() },
     marketplace: {
       findUnique: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
   },
 }))
@@ -25,6 +27,7 @@ vi.mock('../../db.js', () => ({ default: mockPrisma }))
 // Now safe to import the service.
 import {
   emptyMapping,
+  persistMapping,
   parseMapping,
   validateMapping,
   validateFieldRule,
@@ -43,17 +46,23 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockPrisma.$transaction.mockImplementation((fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma))
+  mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
+  mockPrisma.mappingRevision.findFirst.mockResolvedValue(null)
 })
 
 // ────────────────────────────────────────────────────────────────────
 // emptyMapping shape
 // ────────────────────────────────────────────────────────────────────
 describe('emptyMapping', () => {
-  it('returns version 1 with empty fields + overlay + null sync metadata', () => {
+  it('returns version 1 with empty fields + overlay + expressions + null sync metadata', () => {
     expect(emptyMapping()).toEqual({
       version: 1,
       fields: {},
       byProductType: {},
+      // PES.6 — named business rules live in the mapping so they inherit its revision
+      // history; emptyMapping normalizes them the same way it normalizes byProductType.
+      expressions: {},
       lastSyncedAt: null,
       schemaSnapshotVersion: null,
     })
@@ -92,7 +101,40 @@ describe('parseMapping', () => {
       lastSyncedAt: '2026-05-24T00:00:00Z',
       schemaSnapshotVersion: 'abc123',
     }
-    expect(parseMapping(valid)).toEqual({ ...valid, byProductType: {} })
+    expect(parseMapping(valid)).toEqual({ ...valid, byProductType: {}, expressions: {} })
+  })
+
+  // PES.6 / ruling #258 follow-on. parseMapping discards the WHOLE mapping when validation
+  // returns anything, so making an expression BODY syntax error fatal there meant one malformed
+  // formula silently zeroed an entire marketplace — every field reading as unmapped, no error
+  // anywhere. Body syntax is refused on WRITE; on READ it degrades to "that formula is broken".
+  it('keeps the rule set when a stored expression body does not parse', () => {
+    const withBroken = {
+      version: 1,
+      fields: { title: { source: 'name' } },
+      byProductType: {},
+      expressions: { Broken: 'if(isblank($a), "x"' },
+      lastSyncedAt: null,
+      schemaSnapshotVersion: null,
+    }
+    const parsed = parseMapping(withBroken)
+    expect(parsed.fields.title).toEqual({ source: 'name' })
+    expect(parsed.expressions?.Broken).toBe('if(isblank($a), "x"')
+  })
+
+  it('still REFUSES a broken expression body on the write path', () => {
+    const errs = validateMapping({
+      ...emptyMapping(),
+      expressions: { Broken: 'if(isblank($a), "x"' },
+    })
+    expect(errs.some((e) => e.includes('mapping.expressions.Broken'))).toBe(true)
+    // …and the read path deliberately does not complain about it.
+    expect(
+      validateMapping(
+        { ...emptyMapping(), expressions: { Broken: 'if(isblank($a), "x"' } },
+        { checkExpressions: false },
+      ),
+    ).toEqual([])
   })
 })
 
@@ -248,7 +290,7 @@ describe('upsertFieldMapping', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await upsertFieldMapping('AMAZON', 'IT', 'title', {
       source: 'titleSrc',
@@ -257,7 +299,7 @@ describe('upsertFieldMapping', () => {
 
     expect(result.fields.title.source).toBe('titleSrc')
     expect(result.fields.description.source).toBe('descSrc')
-    expect(mockPrisma.marketplace.update).toHaveBeenCalledTimes(1)
+    expect(mockPrisma.marketplace.updateMany).toHaveBeenCalledTimes(1)
   })
 
   it('overwrites an existing field rule', async () => {
@@ -269,7 +311,7 @@ describe('upsertFieldMapping', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await upsertFieldMapping('AMAZON', 'IT', 'title', {
       source: 'newSrc',
@@ -281,7 +323,7 @@ describe('upsertFieldMapping', () => {
     await expect(
       upsertFieldMapping('AMAZON', 'IT', 'title', { source: '' } as FieldMappingRule),
     ).rejects.toBeInstanceOf(InvalidMappingError)
-    expect(mockPrisma.marketplace.update).not.toHaveBeenCalled()
+    expect(mockPrisma.marketplace.updateMany).not.toHaveBeenCalled()
   })
 })
 
@@ -295,7 +337,7 @@ describe('removeFieldMapping', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await removeFieldMapping('AMAZON', 'IT', 'title')
     expect(result.fields.title).toBeUndefined()
@@ -306,7 +348,7 @@ describe('removeFieldMapping', () => {
     mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: {} })
     const result = await removeFieldMapping('AMAZON', 'IT', 'nonexistent')
     expect(result).toEqual(emptyMapping())
-    expect(mockPrisma.marketplace.update).not.toHaveBeenCalled()
+    expect(mockPrisma.marketplace.updateMany).not.toHaveBeenCalled()
   })
 })
 
@@ -320,7 +362,7 @@ describe('recordSchemaSync', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await recordSchemaSync('AMAZON', 'IT', 'snap-v42')
 
@@ -507,7 +549,7 @@ describe('upsertFieldMapping — productType overlay (FM.1)', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await upsertFieldMapping(
       'AMAZON',
@@ -530,7 +572,7 @@ describe('upsertFieldMapping — productType overlay (FM.1)', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await upsertFieldMapping(
       'AMAZON',
@@ -545,7 +587,7 @@ describe('upsertFieldMapping — productType overlay (FM.1)', () => {
 
   it('still writes the default bucket when no productType is given (back-compat)', async () => {
     mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: {} })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
     const result = await upsertFieldMapping('AMAZON', 'IT', 'title', { source: 'name' })
     expect(result.fields.title.source).toBe('name')
     expect(result.byProductType).toEqual({})
@@ -563,7 +605,7 @@ describe('removeFieldMapping — productType overlay (FM.1)', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
     expect(result.byProductType?.OUTERWEAR.material).toBeUndefined()
@@ -581,7 +623,7 @@ describe('removeFieldMapping — productType overlay (FM.1)', () => {
         schemaSnapshotVersion: null,
       },
     })
-    mockPrisma.marketplace.update.mockResolvedValue({})
+    mockPrisma.marketplace.updateMany.mockResolvedValue({ count: 1 })
 
     const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
     expect(result.byProductType?.OUTERWEAR).toBeUndefined()
@@ -592,7 +634,7 @@ describe('removeFieldMapping — productType overlay (FM.1)', () => {
       schemaMapping: { version: 1, fields: {}, byProductType: {}, lastSyncedAt: null, schemaSnapshotVersion: null },
     })
     const result = await removeFieldMapping('AMAZON', 'IT', 'material', 'OUTERWEAR')
-    expect(mockPrisma.marketplace.update).not.toHaveBeenCalled()
+    expect(mockPrisma.marketplace.updateMany).not.toHaveBeenCalled()
     expect(result.byProductType).toEqual({})
   })
 })
@@ -643,5 +685,33 @@ describe('validateFieldRule — FM.3 transform ops', () => {
   it('still rejects an entirely unknown transform type', () => {
     const errs = validateFieldRule('x', { source: 's', transforms: [{ type: 'nope' }] })
     expect(errs.some((e) => e.includes('transforms[0] has invalid type'))).toBe(true)
+  })
+})
+
+
+describe('mapping concurrency and revision atomicity', () => {
+  it('refuses a snapshot changed by another writer before entering the transaction', async () => {
+    const before = emptyMapping()
+    mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: { ...before, version: 2 } })
+    await expect(persistMapping('EBAY', 'IT', before, { ...before, fields: { title: { source: 'name' } } })).rejects.toMatchObject({ statusCode: 409 })
+    expect(mockPrisma.marketplace.updateMany).not.toHaveBeenCalled()
+    expect(mockPrisma.mappingRevision.create).not.toHaveBeenCalled()
+  })
+
+  it('refuses a race at the conditional update without recording a phantom revision', async () => {
+    const before = emptyMapping()
+    mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: before })
+    mockPrisma.marketplace.updateMany.mockResolvedValueOnce({ count: 0 })
+    await expect(persistMapping('EBAY', 'IT', before, { ...before })).rejects.toMatchObject({ statusCode: 409 })
+    expect(mockPrisma.mappingRevision.create).not.toHaveBeenCalled()
+  })
+
+  it('records the prior snapshot in the same transaction and advances the mapping version', async () => {
+    const before = { ...emptyMapping(), version: 7 }
+    mockPrisma.marketplace.findUnique.mockResolvedValue({ schemaMapping: before })
+    await persistMapping('EBAY', 'IT', before, { ...before, fields: { title: { source: 'name' } } })
+    expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1)
+    expect(mockPrisma.marketplace.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { schemaMapping: expect.objectContaining({ version: 8 }) } }))
+    expect(mockPrisma.mappingRevision.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ snapshot: before }) }))
   })
 })

@@ -1,0 +1,17 @@
+import '../src/env.js'
+const { default: prisma } = await import('../src/db.js')
+const P = 'cmr1b1yxl0000s4rcvopsqv42'
+const t = await prisma.productTranslation.findUnique({ where: { productId_language: { productId: P, language: 'de' } } })
+console.log('ProductTranslation[de]:')
+console.log('  name        :', JSON.stringify((t?.name ?? '').slice(0, 60)))
+console.log('  description :', JSON.stringify((t?.description ?? '').slice(0, 60)))
+console.log('  source      :', t?.source, '   <- a MODEL wrote the words')
+console.log('  sourceModel :', t?.sourceModel)
+console.log('  reviewedAt  :', t?.reviewedAt ? 'SET' : 'null', '  <- a HUMAN accepted them')
+const p = await prisma.product.findUnique({ where: { id: P }, select: { name: true, description: true } })
+console.log('MASTER untouched:')
+console.log('  Product.description:', JSON.stringify(p?.description))
+console.log('  Product.name       :', JSON.stringify((p?.name ?? '').slice(0, 45)))
+const a = await prisma.auditLog.findMany({ where: { entityType: 'Product', entityId: P, action: 'ai-draft.approve' }, orderBy: { createdAt: 'desc' }, take: 2 })
+for (const r of a) console.log('audit:', JSON.stringify(r.metadata))
+await prisma.$disconnect()

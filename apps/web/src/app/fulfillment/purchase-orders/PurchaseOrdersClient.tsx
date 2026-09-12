@@ -21,8 +21,9 @@ import {
   useState,
   type CSSProperties,
 } from 'react'
-import Link from 'next/link'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
   ArrowLeft,

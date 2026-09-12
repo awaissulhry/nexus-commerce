@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
+import Link from '@/lib/workspaces/Link';
 import { Search } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { getBackendUrl } from "@/lib/backend-url";

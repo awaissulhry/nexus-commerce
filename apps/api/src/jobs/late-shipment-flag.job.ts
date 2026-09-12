@@ -107,8 +107,8 @@ export function startLateShipmentFlagCron(): void {
     logger.error('late-shipment-flag cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('late-shipment-flag', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('late-shipment-flag', async () => {
       const r = await runLateShipmentFlagSweep()
       return `scanned=${r.scanned} flagged=${r.flagged} skipped=${r.skipped}`
     }).catch((err) => {

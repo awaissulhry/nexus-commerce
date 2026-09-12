@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * W6.2 — Scheduled bulk-action tick.
  *
@@ -144,10 +145,10 @@ export function startScheduledBulkActionCron(): void {
   if (tickTimer) return
   // Fire once at boot so a redeploy with backed-up schedules
   // catches up immediately rather than waiting a minute.
-  void runScheduledBulkActionCronOnce()
-  tickTimer = setInterval(() => {
-    void runScheduledBulkActionCronOnce()
-  }, TICK_INTERVAL_MS)
+  void runProfileTimer('scheduled-bulk-action', runScheduledBulkActionCronOnce, TICK_INTERVAL_MS)
+  tickTimer = setInterval(() => { void runProfileTimer('scheduled-bulk-action', async () => {
+    await runScheduledBulkActionCronOnce()
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
 }
 
 export function stopScheduledBulkActionCron(): void {

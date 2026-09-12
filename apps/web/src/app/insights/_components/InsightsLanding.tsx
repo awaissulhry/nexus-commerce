@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useCallback, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useInsightsLiveRefresh } from './useInsightsLiveRefresh'

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { getBackendUrl } from '@/lib/backend-url'

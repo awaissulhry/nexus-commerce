@@ -29,10 +29,10 @@ export function startBudgetEnforceCron(): void {
   if (task) return
   const schedule = process.env.NEXUS_BUDGET_ENFORCE_SCHEDULE ?? '*/30 * * * *'
   if (!cron.validate(schedule)) { logger.error('ad-budget-enforce cron: invalid schedule', { schedule }); return }
-  task = cron.schedule(schedule, () => {
-    if (running) { logger.warn('[ad-budget-enforce] previous tick still in flight — skipping'); return }
+  task = cron.schedule(schedule, async () => {
+    if (running) { await logger.warn('[ad-budget-enforce] previous tick still in flight — skipping'); return }
     running = true
-    void runBudgetEnforceCron().finally(() => { running = false })
+    await runBudgetEnforceCron().finally(() => { running = false })
   })
   logger.info('ad-budget-enforce cron scheduled', { schedule, apply: process.env.NEXUS_BUDGET_ENFORCE_APPLY === '1' })
 }

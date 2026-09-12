@@ -31,7 +31,7 @@
  * pricing-engine UI.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle } from 'lucide-react'
 import {
   amazonTld,

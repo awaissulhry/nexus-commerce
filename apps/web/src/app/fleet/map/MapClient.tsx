@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Map as MapIcon, Network, RefreshCw, ShieldAlert, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useVisibilityPoll } from '../_shared/use-visibility-poll'

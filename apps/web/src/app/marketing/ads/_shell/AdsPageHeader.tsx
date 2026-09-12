@@ -13,8 +13,8 @@
  * header for now; lift it when the campaigns list endpoint becomes date-aware).
  */
 import { useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { usePathname } from '@/lib/workspaces/navigation'
 import { RefreshCw, ChevronDown, History } from 'lucide-react'
 import { Button, Spinner } from '@/design-system/primitives'
 import { DateRangePicker } from './DateRangePicker'

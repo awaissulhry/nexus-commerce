@@ -14,9 +14,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button, SegmentedControl } from '@/design-system/primitives'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Bot, RefreshCw, ShieldAlert } from 'lucide-react'
 import {
   Bar,

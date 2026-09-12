@@ -22,7 +22,8 @@
  * this page, which is why the register names Control Room as its home rather than "later".
  */
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'

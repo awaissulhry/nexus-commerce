@@ -1,0 +1,57 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
+import type { Prisma, PrismaClient } from '@prisma/client'
+
+type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>> }
+const context = new AsyncLocalStorage<Context>()
+
+/** Formula operations reuse the ordinary writers inside one outer transaction. */
+export function contextualDatabase(root: PrismaClient): PrismaClient {
+  return new Proxy(root, {
+    get(target, property) {
+      const active = context.getStore()
+      if (active && property === '$transaction') return async (work: unknown) => {
+        if (typeof work === 'function') return work(active.client)
+        const results = []
+        for (const statement of work as Promise<unknown>[]) results.push(await statement)
+        return results
+      }
+      const owner = active?.client ?? target
+      const value = Reflect.get(owner, property, owner)
+      return typeof value === 'function' ? value.bind(owner) : value
+    },
+  })
+}
+
+export const activeDatabaseTransaction = () => context.getStore()?.client
+
+/** Fastify injection starts a new async resource; carry only an internal context handle. */
+export function captureDatabaseContext() {
+  const captured = context.getStore()
+  return <T>(work: () => Promise<T>): Promise<T> => captured ? context.run(captured, work) : work()
+}
+
+export async function afterDatabaseCommit(key: string, effect: () => Promise<unknown>) {
+  const active = context.getStore()
+  if (active) { active.effects.set(key, effect); return }
+  await effect()
+}
+
+export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
+  if (context.getStore()) return work()
+  for (let attempt = 0; ; attempt++) {
+    const effects = new Map<string, () => Promise<unknown>>()
+    let result: T
+    try {
+      result = await client.$transaction(tx => context.run({ client: tx, effects }, work), {
+        isolationLevel: 'Serializable', maxWait: 10_000, timeout: 60_000,
+      })
+    } catch (error) {
+      if (attempt < 2 && (error as { code?: string }).code === 'P2034') continue
+      throw error
+    }
+    // Derived refreshes run only after commit. A refresh cannot turn a committed write into a refusal.
+    const outcomes = await Promise.allSettled([...effects.values()].map(effect => effect()))
+    for (const outcome of outcomes) if (outcome.status === 'rejected') console.warn('[formula] post-commit refresh failed', outcome.reason)
+    return result
+  }
+}

@@ -1,3 +1,4 @@
+import { scopePublicToken } from '../lib/workspace-public-links.js'
 /**
  * PO-Plus.2 — Approver email + ack URL minting.
  *
@@ -37,7 +38,7 @@ function ackBaseUrl(): string {
 }
 
 function mintToken(): string {
-  return crypto.randomBytes(32).toString('base64url')
+  return scopePublicToken(crypto.randomBytes(32).toString('base64url'))
 }
 
 export interface PoApproverEmailResult {

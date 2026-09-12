@@ -160,6 +160,7 @@ export async function syncProductToEbay(
       productId: product.id,
       channel: 'EBAY',
       marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      channelConnectionId: channelListing.channelConnectionId ?? null, aliasKey: channelListing.aliasKey ?? '',
       legacyPayload: payload,
     })
   } catch (error) {

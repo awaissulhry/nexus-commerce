@@ -25,6 +25,7 @@ import { validateSession } from './session.js'
 import { sessionCookieName } from './cookies.js'
 import { truncateIp } from './session.js'
 import { writeAuthAudit } from './audit.js'
+import { personalSettingsRoute } from './identity-context.js'
 
 function mode(): 'shadow' | 'enforce' {
   return process.env.NEXUS_RBAC_MODE === 'enforce' ? 'enforce' : 'shadow'
@@ -54,15 +55,16 @@ export async function rbacHook(req: FastifyRequest, reply: FastifyReply): Promis
   }
 
   // Decide.
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && req.authUser && personalSettingsRoute(pattern)) return
   let deny: { status: number; code: string; reason: string } | null = null
   if (required === null) {
     // Unmapped route — deny by default. (CI keeps this from ever happening
     // in practice; this is the runtime backstop.)
     deny = { status: 403, code: 'route_unmapped', reason: 'route has no permission mapping' }
-  } else if (!req.authUser) {
+  } else if (!req.authUser && !req.apiKey) {
     deny = { status: 401, code: 'unauthenticated', reason: 'no valid session' }
   } else {
-    const resolved = await resolvePermissions(req.authUser)
+    const resolved = req.__rbacResolved ?? await resolvePermissions(req.authUser!)
     req.__rbacResolved = resolved // reused by the financial field filter
     if (!hasPermission(resolved, required)) {
       deny = { status: 403, code: 'forbidden', reason: `missing ${required}` }
@@ -71,7 +73,7 @@ export async function rbacHook(req: FastifyRequest, reply: FastifyReply): Promis
 
   if (!deny) return // allowed
 
-  if (mode() === 'enforce') {
+  if (mode() === 'enforce' || process.env.NEXUS_WORKSPACES_ENABLED === '1') {
     await writeAuthAudit({
       actorUserId: req.authUser?.id ?? null,
       ip: truncateIp(req.ip),

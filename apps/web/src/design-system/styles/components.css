@@ -3,6 +3,33 @@
  * ../docs/NAMING.md). Depends only on tokens.css. Phase 4.
  */
 
+/* ── Value source ────────────────────────────────────────────────── */
+.nds-source-indicator.nds-source-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: transparent;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.3;
+  cursor: default;
+}
+.nds-source-indicator.nds-source-indicator > svg { flex: 0 0 auto; }
+.nds-source-indicator.nds-source-indicator--label { justify-content: flex-start; }
+button.nds-source-indicator.nds-source-indicator { cursor: pointer; }
+button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-source-indicator.nds-source-indicator:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: -2px;
+}
+
 /* ── Card ────────────────────────────────────────────────────────── */
 .nds-card {
   background: var(--nds-surface);
@@ -24,7 +51,7 @@
   border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-card-head .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
   color: var(--nds-text);
 }
@@ -35,10 +62,38 @@
    headed cards keep byte-identical markup and centring. */
 .nds-card-head.stacked { align-items: flex-start; }
 .nds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.nds-card-head .d { font-size: 12.5px; font-weight: 500; color: var(--nds-text-2); }
+.nds-card-head .d { font-size: var(--nds-font-size-sm-plus); font-weight: 500; color: var(--nds-text-2); }
 .nds-card-body {
   padding: 16px;
 }
+
+/* ── Disclosure ──────────────────────────────────────────────────── */
+.nds-disclosure {
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+}
+.nds-disclosure-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) 0;
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+  list-style: none;
+  cursor: pointer;
+}
+.nds-disclosure-summary::-webkit-details-marker { display: none; }
+.nds-disclosure-summary:hover { color: var(--nds-text); }
+.nds-disclosure-summary:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.nds-disclosure-chevron { flex-shrink: 0; }
+.nds-disclosure[open] > .nds-disclosure-summary > .nds-disclosure-chevron { transform: rotate(90deg); }
+.nds-disclosure-body { padding-top: var(--nds-space-8); }
 
 /* ── EmptyState ──────────────────────────────────────────────────── */
 .nds-empty {
@@ -60,13 +115,13 @@
   margin-bottom: 14px;
 }
 .nds-empty .t {
-  font-size: 14px;
+  font-size: var(--nds-font-size-md-minus);
   font-weight: 700;
   color: var(--nds-text);
   margin-bottom: 5px;
 }
 .nds-empty .d {
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text-muted);
   line-height: 1.5;
   max-width: 320px;
@@ -82,12 +137,19 @@
   gap: 4px;
   border-bottom: 1px solid var(--nds-border-subtle);
 }
+.nds-tabs.scrollable {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--nds-space-4);
+}
+.nds-tabs.scrollable .nds-tab { flex-shrink: 0; }
 .nds-tab {
   position: relative;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   color: var(--nds-text-2);
   padding: 9px 12px;
@@ -159,7 +221,7 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 14.5px;
+  font-size: 14.5px; /* no token: 14.5px is a lone half-step between md-minus/md — hub #617 left it literal */
   font-weight: 600;
   color: var(--nds-text-2);
   /* no horizontal padding: the indicator below spans the LABEL, as the reference bar's does */
@@ -178,6 +240,26 @@
   height: 2.5px;
   border-radius: 0;
 }
+/* `sm` — a tab strip that sits INSIDE a bar beside 28px controls: the studio's 40px scope row and
+   the record drawer's pane strip. The tabs stretch to the strip so the indicator meets its bottom
+   edge; the HOST draws the hairline; the type is the bar's (sm-plus, 600). Default `md` untouched. */
+.nds-tabs.sm {
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: none;
+}
+.nds-tabs.sm .nds-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: var(--nds-font-size-sm-plus);
+}
+.nds-tabs.sm .nds-tab.on::after {
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+}
 .nds-tab-ic {
   display: inline-flex;
   align-items: center;
@@ -194,7 +276,7 @@
      ring keeps the pill legible without changing its box size */
   box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
   color: var(--nds-text-2);
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1.5;
@@ -216,7 +298,7 @@
   min-width: 0;
   padding: 1px 7px;
   box-shadow: none;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   background: var(--nds-surface-sunken);
   color: var(--nds-text-2);
 }
@@ -231,7 +313,7 @@
   border-radius: var(--nds-radius-full);
   background: var(--nds-primary-soft);
   color: var(--nds-text-link);
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 700;
   line-height: 1.5;
 }
@@ -253,7 +335,7 @@
   background: var(--nds-surface);
   border-radius: var(--nds-radius-md);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   color: var(--nds-text-2);
   cursor: pointer;
@@ -316,6 +398,7 @@
   background: rgb(var(--nds-shadow-rgb) / 0.42);
 }
 .nds-modal {
+  color: var(--nds-text);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -349,7 +432,27 @@
 .nds-modal.xxl .nds-modal-f {
   padding: 16px 28px;
 }
+/* A MEDIA surface, not a dialog: the content IS the picture, so it takes the viewport it can get
+   and the chrome stays thin. `min()` keeps it from stretching absurdly on an ultrawide panel. */
+.nds-modal.full {
+  width: min(1680px, 96vw);
+  height: 94vh;
+  max-height: 94vh;
+}
+.nds-modal.full .nds-modal-h {
+  padding: 14px 20px 12px;
+}
+/* The body is the viewer's own layout container — it must not add padding around a picture that
+   is already positioned, nor scroll: the media pane manages its own overflow. */
+.nds-modal.full .nds-modal-b {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+}
+
 .nds-modal-h {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -357,38 +460,48 @@
   padding: 16px 18px 12px;
 }
 .nds-modal-h .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
   color: var(--nds-text);
 }
 .nds-modal-h .sub {
   margin-top: 3px;
-  font-size: 11.5px;
-  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text);
 }
 .nds-modal-x {
   border: none;
   background: none;
   color: var(--nds-text-3);
   cursor: pointer;
-  padding: 4px;
+  /* A square on the `sm` control tier, so the close glyph in a drawer or modal header lines up
+     with the 28px controls beside it instead of measuring 26 (CT.1). */
+  width: var(--nds-control-h-sm);
+  height: var(--nds-control-h-sm);
+  padding: 0;
+  flex: none;
   border-radius: var(--nds-radius-sm);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .nds-modal-x:hover {
   background: var(--nds-surface-hover);
   color: var(--nds-text);
 }
 .nds-modal-b {
+  min-height: 0;
   flex: 1;
   overflow-y: auto;
   padding: 12px 18px;
   border-top: 1px solid var(--nds-border-subtle);
   border-bottom: 1px solid var(--nds-border-subtle);
-  font-size: 13px;
-  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
 }
 .nds-modal-f {
+  flex-shrink: 0;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -407,7 +520,7 @@
   position: fixed;
   top: 0;
   right: 0;
-  z-index: var(--nds-z-modal);
+  z-index: var(--nds-z-drawer);
   height: 100%;
   width: 420px;
   max-width: 100%;
@@ -434,7 +547,7 @@
   border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-drawer-h .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
   color: var(--nds-text);
 }
@@ -446,7 +559,7 @@
   min-width: 0;
 }
 .nds-drawer-ht .st {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-text-muted);
 }
 .nds-drawer-b {
@@ -459,11 +572,13 @@
      browsers since 2022. */
   overscroll-behavior: contain;
   padding: 16px 18px;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-2);
 }
 .nds-drawer-f {
   display: flex;
+  flex: none;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
@@ -485,6 +600,95 @@
   background: rgb(var(--nds-shadow-rgb) / 0.68);
 }
 
+/* ── Drawer — NON-MODAL panel (PES.4.1; slide-over per layout-v2 §5) ──
+   The same drawer, overlaying the surface instead of blocking it.
+
+   🔴 `--nds-z-rail`, and it is load-bearing rather than arbitrary. `ActionConfirm` portals a DS
+   `Modal` whose backdrop is `--nds-z-overlay` (1400); a panel at `--nds-z-drawer` (1410) would put
+   every shared registry confirmation BEHIND the panel that raised it — the third recurrence of
+   reference_drawer_confirm_overlay. Below 1400, the confirm lands on top BY CONSTRUCTION: no new
+   token, no re-routing, and no z-race left to maintain. Raising this value re-opens that bug.
+
+   No backdrop: one that does not block input is a lie about interactivity, and the sheet behind
+   this genuinely stays live — it keeps its full width underneath, because an overlay does not
+   reflow what it covers. */
+.nds-drawer-dock {
+  position: fixed;
+  top: var(--nds-topbar-h, 56px);
+  right: 0;
+  bottom: 0;
+  z-index: var(--nds-z-rail);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 520px;
+  max-width: 100%;
+  background: var(--nds-surface);
+  border-left: 1px solid var(--nds-border-subtle);
+  box-shadow: var(--nds-shadow-modal);
+  animation: nds-slidein 0.18s ease;
+}
+
+/* A panel that flies in is motion for its own sake to anyone who asked not to see it; the panel
+   still arrives, it just arrives already there. */
+@media (prefers-reduced-motion: reduce) {
+  .nds-drawer-dock {
+    animation: none;
+  }
+}
+
+/* The splitter. Wider than it looks (7px hit area over a 1px seam) because a 1px drag target is a
+   target most people miss. */
+.nds-drawer-grip {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  z-index: 1;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+.nds-drawer-grip::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.nds-drawer-grip:hover::after,
+.nds-drawer-grip:focus-visible::after {
+  background: var(--nds-primary);
+}
+.nds-drawer-grip:focus-visible {
+  /* `--nds-focus-ring` is a 12%-alpha shadow (tokens.css:202) — on the grip's transparent
+     background that measured 1.17:1, which is not a focus indicator (DS.1, #335). The bar below
+     already lights up on focus, so this was not invisible focus, but the ring itself did nothing.
+     Offset INWARD: the grip sits at `left: -3px`, straddling the panel border, so a positive
+     offset would draw the ring over the sheet behind it. */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -1px;
+}
+
+/* Set on <body> for the length of a drag: the pointer routinely outruns a 7px handle, and without
+   this the drag selects the sheet's text and the cursor flickers back to the arrow the moment it
+   leaves the grip. */
+body.nds-drawer-resizing,
+body.nds-drawer-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Narrow viewports: the panel is the whole working area rather than a slice of it. Still no
+   backdrop, still not modal — the sheet is simply behind it. */
+@media (max-width: 719px) {
+  .nds-drawer-dock {
+    width: 100%;
+    border-left: 0;
+  }
+}
+
 /* ── Menu (anchored dropdown) ────────────────────────────────────── */
 .nds-menu-wrap {
   position: relative;
@@ -493,7 +697,9 @@
 .nds-menu {
   position: fixed;
   z-index: var(--nds-z-popover);
-  min-width: 180px;
+  /* No fixed floor. It was `min-width: 180px`, measured rendering a 93px menu at 180 — 87px of dead
+     width, which is exactly "wider than its longest option" (Owner #461). The floor is now the
+     trigger, supplied inline by usePopoverPosition like every other DS panel. */
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
@@ -503,31 +709,77 @@
   flex-direction: column;
   gap: 1px;
 }
-.nds-menu button {
+.nds-menu button,
+.nds-menu a[role='menuitem'] {
   display: flex;
   align-items: center;
   gap: 9px;
   width: 100%;
   text-align: left;
+  /* the anchor form must look identical to the button form */
+  text-decoration: none;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 500;
   color: var(--nds-text-strong);
   padding: 8px 10px;
   border-radius: var(--nds-radius-md);
   cursor: pointer;
 }
-.nds-menu button:hover {
+.nds-menu button:hover,
+.nds-menu a[role='menuitem']:hover {
   background: var(--nds-surface-hover);
 }
+/* 🔴 `--nds-text-disabled` is 2.04:1 and this rule put it on the item's NAME — measured on the
+   studio's `Publish ▾`, where "Amazon · DE" and "eBay · DE" rendered rgb(174,182,194) on white at
+   2.04:1 while the note beside each rendered 5.91:1. The identifying half of the row was the
+   unreadable half, in every menu in the app, not just that one.
+   WCAG exempts inactive controls, and that exemption is correct right up until the disabled item is
+   what has to be read — which is precisely what a menu of unavailable channels is (hub rulings
+   #133/#231). Unavailability is already carried by `cursor: default`, the suppressed hover, and now
+   by `description`; it does not also need the name to be illegible. `--nds-text-2` (5.91:1) still
+   reads as clearly secondary against an enabled item's `--nds-text-strong`. */
 .nds-menu button:disabled {
-  color: var(--nds-text-disabled);
+  color: var(--nds-text-2);
   cursor: default;
 }
 .nds-menu button:disabled:hover {
   background: none;
+}
+/* An icon MAY fade where a word may not: it names nothing on its own, so losing it costs no
+   information, and it keeps a disabled row visibly distinct at a glance. */
+.nds-menu button:disabled svg {
+  opacity: 0.55;
+}
+
+/* ── Menu item with a `description` (MenuItemDef.description) ─────── */
+/* The DS owns this wrap width on purpose. Left to callers it became two policies in one menu: a
+   nowrap note running 520.1px beside a sibling wrapping at 222.6px, and a 617–629px menu. */
+.nds-menu button.has-desc,
+.nds-menu a[role='menuitem'].has-desc {
+  align-items: flex-start;
+}
+.nds-menu-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nds-menu-item-desc {
+  display: block;
+  max-width: 34ch;
+  white-space: normal;
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-normal);
+  line-height: 1.45;
+  color: var(--nds-text-2);
+}
+/* The description keeps its own legible tone when the item is disabled — it is the reason the item
+   is disabled, so it is the last thing that should dim with it. */
+.nds-menu button:disabled .nds-menu-item-desc {
+  color: var(--nds-text-2);
 }
 
 /* ── Toast ───────────────────────────────────────────────────────── */
@@ -548,7 +800,7 @@
   gap: 9px;
   background: var(--nds-text);
   color: var(--nds-text-inverse);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   padding: 11px 16px;
   border-radius: var(--nds-radius-xl);
@@ -600,7 +852,7 @@
   border-radius: var(--nds-radius-lg);
   padding: 7px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text);
   background: var(--nds-surface);
   cursor: pointer;
@@ -634,7 +886,7 @@
   gap: 9px;
   padding: 7px 9px;
   border-radius: var(--nds-radius-md);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   cursor: pointer;
 }
@@ -658,7 +910,7 @@
 /* Facet count rendered after an option label (FilterBar `count`). */
 .nds-ms-count {
   color: var(--nds-text-muted);
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -675,7 +927,7 @@
   border-radius: var(--nds-radius-lg);
   padding: 7px 30px 7px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text);
   background: var(--nds-surface);
 }
@@ -695,10 +947,42 @@
   color: var(--nds-text-3);
   pointer-events: none;
 }
+/* ── ONE width rule for every DS popover panel (Owner #461, hub #669) ──────────────────────────
+ * .nds-pop-clamp-rule — the panel is clamp(anchor, content, --nds-popover-max-w):
+ *   FLOOR   the anchor, applied inline by `usePopoverPosition` as `min-width: <trigger width>`, so
+ *           placement stays owned in one place. Where a panel is mounted WITHOUT that hook — AG's
+ *           cell editor mounts ListboxPanel inside its own popup — the per-class `min-width` below
+ *           is the fallback floor. Those are not dead rules; inline simply wins when it is present.
+ *   CONTENT does the rest, because none of these panels set `width`.
+ *   CAP     this rule. Before it, ONLY .nds-combo-pop was capped: measured `max-width: none` on
+ *           .nds-menu and .nds-ms-pop, so a long label grew them without limit.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-combo-pop,
+.nds-ms-pop,
+.nds-menu {
+  max-width: var(--nds-popover-max-w);
+}
+
+/* D18 — one closed-list popover shape for the whole app.
+   `--nds-combo-row-h` is component-local on purpose, not a DS token: it is the option row's own
+   box (13px text in 8px padding), and the only thing outside this file that needs it is nothing.
+   The height is the CALC rather than a literal so "8 rows" stays true if the row ever changes —
+   240px silently meant 6.5 rows at the row height this component actually renders. */
 .nds-combo-pop {
-  position: fixed;
+  --nds-combo-row-h: 36px;
+  --nds-combo-rows: 8;
+  /* 🔴 NO `position` here. It used to be `position: fixed`, and a class that positions itself is
+     wrong for any consumer it was not written for: inside AG's absolutely-positioned cell-editor
+     popup a `fixed` child anchors to the VIEWPORT, ignores AG's placement and does not move when
+     the popup does (AG.1, D18 gotcha 4). Placement now comes from the `style` its owner passes —
+     `usePopoverPosition` for `Listbox`, AG's own coordinates for the grid editor. */
   z-index: var(--nds-z-popover);
-  max-height: 240px;
+  /* 8 rows + this element's own 5px padding, top and bottom. */
+  max-height: calc(var(--nds-combo-rows) * var(--nds-combo-row-h) + 10px);
+  /* Width is max(anchor, content) capped — the anchor floor is applied as `min-width` by
+     `usePopoverPosition`, the content does the rest, and this stops "too long in a single cell".
+     Deliberately NOT `width`, which is what made the panel ignore its own labels. */
+  max-width: var(--nds-popover-max-w);
   overflow-y: auto;
   background: var(--nds-surface);
   border: 1px solid var(--nds-border-subtle);
@@ -707,8 +991,14 @@
   padding: 5px;
 }
 /* A picker's popover must not inherit a narrow trigger's width — the ads console's rows-per-page
-   select is 84px and its options are not. Scoped to Listbox so Combobox is untouched. */
-.nds-listbox .nds-combo-pop {
+   select is 84px and its options are not. Scoped to Listbox so Combobox is untouched.
+   🔴 The scope is a class ON THE PANEL, never an ancestor. This was `.nds-listbox .nds-combo-pop`
+   until 2026-09-01, and the panel portals to `<body>` — so `.nds-listbox` is not an ancestor by the
+   time it renders and the rule never matched: measured `pop.matches('.nds-listbox .nds-combo-pop')
+   === false` with a computed `min-width: 0px`, while the rule sat loaded and plausible in
+   `document.styleSheets`. A floor a portalled panel cannot see is not a floor. Same trap as the
+   `.h10-shell` token pin, which is why that one is written `body:has(.h10-shell)`. */
+.nds-combo-pop.nds-listbox-pop {
   min-width: 210px;
 }
 .nds-combo-search {
@@ -728,7 +1018,7 @@
   border: none;
   outline: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   width: 100%;
   background: transparent;
   color: var(--nds-text);
@@ -738,13 +1028,15 @@
 }
 .nds-combo-pop button {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: var(--nds-combo-row-h);
   width: 100%;
   text-align: left;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   padding: 8px 9px;
   border-radius: var(--nds-radius-md);
@@ -778,7 +1070,7 @@
 .nds-combo-empty {
   padding: 12px 9px;
   text-align: center;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text-muted);
 }
 
@@ -795,20 +1087,20 @@
   padding: 14px 16px;
 }
 .nds-metric .lbl {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
   color: var(--nds-text-muted);
   margin-bottom: 6px;
 }
 .nds-metric .val {
-  font-size: 22px;
+  font-size: var(--nds-font-size-xl);
   font-weight: 800;
   color: var(--nds-text);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .nds-metric .dlt {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
   margin-top: 4px;
 }
@@ -851,8 +1143,11 @@
   border-color: var(--nds-border-strong);
 }
 .nds-metric.btn:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 /* Engaged. The ring is what carries it — a border-colour change alone is a 1px cue that reads as
    hover, and these tiles toggle a filter the rest of the page is then showing. */
@@ -909,10 +1204,18 @@
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-pop);
   padding: 11px 14px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   line-height: 1.7;
   white-space: nowrap;
   pointer-events: none;
+  /* 🔴 Measured on /marketing/ads/reporting?tab=library, 2026-09-02 (hub #678, found by DS.2 at
+     source): with `nowrap` and no cap, the Hourly-performance card rendered its 179-character
+     Caveat on ONE line — 1147.3px, 66.4% of a 1728px viewport, against a 320px popover cap. The
+     Owner's dropdown complaint, on a hovercard.
+
+     The cap alone would be a worse bug than the one it fixes: `nowrap` inside a bounded box
+     overflows it. So the cap and the wrapping below are ONE change, not two. */
+  max-width: var(--nds-popover-max-w);
 }
 .nds-hovercard-card.above {
   transform: translateY(-100%);
@@ -920,14 +1223,25 @@
 .nds-hovercard-card .r1 {
   color: var(--nds-text-strong);
   font-weight: 500;
+  /* The single-hint form wraps for the same reason and is NOT optional once the card is capped:
+     most HoverCard call sites pass `text`, several of them full sentences, and `nowrap` inside a
+     320px box would overflow rather than grow. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .nds-hovercard-card .r .k {
   color: var(--nds-text);
   font-weight: 700;
+  /* The KEY stays on one line: it is short by construction and a wrapped label reads as two rows. */
+  white-space: nowrap;
 }
 .nds-hovercard-card .r .v {
   color: var(--nds-text-2);
-  font-weight: 400;
+  font-weight: var(--nds-font-weight-normal);
+  /* The VALUE is the unbounded one — a note, a product name, a joined list. `anywhere` rather than
+     `break-word` so a long unbroken token (an ASIN list, a URL) also yields. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ── DateRangePicker ─────────────────────────────────────────────── */
@@ -960,7 +1274,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text-2);
   padding: 7px 10px;
   border-radius: var(--nds-radius-md);
@@ -998,7 +1312,7 @@
 }
 .nds-dp-mh {
   text-align: center;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 700;
   color: var(--nds-text);
   margin-bottom: 8px;
@@ -1012,7 +1326,7 @@
   height: 22px;
   line-height: 22px;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   font-weight: 700;
   color: var(--nds-text-muted);
 }
@@ -1022,7 +1336,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text);
   border-radius: var(--nds-radius-md);
   cursor: pointer;
@@ -1059,7 +1373,7 @@
   justify-content: center;
   gap: 18px;
   margin-top: 8px;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-text-2);
 }
 .nds-chart-legend .sw {
@@ -1078,7 +1392,7 @@
   border-radius: var(--nds-radius-lg);
   box-shadow: var(--nds-shadow-menu);
   padding: 8px 11px;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   min-width: 180px;
 }
 .nds-chart-tt .d {
@@ -1114,7 +1428,7 @@
   flex: 1;
   min-width: 0;
   text-align: center;
-  font-size: 9px;
+  font-size: var(--nds-font-size-nano);
   font-weight: 600;
   color: var(--nds-text-muted);
 }
@@ -1128,7 +1442,7 @@
   flex-shrink: 0;
   padding-right: 6px;
   text-align: right;
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   font-weight: 700;
   color: var(--nds-text-muted);
 }
@@ -1136,7 +1450,7 @@
   flex: 1;
   min-width: 0;
   height: 22px;
-  border-radius: 3px;
+  border-radius: var(--nds-radius-xs);
 }
 
 /* ── DataGrid ────────────────────────────────────────────────────── */
@@ -1155,7 +1469,7 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
 }
 .nds-grid thead th {
   position: sticky;
@@ -1163,7 +1477,7 @@
   z-index: 4;
   background: var(--nds-surface-raised);
   border-bottom: 1px solid var(--nds-border);
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   font-weight: 700;
   /* --nds-text-strong (9.87:1), NOT --nds-text-2 (5.60:1). A column heading is the thing you scan
      to find a column, and it was sitting two tiers below its own body text (--nds-text, 15.48:1).
@@ -1265,7 +1579,7 @@
 
 /* ── ImageUpload ───────────────────────────────────────────────────────── */
 .nds-imgup { display: flex; flex-direction: column; gap: 8px; }
-.nds-imgup-lbl { font-size: 13px; font-weight: 600; color: var(--nds-text-2); }
+.nds-imgup-lbl { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text-2); }
 .nds-imgup-row { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
 .nds-imgup-zone {
   width: 200px; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1275,8 +1589,8 @@
 .nds-imgup-zone:hover:not(:disabled) { border-color: var(--nds-primary); color: var(--nds-text-link); background: var(--nds-imgup-hover); }
 .nds-imgup-zone.drag { border-color: var(--nds-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--nds-text-link); }
 .nds-imgup-zone:disabled { opacity: .6; cursor: not-allowed; }
-.nds-imgup-zone .t { font-size: 13px; font-weight: 600; }
-.nds-imgup-zone .d { font-size: 11.5px; }
+.nds-imgup-zone .t { font-size: var(--nds-font-size-base); font-weight: 600; }
+.nds-imgup-zone .d { font-size: var(--nds-font-size-xs-plus); }
 .nds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--nds-imgup-spin-track); border-top-color: var(--nds-primary); border-radius: 50%; animation: nds-imgup-spin .7s linear infinite; }
 @keyframes nds-imgup-spin { to { transform: rotate(360deg); } }
 .nds-imgup-preview { position: relative; width: 200px; max-width: 100%; border: 1px solid var(--nds-border); border-radius: 10px; overflow: hidden; background: var(--nds-surface); }
@@ -1284,12 +1598,12 @@
 .nds-imgup-preview .rm { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(20,29,40,.72); color: var(--nds-text-inverse); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .nds-imgup-preview .rm:hover { background: rgba(20,29,40,.9); }
 .nds-imgup-crit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; background: var(--nds-imgup-surface); border: 1px solid var(--nds-surface-sunken); border-radius: 10px; }
-.nds-imgup-crit .h { font-size: 12px; font-weight: 700; color: var(--nds-text-2); margin-bottom: 2px; }
-.nds-imgup-crit .c { font-size: 12px; color: var(--nds-text-muted); line-height: 1.5; }
+.nds-imgup-crit .h { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-text-2); margin-bottom: 2px; }
+.nds-imgup-crit .c { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); line-height: 1.5; }
 .nds-imgup-crit .c b { color: var(--nds-text-2); font-weight: 600; }
-.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--nds-text-link); cursor: pointer; }
+.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600; color: var(--nds-text-link); cursor: pointer; }
 .nds-imgup-assets:hover { text-decoration: underline; }
-.nds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-imgup-err); }
+.nds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: var(--nds-font-size-sm); color: var(--nds-imgup-err); }
 
 /* ── Banner (inline status callout) ────────────────────────────────────── */
 .nds-banner {
@@ -1316,13 +1630,13 @@
   gap: 2px;
 }
 .nds-banner-title {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   color: var(--nds-text);
   line-height: 1.35;
 }
 .nds-banner-desc {
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   color: var(--nds-text-2);
   line-height: 1.45;
 }
@@ -1377,6 +1691,7 @@
   background: var(--nds-surface-sunken);
 }
 .nds-banner.neutral .nds-banner-icon { color: var(--nds-text-2); }
+.nds-banner.neutral .nds-banner-desc { color: var(--nds-text); }
 
 /* ── Stepper (horizontal step progress) ────────────────────────────────── */
 .nds-stepper {
@@ -1410,12 +1725,12 @@
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .nds-step-num {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 700;
   line-height: 1;
 }
 .nds-step-label {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 500;
   line-height: 1.3;
   color: var(--nds-text-muted);
@@ -1499,7 +1814,7 @@
   cursor: not-allowed;
 }
 .nds-dropzone-primary {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   color: var(--nds-text-2);
 }
@@ -1508,7 +1823,7 @@
   color: var(--nds-text-link);
 }
 .nds-dropzone-hint {
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   color: var(--nds-text-muted);
 }
 .nds-dropzone-input {
@@ -1518,7 +1833,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-danger-strong);
 }
 
@@ -1529,7 +1844,7 @@
 .nds-listbox-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   width: 100%; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg);
-  padding: 7px 11px; font: inherit; font-size: 13px; color: var(--nds-text);
+  padding: 7px 11px; font: inherit; font-size: var(--nds-font-size-base); color: var(--nds-text);
   background: var(--nds-surface); cursor: pointer; text-align: left;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
@@ -1548,14 +1863,14 @@
 .nds-dp-nav button { border: none; background: none; color: var(--nds-text-2); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .nds-dp-nav button:hover { background: var(--nds-surface-hover); }
 .nds-datefield-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
-.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--nds-text-link); cursor: pointer; }
+.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-link); cursor: pointer; }
 
 /* ── BurnDownChart (BSP.1) ─────────────────────────────────────────────────
    Appended at EOF under a new prefix; no existing selector is touched.
    The legend is always rendered, so no series is identified by colour alone. */
 .nds-burn { display: flex; flex-direction: column; gap: 6px; }
 .nds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
-.nds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; color: var(--nds-text-2); }
+.nds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: var(--nds-font-size-micro-plus); font-weight: 600; color: var(--nds-text-2); }
 /* `--nds-surface-raised`, not `--surface-raised`: that platform name is defined by
    globals.css / ads.css as RGB CHANNELS (`255 255 255`), and this file loads alongside
    both. `var(--surface-raised, #fff)` therefore resolved to `background: 255 255 255`
@@ -1570,8 +1885,8 @@
 /* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
 .nds-burn-key .ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
 .nds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--nds-surface-raised); border: 1px solid var(--nds-border); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
-.nds-burn-tip b { font-size: 11px; font-weight: 800; color: var(--nds-text); }
-.nds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--nds-text-2); }
+.nds-burn-tip b { font-size: var(--nds-font-size-xs); font-weight: 800; color: var(--nds-text); }
+.nds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
 .nds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
 .nds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--nds-text); font-variant-numeric: tabular-nums; }
 
@@ -1589,7 +1904,7 @@
   padding: 3px 8px 3px 4px;
   border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-round);
   background: var(--nds-surface); color: var(--nds-text);
-  font: inherit; font-size: 12.5px; font-weight: 600;
+  font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600;
   cursor: pointer; text-decoration: none;
 }
 .nds-acct-trigger:hover { background: var(--nds-surface-hover); }
@@ -1601,7 +1916,7 @@
   display: inline-flex; align-items: center; gap: 5px;
   padding: 2px 8px; border-radius: var(--nds-radius-round);
   background: var(--nds-surface-sunken); color: var(--nds-text);
-  font-size: 12px; font-weight: 600; white-space: nowrap;
+  font-size: var(--nds-font-size-sm); font-weight: 600; white-space: nowrap;
 }
 .nds-acct-caret { color: var(--nds-text-3); flex: none; }
 /* Count badge on a channel pill — only rendered when that channel holds >1 account. */
@@ -1609,7 +1924,7 @@
   min-width: 15px; padding: 0 4px; margin-left: 1px;
   border-radius: var(--nds-radius-round);
   background: var(--nds-primary); color: var(--nds-text-inverse);
-  font-size: 10px; font-weight: 800; line-height: 15px; text-align: center;
+  font-size: var(--nds-font-size-micro); font-weight: 800; line-height: 15px; text-align: center;
 }
 
 /* Dots share one class so the legend in the panel and the chip cannot drift. */
@@ -1633,17 +1948,17 @@
 }
 .nds-acct-panel-head {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 8px 8px; font-size: 11px; font-weight: 700;
+  padding: 6px 8px 8px; font-size: var(--nds-font-size-xs); font-weight: 700;
   letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-2);
 }
 .nds-acct-count {
   min-width: 18px; text-align: center; padding: 1px 6px;
   border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
-  color: var(--nds-text-2); font-size: 11px; letter-spacing: 0;
+  color: var(--nds-text-2); font-size: var(--nds-font-size-xs); letter-spacing: 0;
 }
 
 .nds-acct-group + .nds-acct-group { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; }
-.nds-acct-group-head { padding: 4px 8px; font-size: 11px; font-weight: 700; color: var(--nds-text-2); }
+.nds-acct-group-head { padding: 4px 8px; font-size: var(--nds-font-size-xs); font-weight: 700; color: var(--nds-text-2); }
 
 .nds-acct-row {
   display: flex; align-items: flex-start; gap: 9px;
@@ -1667,12 +1982,12 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    where green did not (measured 2.91:1 with --nds-success, 4.43:1 with
    --nds-success-strong, both under the 4.5 bar for 13px text). Selection is also
    carried by the row tint and aria-current, so this is never the only signal. */
-.nds-acct-check { margin-left: auto; align-self: center; color: var(--nds-text); font-weight: 800; font-size: 13px; }
+.nds-acct-check { margin-left: auto; align-self: center; color: var(--nds-text); font-weight: 800; font-size: var(--nds-font-size-base); }
 .nds-acct-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.nds-acct-row-label { font-size: 13px; font-weight: 600; color: var(--nds-text); }
-.nds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11.5px; color: var(--nds-text-2); }
-.nds-acct-row-sub code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-text-2); }
-.nds-acct-row-warn { font-size: 11.5px; color: var(--nds-warning-strong); }
+.nds-acct-row-label { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text); }
+.nds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
+.nds-acct-row-sub code { font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.nds-acct-row-warn { font-size: var(--nds-font-size-xs-plus); color: var(--nds-warning-strong); }
 .nds-acct-row-warn[data-tone='error'] { color: var(--nds-danger-strong); }
 /* Dark-mode tone text: no rule needed. `.dark` (tokens.css) now carries
    --nds-{success,warning,danger}-strong and --nds-text-link, so the rules above
@@ -1681,17 +1996,17 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acct-tag {
   padding: 1px 6px; border-radius: var(--nds-radius-pill);
   background: var(--nds-surface-sunken); color: var(--nds-text-2);
-  font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  font-size: var(--nds-font-size-micro-plus); font-weight: 700; letter-spacing: .02em;
 }
 .nds-acct-markets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .nds-acct-market {
   padding: 1px 5px; border-radius: var(--nds-radius-pill);
   background: var(--nds-surface-sunken); color: var(--nds-text-2);
-  font-size: 10.5px; font-weight: 700;
+  font-size: var(--nds-font-size-micro-plus); font-weight: 700;
 }
 
 .nds-acct-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
-.nds-acct-foot a { font-size: 12px; font-weight: 600; color: var(--nds-text-link); text-decoration: none; }
+.nds-acct-foot a { font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-link); text-decoration: none; }
 .nds-acct-foot a:hover { text-decoration: underline; }
 
 /* ── AccountsPanel (MAP.4) ─────────────────────────────────────────────────
@@ -1705,38 +2020,38 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   border-radius: var(--nds-radius-xl);
   padding: 14px 16px;
 }
-.nds-acctp-head h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--nds-text); }
-.nds-acctp-head p { margin: 4px 0 0; font-size: 12px; color: var(--nds-text-2); max-width: 62ch; }
+.nds-acctp-head h3 { margin: 0; font-size: var(--nds-font-size-md-minus); font-weight: 700; color: var(--nds-text); }
+.nds-acctp-head p { margin: 4px 0 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); max-width: 62ch; }
 
-.nds-acctp-notice { margin: 10px 0 0; font-size: 12.5px; font-weight: 600; }
+.nds-acctp-notice { margin: 10px 0 0; font-size: var(--nds-font-size-sm-plus); font-weight: 600; }
 .nds-acctp-notice[data-tone='ok'] { color: var(--nds-success-strong); }
 .nds-acctp-notice[data-tone='error'] { color: var(--nds-danger-strong); }
 
 .nds-acctp-group { margin-top: 14px; }
 .nds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--nds-border-subtle); }
-.nds-acctp-ch { font-size: 12px; font-weight: 700; color: var(--nds-text); }
+.nds-acctp-ch { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-text); }
 .nds-acctp-count {
   min-width: 18px; text-align: center; padding: 0 6px;
   border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
-  color: var(--nds-text-2); font-size: 11px; font-weight: 700;
+  color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: 700;
 }
-.nds-acctp-empty { margin: 8px 0; font-size: 12.5px; color: var(--nds-text-2); }
+.nds-acctp-empty { margin: 8px 0; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-2); }
 
 .nds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--nds-border-subtle); }
 .nds-acctp-row:last-of-type { border-bottom: none; }
 .nds-acctp-row[data-busy] { opacity: 0.6; }
 .nds-acctp-row .nds-acct-dot { margin-top: 6px; }
 .nds-acctp-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
-.nds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13.5px; font-weight: 600; color: var(--nds-text); }
-.nds-acctp-sub { font-size: 12px; color: var(--nds-text-2); }
+.nds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: var(--nds-font-size-base-plus); font-weight: 600; color: var(--nds-text); }
+.nds-acctp-sub { font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
 .nds-acctp-warn { color: var(--nds-warning-strong); }
 .nds-acctp-badge {
   padding: 1px 7px; border-radius: var(--nds-radius-round);
   background: var(--nds-primary); color: var(--nds-text-inverse);
-  font-size: 10.5px; font-weight: 800; letter-spacing: .02em;
+  font-size: var(--nds-font-size-micro-plus); font-weight: 800; letter-spacing: .02em;
 }
 .nds-acctp-input {
-  font: inherit; font-size: 13.5px; font-weight: 600;
+  font: inherit; font-size: var(--nds-font-size-base-plus); font-weight: 600;
   padding: 3px 7px; width: min(280px, 100%);
   border: 1px solid var(--nds-primary); border-radius: var(--nds-radius-sm);
   background: var(--nds-surface); color: var(--nds-text);
@@ -1748,10 +2063,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acctp-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; flex-shrink: 0; max-width: 46%; }
 /* Why an action is absent, in words a screen reader and an eye can both reach —
    never a `title` on a disabled control, which fires no pointer events. */
-.nds-acctp-note { font-size: 11.5px; color: var(--nds-text-2); max-width: 20ch; text-align: right; }
+.nds-acctp-note { font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); max-width: 20ch; text-align: right; }
 
 .nds-acctp-add {
-  margin-top: 10px; font: inherit; font-size: 12.5px; font-weight: 600;
+  margin-top: 10px; font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600;
   padding: 6px 11px; border-radius: var(--nds-radius-md);
   border: 1px dashed var(--nds-border-strong); background: none;
   color: var(--nds-text-link); cursor: pointer;
@@ -1769,7 +2084,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
 .nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
-.nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: 10px; color: var(--nds-text-2); line-height: 1; }
+.nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: var(--nds-font-size-micro); color: var(--nds-text-2); line-height: 1; }
 
 /* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
    permissions + timestamps line and the error line stack under it in `.nds-acctp-main`'s
@@ -1778,15 +2093,24 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-acctp-scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .nds-acctp-times {
   display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
-  font-size: 11.5px; color: var(--nds-text-2); font-variant-numeric: tabular-nums;
+  font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); font-variant-numeric: tabular-nums;
 }
 /* The stored `lastError`, verbatim — already redacted server-side. Long tokens wrap
    inside the column rather than pushing the actions off the row. */
-.nds-acctp-err { margin: 0; font-size: 12px; color: var(--nds-danger-strong); overflow-wrap: anywhere; }
+.nds-acctp-err { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-danger-strong); overflow-wrap: anywhere; }
 /* The inline result of Test: "OK · 412 ms" / "Failed · auth_expired · …". */
-.nds-acctp-test { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.nds-acctp-test { font-size: var(--nds-font-size-sm); font-weight: 600; overflow-wrap: anywhere; }
 .nds-acctp-test[data-tone='ok'] { color: var(--nds-success-strong); }
 .nds-acctp-test[data-tone='error'] { color: var(--nds-danger-strong); }
+
+/* Account details keep a full reading column when this panel is narrow. */
+.nds-acctp { container-type: inline-size; }
+@container (max-width: 640px) {
+  .nds-acctp-row { flex-wrap: wrap; }
+  .nds-acctp-main { flex-basis: calc(100% - 26px); }
+  .nds-acctp-actions { flex-basis: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; }
+  .nds-acctp-note { max-width: none; text-align: left; }
+}
 
 /* ── ColumnGroupModal (2026-08-24) ──────────────────────────────────────────────
    Was the DS's other Tailwind-styled component (see the ToolbarButton note in
@@ -1827,16 +2151,16 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-cgm-dot[data-color='red'] { background: var(--nds-danger); }
 
 .nds-cgm-main { flex: 1; min-width: 0; }
-.nds-cgm-label { font-size: 13px; font-weight: 500; color: var(--nds-text-strong); }
+.nds-cgm-label { font-size: var(--nds-font-size-base); font-weight: 500; color: var(--nds-text-strong); }
 /* A hidden group is dimmed, but it also keeps its Toggle in the off position —
    the tint is a second signal, never the only one. */
 .nds-cgm-label[data-hidden] { color: var(--nds-text-3); }
-.nds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--nds-text-muted); }
+.nds-cgm-count { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-muted); }
 
 .nds-cgm-foot { display: flex; width: 100%; align-items: center; justify-content: space-between; }
 .nds-cgm-foot-actions { display: flex; gap: 8px; }
 .nds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
-.nds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
+.nds-cgm-note { margin: 12px 0 0; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-muted); }
 
 /* ── Field ─────────────────────────────────────────────────────────────────
    Label + required marker + info slot + control + hint. Replaces six spellings across the ads
@@ -1852,7 +2176,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
   line-height: 1.25;
   color: var(--nds-text-strong);
@@ -1866,7 +2190,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   align-items: center;
 }
 .nds-field-hint {
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   line-height: 1.4;
   color: var(--nds-text-muted);
 }
@@ -1928,7 +2252,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-combo-grouphd {
   padding: 5px 9px 3px;
-  font-size: 10.5px;
+  font-size: var(--nds-font-size-micro-plus);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1950,6 +2274,12 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   flex: none;
   margin-right: 7px;
 }
+.nds-listbox-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nds-listbox-trailing {
+  margin-left: auto; max-width: 36%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--nds-text-muted); font-size: var(--nds-font-size-sm);
+}
 .nds-listbox-lead img,
 .nds-listbox-lead svg {
   display: block;
@@ -1963,12 +2293,16 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 /* Listbox dense tiers, matching Button/Input/Select exactly (13 / 12.5 / 11.5). Without these a
    Listbox trigger sat at 13px beside 11.5px grid fields. */
 .nds-listbox.sm .nds-listbox-btn {
-  padding: 5px 9px;
-  font-size: 12.5px;
+  /* On the `sm` control tier (28px), like the buttons it stands beside: `5px 9px` plus the line
+     box measured 31px in a 40px bar (2026-09-04, CT.1). */
+  height: var(--nds-control-h-sm);
+  padding: 0 9px;
+  line-height: 1.1;
+  font-size: var(--nds-font-size-sm-plus);
 }
 .nds-listbox.xs .nds-listbox-btn {
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
 }
 .nds-listbox.xs .nds-listbox-btn .chev,
 .nds-listbox.sm .nds-listbox-btn .chev {
@@ -2000,15 +2334,15 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-grid.sm tbody td {
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
 }
 .nds-grid.xs thead th {
   padding: 5px 9px;
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
 }
 .nds-grid.xs tbody td {
   padding: 5px 9px;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
 }
 /* Chips ride the density tier. `Pill` and `Tag` are fixed at 11px, so in a compacted grid they
    stayed put while the text around them stepped down — leaving the chip the biggest thing in the
@@ -2104,7 +2438,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   gap: 0 12px;
   padding: 9px 0;
   border-bottom: 1px solid var(--nds-border-subtle);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
 }
 .nds-bmk:last-child { border-bottom: none; }
 .nds-bmk-label { font-weight: 600; color: var(--nds-text-strong); min-width: 0; }
@@ -2117,8 +2451,8 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-bmk-tick { position: absolute; top: 4px; width: 1px; height: 10px; background: var(--nds-border-subtle); }
 .nds-bmk-fill { position: absolute; top: 5px; height: 8px; background: var(--nds-primary); }
-.nds-bmk-note { font-size: 11.5px; color: var(--nds-text-3); line-height: 18px; }
-.nds-bmk-verdict { text-align: right; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nds-bmk-note { font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-3); line-height: 18px; }
+.nds-bmk-verdict { text-align: right; font-weight: 700; font-size: var(--nds-font-size-sm-plus); font-variant-numeric: tabular-nums; }
 .nds-bmk.is-ahead .nds-bmk-verdict { color: var(--nds-success-strong); }
 .nds-bmk.is-behind .nds-bmk-verdict { color: var(--nds-warning-strong); }
 .nds-bmk.is-level .nds-bmk-verdict,
@@ -2156,11 +2490,11 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-savedchip-main {
   display: inline-flex; align-items: center; gap: 6px;
   border: 0; background: transparent; cursor: pointer;
-  padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--nds-text-strong);
+  padding: 4px 9px; font: inherit; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-strong);
 }
 .nds-savedchip.is-active .nds-savedchip-main { color: var(--nds-primary); font-weight: 600; }
 .nds-savedchip-meta {
-  font-size: 10.5px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
+  font-size: var(--nds-font-size-micro-plus); color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
 }
 .nds-savedchip-act {
   display: inline-flex; align-items: center; justify-content: center;
@@ -2179,7 +2513,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    surface, the corner and the fade. `.nds-thumb-preview` portals to <body>, above the grid. */
 .nds-thumb { position: relative; flex-shrink: 0; display: inline-block; line-height: 0; }
 .nds-thumb-btn { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm); }
-.nds-thumb-btn:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); }
+.nds-thumb-btn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
 .nds-thumb-img { display: block; object-fit: cover; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); opacity: 0; transition: opacity 150ms ease; }
 .nds-thumb-img.is-loaded { opacity: 1; }
 .nds-thumb-skel { position: absolute; inset: 0; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); animation: nds-thumb-pulse 1.6s ease-in-out infinite; }
@@ -2201,11 +2535,11 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-kv.dense { row-gap: 6px; }
 .nds-kv-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .nds-kv dt {
-  margin: 0; font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  margin: 0; font-size: var(--nds-font-size-xs); font-weight: 600; letter-spacing: .04em;
   text-transform: uppercase; color: var(--nds-text-2);
 }
-.nds-kv dd { margin: 0; font-size: 13px; color: var(--nds-text); overflow-wrap: anywhere; }
-.nds-kv-hint { display: block; margin-top: 1px; font-size: 11.5px; color: var(--nds-text-2); }
+.nds-kv dd { margin: 0; font-size: var(--nds-font-size-base); color: var(--nds-text); overflow-wrap: anywhere; }
+.nds-kv-hint { display: block; margin-top: 1px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
 @media (max-width: 640px) {
   .nds-kv[data-columns='2'], .nds-kv[data-columns='3'] { grid-template-columns: minmax(0, 1fr); }
 }
@@ -2226,3 +2560,239 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   padding-right: 8px;
   flex: none;
 }
+
+
+/* Visually hidden, still announced. The DS had no such utility until PressableRow's `description`
+ * needed one (hub #657). NOT `display:none` or `visibility:hidden` — both remove the node from the
+ * accessibility tree, which is the opposite of the requirement. The 1px-clip form is the one that
+ * keeps it readable by assistive tech. */
+.nds-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── PressableRow ───────────────────────────────────────────────────────────────────────────────
+ * The whole row activates, and it can still hold its own controls. The primary action is a real
+ * `<button>`; its ::after stretches over the row, so a click anywhere hits it. `.nds-prow-actions`
+ * carries `z-index: 1` and therefore sits ABOVE that overlay — nested controls are unreachable from
+ * the row's button by construction, with no event guard to keep in sync (hub #648).
+ * ⚠ Text under the overlay is not selectable. The row is a control.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-prow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.nds-prow:hover { background: var(--nds-surface-hover); }
+.nds-prow.is-active { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-prow.is-current { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-prow.is-disabled { opacity: 0.55; }
+.nds-prow.is-disabled:hover { background: var(--nds-surface); }
+
+.nds-prow-leading { display: flex; align-items: center; flex: none; pointer-events: none; }
+.nds-prow-action {
+  /* a real button that reads as row text */
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.nds-prow.is-disabled .nds-prow-action { cursor: default; }
+/* The overlay. `inset: 0` resolves against .nds-prow, the nearest positioned ancestor. */
+.nds-prow-action::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+/* The ring belongs on the ROW, not on the label — the hit area is what is focused. */
+.nds-prow-action:focus-visible { outline: none; }
+.nds-prow-action:focus-visible::after {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+  border-radius: var(--nds-radius-lg);
+}
+
+.nds-prow-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  min-width: 0;
+}
+/* 🔴 `position: relative` is the load-bearing line, NOT the z-index. Measured by mutation:
+   with z-index removed, a click at 93% of the row still reaches the nested control — because among
+   positioned elements at `z-index: auto` the LATER one in DOM order paints on top, and this region
+   follows the button. Make it `position: static` and the same click hits the row instead.
+   The z-index is kept as insurance: it pins the order if the overlay is ever given a z-index of its
+   own, at which point DOM order would stop deciding. An earlier version of this comment claimed the
+   z-index was the contract — it was not, and the mutation test is what said so. */
+.nds-prow-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* Shell-anchored secondary navigation uses the shared drawer behavior. */
+.nds-drawer.from-left { left: 0; right: auto; animation-name: nds-slidein-left; }
+.nds-drawer-bd.transparent { background: transparent; }
+@keyframes nds-slidein-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.nds-menu [role='menuitem'][data-selected='true'] { background: var(--nds-primary-soft); color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-menu [role='menuitem'][data-selected='true']:hover { background: var(--nds-primary-soft); text-decoration: underline; }
+.nds-menu [role='menuitem']:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .nds-drawer { animation: none; } }
+
+/* OrderedList: shared axis, value and priority ordering. */
+.nds-ordered-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nds-space-6); }
+.nds-ordered-list-item { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-6); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); color: var(--nds-text); background: var(--nds-surface); }
+.nds-ordered-list-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nds-ordered-list-item [draggable='true'] { cursor: grab; }
+
+/* A full editor hosted below the workspace header. Existing dock/record overlays retain their geometry. */
+.nds-drawer-embedded {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.nds-drawer-embedded > .nds-drawer-h,
+.nds-drawer-embedded > .nds-drawer-f { flex: none; flex-wrap: wrap; }
+.nds-drawer-embedded > .nds-drawer-h { flex-wrap: nowrap; align-items: flex-start; }
+.nds-drawer-embedded > .nds-drawer-h > .nds-drawer-ht { flex: 1; overflow-wrap: anywhere; }
+.nds-drawer-embedded > .nds-drawer-b { min-height: 0; }
+/* Media composition: uncropped previews, explicit selection, visible action targets. */
+.nds-media-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 244px), 1fr)); gap: var(--nds-space-16); list-style: none; padding: 0; margin: 0; }
+.nds-media-gallery > li { min-width: 0; }
+.nds-media-card { min-width: 0; overflow: hidden; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); background: var(--nds-surface); color: var(--nds-text); }
+.nds-media-card.is-selected { border-color: var(--nds-primary); box-shadow: inset 0 0 0 1px var(--nds-primary); }
+.nds-media-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.nds-media-card-marker { flex-shrink: 0; padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); color: var(--nds-text); font-size: var(--nds-font-size-sm); }
+.nds-media-card-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1; padding: var(--nds-space-12); background: var(--nds-surface); color: var(--nds-text); border: 0; border-top: 1px solid var(--nds-border-subtle); border-bottom: 1px solid var(--nds-border-subtle); cursor: zoom-in; }
+.nds-media-card-preview:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -4px; }
+.nds-media-card-preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.nds-media-card-failure { display: flex; flex-direction: column; align-items: center; gap: var(--nds-space-12); font: inherit; }
+.nds-media-card-detail { padding: var(--nds-space-10) var(--nds-space-12); color: var(--nds-text); font-size: var(--nds-font-size-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.nds-media-card-actions { display: flex; align-items: center; gap: var(--nds-space-4); flex-wrap: wrap; padding: var(--nds-space-4) var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
+/* Enhanced readability is opt-in, shared by focused editors and Modal's readable variant. */
+.nds-readable {
+  --nds-text-2: var(--nds-text);
+  --nds-text-3: var(--nds-text);
+  --nds-text-muted: var(--nds-text);
+}
+.nds-readable .nds-field > input::placeholder { color: var(--nds-text-muted); opacity: 1; }
+/* The field owns its focus ring; an inner input outline is clipped into a dark vertical bar. */
+.nds-readable .nds-field > input:focus-visible { outline: none; }
+/* Readability changes contrast and focus, never control size or typography. */
+.nds-readable .nds-btn.primary {
+  background: var(--nds-primary-dark);
+  border-color: var(--nds-primary-dark);
+  color: var(--nds-white);
+}
+.nds-readable :focus-visible {
+  outline: 3px solid var(--nds-text);
+  outline-offset: 2px;
+}
+.nds-readable .nds-combo-pop .active,
+.nds-readable .nds-combo-grouphd { color: var(--nds-text); }
+/* Controlled search and recovery for choices fetched by the host. */
+.nds-async-listbox {
+  display: flex; flex-direction: column; gap: var(--nds-space-8);
+  box-sizing: border-box; min-width: 0; padding: var(--nds-space-8);
+  color: var(--nds-text); background: var(--nds-surface);
+  border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md);
+  box-shadow: var(--nds-shadow-pop);
+}
+.nds-async-listbox > p { margin: 0; }
+.nds-async-listbox-actions { display: flex; justify-content: flex-end; gap: var(--nds-space-8); }
+
+/* Gallery insertion feedback uses the shared focus colour and remains visible without motion. */
+.nds-media-gallery > li[data-drop-target="true"] { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-media-gallery-status { color: var(--nds-text-muted); font-size: var(--nds-font-size-base); }
+
+/* Featured media composition for an anchored gallery; images retain their geometry. */
+.nds-media-gallery.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 136px; gap: var(--nds-space-8); }
+.nds-media-gallery.compact > li:first-child { grid-column: span 2; grid-row: span 2; }
+.nds-media-gallery.compact .nds-media-card { display: flex; flex-direction: column; height: 100%; }
+.nds-media-gallery.compact .nds-media-card-head { justify-content: flex-end; padding: var(--nds-space-4); }
+.nds-media-gallery.compact .nds-media-card-head > span:not(.nds-media-card-marker) { display: none; }
+.nds-media-gallery.compact .nds-media-card-preview { flex: 1; min-height: 0; aspect-ratio: auto; padding: var(--nds-space-4); }
+.nds-media-gallery.compact .nds-media-card-preview img { max-height: 100%; }
+.nds-media-gallery.compact .nds-media-card-actions { justify-content: space-between; flex-wrap: nowrap; }
+.nds-media-gallery.compact .nds-media-card-detail { padding: var(--nds-space-2) var(--nds-space-4); }
+@media (max-width: 420px) { .nds-media-gallery.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Mixed media previews use the original aspect ratio and explicit playback. */
+.nds-media-card-preview { position: relative; }
+.nds-media-card-type { position: absolute; inset-inline-end: var(--nds-space-4); bottom: var(--nds-space-4); display: inline-flex; align-items: center; gap: var(--nds-space-4); padding: var(--nds-space-2) var(--nds-space-4); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); background: var(--nds-surface); color: var(--nds-text); font-size: var(--nds-font-size-xs); }
+.nds-media-preview { display: grid; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); }
+.nds-media-preview-stage { display: grid; place-items: center; min-height: 180px; background: var(--nds-surface-sunken); border-radius: var(--nds-radius-lg); overflow: hidden; }
+.nds-media-preview-stage > img, .nds-media-preview-stage > video { display: block; width: 100%; max-height: 64dvh; object-fit: contain; }
+.nds-media-preview-stage > audio { max-width: 100%; }
+.nds-media-preview-stage > video:focus-visible, .nds-media-preview-stage > audio:focus-visible, .nds-media-preview-transcript > summary:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-preview-fallback { display: grid; justify-items: center; gap: var(--nds-space-12); padding: var(--nds-space-24); text-align: center; }
+.nds-media-preview-fallback p { margin: 0; }
+.nds-media-preview-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.nds-media-preview-transcript { overflow-wrap: anywhere; }
+.nds-media-preview-transcript > summary { cursor: pointer; padding: var(--nds-space-8) 0; }
+.nds-media-preview-transcript > p { white-space: pre-wrap; }
+
+.nds-media-strip { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; overflow: hidden; color: var(--nds-text); }
+.nds-media-strip-thumbnail { position: relative; display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); background: var(--nds-surface); overflow: hidden; }
+.nds-media-strip-thumbnail > img { width: 100%; height: 100%; object-fit: contain; }
+.nds-media-strip-kind { position: absolute; bottom: 0; inset-inline-end: 0; display: flex; padding: 1px; color: var(--nds-text); background: var(--nds-surface); border-start-start-radius: var(--nds-radius-sm); }
+.nds-media-strip-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.nds-media-strip > .nds-tooltip { flex: none; }
+.nds-media-strip-move { display: inline-flex; padding: 0; border: 0; border-radius: var(--nds-radius-sm); background: transparent; color: inherit; cursor: grab; }
+.nds-media-strip-move:active { cursor: grabbing; }
+.nds-media-strip-move[data-drop-target="true"] { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-strip-move:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+
+@media (max-width: 360px) { .nds-media-gallery.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Repeated records: composition, technical assemblies and other paired facts. */
+.nds-record-list, .nds-record-list-item { display: grid; gap: var(--nds-space-8); min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.nds-record-list-item { padding-block: var(--nds-space-8); }
+.nds-record-list-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--nds-space-8); }
+.nds-record-list > button, .nds-record-list-item > button { justify-self: start; }
+
+/* Compact read-only comparison in a card or drawer. */
+.nds-summary-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text); }
+.nds-summary-table th { color: var(--nds-text-2); font-weight: 500; text-align: left; }
+.nds-summary-table th, .nds-summary-table td { height: 24px; padding: 2px 8px; border-bottom: 1px solid var(--nds-border-subtle); overflow-wrap: anywhere; }
+.nds-summary-table th:last-child, .nds-summary-table td:last-child { text-align: right; }
+.nds-ordered-list.compact .nds-ordered-list-item { padding: 0; border: 0; background: transparent; }
+
+.nds-ordered-list .nds-ordered-list-item.dragging { background: var(--nds-surface-hover); }
+.nds-ordered-list-grip { touch-action: none; cursor: grab; }

@@ -51,7 +51,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { AlertTriangle, Check, Info, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useAuth } from '@/lib/auth/AuthProvider'

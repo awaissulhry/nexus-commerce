@@ -1,0 +1,58 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.scrolling_text_product_page
+  if nexus_contract.fields contains 'custom.scrolling_text_product_page'
+    assign nexus_field = nexus_variant.metafields.custom.scrolling_text_product_page
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_section_text = nexus_entry.text.value -%}
+{%- assign nexus_section_background = nexus_entry.background_color.value -%}
+{%- assign nexus_section_text_color = nexus_entry.text_color.value -%}
+{%- if nexus_entry != blank -%}
+{%- if nexus_section_text != blank -%}
+  {%- render 'section-spacing-collapsing' -%}
+
+  <style>
+    #shopify-section-{{ section.id }} {
+      --section-spacing-inline: 0;
+      --scrolling-text-font-size: {% if section.settings.text_size == 'xsmall' %}1.125rem{% elsif section.settings.text_size == 'small' %}2.5rem{% elsif section.settings.text_size == 'medium' %}3.75rem{% elsif section.settings.text_size == 'large' %}5rem{% else %}7.5rem{% endif %};
+    }
+
+    @media screen and (min-width: 700px) {
+      #shopify-section-{{ section.id }} {
+        --scrolling-text-font-size: {% if section.settings.text_size == 'xsmall' %}1.5rem{% elsif section.settings.text_size == 'small' %}3.75rem{% elsif section.settings.text_size == 'medium' %}5rem{% elsif section.settings.text_size == 'large' %}8.75rem{% else %}12.5rem{% endif %};
+      }
+    }
+  </style>
+
+  {%- if section.settings.text_size == 'xsmall' -%}
+    {%- assign is_tight = true -%}
+  {%- endif -%}
+
+  <div {% render 'section-properties', background: nexus_section_background, text_color: nexus_section_text_color, tight: is_tight %}>
+    {%- capture section_content -%}
+      {%- for i in (1..10) -%}
+        <span class="scrolling-text__text heading {% unless forloop.first %}motion-reduce:hidden{% endunless %}" {% unless forloop.first %}aria-hidden="true"{% endunless %}>
+          {%- render 'styled-text', content: nexus_section_text, gradient: section.settings.text_gradient, style: section.settings.text_style -%}
+        </span>
+      {%- endfor -%}
+    {%- endcapture -%}
+
+    <div class="scrolling-text {% if section.settings.scrolling_mode == 'scroll' %}scrolling-text--scroll{% else %}scrolling-text--auto{% endif %}">
+      {%- if section.settings.scrolling_mode == 'scroll' -%}
+        <scrolling-text class="scrolling-text__wrapper">
+          {{- section_content -}}
+        </scrolling-text>
+      {%- else -%}
+        <marquee-text scrolling-speed="{{ section.settings.scrolling_speed }}" class="scrolling-text__wrapper">
+          {{- section_content -}}
+        </marquee-text>
+      {%- endif -%}
+    </div>
+  </div>
+{%- endif -%}
+
+
+{%- endif -%}

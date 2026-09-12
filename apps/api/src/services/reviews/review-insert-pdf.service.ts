@@ -1,3 +1,4 @@
+import { marketLanguages } from '../pim/market-languages.js'
 /**
  * Compliant Amazon review-insert cards (PDF).
  *
@@ -48,14 +49,6 @@ function reviewUrl(asin: string, marketplace: string): string {
 
 type Lang = 'it' | 'de' | 'fr' | 'es' | 'en'
 
-const MARKETPLACE_LANG: Record<string, Lang> = {
-  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', UK: 'en', GB: 'en', IE: 'en',
-}
-
-function langFor(code: string): Lang {
-  return MARKETPLACE_LANG[(code || '').toUpperCase()] || 'en'
-}
-
 // All copy is honest-review only: no incentive, no "positive", no diversion.
 const COPY: Record<Lang, { headline: string; body: (brand: string) => string; cta: string }> = {
   it: {
@@ -95,12 +88,11 @@ const ACCENT = '#dc2626'
 const MUTED = '#555555'
 const FAINT = '#999999'
 
-function drawCard(doc: PDFKit.PDFDocument, brand: string, p: InsertProduct, qr: Buffer, marketplace: string) {
+function drawCard(doc: PDFKit.PDFDocument, brand: string, p: InsertProduct, qr: Buffer, marketplace: string, lang: Lang) {
   const W = doc.page.width
   const M = doc.page.margins.left
   const cx = W / 2
   const innerW = W - 2 * M
-  const lang = langFor(marketplace)
   const copy = COPY[lang]
   const name = p.name.length > 64 ? `${p.name.slice(0, 61)}…` : p.name
 
@@ -143,6 +135,15 @@ function drawCard(doc: PDFKit.PDFDocument, brand: string, p: InsertProduct, qr: 
 export async function buildReviewInsertPdf(input: ReviewInsertInput): Promise<Buffer> {
   const brand = input.brand?.trim() || 'Xavia'
   const products = input.products.filter((p) => p.asin && p.asin.trim())
+  // Resolve before opening a PDF stream: missing reviewed copy must not leave it open.
+  const languages = new Map<string, Lang>()
+  for (const p of products) {
+    const mk = (p.marketplace || input.marketplace || 'IT').toString()
+    if (languages.has(mk)) continue
+    const language = (await marketLanguages('AMAZON', mk))[0]
+    if (!(language in COPY)) throw new Error(`No reviewed review-insert copy is available for ${language} (${mk}).`)
+    languages.set(mk, language as Lang)
+  }
 
   const doc = new PDFDocument({ size: 'A6', margin: 28, autoFirstPage: false })
   const chunks: Buffer[] = []
@@ -165,11 +166,12 @@ export async function buildReviewInsertPdf(input: ReviewInsertInput): Promise<Bu
 
   for (const p of products) {
     const mk = (p.marketplace || input.marketplace || 'IT').toString()
+    const language = languages.get(mk)!
     const url = reviewUrl(p.asin, mk)
     const qr = await QRCode.toBuffer(url, { margin: 1, width: 360, errorCorrectionLevel: 'M' })
     doc.addPage()
     try {
-      drawCard(doc, brand, p, qr, mk)
+      drawCard(doc, brand, p, qr, mk, language)
     } catch (err: any) {
       logger.warn('review-insert card draw failed', { asin: p.asin, error: err?.message })
     }

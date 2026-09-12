@@ -57,8 +57,8 @@ export function startPricingWatchdogCron(): void {
     return
   }
   if (scheduledTask) return
-  scheduledTask = cron.schedule(SCHEDULE, () => {
-    void runPricingWatchdogCron()
+  scheduledTask = cron.schedule(SCHEDULE, async () => {
+    await runPricingWatchdogCron()
   })
   logger.info(`pricing-watchdog cron: scheduled (${SCHEDULE} UTC)`)
 }

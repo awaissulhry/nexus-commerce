@@ -11,26 +11,43 @@
  * Styling: `../theme/grid.css` (`.nds-grid-*`), tokens from `tokens/grid.ts`. No CSS module, so
  * the cell reads the same in a page card, a modal and a drawer.
  */
-import { memo, type ReactNode } from 'react'
+import { memo, useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { ChevronDown, ChevronRight, ExternalLink, MoreHorizontal } from 'lucide-react'
-import type { ICellRendererParams } from 'ag-grid-community'
+import type { ICellRendererParams, IRowNode } from 'ag-grid-community'
 
 import { Button, InfoTip, Pill, TagGlyph, type Tone } from '../../primitives'
 import { CoverageSummary, Menu, Thumbnail, type CoverageChannel, type MenuItemDef } from '../../components'
+import { emptyValueA11y } from './emptyValue'
 import { EMPTY_DASH, formatGridValue, type FormatOptions, type GridValueKind } from './format'
+import { longTextMarkLabel, longTextState, type LongTextCaps } from './longTextState'
+import { readinessMeta, type RowReadinessState } from './readiness'
 
 /* ── the dash ─────────────────────────────────────────────────────────────────────────────── */
 
-export interface EmptyValueProps {
-  /** A measured zero: the dash carries the reason as a title. An unmeasured value carries none. */
-  measuredZero?: boolean
-  title?: string
-}
+/**
+ * 🔴 A UNION, not two optional fields — a measured zero MUST say what was measured.
+ *
+ * The old shape was `{ measuredZero?: boolean; title?: string }`, which let `<EmptyValue
+ * measuredZero />` compile and render `aria-label={undefined}`: an element whose only content is an
+ * em-dash and which has **no accessible name at all**. The unmeasured case, meanwhile, was named
+ * "Not measured". So a screen-reader user heard a name for the value we know nothing about and
+ * silence for the one we measured — the exact inversion of this component's purpose, in the
+ * component that exists to make that distinction audible.
+ *
+ * Found by FE.1 writing a probe (hub #313), latent not live: all 8 `zero: 'dash'` call sites pass a
+ * `zeroTitle` today, so discipline was holding and no operator was affected. The type is what
+ * permitted it, so the type is what changed — the incorrect call is now a compile error rather than
+ * a silent gap that no sighted review can see.
+ */
+export type EmptyValueProps =
+  | { measuredZero: true; title: string }
+  | { measuredZero?: false; title?: never }
 
 export const EmptyValue = memo(function EmptyValue({ measuredZero = false, title }: EmptyValueProps) {
+  const a = emptyValueA11y(measuredZero, title)
   return (
-    <span className="nds-cell-empty" title={measuredZero ? title : undefined} aria-label={measuredZero ? title : 'Not measured'}>
+    <span className="nds-cell-empty" title={a.title} aria-label={a.ariaLabel}>
       {EMPTY_DASH}
     </span>
   )
@@ -48,7 +65,13 @@ export interface NumericCellParams extends FormatOptions {
 export const NumericCell = memo(function NumericCell(p: ICellRendererParams & NumericCellParams) {
   const f = formatGridValue(p.kind ?? 'integer', p.value, { zero: p.zero, dp: p.dp })
   if (f.empty) return <EmptyValue />
-  if (f.measuredZero) return <EmptyValue measuredZero title={typeof p.zeroTitle === 'function' ? p.zeroTitle(p.data) : p.zeroTitle} />
+  if (f.measuredZero) {
+    /* `zeroTitle` is optional on `NumericCellParams` and cannot be made conditional on `zero:
+       'dash'` without a union over `FormatOptions` — so this is the one path where a measured zero
+       can arrive without its reason, and it floors rather than passing `undefined` through. */
+    const t = typeof p.zeroTitle === 'function' ? p.zeroTitle(p.data) : p.zeroTitle
+    return <EmptyValue measuredZero title={t ?? 'Measured zero'} />
+  }
   return <span className={p.muted ? 'nds-cell-muted' : undefined}>{f.text}</span>
 })
 
@@ -296,33 +319,94 @@ export const ProgramChip = memo(function ProgramChip({ program }: { program: 'SP
 
 /* ── sheet cells: long text, readiness, follows-master, required ─────────────────────────── */
 
-export interface LongTextCellParams {
-  /** The tightest cap across the channels this field ships to — the counter turns amber at 80%, red at the cap. */
-  maxLength?: number
-  /** Bytes, not characters (Amazon counts UTF-8 bytes on some fields). */
-  countBytes?: boolean
-  /** Shown when the cell is empty and the field is required. */
-  required?: boolean
+/**
+ * The cap fields as the WIRE states them — `LongTextCellParams` is re-exported from
+ * `longTextState.ts` so the rule and the renderer cannot disagree about their shape.
+ *
+ * 🔴 The old props were `{ maxLength, countBytes }`: a cap plus a UNIT FLAG. That shape is what let
+ * a byte cap be dropped — `product_description` carries `maxBytes: 20000` and reached this cell as
+ * `countBytes: true` with `maxLength: undefined`, so it counted bytes against nothing and reported
+ * the field as fine. Taking the raw caps removes the shape that made the loss expressible.
+ */
+export type { LongTextCaps as LongTextCellParams } from './longTextState'
+
+/**
+ * A title / bullet / description cell: one line, ellipsis, and a MARK for how much room is left
+ * (spec §9.3a). The figures live in the tooltip.
+ *
+ * 🔴 `filled` carries a VISIBLE mark and that is load-bearing, not decoration. `unchecked` — no cap
+ * was supplied for this column — is deliberately SILENT, because it is the majority case (60 of 96
+ * columns) and a mark on most cells would drain the salience from the ones that matter. Silence can
+ * only mean "nothing is known here" while "known and within cap" looks different. **If `filled` is
+ * ever made silent too, that ruling flips and `unchecked` takes the mark instead** (UX.1, §9.3a) —
+ * whoever changes `filled` owns re-reading that line.
+ *
+ * 🔴 The glyphs differ in SHAPE, not only in tone: amber and red are the same mark to a large
+ * minority of operators, so `●` / `◆` / `▲` carry the distinction and the colour reinforces it.
+ */
+const MARK: Record<'filled' | 'near' | 'over', string> = { filled: '●', near: '◆', over: '▲' }
+
+/**
+ * The save reason as TEXT inside the cell, visually hidden.
+ *
+ * 🔴 The tooltip is a HOVER overlay. A screen reader gets nothing from it, a keyboard-only operator
+ * gets nothing from it, and — measured the hard way — a DOM probe walking the cell finds nothing
+ * either, which is how the reason came to be reported as unrendered when it was merely unhoverable
+ * (#662). This node is the second route: same string as the tooltip's first paragraph, because both
+ * read the tracker's `reason` rather than each phrasing it.
+ *
+ * `.nds-vh` is the DS's clip utility (#657) — NOT `display:none`, which would remove it from the
+ * accessibility tree and leave this component doing nothing at all while looking like it worked.
+ */
+export function CellSaveReason({ reason }: { reason?: string }) {
+  if (!reason) return null
+  return <span className="nds-vh">{reason}</span>
 }
 
-const byteLength = (s: string) => new TextEncoder().encode(s).length
+/**
+ * An EMPTY cell that a channel REQUIRES on this row — the one glyph, the one class, the one name,
+ * for every renderer on every scope. Master rendered this span inline and the channel scopes
+ * rendered `—` for the same state (measured 2026-09-04); each sheet now decides WHETHER (the shared
+ * `columnRequiredByAny`) and this decides HOW it looks.
+ */
+export function RequiredValue() {
+  return <span className="nds-cell-required" role="img" aria-label="Required">⚠ required</span>
+}
 
-/** A title / bullet / description cell: one line, ellipsis, a length counter against the tightest channel cap. */
-export const LongTextCell = memo(function LongTextCell(p: ICellRendererParams & LongTextCellParams) {
+export const LongTextCell = memo(function LongTextCell(p: ICellRendererParams & LongTextCaps) {
   const text = p.value == null ? '' : String(p.value)
-  if (!text) return p.required ? <span className="nds-cell-required" role="img" aria-label="Required">⚠ required</span> : <EmptyValue />
-  const n = p.countBytes ? byteLength(text) : text.length
-  const max = p.maxLength
-  const tone = max ? (n >= max ? 'over' : n >= max * 0.8 ? 'near' : 'ok') : 'ok'
+  const reading = longTextState(p.value, p)
+  if (reading.state === 'empty') {
+    return p.required ? <RequiredValue /> : <EmptyValue />
+  }
+  const glyph = reading.state === 'unchecked' ? null : MARK[reading.state]
   return (
-    <span className="nds-cell-longtext" title={text}>
+    /* 🔴 NO `title` here. A renderer that sets one gives the cell a SECOND tooltip, competing with
+       the column's own and hiding the refusal reason behind whichever the pointer rested on. The
+       figures reach the operator through `longTextTooltipLine` in the column's getter — see
+       cellTooltip.ts. The mark's `aria-label` below stays: that is this element's own name, not a
+       claim on the cell's tooltip. */
+    <span className="nds-cell-longtext">
       <span className="nds-cell-longtext-text">{text}</span>
-      {max && <span className={`nds-cell-longtext-count nds-cell-longtext-count-${tone}`}>{n}/{max}</span>}
+      {glyph && (
+        <span
+          className={`nds-cell-longtext-mark nds-cell-longtext-mark-${reading.state}`}
+          role="img"
+          aria-label={longTextMarkLabel(reading)}
+        >
+          {glyph}
+        </span>
+      )}
     </span>
   )
 })
 
-export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+/**
+ * Re-exported from `readiness.ts`, which is the ONE tone/label source for both readiness
+ * vocabularies (programme §3). The private table that used to live here is gone: it was a second
+ * copy, in a `.tsx` the node-environment test suite cannot reach.
+ */
+export type ReadinessState = RowReadinessState
 
 export interface ReadinessValue {
   state: ReadinessState
@@ -332,14 +416,6 @@ export interface ReadinessValue {
   ref?: string
 }
 
-const READINESS: Record<ReadinessState, { tone: Tone; label: string }> = {
-  ready: { tone: 'success', label: 'Ready' },
-  live: { tone: 'success', label: 'Live' },
-  missing: { tone: 'warning', label: 'Missing' },
-  errors: { tone: 'danger', label: 'Errors' },
-  unlisted: { tone: 'neutral', label: 'Not listed' },
-}
-
 /**
  * Per channel × market: can this row ship? `value` is a `ReadinessValue` the page computes (from the
  * publish validator / readiness service). A count on the pill, the reasons on hover.
@@ -347,7 +423,7 @@ const READINESS: Record<ReadinessState, { tone: Tone; label: string }> = {
 export const ReadinessCell = memo(function ReadinessCell(p: ICellRendererParams) {
   const v = p.value as ReadinessValue | null | undefined
   if (!v) return <EmptyValue />
-  const meta = READINESS[v.state]
+  const meta = readinessMeta(v.state, 'row')
   const n = v.issues?.length ?? 0
   const label = n && v.state !== 'live' && v.state !== 'ready' ? `${meta.label} · ${n}` : v.state === 'live' && v.ref ? `${meta.label} · ${v.ref}` : meta.label
   const pill = <Pill tone={meta.tone} size="sm">{label}</Pill>
@@ -434,6 +510,28 @@ export interface ExpandButtonProps {
   expanded: boolean
   onToggle: () => void
   labels?: [collapsed: string, expanded: string]
+}
+
+/**
+ * Whether an AG row node is expanded, as a subscription.
+ *
+ * 🔴 AG re-renders a cell renderer on expand, but it does NOT re-run it with a fresh `node.expanded`
+ * in every path, so a renderer that reads `node.expanded` once draws a chevron that stops matching
+ * the tree it controls. The node's own `expandedChanged` event is the only reliable source.
+ *
+ * In the ENGINE because both sheets' identity band owns the expander now (#719): master had this
+ * hook privately and the channel scope was about to need its own copy, which is the fork the
+ * shared-component rule exists to prevent — two subscriptions to one AG behaviour, drifting apart
+ * the first time AG changes when it fires.
+ */
+export function useExpanded(node: IRowNode): boolean {
+  const [expanded, setExpanded] = useState(!!node.expanded)
+  useEffect(() => {
+    const on = () => setExpanded(!!node.expanded)
+    node.addEventListener('expandedChanged', on)
+    return () => node.removeEventListener('expandedChanged', on)
+  }, [node])
+  return expanded
 }
 
 export const ExpandButton = memo(function ExpandButton({ expanded, onToggle, labels = ['Expand', 'Collapse'] }: ExpandButtonProps) {

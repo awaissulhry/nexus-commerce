@@ -6,7 +6,7 @@
  * (yesterday's utilisation + Limited-by-budget deep link). Honesty footnote:
  * 72h reconciliation, 2×-daily / 30.4×-monthly spend semantics.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { eurC, type PacingPayload } from '../_lib'
 
 export function PacingCard({ pacing }: { pacing: PacingPayload | null }) {

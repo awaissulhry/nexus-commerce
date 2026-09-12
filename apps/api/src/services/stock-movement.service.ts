@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../db.js'
 import type { Prisma } from '@prisma/client'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
@@ -277,7 +278,6 @@ export async function recomputeProductTotalStock(
  *
  * Cached at module level for IT-MAIN since it's the hot path.
  */
-let cachedDefaultLocationId: string | null = null
 async function resolveLocationId(
   tx: Prisma.TransactionClient,
   args: { locationId?: string; warehouseId?: string },
@@ -290,17 +290,15 @@ async function resolveLocationId(
     })
     if (sl) return sl.id
   }
-  if (cachedDefaultLocationId) return cachedDefaultLocationId
-  const itMain = await tx.stockLocation.findUnique({
-    where: { code: 'IT-MAIN' },
+  const itMain = await (await import('./default-stock-location.js')).defaultStockLocation(tx) ?? await tx.stockLocation.findUnique({
+    where: { workspace_code: workspaceKey({ code: 'IT-MAIN' }) },
     select: { id: true },
   })
   if (!itMain) {
     throw new Error(
-      'applyStockMovement: IT-MAIN StockLocation missing — run H.1 backfill',
+      'Choose a default warehouse in this business before changing stock.',
     )
   }
-  cachedDefaultLocationId = itMain.id
   return itMain.id
 }
 

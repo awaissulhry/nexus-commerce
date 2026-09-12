@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * D.3/D.4 — Amazon official Customer Feedback API (v2024-06-01) insights.
  *
@@ -56,7 +57,7 @@ function captureDebug(kind: 'topics' | 'trends', asin: string, payload: unknown)
 
 // ── ASIN + marketplace resolution (reused from SQP, kept local to avoid coupling) ──
 async function resolveMarketplaceId(code: string): Promise<string | null> {
-  const row = await prisma.marketplace.findUnique({ where: { channel_code: { channel: 'AMAZON', code } } }).catch(() => null)
+  const row = await prisma.marketplace.findUnique({ where: { channel_code: workspaceKey({ channel: 'AMAZON', code }) } }).catch(() => null)
   return row?.marketplaceId ?? null
 }
 
@@ -197,7 +198,7 @@ export async function ingestAmazonReviewInsights(args: { marketplaceCode: string
     const product = await prisma.product.findFirst({ where: { amazonAsin: asin }, select: { id: true } }).catch(() => null)
 
     await prisma.amazonReviewInsight.upsert({
-      where: { asin_marketplace: { asin, marketplace: args.marketplaceCode } },
+      where: { asin_marketplace: workspaceKey({ asin, marketplace: args.marketplaceCode }) },
       create: {
         asin, marketplace: args.marketplaceCode, productId: product?.id ?? null,
         starRating: trends.starRating, reviewCount: trends.reviewCount,

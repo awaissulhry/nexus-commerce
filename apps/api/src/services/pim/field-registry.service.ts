@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
 /**
  * Field registry — single source of truth for which fields exist on
  * the Product table, plus channel-scoped and category-scoped extras.
@@ -32,6 +33,17 @@ export type FieldCategory =
   | 'category'
 
 export interface FieldDefinition {
+  familyRules?: Record<string, { required: boolean; sortOrder: number }>
+  validation?: Record<string, unknown>
+  group?: { key: string; label: string }
+  scope?: 'global' | 'per_variant'
+  shape?: 'scalar' | 'list' | 'measure'
+  unitOptions?: string[]
+  cardinality?: { min: number; max: number | null }
+  optionLabels?: Record<string, string>
+  maxLength?: number
+  longText?: boolean
+  localizable?: boolean
   /** Either a Product column name (writes via bulk-patch) or a
    *  prefixed virtual field (amazon_*, ebay_*, attr_*). */
   id: string
@@ -75,7 +87,7 @@ const UNIVERSAL_FIELDS: FieldDefinition[] = [
   // editable in the registry primarily for the ZIP-upload path
   // (description.html files); the spreadsheet grid can edit it too,
   // though it's rarely opened by default since the column is wide.
-  { id: 'description', label: 'Description', type: 'text', category: 'universal', editable: true, width: 320, helpText: 'HTML body shown on listings — best edited via ZIP upload (description.html per product folder)' },
+  { id: 'description', label: 'Description', type: 'text', category: 'universal', editable: true, width: 320, helpText: 'Product description. Supports HTML formatting for listings.' },
 ]
 
 // ── Pricing ────────────────────────────────────────────────────────────
@@ -115,11 +127,11 @@ const IDENTIFIER_FIELDS: FieldDefinition[] = [
 // fields themselves stay editable (select) for explicit changes.
 const PHYSICAL_FIELDS: FieldDefinition[] = [
   { id: 'weightValue', label: 'Weight', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "5kg" or "5.5 lb" — the unit is auto-detected' },
-  { id: 'weightUnit', label: 'Wt Unit', type: 'select', options: ['kg', 'g', 'lb', 'oz'], category: 'physical', editable: true, width: 80 },
+  { id: 'weightUnit', label: 'Weight unit', type: 'select', options: ['kg', 'g', 'lb', 'oz'], category: 'physical', editable: true, width: 110 },
   { id: 'dimLength', label: 'Length', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
   { id: 'dimWidth', label: 'Width', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
   { id: 'dimHeight', label: 'Height', type: 'number', category: 'physical', editable: true, width: 100, helpText: 'Type "60cm" or "23.6in" — the unit is auto-detected' },
-  { id: 'dimUnit', label: 'Dim Unit', type: 'select', options: ['cm', 'mm', 'in'], category: 'physical', editable: true, width: 80 },
+  { id: 'dimUnit', label: 'Dimension unit', type: 'select', options: ['cm', 'mm', 'in'], category: 'physical', editable: true, width: 120 },
 ]
 
 // ── Channel-scoped fields ─────────────────────────────────────────────
@@ -398,6 +410,52 @@ export async function getAvailableFields(
  * The optional `context` narrows the search and is recommended when
  * multiple categories define the same attr name.
  */
+/**
+ * F6 — parsed `attr_*` definitions, memoised per marketplace.
+ *
+ * Measured 2026-09-02 before this cache: **4.3 s per `getFieldDefinition` call**
+ * (5235 / 4305 / 3921 / 3737 ms), because every call loaded and re-parsed all
+ * **17** cached DE schemas. A bulk PATCH of N attribute changes paid that N
+ * times; a 50-row cascade of ONE field ≈ **215 s** in registry lookups alone.
+ *
+ * Invalidation is the schema's own freshness stamp — `max(fetchedAt)` for the
+ * marketplace — so a schema refresh changes the key and the parse happens again.
+ * A TTL would have been wrong in both directions: stale after a refresh, and
+ * re-parsing for nothing when none happened. The stamp costs one indexed
+ * aggregate against 17 JSON parses.
+ */
+const attrDefCache = new WorkspaceCache<string, { stamp: string; defs: Map<string, FieldDefinition> }>()
+
+async function attrDefsFor(marketplace: string): Promise<Map<string, FieldDefinition>> {
+  const { default: prisma } = await import('../../db.js')
+  const rows = (await prisma.$queryRawUnsafe(
+    `SELECT COALESCE(max("fetchedAt")::text, '') AS stamp, count(*)::int AS n
+     FROM "CategorySchema" WHERE channel='AMAZON' AND marketplace=$1 AND "isActive"=true`,
+    marketplace,
+  )) as { stamp: string; n: number }[]
+  // The COUNT joins the stamp deliberately: a row deleted without any newer
+  // fetch leaves `max(fetchedAt)` unchanged, and the set has still changed.
+  const stamp = `${rows[0]?.stamp ?? ''}:${rows[0]?.n ?? 0}`
+  const hit = attrDefCache.get(marketplace)
+  if (hit && hit.stamp === stamp) return hit.defs
+
+  const defs = new Map<string, FieldDefinition>()
+  const cached = await loadCachedSchemas(marketplace, [])
+  const { schemaToFieldDefinitions } = await import('./schema-to-fields.js')
+  for (const row of cached) {
+    for (const f of schemaToFieldDefinitions({ productType: row.productType, schemaDefinition: row.schemaDefinition })) {
+      if (!defs.has(f.id)) defs.set(f.id, f)
+    }
+  }
+  attrDefCache.set(marketplace, { stamp, defs })
+  return defs
+}
+
+/** Exported for tests and for a refresh path that wants to drop it explicitly. */
+export function clearAttrDefCache(): void {
+  attrDefCache.clear()
+}
+
 export async function getFieldDefinition(
   id: string,
   context: { marketplace?: string | null; productTypes?: string[] } = {},
@@ -420,18 +478,10 @@ export async function getFieldDefinition(
   if (!context.marketplace) return undefined
 
   try {
-    const types = (context.productTypes ?? []).filter(Boolean)
-    const cached = await loadCachedSchemas(context.marketplace, types)
-    for (const row of cached) {
-      const fromSchema = (
-        await import('./schema-to-fields.js')
-      ).schemaToFieldDefinitions({
-        productType: row.productType,
-        schemaDefinition: row.schemaDefinition,
-      })
-      const hit = fromSchema.find((f) => f.id === id)
-      if (hit) return hit
-    }
+    // The memo is built over ALL of the marketplace's types, which is what the
+    // uncached path effectively scanned anyway when `productTypes` was empty —
+    // the PATCH validator never knows which type an `attr_*` belongs to.
+    return (await attrDefsFor(context.marketplace)).get(id)
   } catch {
     /* fall through */
   }

@@ -1,3 +1,5 @@
+import { storedPresentationValues } from './ebay-theme-axes.js'
+import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
 import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey, canonicalizeRowAspects } from './ebay-theme-axes.js'
@@ -289,6 +291,7 @@ export async function createSharedListing(
   const addFn = ctx.addFixedPriceItemFn ?? addFixedPriceItem
 
   try {
+    await assertLegacyPresentationPublishAllowed({ sku: parentSku, marketplace: market })
     // Incident #23 — the adopt belt must never bow to a CORPSE. A membership
     // (or row ItemID) can reference a listing that has since been ended
     // (deleted pre-sweep-fix, ended in Seller Hub…). Verify liveness with
@@ -372,8 +375,7 @@ export async function createSharedListing(
           select: { platformAttributes: true },
         })
         const pa = (parentCl?.platformAttributes ?? {}) as Record<string, unknown>
-        const stored = (pa._axisValueOrder ?? pa._axisSortOrder) as Record<string, string[]> | undefined
-        if (stored && typeof stored === 'object') valueOrderByAxis = stored
+        valueOrderByAxis = storedPresentationValues(pa)
       }
     } catch { /* order fallback remains deterministic without it */ }
 

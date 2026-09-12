@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { RefreshCw, X } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { cn } from '@/lib/utils'
 
 interface Props {

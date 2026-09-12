@@ -1,3 +1,4 @@
+import { scopePublicToken } from '../lib/workspace-public-links.js'
 /**
  * PO.9 — Supplier-side email + ack URL minting.
  *
@@ -39,7 +40,7 @@ function ackBaseUrl(): string {
  * encoding.
  */
 function mintToken(): string {
-  return crypto.randomBytes(32).toString('base64url')
+  return scopePublicToken(crypto.randomBytes(32).toString('base64url'))
 }
 
 interface SendOptions {

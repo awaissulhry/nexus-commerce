@@ -1,0 +1,14 @@
+-- #732 / PES.5 — the SHEET's market a cell formula was authored in.
+--
+-- ADDITIVE ONLY: one nullable column, nothing dropped, no existing row changes
+-- meaning, and it is NOT part of the coordinate unique key.
+--
+-- Why it is not `marketplace`: that column is the LISTING coordinate and is ''
+-- for a master-scope formula, while the column key set a `$ref` may name is
+-- per-market (measured: 40 column keys on IT, 35 on DE for the same family).
+-- Without this, a saved master formula could not detect an unknown COLUMN
+-- reference, only an unknown attribute one.
+--
+-- NULL means "authored before this column existed"; the write path falls back to
+-- the attribute-only universe for those rather than inventing a market.
+ALTER TABLE "CellFormula" ADD COLUMN IF NOT EXISTS "market" TEXT;

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import prisma from '../../db.js'
 
 export interface DetectedGroup {
@@ -222,7 +223,7 @@ export async function applyGroupings(approvedGroups: ApprovedGroup[]) {
       }
 
       // Create master product (or reuse if SKU collision)
-      let master = await prisma.product.findUnique({ where: { sku: group.masterSku } })
+      let master = await prisma.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: group.masterSku }) } })
       if (!master) {
         master = await prisma.product.create({
           data: {

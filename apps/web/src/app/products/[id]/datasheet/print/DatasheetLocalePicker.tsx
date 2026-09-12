@@ -16,7 +16,8 @@
  */
 
 import { useTransition } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 
 type DatasheetLocale = 'en' | 'it'
 const LOCALES: DatasheetLocale[] = ['en', 'it']

@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { Button } from '@/design-system/primitives'
 import { AlertTriangle, ExternalLink, Mail, Eye, Send, CheckCircle2, Undo2, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'

@@ -20,11 +20,13 @@
 // where the fetch patch adds credentials. Server-side this page 401'd into
 // zeroed KPIs for everyone.
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { MediaSourceLibrary } from '@/app/_shared/media/MediaSourceLibrary'
+import { PageHeader as MediaPageHeader } from '@/design-system/patterns'
+import { Button } from '@/design-system/primitives'
+import Link from '@/lib/workspaces/Link'
 import { Image as ImageIcon } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import PageHeader from '@/components/layout/PageHeader'
-import { useTranslations } from '@/lib/i18n/use-translations'
 import ContentHubClient from './ContentHubClient'
 import type { OverviewPayload } from './_lib/types'
 
@@ -65,7 +67,18 @@ async function fetchOverview(): Promise<{
 }
 
 export default function ContentHubPage() {
-  const { t } = useTranslations()
+  return <div className="space-y-4">
+    <MediaPageHeader title="Media library" subtitle="Browse your connected store’s images, videos and files." actions={<>
+      <Button asChild variant="quiet"><Link href="/marketing/content/mapping">Mapping</Link></Button>
+      <Button asChild variant="quiet"><Link href="/marketing/content/brand-brain">Brand Brain</Link></Button>
+      <Button asChild variant="quiet"><Link href="/marketing/content/analytics">Analytics</Link></Button>
+      <Button asChild variant="quiet"><Link href="/marketing/content/feeds">Channel feeds</Link></Button>
+    </>} />
+    <Suspense fallback={<p role="status">Loading media library…</p>}><MediaSourceLibrary nexusLibrary={<NexusContentLibrary />} /></Suspense>
+  </div>
+}
+
+function NexusContentLibrary() {
   const [result, setResult] = useState<{
     data: OverviewPayload
     error: string | null
@@ -84,27 +97,12 @@ export default function ContentHubPage() {
   const apiBase = getBackendUrl()
 
   if (!result) {
-    return (
-      <div className="space-y-4" aria-busy="true">
-        <PageHeader
-          title={t('marketingContent.title')}
-          description={t('marketingContent.description')}
-        />
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
-          {Array.from({ length: 7 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-16 animate-pulse rounded-md border border-default bg-slate-100 dark:border-slate-800 dark:bg-slate-800"
-            />
-          ))}
-        </div>
-        <div className="h-64 animate-pulse rounded-lg border border-default bg-slate-100 dark:border-slate-800 dark:bg-slate-800" />
-      </div>
-    )
+    return <p role="status">Loading Nexus assets…</p>
   }
 
   return (
     <ContentHubClient
+      embedded
       overview={result.data}
       overviewError={result.error}
       apiBase={apiBase}

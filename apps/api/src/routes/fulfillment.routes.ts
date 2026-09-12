@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -647,10 +648,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/fulfillment/cycle-counts/due', async (request, reply) => {
     try {
       const q = request.query as { locationCode?: string; limit?: string }
-      const code = q.locationCode ?? 'IT-MAIN'
+      const code = q.locationCode ?? (await (await import('../services/default-stock-location.js')).defaultStockLocation())?.code ?? 'IT-MAIN'
       const limit = Math.min(500, Math.max(1, parseInt(q.limit ?? '100', 10)))
       const location = await prisma.stockLocation.findUnique({
-        where: { code }, select: { id: true, code: true },
+        where: { workspace_code: workspaceKey({ code: code }) }, select: { id: true, code: true },
       })
       if (!location) {
         return reply.code(404).send({ error: `Location ${code} not found` })
@@ -5206,7 +5207,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const items = Array.isArray(body.items) ? body.items : []
       if (items.length === 0) return reply.code(400).send({ error: 'items[] required' })
 
-      if (!isFbaInboundConfigured()) {
+      if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
           error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
         })
@@ -5343,7 +5344,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         pageType?: any; labelType?: any
         numberOfPackages?: number; packageLabelsToPrint?: string[]; numberOfPallets?: number
       }
-      if (!isFbaInboundConfigured()) {
+      if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
           error: 'SP-API not configured. Set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AMAZON_MARKETPLACE_ID.',
         })
@@ -5402,7 +5403,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
   // every 15 min from index.ts on startup.
   fastify.post('/fulfillment/fba/poll-status', async (_request, reply) => {
     try {
-      if (!isFbaInboundConfigured()) {
+      if (!(await isFbaInboundConfigured())) {
         return reply.code(503).send({
           error: 'SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)',
         })
@@ -6309,7 +6310,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
       const selected = project.candidates[0]
       if (selected) {
         await prisma.supplierProduct.upsert({
-          where: { supplierId_productId: { supplierId: selected.supplierId, productId: product.id } },
+          where: { supplierId_productId: workspaceKey({ supplierId: selected.supplierId, productId: product.id }) },
           update: { costCents: selected.quotedCostCents ?? undefined, factoryName: project.name },
           create: { supplierId: selected.supplierId, productId: product.id, costCents: selected.quotedCostCents ?? null, factoryName: project.name, isPrimary: true },
         })
@@ -6547,7 +6548,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
       const result = await prisma.$transaction(async (tx) => {
         const row = await tx.supplierProduct.upsert({
-          where: { supplierId_productId: { supplierId, productId: productId! } },
+          where: { supplierId_productId: workspaceKey({ supplierId, productId: productId! }) },
           create: { supplierId, productId: productId!, ...sanitized.data },
           update: sanitized.data,
         })
@@ -6576,7 +6577,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
 
         const result = await prisma.$transaction(async (tx) => {
           const row = await tx.supplierProduct.update({
-            where: { supplierId_productId: { supplierId, productId } },
+            where: { supplierId_productId: workspaceKey({ supplierId, productId }) },
             data: sanitized.data,
           })
           if (row.isPrimary) await wirePrimarySupplier(tx, productId, supplierId)
@@ -6604,7 +6605,7 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
         }
         await prisma.$transaction(async (tx) => {
           await tx.supplierProduct
-            .delete({ where: { supplierId_productId: { supplierId, productId } } })
+            .delete({ where: { supplierId_productId: workspaceKey({ supplierId, productId }) } })
             .catch((e: any) => {
               if (e?.code !== 'P2025') throw e
             })
@@ -6683,12 +6684,12 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
             continue
           }
           const existing = await prisma.supplierProduct.findUnique({
-            where: { supplierId_productId: { supplierId, productId } },
+            where: { supplierId_productId: workspaceKey({ supplierId, productId }) },
             select: { id: true },
           })
           await prisma.$transaction(async (tx) => {
             const sp = await tx.supplierProduct.upsert({
-              where: { supplierId_productId: { supplierId: supplierId!, productId } },
+              where: { supplierId_productId: workspaceKey({ supplierId: supplierId!, productId }) },
               create: { supplierId: supplierId!, productId, ...sanitized.data },
               update: sanitized.data,
             })
@@ -7206,10 +7207,10 @@ const fulfillmentRoutes: FastifyPluginAsync = async (fastify) => {
           if (!r.productId || !Number.isFinite(r.landedCostCents) || r.landedCostCents <= 0) continue
           await prisma.supplierProduct.upsert({
             where: {
-              supplierId_productId: {
+              supplierId_productId: workspaceKey({
                 supplierId: po.supplierId,
                 productId: r.productId,
-              },
+              }),
             },
             update: {
               lastLandedCostCents: Math.round(r.landedCostCents),
@@ -12433,7 +12434,7 @@ Return ONLY valid JSON, no prose:
       }
       const product = await prisma.product.findUnique({ where: { id: productId }, select: { sku: true } })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
-      const supplierId = body.supplierId ?? (await prisma.replenishmentRule.findUnique({ where: { productId } }))?.preferredSupplierId ?? null
+      const supplierId = body.supplierId ?? (await prisma.replenishmentRule.findUnique({ where: { workspace_productId: workspaceKey({ productId: productId }) } }))?.preferredSupplierId ?? null
 
       const po = await prisma.purchaseOrder.create({
         data: {
@@ -14837,7 +14838,7 @@ Return ONLY valid JSON, no prose:
             integrationId: body.integrationId,
           }))
         : null
-      const existing = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const existing = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       const data = {
         code: code as any,
         name: code === 'SENDCLOUD' ? 'Sendcloud' : code === 'AMAZON_BUY_SHIPPING' ? 'Amazon Buy Shipping' : 'Manual',
@@ -14846,7 +14847,7 @@ Return ONLY valid JSON, no prose:
         defaultServiceMap: body.defaultServiceMap ?? null,
       }
       const upserted = existing
-        ? await prisma.carrier.update({ where: { code: code as any }, data })
+        ? await prisma.carrier.update({ where: { workspace_code: workspaceKey({ code: code as any }) }, data })
         : await prisma.carrier.create({ data })
 
       // CR.19: audit-log connect events so the drawer's Activity tab
@@ -14932,7 +14933,7 @@ Return ONLY valid JSON, no prose:
       // dryRun flag so post-incident forensics can tell mocked passes
       // from real verifications.
       const carrierRow = await prisma.carrier.findUnique({
-        where: { code: 'SENDCLOUD' },
+        where: { workspace_code: workspaceKey({ code: 'SENDCLOUD' }) },
         select: { id: true },
       })
       if (carrierRow) {
@@ -14958,7 +14959,7 @@ Return ONLY valid JSON, no prose:
     try {
       const { code } = request.params as { code: string }
       const body = (request.body ?? {}) as { purge?: boolean }
-      const existing = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const existing = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!existing) return reply.code(404).send({ error: 'Carrier not connected' })
 
       // CR.18: by default a soft-disconnect — flips isActive false +
@@ -14978,7 +14979,7 @@ Return ONLY valid JSON, no prose:
               data: { status: 'CANCELLED' },
             })
             await tx.carrier.update({
-              where: { code: code as any },
+              where: { workspace_code: workspaceKey({ code: code as any }) },
               data: {
                 isActive: false,
                 credentialsEncrypted: null,
@@ -14991,7 +14992,7 @@ Return ONLY valid JSON, no prose:
             return { mappings: mappingsCount.count, pickupsCancelled: pickupsCount.count }
           })
         : (await prisma.carrier.update({
-            where: { code: code as any },
+            where: { workspace_code: workspaceKey({ code: code as any }) },
             data: { isActive: false, credentialsEncrypted: null, lastError: null, lastErrorAt: null },
           }), { mappings: 0, pickupsCancelled: 0 })
 
@@ -15065,7 +15066,7 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/carriers/:code/mappings', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return { items: [] }
       const items = await prisma.carrierServiceMapping.findMany({
         where: { carrierId: carrier.id },
@@ -15100,7 +15101,7 @@ Return ONLY valid JSON, no prose:
       if (!body.channel || !body.service?.externalId || !body.service?.name) {
         return reply.code(400).send({ error: 'channel + service.externalId + service.name required' })
       }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return reply.code(404).send({ error: 'Carrier not found' })
 
       // Upsert the CarrierService row keyed on (carrierId, externalId).
@@ -15110,7 +15111,7 @@ Return ONLY valid JSON, no prose:
       const { classifyServiceTier } = await import('../services/sendcloud/tier-classifier.js')
       const tier = body.service.tier ?? classifyServiceTier(body.service.name, body.service.carrierSubName)
       const service = await prisma.carrierService.upsert({
-        where: { carrierId_externalId: { carrierId: carrier.id, externalId: body.service.externalId } },
+        where: { carrierId_externalId: workspaceKey({ carrierId: carrier.id, externalId: body.service.externalId }) },
         create: {
           carrierId: carrier.id,
           externalId: body.service.externalId,
@@ -15190,7 +15191,7 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/carriers/:code/accounts', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return { items: [] }
       const items = await prisma.carrierAccount.findMany({
         where: { carrierId: carrier.id },
@@ -15240,7 +15241,7 @@ Return ONLY valid JSON, no prose:
       if (!body.accountLabel?.trim()) {
         return reply.code(400).send({ error: 'accountLabel required' })
       }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return reply.code(404).send({ error: 'Connect the primary carrier first' })
 
       const { encryptSecret } = await import('../lib/crypto.js')
@@ -15434,7 +15435,7 @@ Return ONLY valid JSON, no prose:
       if (code !== 'SENDCLOUD') {
         return reply.code(400).send({ error: `${code} has no webhook secret to rotate` })
       }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return reply.code(404).send({ error: 'Carrier not connected' })
 
       const crypto = await import('node:crypto')
@@ -15442,7 +15443,7 @@ Return ONLY valid JSON, no prose:
       const plaintext = crypto.randomBytes(32).toString('base64')
       const encrypted = encryptSecret(plaintext)
       await prisma.carrier.update({
-        where: { code: code as any },
+        where: { workspace_code: workspaceKey({ code: code as any }) },
         data: { webhookSecret: encrypted },
       })
 
@@ -15503,7 +15504,7 @@ Return ONLY valid JSON, no prose:
   fastify.get('/fulfillment/carriers/:code/pickups', async (request, reply) => {
     try {
       const { code } = request.params as { code: string }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return { items: [] }
       const items = await prisma.pickupSchedule.findMany({
         where: { carrierId: carrier.id },
@@ -15530,7 +15531,7 @@ Return ONLY valid JSON, no prose:
         contactPhone?: string | null
         notes?: string | null
       }
-      const carrier = await prisma.carrier.findUnique({ where: { code: code as any } })
+      const carrier = await prisma.carrier.findUnique({ where: { workspace_code: workspaceKey({ code: code as any }) } })
       if (!carrier) return reply.code(404).send({ error: 'Carrier not connected' })
 
       const isRecurring = !!body.isRecurring
@@ -15634,13 +15635,13 @@ Return ONLY valid JSON, no prose:
       const { code } = request.params as { code: string }
       const patch = (request.body ?? {}) as Record<string, unknown>
       const existing = await prisma.carrier.findUnique({
-        where: { code: code as any },
+        where: { workspace_code: workspaceKey({ code: code as any }) },
         select: { preferences: true },
       })
       if (!existing) return reply.code(404).send({ error: 'Carrier not connected' })
       const merged = { ...(existing.preferences as any ?? {}), ...patch }
       const updated = await prisma.carrier.update({
-        where: { code: code as any },
+        where: { workspace_code: workspaceKey({ code: code as any }) },
         data: { preferences: merged },
       })
       return { ok: true, preferences: updated.preferences }
@@ -15741,12 +15742,12 @@ Return ONLY valid JSON, no prose:
       // from CR.15 below — this is purely an optimization layer.
       if (!forceFresh) {
         const carrier = await prisma.carrier.findUnique({
-          where: { code: code as any },
+          where: { workspace_code: workspaceKey({ code: code as any }) },
           select: { id: true },
         })
         if (carrier) {
           const cached = await prisma.carrierMetric.findUnique({
-            where: { carrierId_windowDays: { carrierId: carrier.id, windowDays } },
+            where: { carrierId_windowDays: workspaceKey({ carrierId: carrier.id, windowDays }) },
           })
           if (cached) {
             const ageMs = Date.now() - cached.computedAt.getTime()

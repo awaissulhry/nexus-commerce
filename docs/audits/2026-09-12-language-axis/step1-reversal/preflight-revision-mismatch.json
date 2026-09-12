@@ -1,0 +1,14 @@
+{
+  "kind": "media",
+  "marker": "LX1 reversible media probe 2026-09-11T23:42:45.453Z",
+  "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+  "family": "XAVIA GALE",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "base": "http://127.0.0.1:8091/api",
+  "backupPath": "/private/tmp/nexus-lx1-reversal-media-1789170165454.json",
+  "startedAt": "2026-09-11T23:42:45.454Z",
+  "error": "HTTP API must match the exact local DB snapshot before any write.\n+ actual - expected\n\n+ 'c012f59e45b68539b820c88152c1c4ee426dc6e8f92a4ce1c5ea1afc872e91c2'\n- 'c2d423e99647a3eec9940edfe7ec553abc53b862d6d7463c11e1ff465ec15887'\n",
+  "finishedAt": "2026-09-11T23:42:45.604Z"
+}

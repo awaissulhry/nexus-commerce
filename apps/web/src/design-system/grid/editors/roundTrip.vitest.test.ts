@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { CellSaveTracker, roundTripClassRules, SAVED_FADE_MS } from './roundTrip'
 
@@ -62,5 +62,53 @@ describe('roundTripClassRules', () => {
     const r = rules(t)
     t.set('r1', 'bid', 'refused', 'x')
     expect(r('nds-cell-is-refused', undefined, 'bid')).toBe(false)
+  })
+})
+
+describe('CellSaveTracker.clearAll — for a reload that discards the edits (#663)', () => {
+  it('🔴 empties every mark, on every row', () => {
+    /*
+     * Tested on the REAL tracker, not through the writer. `SheetWriter.discard()`'s test uses a
+     * mock tracker, so mutating this method to do nothing left that test green — the mock-hides-
+     * the-collaborator trap, found by mutation. A mark outliving its value is the whole defect
+     * #663 is about: Reload replaced a refused cell's typed value and left the refusal on it.
+     */
+    const t = new CellSaveTracker()
+    t.set('r1', 'name', 'refused', 'Too long')
+    t.set('r2', 'colour', 'saved')
+    expect(t.size).toBe(2)
+    t.clearAll()
+    expect(t.size).toBe(0)
+    expect(t.get('r1', 'name')).toBeUndefined()
+    expect(t.get('r2', 'colour')).toBeUndefined()
+  })
+
+  it('notifies subscribers, so the counters and notes redraw', () => {
+    // Without the emit the map is empty and the footer still says "1 cell blocked".
+    const t = new CellSaveTracker()
+    t.set('r1', 'name', 'refused', 'Too long')
+    const seen = vi.fn()
+    t.subscribe(seen)
+    t.clearAll()
+    expect(seen).toHaveBeenCalled()
+  })
+
+  it('is a no-op when there is nothing to clear — no pointless repaint', () => {
+    const t = new CellSaveTracker()
+    const seen = vi.fn()
+    t.subscribe(seen)
+    t.clearAll()
+    expect(seen).not.toHaveBeenCalled()
+  })
+})
+
+describe('background reads preserve unconfirmed edits', () => {
+  it.each(['saving', 'waiting', 'unknown', 'refused'] as const)('blocks replacement when another cell remains %s', state => {
+    const tracker = new CellSaveTracker()
+    tracker.set('row-a', 'title', state)
+    tracker.set('row-b', 'material', 'saved')
+    expect(tracker.hasUnconfirmedChanges).toBe(true)
+    tracker.clear('row-a', 'title')
+    expect(tracker.hasUnconfirmedChanges).toBe(false)
   })
 })

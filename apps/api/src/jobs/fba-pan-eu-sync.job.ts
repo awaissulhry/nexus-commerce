@@ -79,7 +79,7 @@ export function startFbaPanEuSyncCron(): void {
     logger.error('fba-pan-eu cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runFbaPanEuSyncOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runFbaPanEuSyncOnce() })
   logger.info('fba-pan-eu cron: scheduled', { schedule })
 }
 

@@ -24,7 +24,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronsLeft, ChevronsRight, GripVertical, Pencil, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import './automation-dock.css'

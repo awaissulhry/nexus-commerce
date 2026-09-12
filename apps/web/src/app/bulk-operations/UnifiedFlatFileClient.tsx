@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
 import { useSearchParams } from 'next/navigation'
 import { CalendarClock, Download, History as HistoryIcon, Layers, Upload, Wand2 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import FlatFileGrid from '@/components/flat-file/FlatFileGrid'
 import type {
   BaseRow,

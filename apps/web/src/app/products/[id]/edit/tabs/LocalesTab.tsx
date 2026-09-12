@@ -63,7 +63,6 @@ import {
   clearDraft,
 } from '../_shared/draft-bus/useProductDraftBus'
 
-const SUPPORTED_LOCALES = ['en', 'de', 'fr', 'es', 'nl', 'pl', 'sv'] as const
 
 const LOCALE_DISPLAY: Record<string, { flag: string; label: string }> = {
   it: { flag: '🇮🇹', label: 'Italiano' },
@@ -150,7 +149,8 @@ export default function LocalesTab({
   const { toast } = useToast()
   const confirm = useConfirm()
 
-  const [primaryLanguage, setPrimaryLanguage] = useState<string>('it')
+  const [primaryLanguage, setPrimaryLanguage] = useState<string>('')
+  const [availableLanguages, setAvailableLanguages] = useState<string[]>([])
   const [translations, setTranslations] = useState<TranslationRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -234,9 +234,11 @@ export default function LocalesTab({
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = (await res.json()) as {
         primaryLanguage: string
+        availableLanguages: string[]
         translations: TranslationRow[]
       }
-      setPrimaryLanguage(json.primaryLanguage ?? 'it')
+      setPrimaryLanguage(json.primaryLanguage)
+      setAvailableLanguages(json.availableLanguages ?? [])
       setTranslations(json.translations ?? [])
       // Reseed drafts from server data, preserving any in-flight
       // edits the user has made (their dirty set survives).
@@ -660,7 +662,7 @@ export default function LocalesTab({
   const masterCompleteness = completenessOf(master)
 
   const localesWithRow = new Set(translations.map((r) => r.language))
-  const addable = SUPPORTED_LOCALES.filter(
+  const addable = availableLanguages.filter(
     (l) => l !== primaryLanguage && !localesWithRow.has(l),
   )
 

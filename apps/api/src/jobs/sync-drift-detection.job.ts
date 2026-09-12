@@ -394,8 +394,8 @@ export function startSyncDriftDetectionCron(): void {
     })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('sync-drift-detection', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('sync-drift-detection', async () => {
       const r = await runSyncDriftDetection()
       return `scanned=${r.scanned} priceDrifts=${r.priceDrifts} qtyDrifts=${r.quantityDrifts} logged=${r.conflictsLogged} deduped=${r.conflictsDeduped} errors=${r.errors} durationMs=${r.durationMs}`
     }).catch((err) => {

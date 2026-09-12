@@ -12,6 +12,7 @@ export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent'
 export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
 
 export interface SheetCoordinate {
+  languages?: string[]
   channel: SheetChannel
   marketplace: string
   label: string
@@ -32,9 +33,34 @@ export interface SheetColumn {
   optionLabels?: Record<string, string>
   mode?: 'strict' | 'open'
   requiredBy: string[]
-  maxLength?: number
-  maxBytes?: number
-  capFrom?: string
+  /**
+   * `| null` is DELIBERATELY WIDER THAN THE CONTRACT, and that is the whole justification — there is
+   * no measurement behind it.
+   *
+   * 🔴 Corrected 2026-09-02 (DS.1 challenged it, AG.1 traced it). An earlier version of this comment
+   * claimed "the server SENDS null, measured on `product_description`: `maxLength: null`". **That is
+   * false on this path**, and I had not measured it — I copied the claim from `_studio/sheet/master/
+   * types.ts` and restated it as my own. Traced end to end instead:
+   *   `schema-caps.ts:99`  `typeof v.maxLength === 'number' && v.maxLength > 0 ? v.maxLength : undefined`
+   *   `schema-caps.ts:26`  `maxLength?: number`
+   *   `sheet-columns.service.ts:306` → `SheetColumn.maxLength?: number` (:73)
+   * and the route (`/products/:id/studio/columns`) declares NO response schema, so Fastify applies
+   * no serializer coercion and `JSON.stringify` OMITS an undefined. On this path the field is a
+   * positive number or ABSENT. It is never `null`.
+   *
+   * The nullable `maxLength: number | null` that does exist belongs to `EbayAspect`
+   * (`sheet-columns.service.ts:130`) and the eBay/feed/catalogue paths — a different type that
+   * happens to share the field name. Reaching for it was a type-name homonym.
+   *
+   * So why keep `| null`? Because a consumer may be wider than its producer but must never be
+   * narrower: tolerating a state that cannot arrive costs nothing, while failing to represent one
+   * that can makes the true shape unrepresentable and pushes the next person toward a cast. If
+   * anyone later "corrects" this to `?: number` to match the server, that is a NARROWING dressed as
+   * drift-cleanup — the direction that produced the bug this file was fixed for.
+   */
+  maxLength?: number | null
+  maxBytes?: number | null
+  capFrom?: string | null
   applicableProductTypes?: string[]
   requiredForProductTypes?: string[]
   editable: boolean

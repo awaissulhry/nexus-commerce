@@ -7,7 +7,7 @@
 // browser-initiated navigation (back button, deep links, sidebar
 // click). Tab labels flow through useTranslations().
 
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Tabs, type Tab } from '@/components/ui/Tabs'
 import { useTranslations } from '@/lib/i18n/use-translations'
 

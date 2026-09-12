@@ -1,16 +1,14 @@
-// PRODUCTS REBUILD — universal catalog workspace.
-// One client component (ProductsWorkspace) drives 5 lenses: Grid · Hierarchy ·
-// Coverage · Health · Drafts. URL-driven state, virtualized table, inline
-// quick-edit, faceted filters, saved views, tag + bundle editors, bulk
-// actions across channels via /api/listings/bulk-action.
-
-import ProductsWorkspace from './ProductsWorkspace'
+import { ProductsNextClient } from './next/ProductsNextClient'
+import ProductsNextLayout from './next/layout'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 export const fetchCache = 'force-no-store'
 
 export default function ProductsPage() {
-  // ACP.7b — copilot is mounted globally in the root layout (CopilotMount).
-  return <ProductsWorkspace />
+  return (
+    <ProductsNextLayout>
+      <ProductsNextClient />
+    </ProductsNextLayout>
+  )
 }

@@ -22,7 +22,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Stethoscope, Play, ChevronDown, ChevronRight, CheckCircle2, XCircle, Copy, Check, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, SegmentedControl } from '@/design-system/primitives'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 
 interface ProfileRow { profileId: string; marketplace: string; region: string; accountLabel: string | null; mode: string; isActive: boolean }
 interface ProbeResult {

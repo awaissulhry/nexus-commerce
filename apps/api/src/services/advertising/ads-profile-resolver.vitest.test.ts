@@ -36,8 +36,8 @@ const prismaMock = {
   amazonAdsConnection: {
     findFirst: vi.fn(async ({ where }: { where: { marketplace: string } }) =>
       rows.find((r) => r.marketplace === where.marketplace && r.isActive) ?? null),
-    findUnique: vi.fn(async ({ where }: { where: { profileId: string } }) =>
-      rows.find((r) => r.profileId === where.profileId) ?? null),
+    findUnique: vi.fn(async ({ where }: { where: { workspace_profileId: { profileId: string } } }) =>
+      rows.find((r) => r.profileId === where.workspace_profileId.profileId) ?? null),
     findMany: vi.fn(async () => rows.filter((r) => r.isActive)),
   },
 }

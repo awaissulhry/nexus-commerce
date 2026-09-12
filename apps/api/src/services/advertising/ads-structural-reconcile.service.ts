@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AX-VT.5 — structural reconcile, on a schedule.
  *
@@ -234,11 +235,11 @@ async function openDrift(
   })
   const now = new Date()
   const existing = await prisma.adDrift.findUnique({
-    where: { entityType_entityId_field: { entityType, entityId: e.localId, field } },
+    where: { entityType_entityId_field: workspaceKey({ entityType, entityId: e.localId, field }) },
     select: { id: true, resolvedAt: true },
   })
   await prisma.adDrift.upsert({
-    where: { entityType_entityId_field: { entityType, entityId: e.localId, field } },
+    where: { entityType_entityId_field: workspaceKey({ entityType, entityId: e.localId, field }) },
     create: {
       entityType, entityId: e.localId, externalId: e.externalId,
       marketplace: camp?.marketplace ?? null, entityName: e.label,

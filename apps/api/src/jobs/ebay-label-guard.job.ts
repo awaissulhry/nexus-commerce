@@ -43,8 +43,8 @@ export function startEbayLabelGuardCron(): void {
     return
   }
   const schedule = process.env.NEXUS_EBAY_LABEL_GUARD_SCHEDULE || '15 */6 * * *'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runEbayLabelGuardOnce().catch((err) =>
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runEbayLabelGuardOnce().catch((err) =>
       logger.error('ebay-label-guard: run failed', { error: err instanceof Error ? err.message : String(err) }),
     )
   })

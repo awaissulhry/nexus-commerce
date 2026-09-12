@@ -1,0 +1,103 @@
+- generic: Grid lifecycle QA
+- button "Toggle theme"
+- button "Fail next sheet read"
+- generic: Next read armed; use More → Reload, then Try again.
+- main:
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "Canvas travel bag" [level=1]
+  - generic "TRAVEL-BAG"
+  - generic: Draft
+  - generic: Parent
+  - generic "Every cell saves on its own. There is no page Save.": Autosave on
+  - link "Choose listing destinations":
+    - /url: /products/store-demo/list-wizard
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Not set up" [checked]:
+      - generic: Shared product
+      - generic: ·
+      - generic: Not set up
+    - radio "Shopify Not set up":
+      - generic: Shopify
+      - generic: ·
+      - generic: Not set up
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Content language":
+    - generic: English (en)
+  - region "Information":
+    - text: 3 rows
+    - generic: · Parent · 2 children · Colore × Taglia
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "Required (1)":
+      - text: Required (1)
+    - button "Required 1 column" [pressed]:
+      - generic: Required
+      - generic: 1 column
+    - button "Classification"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Name * Readiness":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Name *":
+            - generic: Name *
+          - columnheader "Readiness":
+            - generic: Readiness
+        - row "Press Space to toggle row selection (unchecked) Collapse children Parent · 20 children TRAVEL-BAG 10% — filled ÷ applicable master attributes Actions for TRAVEL-BAG XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Missing · 1" [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse children Parent · 20 children TRAVEL-BAG 10% — filled ÷ applicable master attributes Actions for TRAVEL-BAG":
+            - button "Collapse children" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: TRAVEL-BAG
+            - img "10% — filled ÷ applicable master attributes":
+              - generic: 10%
+            - button "Actions for TRAVEL-BAG":
+          - gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Missing · 1":
+            - generic: Missing · 1
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-BLUE 9% — filled ÷ applicable master attributes Actions for TRAVEL-BAG-BLUE XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Missing · 1"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-BLUE 9% — filled ÷ applicable master attributes Actions for TRAVEL-BAG-BLUE"':
+            - 'img "Child · Parent SKU: TRAVEL-BAG"': C
+            - generic: TRAVEL-BAG-BLUE
+            - img "9% — filled ÷ applicable master attributes":
+              - generic: 9%
+            - button "Actions for TRAVEL-BAG-BLUE":
+          - gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Missing · 1":
+            - generic: Missing · 1
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-SAND 10% — filled ÷ applicable master attributes Actions for TRAVEL-BAG-SAND XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Missing · 1"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-SAND 10% — filled ÷ applicable master attributes Actions for TRAVEL-BAG-SAND"':
+            - 'img "Child · Parent SKU: TRAVEL-BAG"': C
+            - generic: TRAVEL-BAG-SAND
+            - img "10% — filled ÷ applicable master attributes":
+              - generic: 10%
+            - button "Actions for TRAVEL-BAG-SAND":
+          - gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Missing · 1":
+            - generic: Missing · 1
+    - status:
+      - generic: 3 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- generic "Browser warnings and errors"

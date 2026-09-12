@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * ACP.4a — autonomous agent runtime.
  *
@@ -156,7 +157,7 @@ export async function runAutonomousAgent(
  */
 export async function isAgentScheduleEnabled(key: string): Promise<boolean> {
   const def = await prisma.agentDefinition.findUnique({
-    where: { key },
+    where: { workspace_key: workspaceKey({ key: key }) },
     select: { enabled: true },
   })
   return def ? def.enabled : false
@@ -170,7 +171,7 @@ export async function setAgentEnabled(
   const agent = getAutonomousAgent(key)
   if (!agent) return { ok: false, error: `unknown agent: ${key}` }
   await prisma.agentDefinition.upsert({
-    where: { key },
+    where: { workspace_key: workspaceKey({ key: key }) },
     update: { enabled },
     create: {
       key,

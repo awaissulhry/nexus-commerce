@@ -22,7 +22,10 @@
 // mid-minute, nobody runs anything until its lease expires. A per-tick claim
 // has no such gap: the next tick is simply won by whoever is alive.
 //
-// 🔴 IT FAILS OPEN. If Redis is unreachable the tick RUNS rather than skips.
+// Legacy single-business mode fails open. Business-profile mode requires a
+// renewable Redis lease and skips work when ownership cannot be established.
+// The following description applies only to the legacy flag-off path.
+// If Redis is unreachable the legacy tick RUNS rather than skips.
 // With one replica — which is the deployed reality — a fail-closed lock would
 // silently stop all 117 jobs the moment Redis hiccupped, which is far worse
 // than the duplicate it would be preventing. The lock is a multi-replica
@@ -30,6 +33,10 @@
 
 import nodeCron from 'node-cron'
 import { logger } from '../../utils/logger.js'
+import prisma from '../../db.js'
+import { withWorkspace, workspaceContext } from '../workspace-context.js'
+import { LEGACY_WORKSPACE_ID } from '../workspace-context.js'
+import { runWorkspaceTick } from './workspace-lease.js'
 
 export type ScheduledTask = ReturnType<typeof nodeCron.schedule>
 
@@ -108,16 +115,38 @@ function schedule(
   expression: string,
   handler: (...args: never[]) => void | Promise<void>,
   options?: Parameters<typeof nodeCron.schedule>[2],
+  platform = false,
 ): ScheduledTask {
   const file = callerFile()
   const countKey = `${file}:${expression}`
   const index = registrationCounts.get(countKey) ?? 0
   registrationCounts.set(countKey, index + 1)
   const jobId = jobIdFor(file, expression, index)
+  const registeredScope = workspaceContext()
 
   return nodeCron.schedule(
     expression,
     async (...args: never[]) => {
+      if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+        const scheduledAt = Date.now()
+        const { redis } = await import('../queue.js')
+        if (platform) {
+          await runWorkspaceTick(redis.connection, `${jobId}:platform`, scheduledAt, () => withWorkspace({ workspaceId: LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, async () => { await handler(...args) }))
+          return
+        }
+        // A schedule created within a profile stays there. Global schedules visit
+        // active profiles in bounded pages; every claim includes its profile ID.
+        let after: string | undefined
+        do {
+          const profiles = await prisma.workspace.findMany({ where: { status: 'active', ...(registeredScope ? { id: registeredScope.workspaceId } : {}) }, select: { id: true }, orderBy: { id: 'asc' }, take: 50, ...(after ? { cursor: { id: after }, skip: 1 } : {}) })
+          for (const profile of profiles) {
+            try { await runWorkspaceTick(redis.connection, `${jobId}:workspace:${profile.id}`, scheduledAt, () => withWorkspace(registeredScope ?? { workspaceId: profile.id, actorUserId: null, membershipId: null, roleKeys: [] }, async () => { await handler(...args) })) }
+            catch (error) { logger.error('business profile cron failed', { jobId, workspaceId: profile.id, error: error instanceof Error ? error.message : String(error) }) }
+          }
+          after = profiles.length === 50 ? profiles[profiles.length - 1].id : undefined
+        } while (after)
+        return
+      }
       if (!(await claimTick(jobId))) {
         // Another replica has this minute. Not an error, and not worth a log
         // line 117 times a minute.
@@ -131,6 +160,9 @@ function schedule(
 
 /** Unchanged passthrough — validation is local and has nothing to coordinate. */
 const validate = (expression: string): boolean => nodeCron.validate(expression)
+
+/** Shared inbound queues are drained once, then each verified message selects its profile. */
+export const schedulePlatform = (expression: string, handler: () => Promise<void>, options?: Parameters<typeof nodeCron.schedule>[2]) => schedule(expression, handler, options, true)
 
 export { schedule, validate }
 export default { schedule, validate }

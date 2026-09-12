@@ -4,7 +4,7 @@
  * Overview / Respond / Ask-for-reviews path. "Demote, don't delete."
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Grid, Package, Wrench, Bot, Lightbulb, Upload, SlidersHorizontal, Clock, QrCode, type LucideIcon } from 'lucide-react'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 

@@ -1,0 +1,69 @@
+{%- assign nexus_features_label = 'nexus.features' | t -%}
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign features_metafield = product.metafields.custom.features
+  if nexus_contract.fields contains 'custom.features'
+    assign features_metafield = nexus_variant.metafields.custom.features
+  endif
+-%}
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign features_title = product.metafields.custom.features_title
+  if nexus_contract.fields contains 'custom.features_title'
+    assign features_title = nexus_variant.metafields.custom.features_title
+  endif
+-%}
+{%- if features_metafield.value != blank -%}
+  {%- capture nexus_features_id -%}nexus-features-{{ section.id }}-{{ product.id }}{%- endcapture -%}
+  <nexus-impact-features data-more="{{ 'nexus.show_more' | t | escape }}" data-less="{{ 'nexus.show_less' | t | escape }}">
+    {%- capture nexus_features_content -%}
+      <div class="features-grid" id="{{ nexus_features_id }}">
+        {%- assign nexus_seen_features = '' -%}
+        {%- for item in features_metafield.value -%}
+          {%- capture nexus_feature_key -%}|{{ item.system.id }}|{%- endcapture -%}
+          {%- if item.system.id != blank and nexus_seen_features contains nexus_feature_key -%}{%- continue -%}{%- endif -%}
+          {%- assign nexus_seen_features = nexus_seen_features | append: nexus_feature_key -%}
+          {%- assign item_title = item.title.value -%}
+          {%- if item_title == blank -%}{%- continue -%}{%- endif -%}
+          <button type="button" class="features-card" aria-haspopup="dialog" aria-controls="{{ nexus_features_id }}-dialog-{{ forloop.index }}" aria-label="{{ item_title | escape }} — {{ 'nexus.read_more' | t | escape }}">
+            <span class="features-card__visual">
+              {%- if item.image.value != blank -%}
+                {{- item.image.value | image_url: width: 600 | image_tag: loading: 'lazy', widths: '180, 300, 450, 600', sizes: '(min-width: 1000px) 240px, (min-width: 700px) 300px, 45vw', class: 'features-card__image' -}}
+              {%- endif -%}
+              <span class="features-card__overlay">{{ 'nexus.read_more' | t }}</span>
+            </span>
+            <span class="features-card__title">{{ item_title | escape }}<span class="features-card__action" aria-hidden="true">+</span></span>
+          </button>
+        {%- endfor -%}
+      </div>
+      <button type="button" class="features-show-more" aria-expanded="false" aria-controls="{{ nexus_features_id }}" hidden>
+        <span data-feature-toggle-label>{{ 'nexus.show_more' | t }}</span>
+        <span class="features-show-more__count" data-feature-count></span>
+        <span class="features-show-more__chevron" aria-hidden="true">{%- render 'icon' with 'chevron-bottom-small' -%}</span>
+      </button>
+    {%- endcapture -%}
+    {%- assign nexus_features_heading = features_title.value | default: features_title | default: nexus_features_label -%}
+    {%- render 'accordion', title: nexus_features_heading, content: nexus_features_content, open: true, class: 'features-accordion-group' -%}
+    {%- assign nexus_seen_features = '' -%}
+    {%- for item in features_metafield.value -%}
+      {%- capture nexus_feature_key -%}|{{ item.system.id }}|{%- endcapture -%}
+      {%- if item.system.id != blank and nexus_seen_features contains nexus_feature_key -%}{%- continue -%}{%- endif -%}
+      {%- assign nexus_seen_features = nexus_seen_features | append: nexus_feature_key -%}
+      {%- if item.title.value == blank -%}{%- continue -%}{%- endif -%}
+      <dialog class="features-modal" id="{{ nexus_features_id }}-dialog-{{ forloop.index }}" aria-labelledby="{{ nexus_features_id }}-title-{{ forloop.index }}">
+        <div class="features-modal__header">
+          <h2 class="h5" id="{{ nexus_features_id }}-title-{{ forloop.index }}">{{ item.title.value | escape }}</h2>
+          <button type="button" class="features-modal__close" aria-label="{{ 'nexus.close' | t | escape }}" autofocus>{%- render 'icon' with 'close', width: 20 -%}</button>
+        </div>
+        <div class="features-modal__body">
+          {%- if item.image.value != blank -%}
+            <img class="features-modal__image" data-src="{{ item.image.value | image_url: width: 1200 }}" alt="{{ item.image.value.alt | default: item.title.value | escape }}" width="{{ item.image.value.width }}" height="{{ item.image.value.height }}" decoding="async">
+          {%- endif -%}
+          <div class="prose">{{ item.description | metafield_tag }}</div>
+        </div>
+      </dialog>
+    {%- endfor -%}
+  </nexus-impact-features>
+{%- endif -%}

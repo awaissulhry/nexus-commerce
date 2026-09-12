@@ -72,12 +72,5 @@ export function currencyForMarket(mp: string): string {
   return 'EUR'
 }
 
-// Per-market language (ISO 639-1) — mirrors field-links MARKET_LANG so
-// the cascade translates to the same target languages as manual linking.
-const MARKET_LANG: Record<string, string> = {
-  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', UK: 'en', GB: 'en', US: 'en',
-  NL: 'nl', SE: 'sv', PL: 'pl', BE: 'nl', IE: 'en', AT: 'de', CH: 'de', PT: 'pt', JP: 'ja',
-}
-export function marketLanguage(mp: string): string {
-  return MARKET_LANG[(mp ?? '').toUpperCase()] ?? 'en'
-}
+// Language authority is Marketplace.languages; consumers pass their channel.
+

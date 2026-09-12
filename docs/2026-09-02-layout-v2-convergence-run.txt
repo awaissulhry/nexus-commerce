@@ -1,0 +1,419 @@
+UX.1 · layout v2 conformance — THE CONVERGENCE RECORD
+Run 2026-09-02 18:11:05–18:13:40 · 18 states · ZERO drift · ZERO disturbance
+Taken inside a six-minute write hold; PES.2 and PES.3 both frozen (#747).
+Command: npm run layout:v2   (full suite — NOT the LAYOUT_ONLY=9.1 focused mode)
+Verbatim stdout+stderr follows. The 📌 BUILD STAMP below names all twenty files with sha1 digests.
+════════════════════════════════════════════════════════════════════════════
+
+> nexus-commerce@1.0.0 layout:v2
+> node scripts/check-layout-v2.mjs
+
+
+── contract witnesses (SC.1's W-1/W-2) · http://127.0.0.1:8091
+   ✅ W-1 master DE/de: 96/96 columns, same order true · 21 rows · 0 short · 0 missing a declared key
+   ✅ W-2 master DE/de: every non-editable cell states a reason
+   ✅ W-4 master DE/de: 7 required, and they are exactly the seven this suite hardcodes
+   ✅ W-1 AMAZON·IT/it: 97/97 columns, same order true · 21 rows · 0 short · 0 missing a declared key
+   ✅ W-2 AMAZON·IT/it: every non-editable cell states a reason
+   ✅ W-4 AMAZON·IT/it: 7 required, and they are exactly the seven this suite hardcodes
+   ✅ W-1 Amazon·DE/de: 96/96 columns, same order true · 21 rows · 0 short · 0 missing a declared key
+   ✅ W-2 Amazon·DE/de: every non-editable cell states a reason
+   ·  W-4 Amazon·DE/de: 7 required, and they are exactly the seven this suite hardcodes · not asserted (§9.1 does not measure this coordinate)
+   ✅ W-1 eBay·IT/it: 35/35 columns, same order true · 21 rows · 0 short · 0 missing a declared key
+   ✅ W-2 eBay·IT/it: every non-editable cell states a reason
+   ·  W-4 eBay·IT/it: 1 required — no extras; absent here: item_name, bullet_point, product_description, supplier_declared_dg_hz_regulation, fabric_type, country_of_origin · not asserted (§9.1 does not measure this coordinate) — note the denominator: §9.1 here would be 1-of-1 and could not fail
+
+📌 BUILD STAMP — every file whose change can invalidate a number below (digests are sha1, first 8):
+   13:13:11  sha1:62793d3f  apps/web/src/app/products/[id]/edit/_studio/drawer/StudioDock.tsx
+   18:04:35  sha1:c3b865ac  apps/web/src/app/products/[id]/edit/_studio/sheet/master/MasterSheet.tsx
+   18:09:35  sha1:d8e07457  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
+   16:22:30  sha1:010d984f  apps/web/src/app/products/[id]/edit/_studio/sheet/master/views.ts
+   15:37:53  sha1:77c803f0  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx
+   14:32:33  sha1:db6c54d4  apps/web/src/design-system/grid/columns/presets.ts
+   06:07:17  sha1:083bfe5b  apps/web/src/app/products/[id]/edit/_studio/sheet/flaggedColumns.ts
+   18:04:35  sha1:292f0f61  apps/web/src/design-system/grid/renderers/bandWidth.ts
+   16:50:47  sha1:b61425c6  apps/web/src/design-system/grid/renderers/IdentityBand.tsx
+   16:51:04  sha1:94c924f5  apps/web/src/design-system/grid/renderers/readiness.ts
+   18:04:35  sha1:790b857a  apps/web/src/design-system/grid/renderers/index.ts
+   17:35:10  sha1:d5d8eebe  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/AliasBandCell.tsx
+   16:54:27  sha1:501c08bf  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/rows.ts
+   16:33:31  sha1:e733d566  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts
+   14:50:15  sha1:249dc62e  apps/web/src/app/products/[id]/edit/_studio/contracts.tsx
+   07:13:01  sha1:55d67662  apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx
+   00:37:57  sha1:1dc3503b  apps/web/src/app/products/[id]/edit/_studio/StudioHeader.tsx
+   01:16:46  sha1:1a505ba2  apps/web/src/app/products/[id]/edit/_studio/studio.module.css
+   17:37:18  sha1:23d8abb5  apps/web/src/design-system/grid/theme/grid.css
+   02:33:55  sha1:49e186e3  apps/web/src/design-system/grid/hosts/GridSheet.tsx
+
+── 1728×906 · drawer closed · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 675 (74.5% of 906), measured 675 (74.5%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=732 R=81 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 906px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ·  §5 drawer-fixed: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 drawer-below-overlay: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-not-displaced: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-reachable-behind-drawer: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 not-aria-modal: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1728), measured 1728
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name,status,basePrice,totalStock
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+
+── 1728×906 · drawer open · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 675 (74.5% of 906), measured 675 (74.5%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=732 R=81 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 906px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ✅ §5.3 drawer-fixed: expected fixed (overlays the sheet), measured fixed
+   ✅ §5.1 drawer-below-overlay: expected < 1400 so ActionConfirm lands on top, measured 50
+   ✅ §5.3 sheet-not-displaced: expected open width === closed width (1660), measured 1660 (displaced by 0px)
+   ✅ §5.1 §5.2 sheet-reachable-behind-drawer: expected a point over the sheet hits the GRID (no blocking overlay, whatever it is named), measured hit .nds-identity-band inside the grid
+   ✅ §5.2 not-aria-modal: expected aria-modal absent or false, measured null
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1728), measured 1728
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name,status,basePrice,totalStock
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+   ✅ §9.1 required-columns-fit @ 1728×906 · master · DE/de: [18:11:25→18:11:28] 7 of 7 required columns inside the 1213px centre band (root 1660 − pinned-left 447 − pinned-right 0) · shortfall 303px SPARE · load 2.59/2.41/2.69→2.59/2.41/2.69
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 1213px · scrollWidth 2497
+        centre set (15): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   ✅ §9.1 required-columns-fit @ 1728×906 · master · IT/it: [18:11:29→18:11:33] 7 of 7 required columns inside the 1213px centre band (root 1660 − pinned-left 447 − pinned-right 0) · shortfall 303px SPARE · load 2.62/2.42/2.69→2.62/2.42/2.69
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 1213px · scrollWidth 2817
+        centre set (17): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   ✅ §9.1 required-columns-fit @ 1728×906 · AMAZON · IT/it: [18:11:38→18:11:44] 7 of 7 required columns inside the 1213px centre band (root 1660 − pinned-left 447 − pinned-right 0) · shortfall 303px SPARE · load 2.81/2.46/2.71→4.00/2.73/2.80
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 1213px · scrollWidth 2647
+        centre set (16): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130)
+   📌 §9.1 required-columns-fit @ 1728×906 · EBAY · IT/it: [18:11:46→18:11:50] 1 of 1 required columns inside the 1213px centre band (root 1660 − pinned-left 447 − pinned-right 0) · shortfall 1053px SPARE · load 4.00/2.73/2.80→3.75/2.70/2.79
+        RECORDED, NOT ASSERTED — this coordinate declares 1 required column(s) (brand), not the 7 §9.1 asserts on. At 1-of-1 this check cannot go red at any width or any layout, so a pass here is not evidence of the invariant.
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 1213px · scrollWidth 1660
+        centre set (6): brand(160) name(220) status(110) basePrice(100) totalStock(90) productType(160)
+   ·  §5.4 reveal-trailing-case @ 1728×906: not exercised by this cell (715px of scroll remained) — see reveal-trailing-deliberate below, which targets the band on purpose.
+   ·  §5.4 reveal-trailing-deliberate @ 1728×906: 4 of 17 column(s) lie in the uncoverable trailing 519px (MEASURED overlap) and can never be cleared of an overlay panel at any scroll: productType, dsa_responsible_party_address, gpsr_safety_attestation, ready:scope (content 2497, client 1660). Becomes an assertion when §9.2's non-interactive tail or §5.4's inset lands.
+   ✅ §5.4 reveal-no-op-when-visible @ 1728×906: item_name: visible before the verb true, READABLE in the POST-OPEN geometry false (at DECISION time: cell right 1314 vs panel left 1208, grid 67..1727, clear of panel false); reveal wrote [122]
+   ✅ §5.4 reveal @ 1728×906: [from brand] item_name right 1192 vs panel left 1208 — clear (scrollLeft 0 → 122 of max 837) · writes [122]
+   ·  §5.4 no-phantom-column @ 1728×906: NOT MEASURED — no pad exists yet (scrollWidth 2497 identical open and closed), so there is nothing for this check to convict. It will mean something when a pad mechanism lands.
+   ✅ §5.4 url-path-reveal:bullet_point @ 1728×906: overlap 519 · cell right 784 vs panel left 1208, scrollLeft 0/837 — clear · writes [] (no-op — the cell was already clear, which is the rule declining to move a grid the operator can read)
+   ✅ §5.4 url-path-reveal:supplier_declared_dg_hz_regulation @ 1728×906: overlap 519 · cell right 1044 vs panel left 1208, scrollLeft 0/837 — clear · writes [] (no-op — the cell was already clear, which is the rule declining to move a grid the operator can read)
+   ·  §7 popover "Sheet" @ 1728×906: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Images" @ 1728×906: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Analytics & Ads" @ 1728×906: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Activity" @ 1728×906: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ✅ §7 popover "Publish to a channel" @ 1728×906: panel 1431–1712 (w 281) · trigger 1598–1712 · document 1728/1728
+   ✅ §7 popover "Market" @ 1728×906: panel 1461–1661 (w 200) · trigger 1461–1583 · document 1728/1728 · selectedInView true (scrollTop 0, sel at 83)
+   ✅ §7 popover "Content locale" @ 1728×906: panel 1512–1712 (w 200) · trigger 1597–1712 · document 1728/1728 · selectedInView true (scrollTop 0, sel at 47)
+   ✅ §7 popup-at-right-edge @ 1728×906: opened via Enter on gpsr_safety_attestation (2 options, 130×84) — right 1557/1728, bottom 305/906, document 1728/1728
+
+── 1440×900 · drawer closed · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 669 (74.3% of 900), measured 669 (74.3%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=726 R=87 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 900px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ·  §5 drawer-fixed: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 drawer-below-overlay: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-not-displaced: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-reachable-behind-drawer: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 not-aria-modal: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1440), measured 1440
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+
+── 1440×900 · drawer open · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 669 (74.3% of 900), measured 669 (74.3%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=726 R=87 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 900px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ✅ §5.3 drawer-fixed: expected fixed (overlays the sheet), measured fixed
+   ✅ §5.1 drawer-below-overlay: expected < 1400 so ActionConfirm lands on top, measured 50
+   ✅ §5.3 sheet-not-displaced: expected open width === closed width (1372), measured 1372 (displaced by 0px)
+   ✅ §5.1 §5.2 sheet-reachable-behind-drawer: expected a point over the sheet hits the GRID (no blocking overlay, whatever it is named), measured hit .nds-identity-band inside the grid
+   ✅ §5.2 not-aria-modal: expected aria-modal absent or false, measured null
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1440), measured 1440
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+   ✅ §9.1 required-columns-fit @ 1440×900 · master · DE/de: [18:12:21→18:12:23] 7 of 7 required columns inside the 925px centre band (root 1372 − pinned-left 447 − pinned-right 0) · shortfall 15px SPARE · load 3.61/2.76/2.81→3.40/2.73/2.79
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 925px · scrollWidth 2497
+        centre set (15): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   ✅ §9.1 required-columns-fit @ 1440×900 · master · IT/it: [18:12:24→18:12:26] 7 of 7 required columns inside the 925px centre band (root 1372 − pinned-left 447 − pinned-right 0) · shortfall 15px SPARE · load 3.40/2.73/2.79→3.40/2.73/2.79
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 925px · scrollWidth 2817
+        centre set (17): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   ✅ §9.1 required-columns-fit @ 1440×900 · AMAZON · IT/it: [18:12:31→18:12:35] 7 of 7 required columns inside the 925px centre band (root 1372 − pinned-left 447 − pinned-right 0) · shortfall 15px SPARE · load 3.45/2.75/2.80→3.49/2.77/2.81
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 925px · scrollWidth 2647
+        centre set (16): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130)
+   📌 §9.1 required-columns-fit @ 1440×900 · EBAY · IT/it: [18:12:36→18:12:38] 1 of 1 required columns inside the 925px centre band (root 1372 − pinned-left 447 − pinned-right 0) · shortfall 765px SPARE · load 3.49/2.77/2.81→3.53/2.79/2.81
+        RECORDED, NOT ASSERTED — this coordinate declares 1 required column(s) (brand), not the 7 §9.1 asserts on. At 1-of-1 this check cannot go red at any width or any layout, so a pass here is not evidence of the invariant.
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 925px · scrollWidth 1372
+        centre set (6): brand(160) name(220) status(110) basePrice(100) totalStock(90) productType(160)
+   ·  §5.4 reveal-trailing-case @ 1440×900: not exercised by this cell (985px of scroll remained) — see reveal-trailing-deliberate below, which targets the band on purpose.
+   ·  §5.4 reveal-trailing-deliberate @ 1440×900: 4 of 17 column(s) lie in the uncoverable trailing 519px (MEASURED overlap) and can never be cleared of an overlay panel at any scroll: productType, dsa_responsible_party_address, gpsr_safety_attestation, ready:scope (content 2497, client 1372). Becomes an assertion when §9.2's non-interactive tail or §5.4's inset lands.
+   ✅ §5.4 reveal-no-op-when-visible @ 1440×900: supplier_declared_dg_hz_regulation: visible before the verb true, READABLE in the POST-OPEN geometry false (at DECISION time: cell right 1044 vs panel left 920, grid 67..1439, clear of panel false); reveal wrote [140]
+   ✅ §5.4 reveal @ 1440×900: [from brand] supplier_declared_dg_hz_regulation right 904 vs panel left 920 — clear (scrollLeft 0 → 140 of max 1125) · writes [140]
+   ·  §5.4 no-phantom-column @ 1440×900: NOT MEASURED — no pad exists yet (scrollWidth 2497 identical open and closed), so there is nothing for this check to convict. It will mean something when a pad mechanism lands.
+   ✅ §5.4 url-path-reveal:bullet_point @ 1440×900: overlap 519 · cell right 784 vs panel left 920, scrollLeft 0/1125 — clear · writes [] (no-op — the cell was already clear, which is the rule declining to move a grid the operator can read)
+   ✅ §5.4 url-path-reveal:supplier_declared_dg_hz_regulation @ 1440×900: overlap 519 · cell right 904 vs panel left 920, scrollLeft 140/1125 — clear · writes [140]
+   ·  §7 popover "Sheet" @ 1440×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Images" @ 1440×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Analytics & Ads" @ 1440×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Activity" @ 1440×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ✅ §7 popover "Publish to a channel" @ 1440×900: panel 1143–1424 (w 281) · trigger 1310–1424 · document 1440/1440
+   ✅ §7 popover "Market" @ 1440×900: panel 1173–1373 (w 200) · trigger 1173–1295 · document 1440/1440 · selectedInView true (scrollTop 0, sel at 83)
+   ✅ §7 popover "Content locale" @ 1440×900: panel 1224–1424 (w 200) · trigger 1309–1424 · document 1440/1440 · selectedInView true (scrollTop 0, sel at 47)
+   ✅ §7 popup-at-right-edge @ 1440×900: opened via Enter on gpsr_safety_attestation (2 options, 130×84) — right 1269/1440, bottom 305/900, document 1440/1440
+
+── 1280×900 · drawer closed · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 669 (74.3% of 900), measured 669 (74.3%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=726 R=87 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 900px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ·  §5 drawer-fixed: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 drawer-below-overlay: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-not-displaced: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 sheet-reachable-behind-drawer: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ·  §5 not-aria-modal: NOT MEASURED — no `.nds-drawer-dock` at probe time. An absence of evidence, not evidence of compliance.
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1280), measured 1280
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+
+── 1280×900 · drawer open · 21 rows @ 36px · header at rest
+   ✅ §2.3 no-apptopbar: expected absent, measured absent
+   ✅ §2.1b no-header-overflow: expected no `⋯` link-out overflow in the header (D9), measured none
+   ·  §2.1b header-controls: "Products" · "Publish to a channel"
+        D9: the right side should be autosave state + Publish ▾ only
+   ✅ §2.1 header-h: expected 48, measured 48
+   ✅ §3 merged-row: expected tabs sit inside the scope bar (one row), measured merged — 4 tabs at y=52 inside scope bar y=48 h=40
+   ✅ §2.1 scopetabs-h: expected 40, measured 40
+   ✅ §2.1 toolbar-h: expected 40 exactly (divider inside the token), measured 40
+   ✅ §2.1 family-bar-folded: expected no family bar above the grid, measured absent
+   ✅ §2.1 ag-header-h: expected 57 (28 header + 29 AG filter row), measured 57
+   ✅ §2.1a no-group-strip: expected 0 column-group rows, measured none
+   ·  §9.2a married-groups: precondition MET — verified by grep, not by this DOM check
+        a hidden grouped column paints no group row; absence in the DOM was never removal in source
+   ✅ §2.2 rows-area: expected 669 (74.3% of 900), measured 669 (74.3%)
+   ✅ §8.3 row-height: expected 36, measured 36
+   ✅ §8.3 thumbnail: expected 32×32 in the identity cell, measured 32×32
+   ✅ §4.4 scroll-source: expected .ag-grid-viewport.ag-layout-normal scrolls, measured auto
+   ·  §4.2 collapse-arming: S=813 H(expanded)=726 R=87 → ARMED (needs R >= 48)
+        measured against EXPANDED geometry per §4.2 — never recompute it from collapsed geometry. §4.3a: R is consumed by the vertical budget, so this reading describes THIS build at THIS 900px viewport and nothing else — the same build arms on a shorter screen and not on a taller one, and any vertical pixel won anywhere shrinks R again.
+   ✅ §5.3 drawer-fixed: expected fixed (overlays the sheet), measured fixed
+   ✅ §5.1 drawer-below-overlay: expected < 1400 so ActionConfirm lands on top, measured 50
+   ✅ §5.3 sheet-not-displaced: expected open width === closed width (1212), measured 1212 (displaced by 0px)
+   ✅ §5.1 §5.2 sheet-reachable-behind-drawer: expected a point over the sheet hits the GRID (no blocking overlay, whatever it is named), measured hit .nds-identity-band inside the grid
+   ✅ §5.2 not-aria-modal: expected aria-modal absent or false, measured null
+   ✅ §6.2 no-warning-chip: expected none above the grid — a count of work is a VIEW, not a warning, measured none
+   ✅ §7 no-h-scroll: expected scrollWidth === clientWidth (1280), measured 1280
+        necessary, not sufficient — §7.3 anchoring is the other half and no static probe can see it
+   ·  §9.2 column-order: ag-Grid-SelectionColumn,ag-Grid-AutoColumn,brand,bullet_point,country_of_origin,supplier_declared_dg_hz_regulation,fabric_type,item_name,product_description,name
+        read for review — identity → required-and-incomplete → commerce spine → the rest
+   📌 §9.1 required-columns-fit @ 1280×900 · master · DE/de: [18:13:01→18:13:04] 5 of 7 required columns inside the 765px centre band (root 1212 − pinned-left 447 − pinned-right 0) · shortfall +145px · covered: item_name +35, product_description +145 · load 5.40/3.27/2.99→5.20/3.27/2.99
+        residual (ruled #693), NOT ASSERTED — 1280 is below D11's 1440 bar and no width gives; ratcheted against the ruled 6/7 at +87px
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 765px · scrollWidth 2497
+        centre set (15): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   📌 §9.1 required-columns-fit @ 1280×900 · master · IT/it: [18:13:06→18:13:08] 5 of 7 required columns inside the 765px centre band (root 1212 − pinned-left 447 − pinned-right 0) · shortfall +145px · covered: item_name +35, product_description +145 · load 5.20/3.27/2.99→5.03/3.26/2.99
+        residual (ruled #693), NOT ASSERTED — 1280 is below D11's 1440 bar and no width gives; ratcheted against the ruled 6/7 at +87px
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 765px · scrollWidth 2817
+        centre set (17): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130) ready:scope(170)
+   📌 §9.1 required-columns-fit @ 1280×900 · AMAZON · IT/it: [18:13:13→18:13:17] 5 of 7 required columns inside the 765px centre band (root 1212 − pinned-left 447 − pinned-right 0) · shortfall +145px · covered: item_name +35, product_description +145 · load 5.27/3.34/3.02→5.27/3.34/3.02
+        residual (ruled #693), NOT ASSERTED — 1280 is below D11's 1440 bar and no width gives; ratcheted against the ruled 6/7 at +38px
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 765px · scrollWidth 2647
+        centre set (16): brand(160) bullet_point(110) country_of_origin(130) supplier_declared_dg_hz_regulation(130) fabric_type(160) item_name(110) product_description(110) color(160) size(160) name(220) status(110) basePrice(100) totalStock(90) productType(160) dsa_responsible_party_address(160) gpsr_safety_attestation(130)
+   📌 §9.1 required-columns-fit @ 1280×900 · EBAY · IT/it: [18:13:18→18:13:21] 1 of 1 required columns inside the 765px centre band (root 1212 − pinned-left 447 − pinned-right 0) · shortfall 605px SPARE · load 5.08/3.34/3.02→5.08/3.34/3.02
+        RECORDED, NOT ASSERTED — this coordinate declares 1 required column(s) (brand), not the 7 §9.1 asserts on. At 1-of-1 this check cannot go red at any width or any layout, so a pass here is not evidence of the invariant.
+        pinned L 447px [ag-Grid-SelectionColumn(43) ag-Grid-AutoColumn(404)] · pinned R 0px [—] · centre band 765px · scrollWidth 1287
+        centre set (6): brand(160) name(220) status(110) basePrice(100) totalStock(90) productType(160)
+   ·  §5.4 reveal-trailing-case @ 1280×900: not exercised by this cell (1245px of scroll remained) — see reveal-trailing-deliberate below, which targets the band on purpose.
+   ·  §5.4 reveal-trailing-deliberate @ 1280×900: 4 of 17 column(s) lie in the uncoverable trailing 519px (MEASURED overlap) and can never be cleared of an overlay panel at any scroll: productType, dsa_responsible_party_address, gpsr_safety_attestation, ready:scope (content 2497, client 1212). Becomes an assertion when §9.2's non-interactive tail or §5.4's inset lands.
+   ✅ §5.4 reveal-no-op-when-visible @ 1280×900: bullet_point: visible before the verb true, READABLE in the POST-OPEN geometry false (at DECISION time: cell right 784 vs panel left 760, grid 67..1279, clear of panel false); reveal wrote [40]
+   ✅ §5.4 reveal @ 1280×900: [from brand] bullet_point right 744 vs panel left 760 — clear (scrollLeft 0 → 40 of max 1285) · writes [40]
+   ·  §5.4 no-phantom-column @ 1280×900: NOT MEASURED — no pad exists yet (scrollWidth 2497 identical open and closed), so there is nothing for this check to convict. It will mean something when a pad mechanism lands.
+   ❌ §5.4 url-path-reveal:bullet_point @ 1280×900: overlap 519 · cell right 784 vs panel left 760, scrollLeft 0/1285 — COVERED by 24px · writes [] (no-op — AND THE CELL IS COVERED: the rule declined to move a grid the operator CANNOT read. This is the defect, not the restraint.)
+   ✅ §5.4 url-path-reveal:supplier_declared_dg_hz_regulation @ 1280×900: overlap 519 · cell right 744 vs panel left 760, scrollLeft 300/1285 — clear · writes [300]
+   ·  §7 popover "Sheet" @ 1280×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Images" @ 1280×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Analytics & Ads" @ 1280×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ·  §7 popover "Activity" @ 1280×900: SKIPPED — declares no `aria-haspopup`, so this probe will not click it to find out what it does. A control that opens a panel should declare it; one that performs an action must never be clicked by a layout probe.
+   ✅ §7 popover "Publish to a channel" @ 1280×900: panel 983–1264 (w 281) · trigger 1150–1264 · document 1280/1280
+   ✅ §7 popover "Market" @ 1280×900: panel 1013–1213 (w 200) · trigger 1013–1135 · document 1280/1280 · selectedInView true (scrollTop 0, sel at 83)
+   ✅ §7 popover "Content locale" @ 1280×900: panel 1064–1264 (w 200) · trigger 1149–1264 · document 1280/1280 · selectedInView true (scrollTop 0, sel at 47)
+   ✅ §7 popup-at-right-edge @ 1280×900: opened via Enter on gpsr_safety_attestation (2 options, 130×84) — right 1109/1280, bottom 305/900, document 1280/1280
+
+📋 THE BELOW-BAR RESIDUAL MOVED. Measured values, in `RULED_RESIDUAL` shape — NOT APPLIED, for the hub to confirm:
+  1280: {
+    master: { fits: 5, shortfall: 145 },   // was 6/87
+    'master-at-channel-market': { fits: 5, shortfall: 145 },   // was 6/87
+    channel: { fits: 5, shortfall: 145 },   // was 6/38
+  },
+  ⚠ Confirm these are the FINAL build's numbers — a run with a drift event or an abstain is not a baseline.
+
+══ §9.1 SIDE BY SIDE @ 1728 · master · IT/it vs AMAZON · IT/it — MARKET HELD FIXED, scope varies — the controlled pair · load 2.62/2.42/2.69→4.00/2.73/2.80
+   grid root width                           1660        1660   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                     1213        1213   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       7/7         7/7   
+   shortfall (+ = short)                     -303        -303   0
+   columns in one scope only          ready:scope
+   …and in the other only             —
+
+══ §9.1 SIDE BY SIDE @ 1728 · master · DE/de vs AMAZON · IT/it — the historical baseline: scope AND market both vary, so a difference here names neither · load 2.59/2.41/2.69→4.00/2.73/2.80
+   grid root width                           1660        1660   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                     1213        1213   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       7/7         7/7   
+   shortfall (+ = short)                     -303        -303   0
+   columns in one scope only          ready:scope
+   …and in the other only             color, size
+
+══ §9.1 SIDE BY SIDE @ 1440 · master · IT/it vs AMAZON · IT/it — MARKET HELD FIXED, scope varies — the controlled pair · load 3.40/2.73/2.79→3.49/2.77/2.81
+   grid root width                           1372        1372   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                      925         925   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       7/7         7/7   
+   shortfall (+ = short)                      -15         -15   0
+   columns in one scope only          ready:scope
+   …and in the other only             —
+
+══ §9.1 SIDE BY SIDE @ 1440 · master · DE/de vs AMAZON · IT/it — the historical baseline: scope AND market both vary, so a difference here names neither · load 3.61/2.76/2.81→3.49/2.77/2.81
+   grid root width                           1372        1372   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                      925         925   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       7/7         7/7   
+   shortfall (+ = short)                      -15         -15   0
+   columns in one scope only          ready:scope
+   …and in the other only             color, size
+
+══ §9.1 SIDE BY SIDE @ 1280 · master · IT/it vs AMAZON · IT/it — MARKET HELD FIXED, scope varies — the controlled pair · load 5.20/3.27/2.99→5.27/3.34/3.02
+   grid root width                           1212        1212   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                      765         765   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       5/7         5/7   
+   shortfall (+ = short)                      145         145   0
+   columns in one scope only          ready:scope
+   …and in the other only             —
+
+══ §9.1 SIDE BY SIDE @ 1280 · master · DE/de vs AMAZON · IT/it — the historical baseline: scope AND market both vary, so a difference here names neither · load 5.40/3.27/2.99→5.27/3.34/3.02
+   grid root width                           1212        1212   0
+   pinned LEFT band                           447         447   0
+   pinned RIGHT band                            0           0   0
+   centre band available                      765         765   0
+   required block starts at                   447         447   0
+   required block ends at                    1357        1357   0
+   required block width                       910         910   0
+   …of which NOT required                       0           0   0
+   §9.1                                       5/7         5/7   
+   shortfall (+ = short)                      145         145   0
+   columns in one scope only          ready:scope
+   …and in the other only             color, size
+
+❌ layout v2 conformance — 4 failure(s) across 18 measured state(s):
+   • 1280×900 master · DE/de — §9.1 RULED RESIDUAL GOT WORSE: 5/7 at +145px against the ruled 6/7 at +87px (#693). Not D11's bar, but a regression against the figure the hub ruled on.
+   • 1280×900 master · IT/it — §9.1 RULED RESIDUAL GOT WORSE: 5/7 at +145px against the ruled 6/7 at +87px (#693). Not D11's bar, but a regression against the figure the hub ruled on.
+   • 1280×900 AMAZON · IT/it — §9.1 RULED RESIDUAL GOT WORSE: 5/7 at +145px against the ruled 6/7 at +38px (#693). Not D11's bar, but a regression against the figure the hub ruled on.
+   • 1280×900 — §5.4 url-path-reveal:bullet_point: overlap 519 · cell right 784 vs panel left 760, scrollLeft 0/1285 — COVERED by 24px · writes [] (no-op — AND THE CELL IS COVERED: the rule declined to move a grid the operator CANNOT read. This is the defect, not the restraint.)
+
+   docs/2026-09-01-layout-v2-spec.md §11 says who owns each section.

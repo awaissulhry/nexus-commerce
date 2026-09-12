@@ -1,0 +1,21 @@
+{
+  "sourceThemeId": "200489992519",
+  "draftThemeId": "200516206919",
+  "sourceZipSha256": "e1f71fa232cf104b555bf2ed6d9dadb624c4e6feb649912e58ce1628fd74f4e6",
+  "changes": [
+    {
+      "file": "snippets/product-info.liquid",
+      "beforeSha256": "fcf4e193fb89360a61b34561a0070b6783f121a03e7f92ec2266d50cd51e88d7",
+      "afterSha256": "80262fdcd6cdec66c848515dc9f7bc58fd725dc2f780c0ca8d751406759b4160"
+    },
+    {
+      "file": "assets/theme.js",
+      "beforeSha256": "e8c9901d5e29eff35a2523d5fbc40221dc57a70d417e15147e1a68253d2628f6",
+      "afterSha256": "a6cf14d74d94ded2af1ed06d8184c9d69ac700914576a1f2994127fd0a3332a4"
+    }
+  ],
+  "storeUploadStatus": "NOT_APPLIED",
+  "unchangedFilesVerified": 240,
+  "currentStatus": "CANCELED_ROLLED_BACK_DO_NOT_UPLOAD",
+  "rollbackResult": "../rollback-result.json"
+}

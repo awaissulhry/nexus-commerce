@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay Orders Service (audit fix #2 — TECH_DEBT #33)
  *
@@ -409,10 +410,10 @@ export class EbayOrdersService {
     // unique so the upsert stays idempotent across sync runs.
     const existing = await prisma.order.findUnique({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'EBAY' as any,
           channelOrderId: order.orderId,
-        },
+        }),
       },
       include: {
         items: {

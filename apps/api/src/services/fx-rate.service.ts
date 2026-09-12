@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * G.2 — FX rate cache + fetcher.
  *
@@ -147,11 +148,11 @@ export async function refreshFxRates(prisma: PrismaClient): Promise<{
     if (!Number.isFinite(rate) || rate <= 0) continue
     await prisma.fxRate.upsert({
       where: {
-        fromCurrency_toCurrency_asOf: {
+        fromCurrency_toCurrency_asOf: workspaceKey({
           fromCurrency: MASTER_CURRENCY,
           toCurrency,
           asOf: today,
-        },
+        }),
       },
       create: {
         fromCurrency: MASTER_CURRENCY,

@@ -20,9 +20,9 @@
  *     row at 100% print the same-looking profit, and only the badge distinguishes them.
  */
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { eur2, intl } from '../_canvas/format'
 
 /**

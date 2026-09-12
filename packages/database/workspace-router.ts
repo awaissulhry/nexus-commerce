@@ -1,0 +1,133 @@
+import { assertWorkspaceSql } from './workspace-sql.js'
+import { Prisma, PrismaClient } from '@prisma/client'
+import type { Pool } from 'pg'
+import { WorkspacePg, resolveWorkspaceContext } from './workspace-adapter.js'
+import { scopedPrisma } from './workspace-client.js'
+import { WorkspaceError, workspaceContext, type WorkspaceContext } from './workspace-context.js'
+
+type Client = PrismaClient | Prisma.TransactionClient
+type Operation = { model: string | null; method: string; args: unknown[] }
+const modelNames = new Set(Prisma.dmmf.datamodel.models.map(model => model.name[0].toLowerCase() + model.name.slice(1)))
+const sameScope = (a?: WorkspaceContext, b?: WorkspaceContext) => a?.workspaceId === b?.workspaceId && a?.actorUserId === b?.actorUserId
+
+function invoke(client: Client, operation: Operation): unknown {
+  if (!operation.model) assertWorkspaceSql(operation.method, operation.args)
+  const owner = operation.model ? Reflect.get(client, operation.model) : client
+  return Reflect.get(owner, operation.method).apply(owner, operation.args)
+}
+
+/** A query captures its scope when constructed, including when awaited by a later task. */
+class ScopedOperation<T = unknown> implements PromiseLike<T> {
+  readonly [Symbol.toStringTag] = 'PrismaPromise'
+  private promise?: Promise<T>
+  get executed(): boolean { return !!this.promise }
+  bindToTransaction(result: Promise<T>): void { this.promise = result; void result.catch(() => undefined) }
+  constructor(
+    readonly operation: Operation,
+    readonly captured: WorkspaceContext | undefined,
+    private readonly execute: (operation: Operation, captured?: WorkspaceContext) => Promise<T>,
+  ) {}
+  then<TResult1 = T, TResult2 = never>(fulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null, rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null): Promise<TResult1 | TResult2> {
+    return (this.promise ??= this.execute(this.operation, this.captured)).then(fulfilled, rejected)
+  }
+  catch<TResult = never>(rejected?: ((reason: unknown) => TResult | PromiseLike<TResult>) | null): Promise<T | TResult> { return this.then(undefined, rejected) }
+  finally(callback?: (() => void) | null): Promise<T> { return (this.promise ??= this.execute(this.operation, this.captured)).finally(callback) }
+}
+
+function transactionProxy(tx: Prisma.TransactionClient, scope?: WorkspaceContext): Prisma.TransactionClient {
+  const delegates = new Map<string, object>()
+  const checked = (model: string | null, method: string) => (...args: unknown[]) => {
+    const current = workspaceContext()
+    if (current && !sameScope(current, scope)) throw new WorkspaceError('workspace_transaction_changed', 'A transaction cannot change business profile.')
+    return invoke(tx, { model, method, args })
+  }
+  return new Proxy(tx, {
+    get(target, property) {
+      if (typeof property !== 'string') return Reflect.get(target, property, target)
+      if (modelNames.has(property)) {
+        if (!delegates.has(property)) delegates.set(property, new Proxy({}, { get: (_owner, method) => typeof method === 'string' ? checked(property, method) : undefined }))
+        return delegates.get(property)
+      }
+      const value = Reflect.get(target, property, target)
+      return typeof value === 'function' ? checked(null, property) : value
+    },
+  })
+}
+
+/**
+ * Fixed-context adapters bridge Prisma's execution resources without ambient mutable state.
+ * Engines are bounded and share one pg pool. Evicting an idle engine does not close the pool.
+ */
+export function workspacePrisma(pool: Pool): PrismaClient {
+  const clients = new Map<string, { client: PrismaClient; active: number; used: number }>()
+  const delegates = new Map<string, object>()
+  const capacity = 32
+  const waiting = new Set<() => void>()
+  // Each bounded Prisma adapter installs one listener on the shared pg pool.
+  if (pool.getMaxListeners() !== 0) pool.setMaxListeners(Math.max(pool.getMaxListeners(), capacity + 10))
+
+  async function acquire(scope?: WorkspaceContext) {
+    const key = JSON.stringify([scope?.workspaceId ?? '', scope?.actorUserId ?? ''])
+    let entry = clients.get(key)
+    while (!entry && clients.size >= capacity) {
+      const idle = [...clients].filter(([, item]) => item.active === 0).sort((a, b) => a[1].used - b[1].used)[0]
+      if (idle) {
+        clients.delete(idle[0])
+        await idle[1].client.$disconnect()
+      } else await new Promise<void>(resolve => waiting.add(resolve))
+      entry = clients.get(key)
+    }
+    if (!entry) {
+      entry = { client: scopedPrisma(new PrismaClient({ adapter: new WorkspacePg(pool, scope), log: ['error'] }), scope), active: 0, used: Date.now() }
+      clients.set(key, entry)
+    }
+    entry.active++
+    entry.used = Date.now()
+    return { client: entry.client, release() {
+      entry!.active--
+      const pending = [...waiting]
+      waiting.clear()
+      for (const resume of pending) resume()
+    } }
+  }
+
+  const execute = async (operation: Operation, captured?: WorkspaceContext) => {
+    const scope = captured ?? await resolveWorkspaceContext()
+    const lease = await acquire(scope)
+    try { return await invoke(lease.client, operation) }
+    finally { lease.release() }
+  }
+
+  return new Proxy({} as PrismaClient, {
+    get(_target, property) {
+      if (property === 'then') return undefined
+      if (property === '$disconnect') return async () => {
+        await Promise.all([...clients.values()].map(entry => entry.client.$disconnect()))
+        clients.clear()
+      }
+      if (property === '$transaction') return async (work: unknown, options?: unknown) => {
+        const scope = workspaceContext() ?? await resolveWorkspaceContext()
+        const lease = await acquire(scope)
+        try {
+          if (typeof work === 'function') {
+            return await lease.client.$transaction(tx => work(transactionProxy(tx, scope)), options as never)
+          }
+          if (!Array.isArray(work) || new Set(work).size !== work.length || work.some(item => !(item instanceof ScopedOperation) || item.executed)) throw new WorkspaceError('invalid_transaction', 'Transactions require distinct, unexecuted database operations.', 400)
+          for (const item of work as ScopedOperation[]) if (item.captured && !sameScope(item.captured, scope)) throw new WorkspaceError('workspace_transaction_changed', 'A transaction cannot include another business profile.')
+          const queries = (work as ScopedOperation[]).map(item => invoke(lease.client, item.operation))
+          const result = lease.client.$transaction(queries as Prisma.PrismaPromise<unknown>[], options as never)
+          ;(work as ScopedOperation[]).forEach((item, index) => item.bindToTransaction(result.then(values => values[index])))
+          return await result
+        } finally { lease.release() }
+      }
+      if (typeof property !== 'string') return undefined
+      if (modelNames.has(property)) {
+        if (!delegates.has(property)) delegates.set(property, new Proxy({}, {
+          get: (_owner, method) => typeof method === 'string' ? (...args: unknown[]) => new ScopedOperation({ model: property, method, args }, workspaceContext(), execute) : undefined,
+        }))
+        return delegates.get(property)
+      }
+      return (...args: unknown[]) => new ScopedOperation({ model: null, method: property, args }, workspaceContext(), execute)
+    },
+  })
+}

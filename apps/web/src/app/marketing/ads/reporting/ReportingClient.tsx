@@ -27,7 +27,8 @@
  * rather than a description of where to click.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Tabs } from '@/design-system/components/Tabs'
 import { BrandTab } from './BrandTab'

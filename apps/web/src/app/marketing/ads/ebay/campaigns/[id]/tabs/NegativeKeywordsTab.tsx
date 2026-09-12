@@ -7,7 +7,7 @@
  * the Keywords-tab pattern. Group-scoped management lives in the drill-down.
  */
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AdsDataGrid, type GridColumn } from '../../../../campaigns/_grid/AdsDataGrid'
 import type { CampaignDetailPayload, NegativeKeywordRow } from '../../../_lib'
 import { ebayStatusPill } from '../../../_lib/status'

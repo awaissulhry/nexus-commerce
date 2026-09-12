@@ -1,0 +1,226 @@
+/**
+ * PES.8 — the AI draft review surface.
+ *
+ * DS tokens only (the DS is Tailwind-free and guarded in pre-push). Every colour here resolves
+ * through a token so the surface follows the viewer's theme; nothing is hard-coded.
+ */
+
+/*
+ * The ✦ draft tint is PES.2's decision, not this lane's — it is defined in
+ * `design-system/grid/theme/grid.css` as `.nds-cell-is-ai-draft`. The panel cannot wear a grid
+ * cell class, so the expression is mirrored here ONCE, in one place, rather than inline at each
+ * use. When PES.2 exposes it as a semantic token (requested in docs/pes-claims.md) this becomes a
+ * one-line swap and the duplication is gone. Keep the two in step: a review panel whose tint drifts
+ * from the cell it describes is worse than no tint.
+ */
+.panel {
+  /* The DS token (PES.2, ruling #35). Was a second copy of the sheet's mix; two copies of one
+     colour drift the moment either is touched. */
+  --ai-draft-tint: var(--nds-grid-ai-draft-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--nds-space-12);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  flex-wrap: wrap;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+/* The ✦ carries the identity — never colour alone (reference_tag_identity_is_glyph_not_colour). */
+.mark {
+  color: var(--nds-purple-600);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.counts {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.group {
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  flex-wrap: wrap;
+}
+
+.groupName {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.groupKey {
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+.groupCaps {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  align-items: start;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.side {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.sideLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--nds-text-3);
+  font-weight: 700;
+}
+
+/* The value is never truncated: an operator cannot judge what they cannot read in full. */
+.value {
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+  color: var(--nds-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+  padding: var(--nds-space-8);
+  margin: 0;
+}
+
+.valueDraft {
+  background: var(--ai-draft-tint);
+  font-style: italic;
+}
+
+.valueEmpty {
+  color: var(--nds-text-3);
+  font-style: italic;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex-wrap: wrap;
+  font-size: 10.5px;
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.metaOver {
+  color: var(--nds-danger-text);
+  font-weight: 700;
+}
+
+.rowActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  align-items: stretch;
+  min-width: 140px;
+}
+
+.note {
+  font-size: 10.5px;
+  line-height: 1.45;
+  border-radius: var(--nds-radius-sm);
+  padding: var(--nds-space-4) var(--nds-space-8);
+}
+
+.noteWarn {
+  background: var(--nds-grid-pending-bg);
+  color: var(--nds-warning-strong);
+}
+
+.noteError {
+  background: var(--nds-grid-refused-bg);
+  color: var(--nds-danger-text);
+}
+
+.noteMuted {
+  color: var(--nds-text-2);
+}
+
+.rationale {
+  font-size: 10.5px;
+  color: var(--nds-text-2);
+  font-style: italic;
+  line-height: 1.45;
+}
+
+.empty {
+  padding: var(--nds-space-24);
+  text-align: center;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.6;
+}
+
+.errorBox {
+  padding: var(--nds-space-12);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-grid-refused-bg);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.5;
+}
+
+.sku {
+  font-size: 10.5px;
+  color: var(--nds-text-3);
+  font-weight: 600;
+}

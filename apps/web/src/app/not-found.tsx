@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { FileQuestion, Home } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 

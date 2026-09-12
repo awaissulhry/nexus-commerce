@@ -27,7 +27,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Modal } from '@/design-system/components'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, GraduationCap, Info, ShieldAlert, Sliders, Trash2, Zap } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'

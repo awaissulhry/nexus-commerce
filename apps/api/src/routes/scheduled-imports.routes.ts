@@ -1,139 +1,36 @@
-/**
- * W8.4 — Scheduled-import routes.
- *
- * /api/scheduled-imports — CRUD + pause/resume + manual fire.
- * Operator-facing UI surfaces in the W8.3 imports page in a follow-
- * up; this commit ships the REST surface.
- */
-
-import type { FastifyPluginAsync } from 'fastify'
-import { ScheduledImportService } from '../services/scheduled-import.service.js'
-import { runScheduledImportTickOnce } from '../jobs/scheduled-import.job.js'
+import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import { ScheduledImportService, type CreateScheduledImportInput } from '../services/scheduled-import.service.js'
+import { TransferConflict } from '../services/pim/catalog-transfer.service.js'
 import prisma from '../db.js'
 
-const scheduleService = new ScheduledImportService(prisma)
-
-interface CreateBody {
-  name?: string
-  description?: string | null
-  source?: 'url' | 'ftp'
-  sourceUrl?: string
-  targetEntity?: 'product' | 'channelListing' | 'inventory'
-  columnMapping?: Record<string, string>
-  onError?: 'abort' | 'skip'
-  cronExpression?: string | null
-  scheduledFor?: string | null
-  timezone?: string
-  createdBy?: string | null
-}
-
-const scheduledImportsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get<{ Querystring: { enabled?: string; limit?: string } }>(
-    '/scheduled-imports',
-    async (request, reply) => {
-      const q = request.query
-      const schedules = await scheduleService.list({
-        enabled:
-          q.enabled === 'true'
-            ? true
-            : q.enabled === 'false'
-              ? false
-              : undefined,
-        limit: q.limit ? Number(q.limit) : undefined,
-      })
-      return reply.send({ success: true, schedules })
-    },
-  )
-
-  fastify.get<{ Params: { id: string } }>(
-    '/scheduled-imports/:id',
-    async (request, reply) => {
-      const s = await scheduleService.get(request.params.id)
-      if (!s) return reply.code(404).send({ success: false, error: 'Not found' })
-      return reply.send({ success: true, schedule: s })
-    },
-  )
-
-  fastify.post<{ Body: CreateBody }>(
-    '/scheduled-imports',
-    async (request, reply) => {
-      const body = request.body ?? {}
-      if (!body.name || !body.name.trim()) {
-        return reply.code(400).send({ success: false, error: 'name is required' })
-      }
-      if (!body.sourceUrl) {
-        return reply.code(400).send({ success: false, error: 'sourceUrl is required' })
-      }
-      try {
-        const s = await scheduleService.create({
-          name: body.name,
-          description: body.description ?? null,
-          source: body.source ?? 'url',
-          sourceUrl: body.sourceUrl,
-          targetEntity: body.targetEntity ?? 'product',
-          columnMapping: body.columnMapping ?? {},
-          onError: body.onError ?? 'skip',
-          cronExpression: body.cronExpression ?? null,
-          scheduledFor: body.scheduledFor ?? null,
-          timezone: body.timezone,
-          createdBy: body.createdBy ?? null,
-        })
-        return reply.code(201).send({ success: true, schedule: s })
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        const status =
-          msg.startsWith('Invalid cron expression') ||
-          msg.startsWith('Schedule must carry') ||
-          msg.startsWith('sourceUrl must be') ||
-          msg.startsWith('Unknown source') ||
-          msg.startsWith('FTP source not yet supported')
-            ? 400
-            : 500
-        return reply.code(status).send({ success: false, error: msg })
-      }
-    },
-  )
-
-  fastify.patch<{
-    Params: { id: string }
-    Body: { enabled?: boolean }
-  }>('/scheduled-imports/:id/enabled', async (request, reply) => {
-    if (typeof request.body?.enabled !== 'boolean') {
-      return reply.code(400).send({ success: false, error: 'enabled boolean required' })
-    }
-    try {
-      const s = await scheduleService.setEnabled(
-        request.params.id,
-        request.body.enabled,
-      )
-      return reply.send({ success: true, schedule: s })
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      if (msg.startsWith('ScheduledImport not found')) {
-        return reply.code(404).send({ success: false, error: msg })
-      }
-      return reply.code(500).send({ success: false, error: msg })
-    }
+const service = new ScheduledImportService(prisma)
+const actor = (r: FastifyRequest) => (r as FastifyRequest & { authUser?: { id?: string } }).authUser?.id ?? null
+const scheduledImportsRoutes: FastifyPluginAsync = async fastify => {
+  fastify.setErrorHandler((error, _request, reply) => reply.code(error instanceof TransferConflict ? 409 : 400).send({ success: false, error: error instanceof Error ? error.message : String(error) }))
+  const owned = async (request: FastifyRequest) => {
+    const row = await service.get((request.params as { id: string }).id)
+    if (!row || row.createdBy !== actor(request)) throw new TransferConflict('Schedule not found')
+    return row
+  }
+  fastify.get('/scheduled-imports', async request => ({ success: true, schedules: await service.list({ userId: actor(request) }) }))
+  fastify.get('/scheduled-imports/:id', async request => ({ success: true, schedule: await owned(request) }))
+  fastify.post('/scheduled-imports', async (request, reply) => reply.code(201).send({ success: true, schedule: await service.create({ ...request.body as CreateScheduledImportInput, createdBy: actor(request) }) }))
+  fastify.patch('/scheduled-imports/:id/enabled', async request => {
+    const row = await owned(request), body = request.body as { enabled?: boolean; version?: string }
+    if (typeof body?.enabled !== 'boolean') throw new Error('Choose whether the schedule is enabled')
+    return { success: true, schedule: await service.setEnabled(row.id, body.enabled, body.version) }
   })
-
-  fastify.delete<{ Params: { id: string } }>(
-    '/scheduled-imports/:id',
-    async (request, reply) => {
-      await scheduleService.delete(request.params.id)
-      return reply.send({ success: true })
-    },
-  )
-
-  fastify.post('/scheduled-imports/tick', async (_req, reply) => {
-    try {
-      const r = await runScheduledImportTickOnce()
-      return reply.send({ success: true, ...r })
-    } catch (e) {
-      return reply
-        .code(500)
-        .send({ success: false, error: e instanceof Error ? e.message : String(e) })
-    }
+  fastify.delete('/scheduled-imports/:id', async request => {
+    await service.deleteOwned((request.params as { id: string }).id, actor(request), (request.query as { version?: string }).version)
+    return { success: true }
   })
+  fastify.post('/scheduled-imports/:id/run', async request => {
+    const row = await owned(request), version = (request.body as { version?: string })?.version
+    if (version !== row.updatedAt.toISOString()) throw new TransferConflict('Schedule changed; reload it')
+    const result = await service.fireOnce(row)
+    await service.markFired(row.id, { jobId: result.jobId, status: result.status })
+    return { success: true, ...result }
+  })
+  fastify.post('/scheduled-imports/tick', async () => { throw new TransferConflict('Run one selected schedule with its current version; background ticks are automatic') })
 }
-
 export default scheduledImportsRoutes

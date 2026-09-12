@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds } from '../../../_lib'
 import { Button, Pill } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { pillTone } from '../../../../_shared/pillTone'
 
 interface SelectionRule { brands?: string[]; categoryIds?: string[]; categoryScope?: string; listingConditionIds?: string[]; minPrice?: number; maxPrice?: number }

@@ -31,7 +31,7 @@
  * analysis, and they were pushing the list they sat above off the first screen.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { RefreshCw, AlertTriangle, Info } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../campaigns/FilterDropdown'

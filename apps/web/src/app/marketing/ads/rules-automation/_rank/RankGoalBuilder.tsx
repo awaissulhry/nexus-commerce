@@ -11,7 +11,8 @@
  * Re-skinned to the H10 builder chrome (h10-rb-* / cp-*) so it's seamless with the other builders.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, AlertTriangle } from 'lucide-react'
 import { Button, Input, RadioCard, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 

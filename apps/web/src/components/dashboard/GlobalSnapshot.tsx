@@ -15,7 +15,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowUpRight, ShoppingCart, Package, Mail, RefreshCw, X } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { AnchoredPopover } from '@/app/_shared/grid-lens/AnchoredPopover'

@@ -38,8 +38,8 @@ describe('mergeStoredValueOrder — value order resolution', () => {
     const pa = { _axisSortOrder: { Taglia: ['S', 'M', 'L', 'XL'] } }
     const valueOrder = mergeStoredValueOrder(pa)
 
-    // The legacy raw-name entry is surfaced under its raw key.
-    expect(valueOrder).toEqual({ Taglia: ['S', 'M', 'L', 'XL'] })
+    // The legacy raw-name entry is surfaced under its canonical synonym key.
+    expect(valueOrder).toEqual({ __dim1__: ['S', 'M', 'L', 'XL'] })
 
     // And it drives the sort (unsorted input → legacy order), matched
     // case-insensitively and via the raw-name fallback at the call site.
@@ -74,7 +74,7 @@ describe('mergeStoredValueOrder — value order resolution', () => {
     // Colore (__dim0__) isn't covered by the value order → merged; Taglia is.
     expect(valueOrder).toEqual({
       __dim1__: ['XL', 'L', 'M', 'S'],
-      Colore: ['Rosso', 'Blu'],
+      __dim0__: ['Rosso', 'Blu'],
     })
   })
 

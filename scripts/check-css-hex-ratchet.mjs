@@ -40,13 +40,23 @@ const TOKEN_SOURCES = ['design-system/styles/tokens.css', 'design-system/styles/
 
 const HEX = /#[0-9a-fA-F]{3,8}\b/g;
 
-// Untracked files are another session's work in a shared tree, not part of this push — counting
-// them can fail a push that has nothing to do with them. Same rule as ds-conformance-guard.
+/* 🔴 DISCLOSED EDIT by DS.1 under hub ruling #591 — ENUMERATION ONLY. No rule, threshold or
+   baseline is touched.
+
+   The rationale below was deliberate and is preserved because it is right in the general case: in a
+   shared tree, another session's untracked work-in-progress should not fail your push. **It is wrong
+   for this programme.** Nothing here is committed; the whole rebuild lands in ONE push on the
+   Owner's word, so at that moment every untracked file IS part of the push — ~563 of them. Excluding
+   them means every green this gate printed was over a subset nobody chose, and the surfaces it has
+   never read are the new ones. `--exclude-standard` keeps `.gitignore` honoured. */
+// SUPERSEDED RATIONALE: "Untracked files are another session's work in a shared tree, not part of
+// this push — counting them can fail a push that has nothing to do with them."
 let tracked = null;
 const isTracked = (p) => {
   if (tracked === null) {
     try {
-      tracked = new Set(execSync('git ls-files -z', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean));
+      tracked = new Set((execSync('git ls-files -z', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+        + execSync('git ls-files --others --exclude-standard -z', { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })).split('\0').filter(Boolean));
     } catch { tracked = new Set(); }
   }
   return tracked.size === 0 || tracked.has(relative(process.cwd(), p));
@@ -83,9 +93,14 @@ if (mode === '--census') {
 }
 
 if (mode === '--baseline') {
+  // 🔴 CARRY `reasons` FORWARD. A deliberately-raised entry is only defensible while the sentence
+  // explaining it survives, and a writer that emits a fixed object shape deletes it on the next
+  // `--baseline` run — silently, leaving a raised number with no argument behind it. (DS.1, #605.)
+  const prevReasons = existsSync(BASELINE) ? (JSON.parse(readFileSync(BASELINE, 'utf8')).reasons ?? {}) : {};
+  const reasons = Object.fromEntries(Object.entries(prevReasons).filter(([f]) => counts[f] !== undefined));
   writeFileSync(BASELINE, JSON.stringify({
-    note: 'Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero.',
-    updatedAt: new Date().toISOString().slice(0, 10), total, files: counts,
+    note: 'Raw-hex ratchet over app CSS. Conversions LOWER these; a push may never raise one. A file absent here is held at zero. `reasons` explains any entry that was deliberately raised; a raise without one is a regression.',
+    updatedAt: new Date().toISOString().slice(0, 10), total, files: counts, reasons,
   }, null, 2) + '\n');
   console.log(`baseline written: ${Object.keys(counts).length} files, ${total} literals`);
 }

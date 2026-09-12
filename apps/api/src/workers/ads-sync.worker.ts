@@ -15,7 +15,8 @@
  * for the same row collapses to one job (BullMQ deduplicates on jobId).
  */
 
-import { Worker, type Job } from 'bullmq'
+import { type Job } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
 import { claimEntityWrite, dispatchPayloadFromMutations, settleAdMutations } from '../services/advertising/ads-mutation.service.js'
 import { isRetryableSyncError } from '../services/advertising/ads-write-reconcile.service.js'

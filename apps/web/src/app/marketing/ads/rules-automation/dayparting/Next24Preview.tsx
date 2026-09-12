@@ -17,7 +17,7 @@
  * a preview that paraphrased the engine would be free to drift from it.
  */
 import { useEffect, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { AlertTriangle, TrendingUp, CalendarClock } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

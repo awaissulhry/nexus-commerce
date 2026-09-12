@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Listbox } from '@/design-system/components/Listbox'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertCircle,
   CheckCircle2,

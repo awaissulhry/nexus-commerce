@@ -1,0 +1,92 @@
+/**
+ * FX.1 — type scale for /design/formula-lab.
+ *
+ * WHY THIS FILE EXISTS, and it is a finding rather than a preference. `ds-conformance-guard`
+ * forbids inline `fontSize` and tells you to "use the design-system component instead
+ * (Select/DateRangePicker/type classes)". There ARE no type classes: the DS ships no typography
+ * component and no type-scale utility. Every `font-size: var(--nds-font-size-*)` in
+ * `design-system/styles/**` is a rule INSIDE a component (`.nds-thumb-preview-count` and four
+ * others), and the only single-purpose size class in the whole system is
+ * `.nds-tbtn-kbd { font-size: 9px }`. So the guard's own remedy is unavailable, and a page has
+ * nowhere to put a size except inline — which the guard then fails.
+ *
+ * This module is therefore the smallest thing that conforms: page-local classes that READ THE DS
+ * TOKENS. It is not a second type scale — every class below except the two marked OFF-SCALE
+ * resolves to a token the DS already publishes.
+ *
+ * 🔴 STATUS, hub ruling #612 (2026-09-02): this file STAYS as the smallest conforming thing
+ * **until real type classes exist**. The type-scale question went to DS.2 as an audit — measure
+ * and propose, no change — on the numbers below; the hub rules the scale on DS.2's findings. The
+ * day the DS ships type classes, this file is deleted and the classNames are swapped for them.
+ *
+ * 🔴 TWO SIZES ARE OFF THE DS SCALE and are kept as literals so they stay visible to the hub
+ * rather than being quietly snapped to a neighbour — snapping would change the rendered pixels
+ * the Owner reviewed and the provenance acceptance was measured on. Reported, not fudged.
+ */
+
+/* ── on the DS scale: these are the published tokens, not new values ────────────────────── */
+
+/* --nds-font-size-md = 15px */
+.h2 {
+  font-size: var(--nds-font-size-md);
+}
+
+/* --nds-font-size-base = 13px — the page's body size and the grid cell's */
+.body {
+  font-size: var(--nds-font-size-base);
+}
+
+/* --nds-font-size-sm = 12px */
+.sm {
+  font-size: var(--nds-font-size-sm);
+}
+
+/* --nds-font-size-xs-plus = 11.5px */
+.xsPlus {
+  font-size: var(--nds-font-size-xs-plus);
+}
+
+/* --nds-font-size-xs = 11px */
+.xs {
+  font-size: var(--nds-font-size-xs);
+}
+
+/* ── OFF the DS scale — awaiting the hub's ruling ───────────────────────────────────────── */
+
+/**
+ * 20px. The page h1. The DS scale steps lg 18 → xl 22, so there is no 20. Both neighbours change
+ * the heading's size, so neither is a silent substitution.
+ */
+.title {
+  font-size: 20px;
+}
+
+/**
+ * 12.5px, used three times: the formula editor's field, the error state's formula text, and the
+ * contrast table. It is the monospace size — JetBrains Mono runs visibly larger than the UI face at
+ * the same nominal size, so 13px mono beside 13px UI text reads as bigger, and 12px mono reads as
+ * thin against it.
+ *
+ * 🔴 CORRECTION TO MY OWN FIRST NOTE HERE, which said "the DS scale has no half-step between sm 12
+ * and base 13". That is true of the TOKENS and false of the DS's actual CSS:
+ * `primitives.css:948` `.nds-field.sm > input` and `:955` `.nds-select.sm select` are both
+ * **12.5px, hard-coded**. So the DS already uses this size in two components and simply never gave
+ * it a token — while 11.5px DID get one (`--nds-font-size-xs-plus`). That asymmetry is the finding,
+ * and it is a DS question, not a mock question: this page is asking for a size the DS uses but
+ * cannot name.
+ *
+ * 🔴 ON THE `Input` IT DOES NOT WIN, AND THAT IS LEFT STANDING DELIBERATELY. The DS field styles
+ * its own text with `.nds-field.xs input` (specificity 0,2,1); this class is 0,1,0, so the field
+ * renders at the DS's own 11.5px. The old inline `fontSize` beat everything, which is exactly how
+ * the page came to override a DS component's type size without anyone noticing — the guard's whole
+ * point. Measured: the two formula inputs (one per theme) moved 12.5px → 11.5px; every other
+ * element on the page is byte-identical.
+ *
+ * Not fixed here, because every fix is worse than the finding: `.mono.mono.mono` wins on
+ * specificity and is a hack; `:global(.nds-field) input` reaches into a DS component's internals
+ * from a page stylesheet, which is a fork by another name. If a dense mono field is a real need it
+ * belongs in the DS, on `Input` itself. Reported to the hub, not fudged.
+ */
+.mono {
+  font-size: 12.5px;
+}

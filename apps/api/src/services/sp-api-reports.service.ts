@@ -1,3 +1,4 @@
+import { amazonSpClient } from '../lib/amazon-sp-client.js'
 /**
  * F.3.1 — Generic SP-API report puller.
  *
@@ -71,58 +72,7 @@ export function getSpApiClient(): SellingPartner {
   return getClient()
 }
 
-function getClient(): SellingPartner {
-  if (cachedClient) return cachedClient
-
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY
-  const roleArn = process.env.AWS_ROLE_ARN
-
-  if (
-    !clientId ||
-    !clientSecret ||
-    !refreshToken ||
-    !accessKeyId ||
-    !secretAccessKey ||
-    !roleArn
-  ) {
-    throw new Error(
-      'sp-api-reports: missing one or more required env vars ' +
-        '(AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, ' +
-        'AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN). ' +
-        'See AMAZON_API_AUTHORIZATION.md.',
-    )
-  }
-
-  // Region selection: env override or default to 'eu' (Xavia primary).
-  // For multi-region sellers (NA + EU + FE), use a different cached client
-  // per region — out of v0 scope, single-region cache is fine for now.
-  const region = (process.env.AMAZON_REGION ?? 'eu') as 'eu' | 'na' | 'fe'
-
-  cachedClient = new SellingPartner({
-    region,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: {
-      auto_request_tokens: true,
-      auto_request_throttled: true,
-    },
-  } as any)
-
-  // L.3.2 — every callAPI now writes an OutboundApiCallLog row.
-  instrumentSellingPartner(cachedClient as never, {
-    channel: 'AMAZON',
-    triggeredBy: 'cron',
-  })
-
-  return cachedClient
-}
+function getClient(): SellingPartner { return amazonSpClient() }
 
 /**
  * RPT.9 — how many rows a report actually returned.

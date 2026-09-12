@@ -1,0 +1,48 @@
+{
+  "at": "2026-09-12T00:26:06.719213+00:00",
+  "target": "local API :8091, local nexus_development",
+  "marketplaceStatus": 200,
+  "amazonMarkets": 11,
+  "Belgium": {
+    "workspaceId": "nexus_legacy_workspace",
+    "id": "d6b09afc-f6ff-4053-a196-fea88917a436",
+    "channel": "AMAZON",
+    "code": "BE",
+    "name": "Amazon Belgium",
+    "marketplaceId": "AMEN7PMS3EDWL",
+    "region": "EU",
+    "currency": "EUR",
+    "language": "nl",
+    "languages": [
+      "nl",
+      "fr"
+    ],
+    "domainUrl": "amazon.com.be",
+    "isActive": true,
+    "vatRate": "21",
+    "taxInclusive": true,
+    "fbaProgram": null,
+    "isParticipating": true,
+    "participationStatus": "PARTICIPATING",
+    "participationCheckedAt": "2026-09-08T09:30:07.693Z",
+    "schemaMapping": {},
+    "createdAt": "2026-05-22T03:10:16.509Z",
+    "updatedAt": "2026-09-08T09:30:09.986Z"
+  },
+  "globalStatus": 200,
+  "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+  "family": "XAVIA GALE",
+  "locales": [
+    "de",
+    "en",
+    "es",
+    "fr",
+    "it",
+    "nl",
+    "pl",
+    "sv",
+    "tr"
+  ],
+  "writes": 0,
+  "restore": "None; read-only."
+}

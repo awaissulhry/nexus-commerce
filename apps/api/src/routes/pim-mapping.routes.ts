@@ -1,3 +1,4 @@
+import { listMappingImpactReviews } from '../services/pim/mapping/impact.service.js'
 /**
  * PIM D.2 — Mapping editor backend.
  *
@@ -44,7 +45,7 @@ import { validatePublish } from '../services/pim/publish-validator.js'
 import { previewPayload } from '../services/pim/payload-preview.js'
 import { suggestMappings } from '../services/pim/mapping-suggest.service.js'
 import { suggestMappingsAI } from '../services/pim/mapping-suggest-ai.service.js'
-import { recordMappingRevision, listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
+import { listMappingRevisions, rollbackMapping } from '../services/pim/mapping-revision.service.js'
 import { computeCoverageMatrix } from '../services/pim/mapping-coverage.service.js'
 import { simulateRuleChange } from '../services/pim/mapping-simulate.service.js'
 import { syncSchemaToChannelSchema } from '../services/pim/schema-sync-bridge.js'
@@ -183,40 +184,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   }>(
     '/pim/mappings/:channel/:code/:fieldKey',
     async (request, reply) => {
-      const { channel, code, fieldKey } = request.params
-      const productType = request.query.productType?.trim() || undefined
-      const rule = request.body
-
-      // Cheap pre-check so the API returns 400 with rich error info
-      // instead of letting upsertFieldMapping throw further in.
-      const validationErrors = validateFieldRule(fieldKey, rule)
-      if (validationErrors.length > 0) {
-        return reply.status(400).send({
-          error: 'invalid_rule',
-          details: validationErrors,
-        })
-      }
-
-      try {
-        // FM.13 — snapshot the pre-edit mapping for version history/rollback.
-        await recordMappingRevision(channel, code, {
-          changedBy: (request as any).user?.id ?? null,
-          reason: `upsert ${fieldKey}${productType ? ` [${productType}]` : ''}`,
-        }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
-        const next = await upsertFieldMapping(channel, code, fieldKey, rule, productType)
-        const saved = productType
-          ? next.byProductType?.[productType]?.[fieldKey]
-          : next.fields[fieldKey]
-        return reply.send({ ok: true, rule: saved })
-      } catch (err) {
-        if (err instanceof MarketplaceNotFoundError) {
-          return reply.status(404).send({ error: err.message })
-        }
-        if (err instanceof InvalidMappingError) {
-          return reply.status(400).send({ error: 'invalid_rule', details: err.errors })
-        }
-        throw err
-      }
+      return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review and activate it before changing shared mappings.', href: '/channels/mapping' })
     },
   )
 
@@ -400,12 +368,12 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // name match). Read-only; the operator applies via PUT.
   fastify.get<{
     Params: { channel: string; code: string }
-    Querystring: { productType?: string }
+    Querystring: { productType?: string; productId?: string }
   }>('/pim/mappings/:channel/:code/suggest', async (request, reply) => {
     const { channel, code } = request.params
     const productType = request.query.productType?.trim() || undefined
     try {
-      const result = await suggestMappings({ channel, code, productType })
+      const result = await suggestMappings({ channel, code, productType, productId: request.query.productId })
       return reply.send(result)
     } catch (err: any) {
       request.log.error({ err }, 'mapping suggest failed')
@@ -418,12 +386,12 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   // budget/kill-switch-aware, review-gated (caller confirms before write).
   fastify.post<{
     Params: { channel: string; code: string }
-    Querystring: { productType?: string }
+    Querystring: { productType?: string; productId?: string }
   }>('/pim/mappings/:channel/:code/suggest-ai', async (request, reply) => {
     const { channel, code } = request.params
     const productType = request.query.productType?.trim() || undefined
     try {
-      const result = await suggestMappingsAI({ channel, code, productType })
+      const result = await suggestMappingsAI({ channel, code, productType, productId: request.query.productId })
       return reply.send(result)
     } catch (err: any) {
       request.log.error({ err }, 'mapping suggest-ai failed')
@@ -435,22 +403,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { channel: string; code: string; fieldKey: string }; Querystring: { productType?: string } }>(
     '/pim/mappings/:channel/:code/:fieldKey',
     async (request, reply) => {
-      const { channel, code, fieldKey } = request.params
-      const productType = request.query.productType?.trim() || undefined
-      try {
-        // FM.13 — snapshot the pre-delete mapping for version history/rollback.
-        await recordMappingRevision(channel, code, {
-          changedBy: (request as any).user?.id ?? null,
-          reason: `delete ${fieldKey}${productType ? ` [${productType}]` : ''}`,
-        }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
-        await removeFieldMapping(channel, code, fieldKey, productType)
-        return reply.send({ ok: true })
-      } catch (err) {
-        if (err instanceof MarketplaceNotFoundError) {
-          return reply.status(404).send({ error: err.message })
-        }
-        throw err
-      }
+      return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review and activate it before changing shared mappings.', href: '/channels/mapping' })
     },
   )
 
@@ -461,7 +414,8 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { channel, code } = request.params
       const revisions = await listMappingRevisions(channel, code)
-      return reply.send({ revisions })
+      const reviews = await listMappingImpactReviews(channel, code, (request as any).user?.id ?? (request as any).authUser?.id ?? null)
+      return reply.send({ revisions, reviews })
     },
   )
 
@@ -471,17 +425,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { channel: string; code: string; revisionId: string } }>(
     '/pim/mappings/:channel/:code/rollback/:revisionId',
     async (request, reply) => {
-      const { channel, code, revisionId } = request.params
-      try {
-        const restored = await rollbackMapping(channel, code, revisionId)
-        return reply.send({ ok: true, mapping: restored })
-      } catch (err: any) {
-        const msg = err?.message ?? 'rollback failed'
-        if (msg.includes('not found')) return reply.status(404).send({ error: msg })
-        if (msg.includes('invalid')) return reply.status(400).send({ error: msg })
-        request.log.error({ err }, 'mapping rollback failed')
-        return reply.status(500).send({ error: msg })
-      }
+      return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review and activate it before changing shared mappings.', href: '/channels/mapping' })
     },
   )
 
@@ -492,28 +436,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: { productType?: string }
     Body: { rules: Array<{ fieldKey: string; rule: FieldMappingRule }> }
   }>('/pim/mappings/:channel/:code/bulk', async (request, reply) => {
-    const { channel, code } = request.params
-    const productType = request.query.productType?.trim() || undefined
-    const rules = request.body?.rules
-    if (!Array.isArray(rules) || rules.length === 0) {
-      return reply.status(400).send({ error: 'rules (non-empty array of { fieldKey, rule }) is required' })
-    }
-    if (rules.length > 500) return reply.status(400).send({ error: 'Max 500 rules per call' })
-    try {
-      await recordMappingRevision(channel, code, {
-        changedBy: (request as any).user?.id ?? null,
-        reason: `bulk upsert ${rules.length}${productType ? ` [${productType}]` : ''}`,
-      }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
-      const result = await bulkUpsertFieldMappings(channel, code, rules, productType)
-      return reply.send({ ok: true, count: result.count })
-    } catch (err: any) {
-      if (err instanceof InvalidMappingError) {
-        return reply.status(400).send({ error: 'invalid_rules', details: err.errors })
-      }
-      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
-      request.log.error({ err }, 'bulk mapping upsert failed')
-      return reply.status(500).send({ error: err?.message ?? 'bulk upsert failed' })
-    }
+      return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review and activate it before changing shared mappings.', href: '/channels/mapping' })
   })
 
   // ── DELETE /pim/mappings/:channel/:code/bulk ────────────────────
@@ -523,24 +446,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: { productType?: string }
     Body: { fieldKeys: string[] }
   }>('/pim/mappings/:channel/:code/bulk', async (request, reply) => {
-    const { channel, code } = request.params
-    const productType = request.query.productType?.trim() || undefined
-    const fieldKeys = request.body?.fieldKeys
-    if (!Array.isArray(fieldKeys) || fieldKeys.length === 0) {
-      return reply.status(400).send({ error: 'fieldKeys (non-empty array) is required' })
-    }
-    try {
-      await recordMappingRevision(channel, code, {
-        changedBy: (request as any).user?.id ?? null,
-        reason: `bulk remove ${fieldKeys.length}${productType ? ` [${productType}]` : ''}`,
-      }).catch((e) => request.log.warn({ e }, 'recordMappingRevision failed (non-blocking)'))
-      const result = await bulkRemoveFieldMappings(channel, code, fieldKeys, productType)
-      return reply.send({ ok: true, count: result.count })
-    } catch (err: any) {
-      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
-      request.log.error({ err }, 'bulk mapping remove failed')
-      return reply.status(500).send({ error: err?.message ?? 'bulk remove failed' })
-    }
+      return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review and activate it before changing shared mappings.', href: '/channels/mapping' })
   })
 
   // ── POST /pim/mappings/clone ────────────────────────────────────
@@ -554,27 +460,7 @@ const pimMappingRoutes: FastifyPluginAsync = async (fastify) => {
       addTranslate?: boolean
     }
   }>('/pim/mappings/clone', async (request, reply) => {
-    const b = request.body
-    if (!b?.from?.channel || !b?.from?.code || !Array.isArray(b.targets) || b.targets.length === 0) {
-      return reply.status(400).send({ error: 'from {channel, code} + non-empty targets[] are required' })
-    }
-    const productType = b.productType?.trim() || undefined
-    try {
-      // Snapshot each target before clone (FM.13 rollback).
-      for (const t of b.targets) {
-        await recordMappingRevision(t.channel, t.code, {
-          changedBy: (request as any).user?.id ?? null,
-          reason: `clone from ${b.from.channel}/${b.from.code}${productType ? ` [${productType}]` : ''}`,
-        }).catch(() => {})
-      }
-      const result = await cloneMapping({ from: b.from, targets: b.targets, productType, addTranslate: b.addTranslate })
-      return reply.send(result)
-    } catch (err: any) {
-      const msg = err?.message ?? 'clone failed'
-      if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: msg })
-      request.log.error({ err }, 'mapping clone failed')
-      return reply.status(500).send({ error: msg })
-    }
+    return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Create a mapping impact review for each clone target, then activate the reviewed destinations.' })
   })
 
   // ── GET /pim/mappings/coverage ──────────────────────────────────

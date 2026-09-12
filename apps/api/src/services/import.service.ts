@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Import Service — Rithum-Style Relational Importer
  *
@@ -157,7 +158,7 @@ export class ImportService {
 
   private async upsertMasterProduct(row: AmazonImportRow) {
     return prisma.product.upsert({
-      where: { sku: row.sku },
+      where: { workspace_sku: workspaceKey({ sku: row.sku }) },
       update: {
         name: row.title,
         basePrice: row.price,

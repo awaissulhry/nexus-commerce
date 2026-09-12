@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SR.1 — Review ingest pipeline.
  *
@@ -166,12 +167,12 @@ async function updateCategoryRates(reviewId: string, result: ExtractResult): Pro
     }
     await prisma.reviewCategoryRate.upsert({
       where: {
-        productId_marketplace_category_date: {
+        productId_marketplace_category_date: workspaceKey({
           productId: review.productId,
           marketplace: review.marketplace,
           category,
           date: day,
-        },
+        }),
       },
       create: {
         productId: review.productId,

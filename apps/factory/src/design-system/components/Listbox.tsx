@@ -2,14 +2,17 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronDown, Search } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
 import type { Size } from '../primitives/size'
-import { groupOptions } from '../lib/group-options'
-import { searchOptions } from '../lib/option-search'
+import { ListboxPanel } from './ListboxPanel'
 
 export interface ListboxOption {
+  /** Additional searchable terms without repeating them in the visible option label. */
+  searchText?: string
+  /** Supporting value at the end of the option row; the trigger continues to show the label. */
+  trailing?: ReactNode
   value: string
   label: string
   disabled?: boolean
@@ -63,7 +66,7 @@ export interface ListboxProps {
   disabled?: boolean
   /** trigger width. Every one of the ads console's 97 select call sites sets one. */
   width?: number | string
-  /** force the in-popover search box; it otherwise appears past SEARCH_THRESHOLD options */
+  /** force the in-popover search box; it otherwise appears past `LISTBOX_SEARCH_THRESHOLD` (D18: 9+ options) */
   searchable?: boolean
   searchPlaceholder?: string
   /**
@@ -79,7 +82,6 @@ export interface ListboxProps {
 }
 
 /** Past this many options a picker gets a search box without being asked. */
-const SEARCH_THRESHOLD = 7
 
 /**
  * Plain single-select styled dropdown — the zero-native-control replacement
@@ -91,41 +93,18 @@ const SEARCH_THRESHOLD = 7
 export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
   width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false }: ListboxProps) {
   const [open, setOpen] = useState(false)
-  const [q, setQ] = useState('')
-  const [active, setActive] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const { popRef, style: popStyle } = usePopoverPosition(open, ref, { width: 'anchor' })
   useClickAway([ref, popRef], () => setOpen(false), open)
   const selected = options.find((o) => o.value === value)
-  // Ranked, separator-aware matching — a raw `includes` fails on names like "GALE | IT | Broad".
-  const showSearch = searchable || options.length > SEARCH_THRESHOLD
-  const ranked = showSearch ? searchOptions(q, options, (o) => o.label) : options
-  // Group headings are visual, but they REORDER the list, and keyboard nav indexes a flat array.
-  // `groupOptions` returns both halves together so they cannot drift apart — see its tests.
-  const grouped = groupOptions(ranked)
-  const groups = grouped?.groups ?? null
-  const matches = grouped?.flat ?? ranked
-  const hasOwnEmpty = options.some((o) => o.value === '')
-  const showClear = emptyLabel != null && !hasOwnEmpty
-  const pick = (v: string) => { onChange(v); setOpen(false); setQ(''); setActive(0) }
-  const renderOption = (o: ListboxOption, i: number) => (
-    <button key={o.value} type="button" role="option" aria-selected={o.value === value} disabled={o.disabled}
-      className={[o.value === value ? 'on' : '', showSearch && i === active ? 'active' : ''].filter(Boolean).join(' ') || undefined} title={o.title ?? o.label}
-      onClick={() => pick(o.value)}>
-      {o.leading != null && <span className="nds-listbox-lead">{o.leading}</span>}
-      {o.label}
-    </button>
-  )
+  // Choosing or cancelling a portalled option returns to the owning control.
+  // Click-away still leaves focus at the user's newly chosen destination.
+  const close = () => { setOpen(false); triggerRef.current?.focus() }
 
   return (
-    <div className={['nds-listbox', size === 'md' ? '' : size, className].filter(Boolean).join(' ')} style={width != null ? { width } : undefined} ref={ref} onKeyDown={(e) => (() => {
-        if (!open) return
-        if (e.key === 'Escape') { e.preventDefault(); setOpen(false); setQ(''); setActive(0) }
-        else if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, matches.length - 1)) }
-        else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => Math.max(i - 1, 0)) }
-        else if (e.key === 'Enter') { const m = matches[active]; if (m) { e.preventDefault(); pick(m.value) } }
-      })()}>
-      <button type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
+    <div className={['nds-listbox', size === 'md' ? '' : size, className].filter(Boolean).join(' ')} style={width != null ? { width } : undefined} ref={ref}>
+      <button ref={triggerRef} type="button" id={id} aria-describedby={describedBy} className="nds-listbox-btn" disabled={disabled} aria-haspopup="listbox" aria-expanded={open} aria-label={ariaLabel}
         onClick={() => setOpen((o) => !o)}>
         {selected?.leading != null && <span className="nds-listbox-lead">{selected.leading}</span>}
         <span className={selected == null && (emptyIsPlaceholder || emptyLabel == null) ? 'ph' : undefined}>{selected?.label ?? emptyLabel ?? placeholder}</span>
@@ -133,39 +112,17 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
       </button>
       {open && (
         createPortal(
-          <div ref={popRef} style={popStyle} className="nds-combo-pop" role="listbox">
-            {showSearch && (
-              <div className="nds-combo-search">
-                <Search size={13} aria-hidden />
-                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={searchPlaceholder} aria-label="Search options" />
-              </div>
-            )}
-            {showClear && (
-              <button type="button" role="option" aria-selected={!value} className={!value ? 'on' : undefined}
-                onClick={() => pick('')}>
-                {emptyLabel}
-              </button>
-            )}
-            {matches.length === 0 && <div className="nds-combo-empty">No matches</div>}
-            {groups
-              ? (() => {
-                  let i = -1
-                  return groups.map((g) => (
-                    <div className="nds-combo-group" role="group" aria-label={g.name || undefined} key={g.name}>
-                      {g.name !== '' && (
-                        <div className="nds-combo-grouphd" aria-hidden>
-                          {g.name}
-                        </div>
-                      )}
-                      {g.options.map((o) => {
-                        i += 1
-                        return renderOption(o, i)
-                      })}
-                    </div>
-                  ))
-                })()
-              : matches.map((o, i) => renderOption(o, i))}
-          </div>,
+          <ListboxPanel
+            panelRef={popRef}
+            style={popStyle}
+            options={options}
+            value={value}
+            onCommit={(v) => { onChange(v); close() }}
+            onCancel={close}
+            searchable={searchable}
+            searchPlaceholder={searchPlaceholder}
+            emptyLabel={emptyLabel}
+          />,
           document.body,
         )
       )}

@@ -19,8 +19,8 @@ Concretely, when you build anything:
    DS. Promote it here — generalized, tokenized, cataloged — and import it back
    into the feature.
 3. **Keep it platform-consistent.** New UI uses `.nds-*` classes + the
-   **semantic** tokens (`--text-*` / `--surface-*` / `--border-*` / `--status-*` /
-   `--color-primary`); no raw hex, no raw `--nds-*-NNN` ramp, no raw Tailwind
+   **semantic `--nds-*`** tokens (`--nds-text` / `--nds-surface` / `--nds-border` /
+   `--nds-primary`); no platform aliases, no raw hex, no raw `--nds-*-NNN` ramp, no raw Tailwind
    palette. One `Tone` vocabulary (`neutral · info · success · warning · danger`),
    one `Size` scale (`sm · md · lg · xl`), `variant` only for emphasis.
 4. **Page-specific one-offs stay out** of the system — they live in the feature's
@@ -60,6 +60,7 @@ That is how the look stays uniform across the ~290 pages as they rebuild onto it
 | Component | Purpose |
 |---|---|
 | `Card` | Panel + optional header / header-action slot |
+| `Disclosure` | Collapsible supporting content with native keyboard and expanded-state semantics |
 | `EmptyState` | Icon + title + description + CTA for empty/zero views |
 | `Tabs` | Underline-indicator tab strip (controlled) |
 | `Pagination` | Windowed page list with ellipses + prev/next |

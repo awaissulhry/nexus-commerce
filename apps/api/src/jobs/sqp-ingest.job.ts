@@ -323,6 +323,6 @@ export function startSqpIngestCron(): void {
   }
   // Daily 03:45 UTC (after sales-report at 02:00); fetches the current WEEK each
   // run — idempotent upsert keeps it fresh as Amazon finalises the week.
-  scheduledTask = cron.schedule('45 3 * * *', () => void runSqpIngestCron())
+  scheduledTask = cron.schedule('45 3 * * *', async () => { await runSqpIngestCron() })
   logger.info('sqp-ingest cron scheduled (45 3 * * *)')
 }

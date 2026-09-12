@@ -17,12 +17,13 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { ebayAuthService } from '../services/ebay-auth.service.js'
 import { siteIdForMarket } from '../services/ebay-trading-api.service.js'
-import { pushDescriptions } from '../services/ebay-description-push.service.js'
+import { executePresentationPublication, getPresentationPublication, reviewPresentationPublication } from '../services/ebay-presentation-publication.service.js'
+import type { PresentationDestinationInput } from '../services/ebay-presentation-order.service.js'
+import { MappingConflict } from '../services/pim/mapping/revision-token.js'
 import { collectInventoryDrift } from '../services/ebay-inventory-drift.service.js'
 import { relinkEbayItemId } from '../services/ebay-itemid-relink.service.js'
 import { resolveConnection, tryResolveConnection, listActiveConnections } from '../services/connection-resolver.service.js'
 
-const MAX_PRODUCTS_PER_CALL = 50
 
 export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance) {
   // ── ItemID re-link: verify against eBay, then repair ChannelListing AND
@@ -98,62 +99,21 @@ export default async function ebayDescriptionPushRoutes(fastify: FastifyInstance
     },
   )
 
-  fastify.post<{ Body: { productIds?: unknown; marketplace?: string; themeId?: string } }>(
-    '/ebay/description-push',
-    async (request, reply) => {
-      const rawIds = request.body?.productIds
-      const productIds = Array.isArray(rawIds)
-        ? [...new Set(rawIds.map((p) => String(p).trim()).filter(Boolean))]
-        : []
-      if (productIds.length === 0) {
-        return reply.code(400).send({ error: 'productIds (non-empty string[]) required' })
-      }
-      if (productIds.length > MAX_PRODUCTS_PER_CALL) {
-        return reply.code(400).send({ error: `too many products — max ${MAX_PRODUCTS_PER_CALL} per call` })
-      }
-      const marketplace = String(request.body?.marketplace ?? 'IT').toUpperCase()
-      try {
-        siteIdForMarket(marketplace)
-      } catch {
-        return reply.code(400).send({ error: `unknown marketplace: ${marketplace}` })
-      }
-      const themeId =
-        typeof request.body?.themeId === 'string' && request.body.themeId.trim()
-          ? request.body.themeId.trim()
-          : undefined
-      // A typo'd themeId must fail loudly HERE — the renderer silently falls
-      // back to the raw body for unknown ids, which would push unthemed
-      // descriptions live while looking like success.
-      if (themeId && themeId !== 'none') {
-        const theme = await prisma.ebayDescriptionTheme.findUnique({ where: { id: themeId } })
-        if (!theme) return reply.code(400).send({ error: `unknown themeId: ${themeId}` })
-        if (!theme.active) return reply.code(400).send({ error: `theme "${theme.name}" is inactive` })
-      }
+  // The historical endpoint coupled global theme assignment and unscoped marketplace writes.
+  // Require the exact destination review; a theme library sample is never an assignment target.
+  fastify.post('/ebay/description-push', async (_request, reply) => reply.code(409).send({ error: 'Save the listing theme assignment first, then create and execute a destination-specific presentation publication review', reviewUrl: '/api/ebay/presentation-publications/review' }))
 
-      // MAP.3 — DECLARED.
-      const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
-      if (!connection) return reply.code(503).send({ error: 'No active eBay connection' })
-      let token: string
-      try {
-        token = await ebayAuthService.getValidToken(connection.id)
-      } catch (err: unknown) {
-        return reply
-          .code(503)
-          .send({ error: `Failed to get eBay token: ${err instanceof Error ? err.message : String(err)}` })
-      }
-
-      try {
-        const result = await pushDescriptions(
-          { productIds, marketplace, themeId },
-          { prisma, oauthToken: token, log: request.log },
-        )
-        return reply.send(result)
-      } catch (err: unknown) {
-        request.log.error(err, 'ebay/description-push failed')
-        return reply
-          .code(502)
-          .send({ error: err instanceof Error ? err.message : 'Description push failed' })
-      }
-    },
-  )
+  const actor = (request: any): string | null => request.user?.id ?? request.authUser?.id ?? null
+  fastify.post<{ Body: { destinations: PresentationDestinationInput[]; operation: 'order' | 'description' } }>('/ebay/presentation-publications/review', async (request, reply) => {
+    try { return await reviewPresentationPublication(request.body?.destinations, request.body?.operation, actor(request)) }
+    catch (e) { if (e instanceof MappingConflict) return reply.code(409).send({ error: e.message }); throw e }
+  })
+  fastify.get<{ Params: { id: string } }>('/ebay/presentation-publications/:id', async (request, reply) => {
+    const result = await getPresentationPublication(request.params.id, actor(request))
+    return result ?? reply.code(404).send({ error: 'Publication review not found' })
+  })
+  fastify.post<{ Params: { id: string } }>('/ebay/presentation-publications/:id/execute', async (request, reply) => {
+    try { const result = await executePresentationPublication(request.params.id, actor(request)); return result ?? reply.code(404).send({ error: 'Publication review not found' }) }
+    catch (e) { if (e instanceof MappingConflict) return reply.code(409).send({ error: e.message }); throw e }
+  })
 }

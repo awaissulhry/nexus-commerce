@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Button, Pill, Textarea } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { H10Modal, Err } from '../_lib/modal'
 import { postEbayAds, useWriteMode, SandboxBanner } from '../_lib'
 

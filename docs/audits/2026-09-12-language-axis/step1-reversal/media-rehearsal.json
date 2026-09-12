@@ -1,0 +1,81 @@
+{
+  "kind": "media",
+  "marker": "LX1 reversible media probe 2026-09-11T23:43:33.813Z",
+  "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+  "family": "XAVIA GALE",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "base": "http://127.0.0.1:8091/api",
+  "backupPath": "/private/tmp/nexus-lx1-reversal-media-1789170213814.json",
+  "startedAt": "2026-09-11T23:43:33.814Z",
+  "apiDatabaseSnapshotMatched": true,
+  "before": {
+    "at": "2026-09-11T23:43:33.845Z",
+    "product": "e0a3dea018638654c611a8bf4c0648e9",
+    "productVersion": 1,
+    "localizedContent": "b1048b97290e370fa6e06b91e241d7350436adc8bc557fefab462dc1fb024343",
+    "translation": "f746275e26ef2a9d1b9aecc4fdae6605",
+    "translationVersion": 0,
+    "files": "56bd6e7c6f36690cf313483819405995f1dcc497162dc493b8c01a8e850946fc",
+    "listings": "d21c1e9a30bfd2009f4a35de68b405b355fb849e134a233c1f497d23526a9f54"
+  },
+  "assetId": "cmpge8b5s020qpn01cg2j45my",
+  "putStartedAt": "2026-09-11T23:43:33.891Z",
+  "put": {
+    "at": "2026-09-11T23:43:33.922Z",
+    "status": 200,
+    "bodyHash": "e5a222074c3c0b8f074252baa70b24c06ed70768b653b8607aeae00f6f1fbf1b"
+  },
+  "afterWrite": {
+    "at": "2026-09-11T23:43:42.042Z",
+    "product": "06f13bb376592c01d6d640a7df95d318",
+    "productVersion": 2,
+    "localizedContent": "d3daad9c4c5bfd1dfa31181de251f15fe62fc2117fff2ffc57f19549bd7ac557",
+    "translation": "f746275e26ef2a9d1b9aecc4fdae6605",
+    "translationVersion": 0,
+    "files": "56bd6e7c6f36690cf313483819405995f1dcc497162dc493b8c01a8e850946fc",
+    "listings": "d21c1e9a30bfd2009f4a35de68b405b355fb849e134a233c1f497d23526a9f54"
+  },
+  "readback": {
+    "at": "2026-09-11T23:43:42.066Z",
+    "status": 200,
+    "bodyHash": "e5a222074c3c0b8f074252baa70b24c06ed70768b653b8607aeae00f6f1fbf1b"
+  },
+  "dbMarkerPresent": true,
+  "httpMarkerPresent": true,
+  "productChangedKeys": [
+    "version",
+    "updatedAt",
+    "localizedContent"
+  ],
+  "translationChangedKeys": [],
+  "auditRowsRetained": [],
+  "restore": {
+    "committedAt": "2026-09-11T23:43:42.079Z",
+    "productKeys": [
+      "version",
+      "updatedAt",
+      "localizedContent"
+    ],
+    "translationKeys": [],
+    "compareAndSwap": true
+  },
+  "afterRestore": {
+    "at": "2026-09-11T23:43:50.198Z",
+    "product": "e0a3dea018638654c611a8bf4c0648e9",
+    "productVersion": 1,
+    "localizedContent": "b1048b97290e370fa6e06b91e241d7350436adc8bc557fefab462dc1fb024343",
+    "translation": "f746275e26ef2a9d1b9aecc4fdae6605",
+    "translationVersion": 0,
+    "files": "56bd6e7c6f36690cf313483819405995f1dcc497162dc493b8c01a8e850946fc",
+    "listings": "d21c1e9a30bfd2009f4a35de68b405b355fb849e134a233c1f497d23526a9f54"
+  },
+  "restoredByValue": true,
+  "restoredHttp": {
+    "at": "2026-09-11T23:43:50.227Z",
+    "status": 200,
+    "temporaryMarkerAbsent": true
+  },
+  "finishedAt": "2026-09-11T23:43:50.234Z"
+}

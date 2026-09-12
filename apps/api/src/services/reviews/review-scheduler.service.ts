@@ -1,3 +1,4 @@
+import { scopePublicToken } from '../../lib/workspace-public-links.js'
 /**
  * SR.4 — productType-aware review request scheduler.
  *
@@ -32,7 +33,7 @@ const ACTIVE_RETURN_STATUSES = ['REQUESTED', 'AUTHORIZED', 'IN_TRANSIT', 'RECEIV
  * encoded as base64url (32 chars).
  */
 function newSentimentToken(): string {
-  return randomBytes(24).toString('base64url')
+  return scopePublicToken(randomBytes(24).toString('base64url'))
 }
 
 // Timing resolution (per-product-type delay, anchor, preferred hour, weekend

@@ -1,0 +1,294 @@
+{
+  "at": "2026-09-11T00:14:36.839Z",
+  "target": "local development",
+  "providerOperations": "reference reads only",
+  "searches": [
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "total": 8,
+      "returned": 8,
+      "elapsedMs": 16.38779099999988
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 14.133790999999974
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 15.738375000000133
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 14.543499999999995
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "total": 6,
+      "returned": 6,
+      "elapsedMs": 10.142790999999988
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 11.559959000000163
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "total": 10,
+      "returned": 10,
+      "elapsedMs": 10.8335840000002
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 12.326790999999957
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 19.965875000000096
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 11.154874999999947
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "total": 9,
+      "returned": 9,
+      "elapsedMs": 12.553625000000011
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "total": 2,
+      "returned": 2,
+      "elapsedMs": 349.04166699999996
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "total": 0,
+      "returned": 0,
+      "elapsedMs": 212.84620800000016
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "total": 1,
+      "returned": 1,
+      "elapsedMs": 240.39670800000022
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "total": 0,
+      "returned": 0,
+      "elapsedMs": 221.4703330000002
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "total": 51,
+      "returned": 50,
+      "elapsedMs": 307.66083300000037
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "total": 44,
+      "returned": 44,
+      "elapsedMs": 39.44816600000013
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "total": 53,
+      "returned": 50,
+      "elapsedMs": 129.46574999999984
+    }
+  ],
+  "requirements": [
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "categoryId": "SUIT",
+      "state": "ready"
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "categoryId": "260979",
+      "state": "ready"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "categoryId": "1",
+      "state": "ready"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "categoryId": "gid://shopify/TaxonomyCategory/ap",
+      "state": "store"
+    }
+  ],
+  "sources": [
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "state": "ready",
+      "nodes": 1644,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "state": "ready",
+      "nodes": 1876,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "state": "ready",
+      "nodes": 1877,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "state": "ready",
+      "nodes": 1876,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "state": "ready",
+      "nodes": 1583,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "state": "ready",
+      "nodes": 1875,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "state": "ready",
+      "nodes": 1866,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "state": "ready",
+      "nodes": 1870,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "state": "ready",
+      "nodes": 1871,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "state": "ready",
+      "nodes": 1840,
+      "error": null
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "state": "ready",
+      "nodes": 1878,
+      "error": null
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "state": "ready",
+      "nodes": 17051,
+      "error": null
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "state": "ready",
+      "nodes": 10444,
+      "error": null
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "state": "ready",
+      "nodes": 12036,
+      "error": null
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "state": "ready",
+      "nodes": 11187,
+      "error": null
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "state": "ready",
+      "nodes": 15993,
+      "error": null
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "state": "ready",
+      "nodes": 3065,
+      "error": null
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "state": "ready",
+      "nodes": 14606,
+      "error": null
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "state": "unsupported",
+      "nodes": null,
+      "error": null
+    }
+  ]
+}

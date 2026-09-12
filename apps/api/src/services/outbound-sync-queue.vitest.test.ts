@@ -17,6 +17,7 @@ const db = vi.hoisted(() => ({
   },
 }))
 vi.mock('../db.js', () => ({ default: db }))
+vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'seller-test' }))
 vi.mock('./channel-publish-audit.service.js', () => ({
   writeAttemptLog: vi.fn(),
   digestPayload: () => 'digest',

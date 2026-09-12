@@ -162,10 +162,10 @@ let task: ReturnType<typeof cron.schedule> | null = null
 let running = false
 export function startAutopilotCron(): void {
   if (task) return
-  task = cron.schedule('*/15 * * * *', () => {
-    if (running) { logger.warn('[ad-autopilot] previous tick still in flight — skipping'); return }
+  task = cron.schedule('*/15 * * * *', async () => {
+    if (running) { await logger.warn('[ad-autopilot] previous tick still in flight — skipping'); return }
     running = true
-    void runAutopilotCron().finally(() => { running = false })
+    await runAutopilotCron().finally(() => { running = false })
   })
   logger.info('ad-autopilot cron scheduled (*/15 * * * *)')
 }

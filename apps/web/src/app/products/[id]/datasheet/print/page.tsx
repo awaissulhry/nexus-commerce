@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W5.48 — printable product datasheet, rebuilt.
  *
@@ -38,7 +39,7 @@
 import { prisma } from '@nexus/database'
 import { cookies } from 'next/headers'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft } from 'lucide-react'
 import PrintButtonClient from './PrintButtonClient'
 import PrintBodyFlag from './PrintBodyFlag'
@@ -378,7 +379,7 @@ export default async function ProductDatasheetPage({
     product.brand
       ? prisma.brandKit
           .findUnique({
-            where: { brand: product.brand },
+            where: { workspace_brand: workspaceKey({ brand: product.brand }) },
             select: { tagline: true },
           })
           .catch((e: unknown) => {

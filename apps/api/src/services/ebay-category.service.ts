@@ -5,6 +5,7 @@
  */
 
 import { recordApiCall } from './outbound-api-call-log.service.js'
+import { lookupEnglishAspectName } from './ebay-aspect-names.js'
 
 interface CategoryAspect {
   name: string;
@@ -25,6 +26,7 @@ const MARKETPLACE_TREE_IDS: Record<string, number> = {
   EBAY_DE: 77,
   EBAY_FR: 71,
   EBAY_UK: 3,
+  EBAY_GB: 3,
   EBAY_ES: 186,
 };
 
@@ -35,6 +37,7 @@ const MARKETPLACE_TREE_IDS: Record<string, number> = {
 function normaliseMarketplace(marketplace: string | null): string {
   if (!marketplace) return 'EBAY_US'
   const upper = marketplace.toUpperCase()
+  if (upper === 'UK' || upper === 'EBAY_UK') return 'EBAY_GB'
   if (upper.startsWith('EBAY_')) return upper
   return `EBAY_${upper}`
 }
@@ -98,6 +101,22 @@ interface CachedConditionPolicies {
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export class EbayCategoryService {
+  /** Full reference tree for background ingestion. Never called by the search UI. */
+  async downloadTaxonomyTree(marketplace: string): Promise<unknown> {
+    const token = await this.getAccessToken()
+    const base = process.env.EBAY_API_BASE ?? 'https://api.ebay.com'
+    const read = async (path: string) => {
+      const response = await fetch(`${base}/commerce/taxonomy/v1/${path}`, {
+        signal: AbortSignal.timeout(120_000), headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!response.ok) throw new Error(`eBay taxonomy download failed (${response.status}).`)
+      return response.json() as Promise<Record<string, unknown>>
+    }
+    const tree = await read(`get_default_category_tree_id?marketplace_id=${encodeURIComponent(normaliseMarketplace(marketplace))}`)
+    if (typeof tree.categoryTreeId !== 'string' || !/^\d+$/.test(tree.categoryTreeId)) throw new Error('eBay returned an invalid category tree ID.')
+    return read(`category_tree/${tree.categoryTreeId}`)
+  }
+
   private cache: Map<string, CachedCategory> = new Map();
   private searchCache: Map<string, CachedSearch> = new Map();
   private richCache: Map<string, CachedRichAspects> = new Map();
@@ -105,6 +124,7 @@ export class EbayCategoryService {
   private conditionCache: Map<string, CachedConditionPolicies> = new Map();
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
+  private tokenRequest: Promise<string> | null = null;
 
   /** Y.1 — return multiple ranked category candidates for a search
    *  query. Used by the productType picker so users see a real
@@ -292,16 +312,23 @@ export class EbayCategoryService {
    */
   // ── B3 — category breadcrumbs by ID ────────────────────────────────────────
   // The grid's category cell shows bare numeric IDs; operators are blind.
-  // These maps let it show the full path — ENGLISH from the UK tree (category
-  // ids are shared across EU sites for the vast majority of categories) with
-  // the market's localized path as fallback/secondary. One full-tree fetch per
-  // treeId, cached 24h in-memory (eBay explicitly recommends caching trees).
+  // Use the selected marketplace's tree. Matching numeric IDs in another market
+  // are not proof that the categories mean the same thing.
   private treeMaps = new Map<string, { nodes: Map<string, { name: string; parent: string | null }>; expiresAt: number }>()
+  private treeRequests = new Map<number, Promise<Map<string, { name: string; parent: string | null }> | null>>()
 
   private async loadTreeMap(treeId: number): Promise<Map<string, { name: string; parent: string | null }> | null> {
     const key = String(treeId)
     const cached = this.treeMaps.get(key)
     if (cached && cached.expiresAt > Date.now()) return cached.nodes
+    const running = this.treeRequests.get(treeId)
+    if (running) return running
+    const pending = this.fetchTreeMap(treeId).finally(() => this.treeRequests.delete(treeId))
+    this.treeRequests.set(treeId, pending)
+    return pending
+  }
+
+  private async fetchTreeMap(treeId: number): Promise<Map<string, { name: string; parent: string | null }> | null> {
     let token: string
     try {
       token = await this.getAccessToken()
@@ -312,6 +339,7 @@ export class EbayCategoryService {
     try {
       const res = await fetch(`${apiBase}/commerce/taxonomy/v1/category_tree/${treeId}`, {
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        signal: AbortSignal.timeout(15_000),
       })
       if (!res.ok) return null
       const json = (await res.json()) as {
@@ -320,6 +348,7 @@ export class EbayCategoryService {
           childCategoryTreeNodes?: unknown[]
         }
       }
+      if (!json.rootCategoryNode) return null
       const nodes = new Map<string, { name: string; parent: string | null }>()
       type TreeNode = {
         category?: { categoryId?: string; categoryName?: string }
@@ -338,7 +367,7 @@ export class EbayCategoryService {
           stack.push({ node: child, parent: id ?? parent })
         }
       }
-      this.treeMaps.set(key, { nodes, expiresAt: Date.now() + 24 * 60 * 60 * 1000 })
+      this.treeMaps.set(String(treeId), { nodes, expiresAt: Date.now() + CACHE_TTL })
       return nodes
     } catch (err) {
       console.warn(`[EbayCategoryService] category tree ${treeId} fetch failed:`, err instanceof Error ? err.message : err)
@@ -367,34 +396,41 @@ export class EbayCategoryService {
   }
 
   /**
-   * Breadcrumb paths for a set of category ids: `en` from the UK tree
-   * (English; ids shared across EU sites for most categories), `local` from
-   * the marketplace's own tree. Either can be missing — callers prefer
-   * `en ?? local`. Never throws; unresolvable ids are simply absent.
+   * Breadcrumb paths from the requested market only. English markets also expose
+   * `en` for existing callers. Unknown IDs stay absent; lookup outages can be
+   * distinguished from an unknown ID by opting into throwOnError.
    */
   async getCategoryBreadcrumbs(
     categoryIds: string[],
     marketplace: string | null,
+    options: { throwOnError?: boolean } = {},
   ): Promise<Record<string, { en?: string; local?: string }>> {
     const ids = [...new Set(categoryIds.map((s) => String(s).trim()).filter(Boolean))].slice(0, 200)
     if (ids.length === 0) return {}
     const marketplaceId = normaliseMarketplace(marketplace)
     const localTreeId = MARKETPLACE_TREE_IDS[marketplaceId]
-    const enTreeId = MARKETPLACE_TREE_IDS.EBAY_UK
-    const [localNodes, enNodes] = await Promise.all([
-      localTreeId !== undefined && localTreeId !== enTreeId ? this.loadTreeMap(localTreeId) : Promise.resolve(null),
-      this.loadTreeMap(enTreeId),
-    ])
+    if (localTreeId === undefined) {
+      if (options.throwOnError) throw new Error('Category names are unavailable for this marketplace.')
+      return {}
+    }
+    const localNodes = await this.loadTreeMap(localTreeId)
+    if (!localNodes && options.throwOnError) throw new Error('Category names are unavailable. Check the eBay connection and retry.')
     const out: Record<string, { en?: string; local?: string }> = {}
     for (const id of ids) {
-      const en = enNodes ? EbayCategoryService.buildPath(enNodes, id) : undefined
       const local = localNodes ? EbayCategoryService.buildPath(localNodes, id) : undefined
-      if (en || local) out[id] = { ...(en ? { en } : {}), ...(local ? { local } : {}) }
+      if (local) out[id] = { local, ...(localTreeId === 3 || localTreeId === 0 ? { en: local } : {}) }
     }
     return out
   }
 
   private async getAccessToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) return this.accessToken
+    if (this.tokenRequest) return this.tokenRequest
+    this.tokenRequest = this.requestAccessToken().finally(() => { this.tokenRequest = null })
+    return this.tokenRequest
+  }
+
+  private async requestAccessToken(): Promise<string> {
     // 1. Prefer the seller's OAuth token. We import lazily to avoid
     //    a circular-import / load-order issue with ebayAuthService.
     try {
@@ -416,19 +452,18 @@ export class EbayCategoryService {
       )
     }
 
-    // 2. Cached client-credentials token still valid?
-    if (this.accessToken && Date.now() < this.tokenExpiresAt - 60_000) {
-      return this.accessToken;
-    }
-
-    const appId = process.env.EBAY_APP_ID;
-    const certId = process.env.EBAY_CERT_ID;
+    // 2. Application credentials can read public taxonomy independently of seller access.
     const looksLikePlaceholder = (v?: string) =>
-      !v || v === 'your_app_id' || v === 'your_cert_id' || v.length < 8
+      !v || /^your_/i.test(v) || v.length < 8
+    // The OAuth connection flow uses CLIENT_ID / CLIENT_SECRET. Keep legacy deployments
+    // working, but choose a complete pair so credentials from two apps cannot be mixed.
+    const configured = !looksLikePlaceholder(process.env.EBAY_CLIENT_ID) && !looksLikePlaceholder(process.env.EBAY_CLIENT_SECRET)
+    const appId = configured ? process.env.EBAY_CLIENT_ID : process.env.EBAY_APP_ID
+    const certId = configured ? process.env.EBAY_CLIENT_SECRET : process.env.EBAY_CERT_ID
 
     if (looksLikePlaceholder(appId) || looksLikePlaceholder(certId)) {
       throw new Error(
-        'No eBay credentials available. Either link an eBay account in /settings/channels (preferred) or set real EBAY_APP_ID + EBAY_CERT_ID env vars.',
+        'No eBay credentials available. Link an eBay account in Settings or configure EBAY_CLIENT_ID + EBAY_CLIENT_SECRET (legacy EBAY_APP_ID + EBAY_CERT_ID is also supported).',
       );
     }
 
@@ -450,6 +485,7 @@ export class EbayCategoryService {
         async () => {
           const response = await fetch(authUrl, {
             method: "POST",
+            signal: AbortSignal.timeout(15_000),
             headers: {
               "Content-Type": "application/x-www-form-urlencoded",
               Authorization: `Basic ${credentials}`,
@@ -949,17 +985,19 @@ export class EbayCategoryService {
   async getItemConditionPolicies(
     categoryId: string,
     marketplace: string | null,
+    options: { forceRefresh?: boolean; throwOnError?: boolean } = {},
   ): Promise<EbayConditionPolicy[]> {
     const marketplaceId = normaliseMarketplace(marketplace);
     const key = `${marketplaceId}:${categoryId}`;
     const cached = this.conditionCache.get(key);
-    if (cached && cached.expiresAt > Date.now()) {
+    if (!options.forceRefresh && cached && cached.expiresAt > Date.now()) {
       return cached.conditions;
     }
     let token: string;
     try {
       token = await this.getAccessToken();
     } catch (err) {
+      if (options.throwOnError) throw err;
       console.warn(
         `[EbayCategoryService] No token for getItemConditionPolicies: ${
           err instanceof Error ? err.message : String(err)
@@ -1031,11 +1069,13 @@ export class EbayCategoryService {
           err instanceof Error ? err.message : String(err)
         }`,
       );
+      if (options.throwOnError) throw err;
       return [];
     }
     const row = (json?.itemConditionPolicies ?? []).find(
       (r) => r.categoryId === categoryId,
     );
+    if (!row && options.throwOnError) throw new Error(`eBay returned no condition policy for category ${categoryId}`);
     const conditions: EbayConditionPolicy[] = (row?.itemConditions ?? [])
       .map((c) => ({
         conditionId: c.conditionId ?? "",
@@ -1069,156 +1109,4 @@ export class EbayCategoryService {
       entries: Array.from(this.cache.keys()),
     };
   }
-}
-
-// ── eBay aspect name → English translation dictionary ───────────────────
-//
-// The Taxonomy API always returns aspect names in the marketplace language
-// (Accept-Language is ignored). We maintain a static lookup so the UI can
-// show the English meaning alongside the localized label.
-//
-// Covers IT, DE, FR, ES — the four non-English eBay markets Xavia sells on.
-// Keys are lower-cased; the lookup is case-insensitive.
-
-const ASPECT_EN: Record<string, string> = {
-  // ── Italian (IT) ──────────────────────────────────────────────────────
-  'marca': 'Brand',
-  'taglia': 'Size',
-  'colore': 'Color',
-  'materiale': 'Material',
-  'genere': 'Gender',
-  'tipo': 'Type',
-  'stile': 'Style',
-  'stagione': 'Season',
-  'modello': 'Model',
-  'produttore': 'Manufacturer',
-  'numero di serie': 'Serial number',
-  'lunghezza manica': 'Sleeve length',
-  'vestibilità': 'Fit',
-  'vestibilita': 'Fit',
-  'caratteristiche': 'Features',
-  'paese di fabbricazione': 'Country of manufacture',
-  'peso': 'Weight',
-  'peso del prodotto': 'Product weight',
-  'lunghezza': 'Length',
-  'larghezza': 'Width',
-  'altezza': 'Height',
-  'dimensioni': 'Dimensions',
-  'occasione': 'Occasion',
-  'motivo': 'Pattern',
-  'chiusura': 'Closure / Fastening',
-  'protezione': 'Protection',
-  'livello di protezione': 'Protection level',
-  'impermeabile': 'Waterproof',
-  'certificazione': 'Certification',
-  'norma': 'Standard',
-  'taglia produttore': 'Manufacturer size',
-  'linea': 'Line',
-  'collezione': 'Collection',
-  'anno': 'Year',
-  'reparto': 'Department',
-  'tipo di tessuto': 'Fabric type',
-  'composizione': 'Composition',
-  'numero articolo fornitore': 'Supplier part number',
-  'ean': 'EAN',
-  'isbn': 'ISBN',
-  'mpn': 'MPN',
-  'upc': 'UPC',
-
-  // ── German (DE) ───────────────────────────────────────────────────────
-  'marke': 'Brand',
-  'größe': 'Size',
-  'grösse': 'Size',
-  'farbe': 'Color',
-  'material': 'Material',
-  'abteilung': 'Department',
-  'stil': 'Style',
-  'modell': 'Model',
-  'hersteller': 'Manufacturer',
-  'saison': 'Season',
-  'passform': 'Fit',
-  'anlass': 'Occasion',
-  'muster': 'Pattern',
-  'verschluss': 'Closure',
-  'thema': 'Theme',
-  'herstellernummer': 'Manufacturer part number',
-  'herstellungsland und -region': 'Country of manufacture',
-  'produktart': 'Product type',
-  'produktlinie': 'Product line',
-  'type': 'Type',
-  'länge': 'Length',
-  'breite': 'Width',
-  'höhe': 'Height',
-  'gewicht': 'Weight',
-  'schutzklasse': 'Protection class',
-  'wasserdicht': 'Waterproof',
-  'zertifizierung': 'Certification',
-  'norm': 'Standard',
-  'herstellergröße': 'Manufacturer size',
-  'herstellergroesse': 'Manufacturer size',
-  'kollektion': 'Collection',
-  'jahr': 'Year',
-  'stoff': 'Fabric',
-  'zusammensetzung': 'Composition',
-  'artikelnummer des herstellers': 'Manufacturer part number',
-  'eu-schuhgröße': 'EU shoe size',
-
-  // ── French (FR) ───────────────────────────────────────────────────────
-  'marque': 'Brand',
-  'taille': 'Size',
-  'couleur': 'Color',
-  'matière': 'Material',
-  'matiere': 'Material',
-  'département': 'Department',
-  'departement': 'Department',
-  'modèle': 'Model',
-  'coupe': 'Fit',
-  'motif': 'Pattern',
-  'fermeture': 'Closure',
-  'thème': 'Theme',
-  'pays de fabrication': 'Country of manufacture',
-  'type de produit': 'Product type',
-  'longueur': 'Length',
-  'largeur': 'Width',
-  'hauteur': 'Height',
-  'poids': 'Weight',
-  'imperméable': 'Waterproof',
-  'annee': 'Year',
-  'tissu': 'Fabric',
-  'référence du fabricant': 'Manufacturer part number',
-  'numéro de pièce fabricant': 'Manufacturer part number',
-
-  // ── Spanish (ES) ──────────────────────────────────────────────────────
-  'talla': 'Size',
-  'color': 'Color',
-  'departamento': 'Department',
-  'modelo': 'Model',
-  'temporada': 'Season',
-  'ajuste': 'Fit',
-  'ocasión': 'Occasion',
-  'ocasion': 'Occasion',
-  'estampado': 'Pattern',
-  'cierre': 'Closure',
-  'tema': 'Theme',
-  'país de fabricación': 'Country of manufacture',
-  'tipo de producto': 'Product type',
-  'longitud': 'Length',
-  'anchura': 'Width',
-  'altura': 'Height',
-  'protección': 'Protection',
-  'proteccion': 'Protection',
-  'impermeable': 'Waterproof',
-  'certificación': 'Certification',
-  'colección': 'Collection',
-  'coleccion': 'Collection',
-  'ano': 'Year',
-  'tela': 'Fabric',
-  'composición': 'Composition',
-  'composicion': 'Composition',
-  'número de pieza del fabricante': 'Manufacturer part number',
-}
-
-function lookupEnglishAspectName(localizedName: string): string | undefined {
-  const key = localizedName.trim().toLowerCase()
-  return ASPECT_EN[key]
 }

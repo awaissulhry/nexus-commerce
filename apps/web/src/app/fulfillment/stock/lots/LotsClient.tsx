@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Package, AlertCircle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'

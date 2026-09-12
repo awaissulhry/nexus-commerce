@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Send-time optimization windows (STO.2) — CRUD for ReviewSendWindow.
  *
@@ -72,7 +73,7 @@ export default async function reviewSendWindowsRoutes(app: FastifyInstance) {
           isActive: w.isActive !== false,
         }
         await prisma.reviewSendWindow.upsert({
-          where: { marketplace_dayOfWeek: { marketplace, dayOfWeek } },
+          where: { marketplace_dayOfWeek: workspaceKey({ marketplace, dayOfWeek }) },
           update: data,
           create: { marketplace, dayOfWeek, ...data },
         })
@@ -105,7 +106,7 @@ export default async function reviewSendWindowsRoutes(app: FastifyInstance) {
     if (reset) await prisma.reviewSendWindow.deleteMany({ where: { marketplace: '*' } })
     for (const s of GLOBAL_SEED) {
       await prisma.reviewSendWindow.upsert({
-        where: { marketplace_dayOfWeek: { marketplace: '*', dayOfWeek: s.dayOfWeek } },
+        where: { marketplace_dayOfWeek: workspaceKey({ marketplace: '*', dayOfWeek: s.dayOfWeek }) },
         update: reset ? { hourLocal: s.hourLocal, dayRank: s.dayRank, isActive: true } : {},
         create: { marketplace: '*', dayOfWeek: s.dayOfWeek, hourLocal: s.hourLocal, dayRank: s.dayRank },
       })

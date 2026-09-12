@@ -31,10 +31,29 @@ type Manager = {
   subscribers: Set<Subscriber>;
 };
 
-const g = globalThis as unknown as { __factoryEventManager?: Manager };
+/**
+ * ONE manager per tab, at MODULE scope — deliberately NOT on `globalThis`.
+ *
+ * This file is `"use client"`, so a `globalThis` singleton ships a live `EventSource` and its
+ * subscriber `Set` to the browser on a global name, where any script on the page can read the
+ * stream or mutate the subscriber list. The pattern was borrowed from this app's SERVER singletons
+ * (`lib/db.ts`, `lib/events.ts`, `lib/auth/session.ts`), where it is correct — it survives Next's
+ * dev-time module reloading on the server. None of those three carry `"use client"`; this one did,
+ * which is the whole defect: a server idiom that crossed the boundary unchanged.
+ *
+ * Module scope gives the same guarantee the docblock above promises. A client module is evaluated
+ * once per bundle per tab, so all 9 importers share this one object exactly as they shared the
+ * global one. Nothing outside this module ever read the global — checked, not assumed.
+ *
+ * The one thing module scope does not survive is a dev HOT RELOAD, which re-evaluates the module
+ * and would leave the previous `EventSource` open. That is a dev-only leak and it is not a
+ * regression: this file has never had an HMR strategy (no `import.meta.hot`, no `module.hot`), so
+ * the global was not buying that either — it was buying nothing here.
+ */
+const MANAGER: Manager = { source: null, subscribers: new Set() };
 
 function manager(): Manager {
-  return (g.__factoryEventManager ??= { source: null, subscribers: new Set() });
+  return MANAGER;
 }
 
 function recordId(id: number): void {

@@ -135,7 +135,7 @@ describe('gradeFindings', () => {
     expect(r.graded).toBe(1) // cron-health finding is not gradeable
     expect(db.agentShadowGrade.upsert).toHaveBeenCalledTimes(1)
     const up = db.agentShadowGrade.upsert.mock.calls[0]![0]! as Record<string, never>
-    expect((up.where as { findingId: string }).findingId).toBe('f1')
+    expect((up.where as { workspace_findingId: { findingId: string } }).workspace_findingId.findingId).toBe('f1')
     expect((up.create as { agrees: boolean }).agrees).toBe(true)
   })
 })

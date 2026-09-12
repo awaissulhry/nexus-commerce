@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * IE.4 — Refresh "what's currently live on Amazon" for a product.
  *
@@ -72,7 +74,7 @@ export async function refreshAmazonLiveImages(
   let rowsDeleted = 0
 
   const sellerId =
-    process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    (await getAmazonSellerId())
   if (!sellerId) {
     throw new Error('AMAZON_SELLER_ID not configured')
   }
@@ -142,13 +144,13 @@ export async function refreshAmazonLiveImages(
       upserts.push(
         prisma.channelLiveImage.upsert({
           where: {
-            productId_channel_marketplace_externalSku_slot: {
+            productId_channel_marketplace_externalSku_slot: workspaceKey({
               productId,
               channel: 'AMAZON',
               marketplace: marketplaceCode,
               externalSku: sku,
               slot: img.variant ?? `IDX_${i}`,
-            },
+            }),
           },
           create: {
             productId,

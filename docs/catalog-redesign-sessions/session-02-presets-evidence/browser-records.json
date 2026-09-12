@@ -1,0 +1,2414 @@
+{
+  "fixture": "In-memory isolated registered routes; two families, two accounts, IT/FR, 15 primary/alias listings; no real catalog/publication",
+  "cancelWrites": [],
+  "productsUnchanged": true,
+  "listingsUnchanged": true,
+  "accountsUnchanged": true,
+  "definitionsUnchanged": true,
+  "alternateAccountAddedNoWrites": true,
+  "before": {
+    "product": [
+      {
+        "id": "p1",
+        "name": "Alpine jacket family",
+        "sku": "ALPINE",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p1-s",
+            "sku": "p1-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      },
+      {
+        "id": "p2",
+        "name": "Coastal jacket family",
+        "sku": "COASTAL",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p2-s",
+            "sku": "p2-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      }
+    ],
+    "channelConnection": [
+      {
+        "id": "account-a",
+        "displayName": "Main store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": true,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "account-b",
+        "displayName": "Second store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": false,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "channelListing": [
+      {
+        "id": "p1:account-a:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "listingWizard": [
+      {
+        "id": "existing",
+        "productId": "p1",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          }
+        ],
+        "channelsHash": "49a82431b424b4aae5741e9ae7db43e5",
+        "status": "DRAFT",
+        "version": 2,
+        "currentStep": 4,
+        "state": {
+          "variations": {
+            "includedSkus": []
+          }
+        },
+        "channelStates": {
+          "AMAZON:IT": {
+            "productType": {
+              "productType": "JACKET"
+            },
+            "attributes": {
+              "fabric": "Wool"
+            }
+          }
+        },
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "expiresAt": "2099-01-01T00:00:00.000Z"
+      }
+    ],
+    "wizardTemplate": [
+      {
+        "id": "outerwear",
+        "name": "Outerwear defaults",
+        "description": "Size variation defaults for Italy and France",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          },
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "childSku": "per-marketplace"
+          },
+          "variations": {
+            "commonTheme": "SIZE_NAME",
+            "themeByChannel": {
+              "AMAZON:FR": "COLOR_NAME"
+            },
+            "includedSkus": [
+              "FOREIGN-S"
+            ]
+          },
+          "pricing": {
+            "basePrice": 999
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "future-skus",
+        "name": "Future Amazon listing SKUs",
+        "description": "Future listing SKU settings for an unlisted destination",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "parentSku": "per-marketplace",
+            "childSku": "per-marketplace",
+            "fbaFbm": "suffixed"
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "categorySchema": [
+      {
+        "id": "schema-it",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "SIZE_NAME",
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "schema-fr",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "writes": [],
+    "validation": [
+      {
+        "channels": [
+          {
+            "channelKey": "AMAZON:IT",
+            "platform": "AMAZON",
+            "marketplace": "IT",
+            "ready": false,
+            "blockingCount": 3,
+            "items": [
+              {
+                "step": 1,
+                "title": "Channel selected",
+                "status": "complete"
+              },
+              {
+                "step": 2,
+                "title": "Product type",
+                "status": "complete",
+                "message": "JACKET"
+              },
+              {
+                "step": 3,
+                "title": "Identifiers",
+                "status": "incomplete",
+                "message": "Pick a GTIN path in Step 3."
+              },
+              {
+                "step": 4,
+                "title": "GTIN exemption",
+                "status": "skipped"
+              },
+              {
+                "step": 5,
+                "title": "Attributes",
+                "status": "complete",
+                "message": "1 field filled"
+              },
+              {
+                "step": 6,
+                "title": "Variations",
+                "status": "skipped",
+                "message": "Single product or no children picked."
+              },
+              {
+                "step": 7,
+                "title": "Images",
+                "status": "incomplete",
+                "message": "Amazon needs at least one image."
+              },
+              {
+                "step": 7,
+                "title": "Pricing",
+                "status": "incomplete",
+                "message": "Set a marketplace price."
+              }
+            ],
+            "warnings": []
+          }
+        ],
+        "allReady": false,
+        "blockingChannels": [
+          "AMAZON:IT"
+        ]
+      }
+    ]
+  },
+  "after": {
+    "product": [
+      {
+        "id": "p1",
+        "name": "Alpine jacket family",
+        "sku": "ALPINE",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p1-s",
+            "sku": "p1-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      },
+      {
+        "id": "p2",
+        "name": "Coastal jacket family",
+        "sku": "COASTAL",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p2-s",
+            "sku": "p2-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      }
+    ],
+    "channelConnection": [
+      {
+        "id": "account-a",
+        "displayName": "Main store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": true,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "account-b",
+        "displayName": "Second store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": false,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "channelListing": [
+      {
+        "id": "p1:account-a:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "listingWizard": [
+      {
+        "id": "existing",
+        "productId": "p1",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          }
+        ],
+        "channelsHash": "49a82431b424b4aae5741e9ae7db43e5",
+        "status": "DRAFT",
+        "version": 5,
+        "currentStep": 4,
+        "state": {
+          "variations": {
+            "includedSkus": [
+              "p1-S"
+            ],
+            "themeByChannel": {
+              "AMAZON:IT": "SIZE_NAME"
+            }
+          },
+          "productPresetScope": {
+            "productId": "p1",
+            "channel": "AMAZON",
+            "accountId": "account-a",
+            "market": "IT",
+            "listingId": "p1:account-a:IT:primary",
+            "aliasKey": ""
+          },
+          "productPresetReceipt": {
+            "reviewKey": "9fb41eb63954789fec08e117dde8a57be8af39de5b315d4e938057bd29275c21",
+            "presetId": "outerwear",
+            "version": 3,
+            "appliedAt": "2026-09-06T16:22:31.417Z"
+          }
+        },
+        "channelStates": {
+          "AMAZON:IT": {
+            "productType": {
+              "productType": "JACKET"
+            },
+            "attributes": {
+              "fabric": "Wool"
+            },
+            "variations": {
+              "theme": "SIZE_NAME"
+            }
+          }
+        },
+        "updatedAt": "2026-09-06T16:25:20.734Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "expiresAt": "2099-01-01T00:00:00.000Z"
+      },
+      {
+        "id": "draft-2",
+        "version": 1,
+        "createdAt": "2026-09-06T16:26:21.422Z",
+        "updatedAt": "2026-09-06T16:26:21.422Z",
+        "submissions": [],
+        "productId": "p2",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "channelsHash": "6ff452d12d93136f95cb7e2921334136",
+        "state": {
+          "skuStrategy": {
+            "parentSku": "per-marketplace",
+            "childSku": "per-marketplace"
+          },
+          "productPresetScope": {
+            "productId": "p2",
+            "channel": "AMAZON",
+            "accountId": "account-a",
+            "market": "FR",
+            "listingId": null,
+            "aliasKey": ""
+          },
+          "productPresetReceipt": {
+            "reviewKey": "2c37e9879e011fa4b180e481d38c259a1d71fe570ddecca05b8c56409e543bc4",
+            "presetId": "future-skus",
+            "version": 1,
+            "appliedAt": "2026-09-06T16:26:21.421Z"
+          }
+        },
+        "channelStates": {},
+        "status": "DRAFT",
+        "currentStep": 1,
+        "expiresAt": "2026-10-06T16:26:21.421Z"
+      }
+    ],
+    "wizardTemplate": [
+      {
+        "id": "outerwear",
+        "name": "Outerwear defaults",
+        "description": "Size variation defaults for Italy and France",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          },
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "childSku": "per-marketplace"
+          },
+          "variations": {
+            "commonTheme": "SIZE_NAME",
+            "themeByChannel": {
+              "AMAZON:FR": "COLOR_NAME"
+            },
+            "includedSkus": [
+              "FOREIGN-S"
+            ]
+          },
+          "pricing": {
+            "basePrice": 999
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 1,
+        "lastUsedAt": "2026-09-06T16:22:31.417Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "future-skus",
+        "name": "Future Amazon listing SKUs",
+        "description": "Future listing SKU settings for an unlisted destination",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "parentSku": "per-marketplace",
+            "childSku": "per-marketplace",
+            "fbaFbm": "suffixed"
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 1,
+        "lastUsedAt": "2026-09-06T16:26:21.422Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "categorySchema": [
+      {
+        "id": "schema-it",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "SIZE_NAME",
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "schema-fr",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "writes": [
+      "listingWizard",
+      "wizardTemplate",
+      "listingWizard",
+      "listingWizard",
+      "listingWizard",
+      "wizardTemplate"
+    ],
+    "validation": [
+      {
+        "channels": [
+          {
+            "channelKey": "AMAZON:IT",
+            "platform": "AMAZON",
+            "marketplace": "IT",
+            "ready": false,
+            "blockingCount": 3,
+            "items": [
+              {
+                "step": 1,
+                "title": "Channel selected",
+                "status": "complete"
+              },
+              {
+                "step": 2,
+                "title": "Product type",
+                "status": "complete",
+                "message": "JACKET"
+              },
+              {
+                "step": 3,
+                "title": "Identifiers",
+                "status": "incomplete",
+                "message": "Pick a GTIN path in Step 3."
+              },
+              {
+                "step": 4,
+                "title": "GTIN exemption",
+                "status": "skipped"
+              },
+              {
+                "step": 5,
+                "title": "Attributes",
+                "status": "complete",
+                "message": "1 field filled"
+              },
+              {
+                "step": 6,
+                "title": "Variations",
+                "status": "complete",
+                "message": "1 included (theme: SIZE_NAME)"
+              },
+              {
+                "step": 7,
+                "title": "Images",
+                "status": "incomplete",
+                "message": "Amazon needs at least one image."
+              },
+              {
+                "step": 7,
+                "title": "Pricing",
+                "status": "incomplete",
+                "message": "Set a marketplace price."
+              }
+            ],
+            "warnings": []
+          }
+        ],
+        "allReady": false,
+        "blockingChannels": [
+          "AMAZON:IT"
+        ]
+      },
+      {
+        "channels": [
+          {
+            "channelKey": "AMAZON:FR",
+            "platform": "AMAZON",
+            "marketplace": "FR",
+            "ready": false,
+            "blockingCount": 5,
+            "items": [
+              {
+                "step": 1,
+                "title": "Channel selected",
+                "status": "complete"
+              },
+              {
+                "step": 2,
+                "title": "Product type",
+                "status": "incomplete",
+                "message": "Pick a product type for this channel."
+              },
+              {
+                "step": 3,
+                "title": "Identifiers",
+                "status": "incomplete",
+                "message": "Pick a GTIN path in Step 3."
+              },
+              {
+                "step": 4,
+                "title": "GTIN exemption",
+                "status": "skipped"
+              },
+              {
+                "step": 5,
+                "title": "Attributes",
+                "status": "incomplete",
+                "message": "Fill the required Amazon attributes for this channel."
+              },
+              {
+                "step": 6,
+                "title": "Variations",
+                "status": "skipped",
+                "message": "Single product or no children picked."
+              },
+              {
+                "step": 7,
+                "title": "Images",
+                "status": "incomplete",
+                "message": "Amazon needs at least one image."
+              },
+              {
+                "step": 7,
+                "title": "Pricing",
+                "status": "incomplete",
+                "message": "Set a marketplace price."
+              }
+            ],
+            "warnings": []
+          }
+        ],
+        "allReady": false,
+        "blockingChannels": [
+          "AMAZON:FR"
+        ]
+      }
+    ]
+  },
+  "afterFirstApply": {
+    "product": [
+      {
+        "id": "p1",
+        "name": "Alpine jacket family",
+        "sku": "ALPINE",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p1-s",
+            "sku": "p1-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      },
+      {
+        "id": "p2",
+        "name": "Coastal jacket family",
+        "sku": "COASTAL",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p2-s",
+            "sku": "p2-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      }
+    ],
+    "channelConnection": [
+      {
+        "id": "account-a",
+        "displayName": "Main store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": true,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "account-b",
+        "displayName": "Second store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": false,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "channelListing": [
+      {
+        "id": "p1:account-a:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "listingWizard": [
+      {
+        "id": "existing",
+        "productId": "p1",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          }
+        ],
+        "channelsHash": "49a82431b424b4aae5741e9ae7db43e5",
+        "status": "DRAFT",
+        "version": 3,
+        "currentStep": 4,
+        "state": {
+          "variations": {
+            "includedSkus": [],
+            "themeByChannel": {
+              "AMAZON:IT": "SIZE_NAME"
+            }
+          },
+          "productPresetScope": {
+            "productId": "p1",
+            "channel": "AMAZON",
+            "accountId": "account-a",
+            "market": "IT",
+            "listingId": "p1:account-a:IT:primary",
+            "aliasKey": ""
+          },
+          "productPresetReceipt": {
+            "reviewKey": "9fb41eb63954789fec08e117dde8a57be8af39de5b315d4e938057bd29275c21",
+            "presetId": "outerwear",
+            "version": 3,
+            "appliedAt": "2026-09-06T16:22:31.417Z"
+          }
+        },
+        "channelStates": {
+          "AMAZON:IT": {
+            "productType": {
+              "productType": "JACKET"
+            },
+            "attributes": {
+              "fabric": "Wool"
+            },
+            "variations": {
+              "theme": "SIZE_NAME"
+            }
+          }
+        },
+        "updatedAt": "2026-09-06T16:22:31.417Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "expiresAt": "2099-01-01T00:00:00.000Z"
+      }
+    ],
+    "wizardTemplate": [
+      {
+        "id": "outerwear",
+        "name": "Outerwear defaults",
+        "description": "Size variation defaults for Italy and France",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          },
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "childSku": "per-marketplace"
+          },
+          "variations": {
+            "commonTheme": "SIZE_NAME",
+            "themeByChannel": {
+              "AMAZON:FR": "COLOR_NAME"
+            },
+            "includedSkus": [
+              "FOREIGN-S"
+            ]
+          },
+          "pricing": {
+            "basePrice": 999
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 1,
+        "lastUsedAt": "2026-09-06T16:22:31.417Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "future-skus",
+        "name": "Future Amazon listing SKUs",
+        "description": "Future listing SKU settings for an unlisted destination",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "parentSku": "per-marketplace",
+            "childSku": "per-marketplace",
+            "fbaFbm": "suffixed"
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "categorySchema": [
+      {
+        "id": "schema-it",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "SIZE_NAME",
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "schema-fr",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "writes": [
+      "listingWizard",
+      "wizardTemplate"
+    ],
+    "validation": [
+      {
+        "channels": [
+          {
+            "channelKey": "AMAZON:IT",
+            "platform": "AMAZON",
+            "marketplace": "IT",
+            "ready": false,
+            "blockingCount": 3,
+            "items": [
+              {
+                "step": 1,
+                "title": "Channel selected",
+                "status": "complete"
+              },
+              {
+                "step": 2,
+                "title": "Product type",
+                "status": "complete",
+                "message": "JACKET"
+              },
+              {
+                "step": 3,
+                "title": "Identifiers",
+                "status": "incomplete",
+                "message": "Pick a GTIN path in Step 3."
+              },
+              {
+                "step": 4,
+                "title": "GTIN exemption",
+                "status": "skipped"
+              },
+              {
+                "step": 5,
+                "title": "Attributes",
+                "status": "complete",
+                "message": "1 field filled"
+              },
+              {
+                "step": 6,
+                "title": "Variations",
+                "status": "skipped",
+                "message": "Single product or no children picked."
+              },
+              {
+                "step": 7,
+                "title": "Images",
+                "status": "incomplete",
+                "message": "Amazon needs at least one image."
+              },
+              {
+                "step": 7,
+                "title": "Pricing",
+                "status": "incomplete",
+                "message": "Set a marketplace price."
+              }
+            ],
+            "warnings": []
+          }
+        ],
+        "allReady": false,
+        "blockingChannels": [
+          "AMAZON:IT"
+        ]
+      }
+    ]
+  },
+  "afterExplicitVariantSelection": {
+    "product": [
+      {
+        "id": "p1",
+        "name": "Alpine jacket family",
+        "sku": "ALPINE",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p1-s",
+            "sku": "p1-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      },
+      {
+        "id": "p2",
+        "name": "Coastal jacket family",
+        "sku": "COASTAL",
+        "isParent": true,
+        "parentId": null,
+        "deletedAt": null,
+        "updatedAt": "2026-09-06T12:00:00.000Z",
+        "children": [
+          {
+            "id": "p2-s",
+            "sku": "p2-S",
+            "variantAttributes": {
+              "size": "S",
+              "color": "Black"
+            },
+            "basePrice": 25,
+            "totalStock": 17
+          }
+        ]
+      }
+    ],
+    "channelConnection": [
+      {
+        "id": "account-a",
+        "displayName": "Main store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": true,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "account-b",
+        "displayName": "Second store",
+        "channelType": "AMAZON",
+        "isActive": true,
+        "isPrimary": false,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "channelListing": [
+      {
+        "id": "p1:account-a:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-a:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:IT:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:primary",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p1:account-b:FR:alias-one",
+        "productId": "p1",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p1 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-a:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-a",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:IT:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 IT listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:primary",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "",
+        "aliasId": null,
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "p2:account-b:FR:alias-one",
+        "productId": "p2",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "channelConnectionId": "account-b",
+        "aliasKey": "alias-one",
+        "aliasId": "alias-one",
+        "title": "p2 FR listing",
+        "listingStatus": "ACTIVE",
+        "isPublished": true,
+        "offerActive": true,
+        "platformAttributes": {
+          "productType": "JACKET"
+        },
+        "price": 25,
+        "quantity": 17,
+        "version": 3,
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "listingWizard": [
+      {
+        "id": "existing",
+        "productId": "p1",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          }
+        ],
+        "channelsHash": "49a82431b424b4aae5741e9ae7db43e5",
+        "status": "DRAFT",
+        "version": 4,
+        "currentStep": 4,
+        "state": {
+          "variations": {
+            "includedSkus": [
+              "p1-S"
+            ],
+            "themeByChannel": {
+              "AMAZON:IT": "SIZE_NAME"
+            }
+          },
+          "productPresetScope": {
+            "productId": "p1",
+            "channel": "AMAZON",
+            "accountId": "account-a",
+            "market": "IT",
+            "listingId": "p1:account-a:IT:primary",
+            "aliasKey": ""
+          },
+          "productPresetReceipt": {
+            "reviewKey": "9fb41eb63954789fec08e117dde8a57be8af39de5b315d4e938057bd29275c21",
+            "presetId": "outerwear",
+            "version": 3,
+            "appliedAt": "2026-09-06T16:22:31.417Z"
+          }
+        },
+        "channelStates": {
+          "AMAZON:IT": {
+            "productType": {
+              "productType": "JACKET"
+            },
+            "attributes": {
+              "fabric": "Wool"
+            },
+            "variations": {
+              "theme": "SIZE_NAME"
+            }
+          }
+        },
+        "updatedAt": "2026-09-06T16:23:15.030Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "expiresAt": "2099-01-01T00:00:00.000Z"
+      }
+    ],
+    "wizardTemplate": [
+      {
+        "id": "outerwear",
+        "name": "Outerwear defaults",
+        "description": "Size variation defaults for Italy and France",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "IT"
+          },
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "childSku": "per-marketplace"
+          },
+          "variations": {
+            "commonTheme": "SIZE_NAME",
+            "themeByChannel": {
+              "AMAZON:FR": "COLOR_NAME"
+            },
+            "includedSkus": [
+              "FOREIGN-S"
+            ]
+          },
+          "pricing": {
+            "basePrice": 999
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 1,
+        "lastUsedAt": "2026-09-06T16:22:31.417Z",
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "future-skus",
+        "name": "Future Amazon listing SKUs",
+        "description": "Future listing SKU settings for an unlisted destination",
+        "channels": [
+          {
+            "platform": "AMAZON",
+            "marketplace": "FR"
+          }
+        ],
+        "defaults": {
+          "skuStrategy": {
+            "parentSku": "per-marketplace",
+            "childSku": "per-marketplace",
+            "fbaFbm": "suffixed"
+          }
+        },
+        "builtIn": false,
+        "categoryHint": "Jackets",
+        "usageCount": 0,
+        "lastUsedAt": null,
+        "createdAt": "2026-09-06T12:00:00.000Z",
+        "updatedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "categorySchema": [
+      {
+        "id": "schema-it",
+        "channel": "AMAZON",
+        "marketplace": "IT",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "SIZE_NAME",
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      },
+      {
+        "id": "schema-fr",
+        "channel": "AMAZON",
+        "marketplace": "FR",
+        "productType": "JACKET",
+        "isActive": true,
+        "variationThemes": [
+          "COLOR_NAME"
+        ],
+        "fetchedAt": "2026-09-06T12:00:00.000Z"
+      }
+    ],
+    "writes": [
+      "listingWizard",
+      "wizardTemplate",
+      "listingWizard"
+    ],
+    "validation": [
+      {
+        "channels": [
+          {
+            "channelKey": "AMAZON:IT",
+            "platform": "AMAZON",
+            "marketplace": "IT",
+            "ready": false,
+            "blockingCount": 3,
+            "items": [
+              {
+                "step": 1,
+                "title": "Channel selected",
+                "status": "complete"
+              },
+              {
+                "step": 2,
+                "title": "Product type",
+                "status": "complete",
+                "message": "JACKET"
+              },
+              {
+                "step": 3,
+                "title": "Identifiers",
+                "status": "incomplete",
+                "message": "Pick a GTIN path in Step 3."
+              },
+              {
+                "step": 4,
+                "title": "GTIN exemption",
+                "status": "skipped"
+              },
+              {
+                "step": 5,
+                "title": "Attributes",
+                "status": "complete",
+                "message": "1 field filled"
+              },
+              {
+                "step": 6,
+                "title": "Variations",
+                "status": "complete",
+                "message": "1 included (theme: SIZE_NAME)"
+              },
+              {
+                "step": 7,
+                "title": "Images",
+                "status": "incomplete",
+                "message": "Amazon needs at least one image."
+              },
+              {
+                "step": 7,
+                "title": "Pricing",
+                "status": "incomplete",
+                "message": "Set a marketplace price."
+              }
+            ],
+            "warnings": []
+          }
+        ],
+        "allReady": false,
+        "blockingChannels": [
+          "AMAZON:IT"
+        ]
+      }
+    ]
+  }
+}

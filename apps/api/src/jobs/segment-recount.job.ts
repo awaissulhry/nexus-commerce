@@ -36,8 +36,8 @@ export async function runSegmentRecountCron(): Promise<void> {
 export function startSegmentRecountCron(): void {
   if (scheduledTask) return
   const schedule = process.env.NEXUS_SEGMENT_RECOUNT_SCHEDULE ?? '0 1 * * 0'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runSegmentRecountCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runSegmentRecountCron()
   })
   logger.info('segment-recount cron: scheduled', { schedule })
 }

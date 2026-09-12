@@ -1,0 +1,56 @@
+[
+  {
+    "theme": "light",
+    "background": "rgb(255, 255, 255)",
+    "color": "rgb(28, 37, 48)",
+    "fontSize": "15px",
+    "text": "Information jacket",
+    "ratio": 15.48,
+    "meetsAAAForNormalText": true
+  },
+  {
+    "theme": "light",
+    "background": "rgb(31, 111, 222)",
+    "color": "rgb(255, 255, 255)",
+    "fontSize": "12.5px",
+    "text": "Review listing information",
+    "ratio": 4.79,
+    "meetsAAAForNormalText": false
+  },
+  {
+    "theme": "light",
+    "background": "rgb(255, 255, 255)",
+    "color": "rgb(26, 96, 196)",
+    "fontSize": "11.5px",
+    "text": "Requirements",
+    "ratio": 5.98,
+    "meetsAAAForNormalText": false
+  },
+  {
+    "theme": "dark",
+    "background": "rgb(24, 38, 59)",
+    "color": "rgb(231, 235, 241)",
+    "fontSize": "15px",
+    "text": "Information jacket",
+    "ratio": 12.73,
+    "meetsAAAForNormalText": true
+  },
+  {
+    "theme": "dark",
+    "background": "rgb(109, 158, 232)",
+    "color": "rgb(20, 34, 58)",
+    "fontSize": "12.5px",
+    "text": "Review listing information",
+    "ratio": 5.84,
+    "meetsAAAForNormalText": false
+  },
+  {
+    "theme": "dark",
+    "background": "rgb(24, 38, 59)",
+    "color": "rgb(138, 182, 240)",
+    "fontSize": "11.5px",
+    "text": "Requirements",
+    "ratio": 7.27,
+    "meetsAAAForNormalText": true
+  }
+]

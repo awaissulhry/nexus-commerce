@@ -1,0 +1,70 @@
+[
+  {
+    "jobId": "cmtqti9zx0000njr7b4eiaur0",
+    "channel": "AMAZON",
+    "market": "DE",
+    "category": "OUTERWEAR",
+    "counts": {
+      "changed": 42,
+      "invalid": 254,
+      "missing": 254,
+      "scanned": 338,
+      "excluded": 190,
+      "conflicts": 0,
+      "matchedListings": 136,
+      "matchedProducts": 148,
+      "affectedListings": 21,
+      "introducedInvalid": 0,
+      "preservedOverrides": 0
+    },
+    "result": {
+      "applied": true
+    },
+    "version": 2,
+    "verifiedRules": [
+      {
+        "fieldKey": "fabric_type",
+        "rule": {
+          "source": "fabric_type"
+        }
+      },
+      {
+        "fieldKey": "supplier_declared_dg_hz_regulation",
+        "rule": {
+          "source": "supplier_declared_dg_hz_regulation"
+        }
+      }
+    ]
+  },
+  {
+    "jobId": "cmtqtl5j50004njv2t7q5bq7s",
+    "channel": "AMAZON",
+    "market": "IT",
+    "category": "OUTERWEAR",
+    "counts": {
+      "changed": 21,
+      "invalid": 127,
+      "missing": 127,
+      "scanned": 338,
+      "excluded": 190,
+      "conflicts": 0,
+      "matchedListings": 148,
+      "matchedProducts": 148,
+      "affectedListings": 21,
+      "introducedInvalid": 0,
+      "preservedOverrides": 0
+    },
+    "result": {
+      "applied": true
+    },
+    "version": 2,
+    "verifiedRules": [
+      {
+        "fieldKey": "fabric_type",
+        "rule": {
+          "source": "fabric_type"
+        }
+      }
+    ]
+  }
+]

@@ -1,3 +1,5 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E3 (eBay Ads) — read/analytics API for the eBay console at
  * /marketing/ads/ebay. READ-ONLY (writes are E4). RBAC: the /api/ebay-ads
@@ -76,7 +78,7 @@ async function freshness() {
 
 /** Account-health cache: eligibility changes on eBay's timescale, not ours. */
 const ACCOUNT_HEALTH_TTL_MS = 5 * 60_000
-const accountHealthCache = new Map<string, { at: number; value: Record<string, unknown> }>()
+const accountHealthCache = new WorkspaceCache<string, { at: number; value: Record<string, unknown> }>()
 
 const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   /**
@@ -551,14 +553,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
 
   app.post<{ Body: { itemId: string; marketplace: string; productId: string | null } }>('/ebay-ads/products/match', async (req, reply) => {
     const { itemId, marketplace, productId } = req.body
-    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: { marketplace, itemId } }, select: { productIds: true } })
+    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: workspaceKey({ marketplace, itemId }) }, select: { productIds: true } })
     if (!idx) return reply.code(404).send({ error: 'listing not indexed' })
     if (productId) {
       const p = await prisma.product.findUnique({ where: { id: productId }, select: { deletedAt: true } })
       if (!p || p.deletedAt) return reply.code(400).send({ error: 'product not found (or deleted)' })
     }
     await prisma.ebayListingIndex.update({
-      where: { marketplace_itemId: { marketplace, itemId } },
+      where: { marketplace_itemId: workspaceKey({ marketplace, itemId }) },
       data: productId ? { productIds: [productId], matchStatus: 'MANUAL' } : { productIds: [], matchStatus: 'UNMATCHED' },
     })
     await prisma.campaignAction.create({
@@ -568,7 +570,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       },
     }).catch(() => {})
     await rebuildEbayListingEconomics()
-    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: { marketplace, itemId } } })
+    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: workspaceKey({ marketplace, itemId }) } })
     return { ok: true, matchStatus: productId ? 'MANUAL' : 'UNMATCHED', economicsStatus: eco?.dataStatus ?? null, breakEvenAdRatePct: eco?.breakEvenAdRatePct != null ? Number(eco.breakEvenAdRatePct.toString()) : null }
   })
 
@@ -577,7 +579,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { itemId: string; marketplace: string; costEur: number } }>('/ebay-ads/products/cost', async (req, reply) => {
     const { itemId, marketplace, costEur } = req.body
     if (!Number.isFinite(costEur) || costEur <= 0 || costEur > 100000) return reply.code(400).send({ error: 'costEur must be a positive number' })
-    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: { marketplace, itemId } }, select: { productIds: true } })
+    const idx = await prisma.ebayListingIndex.findUnique({ where: { marketplace_itemId: workspaceKey({ marketplace, itemId }) }, select: { productIds: true } })
     if (!idx) return reply.code(404).send({ error: 'listing not indexed' })
     if (!idx.productIds.length) return reply.code(400).send({ error: 'match the listing to a product first' })
     const products = await prisma.product.findMany({ where: { id: { in: idx.productIds } }, select: { id: true, sku: true, costPrice: true } })
@@ -590,7 +592,7 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
       },
     }).catch(() => {})
     await rebuildEbayListingEconomics()
-    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: { marketplace, itemId } } })
+    const eco = await prisma.ebayListingEconomics.findUnique({ where: { marketplace_itemId: workspaceKey({ marketplace, itemId }) } })
     return { ok: true, updatedProducts: products.map((p) => p.sku), economicsStatus: eco?.dataStatus ?? null, breakEvenAdRatePct: eco?.breakEvenAdRatePct != null ? Number(eco.breakEvenAdRatePct.toString()) : null }
   })
 
@@ -749,14 +751,14 @@ const ebayAdsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{ Body: { globalMode?: 'OFF' | 'SUGGEST' | 'AUTO'; halted?: boolean; haltReason?: string } }>('/ebay-ads/automation/state', async (req) => {
     const b = req.body
     return prisma.marketingAutomationState.upsert({
-      where: { channel: 'EBAY' },
+      where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) },
       create: { channel: 'EBAY', globalMode: b.globalMode ?? 'OFF', halted: b.halted ?? false, haltReason: b.haltReason ?? null, haltedBy: b.halted ? (req as { authUser?: { id?: string } }).authUser?.id ?? 'operator' : null },
       update: { ...(b.globalMode ? { globalMode: b.globalMode } : {}), ...(b.halted !== undefined ? { halted: b.halted, haltReason: b.halted ? b.haltReason ?? 'operator halt' : null, haltedBy: b.halted ? (req as { authUser?: { id?: string } }).authUser?.id ?? 'operator' : null } : {}) },
     })
   })
   app.post<{ Body: { marketplace: string; monthlyCapCents: number; killSwitch?: boolean } }>('/ebay-ads/automation/ceilings', async (req) => {
     return prisma.marketingSpendCeiling.upsert({
-      where: { channel_marketplace: { channel: 'EBAY', marketplace: req.body.marketplace } },
+      where: { channel_marketplace: workspaceKey({ channel: 'EBAY', marketplace: req.body.marketplace }) },
       create: { channel: 'EBAY', marketplace: req.body.marketplace, monthlyCapCents: req.body.monthlyCapCents, killSwitch: req.body.killSwitch ?? false },
       update: { monthlyCapCents: req.body.monthlyCapCents, ...(req.body.killSwitch !== undefined ? { killSwitch: req.body.killSwitch } : {}) },
     })

@@ -1,0 +1,318 @@
+- banner:
+  - link "PageSpeed Insights logo PageSpeed Insights":
+    - /url: ./
+    - img "PageSpeed Insights logo"
+    - generic: PageSpeed Insights
+  - button "Copy Link":
+    - generic: Copy Link
+  - generic: Docs
+  - link "Docs":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+- generic: This site uses cookies from Google to deliver its services and to analyze traffic.
+- generic: Learn More.
+- link "Learn More.":
+  - /url: https://policies.google.com/technologies/cookies
+- button "Ok, Got it.":
+  - generic: Ok, Got it.
+- generic: Report from Sep 8, 2026, 9:51:03 PM
+- textbox:
+  - /placeholder: Enter a web page URL
+  - text: https://xaviaracing.it/collections/all
+- paragraph: Enter a valid URL
+- button "Analyze":
+  - generic: Analyze
+- tablist:
+  - tab "Mobile":
+    - generic: smartphone
+    - generic: Mobile
+  - tab "Desktop" [active] [selected]:
+    - generic: computer
+    - generic: Desktop
+- text: — — — — — — — — — — — — — — — —
+- tabpanel "Desktop":
+  - generic: Discover what your real users are experiencing
+  - button "button":
+  - generic: No Data
+  - separator
+  - generic: Diagnose performance issues
+  - article:
+    - link "79 Performance":
+      - /url: "#performance"
+      - generic: "79"
+      - generic: Performance
+    - link "97 Accessibility":
+      - /url: "#accessibility"
+      - generic: "97"
+      - generic: Accessibility
+    - link "92 Best Practices":
+      - /url: "#best-practices"
+      - generic: "92"
+      - generic: Best Practices
+    - link "92 SEO":
+      - /url: "#seo"
+      - generic: "92"
+      - generic: SEO
+    - link "4/4 Agentic Browsing":
+      - /url: "#agentic-browsing"
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: Values are estimated and may vary. The
+    - link "performance score is calculated":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: directly from these metrics.
+    - link "See calculator.":
+      - /url: https://googlechrome.github.io/lighthouse/scorecalc/#FCP=546&LCP=2264&TBT=69&CLS=0&SI=4439&TTI=2913&device=desktop&version=13.4.1
+    - generic: 0–49
+    - generic: 50–89
+    - generic: 90–100
+    - img "Final Screenshot"
+    - checkbox "Toggle the display of metric descriptions"
+    - generic: Metrics
+    - generic: Expand view
+    - generic: First Contentful Paint
+    - generic: 0.5 s
+    - generic: Largest Contentful Paint
+    - generic: 2.3 s
+    - generic: Total Blocking Time
+    - generic: 70 ms
+    - generic: Cumulative Layout Shift
+    - generic: "0.004"
+    - generic: Speed Index
+    - generic: 4.4 s
+    - list:
+      - listitem: Captured at Sep 8, 2026, 9:51 PM GMT+2
+      - listitem: Emulated Desktop with Lighthouse 13.4.1
+      - listitem: Single page session
+      - listitem: Initial page load
+      - listitem: Custom throttling
+      - listitem: Using HeadlessChromium 151.0.7922.71 with lr
+    - button "View Treemap"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - generic: "Show audits relevant to:"
+    - radio "All" [checked]
+    - generic: All
+    - radio "FCP"
+    - generic "First Contentful Paint": FCP
+    - radio "LCP"
+    - generic "Largest Contentful Paint": LCP
+    - radio "TBT"
+    - generic "Total Blocking Time": TBT
+    - radio "CLS"
+    - generic "Cumulative Layout Shift": CLS
+    - generic: Insights
+    - generic "Use efficient cache lifetimes —Est savings of 37 KiB":
+      - generic: Use efficient cache lifetimes
+      - text: —Est savings of 37 KiB
+    - generic "Font display —Est savings of 30 ms":
+      - generic: Font display
+      - text: —Est savings of 30 ms
+    - generic "Render-blocking requests —Est savings of 40 ms":
+      - generic: Render-blocking requests
+      - text: —Est savings of 40 ms
+    - generic "Forced reflow":
+      - generic: Forced reflow
+    - 'generic "Network dependency tree Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."':
+      - generic: Network dependency tree
+      - generic: "Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."
+    - generic "Improve image delivery —Est savings of 243 KiB":
+      - generic: Improve image delivery
+      - text: —Est savings of 243 KiB
+    - generic "Legacy JavaScript —Est savings of 19 KiB":
+      - generic: Legacy JavaScript
+      - text: —Est savings of 19 KiB
+    - generic "Layout shift culprits":
+      - generic: Layout shift culprits
+    - generic "Optimize DOM size":
+      - generic: Optimize DOM size
+    - generic "LCP breakdown":
+      - generic: LCP breakdown
+    - generic "3rd parties":
+      - generic: 3rd parties
+    - text: These insights are also available in the Chrome DevTools Performance Panel -
+    - link "record a trace":
+      - /url: https://developer.chrome.com/docs/devtools/performance/reference?utm_source=lighthouse&utm_medium=lr
+    - text: to view more detailed information.
+    - generic: Diagnostics
+    - generic "Reduce unused JavaScript —Est savings of 309 KiB":
+      - generic: Reduce unused JavaScript
+      - text: —Est savings of 309 KiB
+    - generic "Reduce unused CSS —Est savings of 33 KiB":
+      - generic: Reduce unused CSS
+      - text: —Est savings of 33 KiB
+    - generic "Minimize main-thread work —3.5 s":
+      - generic: Minimize main-thread work
+      - text: —3.5 s
+    - generic "Avoid enormous network payloads —Total size was 3,572 KiB":
+      - generic: Avoid enormous network payloads
+      - text: —Total size was 3,572 KiB
+    - generic "Avoid long main-thread tasks —7 long tasks found":
+      - generic: Avoid long main-thread tasks
+      - text: —7 long tasks found
+    - generic "User Timing marks and measures —2 user timings":
+      - generic: User Timing marks and measures
+      - text: —2 user timings
+    - generic "Avoid non-composited animations —2 animated elements found":
+      - generic: Avoid non-composited animations
+      - text: —2 animated elements found
+    - text: More information about the performance of your application. These numbers don't
+    - link "directly affect":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: the Performance score.
+    - generic "Passed audits (9) Show":
+      - generic: Passed audits (9)
+      - generic: Show
+    - text: —
+    - heading "97 Accessibility" [level=2]:
+      - generic: "97"
+      - generic: Accessibility
+    - text: These checks highlight opportunities to
+    - link "improve the accessibility of your web app":
+      - /url: https://developer.chrome.com/docs/lighthouse/accessibility/?utm_source=lighthouse&utm_medium=lr
+    - text: . Automatic detection can only detect a subset of issues and does not guarantee the accessibility of your web app, so
+    - link "manual testing":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: is also encouraged.
+    - generic: Contrast
+    - generic "Background and foreground colors do not have a sufficient contrast ratio.":
+      - generic: Background and foreground colors do not have a sufficient contrast ratio.
+    - generic: These are opportunities to improve the legibility of your content.
+    - generic: Names and labels
+    - generic "Image elements do not have [alt] attributes that are redundant text.":
+      - text: Image elements do not have
+      - code: "[alt]"
+      - text: attributes that are redundant text.
+    - generic: These are opportunities to improve the semantics of the controls in your application. This may enhance the experience for users of assistive technology, like a screen reader.
+    - generic: Best practices
+    - generic "Identical links have the same purpose.":
+      - generic: Identical links have the same purpose.
+    - generic: These items highlight common accessibility best practices.
+    - generic "Additional items to manually check (10) Show":
+      - generic: Additional items to manually check (10)
+      - generic: Show
+    - text: These items address areas which an automated testing tool cannot cover. Learn more in our guide on
+    - link "conducting an accessibility review":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "Passed audits (31) Show":
+      - generic: Passed audits (31)
+      - generic: Show
+    - generic "Not applicable (29) Show":
+      - generic: Not applicable (29)
+      - generic: Show
+    - heading "92 Best Practices" [level=2]:
+      - generic: "92"
+      - generic: Best Practices
+    - generic: General
+    - generic "Browser errors were logged to the console":
+      - generic: Browser errors were logged to the console
+    - generic "Issues were logged in the Issues panel in Chrome Devtools":
+      - text: Issues were logged in the
+      - code: Issues
+      - text: panel in Chrome Devtools
+    - generic "Detected JavaScript libraries":
+      - generic: Detected JavaScript libraries
+    - generic: Trust and Safety
+    - generic "Ensure CSP is effective against XSS attacks":
+      - generic: Ensure CSP is effective against XSS attacks
+    - generic "Use a strong HSTS policy":
+      - generic: Use a strong HSTS policy
+    - generic "Ensure proper origin isolation with COOP":
+      - generic: Ensure proper origin isolation with COOP
+    - generic "Mitigate DOM-based XSS with Trusted Types":
+      - generic: Mitigate DOM-based XSS with Trusted Types
+    - generic: Browser Compatibility
+    - generic "Baseline Features":
+      - generic: Baseline Features
+    - generic "Passed audits (11) Show":
+      - generic: Passed audits (11)
+      - generic: Show
+    - generic "Not applicable (2) Show":
+      - generic: Not applicable (2)
+      - generic: Show
+    - heading "92 SEO" [level=2]:
+      - generic: "92"
+      - generic: SEO
+    - text: These checks ensure that your page is following basic search engine optimization advice. There are many additional factors Lighthouse does not score here that may affect your search ranking, including performance on
+    - link "Core Web Vitals":
+      - /url: https://web.dev/explore/vitals?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - link "Learn more about Google Search Essentials":
+      - /url: https://support.google.com/webmasters/answer/35769
+    - text: .
+    - generic: Content Best Practices
+    - generic "Document does not have a meta description":
+      - generic: Document does not have a meta description
+    - generic: Format your HTML in a way that enables crawlers to better understand your app’s content.
+    - generic "Additional items to manually check (1) Show":
+      - generic: Additional items to manually check (1)
+      - generic: Show
+    - generic: Run these additional validators on your site to check additional SEO best practices.
+    - generic "Passed audits (9) Show":
+      - generic: Passed audits (9)
+      - generic: Show
+    - heading "4/4 Agentic Browsing" [level=2]:
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: These checks ensure high-quality,
+    - link "browsable websites for AI agents":
+      - /url: https://goo.gle/lighthouse-agentic-web
+    - text: and validate the correctness of WebMCP integrations. This category is still under development and subject to change.
+    - generic: WebMCP
+    - generic "WebMCP form coverage —11 forms missing annotations":
+      - generic: WebMCP form coverage
+      - text: —11 forms missing annotations
+    - generic "WebMCP tools registered":
+      - generic: WebMCP tools registered
+    - generic: Audits validating WebMCP integration.
+    - generic "Passed audits (4) Show":
+      - generic: Passed audits (4)
+      - generic: Show
+    - text: — —
+- contentinfo:
+  - generic: More on PageSpeed Insights
+  - link "What's new":
+    - /url: https://developers.google.com/speed/docs/insights/release_notes
+  - link "Documentation":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+  - link "Learn about Web Performance":
+    - /url: https://developers.google.com/speed
+  - link "Ask questions on Stack Overflow":
+    - /url: https://stackoverflow.com/questions/tagged/pagespeed-insights
+  - link "Mailing list":
+    - /url: https://groups.google.com/g/pagespeed-insights-discuss
+  - generic: Related Content
+  - link "Updates":
+    - /url: https://developer.chrome.com/blog
+  - link "Web Fundamentals":
+    - /url: https://developers.google.com/focus/web-development
+  - link "Case Studies":
+    - /url: https://web.dev/case-studies
+  - link "Podcasts":
+    - /url: https://web.dev/shows
+  - generic: Connect
+  - link "Twitter":
+    - /url: https://twitter.com/ChromiumDev
+  - link "Youtube":
+    - /url: https://www.youtube.com/user/ChromeDevelopers
+  - link "Google Developers Logo":
+    - /url: https://developers.google.com/
+    - img "Google Developers Logo"
+  - link "Chrome":
+    - /url: https://developer.chrome.com/
+  - link "Firebase":
+    - /url: https://firebase.google.com/
+  - link "All products":
+    - /url: https://developers.google.com/products/
+  - link "Terms and Privacy Policy":
+    - /url: https://policies.google.com/
+  - text: For details, see the
+  - link "Google Developers Site Policies":
+    - /url: https://developers.google.com/terms/site-policies
+  - text: .

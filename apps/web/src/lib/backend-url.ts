@@ -8,6 +8,7 @@
  * every fetch in the app is safe regardless of how the env var is written.
  */
 export function getBackendUrl(): string {
+  if (process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1' && typeof window !== 'undefined') return `${window.location.origin}/backend`
   const raw =
     process.env.NEXT_PUBLIC_API_URL ??
     'https://nexusapi-production-b7bb.up.railway.app'

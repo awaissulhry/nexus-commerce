@@ -84,9 +84,9 @@ describe('payloadValueFor', () => {
     const entry = { channel: 'AMAZON', marketplace: 'DE', fieldKey: 'item_name', current: 'x', proposed: 'Giacca', action: 'update' as const, language: 'de', flags: flags({ needsTranslation: true }) }
     expect(payloadValueFor(entry, { de: { title: 'Jacke' } })).toBe('Jacke')
   })
-  it('falls back to proposed when no translation is available', () => {
+  it('blocks the payload when a required translation is unavailable', () => {
     const entry = { channel: 'AMAZON', marketplace: 'DE', fieldKey: 'item_name', current: 'x', proposed: 'Giacca', action: 'update' as const, language: 'de', flags: flags({ needsTranslation: true }) }
-    expect(payloadValueFor(entry, {})).toBe('Giacca')
+    expect(() => payloadValueFor(entry, {})).toThrow('Translation is pending')
   })
   it('uses proposed for a non-translation entry', () => {
     const entry = { channel: 'AMAZON', marketplace: 'IT', fieldKey: 'material_type', current: 'x', proposed: 'Pelle', action: 'update' as const, language: 'it', flags: flags() }
@@ -105,7 +105,7 @@ describe('applyCatalogCascade', () => {
       changedAttributes: ['title'],
       entries: [
         { channel: 'AMAZON', marketplace: 'DE', fieldKey: 'item_name', current: 'Alt', proposed: 'Giacca', action: 'update', language: 'de', flags: flags({ needsTranslation: true }) },
-        { channel: 'AMAZON', marketplace: 'IT', fieldKey: 'item_name', current: 'Vecchio', proposed: 'Giacca', action: 'update', language: 'it', flags: flags() },
+        { channel: 'AMAZON', marketplace: 'IT', fieldKey: 'item_name', current: 'Giacca', proposed: 'Giacca', action: 'update', language: 'it', flags: flags() },
         { channel: 'AMAZON', marketplace: 'UK', fieldKey: 'our_price', current: 100, proposed: 120, action: 'skip', language: 'en', flags: flags({ currencyMismatch: true }) },
       ],
       counts: { total: 3, willUpdate: 2, needsReview: 1, skipped: 1, currencyMismatch: 1, unmappedRequired: 0 },
@@ -164,5 +164,29 @@ describe('applyCatalogCascade', () => {
     await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } }, { applyGrace: false })
     const created = txMock.outboundSyncQueue.create.mock.calls[0][0].data
     expect(created.holdUntil).toBeNull()
+  })
+  it('does not collapse different accounts and aliases on the same market', async () => {
+    const listings = [
+      { id: 'a', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'account-a', aliasKey: '' },
+      { id: 'b', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'account-b', aliasKey: 'outlet' },
+    ]
+    mockPrisma.channelListing.findMany.mockResolvedValue(listings)
+    mockPlan.mockResolvedValue({ productId: 'p1', sku: 'SKU1', entries: listings.map(l => ({ ...l, listingId: l.id, fieldKey: 'color', current: l.id, proposed: l.id, action: 'update', language: 'it', flags: flags() })) })
+    await applyCatalogCascade({ productId: 'p1', changes: { color: 'new' } })
+    expect(txMock.outboundSyncQueue.create.mock.calls.map(([q]) => [q.data.channelListingId, q.data.payload.channelConnectionId, q.data.payload.aliasKey, q.data.payload.fields.color])).toEqual([
+      ['a', 'account-a', '', 'a'], ['b', 'account-b', 'outlet', 'b'],
+    ])
+  })
+  it('rejects an ambiguous account before entering the write transaction', async () => {
+    mockPlan.mockResolvedValue({ productId: 'p1', sku: 'SKU1', entries: [{ channel: 'EBAY', marketplace: 'IT', fieldKey: 'color', current: 'red', proposed: 'red', action: 'update', flags: flags() }] })
+    mockPrisma.channelListing.findMany.mockResolvedValue(['a', 'b'].map(id => ({ id, channel: 'EBAY', marketplace: 'IT', channelConnectionId: id, aliasKey: '' })))
+    await expect(applyCatalogCascade({ productId: 'p1', changes: { color: 'red' } })).rejects.toThrow('exact listing')
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+  })
+  it('writes nothing when translation fails', async () => {
+    mockTranslate.mockRejectedValue(new Error('translator unavailable'))
+    await expect(applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })).rejects.toThrow('Translation is pending')
+    expect(mockPrisma.$transaction).not.toHaveBeenCalled()
+    expect(mockQueueAdd).not.toHaveBeenCalled()
   })
 })

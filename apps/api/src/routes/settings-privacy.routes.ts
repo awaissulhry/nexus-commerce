@@ -1,3 +1,4 @@
+import { currentProfileUser } from '../lib/auth/current-user.js'
 /**
  * Settings rebuild — Phase H
  *
@@ -70,7 +71,7 @@ const CONSENT_KINDS = new Set([
 ])
 
 async function getSoloUser() {
-  return (await (prisma as any).userProfile.findFirst()) as
+  return (await currentProfileUser()) as
     | { id: string; email: string }
     | null
 }
@@ -506,7 +507,7 @@ async function buildWorkspaceDump(scope: string[]): Promise<WorkspaceDump> {
 
   // User. Never include passwordHash / twoFactorSecret in exports.
   if (wants('user')) {
-    const u = await (prisma as any).userProfile.findFirst()
+    const u = await currentProfileUser()
     if (u) {
       const { passwordHash, twoFactorSecret, ...safe } = u
       void passwordHash
@@ -559,6 +560,7 @@ async function buildWorkspaceDump(scope: string[]): Promise<WorkspaceDump> {
 
   if (wants('consents')) {
     dump.consents = await (prisma as any).consentRecord.findMany({
+      where: process.env.NEXUS_WORKSPACES_ENABLED === '1' ? { userId: (await currentProfileUser())!.id } : {},
       orderBy: { createdAt: 'desc' },
       take: 500,
     })

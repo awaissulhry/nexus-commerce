@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ChevronDown, Plus } from 'lucide-react'
 import { COUNTRY_NAMES } from '@/lib/country-names'
 import { cn } from '@/lib/utils'

@@ -24,7 +24,7 @@
  */
 import { useEffect, useState } from 'react'
 import { ToolbarButton } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

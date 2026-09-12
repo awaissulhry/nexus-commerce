@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * The inbound ledger — one writer for every channel (CX.4a).
  *
@@ -69,7 +70,7 @@ export async function recordInbound(rec: InboundRecord): Promise<InboundWriteRes
 
   try {
     const existing = await prisma.webhookEvent.findUnique({
-      where: { channel_externalId: { channel: rec.channel, externalId } },
+      where: { channel_externalId: workspaceKey({ channel: rec.channel, externalId }) },
       select: { id: true },
     })
     if (existing) {

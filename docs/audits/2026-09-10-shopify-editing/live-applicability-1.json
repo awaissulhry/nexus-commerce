@@ -1,0 +1,9 @@
+{
+  "observedAt": "2026-09-10T14:45:43.247Z",
+  "apiVersion": "2026-07",
+  "boundary": "Read-only production applicability query; no mutations.",
+  "category": "gid://shopify/TaxonomyCategory/vp-1-6-1-3",
+  "definitions": [
+    "gid://shopify/MetafieldDefinition/82757091655"
+  ]
+}

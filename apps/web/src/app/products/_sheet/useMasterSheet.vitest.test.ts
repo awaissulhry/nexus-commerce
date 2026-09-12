@@ -215,3 +215,34 @@ describe('bulkSetCells', () => {
     expect(out.error).toBe('boom')
   })
 })
+
+/* ── `updated: 0` after #675 (#706) ───────────────────────────────────────────────────────────
+ * The route now runs an equality pass BEFORE the CAS, so a token-carrying PATCH whose value is
+ * already correct answers 200 `{updated: 0, unchanged: 1, currentVersion}`. This surface sends a
+ * token, so before the fix that painted "the server accepted the request but changed nothing" over
+ * a cell showing exactly the right value — a refusal message on a correct cell, measured by PES.3
+ * on the sibling sheet.
+ */
+describe('saveSheetCell — a no-op is not a failure', () => {
+  it('🔴 updated:0 WITH unchanged is a SUCCESS, and carries the row version forward', async () => {
+    fetchMock.mockResolvedValue(jsonRes(200, { success: true, updated: 0, unchanged: 1, currentVersion: 35, versionOf: 'product' }))
+    const out = await saveSheetCell({ row: row({ id: 'p1', version: 34 }), column: col({ key: 'material' }), value: 'Leather', locale: 'it' })
+    expect(out).toEqual({ ok: true, version: 35 })
+  })
+
+  it('CONTROL: updated:0 with NO unchanged key is still a failure — the silent-drop shape', async () => {
+    // This is what the branch was built for and an older API still answers this way: a zero with
+    // nothing explaining it. Keyed on the explanation, not on the count — so the fix above cannot
+    // be mistaken for "always treat 0 as fine".
+    fetchMock.mockResolvedValue(jsonRes(200, { updated: 0 }))
+    const out = await saveSheetCell({ row: row({ id: 'p1' }), column: col({ key: 'material' }), value: 'Leather', locale: 'it' })
+    expect(out.ok).toBe(false)
+    expect(out.reason).toMatch(/changed nothing/i)
+  })
+
+  it('a per-cell refusal inside a 200 still wins over the no-op reading', async () => {
+    fetchMock.mockResolvedValue(jsonRes(200, { updated: 0, unchanged: 1, errors: [{ id: 'p1', error: 'Too long' }] }))
+    const out = await saveSheetCell({ row: row({ id: 'p1' }), column: col({ key: 'material' }), value: 'Leather', locale: 'it' })
+    expect(out).toEqual({ ok: false, reason: 'Too long' })
+  })
+})

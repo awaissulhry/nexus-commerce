@@ -1,0 +1,501 @@
+- generic: Disposable Information fixture
+- button "Interrupt next save"
+- button "Delay next read"
+- button "Toggle theme"
+- main:
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "Information jacket" [level=1]
+  - generic "INFO-JACKET"
+  - generic: Draft
+  - generic: Parent
+  - status "1 change saved this session. Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.":
+    - text: Nexus draft · Saved 05:12
+  - button "Review listing information"
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Blocked 33%":
+      - generic: Shared product
+      - generic: ·
+      - generic: Blocked
+      - generic: 33%
+    - radio "Amazon":
+      - generic: Amazon
+    - radio "eBay":
+      - generic: eBay
+    - radio "Shopify Warnings 100%" [checked]:
+      - generic: Shopify
+      - generic: ·
+      - generic: Warnings
+      - generic: 100%
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Account":
+    - generic: SHOPIFY store B
+  - button "Market":
+    - generic: GLOBAL
+  - button "Content language":
+    - generic: English (en) · primary
+  - region "Information":
+    - text: 9 rows
+    - generic: · 3 listings · 2 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (36)":
+      - text: All attributes (36)
+    - button "Required 1 column":
+      - generic: Required
+      - generic: 1 column
+    - button "Essentials 5 columns":
+      - generic: Essentials
+      - generic: 5 columns
+    - button "Localized content 3 columns":
+      - generic: Localized content
+      - generic: 3 columns
+    - 'button "Warnings: 3 affected cells across 1 column and 3 rows"':
+      - generic: Warnings
+      - generic: 1 column
+    - button "Requirements"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - generic: Press SPACE to select this row
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product role Parent SKU Name Description Product media Brand Product category Product type Status Tags":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product role":
+            - generic: Product role
+          - columnheader "Parent SKU":
+            - generic: Parent SKU
+          - columnheader "Name":
+            - generic: Name
+          - columnheader "Description":
+            - generic: Description
+          - columnheader "Product media":
+            - generic: Product media
+          - columnheader "Brand":
+            - generic: Brand
+          - columnheader "Product category":
+            - generic: Product category
+          - columnheader "Product type":
+            - generic: Product type
+          - columnheader "Status":
+            - generic: Status
+          - columnheader "Tags":
+            - generic: Tags
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 2 children Primary listing INFO-JACKET Primary Primary · Listing draft · Listing 200 · 2 variants · Missing — 100% of required fields filled":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 2 children": P
+            - generic "Primary listing": ★
+            - generic: INFO-JACKET
+            - generic "Primary · Listing draft · Listing 200 · 2 variants · Missing — 100% of required fields filled": Primary
+            - img "Primary · Listing draft · Listing 200 · 2 variants · Missing — 100% of required fields filled":
+              - generic: 100%
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "English jacket Edit: INFO-JACKET, Name Follows Master. Uses Master’s title for this product and content language. Show cell details: INFO-JACKET, Name"':
+            - generic: English jacket
+            - 'button "Edit: INFO-JACKET, Name"':
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: INFO-JACKET, Name"':
+          - 'gridcell "Descrizione completa Edit: INFO-JACKET, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+            - generic: Descrizione completa
+            - 'button "Edit: INFO-JACKET, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+          - 'gridcell "INFO-JACKET, 0 media items Edit product media: INFO-JACKET"':
+            - group "INFO-JACKET, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-JACKET"':
+          - 'gridcell "Nexus Edit: INFO-JACKET, Brand Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+            - generic: Nexus
+            - 'button "Edit: INFO-JACKET, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product category No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product category"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product type No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product type"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+          - 'gridcell "DRAFT Edit: INFO-JACKET, Status Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+            - generic: DRAFT
+            - 'button "Edit: INFO-JACKET, Status"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+          - 'gridcell "Empty list Edit: INFO-JACKET, Tags Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+            - generic: Empty list
+            - 'button "Edit: INFO-JACKET, Tags"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-ONE"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-ONE
+            - 'generic "size: M · color: black"': M · black
+            - img "INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-ONE":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "one jacket Details: INFO-ONE, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+            - generic: one jacket
+            - 'button "Details: INFO-ONE, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-ONE, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-ONE, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+          - 'gridcell "INFO-ONE, 0 media items Edit product media: INFO-ONE"':
+            - group "INFO-ONE, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-ONE"':
+          - 'gridcell "Nexus Details: INFO-ONE, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-ONE, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+          - 'gridcell "Not measured Details: INFO-ONE, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+          - 'gridcell "Not measured Details: INFO-ONE, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-TWO"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-TWO
+            - 'generic "size: L · color: red"': L · red
+            - img "INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-TWO":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "two jacket Details: INFO-TWO, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+            - generic: two jacket
+            - 'button "Details: INFO-TWO, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-TWO, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-TWO, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+          - 'gridcell "INFO-TWO, 0 media items Edit product media: INFO-TWO"':
+            - group "INFO-TWO, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-TWO"':
+          - 'gridcell "Nexus Details: INFO-TWO, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-TWO, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+          - 'gridcell "Not measured Details: INFO-TWO, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+          - 'gridcell "Not measured Details: INFO-TWO, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 2 children Listing alias 1 INFO-JACKET Listing 1 Listing 1 · Listing draft · Listing 201 · 2 variants · Missing — 100% of required fields filled":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 2 children": P
+            - generic "Listing alias 1": ①
+            - generic: INFO-JACKET
+            - generic "Listing 1 · Listing draft · Listing 201 · 2 variants · Missing — 100% of required fields filled": Listing 1
+            - img "Listing 1 · Listing draft · Listing 201 · 2 variants · Missing — 100% of required fields filled":
+              - generic: 100%
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "Saved Shopify alias Edit: INFO-JACKET, Name Saved Nexus draft. Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify. Show cell details: INFO-JACKET, Name"':
+            - generic: Saved Shopify alias
+            - 'button "Edit: INFO-JACKET, Name"':
+            - 'button "Saved Nexus draft. Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify. Show cell details: INFO-JACKET, Name"':
+          - 'gridcell "Descrizione completa Edit: INFO-JACKET, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+            - generic: Descrizione completa
+            - 'button "Edit: INFO-JACKET, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+          - 'gridcell "INFO-JACKET, 0 media items Edit product media: INFO-JACKET"':
+            - group "INFO-JACKET, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-JACKET"':
+          - 'gridcell "Nexus Edit: INFO-JACKET, Brand Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+            - generic: Nexus
+            - 'button "Edit: INFO-JACKET, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product category No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product category"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product type No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product type"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+          - 'gridcell "DRAFT Edit: INFO-JACKET, Status Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+            - generic: DRAFT
+            - 'button "Edit: INFO-JACKET, Status"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+          - 'gridcell "Empty list Edit: INFO-JACKET, Tags Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+            - generic: Empty list
+            - 'button "Edit: INFO-JACKET, Tags"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-ONE"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-ONE
+            - 'generic "size: M · color: black"': M · black
+            - img "INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-ONE":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "one jacket Details: INFO-ONE, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+            - generic: one jacket
+            - 'button "Details: INFO-ONE, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-ONE, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-ONE, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+          - 'gridcell "INFO-ONE, 0 media items Edit product media: INFO-ONE"':
+            - group "INFO-ONE, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-ONE"':
+          - 'gridcell "Nexus Details: INFO-ONE, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-ONE, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+          - 'gridcell "Not measured Details: INFO-ONE, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+          - 'gridcell "Not measured Details: INFO-ONE, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-TWO"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-TWO
+            - 'generic "size: L · color: red"': L · red
+            - img "INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-TWO":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "two jacket Details: INFO-TWO, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+            - generic: two jacket
+            - 'button "Details: INFO-TWO, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-TWO, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-TWO, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+          - 'gridcell "INFO-TWO, 0 media items Edit product media: INFO-TWO"':
+            - group "INFO-TWO, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-TWO"':
+          - 'gridcell "Nexus Details: INFO-TWO, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-TWO, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+          - 'gridcell "Not measured Details: INFO-TWO, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+          - 'gridcell "Not measured Details: INFO-TWO, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 2 children Listing alias 2 INFO-JACKET Listing 2 Listing 2 · Listing draft · Listing 202 · 2 variants · Missing — 100% of required fields filled":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 2 children": P
+            - generic "Listing alias 2": ②
+            - generic: INFO-JACKET
+            - generic "Listing 2 · Listing draft · Listing 202 · 2 variants · Missing — 100% of required fields filled": Listing 2
+            - img "Listing 2 · Listing draft · Listing 202 · 2 variants · Missing — 100% of required fields filled":
+              - generic: 100%
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "Verified Shopify alias draft Edit: INFO-JACKET, Name Saved Nexus draft. Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify. Show cell details: INFO-JACKET, Name" [active] [selected]':
+            - generic: Verified Shopify alias draft
+            - 'button "Edit: INFO-JACKET, Name"':
+            - 'button "Saved Nexus draft. Saved for this account, listing and field owner. Review synchronization to send these changes to Shopify. Show cell details: INFO-JACKET, Name"':
+          - 'gridcell "Descrizione completa Edit: INFO-JACKET, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+            - generic: Descrizione completa
+            - 'button "Edit: INFO-JACKET, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-JACKET, Description"':
+          - 'gridcell "INFO-JACKET, 0 media items Edit product media: INFO-JACKET"':
+            - group "INFO-JACKET, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-JACKET"':
+          - 'gridcell "Nexus Edit: INFO-JACKET, Brand Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+            - generic: Nexus
+            - 'button "Edit: INFO-JACKET, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: INFO-JACKET, Brand"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product category No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product category"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product category"':
+          - 'gridcell "Not measured Edit: INFO-JACKET, Product type No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+            - generic: —
+            - 'button "Edit: INFO-JACKET, Product type"':
+            - 'button "No value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Product type"':
+          - 'gridcell "DRAFT Edit: INFO-JACKET, Status Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+            - generic: DRAFT
+            - 'button "Edit: INFO-JACKET, Status"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Status"':
+          - 'gridcell "Empty list Edit: INFO-JACKET, Tags Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+            - generic: Empty list
+            - 'button "Edit: INFO-JACKET, Tags"':
+            - 'button "Channel value. No Master source is reported for this cell. Show cell details: INFO-JACKET, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-ONE"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-ONE
+            - 'generic "size: M · color: black"': M · black
+            - img "INFO-ONE — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-ONE":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "one jacket Details: INFO-ONE, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+            - generic: one jacket
+            - 'button "Details: INFO-ONE, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-ONE, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-ONE, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-ONE, Description"':
+          - 'gridcell "INFO-ONE, 0 media items Edit product media: INFO-ONE"':
+            - group "INFO-ONE, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-ONE"':
+          - 'gridcell "Nexus Details: INFO-ONE, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-ONE, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Brand"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product category"':
+          - 'gridcell "Not measured Details: INFO-ONE, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Product type"':
+          - 'gridcell "Not measured Details: INFO-ONE, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Status"':
+          - 'gridcell "Not measured Details: INFO-ONE, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+            - generic: —
+            - 'button "Details: INFO-ONE, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-ONE, Tags"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live Actions for INFO-TWO"':
+            - 'img "Child · Parent SKU: INFO-JACKET"': C
+            - generic: INFO-TWO
+            - 'generic "size: L · color: red"': L · red
+            - img "INFO-TWO — 6 of 20 channel fields filled (including optional fields) · live":
+              - generic: 30%
+            - button "Actions for INFO-TWO":
+          - gridcell "Child"
+          - gridcell "INFO-JACKET"
+          - 'gridcell "two jacket Details: INFO-TWO, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+            - generic: two jacket
+            - 'button "Details: INFO-TWO, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Name"':
+          - 'gridcell "Descrizione completa Details: INFO-TWO, Description Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+            - generic: Descrizione completa
+            - 'button "Details: INFO-TWO, Description"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: INFO-TWO, Description"':
+          - 'gridcell "INFO-TWO, 0 media items Edit product media: INFO-TWO"':
+            - group "INFO-TWO, 0 media items":
+              - generic: Add media
+            - 'button "Edit product media: INFO-TWO"':
+          - 'gridcell "Nexus Details: INFO-TWO, Brand Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+            - generic: Nexus
+            - 'button "Details: INFO-TWO, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Brand"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product category"':
+          - 'gridcell "Not measured Details: INFO-TWO, Product type No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Product type"':
+            - 'button "No mapping. No rule connects this channel attribute to Master; configure a mapping or enter a listing value. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Product type"':
+          - 'gridcell "Not measured Details: INFO-TWO, Status Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Status"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Status"':
+          - 'gridcell "Not measured Details: INFO-TWO, Tags Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+            - generic: —
+            - 'button "Details: INFO-TWO, Tags"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Edit this field on the product row that owns this Shopify listing. Show cell details: INFO-TWO, Tags"':
+    - status:
+      - generic: 9 rows
+      - button "Show the keyboard shortcuts": "?"
+      - generic: Saved 05:12
+  - complementary "Record"

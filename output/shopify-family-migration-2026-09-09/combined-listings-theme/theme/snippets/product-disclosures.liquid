@@ -1,0 +1,59 @@
+{%- doc -%}
+  Renders the product disclosures attached to a product through the "shopify.disclosure" metafield.
+
+  @param {object} product - the product whose disclosures should be rendered
+  @param {boolean} [collapse_content] - if set to true, wraps the disclosures in a collapsible accordion; otherwise shown inline
+  @param {string} [icon] - an icon shown on the accordion toggle (only used when collapse_content is true)
+  @param {number} [icon_width] - an optional width for the icon
+  @param {object} [block] - an optional block to output theme editor attributes
+{%- enddoc -%}
+
+{%- assign disclosures = product.metafields.shopify.disclosure.value -%}
+
+{%- if disclosures != blank -%}
+  {%- assign disclosures_content = '' -%}
+  {%- assign rendered_disclosures_count = 0 -%}
+
+  {%- for disclosure in disclosures -%}
+    {%- if disclosure.display_preferences.value.surfaces contains 'product_page' -%}
+      {%- capture disclosure_item -%}
+        <div class="v-stack gap-1">
+          {%- if disclosure.title.value != blank or disclosure.symbol.value != blank -%}
+            <div class="h-stack gap-1">
+              {%- if disclosure.symbol.value != blank -%}
+                {{-
+                  disclosure.symbol.value
+                  | image_url: width: 40
+                  | image_tag: loading: 'lazy', alt: '', widths: '20,40', style: 'width: 20px; height: auto'
+                -}}
+              {%- endif -%}
+
+              {%- if disclosure.title.value != blank -%}
+                <span class="h6">{{ disclosure.title.value | escape }}</span>
+              {%- endif -%}
+            </div>
+          {%- endif -%}
+
+          <div class="prose">{{ disclosure.content | metafield_tag }}</div>
+        </div>
+      {%- endcapture -%}
+
+      {%- assign disclosures_content = disclosures_content | append: disclosure_item -%}
+      {%- assign rendered_disclosures_count = rendered_disclosures_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+
+  {%- if rendered_disclosures_count > 0 -%}
+    {%- if rendered_disclosures_count > 1 -%}
+      {%- capture disclosures_content -%}<div class="v-stack gap-4">{{ disclosures_content }}</div>{%- endcapture -%}
+    {%- endif -%}
+
+    {%- assign disclosures_title = 'product.disclosures.title' | t -%}
+
+    {%- if collapse_content -%}
+      {%- render 'accordion', title: disclosures_title, content: disclosures_content, icon: icon, icon_width: icon_width, class: 'product-info__accordion', block: block -%}
+    {%- else -%}
+      {{- disclosures_content -}}
+    {%- endif -%}
+  {%- endif -%}
+{%- endif -%}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { CalendarClock, Loader2, Play, RefreshCw, Pause, PlayCircle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

@@ -1,0 +1,7 @@
+.name {
+  display: inline-block;
+  max-inline-size: min(22vw, 14rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

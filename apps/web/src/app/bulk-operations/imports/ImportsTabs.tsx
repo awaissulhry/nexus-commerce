@@ -8,7 +8,8 @@
  */
 
 import { useEffect, useState } from 'react'
-import { useSearchParams, useRouter, usePathname } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { CalendarClock, Upload } from 'lucide-react'
 import ImportsClient from './ImportsClient'
 import ScheduledImportsPanel from './ScheduledImportsPanel'

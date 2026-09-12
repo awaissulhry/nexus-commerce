@@ -1,3 +1,4 @@
+import { languageTag } from './pim/market-languages.js'
 /**
  * A5 — schema-driven pre-flight validation for Amazon flat-file rows.
  *
@@ -307,20 +308,10 @@ export function checkNonEditableChanges(
 /** The EU marketplaces where Amazon enforces GPSR. */
 export const GPSR_EU_MARKETPLACES = new Set(['ES', 'FR', 'BE', 'NL', 'DE', 'IT', 'SE', 'PL'])
 
-/** Official marketplace language(s) — compliance_media.content_language must match. */
-export const GPSR_MARKETPLACE_LANGUAGES: Record<string, string[]> = {
-  IT: ['it_IT'],
-  DE: ['de_DE'],
-  FR: ['fr_FR'],
-  ES: ['es_ES'],
-  NL: ['nl_NL'],
-  SE: ['sv_SE'],
-  PL: ['pl_PL'],
-  BE: ['fr_BE', 'nl_BE'], // both official Amazon.com.be languages
-}
-
 /** Context for checkGpsrCompliance — everything schema/route-derived. */
 export interface GpsrCheckContext {
+  /** Ordered language authority loaded once for the target coordinate. */
+  languages?: readonly string[]
   /** Target marketplace of the batch (route context). Non-EU → no checks. */
   marketplace: string
   /** Column ids applicable to this row's product type (applicableByType). A
@@ -446,7 +437,7 @@ export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckCont
       }
     }
     const lang = has(CM_LANG) ? cmVal(CM_LANG) : ''
-    const expected = GPSR_MARKETPLACE_LANGUAGES[mk]
+    const expected = ctx.languages?.map(language => languageTag(language, mk))
     if (lang && expected && !expected.some((l) => l.toLowerCase() === lang.toLowerCase())) {
       issues.push({
         field: CM_LANG,

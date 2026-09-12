@@ -21,7 +21,7 @@
  * i.e. the page's most load-bearing truths were its least readable text.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowRight, Clock, Play, Shield } from 'lucide-react'
 import { RunBars } from './RunBars'
 import {

@@ -1,0 +1,17 @@
+{
+  "localeFallback": {
+    "requestedLocale": "de",
+    "availableLocale": "en",
+    "value": "Waterproof jacket",
+    "source": "catalogRule",
+    "needsTranslation": false
+  },
+  "conditionalAmazonByteLimit": {
+    "limit": 3,
+    "actualBytes": 6,
+    "result": {
+      "issues": []
+    },
+    "fieldMaxBytes": null
+  }
+}

@@ -1,0 +1,82 @@
+/** PES.7 — DAM picker layout. Plain px; colour and radius on tokens; never --nds-text-3 for text. */
+
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.controls > :first-child { flex: 1 1 240px; min-width: 0; }
+
+.note {
+  margin: 8px 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.error {
+  margin: 0 0 10px;
+  border: 1px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  border-radius: var(--nds-radius-md);
+  padding: 8px 12px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 12px;
+}
+
+.card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  padding: 8px;
+  background: var(--nds-surface-raised);
+}
+
+/* Square, and it HOLDS: aspect-ratio is a preferred size, so overflow+min-height keep a portrait
+   asset from stretching the card and making the grid ragged. */
+.cardImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  min-height: 0;
+  object-fit: contain;
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+}
+
+.cardMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cardLabel {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardFacts {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cardFacts em { font-style: italic; }

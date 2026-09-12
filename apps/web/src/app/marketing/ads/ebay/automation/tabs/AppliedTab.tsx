@@ -6,7 +6,7 @@
  * no-dates/no-pagination finding; the grid's pager and sort are built-in.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AdsDataGrid, type GridColumn } from '../../../campaigns/_grid/AdsDataGrid'
 import { getEbayAds, postEbayAds } from '../../_lib'
 import { kindLabel } from '../_lib/rules'

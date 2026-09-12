@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Plus,
   Pencil,

@@ -1,0 +1,213 @@
+- generic: Navigated to Klaviyo
+- link "Skip to content":
+  - /url: "#app-shell-main"
+  - generic: Skip to content
+- alert
+- alert
+- banner:
+  - button "Exit":
+    - generic: Exit
+  - button "Email Popup - Click to rename":
+    - generic: Email Popup
+  - generic: Email Popup
+  - textbox "Email Popup"
+  - generic: Publish changes
+  - combobox "Publish changes":
+    - generic: Live
+  - button "Alerts":
+    - generic: Alerts
+  - button "Comments":
+    - generic: Comments
+  - button "Publish or schedule":
+    - generic: Publish or schedule
+  - button "Close Composer":
+    - generic: Close Composer
+- button "Add content":
+  - generic: Add content
+- button "Edit styles":
+  - generic: Edit styles
+- button "Targeting & behavior":
+  - generic: Targeting & behavior
+- button "Create A/B test":
+  - generic: Create A/B test
+- heading "Targeting & display behavior" [level=6]
+- button "Collapse panel":
+  - generic: Collapse panel
+- button:
+  - generic: Scroll left
+- tablist:
+  - tab "Targeting":
+    - generic: Targeting
+  - tab "Display" [active] [selected]:
+    - generic: Display
+- button:
+  - generic: Scroll right
+- region "Timing":
+  - heading "Timing" [level=2]
+  - generic: Show form
+  - combobox "Show form":
+    - generic: Based on rules
+  - generic: When visitor is exiting the page
+  - checkbox "When visitor is exiting the page"
+  - generic: When visitor is exiting the page
+  - generic: After time delay
+  - checkbox "After time delay" [checked]
+  - generic: After time delay
+  - generic: Show after
+  - textbox "Show after": "5"
+  - generic: seconds
+  - generic: After visitor has scrolled a certain amount
+  - checkbox "After visitor has scrolled a certain amount"
+  - generic: After visitor has scrolled a certain amount
+  - generic: After visitor sees a certain number of pages
+  - checkbox "After visitor sees a certain number of pages"
+  - generic: After visitor sees a certain number of pages
+- region "Lead capture with Shop":
+  - heading "Lead capture with Shop" [level=2]
+  - generic: Turn on lead capture
+  - checkbox "Turn on lead capture"
+  - generic: Turn on lead capture
+  - paragraph:
+    - text: Shop recognizes a user's email from lead capture and applies discounts automatically at checkout.
+    - strong:
+      - link "Learn more about Shop Pay":
+        - /url: https://www.shopify.com/shop-pay
+- region "Frequency":
+  - heading "Frequency" [level=2]
+  - generic: If visitor closes form, show again after
+  - textbox "If visitor closes form, show again after": "3"
+  - generic: days
+  - checkbox "Don’t show again if form was submitted or if go to URL button was clicked" [checked]
+  - generic: Don’t show again if form was submitted or if go to URL button was clicked
+- region "Devices":
+  - heading "Devices" [level=2]
+  - generic: Devices
+  - group "Devices":
+    - generic: Devices
+    - radiogroup:
+      - radio "All devices" [checked]
+      - generic: All devices
+      - radio "Desktop only"
+      - generic: Desktop only
+      - radio "Mobile only"
+      - generic: Mobile only
+- region "Click outside form to close":
+  - heading "Click outside form to close" [level=2]
+  - generic: Click outside form to close
+  - group "Click outside form to close":
+    - generic: Click outside form to close
+    - checkbox "On desktop" [checked]
+    - generic: On desktop
+    - checkbox "On mobile" [checked]
+    - generic: On mobile
+- region "Custom trigger":
+  - heading "Custom trigger" [level=2]
+  - generic: Open the form based on any condition, such as on a button click or in your own code.
+  - generic: window._klOnsite = window._klOnsite || []; window._klOnsite.push(['openForm', 'YqXPJw']);
+  - link "See documentation details Open in new tab":
+    - /url: https://help.klaviyo.com/hc/en-us/articles/4418052317339
+    - text: See documentation details
+    - img "Open in new tab"
+- button "Undo" [disabled]:
+  - generic: Undo
+- button "Redo" [disabled]:
+  - generic: Redo
+- button "Teaser":
+  - generic: Teaser
+- button "Options":
+  - generic: Options
+- button "Move step Email Opt-In Options":
+  - button "Move step":
+    - generic: Move step
+  - button "Email Opt-In":
+    - generic: Email Opt-In
+  - button "Options":
+    - generic: Options
+- button "Move step Profile Info Options":
+  - button "Move step":
+    - generic: Move step
+  - button "Profile Info":
+    - generic: Profile Info
+  - button "Options":
+    - generic: Options
+- button "Step":
+  - generic: Step
+- button "Success":
+  - generic: Success
+- generic: mobile or desktop
+- group "mobile or desktop":
+  - generic: mobile or desktop
+  - radiogroup:
+    - radio "Both" [checked]
+    - generic: Both
+    - radio "Desktop"
+    - generic: Desktop
+    - radio "Mobile"
+    - generic: Mobile
+- heading "Desktop" [level=6]
+- dialog "POPUP Form":
+  - button "Close dialog":
+  - img "Xavia Racing Banner"
+  - paragraph: UNLOCK 10% OFF
+  - paragraph: Sign up to receive 10% off your first order and exclusive access to our best offers.
+  - generic: Email
+  - textbox "Email Email":
+    - /placeholder: Email
+  - button "SIGN ME UP!"
+  - button "NO, THANKS"
+  - alert
+- heading "Mobile" [level=6]
+- dialog "POPUP Form":
+  - button "Close dialog":
+  - img "Xavia Racing Banner"
+  - paragraph: UNLOCK 10% OFF
+  - paragraph: Sign up to receive 10% off your first order and exclusive access to our best offers.
+  - generic: Email
+  - textbox "Email"
+  - button "SIGN ME UP!"
+  - button "NO, THANKS"
+  - alert
+- button "Zoom in":
+  - generic: Zoom in
+- generic: 80%
+- button "Zoom out":
+  - generic: Zoom out
+- separator
+- button "Reset position":
+  - generic: Reset position
+- button "New chat":
+  - generic: New chat
+- button "Expand":
+  - generic: Expand
+- button "Close":
+  - generic: Close
+- heading "How can I help?" [level=4]
+- paragraph:
+  - text: Ask questions, get recommendations,
+  - text: and bring your marketing to life.
+  - button "Learn more"
+- button "Audit this form":
+  - heading "Audit this form" [level=3]
+- paragraph:
+  - text: Composer is an AI assistant. By sending a message, you consent to this chat being recorded and processed by us and our service providers.
+  - link "Privacy Notice":
+    - /url: https://privacy.klaviyo.com/policies/?name=klaviyo-privacy-policy
+- textbox "Ask Composer anything":
+  - paragraph: Ask Composer anything
+- button "Campaign brief":
+  - generic: Campaign brief
+- button "Attach assets":
+  - generic: Attach assets
+- button "Send" [disabled]:
+  - generic: Send
+- status
+- tooltip "Find your tools faster The canvas header is now responsive and keeps your key actions together in one place, so you can work faster. 1 of 4 Dismiss Next":
+  - heading "Find your tools faster" [level=6]
+  - generic: The canvas header is now responsive and keeps your key actions together in one place, so you can work faster.
+  - generic: 1 of 4
+  - button "Dismiss":
+    - generic: Dismiss
+  - button "Next":
+    - generic: Next
+- generic: €25
+- slider "Resize the chat panel"

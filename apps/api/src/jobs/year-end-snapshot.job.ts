@@ -65,7 +65,7 @@ export function startYearEndSnapshotCron(): void {
     logger.error('year-end-snapshot cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runYearEndSnapshotOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runYearEndSnapshotOnce() })
   logger.info('year-end-snapshot cron: scheduled', { schedule })
 }
 

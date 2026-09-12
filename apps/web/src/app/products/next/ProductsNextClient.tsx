@@ -8,8 +8,9 @@
 // channels. Nothing here needs them any more: this page's CSS is entirely on `--nds-*`.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, ArrowLeft, Copy, Download, MoreHorizontal, Plus, Search, Send, SlidersHorizontal, Tag as TagIcon, Trash2, Upload } from 'lucide-react'
 
 import { getBackendUrl } from '@/lib/backend-url'
@@ -18,7 +19,7 @@ import { useListingEvents } from '@/lib/sync/use-listing-events'
 import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
-import { Banner, EmptyState, Menu, MetricStrip, Modal, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
+import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import { eur0 } from '@/design-system/lib'
 
@@ -41,17 +42,38 @@ import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, Sel
 import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type AgMenuItemDef, type DefaultMenuItem, type GetContextMenuItemsParams, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
-import { buildPageColumns, columnLabel, isGroupRow, pageColumnExportValue, projectColDefs, rowActions, CHANNEL_OPTS, SALES_WINDOW_DAYS, STATUS_OPTS } from './columns'
+import {
+  buildPageColumns,
+  columnLabel,
+  composeLocks,
+  isGroupRow,
+  isStructuralColumn,
+  pageColumnExportValue,
+  projectColDefs,
+  rowActions,
+  structuralPinState,
+  withStructuralLocks,
+  CHANNEL_OPTS,
+  SALES_WINDOW_DAYS,
+  STATUS_OPTS,
+  STRUCTURAL_COLUMNS,
+} from './columns'
 import { csvFileName, downloadCsv, toCsv, type CsvColumn } from '@/design-system/grid/export/gridCsv'
 import { fetchAllRowsForExport } from './productsExport'
 import { ProductTreeCell, type ProductTreeCellParams } from './ProductTreeCell'
-import { useBulkActions } from './useBulkActions'
+import { BULK_MAX, useBulkActions } from './useBulkActions'
 import { GridViewsMenu } from './GridViewsMenu'
 import { FamilyFooter } from './FamilyFooter'
 import { BulkEditModal, type BulkEditChanges } from './BulkEditModal'
 import { TagDialog } from './TagDialog'
 import { InventoryEditorModal } from './InventoryEditorModal'
 import { ProductsSkeleton } from './ProductsSkeleton'
+import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
+import { preferencesFromLayout, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
+import { isGridStatePayload, type GridViewPayload, type SavedGridView } from '@/design-system/grid/hooks/useGridViews'
+import type { SheetLayoutPayload } from '@/design-system/grid/views/viewPayload'
+import type { PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
+import { buildProductsLayout, readProductsLayout } from './productsLayout'
 import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
 import { DEFAULT_DENSITY, type DensityMode } from './density'
 
@@ -61,10 +83,43 @@ import { DEFAULT_DENSITY, type DensityMode } from './density'
 
 /**
  * Columns that START padlocked in the Customise dialog: the identity column and the row actions.
- * Padlocked means not draggable and not removable — in the dialog and in the grid's header alike
- * — but the operator holds the key: unlock either and it moves or hides like any other column.
+ *
+ * A LOCK is one thing on both pages (the lock contract, 2026-09-05): the column is FROZEN — AG
+ * `pinned` — always visible, not draggable, and released back into the scrolling band when the
+ * operator unlocks it. These two are the grid's STRUCTURAL lead and trail (`STRUCTURAL_COLUMNS`),
+ * frozen left and right; every other lock is the operator's and forms one block between them. The
+ * Owner holds the key to all of them: unlock either bookend in Customise and it moves or hides like
+ * any other column.
  */
-const DEFAULT_LOCKED_COLUMNS: readonly string[] = ['product', 'actions']
+const DEFAULT_LOCKED_COLUMNS: readonly string[] = STRUCTURAL_COLUMNS
+
+/**
+ * A `previous` for `columnStateToPrefs` when only its DERIVED half is read.
+ *
+ * `columnStateToPrefs` spreads `previous` and overwrites what the grid has an opinion about, so a
+ * caller that reads only `lockedColumns` off the result must not hand it a real draft: the values it
+ * carries through (the sort fallback, the page size) would come back attached to a value nobody
+ * asked for. `lockedColumns: []` is what makes the field appear at all — the engine withholds it
+ * from a caller that never opted into locks.
+ */
+const LOCKS_ONLY_PREVIOUS: PreferencesValue = {
+  visibleColumns: [],
+  lockedColumns: [],
+  stickyFirstColumn: false,
+  stickyLastColumn: false,
+  pageSize: 0,
+  sortBy: '',
+  sortDir: 'asc',
+}
+
+/**
+ * The same lock set in the same frozen order.
+ *
+ * `composeLocks` returns a new array every time, and this page's column definitions are memoised on
+ * `lockedColumns` — so writing an equal-but-new set re-runs AG's column model for nothing, on every
+ * column event and every view application. Kept referentially stable when it has not moved.
+ */
+const sameLocks = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((k, i) => k === b[i])
 
 /** Which page warning the operator has already read and closed. Holds the warning's VALUE. */
 const WARNING_DISMISS_KEY = 'products-next:dismissed-warning'
@@ -76,18 +131,6 @@ const BLOCK_SIZE = 100
 const FAMILY_FOOTER_PX = gridGeometry.footerRowH
 /** Rows per page, set in the footer as on Ad Manager. */
 const NO_ROWS_TEMPLATE = '<span style="color: var(--nds-text-muted)">No products match this filter.</span>'
-
-/** Market names for publish-destination labels. */
-const MARKET_NAMES: Record<string, string> = { IT: 'Italy', DE: 'Germany', FR: 'France', ES: 'Spain', UK: 'United Kingdom' }
-/**
- * Publish destinations offered in the bulk "Publish" dialog. Active channels only
- * (Amazon · eBay · Shopify), matching the platform's channel scope.
- */
-const PUBLISH_DESTINATIONS: Array<{ channel: string; marketplace: string; label: string }> = [
-  ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ channel: 'AMAZON', marketplace: m, label: `Amazon ${m} (${MARKET_NAMES[m] ?? m})` })),
-  ...['IT', 'DE', 'FR', 'ES'].map((m) => ({ channel: 'EBAY', marketplace: m, label: `eBay ${m} (${MARKET_NAMES[m] ?? m})` })),
-  { channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify' },
-]
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -112,6 +155,12 @@ interface PageViewState {
   lockedColumns: string[]
   /** Rows per page, from the footer. Absent on views saved before it existed. */
   pageSize?: number
+  columnLayout?: SheetLayoutPayload
+}
+
+const WORKING_LAYOUT_SURFACE = 'products-next:layout'
+function isProductsWorkingPayload(value: unknown): value is GridViewPayload<PageViewState> {
+  return isGridStatePayload<PageViewState>(value) && !!value.gridState && typeof value.gridState === 'object' && readProductsLayout(value) !== null
 }
 
 /** GET /api/products/facets — the subset this page reads. */
@@ -166,8 +215,6 @@ function ProductsNextInner() {
   const [modalRow, setModalRow] = useState<ProductRow | null>(null)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
-  const [publishOpen, setPublishOpen] = useState(false)
-  const [publishTarget, setPublishTarget] = useState<string | null>(null)
   const [customizeOpen, setCustomizeOpen] = useState(false)
 
   // ── The grid's own state ───────────────────────────────────────
@@ -175,6 +222,14 @@ function ProductsNextInner() {
   // (`api.getState()` snapshots them for a saved view). The page keeps only what the grid cannot
   // know: the accordion filters, the density, the clicked tile — and READS the rest.
   const [gridApi, setGridApi] = useState<GridApi<ProductRow> | null>(null)
+  /**
+   * The same api, available SYNCHRONOUSLY from the moment the grid is ready.
+   *
+   * `setGridApi` is a state write, so the render that sets it has not happened yet while
+   * `onGridReady` is still running — and the last-used restore happens inside that call
+   * (`gridViews.bind` → `applyPageState`), which has to read the grid back.
+   */
+  const gridApiRef = useRef<GridApi<ProductRow> | null>(null)
   /** Mirror of AG's filter model, kept current by `onFilterChanged`; the accordion reads it. */
   const [filterModel, setFilterModelState] = useState<GridFilterModel>({})
   /** Mirror of AG's selection, kept current by `onSelectionChanged`; the toolbar reads it. */
@@ -191,9 +246,16 @@ function ProductsNextInner() {
   // never swallowed: a filter that silently stops filtering widens the result behind the
   // operator's back.
   const [unsupported, setUnsupported] = useState<string[]>([])
-  // Operator locks from the Customise padlocks. They are not part of AG's column state, so they
-  // live here and ride into the saved view with the other page knobs.
+  /**
+   * The LOCK SET, in frozen order (`composeLocks`): the identity column, the operator's frozen
+   * block, the actions column. The two structural padlocks cannot be read back out of AG's column
+   * state — a pin says "frozen", not "padlocked", and the actions pin is on the right — so the set
+   * lives here and rides into the saved view with the other page knobs. The operator's own locks
+   * ARE readable from the grid, and the grid is their truth: see `locksFromGrid`.
+   */
   const [lockedColumns, setLockedColumns] = useState<string[]>([...DEFAULT_LOCKED_COLUMNS])
+  const lockedRef = useRef(lockedColumns)
+  lockedRef.current = lockedColumns
   /**
    * Grouped is a VIEW MODE: AG's auto column is either the family tree or the group column, never
    * both. While a grouping is active the tree is off and families do not expand.
@@ -202,20 +264,69 @@ function ProductsNextInner() {
   const [pageSize, setPageSize] = useState(BLOCK_SIZE)
   const [pager, setPager] = useState<{ page: number; pageCount: number }>({ page: 1, pageCount: 1 })
 
-  // ── Saved views: ONE object, server-side, per operator ──────────
+  const columnLayoutRef = useRef<SheetLayoutPayload | null>(null)
+  const initialPayloadRef = useRef<GridViewPayload<PageViewState> | null>(null)
+  const layoutLanded = useRef(false)
+  const [layoutBootstrapped, setLayoutBootstrapped] = useState(false)
+  const [workingState, setWorkingState] = useState<{ loaded: boolean; error: string | null; record: StoredSheetLayout<GridViewPayload<PageViewState>> | null }>({ loaded: false, error: null, record: null })
+  const workingRef = useRef(workingState)
+  const workingRequest = useRef(0)
+  const layoutSaving = useRef(false)
+  const backendUrl = getBackendUrl()
+  const loadSavedLayout = useCallback(async () => {
+    const request = ++workingRequest.current
+    try {
+      const record = await loadWorkingLayout(backendUrl, WORKING_LAYOUT_SURFACE, isProductsWorkingPayload)
+      if (request !== workingRequest.current) throw new Error('A newer layout load is already in progress')
+      workingRef.current = { loaded: true, error: null, record }
+      setWorkingState(workingRef.current)
+      return record
+    } catch (error) {
+      if (request === workingRequest.current) {
+        workingRef.current = { ...workingRef.current, loaded: true, error: error instanceof Error ? error.message : 'Could not load your saved layout' }
+        setWorkingState(workingRef.current)
+      }
+      throw error
+    }
+  }, [backendUrl])
+  useEffect(() => {
+    void loadSavedLayout().catch(() => {})
+    return () => { workingRequest.current += 1 }
+  }, [loadSavedLayout])
+
+  const pageSnapshot = useCallback((): PageViewState => ({ filters, tile: activeTile, density, lockedColumns, pageSize, ...(columnLayoutRef.current ? { columnLayout: columnLayoutRef.current } : {}) }), [filters, activeTile, density, lockedColumns, pageSize])
+  const restorePageState = useCallback((pg: PageViewState) => {
+    columnLayoutRef.current = pg.columnLayout ?? null
+    setFilters(pg.filters ?? EMPTY_FILTERS)
+    setActiveTile(pg.tile ?? null)
+    setDensity(pg.density ?? DEFAULT_DENSITY)
+    const viewLocks = composeLocks(pg.lockedColumns ?? DEFAULT_LOCKED_COLUMNS)
+    lockedRef.current = viewLocks
+    setLockedColumns((prev) => sameLocks(prev, viewLocks) ? prev : viewLocks)
+    if (pg.pageSize) setPageSize(pg.pageSize)
+  }, [])
+
+  // Current layout and named views use the same payload; named Save writes both atomically.
   const gridViews = useGridState<PageViewState>({
     surface: 'products-next',
-    // The DS grid does not know where the API lives; the page answers.
-    baseUrl: getBackendUrl(),
-    getPageState: () => ({ filters, tile: activeTile, density, lockedColumns, pageSize }),
-    applyPageState: (pg) => {
-      setFilters(pg.filters)
-      setActiveTile(pg.tile)
-      setDensity(pg.density)
-      setLockedColumns(pg.lockedColumns ?? [])
-      if (pg.pageSize) setPageSize(pg.pageSize)
-    },
+    baseUrl: backendUrl,
+    getPageState: pageSnapshot,
+    applyPageState: (pg) => restorePageState(!layoutLanded.current && initialPayloadRef.current ? initialPayloadRef.current.page : pg),
   })
+  useEffect(() => {
+    if (layoutBootstrapped || !workingState.loaded || (!gridViews.loaded && !gridViews.loadError)) return
+    const named = gridViews.defaultView
+    const payload = workingState.record?.filters ?? (named && isGridStatePayload<PageViewState>(named.payload) ? named.payload : null)
+      ?? (gridViews.lastUsed ? { v: 1 as const, gridState: gridViews.lastUsed.gridState, page: gridViews.lastUsed.page } : null)
+    initialPayloadRef.current = payload
+    if (payload) {
+      restorePageState(payload.page)
+      setGrouped(!!payload.gridState.rowGroup?.groupColIds.length)
+      const matching = gridViews.views.find((view) => JSON.stringify(view.payload) === JSON.stringify(payload))
+      gridViews.markActive(matching?.id ?? null)
+    }
+    setLayoutBootstrapped(true)
+  }, [layoutBootstrapped, workingState, gridViews, restorePageState])
   const gridViewsBind = gridViews.bind
   // What AG's state cannot hold — density, page size, the accordion, a tile, the padlocks — is the
   // page's; the state hook is told when it moves so the last-used state carries it too.
@@ -353,7 +464,7 @@ function ProductsNextInner() {
   }, [selection.ids.length, confirmDelete])
 
   // ── Mutations ─────────────────────────────────────────────────
-  const { busy, publishBulk, setStatusBulk, duplicateBulk, softDeleteBulk } = useBulkActions({ toast, onConsumed: clearSelection })
+  const { busy, setStatusBulk, duplicateBulk, softDeleteBulk } = useBulkActions({ toast, onConsumed: clearSelection })
   /**
    * One write per field that was ticked, in order, each reporting its own outcome — a status
    * flip that lands and a tag write that fails must not share one green toast.
@@ -365,10 +476,12 @@ function ProductsNextInner() {
     },
     [setStatusBulk, selection.ids],
   )
-  /** Publish is the only thing behind the ⋯ — it is a JOB with per-marketplace outcomes. */
   const moreActionItems = useMemo<MenuItemDef[]>(
-    () => [{ id: 'publish', label: 'Publish…', icon: <Send size={13} />, onSelect: () => { setPublishTarget(null); setPublishOpen(true) } }],
-    [],
+    () => [{ id: 'readiness', label: 'Check listing readiness…', icon: <Send size={13} />, onSelect: () => {
+      if (selection.ids.length > BULK_MAX) { toast(`Select ${BULK_MAX} or fewer products for a readiness check.`, 'danger'); return }
+      router.push(`/products/listing-readiness?${new URLSearchParams({ productIds: selection.ids.join(',') })}`)
+    } }],
+    [selection.ids, router, toast],
   )
 
   // ── Columns ───────────────────────────────────────────────────
@@ -406,6 +519,12 @@ function ProductsNextInner() {
     () => buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }),
     [activeChannels, onDuplicate, router],
   )
+
+  const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => columns.map((c) => ({
+    key: c.key, label: columnLabel(c), group: c.group, groupKey: c.groupKey,
+    defaultLocked: DEFAULT_LOCKED_COLUMNS.includes(c.key),
+    ...(c.key === 'actions' ? { lockSide: 'right' as const } : {}),
+  })), [columns])
 
   /**
    * Which column carries which filter, from the shared contract — the same table the server
@@ -452,9 +571,21 @@ function ProductsNextInner() {
       valueGetter: (p) => (isGroupRow(p.data) ? p.data.groupKey : p.data?.name ?? null),
       flex: 1,
       minWidth: 320,
-      // Holds the left edge and cannot be hidden or dragged WHILE padlocked — the default — and
-      // is an ordinary column once the operator unlocks it in Customise.
+      /**
+       * FROZEN at the left edge, always visible, not draggable WHILE padlocked — the default — and
+       * an ordinary scrolling column the moment the operator unlocks it in Customise.
+       *
+       * 🔴 No `pinned` here, deliberately, though this column IS pinned left while locked. AG
+       * ignores `flex` on a pinned column (`ColumnFlexService` sizes `visibleCols.centerCols` only),
+       * so a definition that pins it before the first flex pass would freeze it at its `minWidth`
+       * — measured: 320px in a 1,552px card, leaving a 143px dead strip between "Last updated" and
+       * "Actions". Pinned by the page AFTER the grid has sized it (`applyStructuralPins`, run from
+       * the reconciliation effect and from every apply), it keeps the width flex gave it: measured
+       * 463px, total column width 1,552 = the card, no gap. `lockPinned` still belongs in the
+       * definition — it is what takes "Pin column" out of a structural column's header menu.
+       */
       lockPosition: lockedColumns.includes('product') ? 'left' : undefined,
+      lockPinned: lockedColumns.includes('product'),
       lockVisible: lockedColumns.includes('product'),
       suppressMovable: lockedColumns.includes('product'),
       sortable: true,
@@ -519,8 +650,22 @@ function ProductsNextInner() {
   // Opening reads the grid's LIVE state — a column dragged in the header shows up in that order —
   // and confirming applies the dialog's answer in one call. Views persist it as part of the grid
   // state they already snapshot, so there is no separate store to drift.
-  const prefsBridge = useMemo<PrefsBridgeOptions>(
-    () => ({ columns: columns.map((c) => ({ key: c.key })), treeColumnKey: 'product', sortKeyToColumn: { product: 'product', available: 'available', price: 'price' } }),
+  /**
+   * The bridge for a GIVEN lock set, not for the current one.
+   *
+   * `PrefsColumnMeta.locked` is what tells the engine which columns are the grid's structural lead
+   * and trail — it pins those itself and keeps them out of the operator's block. On this page that
+   * is a function of the lock set, because the Owner can unlock either bookend, so an apply must be
+   * bridged with the lock set it is APPLYING. Bridging the operator's new answer with the old locks
+   * was the bug this shape prevents: unlock Product in the dialog and the engine would still treat
+   * it as its own lead, pin it, and drop it from `lockedColumns` — the padlock would come back.
+   */
+  const bridgeFor = useCallback(
+    (locks: readonly string[]): PrefsBridgeOptions => ({
+      columns: columns.map((c) => ({ key: c.key, locked: isStructuralColumn(c.key) && locks.includes(c.key) })),
+      treeColumnKey: 'product',
+      sortKeyToColumn: { product: 'product', available: 'available', price: 'price' },
+    }),
     [columns],
   )
   const defaultPrefs = useMemo<PreferencesValue>(
@@ -529,8 +674,11 @@ function ProductsNextInner() {
       lockedColumns,
       rowGroups: [],
       aggregations: {},
-      stickyFirstColumn: false,
-      stickyLastColumn: false,
+      // The two structural pins, in the engine's vocabulary: the lead is frozen left while `product`
+      // is padlocked, the trail frozen right while `actions` is. There are no Display toggles for
+      // them on this page (`showSticky={false}`) — the padlocks ARE the control.
+      stickyFirstColumn: lockedColumns.includes('product'),
+      stickyLastColumn: lockedColumns.includes('actions'),
       pageSize: BLOCK_SIZE,
       sortBy: 'product',
       sortDir: 'asc',
@@ -538,16 +686,83 @@ function ProductsNextInner() {
     [columns, lockedColumns],
   )
   const [prefsDraft, setPrefsDraft] = useState<PreferencesValue | null>(null)
-  /** The grid is the draft: read its column state back into the dialog's shape. */
-  const syncPrefsFromGrid = useCallback(() => {
+  /**
+   * The operator's locks AS THE GRID HAS THEM, plus the structural padlocks the page holds.
+   *
+   * The lock contract's rule for callers: never apply a `lockedColumns` that was not read from the
+   * grid or confirmed in the dialog moments ago. `columnStateToPrefs` derives the operator's block
+   * from `pinned === 'left'`, so a pin made in the header menu or by dragging a column into the
+   * pinned area IS a lock, and survives the next view application instead of being overwritten by
+   * a stale copy the page was keeping.
+   *
+   * The structural pair cannot come from there: the engine keeps them out of the operator's set by
+   * construction, and a right pin is not a left pin. They come from `lockedRef` — the page's own
+   * padlock state, which the dialog and the saved views round-trip.
+   */
+  const locksFromGrid = useCallback(
+    (api: GridApi<ProductRow>, padlocks: readonly string[] = lockedRef.current): string[] => {
+      const read = columnStateToPrefs(api.getColumnState(), LOCKS_ONLY_PREVIOUS, bridgeFor(padlocks))
+      return composeLocks([...padlocks.filter(isStructuralColumn), ...(read.lockedColumns ?? [])])
+    },
+    [bridgeFor],
+  )
+  /** Make the grid's structural pins say what the padlocks say. Pins only — never order or sort. */
+  const applyStructuralPins = useCallback((api: GridApi<ProductRow>, locks: readonly string[]) => {
+    if (api.isDestroyed()) return
+    const state = structuralPinState(locks, AG_AUTO_COL).filter((s) => (api.getColumn(s.colId)?.getPinned() ?? null) !== s.pinned)
+    if (state.length > 0) api.applyColumnState({ state })
+  }, [])
+  /**
+   * Reconcile after somebody ELSE applied a whole column state: the mount restore, a saved view.
+   *
+   * Reads the pins back (the operator's locks are the grid's), re-asserts the two structural ones
+   * (they are the page's — `padlocks` names them, defaulting to what the page holds now), and
+   * leaves the lock set and the grid's pins saying the same thing. Idempotent, so the effect below
+   * and the view application may both run it.
+   */
+  const reconcileLocks = useCallback(
+    (api: GridApi<ProductRow>, padlocks?: readonly string[]) => {
+      const locks = locksFromGrid(api, padlocks)
+      applyStructuralPins(api, locks)
+      setLockedColumns((prev) => (sameLocks(prev, locks) ? prev : locks))
+    },
+    [locksFromGrid, applyStructuralPins],
+  )
+  // 🔴 The grid appearing is itself an unreconciled state: whatever `initialState` restored — a
+  // last-used blob, a default view — was written before this contract or by another lane, and AG
+  // releases every pin its `columnPinning` slice does not name.
+  useEffect(() => {
     if (!gridApi || gridApi.isDestroyed()) return
-    setPrefsDraft((prev) => columnStateToPrefs(gridApi.getColumnState(), { ...(prev ?? defaultPrefs), lockedColumns }, prefsBridge))
-  }, [gridApi, defaultPrefs, prefsBridge, lockedColumns])
+    reconcileLocks(gridApi)
+  }, [gridApi, reconcileLocks])
+  /** Read live pins and visibility while retaining saved group assignments and hidden-column order. */
+  const currentPreferences = useCallback((): PreferencesValue => {
+    const api = gridApiRef.current
+    const stored = columnLayoutRef.current
+    const previous = { ...defaultPrefs, ...(stored ? preferencesFromLayout(stored, preferenceColumns) : {}) }
+    if (!api || api.isDestroyed()) return previous
+    const locks = locksFromGrid(api)
+    const read = withStructuralLocks(columnStateToPrefs(api.getColumnState(), { ...previous, lockedColumns: locks }, bridgeFor(locks)), locks)
+    const keys = new Set(preferenceColumns.map((c) => c.key))
+    return {
+      ...read,
+      columnOrder: mergeVisibleColumnOrder(stored?.columnOrder ?? preferenceColumns.map((column) => column.key), read.visibleColumns.filter((key) => !locks.includes(key) && !read.rowGroups?.includes(key))),
+      visibleColumns: [...read.visibleColumns, ...(stored?.columns.filter((key) => !keys.has(key)) ?? [])],
+    }
+  }, [defaultPrefs, preferenceColumns, locksFromGrid, bridgeFor])
+  const syncPrefsFromGrid = useCallback(() => {
+    const api = gridApiRef.current
+    if (!api || api.isDestroyed()) return
+    const read = currentPreferences()
+    setPrefsDraft(read)
+    const locks = read.lockedColumns ?? []
+    setLockedColumns((prev) => sameLocks(prev, locks) ? prev : locks)
+  }, [currentPreferences])
   const openCustomize = useCallback(() => {
     if (!gridApi) return
-    syncPrefsFromGrid()
+    setPrefsDraft(currentPreferences())
     setCustomizeOpen(true)
-  }, [gridApi, syncPrefsFromGrid])
+  }, [gridApi, currentPreferences])
   /** Tree or groups — decided BEFORE the column state applies, so the first request is right. */
   const applyViewMode = useCallback(
     (next: PreferencesValue) => {
@@ -557,16 +772,100 @@ function ProductsNextInner() {
     },
     [gridApi],
   )
+  /**
+   * The operator's answer, applied. `next.lockedColumns` is the one thing here that is theirs by
+   * construction — they were just looking at the padlocks — so the contract's rule is satisfied and
+   * the engine may state a pin for every togglable column.
+   *
+   * Normalised first, because the dialog's list and the engine's two pin flags have to agree: the
+   * set is put back in frozen order, and the structural pins follow the bookends' padlocks (the
+   * dialog's own "Reset to default" writes `stickyFirst/LastColumn: true` from the shared defaults,
+   * which on a page with no Display toggles would otherwise decide the lead pin by accident).
+   */
   const applyPrefs = useCallback(
     (next: PreferencesValue) => {
-      applyViewMode(next)
-      gridApi?.applyColumnState({ state: prefsToColumnState(next, prefsBridge), applyOrder: true })
-      setLockedColumns(next.lockedColumns ?? [])
-      setPrefsDraft(next)
+      const locks = composeLocks(next.lockedColumns ?? DEFAULT_LOCKED_COLUMNS)
+      const value: PreferencesValue = {
+        ...next,
+        lockedColumns: locks,
+        stickyFirstColumn: locks.includes('product'),
+        stickyLastColumn: locks.includes('actions'),
+      }
+      applyViewMode(value)
+      const api = gridApi
+      if (api) {
+        api.applyColumnState({ state: prefsToColumnState(value, bridgeFor(locks)), applyOrder: true })
+        // The lead pin belongs to the auto column, which the engine states as `AG_AUTO_COL`; the
+        // trail pin also lives in the actions definition. Asserted again so an unlock RELEASES.
+        applyStructuralPins(api, locks)
+      }
+      setLockedColumns((prev) => (sameLocks(prev, locks) ? prev : locks))
+      setPrefsDraft(value)
     },
-    [gridApi, prefsBridge, applyViewMode],
+    [gridApi, bridgeFor, applyViewMode, applyStructuralPins],
   )
-  const confirmCustomize = useCallback((next: PreferencesValue) => { applyPrefs(next); setCustomizeOpen(false) }, [applyPrefs])
+  const applyStoredLayout = useCallback((payload: GridViewPayload<PageViewState>) => {
+    const api = gridApiRef.current
+    if (!api || api.isDestroyed()) return
+    columnLayoutRef.current = readProductsLayout(payload)
+    const isGrouped = !!payload.gridState.rowGroup?.groupColIds.length
+    api.setGridOption('treeData', !isGrouped)
+    setGrouped(isGrouped)
+    api.setState(payload.gridState)
+    restorePageState(payload.page)
+    reconcileLocks(api, composeLocks(payload.page.lockedColumns ?? DEFAULT_LOCKED_COLUMNS))
+    gridViews.markDirty()
+  }, [restorePageState, reconcileLocks, gridViews])
+  const applyNamedView = useCallback((view: SavedGridView<PageViewState>) => {
+    if (!isGridStatePayload<PageViewState>(view.payload)) return
+    applyStoredLayout(view.payload)
+    gridViews.markActive(view.id)
+  }, [applyStoredLayout, gridViews])
+
+  const saveLayout = useCallback(async (draft: PreferencesValue, named?: { name: string; view?: SavedGridView<PageViewState> }) => {
+    if (layoutSaving.current) throw new Error('A layout save is already in progress')
+    const working = workingRef.current
+    if (!working.loaded || working.error) throw new Error('Load your saved layout before saving. Use Reload saved layout to retry.')
+    const api = gridApiRef.current
+    if (!api || api.isDestroyed()) throw new Error('The products grid is not ready to save')
+    const payload = buildProductsLayout({ v: 1, gridState: api.getState(), page: pageSnapshot() }, { ...draft, sortBy: '' }, preferenceColumns, bridgeFor(draft.lockedColumns ?? []))
+    layoutSaving.current = true
+    try {
+      let record: StoredSheetLayout<GridViewPayload<PageViewState>>
+      let namedId: string | null = null
+      if (named) {
+        const saved = await gridViews.saveRecord(named.name, {
+          id: named.view?.id, isDefault: named.view?.isDefault, expectedUpdatedAt: named.view?.updatedAt, payload,
+          workingLayout: { surface: WORKING_LAYOUT_SURFACE, filters: payload, expectedUpdatedAt: working.record?.updatedAt ?? null },
+        })
+        if (!saved.workingLayout || !isProductsWorkingPayload(saved.workingLayout.filters)) throw new Error('The server did not acknowledge your layout. Reload saved layout before retrying.')
+        record = { ...saved.workingLayout, filters: saved.workingLayout.filters }
+        namedId = saved.id
+      } else record = await saveWorkingLayout(backendUrl, WORKING_LAYOUT_SURFACE, payload, working.record)
+      workingRef.current = { loaded: true, error: null, record }
+      setWorkingState(workingRef.current)
+      columnLayoutRef.current = payload.page.columnLayout
+      // Only the column preferences apply here; current product selection and filters stay live.
+      applyPrefs({ ...draft, ...preferencesFromLayout(payload.page.columnLayout, preferenceColumns),
+        rowGroups: draft.rowGroups, aggregations: draft.aggregations, sortBy: '', sortDir: draft.sortDir })
+      gridViews.markActive(namedId)
+      return namedId
+    } finally { layoutSaving.current = false }
+  }, [pageSnapshot, preferenceColumns, bridgeFor, gridViews, backendUrl, applyPrefs])
+  const confirmCustomize = useCallback(async (draft: PreferencesValue) => { await saveLayout(draft) }, [saveLayout])
+  const reloadSavedPreferences = useCallback(async () => {
+    const record = await loadSavedLayout()
+    await gridViews.refresh()
+    if (record) {
+      applyStoredLayout(record.filters)
+      gridViews.markActive(null)
+      return { ...currentPreferences(), ...preferencesFromLayout(record.filters.page.columnLayout ?? null, preferenceColumns) }
+    }
+    // No working layout yet: refresh named revisions while preserving the current draft's context.
+    return currentPreferences()
+  }, [loadSavedLayout, gridViews, applyStoredLayout, currentPreferences, preferenceColumns])
+  const activeSavedView = gridViews.views.find((view) => view.id === gridViews.activeId) ?? null
+
   /**
    * "Reset columns" from a header menu: the page's defaults, in ONE column-state call. Each
    * column's width, flex and pin go back to its definition. `api.resetColumnState()` would do the
@@ -574,21 +873,30 @@ function ProductsNextInner() {
    */
   const resetColumns = useCallback(() => {
     if (!gridApi) return
-    const next: PreferencesValue = { ...defaultPrefs, lockedColumns: [...DEFAULT_LOCKED_COLUMNS] }
+    // The default locks, and only them: the identity column frozen left, actions frozen right,
+    // every other column released back into the scrolling band.
+    columnLayoutRef.current = null
+    const locks = composeLocks(DEFAULT_LOCKED_COLUMNS)
+    const next: PreferencesValue = { ...defaultPrefs, lockedColumns: locks, stickyFirstColumn: true, stickyLastColumn: true }
     applyViewMode(next)
-    const state = prefsToColumnState(next, prefsBridge).map((s) => {
+    const state = prefsToColumnState(next, bridgeFor(locks)).map((s) => {
       const def = gridApi.getColumn(s.colId)?.getColDef()
       return { ...s, width: def?.width, flex: def?.flex ?? null }
     })
     gridApi.applyColumnState({ state, applyOrder: true })
-    setLockedColumns([...DEFAULT_LOCKED_COLUMNS])
+    applyStructuralPins(gridApi, locks)
+    setLockedColumns((prev) => (sameLocks(prev, locks) ? prev : locks))
     setPrefsDraft(next)
-  }, [gridApi, defaultPrefs, prefsBridge, applyViewMode])
+  }, [gridApi, defaultPrefs, bridgeFor, applyViewMode, applyStructuralPins])
 
   const onGridReady = useCallback((e: GridReadyEvent<ProductRow>) => {
+    // The ref FIRST: `gridViewsBind` applies the last-used state inside this call, and its
+    // `applyPageState` reconciles the locks against the grid through it.
+    gridApiRef.current = e.api
     setGridApi(e.api)
     setFilterModelState(e.api.getFilterModel() as GridFilterModel)
     gridViewsBind(e.api)
+    layoutLanded.current = true
   }, [gridViewsBind])
 
   const onPage = useCallback((n: number) => gridApi?.paginationGoToPage(n - 1), [gridApi])
@@ -831,35 +1139,57 @@ function ProductsNextInner() {
   const onStoreRefreshed = useCallback((e: { api: GridApi<ProductRow> }) => { if (e.api.getSelectedNodes().length || selectedCount > 0) setSelection(readSelection(e.api)) }, [selectedCount])
   const onColumnRowGroupChanged = useCallback((e: { api: GridApi<ProductRow> }) => { setGrouped(e.api.getRowGroupColumns().length > 0); syncPrefsFromGrid() }, [syncPrefsFromGrid])
   const onColumnMoved = useCallback((e: { finished: boolean }) => { if (e.finished) syncPrefsFromGrid() }, [syncPrefsFromGrid])
-  // The live page opens sorted by Product ↑; a saved default view overrides it. Initial-only.
-  const initialState = useMemo<GridState>(() => gridViews.initialState ?? { sort: { sortModel: [{ colId: AG_AUTO_COL, sort: 'asc' }] } }, [gridViews.initialState])
+  /**
+   * The live page opens sorted by Product ↑, with the two by-default-hidden columns hidden. A saved
+   * default view or the last-used state overrides the whole thing. Initial-only.
+   *
+   * 🔴 The `columnVisibility` slice is not decoration (measured 2026-09-05). AG treats a state that
+   * names NO column slice as a full reset of the ones it does not mention: with a sort-only state,
+   * `defaultState.hide = null` is applied to every column and `initialHide` in the definitions is
+   * overridden — Brand and Product type opened VISIBLE on a fresh profile, 1,699px of columns in a
+   * 1,552px card. The page's own default has to say what it hides, in the same object AG reads it
+   * from, and the list is derived from the registry rather than spelled out again here.
+   */
+  const initialState = useMemo<GridState>(
+    () =>
+      initialPayloadRef.current?.gridState ?? gridViews.initialState ?? {
+        sort: { sortModel: [{ colId: AG_AUTO_COL, sort: 'asc' }] },
+        columnVisibility: { hiddenColIds: columns.filter((c) => c.defaultHidden).map((c) => c.key) },
+      },
+    [gridViews.initialState, columns, layoutBootstrapped],
+  )
 
   // ── Render ────────────────────────────────────────────────────
   return (
     <div className={styles.wrap}>
       {/* Page header. In family scope it names the FAMILY, not the catalogue — the page is the
           same grid, and the only thing that tells you which of the two you are looking at is
-          this. "Import"/"New product" are catalogue actions and would be lies here, so the
+          this. "Import & export"/"New product" are catalogue actions and would be lies here, so the
           scoped view offers the way back instead. */}
       <PageHeader
         title={familyId ? (family?.name ?? 'Variation family') : 'Products'}
         subtitle={
           familyId
             ? `${stats?.total ?? '—'} variations${family?.sku ? ` of ${family.sku}` : ''}`
-            : `${stats?.total ?? '—'} products · synced live across Amazon, eBay & Shopify`
+            : `${stats?.total ?? '—'} products · shared catalog`
         }
         actions={
           <div className={styles.acts}>
             {familyId ? (
               <Button asChild size="sm">
-                <Link href="/products/next">
+                <Link href="/products">
                   <ArrowLeft size={13} /> All products
                 </Link>
               </Button>
             ) : (
               <>
-                <Button size="sm" onClick={() => router.push('/products/upload')}>
-                  <Upload size={13} /> Import
+                <Button asChild size="sm">
+                  <Link href="/products/listing-readiness">Listing readiness</Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link href="/products/catalog-transfer">
+                    <Upload size={13} /> Import &amp; export
+                  </Link>
                 </Button>
                 <Button size="sm" variant="primary" onClick={() => router.push('/products/new')}>
                   <Plus size={13} /> New product
@@ -900,6 +1230,13 @@ function ProductsNextInner() {
         </Banner>
       )}
 
+      {(workingState.error || gridViews.loadError) && (
+        <Banner tone="warning" className={styles.unattributed}>
+          {workingState.error || gridViews.loadError}{' '}
+          <Button size="sm" variant="link" onClick={() => void reloadSavedPreferences().catch(() => {})}>Reload saved layout</Button>
+        </Banner>
+      )}
+
       {/* One card: toolbar + grid + pager share the grid rectangle (Ad-Manager parity). The grid
           is exactly as tall as the page of rows the footer selects — 50, 100, 200 or 500 — and
           the PAGE scrolls, as Seller Central's and Ad Manager's tables do. Expand a family and
@@ -932,12 +1269,17 @@ function ProductsNextInner() {
               {selectedCount === 0 && (
                 <GridDensityToggle value={density} onChange={setDensity} />
               )}
-              <Button size="sm" onClick={openCustomize} disabled={!gridApi}>
+              <Button size="sm" onClick={openCustomize} disabled={!gridApi || !layoutBootstrapped}>
                 <SlidersHorizontal size={13} /> Customise
               </Button>
-              <GridViewsMenu views={gridViews} />
-              <Button size="sm" onClick={() => void runExport()} disabled={!gridApi || !totalCount || exporting}>
-                <Download size={13} /> {exporting ? 'Exporting…' : 'Export'}
+              <GridViewsMenu
+                views={{ ...gridViews, apply: applyNamedView }}
+                onNewView={openCustomize}
+                onSaveCurrent={(name) => saveLayout(currentPreferences(), { name })}
+                onUpdateCurrent={(view) => saveLayout(currentPreferences(), { name: view.name, view })}
+              />
+              <Button size="sm" onClick={() => void runExport()} disabled={!gridApi || !totalCount || exporting} title="Download the filtered product table as CSV. Use Import & export for an editable catalog workbook.">
+                <Download size={13} /> {exporting ? 'Exporting…' : 'Export table'}
               </Button>
               <Pill tone={error ? 'danger' : 'success'} dot size="md">
                 {error ? 'Not syncing' : loading ? 'Syncing…' : 'Live'}
@@ -991,7 +1333,7 @@ function ProductsNextInner() {
         {/* GridDensityProvider: the grid, the DS Thumbnail and the inventory editor all follow this
             one density (compact 32 / cozy 40 / spacious 56 thumbs; rows 52 / 68 / 85). */}
         <GridDensityProvider value={density}>
-          {error ? (
+          {!layoutBootstrapped ? <div role="status">Loading your saved layout…</div> : error ? (
             // A failed fetch is NOT an empty catalogue and NOT a slow one.
             <EmptyState
               icon={<AlertTriangle size={20} />}
@@ -1038,6 +1380,26 @@ function ProductsNextInner() {
                 onColumnValueChanged={syncPrefsFromGrid}
                 onColumnMoved={onColumnMoved}
                 onColumnVisible={syncPrefsFromGrid}
+                // A pin IS a lock (the lock contract). Pin a column from the header menu, or drag
+                // one into the frozen area, and the padlock is on it in Customise — the same set
+                // the saved views carry. Without this the grid and the dialog disagree silently.
+                onColumnPinned={syncPrefsFromGrid}
+                /**
+                 * 🔴 A COLUMN-DEFINITION SWEEP MUST NOT REORDER THE GRID (measured 2026-09-05).
+                 *
+                 * AG's default is `maintainColumnOrder: false`, which means "when new column
+                 * definitions arrive, put the columns back in the definitions' order" — and this
+                 * page re-derives `columnDefs` whenever the lock set, the channel roster or the
+                 * filter facets move. Measured: unlock Price in Customise and the engine correctly
+                 * applied it back to the front of the scrolling band, then the definition sweep in
+                 * the very next render dropped it at its declared position instead. Every column
+                 * the operator had dragged went with it, and locking anything was enough to do it.
+                 *
+                 * The order belongs to the operator and to the engine's `applyOrder`, not to the
+                 * order this file happens to declare its columns in. "Reset columns" still restores
+                 * the default order — it applies it explicitly.
+                 */
+                maintainColumnOrder
                 localeText={localeText}
                 autoGroupColumnDef={autoGroupColumnDef}
                 columnDefs={colDefs}
@@ -1066,9 +1428,17 @@ function ProductsNextInner() {
           title="Customise columns"
           value={prefsDraft}
           onConfirm={confirmCustomize}
-          // The FULL registry, in canonical order: the immutable ends (Product, Actions) render as
-          // padlocked bookends the operator can unlock.
-          allColumns={columns.map((c) => ({ key: c.key, label: columnLabel(c), group: c.group, defaultLocked: DEFAULT_LOCKED_COLUMNS.includes(c.key) }))}
+          allColumns={preferenceColumns}
+          attributeGroups
+          groupToggles
+          inViewCount
+          onReloadSaved={reloadSavedPreferences}
+          listHint="Organise columns into groups and choose their order. Save keeps your personal products layout after a reload."
+          viewSave={{
+            activeName: activeSavedView?.name ?? null,
+            onSaveAs: (name, draft) => saveLayout(draft, { name }),
+            onUpdate: activeSavedView ? (draft) => saveLayout(draft, { name: activeSavedView.name, view: activeSavedView }) : undefined,
+          }}
           defaultVisible={defaultPrefs.visibleColumns}
           groupByOptions={columns.filter((c) => c.groupable).map((c) => ({ key: c.key, label: columnLabel(c) }))}
           aggregationOptions={columns.filter((c) => c.aggregate).map((c) => ({ key: c.key, label: columnLabel(c), funcs: c.aggregate! }))}
@@ -1095,45 +1465,6 @@ function ProductsNextInner() {
           refreshTags()
         }}
       />
-
-      {/* Publish is a JOB, not an edit: its own dialog, its own outcome, one destination a time. */}
-      <Modal
-        open={publishOpen}
-        onClose={() => setPublishOpen(false)}
-        size="md"
-        title="Publish"
-        subtitle={`${selectedCount} ${selectedCount === 1 ? 'product' : 'products'}${selectionReach > 0 ? ` · ${selectionReach} ${selectionReach === 1 ? 'variation' : 'variations'}` : ''} — choose a destination`}
-        footer={
-          <>
-            <Button onClick={() => setPublishOpen(false)}>Cancel</Button>
-            <span className="grow" />
-            <Button
-              variant="primary"
-              disabled={!publishTarget || busy}
-              onClick={() => {
-                const d = PUBLISH_DESTINATIONS.find((x) => `${x.channel}-${x.marketplace}` === publishTarget)
-                if (!d) return
-                setPublishOpen(false)
-                void publishBulk(selection.ids, d.channel, d.marketplace, d.label)
-              }}
-            >
-              Publish
-            </Button>
-          </>
-        }
-      >
-        <div className={styles.pubList} role="radiogroup" aria-label="Publish destination">
-          {PUBLISH_DESTINATIONS.map((d) => {
-            const id = `${d.channel}-${d.marketplace}`
-            return (
-              <label key={id} className={styles.pubRow}>
-                <input type="radio" name="nds-publish-destination" checked={publishTarget === id} onChange={() => setPublishTarget(id)} />
-                <span>{d.label}</span>
-              </label>
-            )
-          })}
-        </div>
-      </Modal>
 
       {/* Inventory editor modal — opened by clicking the Available cell */}
       <InventoryEditorModal row={modalRow} density={density} onClose={() => setModalRow(null)} />

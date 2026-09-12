@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CX.3b — put the operator's Ads decisions back on the scope.
  *
@@ -36,7 +37,7 @@ export async function runAdsDecisionsReseed(): Promise<string> {
 
     for (const row of rows) {
       const scope = await prisma.connectionScope.findUnique({
-        where: { connectionId_kind_externalId: { connectionId: conn.id, kind: 'profile', externalId: row.profileId } },
+        where: { connectionId_kind_externalId: workspaceKey({ connectionId: conn.id, kind: 'profile', externalId: row.profileId }) },
         select: { metadata: true },
       })
       if (!scope) {
@@ -54,7 +55,7 @@ export async function runAdsDecisionsReseed(): Promise<string> {
         continue
       }
       await prisma.connectionScope.update({
-        where: { connectionId_kind_externalId: { connectionId: conn.id, kind: 'profile', externalId: row.profileId } },
+        where: { connectionId_kind_externalId: workspaceKey({ connectionId: conn.id, kind: 'profile', externalId: row.profileId }) },
         // Merge: discovery's facts (market, currency, account) must survive a repair
         // of the operator's, exactly as the operator's must survive discovery.
         data: { metadata: { ...meta, ...want } as never, isActive: row.mode === 'production' },

@@ -11,7 +11,7 @@
 // tile stays sub-second-fresh after every transition.
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertCircle,
   ArrowRight,

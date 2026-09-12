@@ -10,8 +10,9 @@
  * prisma is an in-memory fake, fetch is stubbed and routed by URL, crypto runs
  * in env mode. Token values are fixtures and are never printed.
  */
-import { createHash, randomBytes } from 'node:crypto'
+import { createHash, createHmac, randomBytes } from 'node:crypto'
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
+import { withWorkspace } from '@nexus/database/workspace-context'
 
 process.env.NEXUS_CREDENTIAL_ENC_KEY = randomBytes(32).toString('base64')
 delete process.env.NEXUS_KMS_KEY_ID
@@ -44,6 +45,8 @@ function connMatches(row: Row, where: Record<string, unknown>): boolean {
 }
 
 const prismaMock = {
+  $transaction: async (work: (tx: unknown) => Promise<unknown>) => work(prismaMock),
+  workspaceMembership: { findUnique: vi.fn<(args: unknown) => Promise<Record<string, unknown> | null>>() },
   oAuthSession: {
     create: vi.fn(async ({ data }: { data: Row }) => {
       const row = { consumedAt: null, error: null, resultConnectionId: null, ...data }
@@ -142,7 +145,7 @@ const getChannelApp = vi.fn(async (key: string) => ({
   clientId: 'test-client-id',
   clientSecret: 'test-client-secret',
   redirectUris: key === 'EBAY' ? ['Nexus-Test-RuName'] : [],
-  extra: {},
+  extra: key === 'AMAZON_SP' ? { applicationId: 'amzn1.sellerapps.app.fixture', authorizationVersion: 'beta' } : {},
   signingKey: null,
 }))
 vi.mock('./apps.service.js', () => ({ getChannelApp }))
@@ -151,10 +154,14 @@ vi.mock('./apps.service.js', () => ({ getChannelApp }))
 
 const { registerChannel, getChannelSpec, scopeDriftOf } = await import('./catalog.js')
 const { ebaySpec, EBAY_REQUIRED_SCOPES } = await import('./connectors/ebay/spec.js')
+const { shopifySpec } = await import('./connectors/shopify/spec.js')
+const { etsySpec } = await import('./connectors/etsy/spec.js')
+await import('./connectors/amazon-sp/spec.js')
 const { decryptCredentials, encryptCredentials } = await import('../../lib/crypto.js')
 const { start, complete, sweepSessions, callbackUrlFor, OAuthFlowError, SESSION_TTL_MS, COOKIE_PREFIX } = await import('./oauth.service.js')
 
 const EBAY_TOKEN_URL = 'https://api.ebay.com/identity/v1/oauth2/token'
+const AMAZON_TOKEN_URL = 'https://api.amazon.com/auth/o2/token'
 const EBAY_IDENTITY_URL = 'https://apiz.ebay.com/commerce/identity/v1/user/'
 const FAKE_TOKEN_URL = 'https://token.fake.test/oauth/token'
 const FAKE_AUTHORIZE_URL = 'https://auth.fake.test/oauth/authorize'
@@ -172,6 +179,7 @@ registerChannel({
     authorizationParams: { response_type: 'code' },
     tokenParams: { extra_param: 'yes' },
     tokenRequestAuth: 'body',
+    includeClientSecretInTokenRequest: false,
     scopeSeparator: ' ',
     codeParamInCallback: 'code',
     callbackMetadata: ['sellerId'],
@@ -180,6 +188,7 @@ registerChannel({
     requiredScopes: ['read_a', 'write_b'],
     accessTokenLifetimeSec: 3600,
     refreshTokenLifetimeSec: 90 * 86_400,
+    refreshTokenRequired: true,
     rotatesRefreshToken: true,
   },
   identity: async () => ({ userId: 'F1', username: 'fake-seller' }),
@@ -228,11 +237,11 @@ function json(body: Record<string, unknown>, status = 200): Response {
 }
 const fetchMock = vi.fn(async (url: string | URL | Request, _init?: RequestInit) => {
   const u = String(url)
-  if (u === EBAY_TOKEN_URL || u === FAKE_TOKEN_URL) return tokenResponse()
+  if (u === EBAY_TOKEN_URL || u === AMAZON_TOKEN_URL || u === FAKE_TOKEN_URL) return tokenResponse()
   if (u === EBAY_IDENTITY_URL) return identityResponse()
   throw new Error(`unexpected fetch ${u}`)
 })
-const exchangeCalls = () => fetchMock.mock.calls.filter((c) => String(c[0]) === EBAY_TOKEN_URL || String(c[0]) === FAKE_TOKEN_URL)
+const exchangeCalls = () => fetchMock.mock.calls.filter((c) => [EBAY_TOKEN_URL, AMAZON_TOKEN_URL, FAKE_TOKEN_URL].includes(String(c[0])))
 const exchangeBody = () => new URLSearchParams(String(exchangeCalls()[0][1]?.body ?? ''))
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -311,6 +320,128 @@ beforeEach(() => {
 })
 afterEach(() => {
   delete process.env.NEXUS_OAUTH_COOKIE_ENFORCE
+  vi.unstubAllEnvs()
+})
+
+describe('real Shopify and Etsy connection contracts', () => {
+  let previousShopify: typeof shopifySpec
+  let previousEtsy: typeof etsySpec
+  beforeEach(() => {
+    previousShopify = getChannelSpec('SHOPIFY')
+    previousEtsy = getChannelSpec('ETSY')
+    registerChannel(shopifySpec)
+    registerChannel(etsySpec)
+  })
+  afterEach(() => { registerChannel(previousShopify); registerChannel(previousEtsy) })
+
+  async function startShopify() {
+    return start({ channelKey: 'SHOPIFY', region: 'fixture.myshopify.com', intent: 'connect', actor: ACTOR })
+  }
+  function shopifyQuery(state: string) {
+    const query = { code: 'shopify-code', shop: 'fixture.myshopify.com', state, timestamp: '1788883200' }
+    const signed = Object.entries(query).sort().map(([key, value]) => `${key}=${value}`).join('&')
+    return { ...query, hmac: createHmac('sha256', 'test-client-secret').update(signed).digest('hex') }
+  }
+
+  it.each(['SHOPIFY', 'ETSY'] as const)('completes the real %s contract into an encrypted, verified grant', async channelKey => {
+    const attempt = await start({ channelKey, region: channelKey === 'SHOPIFY' ? 'fixture.myshopify.com' : null, intent: 'connect', actor: ACTOR })
+    const spec = channelKey === 'SHOPIFY' ? shopifySpec : etsySpec
+    const scopes = spec.auth.requiredScopes
+    const authorize = new URL(attempt.authorizeUrl)
+    expect(authorize.searchParams.get('scope')).toBe(scopes.join(spec.auth.scopeSeparator))
+    if (channelKey === 'SHOPIFY') {
+      fetchMock.mockResolvedValueOnce(json({ access_token: 'shopify-access', scope: scopes.join(',') }))
+      fetchMock.mockResolvedValueOnce(json({ data: { shop: { id: 'gid://shopify/Shop/42', myshopifyDomain: 'fixture.myshopify.com' }, currentAppInstallation: { accessScopes: scopes.map(handle => ({ handle })) } } }))
+    } else {
+      fetchMock.mockResolvedValueOnce(json({ access_token: '101.etsy-access', refresh_token: 'etsy-refresh', expires_in: 3600, scope: scopes.join(' ') }))
+      fetchMock.mockResolvedValueOnce(json({ user_id: 101, shop_id: 202 }))
+      fetchMock.mockResolvedValueOnce(json({ user_id: 101, shop_id: 202, shop_name: 'Fixture' }))
+    }
+    const result = await complete({ channelKey, query: channelKey === 'SHOPIFY' ? shopifyQuery(attempt.state) : { state: attempt.state, code: 'etsy-code' }, cookies: cookiesFor(attempt) })
+    expect(result.scopeDrift).toEqual([])
+    expect(result.identity?.userId).toBe(channelKey === 'SHOPIFY' ? 'gid://shopify/Shop/42' : '101')
+    const row = connections.get(result.connectionId)!
+    expect(row).toMatchObject({ authStatus: 'connected', isActive: true, accessToken: null, refreshToken: null })
+    const creds = await decryptCredentials(row.credentialsEnc as string)
+    expect(creds.accessToken).toBe(channelKey === 'SHOPIFY' ? 'shopify-access' : '101.etsy-access')
+    if (channelKey === 'SHOPIFY') expect(row.accessTokenExpiresAt).toBeNull()
+    else {
+      expect(creds.refreshToken).toBe('etsy-refresh')
+      const body = new URLSearchParams(String(fetchMock.mock.calls[0][1]?.body))
+      expect(body.get('code_verifier')).toBe(sessions.get(attempt.state)!.codeVerifier)
+      expect(body.has('client_secret')).toBe(false)
+    }
+    await expect(complete({ channelKey, query: { state: attempt.state }, cookies: cookiesFor(attempt) })).rejects.toMatchObject({ code: 'state_consumed' })
+  })
+
+  it('adds only known, explicitly approved Shopify restricted scopes', async () => {
+    const defaults = await getChannelApp('SHOPIFY')
+    getChannelApp.mockResolvedValueOnce({ ...defaults, extra: { approvedScopes: ['read_all_orders', 'unknown_scope'] } } as typeof defaults)
+    const attempt = await startShopify()
+    const scopes = new URL(attempt.authorizeUrl).searchParams.get('scope')!.split(',')
+    expect(scopes).toContain('read_all_orders')
+    expect(scopes).not.toContain('read_customer_payment_methods')
+    expect(scopes).not.toContain('unknown_scope')
+  })
+
+  it('never saves a Shopify grant when the shop cannot be verified', async () => {
+    const attempt = await startShopify()
+    fetchMock.mockResolvedValueOnce(json({ access_token: 'shopify-access', scope: 'write_products' }))
+    fetchMock.mockResolvedValueOnce(json({ errors: [{ message: 'Access denied' }] }))
+    await expect(complete({ channelKey: 'SHOPIFY', query: shopifyQuery(attempt.state), cookies: cookiesFor(attempt) }))
+      .rejects.toMatchObject({ code: 'identity_refused' })
+    expect(connections.size).toBe(0)
+  })
+
+  it.each(['SHOPIFY', 'ETSY'] as const)('refuses %s before consent if its callback URL is not an absolute HTTPS URL', async channelKey => {
+    vi.stubEnv('NEXUS_PUBLIC_API_URL', '')
+    await expect(start({ channelKey, region: channelKey === 'SHOPIFY' ? 'fixture.myshopify.com' : null, intent: 'connect', actor: ACTOR }))
+      .rejects.toMatchObject({ code: 'channel_unavailable' })
+    expect(sessions.size).toBe(0)
+  })
+
+  it.each([null, [], { access_token: {} }, { access_token: '   ' }].map(response => ({ response })))('rejects a malformed token envelope before an identity request: $response', async ({ response }) => {
+    const attempt = await startShopify()
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(response)))
+    await expect(complete({ channelKey: 'SHOPIFY', query: shopifyQuery(attempt.state), cookies: cookiesFor(attempt) }))
+      .rejects.toMatchObject({ code: 'exchange_failed' })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(connections.size).toBe(0)
+  })
+
+  it('bounds token exchange time and refuses provider redirects', async () => {
+    const attempt = await start({ channelKey: 'ETSY', intent: 'connect', actor: ACTOR })
+    fetchMock.mockResolvedValueOnce(json({ error: 'invalid_grant' }, 400))
+    await expect(complete({ channelKey: 'ETSY', query: { state: attempt.state, code: 'etsy-code' }, cookies: cookiesFor(attempt) })).rejects.toMatchObject({ code: 'exchange_failed' })
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ signal: expect.any(AbortSignal), redirect: 'error' })
+  })
+})
+
+describe('chosen business profile', () => {
+  const chosen = { workspaceId: 'chosen-business', actorUserId: 'user-1', membershipId: 'chosen-member', roleKeys: ['OWNER'] }
+  const membership = () => ({ id: 'chosen-member', status: 'active', version: 1, userId: 'user-1',
+    user: { status: 'active' }, workspace: { id: 'chosen-business', name: 'Chosen business', status: 'active', version: 1 },
+    roles: [{ role: { id: 'owner-role', key: 'OWNER', name: 'Owner', permissions: [] } }],
+  })
+
+  it('finishes in the initiating profile even if the browser now uses another profile', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    prismaMock.workspaceMembership.findUnique.mockResolvedValue(membership())
+    const attempt = await withWorkspace(chosen, () => startEbay())
+    expect(sessions.get(attempt.state)).toMatchObject({ workspaceId: chosen.workspaceId, startedByUserId: chosen.actorUserId })
+    const result = await withWorkspace({ ...chosen, workspaceId: 'later-page-business' }, () => completeEbay(attempt, { actorUserId: 'user-1' }))
+    expect(result.workspaceId).toBe(chosen.workspaceId)
+    expect(prismaMock.workspaceMembership.findUnique).toHaveBeenLastCalledWith(expect.objectContaining({ where: { workspaceId_userId: { workspaceId: chosen.workspaceId, userId: 'user-1' } } }))
+  })
+
+  it('refuses a callback before exchanging credentials when destination access has been revoked', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    const attempt = await withWorkspace(chosen, () => startEbay())
+    prismaMock.workspaceMembership.findUnique.mockResolvedValue({ ...membership(), status: 'revoked' })
+    await expect(completeEbay(attempt, { actorUserId: 'user-1' })).rejects.toMatchObject({ code: 'workspace_unavailable' })
+    expect(exchangeCalls()).toHaveLength(0)
+    expect(connections.size).toBe(0)
+  })
 })
 
 // ── start ────────────────────────────────────────────────────────────────────
@@ -384,6 +515,34 @@ describe('start', () => {
     expect(sessions.get(s.state)!.redirectUri).toBe('https://api.example.test/api/cx/callback/etsy')
   })
 
+  it('builds Amazon’s Seller Central consent URL without LWA-only parameters', async () => {
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'NA', actor: ACTOR })
+    const url = new URL(s.authorizeUrl)
+    expect(`${url.origin}${url.pathname}`).toBe('https://sellercentral.amazon.com/apps/authorize/consent')
+    expect(url.searchParams.get('application_id')).toBe('amzn1.sellerapps.app.fixture')
+    expect(url.searchParams.get('state')).toBe(s.state)
+    expect(url.searchParams.get('version')).toBe('beta')
+    expect(url.searchParams.has('client_id')).toBe(false)
+    expect(url.searchParams.has('redirect_uri')).toBe(false)
+    expect(url.searchParams.has('scope')).toBe(false)
+    expect(sessions.get(s.state)?.redirectUri).toBe('https://api.example.test/api/cx/callback/amazon_sp')
+  })
+
+  it('refuses unsupported Amazon regions before creating a session', async () => {
+    const err = await flowError(start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'UNKNOWN', actor: ACTOR }))
+    expect(err.code).toBe('invalid_intent')
+    expect(sessions.size).toBe(0)
+  })
+
+  it('refuses missing Amazon application metadata before creating a session', async () => {
+    getChannelApp.mockResolvedValueOnce({
+      channelKey: 'AMAZON_SP', environment: 'production', clientId: 'test-client-id', clientSecret: 'test-client-secret', redirectUris: [], extra: {}, signingKey: null,
+    })
+    const err = await flowError(start({ channelKey: 'AMAZON_SP', intent: 'connect', actor: ACTOR }))
+    expect(err.code).toBe('channel_unavailable')
+    expect(sessions.size).toBe(0)
+  })
+
   it('sandbox environment points at auth.sandbox.ebay.com', async () => {
     const s = await startEbay({ environment: 'sandbox' })
     expect(s.authorizeUrl.startsWith('https://auth.sandbox.ebay.com/oauth2/authorize?')).toBe(true)
@@ -408,7 +567,7 @@ describe('start', () => {
   })
 
   it('an unregistered channel key throws from the catalogue', async () => {
-    await expect(start({ channelKey: 'AMAZON_SP', intent: 'connect', actor: ACTOR })).rejects.toThrow(/No ChannelSpec registered/)
+    await expect(start({ channelKey: 'WALMART' as never, intent: 'connect', actor: ACTOR })).rejects.toThrow(/No ChannelSpec registered/)
   })
 })
 
@@ -459,22 +618,23 @@ describe('complete — session checks', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a missing cookie when enforcement is on (the default) and writes a ledger row', async () => {
+  it('rejects a missing cookie without consuming another browser’s sign-in', async () => {
     const s = await startEbay()
     const err = await flowError(completeEbay(s, { cookies: {} }))
     expect(err.code).toBe('state_cookie_missing')
     expect(fetchMock).not.toHaveBeenCalled()
     const note = eventsOf('status_change').find((e) => (e.detail as Record<string, unknown>).oauth === 'state_cookie_missing')
-    expect(note?.detail).toMatchObject({ enforced: true })
+    expect(note).toBeUndefined()
+    expect(sessions.get(s.state)?.consumedAt).toBeNull()
   })
 
-  it('accepts a missing cookie when NEXUS_OAUTH_COOKIE_ENFORCE=0, still noting it in the ledger', async () => {
+  it('supports the legacy missing-cookie rollout flag', async () => {
     process.env.NEXUS_OAUTH_COOKIE_ENFORCE = '0'
     const s = await startEbay()
     const r = await completeEbay(s, { cookies: {} })
     expect(r.placement).toBe('new')
     const note = eventsOf('status_change').find((e) => (e.detail as Record<string, unknown>).oauth === 'state_cookie_missing')
-    expect(note?.detail).toMatchObject({ enforced: false })
+    expect(note).toBeUndefined()
   })
 
   it('a cookie with the wrong nonce is rejected even with enforcement off', async () => {
@@ -529,7 +689,7 @@ describe('complete — exchange', () => {
     const body = exchangeBody()
     expect(body.get('code_verifier')).toBe(verifier)
     expect(body.get('client_id')).toBe('test-client-id')
-    expect(body.get('client_secret')).toBe('test-client-secret')
+    expect(body.has('client_secret')).toBe(false)
     expect(body.get('extra_param')).toBe('yes')
     expect(body.get('redirect_uri')).toBe('https://api.example.test/api/cx/callback/etsy')
     // tokenResponseMetadata + callbackMetadata land in the envelope's `extra`.
@@ -568,6 +728,19 @@ describe('complete — exchange', () => {
     const s = await startEbay()
     expect((await flowError(completeEbay(s))).code).toBe('exchange_failed')
   })
+
+  it('does not store an Amazon grant that cannot refresh', async () => {
+    tokenResponse = () => json({ access_token: 'one-hour-only', expires_in: 3600 })
+    const s = await start({ channelKey: 'AMAZON_SP', intent: 'connect', region: 'EU', actor: ACTOR })
+    const err = await flowError(complete({
+      channelKey: 'AMAZON_SP',
+      query: { state: s.state, spapi_oauth_code: 'amazon-code', selling_partner_id: 'SELLERONE' },
+      cookies: cookiesFor(s),
+    }))
+    expect(err.code).toBe('exchange_failed')
+    expect(err.message).toContain('returned no refresh token')
+    expect(connections.size).toBe(0)
+  })
 })
 
 describe('complete — placement and storage', () => {
@@ -575,6 +748,7 @@ describe('complete — placement and storage', () => {
     const s = await startEbay()
     const r = await completeEbay(s)
     expect(r).toEqual({
+      workspaceId: 'nexus_legacy_workspace',
       connectionId: 'conn-1',
       placement: 'new',
       identity: { userId: 'U1', username: 'seller1' },
@@ -583,7 +757,7 @@ describe('complete — placement and storage', () => {
       channelKey: 'EBAY',
     })
     expect(prismaMock.channelConnection.create).toHaveBeenCalledWith({
-      data: { channelType: 'EBAY', managedBy: 'oauth', isActive: false, authStatus: 'unknown', region: 'GLOBAL' },
+      data: { channelType: 'EBAY', managedBy: 'oauth', isActive: false, authStatus: 'unknown', region: 'GLOBAL', connectionMetadata: { environment: 'production' } },
       select: { id: true },
     })
     const row = connections.get('conn-1')!
@@ -661,9 +835,8 @@ describe('complete — placement and storage', () => {
     expect(eventsOf('grant')[0].actorUserId).toBe('user-1')
     identityResponse = () => json({ userId: 'U2', username: 'seller2' }) // a different seller, so this is a second grant, not a re-consent
     const s2 = await startEbay()
-    await completeEbay(s2, { actorUserId: 'user-2' })
-    expect(eventsOf('grant')).toHaveLength(2)
-    expect(eventsOf('grant')[1].actorUserId).toBe('user-2')
+    await expect(completeEbay(s2, { actorUserId: 'user-2' })).rejects.toMatchObject({ code: 'identity_refused' })
+    expect(eventsOf('grant')).toHaveLength(1)
   })
 
   it('records scope_drift when the channel echoes fewer scopes than we asked for', async () => {

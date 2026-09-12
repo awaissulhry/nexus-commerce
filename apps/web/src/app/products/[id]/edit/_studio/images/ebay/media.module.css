@@ -1,0 +1,67 @@
+.workspace { color: var(--nds-text); background: var(--nds-bg); display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100%; overflow: hidden; font-size: var(--nds-font-size-base); }
+.workspaceHeader { flex: none; display: flex; flex-direction: column; gap: var(--nds-space-12); padding: var(--nds-space-16) var(--nds-space-24); border-bottom: 1px solid var(--nds-border); background: var(--nds-surface); }
+.workspaceBody { flex: 1; min-height: 0; overflow: auto; padding: var(--nds-space-20) var(--nds-space-24); display: flex; flex-direction: column; gap: var(--nds-space-16); }
+.workspaceBody > * { flex-shrink: 0; }
+.workspace h2, .library h2, .review h2, .photoPreview h2 { margin: 0; font-size: var(--nds-font-size-md); font-weight: var(--nds-font-weight-semibold); }
+.workspace h3, .review h3, .photoPreview h3 { margin: 0 0 var(--nds-space-8); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); }
+.workspace p, .library p, .review p, .photoPreview p { margin: 0; line-height: 1.6; }
+.workspace a, .review a, .photoPreview a { text-decoration: underline; }
+.destination { display: grid; grid-template-columns: minmax(180px, 320px) minmax(0, 1fr) auto; gap: var(--nds-space-20); align-items: end; }
+.destination > * { min-width: 0; }
+.destinationSummary { overflow-wrap: anywhere; font-size: var(--nds-font-size-sm); }
+.saveStatus { font-size: var(--nds-font-size-sm); align-self: center; }
+.actionRow { display: flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-8); }
+.editor { display: grid; grid-template-columns: 248px minmax(0, 1fr); gap: var(--nds-space-24); align-items: start; }
+.editor[data-library-pinned] { grid-template-columns: 248px minmax(0, 1fr) 340px; }
+.galleries { position: sticky; top: 0; display: flex; flex-direction: column; gap: var(--nds-space-20); min-width: 0; max-height: calc(100dvh - 340px); }
+.gallerySection { display: flex; flex-direction: column; gap: var(--nds-space-10); min-height: 0; }
+.gallerySection > * { flex-shrink: 0; }
+.gallerySection:first-child { flex: none; }
+.gallerySection:last-child { flex: 1; }
+.gallerySection .galleryList { flex: 1; }
+.variationControls { display: flex; flex-direction: column; gap: var(--nds-space-10); min-height: 0; }
+.variationControls > * { flex-shrink: 0; }
+.gallerySection > .variationControls { flex: 1; }
+.gallerySection + .gallerySection { padding-top: var(--nds-space-16); border-top: 1px solid var(--nds-border); }
+.galleryList { display: flex; flex-direction: column; gap: var(--nds-space-4); overflow: auto; min-height: 0; padding: var(--nds-space-2); }
+.galleryList > * { flex-shrink: 0; }
+.groupHint, .galleryHint { font-size: var(--nds-font-size-sm); }
+.count { font-variant-numeric: tabular-nums; white-space: nowrap; font-size: var(--nds-font-size-sm); }
+.canvas { min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--nds-space-8); }
+.sectionHead p { font-size: var(--nds-font-size-sm); }
+.commonSummary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-12); padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); }
+.commonSummary > div:nth-child(2) { flex: 1; min-width: 140px; }
+.commonSummary p { font-size: var(--nds-font-size-sm); }
+.library, .review, .photoPreview { color: var(--nds-text); font-size: var(--nds-font-size-base); }
+.library { min-width: 0; display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.sourcePanel { position: sticky; top: 0; max-height: calc(100dvh - 340px); }
+.sourceGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: var(--nds-space-12); }
+.sourcePanel .sourceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-8); }
+.selectionSummary { color: var(--nds-text); font-size: var(--nds-font-size-sm); margin-right: auto; }
+.review { display: flex; flex-direction: column; gap: var(--nds-space-16); }
+.reviewColumns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-16); }
+.reviewCard { padding: var(--nds-space-16); border: 1px solid var(--nds-border); background: var(--nds-surface); border-radius: var(--nds-radius-lg); display: flex; flex-direction: column; gap: var(--nds-space-8); }
+.review ul { padding-left: var(--nds-space-20); margin: 0; }
+.state { display: grid; place-items: center; min-height: 320px; padding: var(--nds-space-32); color: var(--nds-text); }
+.preview { display: grid; place-items: center; min-height: 240px; }
+.preview img { max-width: 100%; max-height: 72vh; object-fit: contain; }
+.uploadResults { display: flex; flex-direction: column; gap: var(--nds-space-8); margin-top: var(--nds-space-16); color: var(--nds-text); overflow-wrap: anywhere; }
+.savedMessage { font-size: var(--nds-font-size-sm); }
+.photoPreview { display: flex; flex-direction: column; gap: var(--nds-space-16); max-width: 1060px; margin: 0 auto; height: 100%; overflow: auto; padding: var(--nds-space-20); box-sizing: border-box; }
+.photoPreview > * { flex-shrink: 0; }
+.photoPreviewLayout { display: grid; grid-template-columns: minmax(0, 400px) minmax(0, 1fr); gap: var(--nds-space-24); align-items: start; }
+.photoSets { display: flex; flex-direction: column; gap: var(--nds-space-20); min-width: 0; }
+.photoStrip { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); list-style: none; padding: 0; margin: 0; }
+@media (max-width: 900px) { .destination { grid-template-columns: minmax(0, 1fr) auto; gap: var(--nds-space-8) var(--nds-space-16); } .destination > :first-child { grid-column: 1 / -1; } .saveStatus { text-align: right; } }
+@media (max-width: 700px) {
+  .selectionSummary { flex-basis: 100%; }
+  .workspaceHeader { padding: var(--nds-space-12) var(--nds-space-16); }
+  .workspaceBody { padding: var(--nds-space-16); }
+  .editor, .reviewColumns, .photoPreviewLayout { grid-template-columns: minmax(0, 1fr); }
+  .galleries { position: static; max-height: none; }
+  .galleryList { max-height: 220px; }
+  .sourceGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--nds-space-8); }
+  .destination { grid-template-columns: minmax(0, 1fr); }
+  .destinationSummary, .saveStatus { text-align: left; }
+}

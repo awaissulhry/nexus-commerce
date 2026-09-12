@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase 23.2: Safety Buffers & Alerts
  * Low-stock monitoring and critical inventory alerts
@@ -131,7 +132,7 @@ export async function checkStockThreshold(
 
     // Find product
     const product = await prisma.product.findUnique({
-      where: { sku },
+      where: { workspace_sku: workspaceKey({ sku: sku }) },
       select: { id: true, sku: true, name: true, lowStockThreshold: true },
     })
 

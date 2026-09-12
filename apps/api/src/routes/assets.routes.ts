@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W4.5 — DAM CRUD API.
  *
@@ -52,6 +53,7 @@ import {
 } from '../services/cloudinary.service.js'
 import { checkAssetQuality } from '../services/asset-quality.service.js'
 import { buildAllVariants } from '../services/channel-variants.service.js'
+import { shopifyMediaRoutes } from './shopify-media.routes.js'
 
 // MC.13.1 — Storage quota. Env-driven for now (workspace settings
 // land in MC.13-followup). When set + the workspace's accumulated
@@ -147,6 +149,7 @@ const MAX_ZIP_ENTRIES = parseInt(
 )
 
 const assetsRoutes: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(shopifyMediaRoutes)
   // ── Meta ────────────────────────────────────────────────────
 
   // MC.13.2 — delivery profile catalog + active default. Powers the
@@ -1130,7 +1133,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       for (const rawName of body.tagNames) {
         const name = rawName.trim()
         if (!name) continue
-        const existing = await prisma.tag.findUnique({ where: { name } })
+        const existing = await prisma.tag.findUnique({ where: { workspace_name: workspaceKey({ name: name }) } })
         if (existing) {
           idSet.add(existing.id)
         } else {
@@ -1287,7 +1290,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: 'asset not found' })
 
       const overlay = await prisma.assetLocaleOverlay.upsert({
-        where: { assetId_locale: { assetId: id, locale } },
+        where: { assetId_locale: workspaceKey({ assetId: id, locale }) },
         update: {
           text: body.text.trim(),
           position: body.position ?? 'south',
@@ -1324,7 +1327,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const locale = request.params.locale
       try {
         await prisma.assetLocaleOverlay.delete({
-          where: { assetId_locale: { assetId: id, locale } },
+          where: { assetId_locale: workspaceKey({ assetId: id, locale }) },
         })
       } catch {
         return reply.code(404).send({ error: 'overlay not found' })
@@ -1448,6 +1451,27 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
   // ── MC.3.1 — direct upload (multipart) ─────────────────────
 
   fastify.post('/assets/upload', async (request, reply) => {
+    const source = (request.query as { source?: string }).source
+    if (source !== undefined && source !== 'nexus') return reply.code(400).send({ error: 'Choose a valid media source.' })
+    if (source !== 'nexus') {
+      const { defaultShopifyMediaAccount, uploadReadyShopifyAsset, ShopifyMediaError } = await import('../services/shopify/media-library.service.js')
+      try {
+        const accountId = await defaultShopifyMediaAccount()
+        if (accountId) {
+          const file = await request.file({ limits: { files: 1, fileSize: 200 * 1024 * 1024 } })
+          if (!file) return reply.code(400).send({ error: 'Choose a file to upload.' })
+          const buffer = await file.toBuffer()
+          if (file.file.truncated) return reply.code(413).send({ error: 'This file exceeds the upload limit.' })
+          const result = await uploadReadyShopifyAsset(accountId, buffer, file.filename)
+          return reply.code(result.reused ? 200 : 201).send({ asset: result.asset, dedup: result.reused })
+        }
+      } catch (error) {
+        if (error instanceof ShopifyMediaError) return reply.code(error.statusCode).send({ error: error.message })
+        if (error instanceof Error && 'code' in error && error.code === 'FST_REQ_FILE_TOO_LARGE') return reply.code(413).send({ error: 'This file exceeds the 200 MB upload limit.' })
+        request.log.error({ err: error }, 'Shopify default media upload failed')
+        return reply.code(502).send({ error: 'The Shopify upload could not be confirmed. Refresh the media library before retrying.' })
+      }
+    }
     if (!isCloudinaryConfigured())
       return reply.code(503).send({
         error:
@@ -1520,7 +1544,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // cost and keeps publicIds stable so downstream caches hold.
     const contentHash = sha256Hex(buffer)
     const existing = await prisma.digitalAsset.findUnique({
-      where: { contentHash },
+      where: { workspace_contentHash: workspaceKey({ contentHash: contentHash }) },
     })
     if (existing) {
       // If the operator dropped this file into a different folder
@@ -1602,7 +1626,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       // these.
       if (err?.code === 'P2002') {
         const winner = await prisma.digitalAsset.findUnique({
-          where: { contentHash },
+          where: { workspace_contentHash: workspaceKey({ contentHash: contentHash }) },
         })
         if (winner)
           return reply.code(200).send({ asset: winner, dedup: true })
@@ -1706,7 +1730,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     // links" workflows so the dedup hit is meaningful.
     const contentHash = sha256Hex(buffer)
     const existing = await prisma.digitalAsset.findUnique({
-      where: { contentHash },
+      where: { workspace_contentHash: workspaceKey({ contentHash: contentHash }) },
     })
     if (existing) {
       if (body.folderId && existing.folderId !== body.folderId) {
@@ -1780,7 +1804,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err: any) {
       if (err?.code === 'P2002') {
         const winner = await prisma.digitalAsset.findUnique({
-          where: { contentHash },
+          where: { workspace_contentHash: workspaceKey({ contentHash: contentHash }) },
         })
         if (winner)
           return reply.code(200).send({ asset: winner, dedup: true })
@@ -1964,7 +1988,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       // Dedup short-circuit (MC.3.3 path).
       const contentHash = sha256Hex(buffer)
       const existing = await prisma.digitalAsset.findUnique({
-        where: { contentHash },
+        where: { workspace_contentHash: workspaceKey({ contentHash: contentHash }) },
         select: { id: true },
       })
       if (existing) {

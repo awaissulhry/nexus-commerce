@@ -23,8 +23,18 @@ export interface SheetAttr {
   mode?: 'strict' | 'open'
   /** Required by which channels for market IT. */
   requiredBy?: readonly ('amazon' | 'ebay' | 'shopify')[]
-  /** The tightest length cap across the channels. */
+  /** The tightest CHARACTER cap across the channels. */
   maxLength?: number
+  /**
+   * The tightest BYTE cap. Added because the lab could not represent one at all — and a lab that
+   * cannot express a case cannot demonstrate it, which is why an invented `?? 2000` survived here
+   * after being removed everywhere else. Amazon declares the two independently (1,061 fields carry
+   * both), and which one binds depends on the content, so a fixture with only `maxLength` exercises
+   * exactly half of the substrate's length behaviour.
+   */
+  maxBytes?: number
+  /** Which channel imposes the tightest cap — a mark that warns has to name its source. */
+  capFrom?: string
   width?: number
 }
 
@@ -32,7 +42,9 @@ export const SHEET_SCHEMA: SheetAttr[] = [
   // content @ IT
   { key: 'title', label: 'Title', group: 'Content · IT', kind: 'longtext', scope: 'global', requiredBy: ['amazon', 'ebay', 'shopify'], maxLength: 80, width: 300 },
   { key: 'bullet1', label: 'Bullet 1', group: 'Content · IT', kind: 'longtext', scope: 'global', requiredBy: ['amazon'], maxLength: 500, width: 220 },
-  { key: 'bullet2', label: 'Bullet 2', group: 'Content · IT', kind: 'longtext', scope: 'global', maxLength: 500, width: 220 },
+  /* Mirrors the live `product_description`: a BYTE cap and no character cap. This is the shape that
+     read as uncapped in three separate files, so the lab now carries one. */
+  { key: 'bullet2', label: 'Bullet 2', group: 'Content · IT', kind: 'longtext', scope: 'global', maxBytes: 2000, capFrom: 'Amazon · IT', width: 220 },
   { key: 'description', label: 'Description', group: 'Content · IT', kind: 'longtext', scope: 'global', requiredBy: ['amazon', 'ebay', 'shopify'], maxLength: 2000, width: 260 },
   { key: 'keywords', label: 'Search terms', group: 'Content · IT', kind: 'longtext', scope: 'global', maxLength: 250, width: 180 },
   // attributes (master schema for "Motorcycle jacket")

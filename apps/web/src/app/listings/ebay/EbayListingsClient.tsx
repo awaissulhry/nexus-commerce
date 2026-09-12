@@ -15,7 +15,7 @@
 // per-marketplace overview.
 
 import { useMemo, useState, useEffect } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Megaphone, ExternalLink } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { Skeleton } from '@/components/ui/Skeleton'

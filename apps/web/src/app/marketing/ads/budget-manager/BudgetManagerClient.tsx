@@ -19,7 +19,7 @@ import { Button, Input, SegmentedControl, Toggle, ToolbarButton } from '@/design
 import { Field } from '@/design-system/components/Field'
 import { Check, Info, Settings, MoreVertical, ChevronDown, ChevronLeft, ChevronRight, Pencil, AlertTriangle, BadgeDollarSign, Sparkles, Network, Search, Wallet } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
-import { AdsDataGrid, type GridColumn, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
+import { AdsDataGrid, type GridColumn, type GridPrefs, type GridSelectFilter } from '../campaigns/_grid/AdsDataGrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'
@@ -341,6 +341,17 @@ export function BudgetManagerClient() {
         : <Button variant="quiet" size="xs" className="bm-nextbtn" onClick={() => { setEditingNext(r.marketplace); setNextDraft(r.nextMonthBudgetCents != null ? (r.nextMonthBudgetCents / 100).toFixed(2) : '') }}>{r.nextMonthBudgetCents != null ? eur(r.nextMonthBudgetCents) : <span className="ph">Set budget</span>}<Pencil size={11} /></Button>
     ) },
   ], [editingNext, nextDraft, month, result]) // eslint-disable-line react-hooks/exhaustive-deps
+  /**
+   * AGW (2026-09-05) — the legacy page un-froze its identity column by CSS (`budget-manager.css:8`,
+   * `th.nm.fz, td.nm.fz { position: static; box-shadow: none; border-right: none }`): a six-column grid
+   * needs no frozen column, and the sticky white ground used to paint over Auto Pacing. On the AG engine a
+   * pin is a column property, so the page says it through the contract's controlled preferences instead —
+   * every column visible in its own order, nothing frozen. `customizable={false}` below is unchanged.
+   */
+  const gridPrefs = useMemo<GridPrefs>(
+    () => ({ visible: columns.filter((c) => !c.defaultHidden).map((c) => c.key), stickyFirst: false, stickyLast: false }),
+    [columns],
+  )
 
   const filters: GridSelectFilter[] = [
     { key: 'autoPacing', label: 'Auto Pacing', kind: 'select', placeholder: 'All', value: (row) => ((row as Row).autoPacing ? 'Active' : 'Paused'), options: [{ value: 'Active', label: 'Active' }, { value: 'Paused', label: 'Paused' }] },
@@ -402,6 +413,7 @@ export function BudgetManagerClient() {
         filters={filters}
         selectable={false}
         customizable={false}
+        prefs={gridPrefs}
         searchable
         searchPlaceholder="Search markets…"
         searchValue={(r) => mktName(r.marketplace)}

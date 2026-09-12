@@ -35,17 +35,43 @@ export interface GridCssVar {
 /**
  * Density tiers — the ONE vocabulary (Q3, decided 2026-08-28). `rowText` is a plain one-line row;
  * `rowMedia` is a row whose identity cell carries a thumbnail (photo · title · sub-line). Header
- * height is the same in both kinds. Spacious is the default on /products/next (Owner).
+ * height is the same in every kind. Spacious is the default on /products/next (Owner).
  *
- *   tier      rowText  rowMedia  header  thumb  cellPadX
- *   compact     28       52        28     32      10       (engine xs; DS grid `xs` 5/9 padding)
- *   cozy        43       68        38     40      14       (engine md)
- *   spacious    49       85        46     56      14       (engine lg)
+ * `rowMediaLine` is a THIRD row KIND, not a fourth density tier (DS.1 + PES.2, 2026-09-02,
+ * hub ruling #195): a one-line row carrying a thumbnail but NO stack — the studio sheet's
+ * identity cell, where SKU and Name are already their own columns. `rowMedia`'s extra height
+ * buys the photo · title · sub-line stack; a cell with no stack should not pay for it.
+ * It is a KIND rather than a tier because density is an operator preference applied across
+ * every grid — making 36 a tier would silently give the ads console a thumbnail row when an
+ * operator picks "compact" — whereas height driven by cell CONTENT is a property of the row.
+ * Derived as `thumb + 4` (2px above and below) so the rule cannot drift from the thumb it has
+ * to contain: at compact that is 32 + 4 = 36, which is the studio's measured requirement.
+ *
+ * 🔴 DO NOT drop `rowMediaLine` back toward `rowText` (28) to reclaim vertical space. Two things
+ * break, and NEITHER reports the row height as the cause:
+ *   1. The thumbnail clips — and NOTHING currently prevents it. `grid.css` carries
+ *      `min(--nds-grid-thumb-compact, calc(--ag-row-height - 4px))`, which LOOKS like a cap and is
+ *      inert: measured 2026-09-02 (DS.1 and UX.1 independently), `--ag-row-height` computes to
+ *      **42px while the rows render at 28px**, because `NexusGrid` passes `rowHeight` as a grid
+ *      OPTION and AG applies it inline without ever feeding that variable. So it evaluates
+ *      `min(32px, 38px)` = 32px and passes the value straight through. An AG geometry variable is a
+ *      theme INPUT, not a readback of what the grid rendered. Do not rely on that line.
+ *   2. PES.1's collapsing header stops arming, and the symptom appears in PES.1's code, not here.
+ *      Measured (UX.1, 2026-09-02): `H = innerHeight - 267` and arming needs a scroll range
+ *      `R >= 48`. At 28px rows the header arms only on viewports <= 894px tall — so it works on a
+ *      laptop and silently does not on an external monitor, with no message and nothing to click.
+ *      At 36 it is armed to 1031px and the whole class disappears.
+ * A change here is a change to two other lanes' features. Re-measure both before touching it.
+ *
+ *   tier      rowText  rowMedia  rowMediaLine  header  thumb  cellPadX
+ *   compact     28       52           36         28     32      10   (engine xs; DS grid `xs` 5/9 padding)
+ *   cozy        43       68           44         38     40      14   (engine md)
+ *   spacious    49       85           60         46     56      14   (engine lg)
  */
 export const gridDensity = {
-  compact: { rowText: 28, rowMedia: 52, header: 28, thumb: 32, cellPadX: 10 },
-  cozy: { rowText: 43, rowMedia: 68, header: 38, thumb: 40, cellPadX: 14 },
-  spacious: { rowText: 49, rowMedia: 85, header: 46, thumb: 56, cellPadX: 14 },
+  compact: { rowText: 28, rowMedia: 52, rowMediaLine: 36, header: 28, thumb: 32, cellPadX: 10 },
+  cozy: { rowText: 43, rowMedia: 68, rowMediaLine: 44, header: 38, thumb: 40, cellPadX: 14 },
+  spacious: { rowText: 49, rowMedia: 85, rowMediaLine: 60, header: 46, thumb: 56, cellPadX: 14 },
 } as const
 
 export type GridDensityName = keyof typeof gridDensity
@@ -122,6 +148,7 @@ export const gridVars: ReadonlyArray<GridCssVar> = [
   // ── density (compact / cozy / spacious) ──
   ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-text-${d}`, value: px(gridDensity[d].rowText) })),
   ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-media-${d}`, value: px(gridDensity[d].rowMedia) })),
+  ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-row-media-line-${d}`, value: px(gridDensity[d].rowMediaLine) })),
   ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-header-${d}`, value: px(gridDensity[d].header) })),
   ...GRID_DENSITIES.map((d) => ({ name: `--nds-grid-thumb-${d}`, value: px(gridDensity[d].thumb) })),
   { name: '--nds-grid-cell-pad-x', value: px(gridDensity.cozy.cellPadX) },
@@ -149,6 +176,12 @@ export const gridVars: ReadonlyArray<GridCssVar> = [
   { name: '--nds-grid-delta-neg-bg', value: 'var(--nds-danger)' },
   { name: '--nds-grid-delta-fg', value: 'var(--nds-text-inverse)' },
   { name: '--nds-grid-locked-fg', value: 'var(--nds-text-muted)' },
+  /**
+   * An AI-drafted cell (PES.8). A TOKEN rather than a mix repeated per surface: the tint appears on
+   * the sheet's cells AND on the review panel's rows, and two copies of one colour drift the moment
+   * either is touched. Emitted at `:root`, so a panel that is not a grid can read it too.
+   */
+  { name: '--nds-grid-ai-draft-bg', value: 'color-mix(in srgb, var(--nds-purple-600) 10%, transparent)' },
   // ── overlays ──
   { name: '--nds-grid-skeleton-bg', value: 'var(--nds-surface-sunken)' },
   { name: '--nds-grid-skeleton-shine', value: 'var(--nds-border-subtle)' },

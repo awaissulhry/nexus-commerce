@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Thumbnail } from './Thumbnail'
 
 export type ProductIdentityCellProps = {

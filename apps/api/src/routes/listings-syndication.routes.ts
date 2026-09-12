@@ -1,3 +1,5 @@
+import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
+import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
@@ -19,6 +21,7 @@ import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.serv
 import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
 import { fireOutboundJobs } from '../services/outbound-enqueue.js'
 import { tryResolveConnection } from '../services/connection-resolver.service.js'
+import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
 
 // ─────────────────────────────────────────────────────────────────────
 // SYNDICATION — universal /listings workspace endpoints
@@ -119,17 +122,13 @@ function listingUrlFor(channel: string, marketplace: string, externalId: string 
 // Amazon stores it in attributes.item_name[].value keyed by language_tag.
 // eBay stores it directly as the listing title (l.title); return null here
 // so the frontend falls back to l.title for eBay.
-const LOCALE_LANG_TAG: Record<string, string> = {
-  IT: 'it_IT', DE: 'de_DE', FR: 'fr_FR', ES: 'es_ES',
-  GB: 'en_GB', UK: 'en_GB', NL: 'nl_NL', PL: 'pl_PL', SE: 'sv_SE', US: 'en_US',
-}
-function extractLocaleTitle(pa: unknown, marketplace: string): string | null {
+export function extractLocaleTitle(pa: unknown, marketplace: string, language: string): string | null {
   if (!pa || typeof pa !== 'object') return null
   const attrs = (pa as any).attributes
   if (!attrs || typeof attrs !== 'object') return null
   const itemName = attrs.item_name
   if (!Array.isArray(itemName) || itemName.length === 0) return null
-  const langTag = LOCALE_LANG_TAG[marketplace.toUpperCase()]
+  const langTag = languageTag(language, marketplace)
   const match = langTag ? itemName.find((n: any) => n?.language_tag === langTag) : null
   const value = match?.value ?? itemName[0]?.value
   return typeof value === 'string' && value.length > 0 ? value.slice(0, 200) : null
@@ -147,6 +146,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const pageSize = Math.min(200, Math.max(1, Math.floor(safeNum(q.pageSize) ?? 50)))
       const skip = (page - 1) * pageSize
 
+      const productIds = csvParam(q.productIds)
+      if (productIds && productIds.length > 200) return reply.code(400).send({ error: 'Max 200 product IDs per listing lookup' })
       const channels = csvParam(q.channel)
       const marketplaces = csvParam(q.marketplace)
       const statuses = csvParam(q.listingStatus)
@@ -168,6 +169,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const sortDir = (q.sortDir === 'asc' ? 'asc' : 'desc') as 'asc' | 'desc'
 
       const where: any = {}
+      if (productIds && productIds.length > 0) where.productId = { in: productIds }
       if (channels && channels.length > 0) where.channel = { in: channels }
       if (marketplaces && marketplaces.length > 0) where.marketplace = { in: marketplaces }
       if (statuses && statuses.length > 0) where.listingStatus = { in: statuses }
@@ -210,6 +212,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // Translate sort key to Prisma orderBy
       let orderBy: any
       switch (sortBy) {
+        case 'id': orderBy = { id: sortDir }; break
         case 'price': orderBy = { price: sortDir }; break
         case 'quantity': orderBy = { quantity: sortDir }; break
         case 'lastSyncedAt': orderBy = { lastSyncedAt: sortDir }; break
@@ -266,15 +269,15 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           take: pageSize,
         }),
         prisma.marketplace.findMany({
-          select: { channel: true, code: true, currency: true, language: true, name: true },
+          select: { channel: true, code: true, currency: true, language: true, languages: true, name: true },
         }),
       ])
 
       const mpKey = (channel: string, code: string) => `${channel}_${code}`
-      const meta = new Map<string, { currency: string; language: string; marketplaceName: string }>(
+      const meta = new Map<string, { currency: string; language: string; languages: string[]; marketplaceName: string }>(
         marketplacesMeta.map((m) => [
           mpKey(m.channel, m.code),
-          { currency: m.currency, language: m.language, marketplaceName: m.name },
+          { currency: m.currency, language: marketLanguages(m.channel, m.code, [m])[0], languages: marketLanguages(m.channel, m.code, [m]), marketplaceName: m.name },
         ])
       )
 
@@ -331,6 +334,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         return {
           id: l.id,
           productId: l.productId,
+          channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey,
           channel: l.channel,
           marketplace: l.marketplace,
           listingStatus: l.listingStatus,
@@ -364,12 +368,13 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           createdAt: l.createdAt,
           currency: m?.currency ?? null,
           language: m?.language ?? null,
+          languages: m?.languages ?? [],
           marketplaceName: m?.marketplaceName ?? null,
           // G.3 — per-marketplace platformAttributes overlays
           browseNodePath: (l.platformAttributes as any)?.browseNodePath ?? null,
           browseNodeId: (l.platformAttributes as any)?.browseNodeId ?? null,
           ebayCategoryId: (l.platformAttributes as any)?.categoryId ?? null,
-          localeTitle: l.channel === 'AMAZON' ? extractLocaleTitle(l.platformAttributes, l.marketplace) : null,
+          localeTitle: l.channel === 'AMAZON' && m?.language ? extractLocaleTitle(l.platformAttributes, l.marketplace, m.language) : null,
           product: (() => {
             const buckets = stockByProduct.get(l.productId) ?? { fba: 0, non: 0 }
             return {
@@ -1156,7 +1161,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   //
   // S.2 — narrow surface for drawer-driven edits: per-field
   // followMaster toggles, pricingRule, priceAdjustmentPercent,
-  // isPublished, stockBuffer. The bulk-action endpoint covers
+  // stockBuffer. Publication belongs to the channel workflows. The bulk-action endpoint covers
   // multi-listing operations and is awkward for single-row UX
   // (job polling, async, etc.) so this provides direct synchronous
   // updates with optimistic-concurrency via `version`.
@@ -1177,7 +1182,6 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         followMasterBulletPoints?: boolean
         pricingRule?: 'FIXED' | 'MATCH_AMAZON' | 'PERCENT_OF_MASTER'
         priceAdjustmentPercent?: number
-        isPublished?: boolean
         stockBuffer?: number
         expectedVersion?: number
         /** AC.7.2 — shallow-merge keys into ChannelListing.platformAttributes.
@@ -1193,11 +1197,14 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         salePrice?: number | string | null
       }
 
+      if (Object.prototype.hasOwnProperty.call(body, 'isPublished')) return reply.code(409).send({
+        code: 'CHANNEL_WORKFLOW_REQUIRED', error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
+        reviewHref: `/products/listing-readiness?${new URLSearchParams({ listingIds: id })}`,
+      })
       const data: any = {}
       const boolFields = [
         'followMasterTitle', 'followMasterDescription', 'followMasterPrice',
         'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints',
-        'isPublished',
       ] as const
       for (const k of boolFields) {
         if (typeof body[k] === 'boolean') data[k] = body[k]
@@ -1264,6 +1271,10 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         !Array.isArray(body.platformAttributes)
           ? body.platformAttributes
           : null
+
+      if (mergePlatformAttrs && Object.keys(mergePlatformAttrs).some(isManagedShopifyAttribute)) return reply.code(409).send({
+        code: 'SHOPIFY_WORKSPACE_REQUIRED', error: 'Use the Shopify family workspace to change family rules, automation or synchronization progress.',
+      })
 
       if (Object.keys(data).length === 0 && !mergePlatformAttrs) {
         return reply.code(400).send({ error: 'No updatable fields provided' })
@@ -2639,8 +2650,8 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   fastify.get<{ Querystring: { probe?: string; stuck?: string } }>('/listings/publish-readiness', async (request, reply) => {
     const probe = request.query?.probe === '1' || request.query?.probe === 'true'
     const wantStuck = request.query?.stuck === '1' || request.query?.stuck === 'true'
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
-    const lwaPresent = !!(process.env.AMAZON_LWA_CLIENT_ID && process.env.AMAZON_LWA_CLIENT_SECRET && process.env.AMAZON_REFRESH_TOKEN)
+    const sellerId = (await getAmazonSellerId())
+    const lwaPresent = await amazonCredsConfigured()
     const shopifyConfigured = !!(process.env.SHOPIFY_SHOP_NAME && (process.env.SHOPIFY_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_API_TOKEN))
 
     let pendingTotal = 0
@@ -3301,8 +3312,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
   // POST /api/listings/bulk-action
   // body: { action, listingIds[], payload? }
   // actions:
-  //   - "publish"          → isPublished=true
-  //   - "unpublish"        → isPublished=false
+  // Publication uses the channel workflows; this route cannot submit or withdraw a listing.
   //   - "resync"           → syncStatus=PENDING, syncRetryCount=0
   //   - "set-price"        → price = payload.price (Decimal)
   //   - "follow-master"    → followMaster* = true (cascade master fields)
@@ -3322,10 +3332,15 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const action = body.action
       const ids = Array.isArray(body.listingIds) ? body.listingIds : []
       if (!action) return reply.code(400).send({ error: 'action is required' })
+      if (action === 'publish' || action === 'unpublish') {
+        return reply.code(409).send({ code: 'CHANNEL_WORKFLOW_REQUIRED',
+          error: 'Use the listing channel workflow to publish or withdraw listings. A local status flag cannot confirm a marketplace change.',
+          reviewHref: '/products/listing-readiness' })
+      }
       if (ids.length === 0) return reply.code(400).send({ error: 'listingIds[] is required' })
       if (ids.length > 1000) return reply.code(400).send({ error: 'Max 1000 listings per bulk action' })
 
-      const validActions = ['publish', 'unpublish', 'resync', 'set-price', 'follow-master', 'unfollow-master', 'set-pricing-rule']
+      const validActions = ['resync', 'set-price', 'follow-master', 'unfollow-master', 'set-pricing-rule']
       if (!validActions.includes(action)) {
         return reply.code(400).send({ error: `Invalid action. Allowed: ${validActions.join(', ')}` })
       }
@@ -3403,8 +3418,6 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           try {
             const data: any = {}
             switch (action) {
-              case 'publish': data.isPublished = true; break
-              case 'unpublish': data.isPublished = false; break
               case 'resync':
                 data.syncStatus = 'PENDING'
                 data.lastSyncStatus = 'PENDING'

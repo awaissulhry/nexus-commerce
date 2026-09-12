@@ -1,0 +1,9 @@
+{
+  "source": "https://github.com/Shopify/product-taxonomy/releases/latest/download/categories.en.json.gz",
+  "providerVersion": "2026-08",
+  "nodes": 14606,
+  "compressedBytes": 2424891,
+  "sha256": "bb400431cf6c28cc1ddad9f2d9c5c3c918db94454ebeb68238ffa8740ee89d05",
+  "roots": 26,
+  "withAttributes": 14454
+}

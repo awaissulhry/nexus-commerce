@@ -8,6 +8,13 @@ export {
 } from './AppShell'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
 export { DetailHeader, type DetailHeaderProps } from './DetailHeader'
+export {
+  ScopeBar,
+  type ScopeBarProps,
+  type ScopeBarItem,
+  type ScopeBarReadiness,
+  type ScopeReadinessState,
+} from './ScopeBar'
 export { FilterPanel, FilterField, type FilterPanelProps } from './FilterPanel'
 export { FilterBar, type FilterBarProps, type FilterBarOption, type FilterDimension } from './FilterBar'
 export { GridToolbar, type GridToolbarProps } from './GridToolbar'
@@ -18,9 +25,12 @@ export {
   PreferencesModal,
   type PreferencesModalProps,
   type PreferencesPanesOptions,
+  type PreferencesQuickPick,
   type PreferencesValue,
+  type PreferencesViewSave,
   usePreferencesPanes,
 } from './PreferencesModal'
+export { addColumns, effectiveLocks, inViewCount, moveVisible, normalizeGroupedPreferences, orderedForDisplay, removeColumns, setHas, toggleColumn, toggleLock, togglableKeysOf } from './preferencesLogic'
 export { BulkActionBar, type BulkActionBarProps } from './BulkActionBar'
 export { EditModeBar, type EditModeBarProps } from './EditModeBar'
 export { Builder, type BuilderProps, type BuilderSection } from './Builder'
@@ -33,3 +43,5 @@ export type {
 export { SectionLayout, defaultSectionLayout, readSectionLayout, writeSectionLayout } from './SectionLayout'
 export type { SectionLayoutProps, SectionLayoutValue, SectionSpec, SectionWidth } from './SectionLayout'
 export { emitPrefsChanged, onPrefsChanged } from './prefs-bus'
+
+export { WorkspaceSubheader, type WorkspaceSubheaderProps, type WorkspaceNavItem, type WorkspaceNavGroup } from './WorkspaceSubheader'

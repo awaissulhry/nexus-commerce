@@ -16,6 +16,7 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob } from '../../lib/crypto.js'
 import type { ChannelKey } from './catalog.js'
+import { ChannelAppConfigurationError } from './app-configuration-error.js'
 
 export type Environment = 'production' | 'sandbox'
 
@@ -48,7 +49,15 @@ function envSeed(key: ChannelKey): { clientId: string; clientSecret: string; red
       const id = e.AMAZON_LWA_CLIENT_ID ?? e.AMAZON_CLIENT_ID
       const secret = e.AMAZON_LWA_CLIENT_SECRET ?? e.AMAZON_CLIENT_SECRET
       if (!id || !secret) return null
-      return { clientId: id, clientSecret: secret, redirectUris: [], extra: { applicationId: e.AMAZON_SP_APPLICATION_ID ?? null } }
+      return {
+        clientId: id,
+        clientSecret: secret,
+        redirectUris: [],
+        extra: {
+          applicationId: e.AMAZON_SP_APPLICATION_ID ?? null,
+          authorizationVersion: e.AMAZON_SP_AUTH_VERSION === 'beta' ? 'beta' : null,
+        },
+      }
     }
     case 'AMAZON_ADS':
       if (!e.AMAZON_ADS_CLIENT_ID || !e.AMAZON_ADS_CLIENT_SECRET) return null
@@ -60,10 +69,10 @@ function envSeed(key: ChannelKey): { clientId: string; clientSecret: string; red
       }
     case 'SHOPIFY':
       if (!e.SHOPIFY_APP_CLIENT_ID || !e.SHOPIFY_APP_CLIENT_SECRET) return null
-      return { clientId: e.SHOPIFY_APP_CLIENT_ID, clientSecret: e.SHOPIFY_APP_CLIENT_SECRET, redirectUris: [], extra: {} }
+      return { clientId: e.SHOPIFY_APP_CLIENT_ID, clientSecret: e.SHOPIFY_APP_CLIENT_SECRET, redirectUris: [], extra: { approvedScopes: (e.SHOPIFY_APPROVED_SCOPES ?? '').split(/[\s,]+/).filter(Boolean) } }
     case 'ETSY':
-      if (!e.ETSY_API_KEY) return null
-      return { clientId: e.ETSY_API_KEY, clientSecret: e.ETSY_SHARED_SECRET ?? '', redirectUris: [], extra: {} }
+      if (!e.ETSY_API_KEY || !e.ETSY_SHARED_SECRET) return null
+      return { clientId: e.ETSY_API_KEY, clientSecret: e.ETSY_SHARED_SECRET, redirectUris: [], extra: {} }
   }
 }
 
@@ -112,18 +121,27 @@ export async function getChannelApp(key: ChannelKey, environment: Environment = 
         cipher: String(sk.cipher ?? 'ED25519'),
       }
     }
+    const storedExtra = (row.extra as Record<string, unknown>) ?? {}
+    // Application id / draft status are public registration metadata, not a
+    // seller grant. Let env fill an older ChannelApp row that predates those
+    // fields while preserving every non-empty value explicitly stored on it.
+    const fallbackExtra = key === 'AMAZON_SP' || key === 'SHOPIFY' ? (envSeed(key)?.extra ?? {}) : {}
+    const extra = { ...fallbackExtra }
+    for (const [name, entry] of Object.entries(storedExtra)) {
+      if (entry !== null && entry !== '') extra[name] = entry
+    }
     value = {
       channelKey: key,
       environment,
       clientId: row.clientId,
       clientSecret: secret,
       redirectUris: row.redirectUris,
-      extra: (row.extra as Record<string, unknown>) ?? {},
+      extra,
       signingKey,
     }
   } else {
     const seed = envSeed(key)
-    if (!seed) throw new Error(`No ChannelApp row and no env credentials for ${key} (${environment})`)
+    if (!seed) throw new ChannelAppConfigurationError(key, environment)
     value = { channelKey: key, environment, ...seed, signingKey: null }
   }
   cache.set(cacheKey, { at: Date.now(), value })

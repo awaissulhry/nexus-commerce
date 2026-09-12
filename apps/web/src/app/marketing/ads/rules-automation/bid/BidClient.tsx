@@ -48,8 +48,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { Button, Input, SegmentedControl, Select, ToolbarButton } from '@/design-system/primitives'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'

@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from 'react'
 import { Button, Pill } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Plus, Layers, ExternalLink } from 'lucide-react'
 import { AdsDataGrid, type GridColumn, type GridFilter, type GridEditMode } from '../../_grid/AdsDataGrid'
 import { num, eur, int, STATUS_PILL, latestReportLabel, METRIC_TIPS } from '../../_grid/format'

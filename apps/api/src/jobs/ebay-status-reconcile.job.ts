@@ -282,8 +282,8 @@ export function startEbayStatusReconcileCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runEbayStatusReconcile()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runEbayStatusReconcile()
   })
 
   logger.info(`${JOB_NAME} cron: scheduled`, { schedule })

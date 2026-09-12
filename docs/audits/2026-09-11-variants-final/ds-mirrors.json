@@ -1,0 +1,37 @@
+[
+  {
+    "path": "components/SummaryTable.tsx",
+    "webFactoryIdentical": true,
+    "sha256": "402f6c1edeb3d743d82123c2528b2632f3e679e5002803a4b36cd50db74972d9"
+  },
+  {
+    "path": "components/OrderedList.tsx",
+    "webFactoryIdentical": true,
+    "sha256": "4aadbb08bbf8da4270c2ab1d831de5b16ab3d83753fe83bda9cee0a2a608a832"
+  },
+  {
+    "path": "components/usePointerReorder.ts",
+    "webFactoryIdentical": true,
+    "sha256": "d76ffbc1f82877c6babf65c6eebf0c88e59b7bf7c7e12af3df94d2093fe1c41e"
+  },
+  {
+    "path": "primitives/AxisChip.tsx",
+    "webFactoryIdentical": true,
+    "sha256": "33365d42a73cb339a23cffb5682dd7251031fe8471103bb079fffb2f75c835f5"
+  },
+  {
+    "path": "primitives/FilterChip.tsx",
+    "webFactoryIdentical": true,
+    "sha256": "b7d1f65b3ab9541e9f67228f84a6307de886e0fb13eda8bda79011a37cb62f86"
+  },
+  {
+    "path": "patterns/BulkActionBar.tsx",
+    "webFactoryIdentical": true,
+    "sha256": "14ffd10d88e3310113d7e821785debead02a51e63a22196ecaaabf8524509388"
+  },
+  {
+    "path": "grid/hooks/useGridHostTop.ts",
+    "webFactoryIdentical": true,
+    "sha256": "f4d31773bff5d4837fbe87feb38619293718a1b4ca717b956837928e989d1408"
+  }
+]

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E2 (eBay Ads) — listing discovery + the product-first resolver.
  *
@@ -229,7 +230,7 @@ export async function discoverEbayListings(): Promise<DiscoveryReport> {
       ...(productIds.length ? { productIds, matchStatus: manual.length ? 'MANUAL' : 'MATCHED' } : {}),
     }
     await prisma.ebayListingIndex.upsert({
-      where: { marketplace_itemId: { marketplace, itemId: it.itemId } },
+      where: { marketplace_itemId: workspaceKey({ marketplace, itemId: it.itemId }) },
       create: { marketplace, itemId: it.itemId, source: 'DISCOVERED', firstSeenAt: now, ...base },
       update: base,
     })

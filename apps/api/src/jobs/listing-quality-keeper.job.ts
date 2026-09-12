@@ -57,8 +57,8 @@ export function startListingQualityKeeperCron(): void {
     return
   }
   if (scheduledTask) return
-  scheduledTask = cron.schedule(SCHEDULE, () => {
-    void runListingQualityKeeperCron()
+  scheduledTask = cron.schedule(SCHEDULE, async () => {
+    await runListingQualityKeeperCron()
   })
   logger.info(`listing-quality-keeper cron: scheduled (${SCHEDULE} UTC)`)
 }

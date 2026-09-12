@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@nexus/database'
 import PageHeader from '@/components/layout/PageHeader'
 import ChannelResolverClient from '@/components/inventory/ChannelResolverClient'
 
@@ -25,7 +25,6 @@ async function getUnmatchedListings(): Promise<{
   listings: UnmatchedListing[]
 }> {
   try {
-    const prisma = new PrismaClient()
 
     // Get the first active eBay connection
     const connection = await (prisma as any).channelConnection.findFirst({
@@ -36,7 +35,6 @@ async function getUnmatchedListings(): Promise<{
     })
 
     if (!connection) {
-      await prisma.$disconnect()
       return {
         connectionId: '',
         listings: [],
@@ -51,7 +49,6 @@ async function getUnmatchedListings(): Promise<{
       },
     })
 
-    await prisma.$disconnect()
 
     return {
       connectionId: connection.id,
@@ -76,7 +73,6 @@ async function getUnmatchedListings(): Promise<{
 
 async function getAllProducts(): Promise<Product[]> {
   try {
-    const prisma = new PrismaClient()
 
     // Fetch all products with their variations
     const products = await prisma.product.findMany({
@@ -98,7 +94,6 @@ async function getAllProducts(): Promise<Product[]> {
       take: 1000, // safety cap — selector list, avoids loading the whole catalog
     })
 
-    await prisma.$disconnect()
 
     // Flatten to include both parent products and variations
     const allProducts: Product[] = []

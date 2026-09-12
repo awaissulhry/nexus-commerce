@@ -21,7 +21,7 @@
  */
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Info, TrendingDown } from 'lucide-react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { fetchBusinessContextDays, money, money2, pct, type BusinessContext, type MarketContext } from './business-api'
 
 export function BusinessContextPanel() {

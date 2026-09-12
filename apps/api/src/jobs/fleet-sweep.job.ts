@@ -151,8 +151,8 @@ export async function resyncFleetSchedules(): Promise<void> {
   task?.stop()
   task = null
   if (sweepCron) {
-    task = cron.schedule(sweepCron, () => {
-      void runFleetSweepCron()
+    task = cron.schedule(sweepCron, async () => {
+      await runFleetSweepCron()
     })
     logger.info(`[fleet-sweep] nightly analyst sweep scheduled (${sweepCron})`)
   } else {
@@ -166,8 +166,8 @@ export async function resyncFleetSchedules(): Promise<void> {
   councilTask?.stop()
   councilTask = null
   if (councilCron) {
-    councilTask = cron.schedule(councilCron, () => {
-      void runFleetCouncilCron()
+    councilTask = cron.schedule(councilCron, async () => {
+      await runFleetCouncilCron()
     })
     logger.info(`[fleet-council] weekly council scheduled (${councilCron})`)
   } else {
@@ -194,8 +194,8 @@ export async function resyncFleetSchedules(): Promise<void> {
       }
       customTasks.set(
         row.key,
-        cron.schedule(trig.cron, () => {
-          void runCustomWorkflowCron(row.key)
+        cron.schedule(trig.cron, async () => {
+          await runCustomWorkflowCron(row.key)
         }),
       )
       logger.info(`[fleet-workflow] ${row.key} scheduled (${trig.cron})`)

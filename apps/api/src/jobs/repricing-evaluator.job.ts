@@ -258,9 +258,9 @@ export function startRepricingEvaluatorCron(): void {
     logger.error('repricing-evaluator cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
+  scheduledTask = cron.schedule(schedule, async () => {
     if (process.env.NEXUS_ENABLE_REPRICING_EVALUATOR === '0') return
-    void recordCronRun('repricing-evaluator', async () => {
+    await recordCronRun('repricing-evaluator', async () => {
       const r = await runRepricingEvaluatorOnce()
       return `rules=${r.enabledRules} evaluated=${r.evaluated} changed=${r.changed} no-listing=${r.skippedNoListing} stale-obs=${r.skippedStaleObservation} errors=${r.errors}`
     }).catch((err) => {

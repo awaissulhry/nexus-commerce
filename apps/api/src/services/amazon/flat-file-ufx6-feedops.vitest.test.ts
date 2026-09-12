@@ -28,6 +28,7 @@
  * ["tecdoc"]); NO replacedBy/replaces marker exists in any cached schema.
  */
 import { describe, it, expect, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import {
   AmazonFlatFileService,
   buildSchemaFieldHints,
@@ -152,6 +153,7 @@ describe('UFX P6g — preflight missing-required downgrade for PARTIAL_UPDATE + 
 })
 
 describe('UFX P6g — schema-sync captures envelope requirementsEnforced additively', () => {
+  const document = JSON.stringify({ required: ['item_name'], properties: { item_name: wrappedString() } })
   const makeDeps = (existing: any) => {
     const created: any[] = []
     const updated: any[] = []
@@ -160,6 +162,7 @@ describe('UFX P6g — schema-sync captures envelope requirementsEnforced additiv
         findFirst: vi.fn(async () => existing),
         findUnique: vi.fn(async () => existing),
         create: vi.fn(async ({ data }: any) => { created.push(data); return data }),
+        upsert: vi.fn(async ({ create }: any) => { created.push(create); return create }),
         update: vi.fn(async (args: any) => { updated.push(args); return args }),
       },
       schemaChange: { create: vi.fn() },
@@ -168,7 +171,7 @@ describe('UFX P6g — schema-sync captures envelope requirementsEnforced additiv
     const envelope = {
       productType: 'SHIRT',
       productTypeVersion: { version: 'REL_2' },
-      schema: { link: { resource: 'https://example.test/schema.json', verb: 'GET' }, checksum: 'x' },
+      schema: { link: { resource: 'https://example.test/schema.json', verb: 'GET' }, checksum: createHash('md5').update(document).digest('base64') },
       requirements: 'LISTING',
       requirementsEnforced: 'NOT_ENFORCED',
       propertyGroups: { details: { title: 'Details', propertyNames: ['item_name'] } },
@@ -179,6 +182,7 @@ describe('UFX P6g — schema-sync captures envelope requirementsEnforced additiv
   const stubFetch = () => vi.stubGlobal('fetch', vi.fn(async () => ({
     ok: true,
     json: async () => ({ required: ['item_name'], properties: { item_name: wrappedString() } }),
+    arrayBuffer: async () => new TextEncoder().encode(document).buffer,
   })))
 
   it('new-version path stores __requirementsEnforced on schemaDefinition (no migration)', async () => {

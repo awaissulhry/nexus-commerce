@@ -1,0 +1,11 @@
+--- a/apps/api/src/lib/auth/permissions-manifest.ts
++++ b/apps/api/src/lib/auth/permissions-manifest.ts
+@@ -425,7 +425,7 @@
+   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-action-templates')),
+   RW(F.productsView, F.productsBulkRun, pfx('/api/scheduled-bulk-actions')),
+   RW(F.productsView, F.productsBulkRun, pfx('/api/bulk-automation')),
+-  RW(F.productsView, F.productsBulkRun, pfx('/api/import-jobs')),
++  RW(F.productsView, F.productsImport, pfx('/api/import-jobs')),
+ 
+   // ── Sync / observability / notifications ────────────────────────
+   RW(F.adminView, F.syncManage, pfx('/api/sync-logs')),

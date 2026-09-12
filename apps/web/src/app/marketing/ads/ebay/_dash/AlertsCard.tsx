@@ -5,7 +5,7 @@
  * anomalies open the campaign, drift opens the hub's Drift tab, account-grain
  * spikes open the Ad Manager. Severity dot + type pill unchanged from v1.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import type { AnomalyRow } from '../_lib'
 
 const targetFor = (a: AnomalyRow): string | null => {

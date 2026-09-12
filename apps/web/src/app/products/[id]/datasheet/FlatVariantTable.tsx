@@ -28,8 +28,8 @@
  */
 
 import { useCallback, useMemo, useState, useTransition } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertTriangle,
   Check,

@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle, Ban, Bot, Check, Play, RefreshCw, ShieldAlert, ShieldCheck,
 } from 'lucide-react'

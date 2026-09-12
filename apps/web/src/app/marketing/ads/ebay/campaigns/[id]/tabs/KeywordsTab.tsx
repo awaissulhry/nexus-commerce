@@ -7,7 +7,7 @@
  * demand through eBay's suggestBids (quota-governed).
  */
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AdsDataGrid, type GridColumn, type GridEditMode } from '../../../../campaigns/_grid/AdsDataGrid'
 import { money } from '../../../../campaigns/_grid/format'
 import { postEbayAds, type CampaignDetailPayload, type KeywordRow, type WriteItemOutcome } from '../../../_lib'

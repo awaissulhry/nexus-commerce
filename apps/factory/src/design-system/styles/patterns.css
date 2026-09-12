@@ -11,8 +11,8 @@
   min-height: 100%;
   overflow: hidden;
   padding-left: 66px;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: var(--nds-bg);
+  color: var(--nds-text);
 }
 .nds-rail {
   position: absolute;
@@ -48,10 +48,10 @@
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: var(--color-primary);
+  background: var(--nds-primary);
   color: var(--nds-text-inverse);
   font-weight: 800;
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   flex-shrink: 0;
 }
 .nds-brand .name {
@@ -81,9 +81,9 @@
   background: none;
   border-radius: var(--nds-radius-xl);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--nds-font-size-md-minus);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   text-decoration: none;
   cursor: pointer;
   overflow: hidden;
@@ -94,7 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
 }
 .nds-navitem .lbl {
   white-space: nowrap;
@@ -105,14 +105,14 @@
   opacity: 1;
 }
 .nds-navitem:hover {
-  background: var(--border-subtle);
-  color: var(--text-primary);
+  background: var(--nds-border-subtle);
+  color: var(--nds-text);
 }
 .nds-navitem:hover .ico {
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
 }
 .nds-navitem.on {
-  background: var(--color-primary);
+  background: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
 .nds-navitem.on .ico {
@@ -126,9 +126,9 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--status-danger-line);
+  background: var(--nds-danger-strong);
   color: var(--nds-text-inverse);
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   font-weight: 800;
   line-height: 16px;
   text-align: center;
@@ -142,7 +142,7 @@
   margin-left: auto;
   margin-right: 16px;
   flex-shrink: 0;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   opacity: 0;
   transition: opacity 0.14s ease, transform 0.18s ease;
 }
@@ -168,8 +168,8 @@
   font: inherit;
   text-align: left;
   white-space: nowrap;
-  font-size: 12.5px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
   text-decoration: none;
   padding: 6px 10px;
   border-radius: var(--nds-radius-sm);
@@ -177,18 +177,18 @@
 }
 .nds-subitem:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-subitem.on {
-  color: var(--color-primary);
+  color: var(--nds-text-link);
   font-weight: 600;
 }
 
 .nds-railft {
   white-space: nowrap;
   padding: 12px 16px;
-  font-size: 10px;
-  color: var(--text-disabled);
+  font-size: var(--nds-font-size-micro);
+  color: var(--nds-text-disabled);
   opacity: 0;
   transition: opacity 0.14s ease;
   flex-shrink: 0;
@@ -214,22 +214,22 @@
   flex-wrap: wrap;
 }
 .nds-pagehdr .eyebrow {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
   margin-bottom: 2px;
 }
 .nds-pagehdr h1 {
   margin: 0;
-  font-size: 27px;
+  font-size: var(--nds-font-size-2xl);
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--nds-text);
   letter-spacing: -0.02em;
 }
 .nds-pagehdr .sub {
   margin: 4px 0 0;
-  font-size: 13.5px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-base-plus);
+  color: var(--nds-text-2);
 }
 .nds-pagehdr-actions {
   display: flex;
@@ -238,6 +238,10 @@
   flex-wrap: wrap;
 }
 
+/* Keep identity pills inside their own track instead of shrinking the track under them. */
+@media (min-width: 720px) {
+  .nds-detailhdr.dense .nds-detailhdr-meta { flex-shrink: 0; max-width: 50%; }
+}
 /* ── DetailHeader ────────────────────────────────────────────────── */
 .nds-detailhdr {
   margin-bottom: 18px;
@@ -251,9 +255,9 @@
   background: none;
   padding: 0;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
-  color: var(--color-primary);
+  color: var(--nds-text-link);
   cursor: pointer;
 }
 .nds-detailhdr-row {
@@ -271,16 +275,16 @@
 }
 .nds-detailhdr-title h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: var(--nds-font-size-xl);
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--nds-text);
   letter-spacing: -0.01em;
 }
 
 /* ── FilterPanel ─────────────────────────────────────────────────── */
 .nds-fpanel {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-2xl);
   padding: 14px 18px 16px;
 }
@@ -300,9 +304,9 @@
 }
 .nds-fpanel-head h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--nds-font-size-lg);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   letter-spacing: -0.01em;
 }
 .nds-fpanel-toggle {
@@ -312,9 +316,9 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   cursor: pointer;
 }
 .nds-fpanel-toggle svg {
@@ -345,7 +349,7 @@
   grid-column: span 2;
 }
 .nds-fpanel-field > .flbl {
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
   color: var(--nds-text-strong);
 }
@@ -426,29 +430,29 @@
   border: none;
   outline: none;
   font: inherit;
-  font-size: 13px;
-  color: var(--text-primary);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
   padding: 7px 10px;
   background: transparent;
 }
 .nds-range-in input::placeholder {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
 }
 .nds-range-in .ad {
   display: flex;
   align-items: center;
   flex-shrink: 0;
   padding: 0 9px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   background: var(--nds-surface-hover);
 }
 .nds-range-in.cur .ad {
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--nds-border-subtle);
 }
 .nds-range-in.pct .ad {
-  border-left: 1px solid var(--border-subtle);
+  border-left: 1px solid var(--nds-border-subtle);
 }
 .nds-toggle-field {
   align-items: center;
@@ -462,28 +466,41 @@
   gap: 8px;
 }
 .nds-toolbar .cnt {
-  font-size: 12.5px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
   white-space: nowrap;
 }
 .nds-toolbar .cnt b {
-  color: var(--text-primary);
+  color: var(--nds-text);
   font-weight: 700;
 }
 .nds-toolbar .grow {
   flex: 1;
 }
+/* A field standing in a toolbar sits on the bar's control tier, like the buttons beside it. The
+   `xs`/`sm` field tiers are FORM sizes (26 / 36 px); in a 40px bar next to 28px controls a 26px
+   search box read as 1px short top and bottom (CT.1, 2026-09-04). Scoped to the toolbar so forms
+   keep their own heights. */
+.nds-toolbar .nds-field.xs,
+.nds-toolbar .nds-field.sm {
+  height: var(--nds-control-h-sm);
+}
+.nds-toolbar .nds-field.xs > input,
+.nds-toolbar .nds-field.sm > input {
+  padding-top: 0;
+  padding-bottom: 0;
+}
 /* One card wrapping the toolbar + grid (+ pager): the toolbar sits inside the
    grid rectangle with a divider, and the inner DataGrid drops its own border. */
 .nds-gridcard {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-2xl);
   overflow: hidden;
 }
 .nds-gridcard .nds-toolbar {
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-gridcard .nds-grid-wrap {
   border: none;
@@ -522,14 +539,14 @@
 .nds-prefs-set legend,
 .nds-prefs-set > legend {
   padding: 0;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   margin-bottom: 8px;
 }
 .nds-prefs-help {
-  font-size: 12px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
   margin: 0 0 8px;
 }
 .nds-prefs-radios {
@@ -542,8 +559,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text-2);
   cursor: pointer;
 }
 .nds-prefs-check {
@@ -554,7 +571,7 @@
 .nds-prefs-check input {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--nds-primary);
 }
 .nds-prefs-sort {
   display: flex;
@@ -565,7 +582,7 @@
   min-width: 0;
 }
 .nds-prefs-cols {
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-lg);
   overflow: hidden auto;
   max-height: 360px;
@@ -579,6 +596,9 @@
    Ad Manager passes 50 columns, so without this the operator scrolls into a run of names with
    nothing left on screen saying which group they belong to.
    Measured: --nds-text-muted on --nds-surface-sunken is 4.69:1 light, 7.67:1 dark. */
+/* Was a <p>; it is a <button> since the sections collapse, so the button chrome is reset rather
+   than restyled — every visual property below is the one the heading already had. Keeping it
+   `sticky` matters more now: with 98 columns the heading is how you know where you are. */
 .nds-prefs-grouphd {
   position: sticky;
   top: 0;
@@ -586,21 +606,204 @@
   margin: 0;
   padding: 7px 10px;
   background: var(--nds-surface-sunken);
+  border: 0;
   border-bottom: 1px solid var(--nds-border-subtle);
-  font-size: 11px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-align: left;
+  font-family: inherit;
+  font-size: var(--nds-font-size-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--nds-text-muted);
+  cursor: pointer;
+}
+.nds-prefs-grouphd:hover {
+  background: var(--nds-surface-hover);
+}
+.nds-prefs-grouphd:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+.nds-prefs-grouphd-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* How many columns are behind a collapsed heading. Without it, collapsing hides the fact that
+   anything was there — the operator would be trading 13 screens of scroll for a list that lies
+   about its own size. */
+.nds-prefs-groupcount {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--nds-text-2);
+}
+
+/* Attribute layouts use one set of groups in the registry and the saved view. */
+.nds-prefs-draft {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.nds-prefs-attributes {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 20px;
+}
+.nds-prefs-attributes .nds-prefs-picks,
+.nds-prefs-attributes .nds-prefs-viewgroups {
+  max-height: min(420px, 45vh);
+}
+.nds-prefs-attributes .nds-prefs-col:last-child {
+  gap: 10px;
+}
+.nds-prefs-bulk + .nds-prefs-viewgroups {
+  max-height: min(320px, 32vh);
+}
+.nds-prefs-group-tools,
+.nds-prefs-bulk,
+.nds-prefs-viewgrouphd,
+.nds-prefs-pinnedhd,
+.nds-prefs-groupempty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--nds-font-size-xs);
+}
+.nds-prefs-group-tools {
+  flex-wrap: wrap;
+}
+.nds-prefs-group-tools > span {
+  flex: 1;
+}
+.nds-prefs-bulk {
+  flex-wrap: wrap;
+  padding: 8px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+.nds-prefs-bulk-count {
+  flex: 1 1 auto;
+  font-weight: 600;
+}
+.nds-prefs-bulk .nds-select {
+  width: 100%;
+  min-width: 0;
+}
+.nds-prefs-viewgrouphd,
+.nds-prefs-pinnedhd {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 7px 10px;
+  background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-weight: 700;
+}
+.nds-prefs-viewgrouphd {
+  cursor: grab;
+}
+.nds-prefs-group-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.nds-prefs-group-label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nds-prefs-group-label:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+.nds-prefs-orderbtns {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.nds-prefs-orderbtns > button {
+  padding-inline: 3px;
+}
+.nds-prefs-attributes .nds-prefs-row {
+  gap: 6px;
+}
+.nds-prefs-row.selected {
+  box-shadow: inset 3px 0 0 var(--nds-primary);
+}
+.nds-prefs-groupempty {
+  justify-content: space-between;
+  padding: 8px 10px;
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+@media (max-width: 720px) {
+  .nds-prefs-attributes {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── the column filter (measured: 98 checkboxes over 3,436px = 13.3 screens) ── */
+.nds-prefs-find {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 0 8px;
+}
+.nds-prefs-findfield {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.nds-prefs-findcount {
+  flex: 0 0 auto;
+  font-size: var(--nds-font-size-xs-plus);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.nds-prefs-findall {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-link);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.nds-prefs-findall:hover {
+  text-decoration: underline;
+}
+.nds-prefs-findall:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 2px;
+}
+.nds-prefs-nomatch {
+  padding: 12px 10px;
 }
 .nds-prefs-row {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 8px 10px;
-  font-size: 13px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-prefs-row:last-child {
   border-bottom: none;
@@ -615,11 +818,11 @@
   opacity: 0.4;
 }
 .nds-prefs-row.locked {
-  background: var(--surface-sunken);
+  background: var(--nds-surface-sunken);
 }
 .nds-prefs-grip {
   flex: none;
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
 }
 .nds-prefs-row:not(.draggable) .nds-prefs-grip {
   visibility: hidden;
@@ -632,10 +835,10 @@
   white-space: nowrap;
 }
 .nds-prefs-locked {
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
 }
 /* The slot holds its width whether or not there is a button in it — otherwise every row
    shifts sideways the moment a column is ticked. 22px is the button's own footprint. */
@@ -731,7 +934,7 @@
   flex: 1;
 }
 .nds-prefs-reset {
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
 }
 
 /* ── Sticky action bar (BulkActionBar / EditModeBar) ─────────────── */
@@ -742,18 +945,18 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-xl);
   padding: 11px 16px;
   box-shadow: var(--nds-shadow-card);
 }
 .nds-actionbar .lbl {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
 }
 .nds-actionbar .lbl b {
-  color: var(--text-primary);
+  color: var(--nds-text);
   font-weight: 700;
 }
 .nds-actionbar .grow {
@@ -768,16 +971,16 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   cursor: pointer;
   padding: 6px 8px;
   border-radius: var(--nds-radius-md);
 }
 .nds-actionbar-clear:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 
 /* ── Builder (full-screen wizard + scroll-spy) ───────────────────── */
@@ -787,8 +990,8 @@
   z-index: 120;
   display: flex;
   flex-direction: column;
-  background: var(--surface-canvas);
-  color: var(--text-primary);
+  background: var(--nds-bg);
+  color: var(--nds-text);
 }
 .nds-builder-top {
   display: flex;
@@ -797,26 +1000,26 @@
   height: 56px;
   padding: 0 18px;
   flex-shrink: 0;
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-default);
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border);
 }
 .nds-builder-top .x {
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   cursor: pointer;
   padding: 6px;
   border-radius: var(--nds-radius-sm);
 }
 .nds-builder-top .x:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-builder-top .ttl {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-builder-top .grow {
   flex: 1;
@@ -831,7 +1034,7 @@
   flex-shrink: 0;
   padding: 20px 12px;
   overflow-y: auto;
-  border-right: 1px solid var(--border-default);
+  border-right: 1px solid var(--nds-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -841,20 +1044,20 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   padding: 9px 12px;
   border-radius: var(--nds-radius-md);
   cursor: pointer;
 }
 .nds-builder-navitem:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-builder-navitem.on {
   background: var(--nds-wash-primary);
-  color: var(--color-primary);
+  color: var(--nds-text-link);
 }
 .nds-builder-content {
   position: relative;
@@ -869,9 +1072,9 @@
 }
 .nds-builder-section h3 {
   margin: 0 0 12px;
-  font-size: 18px;
+  font-size: var(--nds-font-size-lg);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   letter-spacing: -0.01em;
 }
 
@@ -899,23 +1102,23 @@
   display: inline-flex;
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   cursor: pointer;
   padding: 0;
   line-height: 1;
 }
 .nds-colcust-row .grip button:hover:not(:disabled) {
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-colcust-row .grip button:disabled {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
   cursor: default;
 }
 
 /* Customise → Group totals: one row per numeric column, label left, function right. */
 .nds-prefs-aggs { display: flex; flex-direction: column; gap: 6px; }
 .nds-prefs-agg { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.nds-prefs-agg > span { font-size: 13px; color: var(--nds-text); }
+.nds-prefs-agg > span { font-size: var(--nds-font-size-base); color: var(--nds-text); }
 .nds-prefs-agg .nds-select { width: 140px; }
 
 /* ── Customise, tabbed: each pane scrolls on its own inside a fixed-height body ──────────── */
@@ -936,10 +1139,10 @@
   background: var(--nds-surface-sunken);
 }
 .nds-prefs-zone.over { border-style: solid; border-color: var(--nds-primary); background: var(--nds-wash-primary); }
-.nds-prefs-zonehint { margin: auto; font-size: 12px; color: var(--nds-text-muted); text-align: center; }
+.nds-prefs-zonehint { margin: auto; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); text-align: center; }
 .nds-prefs-chip {
   display: flex; align-items: center; gap: 9px;
-  padding: 7px 10px; font-size: 13px; color: var(--nds-text);
+  padding: 7px 10px; font-size: var(--nds-font-size-base); color: var(--nds-text);
   background: var(--nds-surface); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md);
 }
 .nds-prefs-avail .nds-prefs-chip { border: none; border-radius: 0; border-bottom: 1px solid var(--nds-border-subtle); }
@@ -950,7 +1153,7 @@
 .nds-prefs-chiplvl {
   flex: none; width: 18px; height: 18px; border-radius: 999px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 11px; font-weight: 700; color: var(--nds-primary); background: var(--nds-primary-soft);
+  font-size: var(--nds-font-size-xs); font-weight: 700; color: var(--nds-primary); background: var(--nds-primary-soft);
 }
 .nds-prefs-chipsel { width: 132px; flex: none; }
 .nds-prefs-add {
@@ -960,3 +1163,339 @@
 .nds-prefs-add:hover { color: var(--nds-primary); }
 .nds-prefs-add:focus-visible, .nds-prefs-chip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
 
+
+/* ── The view BUILDER (design V.4, 2026-09-04) — additive, rendered only for a caller that
+   passes `quickPicks` / `groupToggles` / `inViewCount` / `viewSave`. Every other Customise
+   dialog is byte-identical on screen. ── */
+.nds-prefs-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 0 10px;
+}
+.nds-prefs-quicksep {
+  width: 1px;
+  height: 16px;
+  background: var(--nds-border);
+  margin: 0 2px;
+}
+/* The group heading keeps its sticky job; the row around it takes the sticky seat so the toggle
+   scrolls with the heading it belongs to. Same paint as the heading — one bar, two controls. */
+.nds-prefs-grouprow {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.nds-prefs-grouprow .nds-prefs-grouphd {
+  position: static;
+  flex: 1 1 auto;
+  min-width: 0;
+  border-bottom: 0;
+}
+/* A DS ghost button in the heading bar: only its seat is styled here. */
+.nds-prefs-grouptoggle {
+  flex: 0 0 auto;
+  margin: 0 6px 0 0;
+  white-space: nowrap;
+}
+.nds-prefs-inview-n {
+  font-weight: 400;
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.nds-prefs-saveview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.nds-prefs-viewname {
+  width: 200px;
+}
+.nds-prefs-saveview-err {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+  max-width: 320px;
+}
+
+/* WorkspaceSubheader: the toggle column ends here. The content is a sibling. */
+.nds-workspace-subheader { display: flex; flex: none; min-width: 0; background: var(--nds-surface); border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-workspace-subheader-toggle { flex: 0 0 var(--nds-secondary-nav-toggle-w); display: flex; align-items: center; justify-content: center; border-right: 1px solid var(--nds-border-subtle); }
+.nds-workspace-subheader-main { flex: 1; min-width: 0; }
+.nds-workspace-subheader-main > .nds-detailhdr { border-bottom: 0; }
+.nds-workspace-subheader-tabs { min-width: 0; }
+.nds-workspace-subheader-tabs .nds-tabs { min-width: 0; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }
+.nds-workspace-subheader .nds-detailhdr-title { min-width: 0; }
+.nds-workspace-subheader .nds-detailhdr-title > .nds-menu-wrap { flex: none; }
+.nds-drawer.from-left.nds-secondary-navigation { border-right: 1px solid var(--nds-border-subtle); box-shadow: var(--nds-shadow-rail); animation-name: nds-secondary-nav-reveal; animation-duration: var(--nds-duration-panel); animation-timing-function: var(--nds-easing-standard); }
+/* Reveal in place so the animation never crosses the visible primary navigation. */
+@keyframes nds-secondary-nav-reveal { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .nds-drawer.from-left.nds-secondary-navigation { animation: none; } }
+.nds-secondary-navigation .nds-drawer-h { padding: var(--nds-space-10) var(--nds-space-12); min-height: var(--nds-toolbar-h); flex: none; }
+.nds-secondary-navigation .nds-drawer-h .t { font-size: var(--nds-font-size-base); overflow-wrap: anywhere; }
+.nds-secondary-navigation .nds-drawer-b { min-height: 0; padding: var(--nds-space-8); scrollbar-gutter: stable; }
+.nds-secondary-nav-group + .nds-secondary-nav-group { border-top: 1px solid var(--nds-border-subtle); margin-top: var(--nds-space-8); padding-top: var(--nds-space-8); }
+.nds-secondary-nav-group-label { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8); padding: var(--nds-space-8); color: var(--nds-text); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.nds-secondary-nav-group-label.disclosure { width: 100%; border: 0; background: transparent; cursor: pointer; text-align: left; }
+.nds-secondary-nav-group-label[aria-expanded='false'] svg { transform: rotate(-90deg); }
+.nds-secondary-nav-link { display: flex; align-items: center; gap: var(--nds-space-8); min-height: var(--nds-control-h-md); padding: var(--nds-space-8); border-radius: var(--nds-radius-sm); color: var(--nds-text); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-medium); line-height: 1.4; text-decoration: none; }
+.nds-secondary-nav-link[aria-current='page'] { color: var(--nds-text); background: var(--nds-primary-soft); font-weight: var(--nds-font-weight-semibold); }
+.nds-secondary-nav-link:hover, .nds-secondary-nav-group-label.disclosure:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-secondary-nav-link[aria-current='page']:hover { background: var(--nds-primary-soft); text-decoration: underline; }
+.nds-secondary-nav-link:focus-visible, .nds-secondary-nav-group-label.disclosure:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-secondary-nav-icon, .nds-secondary-nav-link > .nds-tag { flex: none; }
+.nds-secondary-nav-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 719px) {
+  .nds-secondary-navigation { width: 100% !important; }
+  .nds-workspace-subheader-toggle .nds-tbtn,
+  .nds-secondary-navigation .nds-tbtn { width: var(--nds-space-40); height: var(--nds-space-40); }
+  .nds-secondary-nav-link { min-height: var(--nds-space-40); }
+  .nds-workspace-subheader .nds-detailhdr.dense { height: auto; }
+  .nds-workspace-subheader .nds-detailhdr.dense .nds-detailhdr-row { height: auto; min-height: var(--nds-space-48); flex-wrap: wrap; padding-block: var(--nds-space-8); gap: var(--nds-space-8); }
+  .nds-workspace-subheader .nds-detailhdr.dense .nds-detailhdr-title { flex: 1 0 100%; flex-wrap: wrap; }
+  .nds-workspace-subheader .nds-detailhdr-title h1 { flex: 1; }
+  .nds-workspace-subheader .nds-detailhdr-meta { flex: 1 0 100%; flex-wrap: wrap; }
+  .nds-workspace-subheader .nds-detailhdr-right { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+  .nds-workspace-subheader-main .nds-workspace-subheader-tabs .nds-scopebar { height: auto; min-height: var(--nds-toolbar-h); flex-wrap: wrap; gap: var(--nds-space-8); padding-block: var(--nds-space-8); }
+  .nds-workspace-subheader .nds-scopebar-right { flex: 1 0 100%; justify-content: flex-end; }
+}
+
+/* ── ScopeBar ────────────────────────────────────────────────────── */
+/* Which LAYER of a record is being edited. Not a filter bar — see ScopeBar.tsx. */
+.nds-scopebar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+/* ── page band (VP.5, Variants page §2 / §3.1 / §4.1) ───────────────────────────────────────
+   A 40px band BELOW the scope bar carrying one page-level statement: the family band's axes and
+   coverage on the shared product, the mapping band's axis pairs and limits on a channel. Spec §2
+   calls it "the same class of band as the scope bar", and this is that geometry as ONE rule
+   rather than two page-local copies — the family band and the mapping band are built by different
+   lanes and must not be able to disagree by a pixel. Measured off the approved canvas (artboards
+   1 and 2), which gives both bands the same numbers: height 40, padding 0 16px, gap 12,
+   `#e6e9ee` = `--nds-border-subtle` below, `#ffffff` = `--nds-surface`.
+
+   Not a component: §1.6 fixes the new DS pieces at three, and this band is composed from existing
+   primitives at their measured sizes. It is a style, and `scripts/check-layout-v2.mjs` keys the
+   variants band budget on this class. */
+.nds-pageband {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-12);
+  height: var(--nds-toolbar-h);
+  padding: 0 16px;
+  flex: none;
+  box-sizing: border-box;
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+/* The band's own content, in the order both bands use it: eyebrow · the growing middle · right. */
+.nds-pageband-main {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex: 1;
+  min-width: 0;
+}
+.nds-pageband-right {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  flex: none;
+}
+/* A 1×20 hairline between the chips and the sentence (canvas: `#e6e9ee`, 20px tall). */
+.nds-pageband-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--nds-border-subtle);
+  flex: none;
+}
+/* The sentence, with its numbers in bold — "**20** of 20 combinations exist · **0** missing". */
+.nds-pageband-note {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nds-pageband-note b {
+  color: var(--nds-text);
+  font-weight: 700;
+}
+
+/* ONE selector list, not a copy: the page band's eyebrow IS the scope bar's eyebrow, and writing
+   it twice is how two bands start reading differently (feedback_shared_components_no_copy_props). */
+.nds-scopebar-label,
+.nds-pageband-label {
+  flex: none;
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  /* --nds-text-3 (#7e8796) clears the 3:1 ICON floor, not the 4.5:1 TEXT floor: measured 3.62:1
+     here. This is text (reference_grey_500_is_not_a_text_token). */
+  color: var(--nds-text-2);
+}
+.nds-scopebar-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  /* Takes the slack so the coordinate controls stay pinned right whatever the chip count. */
+  flex: 1;
+  min-width: 0;
+  /* Channels are unbounded; the coordinate controls on the right are not, so the chips are what
+     gives way. Padding keeps a focus ring from being clipped by the scroll box. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 3px 3px;
+  margin: -3px -3px;
+  scrollbar-width: thin;
+}
+.nds-scopebar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.nds-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
+}
+.nds-scope:hover:not(:disabled) {
+  background: var(--nds-surface-hover);
+  color: var(--nds-text);
+}
+.nds-scope.on {
+  /* --nds-primary-soft is a WASH (1.15:1 against the page) and can never be the only signal —
+     reference_color_primary_soft_is_invisible. The border and the text colour are what actually
+     say "selected"; the fill only warms it. */
+  background: var(--nds-primary-soft);
+  border-color: var(--nds-text-link);
+  color: var(--nds-text-link);
+  font-weight: 700;
+}
+.nds-scope:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.nds-scope:focus-visible {
+  outline: 2px solid var(--nds-text-link);
+  outline-offset: 2px;
+}
+.nds-scope.add {
+  padding: 0 8px;
+  color: var(--nds-text-3);
+}
+.nds-scope.add:hover {
+  color: var(--nds-text);
+}
+.nds-scope-label {
+  min-width: 0;
+}
+.nds-scope-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--nds-radius-round);
+  flex: none;
+}
+/* Keyed on the shared readiness TONE, not on the scope state. `readinessMeta(state, 'scope')`
+   decides which state is which tone (design-system/grid/renderers/readiness.ts); this file only
+   decides what a tone looks like as a 7px dot. Keying it on the state name would put a second,
+   silently divergent copy of that mapping in CSS. */
+.nds-scope-dot.success {
+  background: var(--nds-success);
+}
+.nds-scope-dot.warning {
+  background: var(--nds-warning);
+}
+.nds-scope-dot.danger {
+  background: var(--nds-danger);
+}
+.nds-scope-dot.info {
+  background: var(--nds-info);
+}
+/* Neutral — "no answer" — is a HOLLOW dot, not a grey filled one: absence of a verdict should not
+   look like a fourth status colour that someone has to learn. */
+.nds-scope-dot.neutral {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--nds-text-3);
+}
+/* §14.4 — the state word. Same size as the label and a step down in weight from the percentage:
+   it is the chip's answer, so it reads as text rather than as a badge. It takes the 4.5:1 text
+   floor (--nds-text-2), never the icon token: `--nds-text-3` is 3.10:1 and is not a text token. */
+.nds-scope-state {
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: 600;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+.nds-scope.on .nds-scope-state {
+  color: var(--nds-text-link);
+}
+/* The separator is decoration and is aria-hidden in the markup; it must not take colour weight
+   away from the two things it sits between. */
+.nds-scope-sep {
+  color: var(--nds-text-3);
+  font-size: var(--nds-font-size-xs-plus);
+}
+.nds-scope-pct {
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+.nds-scope.on .nds-scope-pct {
+  color: var(--nds-text-link);
+}
+.nds-scope-pct.unknown {
+  /* The em dash is TEXT — it is the chip's whole answer when nothing has been scored — so it takes
+     the 4.5:1 floor, not the icon token's 3:1. It is de-emphasised by weight, not by going grey. */
+  color: var(--nds-text-2);
+  font-weight: 600;
+}
+/* A percentage that is still being fetched is a placeholder the width of one, so the chip does
+   not resize when the number lands. */
+.nds-scope-pct.loading {
+  display: inline-block;
+  width: 26px;
+  height: 8px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken);
+  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
+}
+
+/* A workspace scope is below, and spans independently of, the subheader toggle cell. */
+.nds-scopebar.nds-workspace-scope { flex-wrap: wrap; height: auto; min-height: var(--nds-toolbar-h); }
+.nds-workspace-scope .nds-scopebar-right { flex-wrap: wrap; }
+@media (max-width: 760px) {
+  .nds-workspace-scope { padding-block: var(--nds-space-8); gap: var(--nds-space-8); }
+  .nds-workspace-scope .nds-scopebar-chips { overflow-x: auto; max-width: 100%; }
+  .nds-workspace-scope .nds-scopebar-right { flex-basis: 100%; }
+}
+
+/* Opt-in semantic theme for workspaces hosted in an older light-pinned shell. */
+.nds-theme-responsive.nds-theme-responsive { background: var(--nds-bg); color: var(--nds-text); color-scheme: light; }
+.dark .nds-theme-responsive.nds-theme-responsive { color-scheme: dark; }

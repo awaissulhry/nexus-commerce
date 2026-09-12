@@ -1,0 +1,17 @@
+{
+  "target": "127.0.0.1:55439/nexus_development",
+  "migration": "20260911020000_information_formula_destination",
+  "checksum": "b7575c71b64d86a0dc07e0a1d9fa4b92f7db4385074a4bb3cea28b20e0c37dbe",
+  "appliedAt": "2026-09-11T03:30:13.128Z",
+  "before": {
+    "products": "338",
+    "listings": "999"
+  },
+  "after": {
+    "products": "338",
+    "listings": "999"
+  },
+  "productValuesChangedByMigration": 0,
+  "listingValuesChangedByMigration": 0,
+  "productionChanged": false
+}

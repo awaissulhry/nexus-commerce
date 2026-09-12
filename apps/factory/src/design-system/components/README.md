@@ -46,3 +46,32 @@ bulk dialog. It inherited that dialog's `padding: 0` body (textarea border
 touched the edges) and silently resized the other dialog. The DS `Modal` is
 namespaced (`.nds-*`), so reusing it is collision-proof. If a needed control
 is missing (as `Textarea` was), **add the primitive here** rather than hand-roll.
+
+`SourceIndicator` shows value origins with focus/hover portal explanations. Provide
+`kind`, `label`, `description`; add both `actionLabel` and `onAction` for a supported
+action. `showLabel` creates a readable legend entry. Shared with the web catalog.
+
+`Drawer` footer actions wrap within narrow panels and retain their full height while the body scrolls. Consumers can compose Buttons directly in the existing `footer` slot.
+
+Neutral Banner descriptions use `--nds-text` so account and availability notices retain AAA normal-text contrast in both themes.
+
+
+### Media galleries — 2026-09-07
+
+`MediaCard` presents an uncropped image with a separately focusable preview, optional selection, metadata and actions. Failed images show “Image unavailable”. `MediaGallery` composes cards into a controlled sequence with drag grips, standard ToolbarButton move/first/remove controls and position announcements. Provide unique stable IDs and update the controlled order in `onChange`. Removing assignments must be handled by the host; the component does not delete source assets.
+
+Media uses the normal Nexus control sizes and semantic text hierarchy, including 28px ToolbarButton actions. No page wrapper resizes or restyles shared controls. Arrange action containers with layout; choose component sizes through their documented props.
+
+`MediaGalleryExample` (`#media-gallery-example` in Web) demonstrates reordering, source selection and an unavailable image using clearly synthetic catalog assets. Factory carries the same component and specimen source.
+
+`PressableRow.leading` accepts a decorative thumbnail or icon before the labelled action. It is hidden from assistive technology and does not receive pointer events; keep interactive content in `actions`. The Media catalog demonstrates the row. Existing row and control sizes are unchanged.
+
+Embedded Drawer header text wraps within the available text column; Close retains its own column. Modal owns the default semantic text color, including plain footer content outside the originating shell.
+
+### Asynchronous choices — 2026-09-07
+
+`AsyncListboxPanel` combines a labelled search field, externally supplied options and explicit loading/error/empty states. Supply controlled `query`, `onQueryChange`, filtered `options`, `onCommit` and `onCancel`; optional `onRetry` adds Refresh/Try again. The host owns fetching, stale-response protection, ID validation and popup placement. Loading/error states hide choices and Enter cannot commit. Arrow keys skip disabled choices and track grouped order; Escape cancels. Options remain outside the Tab sequence through `ListboxPanel.optionTabIndex=-1`, so Tab reaches actions. `value` is a stable ID, never a display label. The Web catalog specimen `#async-listbox-example` demonstrates loading, failure/retry and a disabled option; its source is mirrored to Factory.
+
+### AccountsPanel — business ownership (2026-09-08)
+
+The host supplies only the current business’s accounts. Several accounts may use the same channel. The panel explains account selection for publishing/syncing and uses plain language when connection activity tracking is unavailable. Ownership and credential checks remain server responsibilities.

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R.16 — Forecast model A/B routing service.
  *
@@ -149,7 +150,7 @@ export async function pinSkuToModel(args: {
   assignedBy?: string
 }): Promise<void> {
   await prisma.forecastModelAssignment.upsert({
-    where: { sku_modelId: { sku: args.sku, modelId: args.modelId } },
+    where: { sku_modelId: workspaceKey({ sku: args.sku, modelId: args.modelId }) },
     create: {
       sku: args.sku,
       modelId: args.modelId,

@@ -47,8 +47,8 @@ export interface ToolbarButtonProps
   /**
    * Where the tooltip bubble sits relative to the button. `'end'` right-aligns it, for a button
    * flush against a container edge where a centred bubble would overflow. Declared rather than
-   * detected: `Tooltip` is in-flow by design, and the places this is needed (the last button of a
-   * right-aligned toolbar) know it statically.
+   * detected by the default inline tooltip; portal mode also clamps it to the viewport. The last button of a
+   * right-aligned toolbar can declare its preferred alignment.
    */
   tooltipAlign?: 'center' | 'end'
   /**

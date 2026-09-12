@@ -1,0 +1,269 @@
+import { previewPresentationAssignment } from '../services/pim/mapping/presentation-assignment.service.js'
+import type { PresentationRule } from '../services/pim/mapping/presentation-rules.js'
+/** Canonical mapping catalogue, resolution and durable impact reviews. Broad formula,
+ * category and clone changes use review → activation; direct legacy mutation URLs return 409.
+ * Field previews and reviews share the existing resolver and revision-CAS writer. */
+
+import type { FastifyPluginAsync } from 'fastify'
+import { listMappingTemplates, listMappingPreviewProducts } from '../services/pim/mapping/editor-catalogue.service.js'
+import {
+  getMappingForMarketplace,
+  findExpressionUsage,
+  MarketplaceNotFoundError,
+  InvalidMappingError,
+  mergeRulesIntoMapping,
+  validateFieldRule,
+  type FieldMappingRule,
+} from '../services/pim/schema-mapping.service.js'
+import { createMappingImpact, readMappingImpact, activateMappingImpact, recoverMappingImpacts, type MappingChange } from '../services/pim/mapping/impact.service.js'
+import type { ExpressionChange, CategoryChange } from '../services/pim/mapping/review-draft.js'
+import { mappingToken, MappingConflict } from '../services/pim/mapping/revision-token.js'
+import { getFieldCatalogue } from '../services/pim/mapping/field-catalogue.service.js'
+import { resolveBatch } from '../services/pim/mapping/resolve-batch.service.js'
+import {
+  listCategoryMappings,
+  listChannelCategories,
+} from '../services/pim/mapping/category-mapping.service.js'
+import { validateExpr, exprDependencies, EXPR_FUNCTIONS } from '../services/pim/mapping/expr.js'
+import { getMappingSources } from '../services/pim/mapping/mapping-sources.service.js'
+import { resolveChannelConnectionId } from '../services/connection-resolver.service.js'
+
+/** One place to turn a service throw into the right status. */
+function fail(reply: any, err: unknown) {
+  if (err instanceof MarketplaceNotFoundError) return reply.status(404).send({ error: err.message })
+  if (err instanceof InvalidMappingError) return reply.status(400).send({ error: 'invalid', details: (err as any).errors })
+  throw err
+}
+
+const channelMappingRoutes: FastifyPluginAsync = async (fastify) => {
+  const actor = (request: any): string | null => request.user?.id ?? request.authUser?.id ?? null
+  fastify.post<{ Params: { channel: string; code: string }; Body: { restoreRevisionId?: string; category?: string | null; changes?: MappingChange[]; expectedToken: string; presentationChange?: { id: string; rule: PresentationRule | null }; expression?: ExpressionChange; categoryChange?: CategoryChange; clone?: { channel: string; market: string; token: string; addTranslate?: boolean } } }>(
+    '/pim/channel-mapping/:channel/:code/impact', async (request, reply) => {
+      try {
+        return reply.code(202).send(await createMappingImpact({ channel: request.params.channel.toUpperCase(), market: request.params.code,
+          restoreRevisionId: request.body?.restoreRevisionId, presentationChange: request.body?.presentationChange, expression: request.body?.expression, categoryChange: request.body?.categoryChange, clone: request.body?.clone, category: request.body?.category, changes: request.body?.changes, expectedToken: request.body?.expectedToken, userId: actor(request) }))
+      } catch (err) { return fail(reply, err) }
+    })
+  fastify.get<{ Params: { jobId: string }; Querystring: { page?: string } }>('/pim/channel-mapping/impact/:jobId', async (request, reply) => {
+    const result = await readMappingImpact(request.params.jobId, actor(request), Math.max(0, Number.parseInt(request.query.page ?? '0', 10) || 0))
+    return result ?? reply.code(404).send({ error: 'Mapping impact not found' })
+  })
+  fastify.post<{ Params: { jobId: string } }>('/pim/channel-mapping/impact/:jobId/activate', async (request, reply) => {
+    const result = await activateMappingImpact(request.params.jobId, actor(request))
+    return result ?? reply.code(404).send({ error: 'Mapping impact not found' })
+  })
+  fastify.post<{ Params: { jobId: string } }>('/pim/channel-mapping/impact/:jobId/assign-once', async (request, reply) => {
+    const result = await previewPresentationAssignment(request.params.jobId, actor(request))
+    return result ?? reply.code(404).send({ error: 'Mapping review not found' })
+  })
+  const recovery = setInterval(() => { void recoverMappingImpacts().catch(err => fastify.log.warn({ err }, 'Mapping preview recovery deferred')) }, 30_000)
+  recovery.unref()
+  fastify.addHook('onClose', async () => { clearInterval(recovery) })
+  fastify.get<{ Params: { channel: string; code: string } }>('/pim/channel-mapping/:channel/:code/presentation', async (request, reply) => {
+    const mapping = await getMappingForMarketplace(request.params.channel.toUpperCase(), request.params.code)
+    return reply.send({ token: mappingToken(mapping), rules: mapping.presentationRules ?? [], orderActivationAvailable: false })
+  })
+  // ── GET /pim/channel-mapping/templates ──────────────────────────
+  // The channel × market list the editor opens on. One row per Marketplace, with how many of
+  // its stored schema fields carry a rule — the rail's "59/236".
+  fastify.get('/pim/channel-mapping/templates', async (_request, reply) => {
+    return reply.send({ templates: await listMappingTemplates() })
+  })
+
+  // ── GET /pim/channel-mapping/functions ──────────────────────────
+  // The formula language, for the editor's help + autocomplete. Static.
+  fastify.get('/pim/channel-mapping/functions', async (_request, reply) => {
+    return reply.send({ functions: EXPR_FUNCTIONS })
+  })
+
+  // ── POST /pim/channel-mapping/expressions/validate ──────────────
+  // Syntax-check a formula WITHOUT saving it, and list what it reads. The editor calls this
+  // on every keystroke-pause; it touches no database.
+  fastify.post<{ Body: { expr?: string } }>(
+    '/pim/channel-mapping/expressions/validate',
+    async (request, reply) => {
+      const expr = request.body?.expr ?? ''
+      const bad = validateExpr(expr)
+      return reply.send({
+        ok: bad === null,
+        error: bad ? { message: bad.message, pos: bad.pos } : null,
+        // null (not an empty list) when it does not parse — an empty list means "depends on
+        // nothing", which is a different and legitimate answer.
+        dependencies: bad ? null : exprDependencies(expr),
+      })
+    },
+  )
+
+  // ── GET /pim/channel-mapping/:channel/:code/fields ──────────────
+  fastify.get<{
+    Params: { channel: string; code: string }
+    Querystring: { productType?: string; accountId?: string }
+  }>('/pim/channel-mapping/:channel/:code/fields', async (request, reply) => {
+    try {
+      const catalogue = await getFieldCatalogue({
+        channel: request.params.channel,
+        marketplace: request.params.code,
+        productType: request.query.productType,
+        accountId: request.params.channel.toUpperCase() === 'SHOPIFY' ? await resolveChannelConnectionId('SHOPIFY', request.query.accountId) : undefined,
+      })
+      return reply.send(catalogue)
+    } catch (err) {
+      return fail(reply, err)
+    }
+  })
+
+  // ── POST /pim/channel-mapping/:channel/:code/resolve ────────────
+  // THE resolver. The editor sends one productId (the Preview SKU); the product sheet sends a
+  // page of them. Same code path, same values publish will use.
+  fastify.post<{
+    Params: { channel: string; code: string }
+    Body: {
+      channelConnectionId?: string | null
+      aliasKey?: string
+      productIds?: string[]
+      fieldKeys?: string[]
+      locale?: string
+      productType?: string | null
+      includeCatalogue?: boolean
+      candidate?: { fieldKey: string; rule: FieldMappingRule; expectedToken: string }
+    }
+  }>('/pim/channel-mapping/:channel/:code/resolve', async (request, reply) => {
+    const productIds = request.body?.productIds ?? []
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      return reply.status(400).send({ error: 'productIds is required and must be a non-empty array' })
+    }
+    // A page of a sheet is ~100 rows; anything larger is a client bug, and saying so beats
+    // quietly resolving 10,000 products against a schema.
+    if (productIds.length > 250) {
+      return reply.status(400).send({ error: `productIds is capped at 250 per call (got ${productIds.length})` })
+    }
+    try {
+      const candidate = request.body?.candidate
+      if (request.body?.channelConnectionId) await resolveChannelConnectionId(request.params.channel.toUpperCase(), request.body.channelConnectionId)
+      let mappingSnapshot
+      if (candidate) {
+        const errors = validateFieldRule(candidate.fieldKey, candidate.rule)
+        if (errors.length) throw new InvalidMappingError(errors)
+        const current = await getMappingForMarketplace(request.params.channel.toUpperCase(), request.params.code)
+        if (!candidate.expectedToken || candidate.expectedToken !== mappingToken(current)) throw new MappingConflict()
+        mappingSnapshot = mergeRulesIntoMapping(current, [candidate], request.body.productType)
+      }
+      const result = await resolveBatch({
+        channel: request.params.channel,
+        marketplace: request.params.code,
+        productIds,
+        channelConnectionId: request.body?.channelConnectionId, aliasKey: request.body?.aliasKey,
+        fieldKeys: request.body?.fieldKeys,
+        locale: request.body?.locale,
+        productType: request.body?.productType,
+        includeCatalogue: request.body?.includeCatalogue,
+        mappingSnapshot,
+      })
+      return reply.send(result)
+    } catch (err) {
+      return fail(reply, err)
+    }
+  })
+
+  // ── GET /pim/channel-mapping/:channel/:code/preview-skus ────────
+  // The Preview SKU typeahead: `SKU: Product name`, exactly Rithum's row.
+  fastify.get<{
+    Params: { channel: string; code: string }
+    Querystring: { q?: string; limit?: string; productId?: string }
+  }>('/pim/channel-mapping/:channel/:code/preview-skus', async (request, reply) => {
+    return reply.send({ skus: await listMappingPreviewProducts({ ...request.query, channel: request.params.channel, marketplace: request.params.code }) })
+  })
+
+  // ── GET /pim/channel-mapping/:channel/:code/sources ─────────────
+  // What an operator can map FROM, read off a real product rather than a hand-kept registry.
+  // The old canvas shipped a 30-entry hardcoded list of "internal variables"; a list like that
+  // is wrong the day someone adds an attribute. This resolves an actual product through the
+  // SAME resolver the rules use, so every key offered is a key that will resolve, and each
+  // comes with the value it currently holds for that product.
+  fastify.get<{
+    Params: { channel: string; code: string }
+    Querystring: { productId?: string; locale?: string }
+  }>('/pim/channel-mapping/:channel/:code/sources', async (request, reply) => {
+    return reply.send(await getMappingSources({
+      marketplace: request.params.code, productId: request.query.productId, locale: request.query.locale,
+    }))
+  })
+
+  // ── Category mapping ────────────────────────────────────────────
+  fastify.get<{ Params: { channel: string; code: string } }>(
+    '/pim/channel-mapping/:channel/:code/categories',
+    async (request, reply) => {
+      const result = await listCategoryMappings({
+        channel: request.params.channel,
+        marketplace: request.params.code,
+      })
+      const mapping = await getMappingForMarketplace(request.params.channel.toUpperCase(), request.params.code)
+      return reply.send({ ...result, token: mappingToken(mapping) })
+    },
+  )
+
+  fastify.get<{ Params: { channel: string; code: string } }>(
+    '/pim/channel-mapping/:channel/:code/channel-categories',
+    async (request, reply) => {
+      const result = await listChannelCategories({
+        channel: request.params.channel,
+        marketplace: request.params.code,
+      })
+      return reply.send(result)
+    },
+  )
+
+  fastify.put<{
+    Params: { channel: string; code: string; categoryId: string }
+    Body: {
+      channelCategoryId?: string
+      channelCategoryPath?: string | null
+      browseNodeId?: string | null
+      confidence?: string
+      notes?: string | null
+      /** '*' (default) applies to every market of the channel. */
+      marketplace?: string
+    }
+  }>('/pim/channel-mapping/:channel/:code/categories/:categoryId', async (request, reply) => {
+    return reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Review this category change through the mapping impact endpoint before activation.' })
+  })
+  fastify.delete('/pim/channel-mapping/:channel/:code/categories/:categoryId', async (_request, reply) =>
+    reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Review removal of the exact-market category mapping before activation.' }))
+
+  // ── Business rules (named expressions) ──────────────────────────
+  fastify.get<{ Params: { channel: string; code: string } }>(
+    '/pim/channel-mapping/:channel/:code/expressions',
+    async (request, reply) => {
+      try {
+        const mapping = await getMappingForMarketplace(request.params.channel.toUpperCase(), request.params.code)
+        const expressions = mapping.expressions ?? {}
+        return reply.send({
+          token: mappingToken(mapping),
+          expressions: Object.entries(expressions).map(([name, expr]) => {
+            const bad = validateExpr(expr)
+            return {
+              name,
+              expr,
+              // A stored rule that no longer parses is REPORTED, never shown as dependency-free:
+              // every field pointing at it resolves to nothing, so the editor must be able to say
+              // which rule is broken and where.
+              dependencies: bad ? null : exprDependencies(expr),
+              parseError: bad ? { message: bad.message, pos: bad.pos } : null,
+              usedBy: findExpressionUsage(mapping, name),
+            }
+          }),
+        })
+      } catch (err) {
+        return fail(reply, err)
+      }
+    },
+  )
+
+  const reviewRequired = async (_request: unknown, reply: any) => reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Preview the business-rule change through the mapping impact endpoint, then activate the reviewed result.' })
+  fastify.put('/pim/channel-mapping/:channel/:code/expressions/:name', reviewRequired)
+  fastify.post('/pim/channel-mapping/:channel/:code/expressions/:name/rename', reviewRequired)
+  fastify.delete('/pim/channel-mapping/:channel/:code/expressions/:name', reviewRequired)
+
+}
+
+export default channelMappingRoutes

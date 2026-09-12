@@ -1172,7 +1172,7 @@
 /* The affordance only appears on hover: a row of permanent chevrons reads as clutter, and the
    link itself already says the label is clickable. */
 .gx-go { color: rgb(var(--text-tertiary)); opacity: 0; transition: opacity .12s ease; flex: none; }
-.nds-wsgrid tbody tr:hover .gx-go { opacity: 1; }
+.nds-wsgrid .nds-ws-tr:hover .gx-go { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .gx-go { transition: none; } }
 
 /* GX.6 — the section arrangers sit after the freshness chips, before they push to the right. */

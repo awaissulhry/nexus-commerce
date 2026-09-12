@@ -19,8 +19,8 @@
  *    reusable across different sub-sections of the app.
  */
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { usePathname } from '@/lib/workspaces/navigation'
 import { useMemo, useState, type ReactNode } from 'react'
 import { ChevronDown, ExternalLink } from 'lucide-react'
 import { resolveActiveNav } from './app-rail-active'

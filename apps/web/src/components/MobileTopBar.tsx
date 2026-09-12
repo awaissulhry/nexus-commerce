@@ -15,7 +15,7 @@
  * so the hamburger has the left-thumb zone to itself on phones.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Menu } from 'lucide-react'
 
 export default function MobileTopBar() {

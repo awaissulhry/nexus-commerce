@@ -31,7 +31,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/design-system/primitives'
 import { Menu } from '@/design-system/components/Menu'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, RefreshCw, Settings2, Share2, Sigma, AlertTriangle } from 'lucide-react'
 import { AdsFilterBar } from '../campaigns/_grid/AdsFilterBar'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'

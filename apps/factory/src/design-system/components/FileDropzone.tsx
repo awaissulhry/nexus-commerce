@@ -9,6 +9,7 @@
  */
 import { useRef, useState, type ReactNode, type DragEvent, type KeyboardEvent } from 'react'
 import { UploadCloud, AlertCircle } from 'lucide-react'
+import { matchesAccept, parseAccept } from '../lib/accept-match'
 
 export interface FileDropzoneProps {
   /** Called with the validated files. */
@@ -36,13 +37,7 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
   const [drag, setDrag] = useState(false)
   const [err, setErr] = useState('')
 
-  const exts = accept.split(',').map((s) => s.trim().toLowerCase()).filter(Boolean)
-
-  const matchesAccept = (file: File) => {
-    if (!exts.length) return true
-    const name = file.name.toLowerCase()
-    return exts.some((ext) => (ext.startsWith('.') ? name.endsWith(ext) : file.type === ext))
-  }
+  const exts = parseAccept(accept)
 
   const handle = (fileList: FileList | null | undefined) => {
     if (disabled) return
@@ -51,7 +46,7 @@ export function FileDropzone({ onFiles, accept = '', maxBytes, multiple = false,
     if (!files.length) return
     const picked = multiple ? files : files.slice(0, 1)
     for (const file of picked) {
-      if (!matchesAccept(file)) {
+      if (!matchesAccept(file, exts)) {
         setErr(`Unsupported file — accepts ${exts.join(', ') || 'any type'}.`)
         return
       }

@@ -3,7 +3,8 @@
 /** Phase S3 — set a new password from a reset link (?token). */
 
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AuthCard } from '../_auth/AuthCard'
 

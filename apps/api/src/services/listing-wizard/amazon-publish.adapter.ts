@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 /**
  * E.8 — Amazon publish adapter (SP-API Listings Items v2021-08-01).
  *
@@ -97,7 +98,7 @@ export class AmazonPublishAdapter {
    */
   async publish(payload: AmazonPayload): Promise<AmazonPublishResult> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      (await getAmazonSellerId())
     if (!sellerId) {
       return {
         ok: false,

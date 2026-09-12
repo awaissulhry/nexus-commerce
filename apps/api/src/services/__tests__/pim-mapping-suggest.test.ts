@@ -15,7 +15,7 @@ describe('suggestSourceForField', () => {
   it('exact alias (key) → high confidence', () => {
     expect(suggestSourceForField('item_name')).toMatchObject({ source: 'title', confidence: 'high' })
     expect(suggestSourceForField('product_description')).toMatchObject({ source: 'description', confidence: 'high' })
-    expect(suggestSourceForField('our_price')).toMatchObject({ source: 'our_price', confidence: 'high' })
+    expect(suggestSourceForField('our_price')).toMatchObject({ source: 'basePrice', confidence: 'high' })
     expect(suggestSourceForField('material_type')).toMatchObject({ source: 'categoryAttributes.material', confidence: 'high' })
     expect(suggestSourceForField('generic_keyword')).toMatchObject({ source: 'keywords', confidence: 'high' })
   })
@@ -24,16 +24,23 @@ describe('suggestSourceForField', () => {
     expect(suggestSourceForField('attr_42', 'Brand')).toMatchObject({ source: 'brand', confidence: 'high' })
   })
 
-  it('substring containment → medium (color via "color")', () => {
-    expect(suggestSourceForField('outer_shell_color_name')).toMatchObject({
-      source: 'categoryAttributes.color',
-      confidence: 'medium',
-    })
+  it('refuses substring-only matches with different semantics', () => {
+    expect(suggestSourceForField('outer_shell_color_name')).toBeNull()
+    expect(suggestSourceForField('purchasable_offer__discounted_price__end_at')).toBeNull()
+    expect(suggestSourceForField('gpsr_manufacturer_reference', 'Manufacturer email')).toBeNull()
   })
 
   it('returns null for an unrelated field', () => {
     expect(suggestSourceForField('voltage')).toBeNull()
     expect(suggestSourceForField('hazmat_un_number')).toBeNull()
+  })
+
+  it('does not suggest prices for list prices, or partial matches for empty and short keys', () => {
+    expect(suggestSourceForField('list_price')?.confidence).not.toBe('high')
+    expect(suggestSourceForField('')).toBeNull()
+    expect(suggestSourceForField('id')).toBeNull()
+    expect(suggestSourceForField('xx', 'a')).toBeNull()
+    expect(suggestSourceForField('fabric_type')?.confidence).not.toBe('high')
   })
 
   it('is case/punctuation insensitive', () => {

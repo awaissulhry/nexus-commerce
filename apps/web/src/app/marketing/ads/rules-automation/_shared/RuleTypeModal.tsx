@@ -13,7 +13,7 @@
  */
 import { useState } from 'react'
 import { Button, RadioCard, ToolbarButton } from '@/design-system/primitives'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X } from 'lucide-react'
 import { RULE_TYPES } from './ruleTypes'
 

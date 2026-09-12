@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   ArrowLeft,
   BookOpen,

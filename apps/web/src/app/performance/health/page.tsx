@@ -1,6 +1,6 @@
 import { prisma } from '@nexus/database'
 import PageHeader from '@/components/layout/PageHeader'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 
 export const dynamic = 'force-dynamic'
 

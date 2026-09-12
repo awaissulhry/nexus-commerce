@@ -100,7 +100,12 @@ export default function AiCopilot({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-40 h-12 px-4 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg inline-flex items-center gap-2 hover:opacity-90"
+          /* Position comes from --nds-fab-inset (DS token, default 24px = the old bottom-6/right-6) so a
+             surface that owns its bottom-right corner can lift the button clear of its own chrome. The
+             footprint is published as --nds-fab-reserve-inline/-block for surfaces that reserve instead.
+             DS.1 2026-09-01: measured covering 104x19px of the studio sheet's keyboard-hint strip. */
+          style={{ bottom: 'var(--nds-fab-inset, 24px)', right: 'var(--nds-fab-inset, 24px)' }}
+          className="fixed z-40 h-12 px-4 rounded-full bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 shadow-lg inline-flex items-center gap-2 hover:opacity-90"
         >
           <Sparkles className="w-4 h-4" /> Ask AI
         </button>

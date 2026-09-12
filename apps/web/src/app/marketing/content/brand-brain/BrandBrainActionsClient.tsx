@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Loader2, RefreshCw, Search, Zap } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

@@ -19,11 +19,13 @@ beforeEach(() => vi.clearAllMocks())
 describe('rollbackMapping guards', () => {
   it('rejects when the revision does not exist', async () => {
     mockFindUnique.mockResolvedValue(null)
-    await expect(rollbackMapping('AMAZON', 'IT', 'rev1')).rejects.toThrow(/not found/)
+    await expect(rollbackMapping('AMAZON', 'IT', 'rev1')).rejects.toThrow(/REVIEW_REQUIRED/)
+    expect(mockFindUnique).not.toHaveBeenCalled()
   })
 
   it('rejects when the revision belongs to a different marketplace', async () => {
     mockFindUnique.mockResolvedValue({ id: 'rev1', channel: 'EBAY', code: 'DE', snapshot: {} })
-    await expect(rollbackMapping('AMAZON', 'IT', 'rev1')).rejects.toThrow(/not found/)
+    await expect(rollbackMapping('AMAZON', 'IT', 'rev1')).rejects.toThrow(/REVIEW_REQUIRED/)
+    expect(mockFindUnique).not.toHaveBeenCalled()
   })
 })

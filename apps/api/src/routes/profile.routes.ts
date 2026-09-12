@@ -1,3 +1,6 @@
+import { verifyPassword as verifyAuthPassword } from '../lib/auth/password.js'
+import { revokeSession, revokeAllSessions } from '../lib/auth/session.js'
+import { currentProfileUser } from '../lib/auth/current-user.js'
 /**
  * Settings rebuild — Phase C
  *
@@ -37,7 +40,7 @@ const TOTP_OPTIONS = { digits: 6, step: 30, window: 1 as const }
 const TOTP_ISSUER = 'Nexus Commerce'
 
 async function getSoloUser() {
-  return (await (prisma as any).userProfile.findFirst()) as
+  return (await currentProfileUser()) as
     | {
         id: string
         email: string
@@ -55,21 +58,7 @@ async function getSoloUser() {
  * actions.ts before the upgrade); new hashes are bcrypt. Detect by
  * prefix ("$2") and route to the right comparator.
  */
-async function verifyPassword(plain: string, stored: string): Promise<boolean> {
-  if (!stored) return false
-  if (stored.startsWith('$2')) {
-    return bcrypt.compare(plain, stored)
-  }
-  // Legacy sha256: hex(64). Constant-time-ish compare.
-  const { createHash, timingSafeEqual } = await import('crypto')
-  const hex = createHash('sha256').update(plain).digest('hex')
-  if (hex.length !== stored.length) return false
-  try {
-    return timingSafeEqual(Buffer.from(hex), Buffer.from(stored))
-  } catch {
-    return false
-  }
-}
+async function verifyPassword(plain: string, stored: string): Promise<boolean> { return (await verifyAuthPassword(plain, stored)).ok }
 
 /**
  * Generate 10 recovery codes for an enrollment / regenerate cycle.
@@ -412,11 +401,8 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
     '/settings/sessions/:id/revoke',
     async (request, reply) => {
       try {
-        const updated = await (prisma as any).userSession.updateMany({
-          where: { id: request.params.id, revokedAt: null },
-          data: { revokedAt: new Date() },
-        })
-        if (updated.count === 0) {
+        const updated = await revokeSession(request.params.id, (await currentProfileUser())!.id)
+        if (!updated) {
           return reply.code(404).send({ error: 'Session not found or already revoked' })
         }
         return { ok: true }
@@ -431,11 +417,8 @@ const profileRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const user = await getSoloUser()
       if (!user) return { ok: true, revoked: 0 }
-      const r = await (prisma as any).userSession.updateMany({
-        where: { userId: user.id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      })
-      return { ok: true, revoked: r.count }
+      const revoked = await revokeAllSessions(user.id)
+      return { ok: true, revoked }
     } catch (err: any) {
       fastify.log.error({ err }, '[settings/sessions/revoke-all] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })

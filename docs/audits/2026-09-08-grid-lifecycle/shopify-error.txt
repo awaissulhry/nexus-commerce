@@ -1,0 +1,46 @@
+- generic: Grid lifecycle QA
+- button "Toggle theme"
+- button "Fail next sheet read"
+- generic: Next read armed; use More → Reload, then Try again.
+- main:
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "Canvas travel bag" [level=1]
+  - generic "TRAVEL-BAG"
+  - generic: Draft
+  - generic: Parent
+  - generic "Every cell saves on its own. There is no page Save.": Autosave on
+  - button "Review listing information"
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Not set up":
+      - generic: Shared product
+      - generic: ·
+      - generic: Not set up
+    - radio "Shopify Not set up" [checked]:
+      - generic: Shopify
+      - generic: ·
+      - generic: Not set up
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Market":
+    - generic: GLOBAL
+  - region "Information":
+    - status: Information unavailable
+    - textbox "Find" [disabled]:
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes" [disabled]
+    - button "Customise" [disabled]
+    - button "Export" [disabled]
+    - button "Import" [disabled]
+    - button "More" [active]:
+    - alert:
+      - generic: Could not load Shopify · GLOBAL information
+      - generic: Check your connection and try again. If this continues, check your access to this product.
+      - button "Try again"
+  - complementary "Record"
+- generic "Browser warnings and errors"

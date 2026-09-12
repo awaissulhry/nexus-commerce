@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   Mail, MapPin, Package, Truck, Undo2, Star, RefreshCw,
   ExternalLink, Clock, CheckCircle2, XCircle, DollarSign,

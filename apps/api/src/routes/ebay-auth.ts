@@ -58,8 +58,8 @@ export async function ebayAuthRoutes(app: FastifyInstance) {
         reply.setCookie(started.cookie.name, started.cookie.value, {
           path: "/api/cx/callback",
           httpOnly: true,
-          secure: true,
-          sameSite: "none",
+          secure: process.env.COOKIE_SECURE !== 'false',
+          sameSite: process.env.COOKIE_SECURE === "false" ? "lax" : "none",
           maxAge: started.cookie.maxAgeSec,
         });
         return reply.send({

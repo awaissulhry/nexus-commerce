@@ -1,0 +1,38 @@
+--- a/apps/api/src/services/pim/studio-sheet.service.ts
++++ b/apps/api/src/services/pim/studio-sheet.service.ts
+@@ -97,6 +97,7 @@
+  * own them.
+  */
+ export interface MappedCell {
++  supplyingRule?: { id: string; name: string; version: number; href: string }
+   value: unknown
+   status: 'mapped' | 'unmapped'
+   provenance: string | null
+@@ -1268,6 +1269,7 @@
+                 value: m.value,
+                 status: m.status,
+                 provenance: m.provenance,
++                supplyingRule: m.supplyingRule,
+                 sourcePath: m.rule?.source ?? null,
+                 fallbackPath: m.rule?.fallback ?? null,
+                 usesExpression: m.rule?.transforms?.some(op => op.type === 'expr') ?? false,
+--- a/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts
++++ b/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts
+@@ -203,6 +203,7 @@
+  * mapped-ness from a non-empty source under-counts.
+  */
+ export interface MappedCell {
++  supplyingRule?: { id: string; name: string; version: number; href: string }
+   value: unknown
+   status: 'mapped' | 'unmapped'
+   provenance: string | null
+--- a/apps/web/src/app/products/[id]/edit/_studio/PresentationTab.tsx
++++ b/apps/web/src/app/products/[id]/edit/_studio/PresentationTab.tsx
+@@ -105,6 +105,7 @@
+         onChange={theme => void assign(theme)} />
+     </Field>
+     <p>{cell?.inherited ? 'Inherited presentation' : cell?.pinned ? 'Listing customization' : 'Default presentation'}{sheet.data?.scope.connectionId ? ` · Account ${sheet.data.scope.connectionId}` : ''}</p>
++    {cell?.mapped?.supplyingRule && <Button asChild variant="link"><Link href={cell.mapped.supplyingRule.href}>Inherited from {cell.mapped.supplyingRule.name} · v{cell.mapped.supplyingRule.version}</Link></Button>}
+     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--nds-space-8)' }}>
+       <Button ref={editorOpener} variant="link" onClick={() => setEditorOpen(true)}>Open shared description-theme editor</Button>
+       {(product.isParent || product.parentId) && <Button disabled={!row || busy || !!aliasKey} onClick={() => setOrderOpen(true)}>Order variation axes & values</Button>}

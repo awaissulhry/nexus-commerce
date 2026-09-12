@@ -24,8 +24,9 @@ import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { useOrderEventsRefresh } from '@/hooks/use-order-events-refresh'
 import type { GridLensColumn, GridLensRow } from '@/app/_shared/grid-lens'
 import { DENSITY_CELL_CLASS } from '@/lib/products/theme'
-import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   Warehouse, Search, RefreshCw, Package, ChevronRight, Eye, Settings2,
   X, History, ExternalLink, ArrowRightLeft, Plus, Minus,

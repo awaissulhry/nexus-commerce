@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W12 — Per-product SEO metadata CRUD.
  *
@@ -42,7 +43,7 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:id/seo/:locale',
     async (req, reply) => {
       const row = await prisma.productSeo.findUnique({
-        where: { productId_locale: { productId: req.params.id, locale: req.params.locale.toLowerCase() } },
+        where: { productId_locale: workspaceKey({ productId: req.params.id, locale: req.params.locale.toLowerCase() }) },
       })
       if (!row) return reply.status(404).send({ error: 'SEO_NOT_FOUND' })
       return reply.send(row)
@@ -71,7 +72,7 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
     if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
 
     const row = await prisma.productSeo.upsert({
-      where: { productId_locale: { productId, locale } },
+      where: { productId_locale: workspaceKey({ productId, locale }) },
       create: {
         productId,
         locale,
@@ -106,10 +107,10 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
       const productId = req.params.id
       const locale = req.params.locale.toLowerCase()
       const existing = await prisma.productSeo.findUnique({
-        where: { productId_locale: { productId, locale } },
+        where: { productId_locale: workspaceKey({ productId, locale }) },
       })
       if (!existing) return reply.status(404).send({ error: 'SEO_NOT_FOUND' })
-      await prisma.productSeo.delete({ where: { productId_locale: { productId, locale } } })
+      await prisma.productSeo.delete({ where: { productId_locale: workspaceKey({ productId, locale }) } })
       return reply.send({ deleted: true })
     },
   )

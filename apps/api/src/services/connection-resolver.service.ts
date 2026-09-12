@@ -59,6 +59,7 @@ export type ConnectionRow = Prisma.ChannelConnectionGetPayload<{ select: typeof 
 /** Thrown when the scope does not identify one account and more than one is live. */
 export class AmbiguousConnectionError extends Error {
   readonly code = "AMBIGUOUS_CONNECTION";
+  readonly statusCode = 409;
   constructor(
     readonly channel: string,
     readonly candidateIds: string[],
@@ -76,6 +77,7 @@ export class AmbiguousConnectionError extends Error {
 /** Thrown when nothing matches the scope at all. */
 export class NoConnectionError extends Error {
   readonly code = "NO_CONNECTION";
+  readonly statusCode = 400;
   constructor(message: string) {
     super(message);
     this.name = "NoConnectionError";
@@ -297,6 +299,7 @@ export async function primaryConnectionIds(
   channels: string[],
 ): Promise<Map<string, string | null>> {
   const wanted = [...new Set(channels)];
+  if (wanted.length === 0) return new Map();
   const rows = await prisma.channelConnection.findMany({
     where: { channelType: { in: wanted }, isActive: true },
     orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }],
@@ -306,7 +309,8 @@ export async function primaryConnectionIds(
   for (const channel of wanted) {
     try {
       out.set(channel, chooseConnection(rows, { channel, wantPrimary: true }).id);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof NoConnectionError)) throw error;
       // No active account for this channel — null, not a throw. These callers are
       // writing a row, not calling the marketplace, and a DRAFT listing for a
       // channel nobody has connected yet is a legitimate thing to store.
@@ -314,6 +318,31 @@ export async function primaryConnectionIds(
     }
   }
   return out;
+}
+
+/**
+ * A channel destination for catalog work. Undefined uses the declared primary;
+ * null preserves an already resolved, unattributed draft destination. A named
+ * account must be active on this channel and never falls back to another store.
+ */
+export async function resolveChannelConnectionId(channel: string, accountId?: string | null): Promise<string | null> {
+  if (accountId === null) return null;
+  if (accountId !== undefined) {
+    const account = await resolveConnection({ accountId });
+    if (account.channelType !== channel) throw new NoConnectionError('The selected account does not belong to this channel.');
+    return account.id;
+  }
+  return (await primaryConnectionIds([channel])).get(channel) ?? null;
+}
+
+/** Whether a validated destination can use a legacy primary-account consumer. */
+export async function isPrimaryChannelConnection(channel: string, connectionId: string | null): Promise<boolean> {
+  try {
+    return (await primaryConnectionIds([channel])).get(channel) === connectionId;
+  } catch (error) {
+    if (error instanceof AmbiguousConnectionError) return false;
+    throw error;
+  }
 }
 
 // ── Connect-flow lookups ─────────────────────────────────────────────────────

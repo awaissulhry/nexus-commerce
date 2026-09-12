@@ -1,3 +1,5 @@
+import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Step 9/10 — wizard state validation + Amazon listings payload
  * composition.
@@ -104,6 +106,7 @@ export interface MultiChannelValidation {
 }
 
 export interface ChannelPayloadEntry {
+  language?: string
   channelKey: string
   platform: string
   marketplace: string
@@ -134,27 +137,8 @@ export interface MultiChannelWizard {
   product?: { sku?: string }
 }
 
-const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
-  IT: 'it',
-  DE: 'de',
-  FR: 'fr',
-  ES: 'es',
-  UK: 'en',
-  GB: 'en',
-  US: 'en',
-  CA: 'en',
-  MX: 'es',
-  AU: 'en',
-  JP: 'ja',
-  GLOBAL: 'en',
-}
-
-function languageForMarketplace(marketplace: string): string {
-  return MARKETPLACE_TO_LANGUAGE[marketplace.toUpperCase()] ?? 'en'
-}
-
-function contentGroupKey(platform: string, marketplace: string): string {
-  return `${languageForMarketplace(marketplace)}:${platform.toUpperCase()}`
+function contentGroupKey(platform: string, marketplace: string, rows: MarketLanguageRow[]): string {
+  return `${marketLanguages(platform, marketplace, rows)[0]}:${platform.toUpperCase()}`
 }
 
 const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
@@ -890,7 +874,7 @@ export class SubmissionService {
 
       // Non-Amazon advisory warning — these channels can't actually
       // be published yet (TECH_DEBT #35).
-      if (c.platform !== 'AMAZON' && c.platform !== 'EBAY') {
+      if (c.platform !== 'AMAZON' && c.platform !== 'EBAY' && c.platform !== 'SHOPIFY') {
         warnings.push(
           `${c.platform} publish adapter not yet wired — wizard state will save but submit shows the prepared payload only.`,
         )
@@ -976,6 +960,13 @@ export class SubmissionService {
       )
     }
 
+    const shopifyFamily = wizard.channels.some(c => c.platform.toUpperCase() === 'SHOPIFY') && wizard.productId
+      ? await this.prisma.product.findFirst({ where: { id: wizard.productId, deletedAt: null }, select: {
+          id: true, parentId: true, name: true, variationAxes: true, sku: true, basePrice: true, totalStock: true,
+          children: { where: { deletedAt: null }, orderBy: { id: 'asc' }, select: { id: true, sku: true, basePrice: true, totalStock: true, variantAttributes: true } },
+        } }) : null
+
+    const languageRows = await this.prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } })
     return wizard.channels.map((cRaw) => {
       const c = {
         platform: cRaw.platform.toUpperCase(),
@@ -1003,7 +994,7 @@ export class SubmissionService {
           ...baseAttributes,
           ...channelAttrs,
         }
-        const groupKey = contentGroupKey(c.platform, c.marketplace)
+        const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
         const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
         const channelPricing = (slice as any).pricing ?? {}
         const effectivePrice =
@@ -1070,23 +1061,14 @@ export class SubmissionService {
           channelKey,
           platform: c.platform,
           marketplace: c.marketplace,
+          language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
           payload: ebayPayload,
         }
       }
 
       if (c.platform === 'SHOPIFY') {
-        // S.1 — compose a Shopify Admin REST productCreate payload
-        // shaped for POST /admin/api/{ver}/products.json. Per the
-        // active-channel scope memory Shopify is single-marketplace
-        // ("GLOBAL"); we still let the channel.marketplace flow
-        // through so a future Shopify Markets multi-store wiring
-        // doesn't churn this composer.
-        //
-        // v1 ships master-only (no variation expansion). Includes
-        // title + body_html + vendor + product_type + tags + status
-        // + first variant + images. Variation children land in a
-        // follow-up — the publish adapter creates them via PUT
-        // /products/{id}/variants once the parent ID is known.
+        // A family creates ONE Shopify product with native sellable child variants.
+        // The adapter rechecks this snapshot against current canonical Product rows.
         const productType =
           ((slice as any).productType?.productType as string | undefined) ??
           fallbackProductType ??
@@ -1099,7 +1081,7 @@ export class SubmissionService {
           ...baseAttributes,
           ...channelAttrs,
         }
-        const groupKey = contentGroupKey(c.platform, c.marketplace)
+        const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
         const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
         const channelPricing = (slice as any).pricing ?? {}
         const effectivePrice =
@@ -1156,7 +1138,10 @@ export class SubmissionService {
         })()
 
         const shopifyPayload: Record<string, unknown> = {
-          shop: c.marketplace, // 'GLOBAL' for the single-store case
+          shop: c.marketplace,
+          nexusProductId: shopifyFamily?.id,
+          axes: shopifyFamily?.variationAxes ?? [],
+          familyError: !shopifyFamily || shopifyFamily.parentId ? 'Open the family product before publishing to Shopify.' : includedSkus.length && shopifyFamily.children.some(child => !includedSkus.includes(child.sku)) ? 'Shopify publication requires the complete native variant family. Include every child SKU.' : undefined,
           product: {
             title,
             body_html: bodyHtml,
@@ -1164,25 +1149,17 @@ export class SubmissionService {
             product_type: productType,
             tags,
             status: 'draft', // operator activates manually after review
-            variants: [
-              {
-                sku: wizard.product?.sku ?? '',
-                price:
-                  typeof effectivePrice === 'number'
-                    ? effectivePrice.toFixed(2)
-                    : '0.00',
-                compare_at_price:
-                  typeof compareAtPrice === 'number'
-                    ? compareAtPrice.toFixed(2)
-                    : undefined,
-                inventory_quantity:
-                  typeof basePricing.stock === 'number'
-                    ? basePricing.stock
-                    : undefined,
-                inventory_management: 'shopify',
-                inventory_policy: 'deny',
-              },
-            ],
+            options: (shopifyFamily?.variationAxes ?? []).map(name => ({ name })),
+            variants: shopifyFamily?.children.length ? shopifyFamily.children.map(child => ({
+              nexusId: child.id, sku: child.sku, price: String(child.basePrice), inventory_quantity: child.totalStock,
+              options: (child.variantAttributes ?? {}) as Record<string, string>, inventory_management: 'shopify', inventory_policy: 'deny',
+            })) : [{
+              nexusId: shopifyFamily?.id, sku: wizard.product?.sku ?? shopifyFamily?.sku ?? '',
+              price: typeof effectivePrice === 'number' ? effectivePrice.toFixed(2) : String(shopifyFamily?.basePrice ?? '0.00'),
+              compare_at_price: typeof compareAtPrice === 'number' ? compareAtPrice.toFixed(2) : undefined,
+              inventory_quantity: typeof basePricing.stock === 'number' ? basePricing.stock : shopifyFamily?.totalStock,
+              options: {}, inventory_management: 'shopify', inventory_policy: 'deny',
+            }],
             images:
               orderedUrls.length > 0
                 ? orderedUrls.slice(0, 250).map((src) => ({ src }))
@@ -1194,6 +1171,7 @@ export class SubmissionService {
           channelKey,
           platform: c.platform,
           marketplace: c.marketplace,
+          language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
           payload: shopifyPayload,
         }
       }
@@ -1239,7 +1217,7 @@ export class SubmissionService {
       const theme =
         ((slice as any).variations?.theme as string | undefined) ??
         (variations.commonTheme as string | undefined)
-      const groupKey = contentGroupKey(c.platform, c.marketplace)
+      const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
       const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
       const channelPricing = (slice as any).pricing ?? {}
       const effectivePrice =
@@ -1396,6 +1374,7 @@ export class SubmissionService {
         channelKey,
         platform: c.platform,
         marketplace: c.marketplace,
+        language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
         payload,
         missingChildSkus:
           childrenResolution.missingSkus.length > 0
@@ -1442,12 +1421,14 @@ export class SubmissionService {
 
     await this.prisma.channelListing.upsert({
       where: {
-        productId_channel_marketplace: {
+        productId_channel_marketplace: workspaceKey({
           productId: args.productId,
           channel: 'AMAZON',
           marketplace,
           channelConnectionId: wizardConn,
-        },
+          // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+          aliasKey: '',
+        }),
       },
       create: {
         productId: args.productId,
@@ -1483,12 +1464,14 @@ export class SubmissionService {
         if (!asin) return Promise.resolve()
         return this.prisma.channelListing.upsert({
           where: {
-            productId_channel_marketplace: {
+            productId_channel_marketplace: workspaceKey({
               productId: v.id,
               channel: 'AMAZON',
               marketplace,
               channelConnectionId: wizardConn,
-            },
+              // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+              aliasKey: '',
+            }),
           },
           create: {
             productId: v.id,

@@ -13,8 +13,9 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { Search, Users, Download, BarChart2, Filter, Keyboard } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import {

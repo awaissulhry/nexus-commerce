@@ -1,0 +1,83 @@
+{
+  "checkedAt": "2026-09-07T16:14:44.338Z",
+  "summary": {
+    "total": 977,
+    "audited": 977,
+    "blocked": 976,
+    "unclassified": [
+      {
+        "id": "f67fa2a9-3155-43b7-a640-9e3287e329d8",
+        "sku": "1J-EYE5-Y0TW",
+        "channel": "EBAY",
+        "marketplace": "IT"
+      },
+      {
+        "id": "8b622996-338e-491e-9920-3dba33fb978a",
+        "sku": "UD-LVLM-1H8T",
+        "channel": "EBAY",
+        "marketplace": "IT"
+      },
+      {
+        "id": "cd1866bf-115e-403f-92da-4a7eeb0a0637",
+        "sku": "xracing",
+        "channel": "EBAY",
+        "marketplace": "IT"
+      }
+    ],
+    "issueFrequency": {
+      "AMAZON:item_package_dimensions__height": 696,
+      "AMAZON:item_package_dimensions__length": 696,
+      "AMAZON:item_package_weight": 696,
+      "AMAZON:item_package_dimensions__width": 696,
+      "AMAZON:manufacturer": 696,
+      "AMAZON:model_name": 696,
+      "AMAZON:externally_assigned_product_identifier": 676,
+      "AMAZON:department": 670,
+      "AMAZON:age_range_description": 655,
+      "AMAZON:care_instructions": 655,
+      "AMAZON:closure": 655,
+      "AMAZON:item_type_name": 655,
+      "AMAZON:outer": 655,
+      "AMAZON:style": 655,
+      "AMAZON:target_gender": 655,
+      "AMAZON:country_of_origin": 641,
+      "AMAZON:supplier_declared_dg_hz_regulation": 609,
+      "AMAZON:color": 599,
+      "AMAZON:fabric_type": 597,
+      "AMAZON:water_resistance_level": 590,
+      "AMAZON:batteries_required": 582,
+      "AMAZON:weave_type": 579,
+      "AMAZON:inner": 567,
+      "AMAZON:size": 467,
+      "AMAZON:product_description": 354,
+      "EBAY:description": 252,
+      "AMAZON:bullet_point": 246,
+      "EBAY:season": 199,
+      "AMAZON:apparel_size__size_class": 148,
+      "EBAY:title": 143,
+      "AMAZON:apparel_size__size": 100,
+      "AMAZON:included_components": 41,
+      "AMAZON:warranty_description": 41,
+      "AMAZON:bottoms_size__size_class": 32,
+      "AMAZON:rise__height": 32,
+      "AMAZON:rise__style": 32,
+      "AMAZON:accepted_voltage_frequency": 26,
+      "AMAZON:automotive_fit_type": 26,
+      "AMAZON:is_assembly_required": 26,
+      "AMAZON:is_fragile": 26,
+      "AMAZON:is_expiration_dated_product": 26,
+      "AMAZON:part_number": 26,
+      "AMAZON:power_plug_type": 26,
+      "AMAZON:glove_type": 15,
+      "AMAZON:hand_orientation": 15,
+      "AMAZON:material": 15,
+      "AMAZON:eu_toys_safety_directive_age_warning": 15,
+      "AMAZON:eu_toys_safety_directive_warning": 15,
+      "EBAY:adatto_a": 12,
+      "EBAY:aspect_Brand": 3,
+      "EBAY:condition": 3,
+      "EBAY:brand": 1
+    }
+  },
+  "failures": []
+}

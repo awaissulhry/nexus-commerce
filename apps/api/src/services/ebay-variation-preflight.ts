@@ -56,6 +56,13 @@ const MAX_ASPECT_VALUE_LEN = 65
 const MAX_ASPECT_NAME_LEN = 40
 
 /**
+ * VP.2 — the Variants page SERVES this number to the browser ("20 of 250 allowed"), and a page that restates
+ * a limit is a page that goes stale silently. Exported so there is one value, here, where it is enforced.
+ * Nothing else changes: the const and every use of it above are untouched.
+ */
+export { MAX_VARIANTS as EBAY_MAX_VARIANTS_PER_LISTING }
+
+/**
  * Resolve the aspect value a variant carries for a given spec name — mirrors the
  * push's aspectsMap lookup (canonical key, lowercase key, then a synonym scan),
  * so the validator reads exactly the value the group/item PUT will send.

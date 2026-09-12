@@ -22,7 +22,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   ShieldCheck,
   ShieldOff,

@@ -75,6 +75,10 @@ export interface AmazonTemplateParse {
    * without re-deriving localized tokens.
    */
   rows: Record<string, string>[]
+  /** Original worksheet coordinates, including gaps between product rows. */
+  rowNumbers: number[]
+  /** Amazon's own localized label → wire value dictionary, keyed by exact attribute path. */
+  valueAliases: Record<string, Record<string, string>>
   meta: AmazonTemplateMeta
 }
 
@@ -437,7 +441,7 @@ export async function parseOoxmlSheet(
  * Returns null when the workbook is not an Amazon template (the caller then
  * falls back to the generic exceljs parser).
  */
-export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTemplateParse | null> {
+export async function detectAmazonTemplate(bytes: Uint8Array, opts: { strict?: boolean } = {}): Promise<AmazonTemplateParse | null> {
   let zip: JSZip
   try {
     zip = await JSZip.loadAsync(bytes)
@@ -467,14 +471,21 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
   const ordered = [...candidates.filter((c) => c.hasMarker), ...candidates.filter((c) => !c.hasMarker)]
   let chosen: { c: Candidate; attrRow: SheetRow; grammar: 'v2' | 'legacy' } | null = null
   for (const c of ordered) {
+    if (opts.strict && ordered.some(candidate => candidate.hasMarker) && !c.hasMarker) continue
     const found = findAttrRow(c.head)
-    if (found) { chosen = { c, attrRow: found.attrRow, grammar: found.grammar }; break }
+    if (found) {
+      if (chosen && opts.strict) throw new Error('Multiple Amazon product sheets were found. Import each marketplace workbook separately.')
+      chosen = { c, attrRow: found.attrRow, grammar: found.grammar }
+      if (!opts.strict) break
+    }
   }
   if (!chosen) return null
 
   const { c, attrRow, grammar } = chosen
   const attrCols = [...attrRow.cells.entries()].sort((a, b) => a[0] - b[0])
   const headers = attrCols.map(([, v]) => v)
+  if (opts.strict && new Set(headers).size !== headers.length) throw new Error('Duplicate Amazon attribute paths are ambiguous')
+  if (opts.strict && /<f(?:\s|\/?>)|<c\b[^>]*\bt="e"/.test(c.xml)) throw new Error(`${c.name}: replace formula and error cells with verified values before importing this Amazon template`)
   const colByHeaderOrder = attrCols.map(([col]) => col)
 
   // Localized labels = the row directly above the attr row (v2 row 4; legacy row 2).
@@ -488,7 +499,21 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
   }
 
   const a1 = c.head.find((r) => r.rowNum === 1)?.cells.get(1) ?? ''
-  const settings = grammar === 'v2' && a1.startsWith('settings=') ? parseSettingsBlob(a1) : {}
+  // Large dictionaries continue in B1 (settings2=), C1, …; decoding A1 alone truncates them.
+  const settingsCells = c.head.find(r => r.rowNum === 1)?.cells
+  const chunks = [...(settingsCells?.values() ?? [])].filter(v => /^settings\d*=/.test(v))
+    .sort((a, b) => Number(a.match(/^settings(\d*)=/)?.[1] || 1) - Number(b.match(/^settings(\d*)=/)?.[1] || 1))
+  const settings = grammar === 'v2' && a1.startsWith('settings=') ? parseSettingsBlob(`settings=${chunks.map(v => v.slice(v.indexOf('=') + 1)).join('')}`) : {}
+  const valueAliases: AmazonTemplateParse['valueAliases'] = Object.create(null)
+  if (settings.attributeSettings) {
+    try {
+      const entries: unknown = JSON.parse(Buffer.from(settings.attributeSettings, 'base64').toString('utf8'))
+      if (!Array.isArray(entries)) throw new Error('Invalid attribute settings')
+      for (const entry of entries) if (typeof entry?.attribute === 'string' && entry.aliases && typeof entry.aliases === 'object') {
+        valueAliases[entry.attribute] = Object.fromEntries(Object.entries(entry.aliases).filter(([, v]) => typeof v === 'string')) as Record<string, string>
+      }
+    } catch { if (opts.strict) throw new Error('Amazon value translations are damaged. Download a fresh template before importing.') }
+  }
   const rawMpId = settings.primaryMarketplaceId ?? ''
   const mpId = rawMpId.replace(/^amzn1\.mp\.o\./, '')
 
@@ -502,6 +527,7 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
   )
 
   const rows: Record<string, string>[] = []
+  const rowNumbers: number[] = []
   const actions: Record<RecordAction, number> = { replace: 0, partial: 0, delete: 0, unknown: 0 }
   const productTypes = new Set<string>()
   let skippedEmptyRows = 0
@@ -509,6 +535,8 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
 
   walkSheetRows(c.xml, sst, (row) => {
     if (row.rowNum <= attrRow.rowNum) return
+    if (opts.strict && settings.dataRow && row.rowNum < Number(settings.dataRow)) return
+    if (opts.strict && [...row.cells.keys()].some(col => !colByHeaderOrder.includes(col))) throw new Error(`${c.name} row ${row.rowNum}: data has no attribute header`)
     let any = false
     const obj: Record<string, string> = {}
     for (let i = 0; i < headers.length; i++) {
@@ -522,19 +550,22 @@ export async function detectAmazonTemplate(bytes: Uint8Array): Promise<AmazonTem
     // surface it as "missing SKU" rather than silently dropping operator data.
     const sku = skuHeaderIdx >= 0 ? obj[headers[skuHeaderIdx]] : ''
     const filled = Object.values(obj).filter((v) => v !== '').length
-    if (sku === '' && filled <= 2) { skippedEmptyRows++; return }
+    if (!opts.strict && sku === '' && filled <= 2) { skippedEmptyRows++; return }
     const action = classifyRecordAction(actionIdx >= 0 ? obj[headers[actionIdx]] : '')
     ;(obj as Record<string, string>).__action = action
     actions[action]++
     if (typeIdx >= 0 && obj[headers[typeIdx]]) productTypes.add(obj[headers[typeIdx]].toUpperCase())
     if (dataStartRow === null) dataStartRow = row.rowNum
     rows.push(obj)
+    rowNumbers.push(row.rowNum)
   })
 
   return {
     headers,
     labels,
     rows,
+    rowNumbers,
+    valueAliases,
     meta: {
       grammar,
       sheet: c.name,

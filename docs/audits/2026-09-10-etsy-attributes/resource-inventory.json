@@ -1,0 +1,240 @@
+{
+  "source": "https://www.etsy.com/openapi/generated/oas/3.0.0.json",
+  "verifiedAt": "2026-09-10",
+  "resources": [
+    {
+      "resource": "ShopListingWithAssociations",
+      "fields": [
+        "listing_id",
+        "user_id",
+        "shop_id",
+        "title",
+        "description",
+        "rich_description",
+        "state",
+        "creation_timestamp",
+        "created_timestamp",
+        "ending_timestamp",
+        "original_creation_timestamp",
+        "last_modified_timestamp",
+        "updated_timestamp",
+        "state_timestamp",
+        "quantity",
+        "shop_section_id",
+        "featured_rank",
+        "url",
+        "num_favorers",
+        "non_taxable",
+        "is_taxable",
+        "is_customizable",
+        "is_personalizable",
+        "listing_type",
+        "tags",
+        "materials",
+        "shipping_profile_id",
+        "return_policy_id",
+        "processing_min",
+        "processing_max",
+        "who_made",
+        "when_made",
+        "is_supply",
+        "item_weight",
+        "item_weight_unit",
+        "item_length",
+        "item_width",
+        "item_height",
+        "item_dimensions_unit",
+        "is_private",
+        "style",
+        "file_data",
+        "has_variations",
+        "should_auto_renew",
+        "language",
+        "price",
+        "converted_price",
+        "taxonomy_id",
+        "readiness_state_id",
+        "suggested_title",
+        "shipping_profile",
+        "user",
+        "shop",
+        "images",
+        "videos",
+        "inventory",
+        "production_partners",
+        "skus",
+        "translations",
+        "views",
+        "personalization",
+        "buyer_price"
+      ]
+    },
+    {
+      "resource": "ListingInventory",
+      "fields": [
+        "products",
+        "price_on_property",
+        "quantity_on_property",
+        "sku_on_property",
+        "readiness_state_on_property"
+      ]
+    },
+    {
+      "resource": "ListingInventoryProduct",
+      "fields": [
+        "product_id",
+        "sku",
+        "is_deleted",
+        "offerings",
+        "property_values"
+      ]
+    },
+    {
+      "resource": "ListingInventoryProductOffering",
+      "fields": [
+        "offering_id",
+        "quantity",
+        "is_enabled",
+        "is_deleted",
+        "price",
+        "readiness_state_id"
+      ]
+    },
+    {
+      "resource": "ListingPropertyValue",
+      "fields": [
+        "property_id",
+        "property_name",
+        "scale_id",
+        "scale_name",
+        "value_ids",
+        "values"
+      ]
+    },
+    {
+      "resource": "ListingImage",
+      "fields": [
+        "listing_id",
+        "listing_image_id",
+        "hex_code",
+        "red",
+        "green",
+        "blue",
+        "hue",
+        "saturation",
+        "brightness",
+        "is_black_and_white",
+        "creation_tsz",
+        "created_timestamp",
+        "rank",
+        "url_75x75",
+        "url_170x135",
+        "url_570xN",
+        "url_fullxfull",
+        "full_height",
+        "full_width",
+        "alt_text"
+      ]
+    },
+    {
+      "resource": "ListingVideo",
+      "fields": [
+        "video_id",
+        "height",
+        "width",
+        "thumbnail_url",
+        "video_url",
+        "video_state"
+      ]
+    },
+    {
+      "resource": "ShopListingFile",
+      "fields": [
+        "listing_file_id",
+        "listing_id",
+        "rank",
+        "filename",
+        "filesize",
+        "size_bytes",
+        "filetype",
+        "create_timestamp",
+        "created_timestamp"
+      ]
+    },
+    {
+      "resource": "ListingTranslation",
+      "fields": [
+        "listing_id",
+        "language",
+        "title",
+        "description",
+        "tags"
+      ]
+    },
+    {
+      "resource": "Etsy_Modules_ListingPersonalization_Api_Resources_OpenApi_ListingPersonalization",
+      "fields": [
+        "personalization_questions"
+      ]
+    },
+    {
+      "resource": "Etsy_Modules_ListingPersonalization_Api_Resources_OpenApi_PersonalizationQuestion",
+      "fields": [
+        "question_id",
+        "question_text",
+        "instructions",
+        "question_type",
+        "required",
+        "max_allowed_characters",
+        "max_allowed_files",
+        "add_on_price",
+        "options"
+      ]
+    },
+    {
+      "resource": "ShopShippingProfile",
+      "fields": [
+        "shipping_profile_id",
+        "title",
+        "user_id",
+        "origin_country_iso",
+        "is_deleted",
+        "shipping_profile_destinations",
+        "shipping_profile_upgrades",
+        "origin_postal_code",
+        "profile_type",
+        "domestic_handling_fee",
+        "international_handling_fee"
+      ]
+    },
+    {
+      "resource": "ShopProcessingProfile",
+      "fields": [
+        "shop_id",
+        "readiness_state_id",
+        "readiness_state",
+        "min_processing_days",
+        "max_processing_days",
+        "processing_days_display_label"
+      ]
+    },
+    {
+      "resource": "ShopReturnPolicy",
+      "fields": [
+        "return_policy_id",
+        "shop_id",
+        "accepts_returns",
+        "accepts_exchanges",
+        "return_deadline"
+      ]
+    },
+    {
+      "resource": "ShopProductionPartner",
+      "fields": [
+        "production_partner_id",
+        "partner_name",
+        "location"
+      ]
+    }
+  ]
+}

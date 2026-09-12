@@ -51,8 +51,8 @@ export function startEmbeddingIngesterCron(): void {
     logger.error('embedding-ingester cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runEmbeddingIngesterCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runEmbeddingIngesterCron()
   })
   logger.info('embedding-ingester cron: scheduled', { schedule })
 }

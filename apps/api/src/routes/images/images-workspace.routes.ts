@@ -1,3 +1,5 @@
+import { saveGalleryAssignments, normalizeScopeFields, type ListingImageUpsert, type ImageScope } from '../../services/images/gallery-assignment.service.js'
+import { resolveWorkspaceDestination, WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
 /**
  * IM.2 — Images workspace route.
  *
@@ -38,48 +40,21 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../../db.js'
+import { ebayMediaWorkspaceRoutes } from './ebay-media-workspace.routes.js'
+import { amazonMediaWorkspaceRoutes } from './amazon-media-workspace.routes.js'
+import { shopifyContentRoutes } from './shopify-content.routes.js'
+import { shopifyLinkedProductsRoutes } from './shopify-linked-products.routes.js'
+import { productMediaRoutes } from './product-media.routes.js'
 import { resolveSlotTaxonomy } from '../../services/images/amazon-slot-taxonomy.service.js'
 import { deriveWorkspaceAxes } from '../../services/images/ebay-image-axis.pure.js'
 import { resolveFamilyAxes } from '../../services/ebay-family-axes.service.js'
 
-type ImageScope = 'GLOBAL' | 'PLATFORM' | 'MARKETPLACE'
-
-interface ListingImageUpsert {
-  id?: string                 // present = update existing row
-  variationId?: string | null
-  scope: ImageScope
-  platform?: string | null
-  marketplace?: string | null
-  amazonSlot?: string | null
-  variantGroupKey?: string | null
-  variantGroupValue?: string | null
-  url: string
-  filename?: string | null
-  role?: string
-  position?: number
-  sourceProductImageId?: string | null
-  width?: number | null
-  height?: number | null
-  fileSize?: number | null
-  mimeType?: string | null
-  hasWhiteBackground?: boolean | null
-  // IE.6 — per-row alt-text override. NULL means "inherit from master".
-  altOverride?: string | null
-}
-
-function normalizeScopeFields(
-  scope: ImageScope,
-  platform?: string | null,
-  marketplace?: string | null,
-) {
-  const p = platform ? platform.toUpperCase() : null
-  const m = marketplace ? marketplace.toUpperCase() : null
-  if (scope === 'GLOBAL') return { platform: null, marketplace: null }
-  if (scope === 'PLATFORM') return { platform: p, marketplace: null }
-  return { platform: p, marketplace: m }
-}
-
 const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
+  await fastify.register(ebayMediaWorkspaceRoutes)
+  await fastify.register(amazonMediaWorkspaceRoutes)
+  await fastify.register(shopifyContentRoutes)
+  await fastify.register(shopifyLinkedProductsRoutes)
+  await fastify.register(productMediaRoutes)
   // ── GET /api/products/:productId/images-workspace ─────────────────
   fastify.get<{
     Params: { productId: string }
@@ -87,6 +62,16 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:productId/images-workspace',
     async (request, reply) => {
       const { productId } = request.params
+      const q = request.query as { channel?: string; market?: string; accountId?: string; listingId?: string; scope?: string }
+      let destination: Awaited<ReturnType<typeof resolveWorkspaceDestination>> | null = null
+      if (q.channel) {
+        try { destination = await resolveWorkspaceDestination({ productId, channel: q.channel, marketplace: q.market ?? '', accountId: q.accountId, listingId: q.listingId }) }
+        catch (error) { return reply.code(error instanceof WorkspaceScopeError ? error.statusCode : 400).send({ error: error instanceof Error ? error.message : 'The selected destination is unavailable.' }) }
+      }
+      const scopedWorkspace = q.scope !== undefined || destination !== null
+      const mediaListing = destination?.channel === 'EBAY' && destination.aliasKey !== null ? await prisma.channelListing.findFirst({ where: {
+        productId, channel: 'EBAY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '',
+      }, select: { externalListingId: true } }) : null
 
       const product = await prisma.product.findUnique({
         where: { id: productId },
@@ -115,7 +100,11 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         }),
 
         prisma.listingImage.findMany({
-          where: { productId },
+          where: { productId, ...(destination ? { OR: [
+            { scope: 'GLOBAL' as const, platform: null, marketplace: null },
+            { scope: 'PLATFORM' as const, platform: destination.channel, marketplace: null },
+            { scope: 'MARKETPLACE' as const, platform: destination.channel, marketplace: destination.marketplace },
+          ] } : {}) },
           orderBy: [
             { scope: 'asc' },
             { platform: 'asc' },
@@ -153,7 +142,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
           },
         }),
 
-        prisma.amazonImageFeedJob.findMany({
+        scopedWorkspace ? Promise.resolve([]) : prisma.amazonImageFeedJob.findMany({
           where: { productId },
           orderBy: { submittedAt: 'desc' },
           take: 10,
@@ -173,7 +162,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         // IE.4 — read-replica of what each channel is currently
         // serving. Powers the IE.5 live strip + drift detector. Stays
         // empty until the operator (or IE.4b cron) calls /refresh.
-        prisma.channelLiveImage.findMany({
+        scopedWorkspace ? Promise.resolve([]) : prisma.channelLiveImage.findMany({
           where: { productId },
           orderBy: [
             { channel: 'asc' },
@@ -192,8 +181,8 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         // legacy ProductVariation path (no child Products) matches nothing and
         // skips the source gracefully. Ordered by marketplace so the per-child
         // pick below is deterministic (keys are market-stable anyway).
-        prisma.channelListing.findMany({
-          where: { product: { parentId: productId }, channel: 'EBAY' },
+        scopedWorkspace && (destination?.channel !== 'EBAY' || destination.aliasKey === null) ? Promise.resolve([]) : prisma.channelListing.findMany({
+          where: { product: { parentId: productId }, channel: 'EBAY', ...(destination ? { channelConnectionId: destination.accountId, marketplace: destination.marketplace, aliasKey: destination.aliasKey ?? '' } : {}) },
           orderBy: { marketplace: 'asc' },
           select: { productId: true, marketplace: true, platformAttributes: true },
         }),
@@ -210,7 +199,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       if (product.productType === 'EBAY_LISTING_SHELL' && childProducts.length === 0) {
         try {
           const memberships = await prisma.sharedListingMembership.findMany({
-            where: { parentSku: product.sku ?? '' },
+            where: { parentSku: product.sku ?? '', ...(scopedWorkspace ? { channelConnectionId: destination?.accountId ?? null, marketplace: destination?.marketplace ?? '__unselected__', itemId: mediaListing?.externalListingId ?? '__unselected__' } : {}) },
             select: { productId: true },
           })
           const poolIds = [...new Set(memberships.map((mm) => mm.productId).filter((v): v is string => Boolean(v)))]
@@ -343,9 +332,18 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // the Images tab renders the real slots incl. Product-Safety (GPSR),
       // not a hardcoded 10. Slot codes are market-agnostic; the cached
       // resolver makes this ~free.
-      const amazonSlotTaxonomy = (
-        await resolveSlotTaxonomy('IT', (product as { productType?: string | null })?.productType ?? 'PRODUCT')
-      ).slots
+      const amazonTaxonomy = await resolveSlotTaxonomy(
+        destination?.marketplace ?? q.market ?? 'IT', (product as { productType?: string | null })?.productType ?? 'PRODUCT')
+      const amazonSlotTaxonomy = amazonTaxonomy.slots
+      /**
+       * Which set the slots came from — Amazon's own schema, or the legacy fallback.
+       *
+       * The array alone cannot say: a FALLBACK is also a non-empty list of slots, so a client that
+       * infers "we have slots, therefore the schema answered" will present the legacy ten as
+       * authoritative. That is the falsely-clean shape — a surface stating something it has not
+       * been told. `source` is already on the taxonomy object; it was simply dropped here.
+       */
+      const amazonSlotTaxonomySource = amazonTaxonomy.source
 
       // EFX Layer A (additive) — the ONE theme-authoritative axis catalog from
       // the shared server helper (mirrors the push). The picker + buckets can
@@ -354,12 +352,12 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       // `axisValueCounts` above are left untouched this pass. Marketplace picks
       // the family's first eBay market (labels/value-order are per-market),
       // defaulting to IT (primary market). Best-effort — never fails the load.
-      const axisMarketplace = childEbayListings[0]?.marketplace ?? 'IT'
+      const axisMarketplace = destination?.marketplace ?? childEbayListings[0]?.marketplace ?? 'IT'
       let resolvedAxes: Awaited<ReturnType<typeof resolveFamilyAxes>>['axes'] = []
       let resolvedAxisWarnings: string[] = []
       let resolvedAxisSuppressed: string[] = []
       try {
-        const r = await resolveFamilyAxes(productId, axisMarketplace)
+        const r = scopedWorkspace && (destination?.channel !== 'EBAY' || destination.aliasKey === null) ? { axes: [], warnings: [], suppressed: [] } : await resolveFamilyAxes(productId, axisMarketplace, destination ? { channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } : undefined)
         resolvedAxes = r.axes
         resolvedAxisWarnings = r.warnings
         resolvedAxisSuppressed = r.suppressed
@@ -368,10 +366,10 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       return {
-        product,
+        product: scopedWorkspace ? { ...product, amazonAsin: null, ebayItemId: mediaListing?.externalListingId ?? null, shopifyProductId: null } : product,
         master: effectiveMaster,
-        listing,
-        variants: rawVariants,
+        listing: scopedWorkspace ? listing.map(row => ({ ...row, publishStatus: 'UNATTRIBUTED', publishedAt: null, publishError: null })) : listing,
+        variants: scopedWorkspace ? rawVariants.map(row => ({ ...row, amazonAsin: null, ebayVariationId: null, shopifyVariantId: null })) : rawVariants,
         availableAxes,
         axisValueCounts,
         amazonJobs: recentJobs,
@@ -379,6 +377,7 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
         damDrift,
         channelLiveImages: liveImages,
         amazonSlotTaxonomy,
+        amazonSlotTaxonomySource,
         // EFX Layer A — additive, theme-authoritative:
         resolvedAxes,
         resolvedAxisWarnings,
@@ -424,63 +423,10 @@ const imagesWorkspaceRoutes: FastifyPluginAsync = async (fastify) => {
       const { productId } = request.params
       const { upserts = [], deletes = [] } = request.body ?? ({} as any)
 
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { id: true },
-      })
-      if (!product) return reply.code(404).send({ error: 'Product not found' })
-
-      await prisma.$transaction(async (tx) => {
-        // Deletes first to avoid position conflicts
-        if (deletes.length > 0) {
-          await tx.listingImage.deleteMany({
-            where: { id: { in: deletes }, productId },
-          })
-        }
-
-        for (const u of upserts) {
-          const { platform, marketplace } = normalizeScopeFields(
-            u.scope,
-            u.platform,
-            u.marketplace,
-          )
-
-          const data = {
-            productId,
-            variationId: u.variationId ?? null,
-            scope: u.scope as any,
-            platform,
-            marketplace,
-            amazonSlot: u.amazonSlot ?? null,
-            variantGroupKey: u.variantGroupKey ?? null,
-            variantGroupValue: u.variantGroupValue ?? null,
-            url: u.url,
-            filename: u.filename ?? null,
-            role: (u.role ?? 'GALLERY') as any,
-            position: u.position ?? 0,
-            sourceProductImageId: u.sourceProductImageId ?? null,
-            altOverride: u.altOverride ?? null,
-            width: u.width ?? null,
-            height: u.height ?? null,
-            fileSize: u.fileSize ?? null,
-            mimeType: u.mimeType ?? null,
-            hasWhiteBackground: u.hasWhiteBackground ?? null,
-            publishStatus: 'DRAFT',
-            publishError: null,
-          }
-
-          if (u.id) {
-            await tx.listingImage.update({ where: { id: u.id }, data })
-          } else {
-            await tx.listingImage.create({ data })
-          }
-        }
-      })
-
-      return {
-        saved: upserts.length,
-        deleted: deletes.length,
-        total: upserts.length + deletes.length,
+      try { return await saveGalleryAssignments(productId, upserts, deletes) }
+      catch (error) {
+        if (error instanceof WorkspaceScopeError) return reply.code(error.statusCode).send({ error: error.message })
+        throw error
       }
     },
   )

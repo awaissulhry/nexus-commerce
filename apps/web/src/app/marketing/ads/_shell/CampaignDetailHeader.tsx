@@ -8,7 +8,7 @@
  * the shared .h10-hbtn / .h10-hsel / .h10-menu styling so the two headers stay in sync.
  */
 import { useState, type ReactNode } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, Video, ChevronDown } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
 import { DateRangePicker } from './DateRangePicker'

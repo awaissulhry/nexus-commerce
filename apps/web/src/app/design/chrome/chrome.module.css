@@ -1,0 +1,77 @@
+/**
+ * CH.1 — type scale for /design/chrome. 2026-09-02.
+ *
+ * WHY THIS FILE EXISTS. `ds-conformance-guard` forbids inline `fontSize`, and the DS ships no
+ * typography component and no type-scale utility — every `font-size: var(--nds-font-size-*)` in
+ * `design-system/styles/**` is a rule inside a component. So a page has nowhere to put a size.
+ * This module is the smallest conforming thing: page-local classes that READ THE DS TOKENS.
+ * It is not a second scale — every class below resolves to a token the DS already publishes.
+ * Same pattern, and the same reasoning, as FX.1's `formula-lab.module.css`.
+ *
+ * 🔴 STATUS (hub ruling #623): this file STAYS until DS.2 ships real `.nds-type-*` utilities.
+ * The day they land, this file is DELETED and every className here is swapped for them.
+ *
+ * 🔴 WHAT THIS REPLACED, so the mistake is not repeated. The first conformance pass used Tailwind
+ * `text-xs|sm|base|md|lg|2xl|3xl` + `font-heading|label`. That is the kit the Owner declared
+ * LEGACY, the guard cannot see Tailwind classes, so it passed FOR THE WRONG REASON — and the two
+ * scales disagree. Reading the DS scale instead, the mock was already almost entirely ON it:
+ * 11.5, 12.5, 14, 15, 18 and 22 are all published DS steps, and the Tailwind pass had snapped
+ * every one of them to a neighbour for no reason (22 → Tailwind `3xl` 24 is not a DS size at all).
+ *
+ * The DS scale, for reference (tokens.css:393–406):
+ *   nano 9 · micro 10 · micro-plus 10.5 · xs 11 · xs-plus 11.5 · sm 12 · sm-plus 12.5 ·
+ *   base 13 · base-plus 13.5 · md-minus 14 · md 15 · lg 18 · xl 22 · 2xl 27
+ */
+
+/* The page inherits Inter from the app; naming it here sources the family from the DS too. */
+.page {
+  font-family: var(--nds-font-sans);
+}
+
+/* ── every class below is a published DS token, at its published value ──────────────────── */
+
+/* 10px — the guide labels and the avatar monogram */
+.micro { font-size: var(--nds-font-size-micro); }
+
+/* 11px — the control-group labels */
+.xs { font-size: var(--nds-font-size-xs); }
+
+/* 11.5px — the scale readout and the ledger footnotes */
+.xsPlus { font-size: var(--nds-font-size-xs-plus); }
+
+/* 12px — the sheet rows, the back link, the header meta line */
+.sm { font-size: var(--nds-font-size-sm); }
+
+/* 12.5px — the lab's second paragraph */
+.smPlus { font-size: var(--nds-font-size-sm-plus); }
+
+/* 13px — the bar's page-context slot, the lab's lead paragraph, the ledger headings */
+.base { font-size: var(--nds-font-size-base); }
+
+/* 14px — the rail's navigation labels */
+.mdMinus { font-size: var(--nds-font-size-md-minus); }
+
+/* 15px — the brand monogram */
+.md { font-size: var(--nds-font-size-md); }
+
+/* 18px — the sidebar wordmark, and the mock's page title (see the note below) */
+.lg { font-size: var(--nds-font-size-lg); }
+
+/* 22px — the lab's own page title */
+.xl { font-size: var(--nds-font-size-xl); }
+
+/*
+ * ── the only two sizes that MOVED, both stated rather than hidden ───────────────────────────
+ *
+ * 9.5 → micro (10). The guide labels. 9.5 sat exactly between `nano` 9 and `micro` 10; the hub
+ * ruled micro, and up is the right way for 9.5px text that carries a measurement the Owner reads.
+ *
+ * 20 → lg (18), NOT xl (22). The mock's page title, and 20 sat exactly between the two, so the
+ * element's role decides. This stage exists to show the VERTICAL BUDGET — a page title that grows
+ * eats the thing being measured, and 18px is a real page-title size in this app (the dashboard's
+ * h1 measures 18px; the studio's own is 15px). `xl` 22 would inflate the header on the one page
+ * whose spare height is the subject.
+ *
+ * Everything else is an exact DS step: 10, 11, 11.5, 12, 12.5, 13, 14, 15, 18 and 22 all land on
+ * a published token with zero pixel change.
+ */

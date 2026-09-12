@@ -8,11 +8,11 @@
  * drift scoped to this campaign. One aggregate fetch.
  */
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { money } from '../../../../campaigns/_grid/format'
 import { getEbayAds, postEbayAds, type CampaignAutomationPayload } from '../../../_lib'
 import { Button, Pill, Toggle, Input } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { pillTone } from '../../../../_shared/pillTone'
 
 const POSTURES = [

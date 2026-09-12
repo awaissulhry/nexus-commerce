@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * G.1 — Always-on repricer scheduler.
  *
@@ -117,7 +118,7 @@ export async function runRepricerTick(
     // Find the ChannelListing this snapshot maps to. SKU + channel +
     // marketplace is the natural key.
     const variant = await prisma.productVariation.findUnique({
-      where: { sku: snap.sku },
+      where: { workspace_sku: workspaceKey({ sku: snap.sku }) },
       select: { productId: true },
     })
     const standalone = variant

@@ -11,6 +11,7 @@ interface Row {
   channelType: string
   isActive: boolean
   externalAccountId: string | null
+  managedBy?: string
 }
 
 const rows: Row[] = []
@@ -55,6 +56,10 @@ beforeEach(() => {
 })
 
 describe('placeGrant — identity known', () => {
+  it('never reuses a connection retired by a business profile assignment', async () => {
+    rows.push({ id: 'retired', channelType: 'EBAY', isActive: false, externalAccountId: null, managedBy: 'transferred' })
+    await expect(placeGrant({ channelType: 'EBAY', channelLabel: LABEL, identity: identity('U1'), targetConnectionId: 'retired' })).rejects.toMatchObject({ code: 'ADOPT_TARGET_INVALID' })
+  })
   it('an active row already carrying this identity → reconsent onto that row', async () => {
     rows.push({ id: 'c1', channelType: 'EBAY', isActive: true, externalAccountId: 'U1' })
     rows.push({ id: 'c2', channelType: 'EBAY', isActive: true, externalAccountId: 'U2' })
@@ -62,11 +67,10 @@ describe('placeGrant — identity known', () => {
     expect(r).toEqual({ kind: 'reconsent', connectionId: 'c2' })
   })
 
-  it('reconsent wins even when the operator named a different target', async () => {
+  it('refuses reconnecting a different target when this seller is already connected', async () => {
     rows.push({ id: 'c1', channelType: 'EBAY', isActive: true, externalAccountId: 'U1' })
     rows.push({ id: 'c9', channelType: 'EBAY', isActive: true, externalAccountId: null })
-    const r = await placeGrant({ channelType: 'EBAY', channelLabel: LABEL, identity: identity('U1'), targetConnectionId: 'c9' })
-    expect(r).toEqual({ kind: 'reconsent', connectionId: 'c1' })
+    await expect(placeGrant({ channelType: 'EBAY', channelLabel: LABEL, identity: identity('U1'), targetConnectionId: 'c9' })).rejects.toMatchObject({ code: 'ADOPT_TARGET_INVALID' })
   })
 
   it('an inactive row with the same identity does not count as a match', async () => {

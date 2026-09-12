@@ -1,4 +1,9 @@
 import { describe, it, expect, vi } from 'vitest'
+// These tests own the legacy creation contract; the new presentation boundary is tested
+// through its real store and adapters in ebay-presentation-workflow.vitest.test.ts.
+vi.mock('./ebay-presentation-consumer.service.js', () => ({ assertLegacyPresentationPublishAllowed: vi.fn(async () => undefined) }))
+vi.mock('../db.js', () => ({ default: { product: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []) }, channelListing: { findFirst: vi.fn(async () => null) }, productImage: { findMany: vi.fn(async () => []) } } }))
+vi.mock('./ebay-description-theme.service.js', () => ({ renderListingDescriptionSafe: vi.fn(async (_db: unknown, args: { body: string }) => ({ html: args.body, warnings: [] })) }))
 import { Prisma } from '@prisma/client'
 import { buildSharedListingInput, createSharedListing, pushSharedListings } from './ebay-shared-listing-push.service.js'
 

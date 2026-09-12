@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Lock as LockIcon, ArrowLeft, Package, AlertCircle, X,
   Clock, CheckCircle2, Ban,

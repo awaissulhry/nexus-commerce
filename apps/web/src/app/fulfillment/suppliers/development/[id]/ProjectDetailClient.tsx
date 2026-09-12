@@ -6,7 +6,8 @@
 // page with the shared Card/Badge/Button components.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   ArrowLeft, Rocket, Plus, Trash2, Star, Upload, FileText, ExternalLink, Send,
 } from 'lucide-react'

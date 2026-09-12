@@ -1,3 +1,6 @@
+import { createHmac, timingSafeEqual } from 'node:crypto'
+import { scopePublicToken, publicLinkSalt } from '../../lib/workspace-public-links.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * RV.9.5 — Email suppression service.
  *
@@ -78,7 +81,7 @@ export async function addSuppression(opts: {
     return { created: true }
   }
   await prisma.emailSuppression.upsert({
-    where: { email_channel: { email: lower, channel: opts.channel } },
+    where: { email_channel: workspaceKey({ email: lower, channel: opts.channel }) },
     update: {
       source: opts.source,
       reason: opts.reason ?? null,
@@ -116,19 +119,23 @@ export async function removeSuppression(opts: {
 }
 
 /**
- * Generate a deterministic, non-reversible unsubscribe token. We don't
- * want raw email in the URL (leaks PII via referrer/logs). Token = base64
- * of (email + secret) — same email always produces same token so a
- * customer can re-use a forwarded unsubscribe link.
+ * New links authenticate the email and business. Previously issued links
+ * continue to opt out only from the original business.
  */
 export function unsubscribeTokenFor(email: string): string {
-  const secret = process.env.NEXUS_UNSUBSCRIBE_SECRET ?? 'xavia-default-secret'
-  const payload = `${email.trim().toLowerCase()}|${secret}`
-  // Simple HMAC-less base64url — the secret prevents trivial guessing of
-  // tokens but this is not authenticated; the unsubscribe endpoint
-  // confirms intent with a one-click form. Good enough for opt-out
-  // tokens (no destructive action possible from leak).
-  return Buffer.from(payload).toString('base64url').slice(0, 32)
+  const secret = process.env.NEXUS_UNSUBSCRIBE_SECRET
+  if (!secret && !publicLinkSalt()) return legacyUnsubscribeToken(email)
+  if (!secret) throw new Error('Configure the unsubscribe signing secret before sending review email.')
+  return scopePublicToken(createHmac('sha256', secret).update(`${publicLinkSalt()}${email.trim().toLowerCase()}`).digest('base64url'))
+}
+
+function legacyUnsubscribeToken(email: string): string {
+  return Buffer.from(`${email.trim().toLowerCase()}|${process.env.NEXUS_UNSUBSCRIBE_SECRET ?? 'xavia-default-secret'}`).toString('base64url').slice(0, 32)
+}
+export function verifyUnsubscribeToken(email: string, token: string): boolean {
+  const equals = (expected: string) => token.length === expected.length && timingSafeEqual(Buffer.from(token), Buffer.from(expected))
+  if (!publicLinkSalt() && equals(legacyUnsubscribeToken(email))) return true
+  try { return equals(unsubscribeTokenFor(email)) } catch { return false }
 }
 
 export function emailFromUnsubscribeToken(token: string, candidates: string[]): string | null {
@@ -137,7 +144,7 @@ export function emailFromUnsubscribeToken(token: string, candidates: string[]): 
   // unsubscribe route accepts both ?token=X and ?email=foo@bar.com and
   // re-verifies the email vs token before suppressing.
   for (const email of candidates) {
-    if (unsubscribeTokenFor(email) === token) return email
+    if (verifyUnsubscribeToken(email, token)) return email
   }
   return null
 }

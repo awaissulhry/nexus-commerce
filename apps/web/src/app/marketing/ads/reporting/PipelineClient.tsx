@@ -14,7 +14,7 @@
  * back nothing, and only the gap between those two shows it.
  */
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Pill } from '@/design-system/primitives/Pill'

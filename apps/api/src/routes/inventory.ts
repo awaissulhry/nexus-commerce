@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import { ServerTiming } from "../utils/server-timing.js";
@@ -347,7 +348,7 @@ export async function inventoryRoutes(app: FastifyInstance) {
 
         // Find product with variants
         const product = await prisma.product.findUnique({
-          where: { sku: productSku },
+          where: { workspace_sku: workspaceKey({ sku: productSku }) },
           include: { variations: true },
         });
 

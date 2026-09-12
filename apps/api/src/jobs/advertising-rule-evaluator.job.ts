@@ -1996,8 +1996,8 @@ export function startAdvertisingRuleEvaluatorCron(): void {
     logger.error('advertising-rule-evaluator cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runAdvertisingRuleEvaluatorCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runAdvertisingRuleEvaluatorCron()
   })
   logger.info('advertising-rule-evaluator cron: scheduled', { schedule })
 }

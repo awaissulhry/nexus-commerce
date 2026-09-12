@@ -44,7 +44,7 @@ const emit = (rows: ReadonlyArray<CssVar>, indent = '  '): string =>
     .map((r) => `${r.section ? `\n${indent}/* ── ${r.section} ── */\n` : ''}${indent}${r.name}: ${r.value};`)
     .join('\n')
 
-const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark {\n${emit(cssVarsDark)}\n}\n`
+const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n`
 
 const GLOBAL_HEAD = `/**
  * GENERATED — do not edit by hand.
@@ -57,7 +57,7 @@ const GLOBAL_HEAD = `/**
  */`
 
 const globalVars = cssVars.filter((r) => !CONTESTED.has(r.name))
-const cssGlobal = `${GLOBAL_HEAD}\n\n:root {\n${emit(globalVars)}\n}\n\n.dark {\n${emit(cssVarsDark)}\n}\n`
+const cssGlobal = `${GLOBAL_HEAD}\n\n:root {\n${emit(globalVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n`
 
 if (process.argv.includes('--check')) {
   let stale = false

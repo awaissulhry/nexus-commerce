@@ -7,8 +7,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { Listbox, MultiSelect } from '@/design-system/components'
 import { GridToolbar } from '@/design-system/patterns'

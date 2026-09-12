@@ -7,13 +7,15 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { productWorkspaceHref } from '@/app/_shared/product-workspace-href'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles, Search, RefreshCw,
   ExternalLink, Eye, Filter, Settings2, X, ChevronDown,
-  EyeOff, CheckCircle2, Tag, Link2,
-  ArrowUpRight, Package, Plus, Pause, Play,
+  CheckCircle2, Tag, Link2,
+  ArrowUpRight, Package, Plus,
   Edit3, Bookmark, BookmarkPlus, Star, Trash2,
   Download, FilterX, AlertCircle, Activity, TrendingUp,
 } from 'lucide-react'
@@ -63,6 +65,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge'
 import { InlineEditTrigger } from '@/components/ui/InlineEditTrigger'
 import { Listbox } from '@/design-system/components/Listbox'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
+import { Button as NexusButton } from '@/design-system/primitives'
 import { useToast } from '@/components/ui/Toast'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { COUNTRY_NAMES } from '@/lib/country-names'
@@ -103,6 +106,8 @@ type SavedListingsView = {
 type Listing = {
   id: string
   productId: string
+  channelConnectionId?: string | null
+  aliasKey?: string
   channel: string
   marketplace: string
   listingStatus: string
@@ -2412,7 +2417,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
             rowId={l.product.id}
             primaryAction={{
               label: t('listings.actions.editProduct'),
-              href: `/products/${l.product.id}/edit`,
+              href: `/products/${l.product.id}/edit/studio`,
             }}
           />
         )
@@ -2436,7 +2441,7 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
           ]}
           primaryAction={{
             label: t('listings.actions.edit'),
-            href: `/products/${l.productId}/edit?channel=${l.channel}&marketplace=${l.marketplace}`,
+            href: productWorkspaceHref(l),
           }}
         />
       )
@@ -2458,15 +2463,11 @@ function CellRenderer({ col, listing, isParentRow = false, onOpenDrawer, onResyn
 // and the safe inverse is "follow master", which the operator can
 // trigger explicitly if they want it.
 const INVERSE_BULK_ACTION: Record<string, string> = {
-  publish: 'unpublish',
-  unpublish: 'publish',
   'follow-master': 'unfollow-master',
   'unfollow-master': 'follow-master',
 }
 
 const ACTION_PAST_LABEL: Record<string, string> = {
-  publish: 'Published',
-  unpublish: 'Unpublished',
   resync: 'Resynced',
   'set-price': 'Price set on',
   'follow-master': 'Following master on',
@@ -2478,7 +2479,6 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
   const [busy, setBusy] = useState(false)
   const [jobStatus, setJobStatus] = useState<string | null>(null)
   const [setPriceOpen, setSetPriceOpen] = useState(false)
-  const confirm = useConfirm()
   const { toast } = useToast()
   const { t } = useTranslations()
 
@@ -2527,26 +2527,6 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
   )
 
   const runAction = async (action: string, payload?: any) => {
-    // C.5 — confirm step for destructive bulk operations. Today
-    // unpublish is the only one that takes listings off marketplaces;
-    // the others (resync, follow-master, set-price) either don't
-    // change visible state from the buyer's POV or get confirmed via
-    // their own dedicated modal.
-    if (action === 'unpublish') {
-      const ok = await confirm({
-        title: t(
-          selectedIds.length === 1
-            ? 'listings.bulk.unpublishConfirm.title'
-            : 'listings.bulk.unpublishConfirm.titlePlural',
-          { count: selectedIds.length },
-        ),
-        description: t('listings.bulk.unpublishConfirm.description'),
-        confirmLabel: t('listings.bulk.unpublish'),
-        tone: 'danger',
-      })
-      if (!ok) return
-    }
-
     setBusy(true)
     // Snapshot at the start of the action so the undo target is
     // stable even after the bar's selection clears on success.
@@ -2645,8 +2625,6 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
   }
 
   const bulkActions: BulkAction[] = [
-    { id: 'publish',      label: t('listings.bulk.publish'),       icon: Eye,    tone: 'primary', onClick: () => runAction('publish') },
-    { id: 'unpublish',    label: t('listings.bulk.unpublish'),     icon: EyeOff, tone: 'danger',  onClick: () => runAction('unpublish') },
     { id: 'resync',       label: t('listings.bulk.resync'),        icon: RefreshCw,               onClick: () => runAction('resync') },
     { id: 'set-price',    label: t('listings.bulk.setPrice'),      icon: Tag,                     onClick: () => setSetPriceOpen(true) },
     { id: 'follow',       label: t('listings.bulk.followMaster'),  icon: Link2,                   onClick: () => runAction('follow-master') },
@@ -2655,6 +2633,8 @@ function BulkActionBar({ selectedIds, onClear, onComplete }: { selectedIds: stri
 
   return (
     <>
+      {selectedIds.length > 0 && selectedIds.length <= 200 && <NexusButton asChild size="sm"><Link href={`/products/listing-readiness?${new URLSearchParams({ listingIds: selectedIds.join(',') })}`}>Check listing readiness</Link></NexusButton>}
+      {selectedIds.length > 200 && <p>Select 200 or fewer listings to check readiness.</p>}
       <BulkActionShell
         selectedCount={selectedIds.length}
         noun="listing"
@@ -3946,7 +3926,7 @@ function MatrixLens({ lockChannel }: { lockChannel?: string; marketplaces: Marke
                         role="rowheader"
                         className="px-3 py-2 sticky left-0 bg-white dark:bg-slate-900 border-r border-subtle dark:border-slate-800 z-10 group-hover/row:bg-slate-50/50"
                       >
-                        <Link href={`/products/${p.id}/edit`} className="hover:text-blue-600 block">
+                        <Link href={`/products/${p.id}/edit/studio`} className="hover:text-blue-600 block">
                           <div className="text-md font-medium text-slate-900 dark:text-slate-100 truncate max-w-xs">{p.name}</div>
                           <div className="text-sm text-slate-500 dark:text-slate-400 font-mono">{p.sku}</div>
                         </Link>
@@ -4386,7 +4366,6 @@ function CellInlineActions({
   listingUrl,
   channel,
   listingId,
-  isPublished,
   onSync,
 }: {
   listingUrl: string | null
@@ -4406,22 +4385,7 @@ function CellInlineActions({
           onSync()
         }}
       />
-      <CellActionButton
-        icon={isPublished ? Pause : Play}
-        label={isPublished ? 'Pause listing' : 'Resume listing'}
-        onClick={async (e) => {
-          e.stopPropagation()
-          await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: isPublished ? 'unpublish' : 'publish',
-              listingIds: [listingId],
-            }),
-          })
-          emitInvalidation({ type: 'listing.updated', id: listingId })
-        }}
-      />
+      <NexusButton asChild size="xs" variant="quiet" onClick={e => e.stopPropagation()}><Link aria-label="Review listing readiness" href={`/products/listing-readiness?${new URLSearchParams({ listingIds: listingId })}`}><Eye size={11} aria-hidden /></Link></NexusButton>
       {listingUrl && (
         <CellActionButton
           icon={ExternalLink}
@@ -4982,13 +4946,6 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
     }
   }
 
-  const togglePublish = async () => {
-    if (!listing) return
-    setActionPending('publish')
-    await patch({ isPublished: !listing.isPublished })
-    setActionPending(null)
-  }
-
   const tabs = useMemo(() => {
     const errorCount = listing?.lastSyncError ? 1 : 0
     return [
@@ -5081,16 +5038,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                   Sync
                 </button>
               </Tooltip>
-              <Tooltip content={listing.isPublished ? 'Pause this listing on the marketplace' : 'Resume this listing'}>
-                <button
-                  onClick={togglePublish}
-                  disabled={actionPending === 'publish'}
-                  className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 inline-flex items-center gap-1.5"
-                >
-                  {listing.isPublished ? <Pause size={11} /> : <Play size={11} />}
-                  {listing.isPublished ? 'Pause' : 'Resume'}
-                </button>
-              </Tooltip>
+              <NexusButton asChild size="sm"><Link href={`/products/listing-readiness?${new URLSearchParams({ listingIds: listing.id })}`}>Review listing readiness</Link></NexusButton>
               {listing.listingUrl && (
                 <Tooltip content={`Open on ${listing.channel.toLowerCase()}`}>
                   <a
@@ -5105,7 +5053,7 @@ function ListingDrawer({ id: initialId, onClose, onChanged }: { id: string; onCl
                 </Tooltip>
               )}
               <Link
-                href={`/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`}
+                href={productWorkspaceHref(listing)}
                 className="h-7 px-2.5 text-sm bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border border-default dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center gap-1.5"
               >
                 <Edit3 size={11} />
@@ -5177,7 +5125,7 @@ function DetailTab({ listing, patch }: { listing: any; patch: (body: any) => Pro
         await patch({ [key]: true })
       },
       onEdit: () => {
-        window.location.href = `/products/${listing.productId}/edit?channel=${listing.channel}&marketplace=${listing.marketplace}`
+        window.location.href = productWorkspaceHref(listing)
       },
       onViewMarketplace: () => {
         if (listing.listingUrl) window.open(listing.listingUrl, '_blank', 'noopener,noreferrer')

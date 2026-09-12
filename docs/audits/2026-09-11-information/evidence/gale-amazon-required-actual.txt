@@ -1,0 +1,1176 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to system theme":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+        - generic: Home
+      - link "Products 37 pending":
+        - /url: /products
+        - generic: Products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic: Listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+        - generic: Stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+        - generic: Inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic: Outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+        - generic: Replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+        - generic: Purchase Orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+        - generic: Suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+        - generic: Carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+        - generic: Returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic: Orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+        - generic: Pricing
+      - link "Insights":
+        - /url: /insights
+        - generic: Insights
+      - link "Advertising":
+        - /url: /marketing/ads
+        - generic: Advertising
+      - link "Calendar":
+        - /url: /marketing/calendar
+        - generic: Calendar
+      - link "Content":
+        - /url: /marketing/content
+        - generic: Content
+      - link "Reviews":
+        - /url: /marketing/reviews
+        - generic: Reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+        - generic: Agent Fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic: Inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+        - generic: Sync Logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic: Connections
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+        - generic: Mappings
+      - link "Settings":
+        - /url: /settings
+        - generic: Settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+        - generic: Recycle Bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic: Active
+  - generic: Parent
+  - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Warnings 100%":
+      - generic: Shared product
+      - generic: ·
+      - generic: Warnings
+      - generic: 100%
+    - radio "Amazon Blocked 41%" [checked]:
+      - generic: Amazon
+      - generic: ·
+      - generic: Blocked
+      - generic: 41%
+    - radio "eBay Not set up":
+      - generic: eBay
+      - generic: ·
+      - generic: Not set up
+    - radio "Shopify":
+      - generic: Shopify
+    - radio "Etsy":
+      - generic: Etsy
+  - button "Market":
+    - generic: IT · Italy
+  - region "Information":
+    - text: 21 rows
+    - generic: · 1 listing · 20 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "Required (32)":
+      - text: Required (32)
+    - button "Required 32 columns" [active] [pressed]:
+      - generic: Required
+      - generic: 32 columns
+    - button "Essentials 35 columns":
+      - generic: Essentials
+      - generic: 35 columns
+    - button "Localized content 14 columns":
+      - generic: Localized content
+      - generic: 14 columns
+    - 'button "Missing required: 381 affected cells across 20 columns and 21 rows"':
+      - generic: Missing required
+      - generic: 20 columns
+    - 'button "Warnings: 42 affected cells across 2 columns and 21 rows"':
+      - generic: Warnings
+      - generic: 2 columns
+    - 'button "Invalid values: 58 affected cells across 3 columns and 20 rows"':
+      - text: Invalid values
+      - generic: 3 columns
+    - button "Requirements"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product type Brand Title External Product ID Merchant Suggested ASIN Manufacturer Model Name Product Description Bullet 1 Fabric Type":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product type":
+            - generic: Product type
+          - columnheader "Brand":
+            - generic: Brand
+          - columnheader "Title":
+            - generic: Title
+          - columnheader "External Product ID":
+            - generic: External Product ID
+          - columnheader "Merchant Suggested ASIN":
+            - generic: Merchant Suggested ASIN
+          - columnheader "Manufacturer":
+            - generic: Manufacturer
+          - columnheader "Model Name":
+            - generic: Model Name
+          - columnheader "Product Description":
+            - generic: Product Description
+          - columnheader "Bullet 1":
+            - generic: Bullet 1
+          - columnheader "Fabric Type":
+            - generic: Fabric Type
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing B0F7J163XJ · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: GALE-JACKET
+            - img "Primary · Listing active · Listing B0F7J163XJ · 20 variants · Errors — 41% of required fields filled · 21 rows missing required · 439 blocked":
+              - generic: 41%
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Product type"':
+          - 'gridcell "XAVIA RACING WWW.XAVIARACING.IT Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET, Brand"':
+            - generic: XAVIA RACING WWW.XAVIARACING.IT
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Title"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, External Product ID"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, External Product ID"':
+          - 'gridcell "B0F7J163XJ Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Manufacturer"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Manufacturer"':
+          - 'gridcell "Not measured Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Model Name"':
+            - generic: —
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL GALE-JACKET-BLACK-MEN-3XL — 23 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-3XL
+            - img "GALE-JACKET-BLACK-MEN-3XL — 23 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 14%
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (3XL, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (3XL, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-3XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-3XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL GALE-JACKET-BLACK-MEN-4XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-4XL
+            - img "GALE-JACKET-BLACK-MEN-4XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (4XL, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (4XL, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-4XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-4XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL GALE-JACKET-BLACK-MEN-5XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-5XL
+            - img "GALE-JACKET-BLACK-MEN-5XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (5XL, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (5XL, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-5XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-5XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L GALE-JACKET-BLACK-MEN-L — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-L
+            - img "GALE-JACKET-BLACK-MEN-L — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-L, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-L, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (L, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (L, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-L, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-L, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-L, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-L, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-L, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-L, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-L, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-L, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-L, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-L, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M GALE-JACKET-BLACK-MEN-M — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-M
+            - img "GALE-JACKET-BLACK-MEN-M — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-M, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-M, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (M, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (M, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-M, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-M, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-M, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-M, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-M, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-M, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-M, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-M, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-M, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-M, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S GALE-JACKET-BLACK-MEN-S — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-S
+            - img "GALE-JACKET-BLACK-MEN-S — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-S, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-S, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (S, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (S, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-S, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-S, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-S, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-S, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-S, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-S, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-S, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-S, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-S, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-S, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL GALE-JACKET-BLACK-MEN-XL — 23 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XL
+            - img "GALE-JACKET-BLACK-MEN-XL — 23 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 14%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+          - 'gridcell "OUTERWEAR Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product type"':
+          - 'gridcell "Xavia Linked field. Follows a shared field link; its configured source determines the value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Brand"':
+            - generic: Xavia
+            - 'button "Linked field. Follows a shared field link; its configured source determines the value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XL, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XL, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS GALE-JACKET-BLACK-MEN-XS — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XS
+            - img "GALE-JACKET-BLACK-MEN-XS — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XS, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XS, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XS, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XS, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XS, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XS, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XS, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XS, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XS, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XS, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XS, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XS, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL GALE-JACKET-BLACK-MEN-XXL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXL
+            - img "GALE-JACKET-BLACK-MEN-XXL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXL, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXL, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS GALE-JACKET-BLACK-MEN-XXS — 26 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXS
+            - img "GALE-JACKET-BLACK-MEN-XXS — 26 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 16%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXS, Nero) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXS, Nero)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXS, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-BLACK-MEN-XXS, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL GALE-JACKET-YELLOW-MEN-3XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-3XL
+            - img "GALE-JACKET-YELLOW-MEN-3XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (3XL, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (3XL, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL GALE-JACKET-YELLOW-MEN-4XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-4XL
+            - img "GALE-JACKET-YELLOW-MEN-4XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (4XL, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (4XL, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL GALE-JACKET-YELLOW-MEN-5XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-5XL
+            - img "GALE-JACKET-YELLOW-MEN-5XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (5XL, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (5XL, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L GALE-JACKET-YELLOW-MEN-L — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-L
+            - img "GALE-JACKET-YELLOW-MEN-L — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-L, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-L, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (L, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (L, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-L, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-L, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-L, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-L, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-L, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-L, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-L, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-L, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-L, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-L, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M GALE-JACKET-YELLOW-MEN-M — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-M
+            - img "GALE-JACKET-YELLOW-MEN-M — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-M, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-M, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (M, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (M, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-M, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-M, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-M, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-M, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-M, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-M, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-M, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-M, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-M, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-M, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S GALE-JACKET-YELLOW-MEN-S — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-S
+            - img "GALE-JACKET-YELLOW-MEN-S — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-S, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-S, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (S, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (S, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-S, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-S, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-S, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-S, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-S, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-S, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-S, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-S, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-S, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-S, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL GALE-JACKET-YELLOW-MEN-XL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XL
+            - img "GALE-JACKET-YELLOW-MEN-XL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XL, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XL, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS GALE-JACKET-YELLOW-MEN-XS — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XS
+            - img "GALE-JACKET-YELLOW-MEN-XS — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XS, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XS, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL GALE-JACKET-YELLOW-MEN-XXL — 24 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXL
+            - img "GALE-JACKET-YELLOW-MEN-XXL — 24 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 15%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXL, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXL, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Fabric Type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS GALE-JACKET-YELLOW-MEN-XXS — 26 of 159 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXS
+            - img "GALE-JACKET-YELLOW-MEN-XXS — 26 of 159 channel fields filled (including optional fields) · errors":
+              - generic: 16%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+          - 'gridcell "OUTERWEAR Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product type"':
+            - generic: OUTERWEAR
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product type"':
+          - 'gridcell "Xavia Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Brand"':
+            - generic: Xavia
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Brand"':
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXS, Giallo) Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XXS, Giallo)
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: External Product ID. Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, External Product ID"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: External Product ID."': "!"
+            - 'button "Follows Master. Uses Master’s gtin for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: External Product ID. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, External Product ID"':
+          - 'gridcell "B0F7J163XJ Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Merchant Suggested ASIN"':
+            - generic: B0F7J163XJ
+            - 'generic "Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN."': "!"
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Field validation: Required by the category''s condition for this product: Merchant Suggested ASIN. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Merchant Suggested ASIN"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Manufacturer. Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Manufacturer"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Manufacturer."': "!"
+            - 'button "Follows Master. Uses Master’s manufacturer for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Manufacturer. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Manufacturer"':
+          - 'gridcell "Not measured Field validation: Required by the category''s condition for this product: Model Name. Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Model Name"':
+            - generic: —
+            - 'generic "Field validation: Required by the category''s condition for this product: Model Name."': "!"
+            - 'button "Follows Master. Uses Master’s model_name for this product and content language. The configured source currently produces no value. Field validation: Required by the category''s condition for this product: Model Name. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Model Name"':
+          - gridcell:
+            - generic: Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product Description"':
+          - 'gridcell "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull''addome E Sulla Schiena. Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Bullet 1"':
+            - generic: "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena."
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Bullet 1"':
+          - 'gridcell "Polyester Within the cap Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Fabric Type"':
+            - generic: Polyester
+            - img "Within the cap": ●
+            - 'button "Follows Master. Uses Master’s fabric_type for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Fabric Type"':
+    - status:
+      - generic: 21 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

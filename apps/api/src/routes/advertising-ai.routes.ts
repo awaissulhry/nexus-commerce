@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AIAD — AI Advertising routes: goal materialization + the dashboard metrics rollup.
  * 🔴 A NEW FILE, not `advertising.routes.ts`, on purpose (same reason as
@@ -147,7 +148,7 @@ const advertisingAiRoutes: FastifyPluginAsync = async (fastify) => {
     if (typeof b.id !== 'string' || !b.id) { reply.status(400); return { error: 'id required' } }
     const prisma = (await import('../db.js')).default
     await prisma.adsSuggestionMute.upsert({
-      where: { scope_entityType_entityId: { scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id } },
+      where: { scope_entityType_entityId: workspaceKey({ scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id }) },
       create: {
         scope: 'recommendations', entityType: 'RECOMMENDATION', entityId: b.id,
         entityName: typeof b.label === 'string' ? b.label.slice(0, 300) : null,

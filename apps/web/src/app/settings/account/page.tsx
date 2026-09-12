@@ -11,6 +11,7 @@ export default async function AccountSettingsPage() {
   try {
     settings = await (prisma as any).accountSettings.findFirst()
   } catch (err) {
+    if (process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1') throw err
     // eslint-disable-next-line no-console
     console.error('[settings/account] prisma error:', err)
     settings = null
@@ -29,6 +30,7 @@ export default async function AccountSettingsPage() {
         timezone: settings.timezone,
         currency: settings.currency,
         primaryMarketplace: settings.primaryMarketplace ?? null,
+        updatedAt: settings.updatedAt.toISOString(),
       } : null}
     />
   )

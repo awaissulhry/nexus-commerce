@@ -3,8 +3,11 @@
  * `@/design-system/patterns/workspace-grid`, making the #13 decision real: the ads console's grid
  * IS the platform's workspace grid, and the DS `DataGrid` is the one being retired.
  *
- * This file re-exports it so 49 component call sites and 83 type imports did not have to change in
- * the same commit as the move. New code should import from `@/design-system/patterns`.
+ * AGW (2026-09-05) — the engine under it is AG Grid Enterprise: `@/design-system/grid/workspace`, the
+ * IDENTICAL `WorkspaceGridProps`. The legacy grid was measured in a browser on 17 console pages before
+ * this flip (the programme's baseline; every record stamped `engine: 'legacy'`), and its hand-rolled
+ * body is frozen under `app/design/grid-lab/legacy/LegacyWorkspaceGrid.stories.tsx` for the parity lab only.
+ * Rollback is these two exports pointing back at that copy — nothing else in the console changes.
  */
 export {
   WorkspaceGrid,
@@ -13,7 +16,7 @@ export {
   stripServerKeys,
   isServerKey,
   enabledRank,
-} from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
+} from '@/design-system/grid/workspace'
 export type {
   GridPrefs,
   GridColumn,
@@ -28,4 +31,4 @@ export type {
   FilterState,
   WorkspaceGridProps,
   WorkspaceGridProps as AdsDataGridProps,
-} from '@/design-system/patterns/workspace-grid/WorkspaceGrid'
+} from '@/design-system/grid/workspace'

@@ -1,0 +1,2034 @@
+- banner:
+  - link "PageSpeed Insights logo PageSpeed Insights":
+    - /url: ./
+    - img "PageSpeed Insights logo"
+    - generic: PageSpeed Insights
+  - button "Copy Link":
+    - generic: Copy Link
+  - generic: Docs
+  - link "Docs":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+- generic: This site uses cookies from Google to deliver its services and to analyze traffic.
+- generic: Learn More.
+- link "Learn More.":
+  - /url: https://policies.google.com/technologies/cookies
+- button "Ok, Got it.":
+  - generic: Ok, Got it.
+- generic: Report from Sep 8, 2026, 11:46:12 PM
+- textbox:
+  - /placeholder: Enter a web page URL
+  - text: https://xaviaracing.it/products/gale-jacket
+- paragraph: Enter a valid URL
+- button "Analyze":
+  - generic: Analyze
+- tablist:
+  - tab "Mobile" [selected]:
+    - generic: smartphone
+    - generic: Mobile
+  - tab "Desktop":
+    - generic: computer
+    - generic: Desktop
+- tabpanel "Mobile":
+  - generic: Discover what your real users are experiencing
+  - button "button":
+  - generic: No Data
+  - separator
+  - generic: Diagnose performance issues
+  - article:
+    - link "50 Performance":
+      - /url: "#performance"
+      - generic: "50"
+      - generic: Performance
+    - link "94 Accessibility":
+      - /url: "#accessibility"
+      - generic: "94"
+      - generic: Accessibility
+    - link "92 Best Practices":
+      - /url: "#best-practices"
+      - generic: "92"
+      - generic: Best Practices
+    - link "100 SEO":
+      - /url: "#seo"
+      - generic: "100"
+      - generic: SEO
+    - link "4/4 Agentic Browsing":
+      - /url: "#agentic-browsing"
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: Values are estimated and may vary. The
+    - link "performance score is calculated":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: directly from these metrics.
+    - link "See calculator.":
+      - /url: https://googlechrome.github.io/lighthouse/scorecalc/#FCP=2851&LCP=4823&TBT=1366&CLS=0&SI=4498&TTI=21742&device=mobile&version=13.4.1
+    - generic: 0–49
+    - generic: 50–89
+    - generic: 90–100
+    - img "Final Screenshot"
+    - checkbox "Toggle the display of metric descriptions"
+    - generic: Metrics
+    - generic: Expand view
+    - generic: First Contentful Paint
+    - generic: 2.9 s
+    - generic: Largest Contentful Paint
+    - generic: 4.8 s
+    - generic: Total Blocking Time
+    - generic: 1,370 ms
+    - generic: Cumulative Layout Shift
+    - generic: "0"
+    - generic: Speed Index
+    - generic: 4.5 s
+    - list:
+      - listitem: Captured at Sep 8, 2026, 11:46 PM GMT+2
+      - listitem: Emulated Moto G Power with Lighthouse 13.4.1
+      - listitem: Single page session
+      - listitem: Initial page load
+      - listitem: Slow 4G throttling
+      - listitem: Using HeadlessChromium 151.0.7922.71 with lr
+    - button "View Treemap"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - img "Screenshot"
+    - generic: "Show audits relevant to:"
+    - radio "All" [checked]
+    - generic: All
+    - radio "FCP"
+    - generic "First Contentful Paint": FCP
+    - radio "LCP"
+    - generic "Largest Contentful Paint": LCP
+    - radio "TBT"
+    - generic "Total Blocking Time": TBT
+    - radio "CLS"
+    - generic "Cumulative Layout Shift": CLS
+    - generic: Insights
+    - generic "Use efficient cache lifetimes —Est savings of 271 KiB":
+      - generic: Use efficient cache lifetimes
+      - text: —Est savings of 271 KiB
+    - generic "Render-blocking requests —Est savings of 160 ms":
+      - generic: Render-blocking requests
+      - text: —Est savings of 160 ms
+    - generic "Forced reflow":
+      - generic: Forced reflow
+    - generic "LCP request discovery":
+      - generic: LCP request discovery
+    - 'generic "Network dependency tree Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."':
+      - generic: Network dependency tree
+      - generic: "Warnings: More than 4 `preconnect` connections were found. These should be used sparingly and only to the most important origins."
+    - generic "Font display —Est savings of 20 ms":
+      - generic: Font display
+      - text: —Est savings of 20 ms
+    - generic "Improve image delivery —Est savings of 926 KiB":
+      - generic: Improve image delivery
+      - text: —Est savings of 926 KiB
+    - generic "Legacy JavaScript —Est savings of 25 KiB":
+      - generic: Legacy JavaScript
+      - text: —Est savings of 25 KiB
+    - generic "Layout shift culprits":
+      - generic: Layout shift culprits
+    - generic "Optimize DOM size":
+      - generic: Optimize DOM size
+    - generic "LCP breakdown":
+      - generic: LCP breakdown
+    - generic "3rd parties" [active]:
+      - generic: 3rd parties
+    - text: 3rd party code can significantly impact load performance.
+    - link "Reduce and defer loading of 3rd party code":
+      - /url: https://developer.chrome.com/docs/performance/insights/third-parties?utm_source=lighthouse&utm_medium=lr
+    - text: to prioritize your page's content.
+    - generic "This audit does not contribute to the overall category score.": Unscored
+    - table:
+      - rowgroup:
+        - row "3rd party Transfer size Main thread time":
+          - columnheader "3rd party":
+            - generic: 3rd party
+          - columnheader "Transfer size":
+            - generic: Transfer size
+          - columnheader "Main thread time":
+            - generic: Main thread time
+      - rowgroup:
+        - row "PayPal utility 386 KiB 517 ms":
+          - cell "PayPal utility":
+            - generic: PayPal
+            - generic: utility
+          - cell "386 KiB":
+            - generic "395,675 bytes": 386 KiB
+          - cell "517 ms":
+            - generic: 517 ms
+        - row "/sdk/js?components=…(www.paypal.com) 200 KiB 356 ms":
+          - cell "/sdk/js?components=…(www.paypal.com)":
+            - generic "https://www.paypal.com/sdk/js?components=buttons&commit=false&currency=EUR&locale=en_US&client-id=AexZEtAxk09Ncgj6FSWFFyGKbxxAZ_LTyJ2DPdJWl1YUlecinmc5AfIaRF2qYjWlusWahlzz6SVkY5Ci&merchant-id=Z58HJUPVZJV3C&intent=authorize":
+              - link "/sdk/js?components=…":
+                - /url: https://www.paypal.com/sdk/js?components=buttons&commit=false&currency=EUR&locale=en_US&client-id=AexZEtAxk09Ncgj6FSWFFyGKbxxAZ_LTyJ2DPdJWl1YUlecinmc5AfIaRF2qYjWlusWahlzz6SVkY5Ci&merchant-id=Z58HJUPVZJV3C&intent=authorize
+              - text: (www.paypal.com)
+          - cell "200 KiB":
+            - generic "205,216 bytes": 200 KiB
+          - cell "356 ms":
+            - generic: 356 ms
+        - row "/smart/buttons?fundingSource=…(www.paypal.com) 180 KiB 161 ms":
+          - cell "/smart/buttons?fundingSource=…(www.paypal.com)":
+            - link "/smart/buttons?fundingSource=…":
+              - /url: https://www.paypal.com/smart/buttons?fundingSource=paypal&style.label=pay&style.layout=horizontal&style.color=gold&style.shape=sharp&style.tagline=false&style.height=54&style.menuPlacement=below&style.disableMaxWidth=true&style.borderRadius=60&style.shouldApplyRebrandedStyles=false&style.isButtonColorABTestMerchant=false&style.isPayNowOrLaterLabelEligible=false&style.shouldApplyPayNowOrLaterLabel=false&style.requestedButtonColor=gold&style.brandVersion=v1&browser_context=unknown&allowBillingPayments=true&applePaySupport=false&buttonSessionID=uid_5496ad06e4_mje6ndy6mtk&buttonSize=large&customerId=&clientID=AexZEtAxk09Ncgj6FSWFFyGKbxxAZ_LTyJ2DPdJWl1YUlecinmc5AfIaRF2qYjWlusWahlzz6SVkY5Ci&clientMetadataID=uid_a6a6e03e91_mje6ndy6mtk&commit=false&components.0=buttons&currency=EUR&debug=false&disableSetCookie=true&eagerOrderCreation=false&env=production&experiment.enableVenmo=false&experiment.venmoDesktopQRCodeEnhancements=false&experiment.venmoVaultWithoutPurchase=false&experiment.spbEagerOrderCreation=false&experiment.venmoWebEnabled=false&experiment.isWebViewEnabled=false&experiment.isPaypalRebrandABTestEnabled=false&experiment.defaultBlueButtonColor=defaultBlue_darkBlue&experiment.isEdgeCacheStaleEnabled=false&experiment.isJunoCircuitBreakerEnabled=false&experiment.venmoEnableWebOnNonNativeBrowser=false&experiment.paypalCreditButtonCreateVaultSetupTokenExists=false&experiment.isPaylaterCobrandedLabelEnabled=false&experiment.isPaylaterCobrandedLabelRandomizationEnabled=true&experiment.isBfcacheEnabled=true&experiment.isStaticFallbackBundleEnabled=false&experiment.isForceStaticFallbackBundleEnabled=false&experiment.isPaypalRebrandEnabled=false&flow=purchase&fundingEligibility=eyJwYXlwYWwiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sInBheWxhdGVyIjp7ImVsaWdpYmxlIjpmYWxzZSwidmF1bHRhYmxlIjpmYWxzZSwicHJvZHVjdHMiOnsicGF5SW4zIjp7ImVsaWdpYmxlIjpmYWxzZSwidmFyaWFudCI6bnVsbH0sInBheUluNCI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhcmlhbnQiOm51bGx9LCJwYXlsYXRlciI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhcmlhbnQiOm51bGx9fX0sImNhcmQiOnsiZWxpZ2libGUiOnRydWUsImJyYW5kZWQiOnRydWUsImluc3RhbGxtZW50cyI6ZmFsc2UsInZlbmRvcnMiOnsidmlzYSI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwibWFzdGVyY2FyZCI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiYW1leCI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiZGlzY292ZXIiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sImhpcGVyIjp7ImVsaWdpYmxlIjpmYWxzZSwidmF1bHRhYmxlIjpmYWxzZX0sImVsbyI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6dHJ1ZX0sImpjYiI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwibWFlc3RybyI6eyJlbGlnaWJsZSI6dHJ1ZSwidmF1bHRhYmxlIjp0cnVlfSwiZGluZXJzIjp7ImVsaWdpYmxlIjp0cnVlLCJ2YXVsdGFibGUiOnRydWV9LCJjdXAiOnsiZWxpZ2libGUiOnRydWUsInZhdWx0YWJsZSI6dHJ1ZX0sImNiX25hdGlvbmFsZSI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6dHJ1ZX19LCJndWVzdEVuYWJsZWQiOnRydWV9LCJ2ZW5tbyI6eyJlbGlnaWJsZSI6ZmFsc2UsInZhdWx0YWJsZSI6ZmFsc2V9LCJpdGF1Ijp7ImVsaWdpYmxlIjpmYWxzZX0sImNyZWRpdCI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJhcHBsZXBheSI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJzZXBhIjp7ImVsaWdpYmxlIjpmYWxzZX0sImlkZWFsIjp7ImVsaWdpYmxlIjpmYWxzZX0sImJhbmNvbnRhY3QiOnsiZWxpZ2libGUiOmZhbHNlfSwiZ2lyb3BheSI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJlcHMiOnsiZWxpZ2libGUiOmZhbHNlfSwic29mb3J0Ijp7ImVsaWdpYmxlIjpmYWxzZX0sIm15YmFuayI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJwMjQiOnsiZWxpZ2libGUiOmZhbHNlfSwid2VjaGF0cGF5Ijp7ImVsaWdpYmxlIjpmYWxzZX0sInBheXUiOnsiZWxpZ2libGUiOmZhbHNlfSwiYmxpayI6eyJlbGlnaWJsZSI6ZmFsc2V9LCJ0cnVzdGx5Ijp7ImVsaWdpYmxlIjpmYWxzZX0sIm94eG8iOnsiZWxpZ2libGUiOmZhbHNlfSwiYm9sZXRvIjp7ImVsaWdpYmxlIjpmYWxzZX0sImJvbGV0b2JhbmNhcmlvIjp7ImVsaWdpYmxlIjpmYWxzZX0sIm1lcmNhZG9wYWdvIjp7ImVsaWdpYmxlIjpmYWxzZX0sIm11bHRpYmFuY28iOnsiZWxpZ2libGUiOmZhbHNlfSwic2F0aXNwYXkiOnsiZWxpZ2libGUiOmZhbHNlfSwicGFpZHkiOnsiZWxpZ2libGUiOmZhbHNlfX0&intent=authorize&locale.lang=en&locale.country=US&merchantID.0=Z58HJUPVZJV3C&hasShippingCallback=false&platform=mobile&renderedButtons.0=paypal&sessionID=uid_a6a6e03e91_mje6ndy6mtk&sdkCorrelationID=prebuild&sdkMeta=eyJ1cmwiOiJodHRwczovL3d3dy5wYXlwYWwuY29tL3Nkay9qcz9jb21wb25lbnRzPWJ1dHRvbnMmY29tbWl0PWZhbHNlJmN1cnJlbmN5PUVVUiZsb2NhbGU9ZW5fVVMmY2xpZW50LWlkPUFleFpFdEF4azA5TmNnajZGU1dGRnlHS2J4eEFaX0xUeUoyRFBkSldsMVlVbGVjaW5tYzVBZklhUkYycVlqV2x1c1dhaGx6ejZTVmtZNUNpJm1lcmNoYW50LWlkPVo1OEhKVVBWWkpWM0MmaW50ZW50PWF1dGhvcml6ZSIsImF0dHJzIjp7ImRhdGEtdWlkIjoidWlkX3RhcXZua3N5Z254emJ5ZWdhbGRnZWx2YnZmcGJybyJ9fQ&sdkVersion=5.0.570&storageID=uid_ee6cdbe4f5_mje6ndy6mtk&buttonColor.shouldApplyRebrandedStyles=false&buttonColor.color=gold&buttonColor.isButtonColorABTestMerchant=false&buttonColor.brandVersion=v1&supportedNativeBrowser=true&supportedNativeVenmoBrowser=true&supportsPopups=true&supportsVenmoPopups=true&vault=false&userAgent=Mozilla%2F5.0%20(Linux%3B%20Android%2011%3B%20moto%20g%20power%20(2022))%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F151.0.0.0%20Mobile%20Safari%2F537.36
+            - text: (www.paypal.com)
+          - cell "180 KiB":
+            - generic "184,268 bytes": 180 KiB
+          - cell "161 ms":
+            - generic: 161 ms
+        - row "…api/logger?disableSetCookie=true(www.paypal.com) 4 KiB 0 ms":
+          - cell "…api/logger?disableSetCookie=true(www.paypal.com)":
+            - generic "https://www.paypal.com/xoplatform/logger/api/logger?disableSetCookie=true":
+              - link "…api/logger?disableSetCookie=true":
+                - /url: https://www.paypal.com/xoplatform/logger/api/logger?disableSetCookie=true
+              - text: (www.paypal.com)
+          - cell "4 KiB":
+            - generic "4,410 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…2.3.7/paypal-blue.svg(www.paypalobjects.com) 2 KiB 0 ms":
+          - cell "…2.3.7/paypal-blue.svg(www.paypalobjects.com)":
+            - generic "https://www.paypalobjects.com/js-sdk-logos/2.3.7/paypal-blue.svg":
+              - link "…2.3.7/paypal-blue.svg":
+                - /url: https://www.paypalobjects.com/js-sdk-logos/2.3.7/paypal-blue.svg
+              - text: (www.paypalobjects.com)
+          - cell "2 KiB":
+            - generic "1,781 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "loloyal.com 387 KiB 517 ms":
+          - cell "loloyal.com":
+            - generic: loloyal.com
+          - cell "387 KiB":
+            - generic "396,255 bytes": 387 KiB
+          - cell "517 ms":
+            - generic: 517 ms
+        - row "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com) 108 KiB 189 ms":
+          - cell "…widget/boom-cend-referral-popup.js?v=178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598":
+              - link "…widget/boom-cend-referral-popup.js?v=178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/boom-cend-referral-popup.js?v=1788841017598
+              - text: (static.loloyal.com)
+          - cell "108 KiB":
+            - generic "110,284 bytes": 108 KiB
+          - cell "189 ms":
+            - generic: 189 ms
+        - row "…js/317.cc5b2e1f.js(static.loloyal.com) 143 KiB 167 ms":
+          - cell "…js/317.cc5b2e1f.js(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js":
+              - link "…js/317.cc5b2e1f.js":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/js/317.cc5b2e1f.js
+              - text: (static.loloyal.com)
+          - cell "143 KiB":
+            - generic "146,059 bytes": 143 KiB
+          - cell "167 ms":
+            - generic: 167 ms
+        - row "…js/index.19507595.js(static.loloyal.com) 92 KiB 103 ms":
+          - cell "…js/index.19507595.js(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/js/index.19507595.js":
+              - link "…js/index.19507595.js":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/js/index.19507595.js
+              - text: (static.loloyal.com)
+          - cell "92 KiB":
+            - generic "93,837 bytes": 92 KiB
+          - cell "103 ms":
+            - generic: 103 ms
+        - row "…widget/boom-cend-widget.js?v=178…(static.loloyal.com) 34 KiB 58 ms":
+          - cell "…widget/boom-cend-widget.js?v=178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/boom-cend-widget.js?v=1788841017598":
+              - link "…widget/boom-cend-widget.js?v=178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/boom-cend-widget.js?v=1788841017598
+              - text: (static.loloyal.com)
+          - cell "34 KiB":
+            - generic "34,920 bytes": 34 KiB
+          - cell "58 ms":
+            - generic: 58 ms
+        - row "…css/index.7133b717.css(static.loloyal.com) 7 KiB 0 ms":
+          - cell "…css/index.7133b717.css(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/static/css/index.7133b717.css":
+              - link "…css/index.7133b717.css":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/static/css/index.7133b717.css
+              - text: (static.loloyal.com)
+          - cell "7 KiB":
+            - generic "7,083 bytes": 7 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…launcherIcons/boom-start.svg(static.loloyal.com) 1 KiB 0 ms":
+          - cell "…launcherIcons/boom-start.svg(static.loloyal.com)":
+            - generic "https://static.loloyal.com/image/launcherIcons/boom-start.svg":
+              - link "…launcherIcons/boom-start.svg":
+                - /url: https://static.loloyal.com/image/launcherIcons/boom-start.svg
+              - text: (static.loloyal.com)
+          - cell "1 KiB":
+            - generic "1,498 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…widget/index.html?v=0.5.12.178…(static.loloyal.com) 1 KiB 0 ms":
+          - cell "…widget/index.html?v=0.5.12.178…(static.loloyal.com)":
+            - generic "https://static.loloyal.com/loloyal-cend/widget/index.html?v=0.5.12.1788836710902":
+              - link "…widget/index.html?v=0.5.12.178…":
+                - /url: https://static.loloyal.com/loloyal-cend/widget/index.html?v=0.5.12.1788836710902
+              - text: (static.loloyal.com)
+          - cell "1 KiB":
+            - generic "1,413 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…c_end/closeWhite.svg(static.loloyal.com) 1 KiB 0 ms":
+          - cell "…c_end/closeWhite.svg(static.loloyal.com)":
+            - generic "https://static.loloyal.com/i/c_end/closeWhite.svg":
+              - link "…c_end/closeWhite.svg":
+                - /url: https://static.loloyal.com/i/c_end/closeWhite.svg
+              - text: (static.loloyal.com)
+          - cell "1 KiB":
+            - generic "1,161 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "Klaviyo ad 284 KiB 287 ms":
+          - cell "Klaviyo ad":
+            - generic: Klaviyo
+            - generic: ad
+          - cell "284 KiB":
+            - generic "290,801 bytes": 284 KiB
+          - cell "287 ms":
+            - generic: 287 ms
+        - row "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…(static.klaviyo.com) 11 KiB 49 ms":
+          - cell "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~reviews~atlas~product_recommendations.8039a15914451.js?cb=2":
+              - link "…js/vendors~in_app_forms~signup_forms~reviews~atlas~produc….js?…":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~reviews~atlas~product_recommendations.8039a15914451.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "11 KiB":
+            - generic "11,240 bytes": 11 KiB
+          - cell "49 ms":
+            - generic: 49 ms
+        - row "…js/fender_analytics.260bfd76609a3.js?cb=2(static-tracking.klaviyo.com) 14 KiB 40 ms":
+          - cell "…js/fender_analytics.260bfd76609a3.js?cb=2(static-tracking.klaviyo.com)":
+            - generic "https://static-tracking.klaviyo.com/onsite/js/fender_analytics.260bfd76609a3.js?cb=2":
+              - link "…js/fender_analytics.260bfd76609a3.js?cb=2":
+                - /url: https://static-tracking.klaviyo.com/onsite/js/fender_analytics.260bfd76609a3.js?cb=2
+              - text: (static-tracking.klaviyo.com)
+          - cell "14 KiB":
+            - generic "14,593 bytes": 14 KiB
+          - cell "40 ms":
+            - generic: 40 ms
+        - row "…js/vendors~in_app_forms~signup_forms.7aacb65a2e8f7.js?cb=2(static.klaviyo.com) 5 KiB 32 ms":
+          - cell "…js/vendors~in_app_forms~signup_forms.7aacb65a2e8f7.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms.7aacb65a2e8f7.js?cb=2":
+              - link "…js/vendors~in_app_forms~signup_forms.7aacb65a2e8f7.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms.7aacb65a2e8f7.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "5 KiB":
+            - generic "4,926 bytes": 5 KiB
+          - cell "32 ms":
+            - generic: 32 ms
+        - row "…js/1029.77b70d8753410.js?cb=2(static.klaviyo.com) 9 KiB 23 ms":
+          - cell "…js/1029.77b70d8753410.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/1029.77b70d8753410.js?cb=2":
+              - link "…js/1029.77b70d8753410.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/1029.77b70d8753410.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "9 KiB":
+            - generic "9,358 bytes": 9 KiB
+          - cell "23 ms":
+            - generic: 23 ms
+        - row "…js/Render.661d403fd90b2.js?cb=2(static.klaviyo.com) 57 KiB 22 ms":
+          - cell "…js/Render.661d403fd90b2.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/Render.661d403fd90b2.js?cb=2":
+              - link "…js/Render.661d403fd90b2.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/Render.661d403fd90b2.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "57 KiB":
+            - generic "58,382 bytes": 57 KiB
+          - cell "22 ms":
+            - generic: 22 ms
+        - row "…js/default~in_app_forms~signup_forms.6d00842d29812.js?cb=2(static.klaviyo.com) 13 KiB 16 ms":
+          - cell "…js/default~in_app_forms~signup_forms.6d00842d29812.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/default~in_app_forms~signup_forms.6d00842d29812.js?cb=2":
+              - link "…js/default~in_app_forms~signup_forms.6d00842d29812.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/default~in_app_forms~signup_forms.6d00842d29812.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "13 KiB":
+            - generic "13,384 bytes": 13 KiB
+          - cell "16 ms":
+            - generic: 16 ms
+        - row "…js/vendors~Render~customerHubRoot.b0dfdd5027360.js?cb=2(static.klaviyo.com) 9 KiB 13 ms":
+          - cell "…js/vendors~Render~customerHubRoot.b0dfdd5027360.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~Render~customerHubRoot.b0dfdd5027360.js?cb=2":
+              - link "…js/vendors~Render~customerHubRoot.b0dfdd5027360.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~Render~customerHubRoot.b0dfdd5027360.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "9 KiB":
+            - generic "8,927 bytes": 9 KiB
+          - cell "13 ms":
+            - generic: 13 ms
+        - row "…js/sharedUtils.8ae7328c4e692.js?cb=2(static.klaviyo.com) 21 KiB 11 ms":
+          - cell "…js/sharedUtils.8ae7328c4e692.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/sharedUtils.8ae7328c4e692.js?cb=2":
+              - link "…js/sharedUtils.8ae7328c4e692.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/sharedUtils.8ae7328c4e692.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "21 KiB":
+            - generic "21,250 bytes": 21 KiB
+          - cell "11 ms":
+            - generic: 11 ms
+        - row "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2(static.klaviyo.com) 26 KiB 11 ms":
+          - cell "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~Render.348770328c1e5.js?cb=2":
+              - link "…js/vendors~in_app_forms~Render.348…c1e5.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~Render.348770328c1e5.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "26 KiB":
+            - generic "26,195 bytes": 26 KiB
+          - cell "11 ms":
+            - generic: 11 ms
+        - row "…js/event_adapter.dcd7f3a30a106.js?cb=2(static.klaviyo.com) 1 KiB 10 ms":
+          - cell "…js/event_adapter.dcd7f3a30a106.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/event_adapter.dcd7f3a30a106.js?cb=2":
+              - link "…js/event_adapter.dcd7f3a30a106.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/event_adapter.dcd7f3a30a106.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "1 KiB":
+            - generic "1,177 bytes": 1 KiB
+          - cell "10 ms":
+            - generic: 10 ms
+        - row "…js/telemetry.0150fc8ff7cd7.js?cb=2(static-tracking.klaviyo.com) 7 KiB 9 ms":
+          - cell "…js/telemetry.0150fc8ff7cd7.js?cb=2(static-tracking.klaviyo.com)":
+            - generic "https://static-tracking.klaviyo.com/onsite/js/telemetry.0150fc8ff7cd7.js?cb=2":
+              - link "…js/telemetry.0150fc8ff7cd7.js?cb=2":
+                - /url: https://static-tracking.klaviyo.com/onsite/js/telemetry.0150fc8ff7cd7.js?cb=2
+              - text: (static-tracking.klaviyo.com)
+          - cell "7 KiB":
+            - generic "6,693 bytes": 7 KiB
+          - cell "9 ms":
+            - generic: 9 ms
+        - row "…Skh8gv/klaviyo.js?company_id=Skh8gv(static.klaviyo.com) 3 KiB 8 ms":
+          - cell "…Skh8gv/klaviyo.js?company_id=Skh8gv(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/Skh8gv/klaviyo.js?company_id=Skh8gv":
+              - link "…Skh8gv/klaviyo.js?company_id=Skh8gv":
+                - /url: https://static.klaviyo.com/onsite/js/Skh8gv/klaviyo.js?company_id=Skh8gv
+              - text: (static.klaviyo.com)
+          - cell "3 KiB":
+            - generic "2,893 bytes": 3 KiB
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "…js/default~Render~ClientStore~.4886e5632b0dd.js?cb=2(static.klaviyo.com) 21 KiB 8 ms":
+          - cell "…js/default~Render~ClientStore~.4886e5632b0dd.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/default~Render~ClientStore~.4886e5632b0dd.js?cb=2":
+              - link "…js/default~Render~ClientStore~.4886e5632b0dd.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/default~Render~ClientStore~.4886e5632b0dd.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "21 KiB":
+            - generic "21,776 bytes": 21 KiB
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "…js/vendors~static~in_app_forms~signup_forms~post_identificatio…(static.klaviyo.com) 5 KiB 7 ms":
+          - cell "…js/vendors~static~in_app_forms~signup_forms~post_identificatio…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~static~in_app_forms~signup_forms~post_identification_sync~web_personalization~client_identity~server_side_cookies~reviews~telemetry~customerHubRoot~contentBlocks~embeddedIntegrationBlocks~favorites~faq~.9f169ee5e5fdd.js?cb=2":
+              - link "…js/vendors~static~in_app_forms~signup_forms~post_identificatio…":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~static~in_app_forms~signup_forms~post_identification_sync~web_personalization~client_identity~server_side_cookies~reviews~telemetry~customerHubRoot~contentBlocks~embeddedIntegrationBlocks~favorites~faq~.9f169ee5e5fdd.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "5 KiB":
+            - generic "4,867 bytes": 5 KiB
+          - cell "7 ms":
+            - generic: 7 ms
+        - row "…js/post_identification_sync.ac925c49ab397.js?cb=2(static-tracking.klaviyo.com) 3 KiB 7 ms":
+          - cell "…js/post_identification_sync.ac925c49ab397.js?cb=2(static-tracking.klaviyo.com)":
+            - generic "https://static-tracking.klaviyo.com/onsite/js/post_identification_sync.ac925c49ab397.js?cb=2":
+              - link "…js/post_identification_sync.ac925c49ab397.js?cb=2":
+                - /url: https://static-tracking.klaviyo.com/onsite/js/post_identification_sync.ac925c49ab397.js?cb=2
+              - text: (static-tracking.klaviyo.com)
+          - cell "3 KiB":
+            - generic "2,724 bytes": 3 KiB
+          - cell "7 ms":
+            - generic: 7 ms
+        - row "…js/runtime.08a889cad67f0.js?cb=2(static.klaviyo.com) 8 KiB 4 ms":
+          - cell "…js/runtime.08a889cad67f0.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/runtime.08a889cad67f0.js?cb=2":
+              - link "…js/runtime.08a889cad67f0.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/runtime.08a889cad67f0.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "8 KiB":
+            - generic "8,131 bytes": 8 KiB
+          - cell "4 ms":
+            - generic: 4 ms
+        - row "…js/vendors~in_app_forms~signup_forms~client_identity~tele….js?…(static.klaviyo.com) 4 KiB 3 ms":
+          - cell "…js/vendors~in_app_forms~signup_forms~client_identity~tele….js?…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~client_identity~telemetry~onsite-triggering-v2~.0e276da169a99.js?cb=2":
+              - link "…js/vendors~in_app_forms~signup_forms~client_identity~tele….js?…":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~in_app_forms~signup_forms~client_identity~telemetry~onsite-triggering-v2~.0e276da169a99.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "4 KiB":
+            - generic "3,777 bytes": 4 KiB
+          - cell "3 ms":
+            - generic: 3 ms
+        - row "…js/vendors~Render.9cc4a1c1faf8c.js?cb=2(static.klaviyo.com) 7 KiB 3 ms":
+          - cell "…js/vendors~Render.9cc4a1c1faf8c.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~Render.9cc4a1c1faf8c.js?cb=2":
+              - link "…js/vendors~Render.9cc4a1c1faf8c.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~Render.9cc4a1c1faf8c.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "7 KiB":
+            - generic "7,101 bytes": 7 KiB
+          - cell "3 ms":
+            - generic: 3 ms
+        - row "…js/onsite-triggering-v2.866d8e053462c.js?cb=2(static.klaviyo.com) 8 KiB 2 ms":
+          - cell "…js/onsite-triggering-v2.866d8e053462c.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/onsite-triggering-v2.866d8e053462c.js?cb=2":
+              - link "…js/onsite-triggering-v2.866d8e053462c.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/onsite-triggering-v2.866d8e053462c.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "8 KiB":
+            - generic "7,962 bytes": 8 KiB
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…js/vendors~Render~ClientStore~~~onsite-back-in-stock.d9f0….js?…(static.klaviyo.com) 3 KiB 2 ms":
+          - cell "…js/vendors~Render~ClientStore~~~onsite-back-in-stock.d9f0….js?…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/vendors~Render~ClientStore~~~onsite-back-in-stock.d9f0a07ad7e39.js?cb=2":
+              - link "…js/vendors~Render~ClientStore~~~onsite-back-in-stock.d9f0….js?…":
+                - /url: https://static.klaviyo.com/onsite/js/vendors~Render~ClientStore~~~onsite-back-in-stock.d9f0a07ad7e39.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "3 KiB":
+            - generic "3,006 bytes": 3 KiB
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…js/default~Render~ClientStore~~onsite-back-in-stock.80954….js?…(static.klaviyo.com) 5 KiB 2 ms":
+          - cell "…js/default~Render~ClientStore~~onsite-back-in-stock.80954….js?…(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/default~Render~ClientStore~~onsite-back-in-stock.80954401b9846.js?cb=2":
+              - link "…js/default~Render~ClientStore~~onsite-back-in-stock.80954….js?…":
+                - /url: https://static.klaviyo.com/onsite/js/default~Render~ClientStore~~onsite-back-in-stock.80954401b9846.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "5 KiB":
+            - generic "4,944 bytes": 5 KiB
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…js/default~Render~back-in-s…~ClientStore~.8e132e385609e.js?cb=2(static.klaviyo.com) 4 KiB 1 ms":
+          - cell "…js/default~Render~back-in-s…~ClientStore~.8e132e385609e.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/default~Render~back-in-stock-dynamic-button-handler~ClientStore~.8e132e385609e.js?cb=2":
+              - link "…js/default~Render~back-in-s…~ClientStore~.8e132e385609e.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/default~Render~back-in-stock-dynamic-button-handler~ClientStore~.8e132e385609e.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "4 KiB":
+            - generic "4,247 bytes": 4 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…js/default~in_app_forms~Render.7dc20bfa851d8.js?cb=2(static.klaviyo.com) 3 KiB 1 ms":
+          - cell "…js/default~in_app_forms~Render.7dc20bfa851d8.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/default~in_app_forms~Render.7dc20bfa851d8.js?cb=2":
+              - link "…js/default~in_app_forms~Render.7dc20bfa851d8.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/default~in_app_forms~Render.7dc20bfa851d8.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "3 KiB":
+            - generic "3,367 bytes": 3 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…js/styles.20910c4fef571.js?cb=2(static.klaviyo.com) 3 KiB 1 ms":
+          - cell "…js/styles.20910c4fef571.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/styles.20910c4fef571.js?cb=2":
+              - link "…js/styles.20910c4fef571.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/styles.20910c4fef571.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "3 KiB":
+            - generic "3,479 bytes": 3 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…js/ClientStore.3227b62863a7d.js?cb=2(static.klaviyo.com) 4 KiB 1 ms":
+          - cell "…js/ClientStore.3227b62863a7d.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/ClientStore.3227b62863a7d.js?cb=2":
+              - link "…js/ClientStore.3227b62863a7d.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/ClientStore.3227b62863a7d.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "4 KiB":
+            - generic "3,781 bytes": 4 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…js/static.cf5be546f15dc.js?cb=2(static-tracking.klaviyo.com) 1 KiB 1 ms":
+          - cell "…js/static.cf5be546f15dc.js?cb=2(static-tracking.klaviyo.com)":
+            - generic "https://static-tracking.klaviyo.com/onsite/js/static.cf5be546f15dc.js?cb=2":
+              - link "…js/static.cf5be546f15dc.js?cb=2":
+                - /url: https://static-tracking.klaviyo.com/onsite/js/static.cf5be546f15dc.js?cb=2
+              - text: (static-tracking.klaviyo.com)
+          - cell "1 KiB":
+            - generic "1,387 bytes": 1 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…js/signup_forms.ad877d05ed7f2.js?cb=2(static.klaviyo.com) 1 KiB 0 ms":
+          - cell "…js/signup_forms.ad877d05ed7f2.js?cb=2(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/signup_forms.ad877d05ed7f2.js?cb=2":
+              - link "…js/signup_forms.ad877d05ed7f2.js?cb=2":
+                - /url: https://static.klaviyo.com/onsite/js/signup_forms.ad877d05ed7f2.js?cb=2
+              - text: (static.klaviyo.com)
+          - cell "1 KiB":
+            - generic "1,418 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/onsite/track-analytics?company_id=Skh8gv(a.klaviyo.com) 2 KiB 0 ms":
+          - cell "/onsite/track-analytics?company_id=Skh8gv(a.klaviyo.com)":
+            - generic "https://a.klaviyo.com/onsite/track-analytics?company_id=Skh8gv":
+              - link "/onsite/track-analytics?company_id=Skh8gv":
+                - /url: https://a.klaviyo.com/onsite/track-analytics?company_id=Skh8gv
+              - text: (a.klaviyo.com)
+          - cell "2 KiB":
+            - generic "1,962 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…company-fonts/onsite?company_id=Skh8gv(fast.a.klaviyo.com) 1 KiB 0 ms":
+          - cell "…company-fonts/onsite?company_id=Skh8gv(fast.a.klaviyo.com)":
+            - generic "https://fast.a.klaviyo.com/custom-fonts/api/v1/company-fonts/onsite?company_id=Skh8gv":
+              - link "…company-fonts/onsite?company_id=Skh8gv":
+                - /url: https://fast.a.klaviyo.com/custom-fonts/api/v1/company-fonts/onsite?company_id=Skh8gv
+              - text: (fast.a.klaviyo.com)
+          - cell "1 KiB":
+            - generic "1,228 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…Skh8gv/full-forms(static-forms.klaviyo.com) 15 KiB 0 ms":
+          - cell "…Skh8gv/full-forms(static-forms.klaviyo.com)":
+            - generic "https://static-forms.klaviyo.com/forms/api/v7/Skh8gv/full-forms":
+              - link "…Skh8gv/full-forms":
+                - /url: https://static-forms.klaviyo.com/forms/api/v7/Skh8gv/full-forms
+              - text: (static-forms.klaviyo.com)
+          - cell "15 KiB":
+            - generic "15,199 bytes": 15 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v3/geo-ip(a.klaviyo.com) 1 KiB 0 ms":
+          - cell "…v3/geo-ip(a.klaviyo.com)":
+            - generic "https://a.klaviyo.com/forms/api/v3/geo-ip":
+              - link "…v3/geo-ip":
+                - /url: https://a.klaviyo.com/forms/api/v3/geo-ip
+              - text: (a.klaviyo.com)
+          - cell "1 KiB":
+            - generic "1,017 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…js/532.a95ebb9d438a8.css(static.klaviyo.com) 10 KiB 0 ms":
+          - cell "…js/532.a95ebb9d438a8.css(static.klaviyo.com)":
+            - generic "https://static.klaviyo.com/onsite/js/532.a95ebb9d438a8.css":
+              - link "…js/532.a95ebb9d438a8.css":
+                - /url: https://static.klaviyo.com/onsite/js/532.a95ebb9d438a8.css
+              - text: (static.klaviyo.com)
+          - cell "10 KiB":
+            - generic "10,410 bytes": 10 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "Shopify hosting 851 KiB 195 ms":
+          - cell "Shopify hosting":
+            - generic: Shopify
+            - generic: hosting
+          - cell "851 KiB":
+            - generic "870,922 bytes": 851 KiB
+          - cell "195 ms":
+            - generic: 195 ms
+        - row "…v2/chunk.index_Jmvh7d10.esm.js(cdn.shopify.com) 22 KiB 56 ms":
+          - cell "…v2/chunk.index_Jmvh7d10.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_Jmvh7d10.esm.js":
+              - link "…v2/chunk.index_Jmvh7d10.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_Jmvh7d10.esm.js
+              - text: (cdn.shopify.com)
+          - cell "22 KiB":
+            - generic "22,342 bytes": 22 KiB
+          - cell "56 ms":
+            - generic: 56 ms
+        - row "…assets/loader.js(cdn.shopify.com) 4 KiB 40 ms":
+          - cell "…assets/loader.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/loader.js":
+              - link "…assets/loader.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/loader.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "4,280 bytes": 4 KiB
+          - cell "40 ms":
+            - generic: 40 ms
+        - row "…assets/checkout-DTJs6qRt.js(cdn.shopify.com) 29 KiB 29 ms":
+          - cell "…assets/checkout-DTJs6qRt.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/checkout-DTJs6qRt.js":
+              - link "…assets/checkout-DTJs6qRt.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/checkout-DTJs6qRt.js
+              - text: (cdn.shopify.com)
+          - cell "29 KiB":
+            - generic "29,844 bytes": 29 KiB
+          - cell "29 ms":
+            - generic: 29 ms
+        - row "…account/observe-l….js(cdn.shopify.com) 4 KiB 16 ms":
+          - cell "…account/observe-l….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/observe-logger-impl-CvnPPqr9.js":
+              - link "…account/observe-l….js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/observe-logger-impl-CvnPPqr9.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "4,028 bytes": 4 KiB
+          - cell "16 ms":
+            - generic: 16 ms
+        - row "…web-components/login-form.js(cdn.shopify.com) 12 KiB 10 ms":
+          - cell "…web-components/login-form.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/login-form.js":
+              - link "…web-components/login-form.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/login-form.js
+              - text: (cdn.shopify.com)
+          - cell "12 KiB":
+            - generic "11,995 bytes": 12 KiB
+          - cell "10 ms":
+            - generic: 10 ms
+        - row "…v2/chunk.useEventL….esm.js(cdn.shopify.com) 2 KiB 9 ms":
+          - cell "…v2/chunk.useEventL….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useEventListener_BEs6MAnZ.esm.js":
+              - link "…v2/chunk.useEventL….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useEventListener_BEs6MAnZ.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,895 bytes": 2 KiB
+          - cell "9 ms":
+            - generic: 9 ms
+        - row "…web-components/account.js(cdn.shopify.com) 11 KiB 8 ms":
+          - cell "…web-components/account.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account.js":
+              - link "…web-components/account.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account.js
+              - text: (cdn.shopify.com)
+          - cell "11 KiB":
+            - generic "11,105 bytes": 11 KiB
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "…web-components/chat.js(cdn.shopify.com) 19 KiB 7 ms":
+          - cell "…web-components/chat.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/chat.js":
+              - link "…web-components/chat.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/chat.js
+              - text: (cdn.shopify.com)
+          - cell "19 KiB":
+            - generic "19,887 bytes": 19 KiB
+          - cell "7 ms":
+            - generic: 7 ms
+        - row "…account/account-d….js(cdn.shopify.com) 9 KiB 4 ms":
+          - cell "…account/account-d….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/account-dialog-BC1wQr03.js":
+              - link "…account/account-d….js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/account-dialog-BC1wQr03.js
+              - text: (cdn.shopify.com)
+          - cell "9 KiB":
+            - generic "9,021 bytes": 9 KiB
+          - cell "4 ms":
+            - generic: 4 ms
+        - row "…v2/chunk.casing_BkIPdPn9.esm.js(cdn.shopify.com) 6 KiB 4 ms":
+          - cell "…v2/chunk.casing_BkIPdPn9.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.casing_BkIPdPn9.esm.js":
+              - link "…v2/chunk.casing_BkIPdPn9.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.casing_BkIPdPn9.esm.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "5,862 bytes": 6 KiB
+          - cell "4 ms":
+            - generic: 4 ms
+        - row "…storefront/origin_trials-5059b83f.js(cdn.shopify.com) 2 KiB 3 ms":
+          - cell "…storefront/origin_trials-5059b83f.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/storefront/assets/storefront/origin_trials-5059b83f.js":
+              - link "…storefront/origin_trials-5059b83f.js":
+                - /url: https://cdn.shopify.com/shopifycloud/storefront/assets/storefront/origin_trials-5059b83f.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,969 bytes": 2 KiB
+          - cell "3 ms":
+            - generic: 3 ms
+        - row "…v2/chunk.useDispatchEvent_BHaEBKOE.esm.js(cdn.shopify.com) 1 KiB 2 ms":
+          - cell "…v2/chunk.useDispatchEvent_BHaEBKOE.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useDispatchEvent_BHaEBKOE.esm.js":
+              - link "…v2/chunk.useDispatchEvent_BHaEBKOE.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useDispatchEvent_BHaEBKOE.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,449 bytes": 1 KiB
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…assets/RumMetric….js(cdn.shopify.com) 8 KiB 2 ms":
+          - cell "…assets/RumMetric….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/RumMetrics-BBx-zNv5.js":
+              - link "…assets/RumMetric….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/RumMetrics-BBx-zNv5.js
+              - text: (cdn.shopify.com)
+          - cell "8 KiB":
+            - generic "7,738 bytes": 8 KiB
+          - cell "2 ms":
+            - generic: 2 ms
+        - row "…v2/chunk.debounce_Cw7GgcT5.esm.js(cdn.shopify.com) 1 KiB 1 ms":
+          - cell "…v2/chunk.debounce_Cw7GgcT5.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.debounce_Cw7GgcT5.esm.js":
+              - link "…v2/chunk.debounce_Cw7GgcT5.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.debounce_Cw7GgcT5.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,376 bytes": 1 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…v2/chunk.init_DwUYQMqM.esm.js(cdn.shopify.com) 2 KiB 1 ms":
+          - cell "…v2/chunk.init_DwUYQMqM.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.init_DwUYQMqM.esm.js":
+              - link "…v2/chunk.init_DwUYQMqM.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.init_DwUYQMqM.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,582 bytes": 2 KiB
+          - cell "1 ms":
+            - generic: 1 ms
+        - row "…v2/chunk.utils_Bswv5KxV.esm.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…v2/chunk.utils_Bswv5KxV.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.utils_Bswv5KxV.esm.js":
+              - link "…v2/chunk.utils_Bswv5KxV.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.utils_Bswv5KxV.esm.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,762 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "https://error-analytics-sessions-production.shopifysvc.com 1 KiB 0 ms":
+          - cell "https://error-analytics-sessions-production.shopifysvc.com":
+            - generic "https://error-analytics-sessions-production.shopifysvc.com/":
+              - link "https://error-analytics-sessions-production.shopifysvc.com":
+                - /url: https://error-analytics-sessions-production.shopifysvc.com/
+          - cell "1 KiB":
+            - generic "568 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_base.js(cdn.shopify.com) 45 KiB 0 ms":
+          - cell "…assets/widget_base.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_base.js":
+              - link "…assets/widget_base.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_base.js
+              - text: (cdn.shopify.com)
+          - cell "45 KiB":
+            - generic "46,113 bytes": 45 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/app.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…assets/app.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0818c-a721-7530-b831-87785d9c7014/klaviyo-email-marketing-67/assets/app.js":
+              - link "…assets/app.js":
+                - /url: https://cdn.shopify.com/extensions/01a0818c-a721-7530-b831-87785d9c7014/klaviyo-email-marketing-67/assets/app.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,193 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_main.js(cdn.shopify.com) 8 KiB 0 ms":
+          - cell "…assets/widget_main.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_main.js":
+              - link "…assets/widget_main.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_main.js
+              - text: (cdn.shopify.com)
+          - cell "8 KiB":
+            - generic "8,121 bytes": 8 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_common.js(cdn.shopify.com) 38 KiB 0 ms":
+          - cell "…assets/widget_common.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_common.js":
+              - link "…assets/widget_common.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_common.js
+              - text: (cdn.shopify.com)
+          - cell "38 KiB":
+            - generic "39,096 bytes": 38 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_write_review_modal.js(cdn.shopify.com) 54 KiB 0 ms":
+          - cell "…assets/widget_write_review_modal.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_write_review_modal.js":
+              - link "…assets/widget_write_review_modal.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_write_review_modal.js
+              - text: (cdn.shopify.com)
+          - cell "54 KiB":
+            - generic "54,946 bytes": 54 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.index_CFUCpJst.esm.js(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "…v2/chunk.index_CFUCpJst.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_CFUCpJst.esm.js":
+              - link "…v2/chunk.index_CFUCpJst.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.index_CFUCpJst.esm.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "5,963 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/client.shop-logi….esm.js(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "…v2/client.shop-logi….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.shop-login_6AawDZRP.esm.js":
+              - link "…v2/client.shop-logi….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.shop-login_6AawDZRP.esm.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "6,054 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…shoplift/GTStandard-MMedium.woff2(cdn.shopify.com) 64 KiB 0 ms":
+          - cell "…shoplift/GTStandard-MMedium.woff2(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shop-assets/static_uploads/shoplift/GTStandard-MMedium.woff2":
+              - link "…shoplift/GTStandard-MMedium.woff2":
+                - /url: https://cdn.shopify.com/shop-assets/static_uploads/shoplift/GTStandard-MMedium.woff2
+              - text: (cdn.shopify.com)
+          - cell "64 KiB":
+            - generic "65,982 bytes": 64 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…shoplift/GTStandar….woff2(cdn.shopify.com) 64 KiB 0 ms":
+          - cell "…shoplift/GTStandar….woff2(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shop-assets/static_uploads/shoplift/GTStandard-MRegular.woff2":
+              - link "…shoplift/GTStandar….woff2":
+                - /url: https://cdn.shopify.com/shop-assets/static_uploads/shoplift/GTStandard-MRegular.woff2
+              - text: (cdn.shopify.com)
+          - cell "64 KiB":
+            - generic "65,097 bytes": 64 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…files/Xavia_logo_x320.png?v=176…(cdn.shopify.com) 35 KiB 0 ms":
+          - cell "…files/Xavia_logo_x320.png?v=176…(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/s/files/1/0729/9186/7207/files/Xavia_logo_x320.png?v=1760139251":
+              - link "…files/Xavia_logo_x320.png?v=176…":
+                - /url: https://cdn.shopify.com/s/files/1/0729/9186/7207/files/Xavia_logo_x320.png?v=1760139251
+              - text: (cdn.shopify.com)
+          - cell "35 KiB":
+            - generic "36,351 bytes": 35 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_form.js(cdn.shopify.com) 27 KiB 0 ms":
+          - cell "…assets/widget_form.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_form.js":
+              - link "…assets/widget_form.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_form.js
+              - text: (cdn.shopify.com)
+          - cell "27 KiB":
+            - generic "27,931 bytes": 27 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/tailwind-DBEU5GlA.css(cdn.shopify.com) 25 KiB 0 ms":
+          - cell "…assets/tailwind-DBEU5GlA.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/tailwind-DBEU5GlA.css":
+              - link "…assets/tailwind-DBEU5GlA.css":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/tailwind-DBEU5GlA.css
+              - text: (cdn.shopify.com)
+          - cell "25 KiB":
+            - generic "25,456 bytes": 25 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/Analytics….js(cdn.shopify.com) 20 KiB 0 ms":
+          - cell "…assets/Analytics….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/AnalyticsProvider-COyPBgi6.js":
+              - link "…assets/Analytics….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/AnalyticsProvider-COyPBgi6.js
+              - text: (cdn.shopify.com)
+          - cell "20 KiB":
+            - generic "20,734 bytes": 20 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…webmcp/webmcp-0.1.1.js(cdn.shopify.com) 19 KiB 0 ms":
+          - cell "…webmcp/webmcp-0.1.1.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js":
+              - link "…webmcp/webmcp-0.1.1.js":
+                - /url: https://cdn.shopify.com/storefront/webmcp/webmcp-0.1.1.js
+              - text: (cdn.shopify.com)
+          - cell "19 KiB":
+            - generic "19,793 bytes": 19 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_media.js(cdn.shopify.com) 17 KiB 0 ms":
+          - cell "…assets/widget_media.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_media.js":
+              - link "…assets/widget_media.js":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_media.js
+              - text: (cdn.shopify.com)
+          - cell "17 KiB":
+            - generic "17,227 bytes": 17 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/v1/produce(monorail-edge.shopifysvc.com) 16 KiB 0 ms":
+          - cell "/v1/produce(monorail-edge.shopifysvc.com)":
+            - generic "https://monorail-edge.shopifysvc.com/v1/produce":
+              - link "/v1/produce":
+                - /url: https://monorail-edge.shopifysvc.com/v1/produce
+              - text: (monorail-edge.shopifysvc.com)
+          - cell "16 KiB":
+            - generic "15,928 bytes": 16 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/jost/jost_n7.921dc18….woff2?h1=eGF2aWFyY…&hmac=da45cd2…(fonts.shopifycdn.com) 14 KiB 0 ms":
+          - cell "/jost/jost_n7.921dc18….woff2?h1=eGF2aWFyY…&hmac=da45cd2…(fonts.shopifycdn.com)":
+            - generic "https://fonts.shopifycdn.com/jost/jost_n7.921dc18c13fa0b0c94c5e2517ffe06139c3615a3.woff2?h1=eGF2aWFyYWNpbmcuaXQ&hmac=da45cd2c16a05a946adec99994268ca0e6647d22cbaffc706a8c98b7979ec616":
+              - link "/jost/jost_n7.921dc18….woff2?h1=eGF2aWFyY…&hmac=da45cd2…":
+                - /url: https://fonts.shopifycdn.com/jost/jost_n7.921dc18c13fa0b0c94c5e2517ffe06139c3615a3.woff2?h1=eGF2aWFyYWNpbmcuaXQ&hmac=da45cd2c16a05a946adec99994268ca0e6647d22cbaffc706a8c98b7979ec616
+              - text: (fonts.shopifycdn.com)
+          - cell "14 KiB":
+            - generic "14,658 bytes": 14 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/hooks.module-BQVURBKQ.js(cdn.shopify.com) 14 KiB 0 ms":
+          - cell "…assets/hooks.module-BQVURBKQ.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/hooks.module-BQVURBKQ.js":
+              - link "…assets/hooks.module-BQVURBKQ.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/hooks.module-BQVURBKQ.js
+              - text: (cdn.shopify.com)
+          - cell "14 KiB":
+            - generic "14,100 bytes": 14 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/jost/jost_n4.d47a1b6….woff2?h1=eGF2aWFyY…&hmac=365d101…(fonts.shopifycdn.com) 13 KiB 0 ms":
+          - cell "/jost/jost_n4.d47a1b6….woff2?h1=eGF2aWFyY…&hmac=365d101…(fonts.shopifycdn.com)":
+            - generic "https://fonts.shopifycdn.com/jost/jost_n4.d47a1b6347ce4a4c9f437608011273009d91f2b7.woff2?h1=eGF2aWFyYWNpbmcuaXQ&hmac=365d1012825c6aadda1ebdad906c30c52543fa50f65bcdd35709dba228d0b98e":
+              - link "/jost/jost_n4.d47a1b6….woff2?h1=eGF2aWFyY…&hmac=365d101…":
+                - /url: https://fonts.shopifycdn.com/jost/jost_n4.d47a1b6347ce4a4c9f437608011273009d91f2b7.woff2?h1=eGF2aWFyYWNpbmcuaXQ&hmac=365d1012825c6aadda1ebdad906c30c52543fa50f65bcdd35709dba228d0b98e
+              - text: (fonts.shopifycdn.com)
+          - cell "13 KiB":
+            - generic "13,199 bytes": 13 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_v3_base.css(cdn.shopify.com) 12 KiB 0 ms":
+          - cell "…assets/widget_v3_base.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_base.css":
+              - link "…assets/widget_v3_base.css":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_base.css
+              - text: (cdn.shopify.com)
+          - cell "12 KiB":
+            - generic "12,501 bytes": 12 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/jsxRuntime.module-B-u1t7Zm.js(cdn.shopify.com) 10 KiB 0 ms":
+          - cell "…assets/jsxRuntime.module-B-u1t7Zm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/jsxRuntime.module-B-u1t7Zm.js":
+              - link "…assets/jsxRuntime.module-B-u1t7Zm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/jsxRuntime.module-B-u1t7Zm.js
+              - text: (cdn.shopify.com)
+          - cell "10 KiB":
+            - generic "10,672 bytes": 10 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…account/store-BTEHG3Hd.js(cdn.shopify.com) 9 KiB 0 ms":
+          - cell "…account/store-BTEHG3Hd.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/web-components/account/store-BTEHG3Hd.js":
+              - link "…account/store-BTEHG3Hd.js":
+                - /url: https://cdn.shopify.com/storefront/web-components/account/store-BTEHG3Hd.js
+              - text: (cdn.shopify.com)
+          - cell "9 KiB":
+            - generic "9,472 bytes": 9 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/useResize….js(cdn.shopify.com) 9 KiB 0 ms":
+          - cell "…assets/useResize….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/useResizeObserver-DxaSY3Nb.js":
+              - link "…assets/useResize….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/useResizeObserver-DxaSY3Nb.js
+              - text: (cdn.shopify.com)
+          - cell "9 KiB":
+            - generic "9,166 bytes": 9 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/ThemeProvider-DUJRnQTE.js(cdn.shopify.com) 9 KiB 0 ms":
+          - cell "…assets/ThemeProvider-DUJRnQTE.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ThemeProvider-DUJRnQTE.js":
+              - link "…assets/ThemeProvider-DUJRnQTE.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ThemeProvider-DUJRnQTE.js
+              - text: (cdn.shopify.com)
+          - cell "9 KiB":
+            - generic "8,918 bytes": 9 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/EmbeddedCard-DakeVFou.js(cdn.shopify.com) 8 KiB 0 ms":
+          - cell "…assets/EmbeddedCard-DakeVFou.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/EmbeddedCard-DakeVFou.js":
+              - link "…assets/EmbeddedCard-DakeVFou.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/EmbeddedCard-DakeVFou.js
+              - text: (cdn.shopify.com)
+          - cell "8 KiB":
+            - generic "8,090 bytes": 8 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_v3_main.css(cdn.shopify.com) 7 KiB 0 ms":
+          - cell "…assets/widget_v3_main.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_main.css":
+              - link "…assets/widget_v3_main.css":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_main.css
+              - text: (cdn.shopify.com)
+          - cell "7 KiB":
+            - generic "7,115 bytes": 7 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/Avatar-DO9G5B3r.js(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "…assets/Avatar-DO9G5B3r.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/Avatar-DO9G5B3r.js":
+              - link "…assets/Avatar-DO9G5B3r.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/Avatar-DO9G5B3r.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "6,380 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/widget_v3_form.css(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "…assets/widget_v3_form.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_form.css":
+              - link "…assets/widget_v3_form.css":
+                - /url: https://cdn.shopify.com/extensions/01a0811b-076c-7eea-adc1-d25d0de6ed3b/judgeme-745/assets/widget_v3_form.css
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "6,274 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/index-Cx_UvtMI.js(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "…assets/index-Cx_UvtMI.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-Cx_UvtMI.js":
+              - link "…assets/index-Cx_UvtMI.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-Cx_UvtMI.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "5,898 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/storefront/standard-actions.js(cdn.shopify.com) 6 KiB 0 ms":
+          - cell "/storefront/standard-actions.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/storefront/standard-actions.js":
+              - link "/storefront/standard-actions.js":
+                - /url: https://cdn.shopify.com/storefront/standard-actions.js
+              - text: (cdn.shopify.com)
+          - cell "6 KiB":
+            - generic "5,650 bytes": 6 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/ErrorBoundary-CElFZH_p.js(cdn.shopify.com) 5 KiB 0 ms":
+          - cell "…assets/ErrorBoundary-CElFZH_p.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ErrorBoundary-CElFZH_p.js":
+              - link "…assets/ErrorBoundary-CElFZH_p.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ErrorBoundary-CElFZH_p.js
+              - text: (cdn.shopify.com)
+          - cell "5 KiB":
+            - generic "5,170 bytes": 5 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/avatar-C_9EyF3G.js(cdn.shopify.com) 5 KiB 0 ms":
+          - cell "…assets/avatar-C_9EyF3G.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/avatar-C_9EyF3G.js":
+              - link "…assets/avatar-C_9EyF3G.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/avatar-C_9EyF3G.js
+              - text: (cdn.shopify.com)
+          - cell "5 KiB":
+            - generic "4,792 bytes": 5 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/browser-BilL3ON1.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…assets/browser-BilL3ON1.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/browser-BilL3ON1.js":
+              - link "…assets/browser-BilL3ON1.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/browser-BilL3ON1.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "4,400 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.utils_1bb8Zmgu.esm.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…v2/chunk.utils_1bb8Zmgu.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.utils_1bb8Zmgu.esm.js":
+              - link "…v2/chunk.utils_1bb8Zmgu.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.utils_1bb8Zmgu.esm.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "4,268 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/types-uH1vj1iI.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…assets/types-uH1vj1iI.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/types-uH1vj1iI.js":
+              - link "…assets/types-uH1vj1iI.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/types-uH1vj1iI.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "4,174 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/v1/metrics(otlp-http-production.shopifysvc.com) 4 KiB 0 ms":
+          - cell "/v1/metrics(otlp-http-production.shopifysvc.com)":
+            - generic "https://otlp-http-production.shopifysvc.com/v1/metrics":
+              - link "/v1/metrics":
+                - /url: https://otlp-http-production.shopifysvc.com/v1/metrics
+              - text: (otlp-http-production.shopifysvc.com)
+          - cell "4 KiB":
+            - generic "4,095 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.css_DuK0DxQH.esm.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…v2/chunk.css_DuK0DxQH.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.css_DuK0DxQH.esm.js":
+              - link "…v2/chunk.css_DuK0DxQH.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.css_DuK0DxQH.esm.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "3,882 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/client.shop-cart….en.esm.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…v2/client.shop-cart….en.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.shop-cart-sync_DyjkU2ix.en.esm.js":
+              - link "…v2/client.shop-cart….en.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.shop-cart-sync_DyjkU2ix.en.esm.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "3,865 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/preload-helper-CQsuxpMq.js(cdn.shopify.com) 4 KiB 0 ms":
+          - cell "…assets/preload-helper-CQsuxpMq.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/preload-helper-CQsuxpMq.js":
+              - link "…assets/preload-helper-CQsuxpMq.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/preload-helper-CQsuxpMq.js
+              - text: (cdn.shopify.com)
+          - cell "4 KiB":
+            - generic "3,592 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/ApiFetche….js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/ApiFetche….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ApiFetcher-CoE8Myt7.js":
+              - link "…assets/ApiFetche….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ApiFetcher-CoE8Myt7.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,562 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/useFooterTranslationInformation-BvYNQkHg.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/useFooterTranslationInformation-BvYNQkHg.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/useFooterTranslationInformation-BvYNQkHg.js":
+              - link "…assets/useFooterTranslationInformation-BvYNQkHg.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/useFooterTranslationInformation-BvYNQkHg.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,548 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…files/Black_2000x.png?v=175…(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…files/Black_2000x.png?v=175…(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/s/files/1/0729/9186/7207/files/Black_2000x.png?v=1759442755":
+              - link "…files/Black_2000x.png?v=175…":
+                - /url: https://cdn.shopify.com/s/files/1/0729/9186/7207/files/Black_2000x.png?v=1759442755
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,515 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/index-DiYWUa65.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/index-DiYWUa65.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-DiYWUa65.js":
+              - link "…assets/index-DiYWUa65.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-DiYWUa65.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,428 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/PageLoade….js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/PageLoade….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/PageLoaded-CdyGhGO3.js":
+              - link "…assets/PageLoade….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/PageLoaded-CdyGhGO3.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,412 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/global-CuaHjdXa.css(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/global-CuaHjdXa.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/global-CuaHjdXa.css":
+              - link "…assets/global-CuaHjdXa.css":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/global-CuaHjdXa.css
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,382 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.I18n_31OjU9f-.esm.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…v2/chunk.I18n_31OjU9f-.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.I18n_31OjU9f-.esm.js":
+              - link "…v2/chunk.I18n_31OjU9f-.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.I18n_31OjU9f-.esm.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,205 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/SpriteIco….js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/SpriteIco….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/SpriteIcon-CylvUnH4.js":
+              - link "…assets/SpriteIco….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/SpriteIcon-CylvUnH4.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,184 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/_commonjsHelpers-CLPN-Npl.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/_commonjsHelpers-CLPN-Npl.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/_commonjsHelpers-CLPN-Npl.js":
+              - link "…assets/_commonjsHelpers-CLPN-Npl.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/_commonjsHelpers-CLPN-Npl.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,142 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/index-YYjrOdLH.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/index-YYjrOdLH.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-YYjrOdLH.js":
+              - link "…assets/index-YYjrOdLH.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/index-YYjrOdLH.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,132 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/account-BJGpcByN.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/account-BJGpcByN.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/account-BJGpcByN.js":
+              - link "…assets/account-BJGpcByN.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/account-BJGpcByN.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "3,126 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/EmailElli….js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/EmailElli….js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/EmailEllipsis-Mi1ID48i.js":
+              - link "…assets/EmailElli….js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/EmailEllipsis-Mi1ID48i.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,986 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/string-BjbqEgkz.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/string-BjbqEgkz.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/string-BjbqEgkz.js":
+              - link "…assets/string-BjbqEgkz.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/string-BjbqEgkz.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,762 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/client-DVBjQylA.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/client-DVBjQylA.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/client-DVBjQylA.js":
+              - link "…assets/client-DVBjQylA.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/client-DVBjQylA.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,608 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.colors_Cs7EgwvK.esm.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…v2/chunk.colors_Cs7EgwvK.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.colors_Cs7EgwvK.esm.js":
+              - link "…v2/chunk.colors_Cs7EgwvK.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.colors_Cs7EgwvK.esm.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,572 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/document-DCk1mbhN.js(cdn.shopify.com) 3 KiB 0 ms":
+          - cell "…assets/document-DCk1mbhN.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/document-DCk1mbhN.js":
+              - link "…assets/document-DCk1mbhN.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/document-DCk1mbhN.js
+              - text: (cdn.shopify.com)
+          - cell "3 KiB":
+            - generic "2,572 bytes": 3 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.reportAss….esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.reportAss….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.reportAssetMetrics_BavG6JZ8.esm.js":
+              - link "…v2/chunk.reportAss….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.reportAssetMetrics_BavG6JZ8.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "2,473 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/global.module-CHxlb-go.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…assets/global.module-CHxlb-go.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/global.module-CHxlb-go.js":
+              - link "…assets/global.module-CHxlb-go.js":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/global.module-CHxlb-go.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "2,432 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.buildUrlS….esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.buildUrlS….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.buildUrlSearchParams_FHv23e6a.esm.js":
+              - link "…v2/chunk.buildUrlS….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.buildUrlSearchParams_FHv23e6a.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "2,411 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/ThemeProv….css(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…assets/ThemeProv….css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ThemeProvider-tn0RQdqM.css":
+              - link "…assets/ThemeProv….css":
+                - /url: https://cdn.shopify.com/shopifycloud/arrive-server/pay/vite-pay/assets/ThemeProvider-tn0RQdqM.css
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "2,390 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.ShopIcon_BY3u9qnR.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.ShopIcon_BY3u9qnR.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.ShopIcon_BY3u9qnR.esm.js":
+              - link "…v2/chunk.ShopIcon_BY3u9qnR.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.ShopIcon_BY3u9qnR.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "2,193 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/client.init-shop….en.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/client.init-shop….en.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.init-shop-cart-sync_kBfrUvu4.en.esm.js":
+              - link "…v2/client.init-shop….en.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.init-shop-cart-sync_kBfrUvu4.en.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,947 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.windoid_C9PdBZa0.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.windoid_C9PdBZa0.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.windoid_C9PdBZa0.esm.js":
+              - link "…v2/chunk.windoid_C9PdBZa0.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.windoid_C9PdBZa0.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,854 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.tslib-es6_i06t5CRd.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.tslib-es6_i06t5CRd.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.tslib-es6_i06t5CRd.esm.js":
+              - link "…v2/chunk.tslib-es6_i06t5CRd.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.tslib-es6_i06t5CRd.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,806 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.hooks_BF_YNgT0.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.hooks_BF_YNgT0.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.hooks_BF_YNgT0.esm.js":
+              - link "…v2/chunk.hooks_BF_YNgT0.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.hooks_BF_YNgT0.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,782 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.useWindoidMessageHandler_ZpHKuo_w.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.useWindoidMessageHandler_ZpHKuo_w.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useWindoidMessageHandler_ZpHKuo_w.esm.js":
+              - link "…v2/chunk.useWindoidMessageHandler_ZpHKuo_w.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useWindoidMessageHandler_ZpHKuo_w.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,766 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/loader.shop-login.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/loader.shop-login.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/loader.shop-login.esm.js":
+              - link "…v2/loader.shop-login.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/loader.shop-login.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,744 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.window_BV7pwtSs.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.window_BV7pwtSs.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.window_BV7pwtSs.esm.js":
+              - link "…v2/chunk.window_BV7pwtSs.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.window_BV7pwtSs.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,720 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.validator….esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.validator….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.validators_Cj2qrO-d.esm.js":
+              - link "…v2/chunk.validator….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.validators_Cj2qrO-d.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,705 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.BrandedBu….esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.BrandedBu….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.BrandedButtonIcon_Com_Y0C2.esm.js":
+              - link "…v2/chunk.BrandedBu….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.BrandedButtonIcon_Com_Y0C2.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,698 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.toast_HkvXzox0.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.toast_HkvXzox0.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.toast_HkvXzox0.esm.js":
+              - link "…v2/chunk.toast_HkvXzox0.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.toast_HkvXzox0.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,696 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.v4_CSBSzmbm.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.v4_CSBSzmbm.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.v4_CSBSzmbm.esm.js":
+              - link "…v2/chunk.v4_CSBSzmbm.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.v4_CSBSzmbm.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,660 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.StyleProv….esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.StyleProv….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.StyleProvider_B1fpSdzr.esm.js":
+              - link "…v2/chunk.StyleProv….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.StyleProvider_B1fpSdzr.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,635 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.useUserRecognitionSignal_RxakwPio.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.useUserRecognitionSignal_RxakwPio.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useUserRecognitionSignal_RxakwPio.esm.js":
+              - link "…v2/chunk.useUserRecognitionSignal_RxakwPio.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useUserRecognitionSignal_RxakwPio.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,603 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.useCompleteLogin_B-fGSyJO.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.useCompleteLogin_B-fGSyJO.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useCompleteLogin_B-fGSyJO.esm.js":
+              - link "…v2/chunk.useCompleteLogin_B-fGSyJO.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useCompleteLogin_B-fGSyJO.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,584 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.Button_BKBS1V1j.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.Button_BKBS1V1j.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.Button_BKBS1V1j.esm.js":
+              - link "…v2/chunk.Button_BKBS1V1j.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.Button_BKBS1V1j.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,575 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/loader.init-shop-cart-sync.en.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/loader.init-shop-cart-sync.en.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/loader.init-shop-cart-sync.en.esm.js":
+              - link "…v2/loader.init-shop-cart-sync.en.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/loader.init-shop-cart-sync.en.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,550 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.context_C6RPgO44.esm.js(cdn.shopify.com) 2 KiB 0 ms":
+          - cell "…v2/chunk.context_C6RPgO44.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.context_C6RPgO44.esm.js":
+              - link "…v2/chunk.context_C6RPgO44.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.context_C6RPgO44.esm.js
+              - text: (cdn.shopify.com)
+          - cell "2 KiB":
+            - generic "1,538 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.authorize_BuQdLYn9.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.authorize_BuQdLYn9.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.authorize_BuQdLYn9.esm.js":
+              - link "…v2/chunk.authorize_BuQdLYn9.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.authorize_BuQdLYn9.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,515 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.zoom_7OwNMdIG.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.zoom_7OwNMdIG.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.zoom_7OwNMdIG.esm.js":
+              - link "…v2/chunk.zoom_7OwNMdIG.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.zoom_7OwNMdIG.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,508 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.useElemen….esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.useElemen….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useElementEventListener_uJ7_X-Qg.esm.js":
+              - link "…v2/chunk.useElemen….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.useElementEventListener_uJ7_X-Qg.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,494 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.storage_BGV5Ustn.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.storage_BGV5Ustn.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.storage_BGV5Ustn.esm.js":
+              - link "…v2/chunk.storage_BGV5Ustn.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.storage_BGV5Ustn.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,449 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.document_CC4DPZSc.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.document_CC4DPZSc.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.document_CC4DPZSc.esm.js":
+              - link "…v2/chunk.document_CC4DPZSc.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.document_CC4DPZSc.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,443 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.networkEr….esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.networkEr….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.networkErrorMessages_DSiGJi0_.esm.js":
+              - link "…v2/chunk.networkEr….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.networkErrorMessages_DSiGJi0_.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,438 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…translations/chunk.en_CDI64xzY.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…translations/chunk.en_CDI64xzY.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/translations/chunk.en_CDI64xzY.esm.js":
+              - link "…translations/chunk.en_CDI64xzY.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/translations/chunk.en_CDI64xzY.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,409 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.defineIni….esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.defineIni….esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.defineInitFunction_D4of-Jj4.esm.js":
+              - link "…v2/chunk.defineIni….esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.defineInitFunction_D4of-Jj4.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,373 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v2/chunk.hooks_C3ligZlI.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…v2/chunk.hooks_C3ligZlI.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.hooks_C3ligZlI.esm.js":
+              - link "…v2/chunk.hooks_C3ligZlI.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/chunk.hooks_C3ligZlI.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,296 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…translations/chunk.en_DCcnwm9u.esm.js(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…translations/chunk.en_DCcnwm9u.esm.js(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/translations/chunk.en_DCcnwm9u.esm.js":
+              - link "…translations/chunk.en_DCcnwm9u.esm.js":
+                - /url: https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/translations/chunk.en_DCcnwm9u.esm.js
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,292 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/app.css(cdn.shopify.com) 1 KiB 0 ms":
+          - cell "…assets/app.css(cdn.shopify.com)":
+            - generic "https://cdn.shopify.com/extensions/01a0818c-a721-7530-b831-87785d9c7014/klaviyo-email-marketing-67/assets/app.css":
+              - link "…assets/app.css":
+                - /url: https://cdn.shopify.com/extensions/01a0818c-a721-7530-b831-87785d9c7014/klaviyo-email-marketing-67/assets/app.css
+              - text: (cdn.shopify.com)
+          - cell "1 KiB":
+            - generic "1,193 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/v1/logs(otlp-http-production.shopifysvc.com) 0 KiB 0 ms":
+          - cell "/v1/logs(otlp-http-production.shopifysvc.com)":
+            - generic "https://otlp-http-production.shopifysvc.com/v1/logs":
+              - link "/v1/logs":
+                - /url: https://otlp-http-production.shopifysvc.com/v1/logs
+              - text: (otlp-http-production.shopifysvc.com)
+          - cell "0 KiB":
+            - generic "305 bytes": 0 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/observeonly(error-analytics-sessions-production.shopifysvc.com) 0 KiB 0 ms":
+          - cell "/observeonly(error-analytics-sessions-production.shopifysvc.com)":
+            - generic "https://error-analytics-sessions-production.shopifysvc.com/observeonly":
+              - link "/observeonly":
+                - /url: https://error-analytics-sessions-production.shopifysvc.com/observeonly
+              - text: (error-analytics-sessions-production.shopifysvc.com)
+          - cell "0 KiB":
+            - generic "290 bytes": 0 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "langshop.app 77 KiB 113 ms":
+          - cell "langshop.app":
+            - generic: langshop.app
+          - cell "77 KiB":
+            - generic "79,121 bytes": 77 KiB
+          - cell "113 ms":
+            - generic: 113 ms
+        - row "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae(cdn.langshop.app) 77 KiB 113 ms":
+          - cell "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae(cdn.langshop.app)":
+            - generic "https://cdn.langshop.app/buckets/app/libs/storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae":
+              - link "…storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae":
+                - /url: https://cdn.langshop.app/buckets/app/libs/storefront/sdk.js?proxy_prefix=/apps/langshop&source=tae
+              - text: (cdn.langshop.app)
+          - cell "77 KiB":
+            - generic "79,121 bytes": 77 KiB
+          - cell "113 ms":
+            - generic: 113 ms
+        - row "shop.app 81 KiB 17 ms":
+          - cell "shop.app":
+            - generic: shop.app
+          - cell "81 KiB":
+            - generic "82,682 bytes": 81 KiB
+          - cell "17 ms":
+            - generic: 17 ms
+        - row "/accounts/pre_auth?client_id=…(shop.app) 29 KiB 8 ms":
+          - cell "/accounts/pre_auth?client_id=…(shop.app)":
+            - generic "https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=6f9b1b2c-6eb6-43fa-a928-3517da0d1181&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en":
+              - link "/accounts/pre_auth?client_id=…":
+                - /url: https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=6f9b1b2c-6eb6-43fa-a928-3517da0d1181&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en
+              - text: (shop.app)
+          - cell "29 KiB":
+            - generic "29,508 bytes": 29 KiB
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "/accounts/pre_auth?client_id=…(shop.app) 29 KiB 8 ms":
+          - cell "/accounts/pre_auth?client_id=…(shop.app)":
+            - generic "https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=52742bc4-782c-4ddd-8f24-46872f745569&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en":
+              - link "/accounts/pre_auth?client_id=…":
+                - /url: https://shop.app/accounts/pre_auth?client_id=8c733c27-349a-4362-8d81-f707633bad9a&analytics_trace_id=52742bc4-782c-4ddd-8f24-46872f745569&flow=embed&flow_version=account_menu&target_origin=https%3A%2F%2Fxaviaracing.it&storefront_domain=https%3A%2F%2Fxaviaracing.it&scope=openid+email%3Averified+pay%3Asession_token+profile+shop%3Aaccount_uuid&locale=en
+              - text: (shop.app)
+          - cell "29 KiB":
+            - generic "29,520 bytes": 29 KiB
+          - cell "8 ms":
+            - generic: 8 ms
+        - row "…internal/preloads.js?locale=en-IT&shop_id=729…(shop.app) 1 KiB 0 ms":
+          - cell "…internal/preloads.js?locale=en-IT&shop_id=729…(shop.app)":
+            - generic "https://shop.app/checkouts/internal/preloads.js?locale=en-IT&shop_id=72991867207":
+              - link "…internal/preloads.js?locale=en-IT&shop_id=729…":
+                - /url: https://shop.app/checkouts/internal/preloads.js?locale=en-IT&shop_id=72991867207
+              - text: (shop.app)
+          - cell "1 KiB":
+            - generic "708 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…assets/sprite.svg(shop.app) 18 KiB 0 ms":
+          - cell "…assets/sprite.svg(shop.app)":
+            - generic "https://shop.app/pay/assets/sprite.svg":
+              - link "…assets/sprite.svg":
+                - /url: https://shop.app/pay/assets/sprite.svg
+              - text: (shop.app)
+          - cell "18 KiB":
+            - generic "18,794 bytes": 18 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/pay/session?v=…(shop.app) 4 KiB 0 ms":
+          - cell "/pay/session?v=…(shop.app)":
+            - generic "https://shop.app/pay/session?v=1&token=d9b6dd97-1e45-4822-b453-4c6066d454bf&shop_id=72991867207":
+              - link "/pay/session?v=…":
+                - /url: https://shop.app/pay/session?v=1&token=d9b6dd97-1e45-4822-b453-4c6066d454bf&shop_id=72991867207
+              - text: (shop.app)
+          - cell "4 KiB":
+            - generic "4,152 bytes": 4 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "Judge.me marketing 2 KiB 0 ms":
+          - cell "Judge.me marketing":
+            - generic: Judge.me
+            - generic: marketing
+          - cell "2 KiB":
+            - generic "2,057 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/widgets/track_bulk_events?_events_count=1(tracking.aws.judge.me) 0 KiB 0 ms":
+          - cell "/widgets/track_bulk_events?_events_count=1(tracking.aws.judge.me)":
+            - generic "https://tracking.aws.judge.me/widgets/track_bulk_events?_events_count=1":
+              - link "/widgets/track_bulk_events?_events_count=1":
+                - /url: https://tracking.aws.judge.me/widgets/track_bulk_events?_events_count=1
+              - text: (tracking.aws.judge.me)
+          - cell "0 KiB":
+            - generic "443 bytes": 0 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…logos/verified-checkmark.svg(public-images.judge.me) 2 KiB 0 ms":
+          - cell "…logos/verified-checkmark.svg(public-images.judge.me)":
+            - generic "https://public-images.judge.me/judgeme/logos/verified-checkmark.svg":
+              - link "…logos/verified-checkmark.svg":
+                - /url: https://public-images.judge.me/judgeme/logos/verified-checkmark.svg
+              - text: (public-images.judge.me)
+          - cell "2 KiB":
+            - generic "1,614 bytes": 2 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "Google Fonts cdn 29 KiB 0 ms":
+          - cell "Google Fonts cdn":
+            - generic: Google Fonts
+            - generic: cdn
+          - cell "29 KiB":
+            - generic "29,774 bytes": 29 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…v20/92zatBhPN….woff2(fonts.gstatic.com) 27 KiB 0 ms":
+          - cell "…v20/92zatBhPN….woff2(fonts.gstatic.com)":
+            - generic "https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oTd4jQmfxI.woff2":
+              - link "…v20/92zatBhPN….woff2":
+                - /url: https://fonts.gstatic.com/s/jost/v20/92zatBhPNqw73oTd4jQmfxI.woff2
+              - text: (fonts.gstatic.com)
+          - cell "27 KiB":
+            - generic "27,399 bytes": 27 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/css2?family=Jost:ital,wght@0,400;0,600;0,700&display=swap(fonts.googleapis.com) 1 KiB 0 ms":
+          - cell "/css2?family=Jost:ital,wght@0,400;0,600;0,700&display=swap(fonts.googleapis.com)":
+            - generic "https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,600;0,700&display=swap":
+              - link "/css2?family=Jost:ital,wght@0,400;0,600;0,700&display=swap":
+                - /url: https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,400;0,600;0,700&display=swap
+              - text: (fonts.googleapis.com)
+          - cell "1 KiB":
+            - generic "1,202 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "/css2?family=Jost&display=swap(fonts.googleapis.com) 1 KiB 0 ms":
+          - cell "/css2?family=Jost&display=swap(fonts.googleapis.com)":
+            - generic "https://fonts.googleapis.com/css2?family=Jost&display=swap":
+              - link "/css2?family=Jost&display=swap":
+                - /url: https://fonts.googleapis.com/css2?family=Jost&display=swap
+              - text: (fonts.googleapis.com)
+          - cell "1 KiB":
+            - generic "1,173 bytes": 1 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "cloudfront.net 76 KiB 0 ms":
+          - cell "cloudfront.net":
+            - generic: cloudfront.net
+          - cell "76 KiB":
+            - generic "78,332 bytes": 76 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+        - row "…images/f38ff634-d347-4c96-96ae-630be4e05765.jpeg(d3k81ch9hvuctc.cloudfront.net) 76 KiB 0 ms":
+          - cell "…images/f38ff634-d347-4c96-96ae-630be4e05765.jpeg(d3k81ch9hvuctc.cloudfront.net)":
+            - generic "https://d3k81ch9hvuctc.cloudfront.net/company/Skh8gv/images/f38ff634-d347-4c96-96ae-630be4e05765.jpeg":
+              - link "…images/f38ff634-d347-4c96-96ae-630be4e05765.jpeg":
+                - /url: https://d3k81ch9hvuctc.cloudfront.net/company/Skh8gv/images/f38ff634-d347-4c96-96ae-630be4e05765.jpeg
+              - text: (d3k81ch9hvuctc.cloudfront.net)
+          - cell "76 KiB":
+            - generic "78,332 bytes": 76 KiB
+          - cell "0 ms":
+            - generic: 0 ms
+    - text: These insights are also available in the Chrome DevTools Performance Panel -
+    - link "record a trace":
+      - /url: https://developer.chrome.com/docs/devtools/performance/reference?utm_source=lighthouse&utm_medium=lr
+    - text: to view more detailed information.
+    - generic: Diagnostics
+    - generic "Minimize main-thread work —10.2 s":
+      - generic: Minimize main-thread work
+      - text: —10.2 s
+    - generic "Reduce JavaScript execution time —4.0 s":
+      - generic: Reduce JavaScript execution time
+      - text: —4.0 s
+    - generic "Reduce unused CSS —Est savings of 58 KiB":
+      - generic: Reduce unused CSS
+      - text: —Est savings of 58 KiB
+    - generic "Reduce unused JavaScript —Est savings of 564 KiB":
+      - generic: Reduce unused JavaScript
+      - text: —Est savings of 564 KiB
+    - generic "Minify CSS —Est savings of 6 KiB":
+      - generic: Minify CSS
+      - text: —Est savings of 6 KiB
+    - generic "Avoid enormous network payloads —Total size was 4,697 KiB":
+      - generic: Avoid enormous network payloads
+      - text: —Total size was 4,697 KiB
+    - generic "Avoid long main-thread tasks —20 long tasks found":
+      - generic: Avoid long main-thread tasks
+      - text: —20 long tasks found
+    - generic "User Timing marks and measures —16 user timings":
+      - generic: User Timing marks and measures
+      - text: —16 user timings
+    - generic "Avoid non-composited animations —2 animated elements found":
+      - generic: Avoid non-composited animations
+      - text: —2 animated elements found
+    - text: More information about the performance of your application. These numbers don't
+    - link "directly affect":
+      - /url: https://developer.chrome.com/docs/lighthouse/performance/performance-scoring/?utm_source=lighthouse&utm_medium=lr
+    - text: the Performance score.
+    - generic "Passed audits (6) Show":
+      - generic: Passed audits (6)
+      - generic: Show
+    - heading "94 Accessibility" [level=2]:
+      - generic: "94"
+      - generic: Accessibility
+    - text: These checks highlight opportunities to
+    - link "improve the accessibility of your web app":
+      - /url: https://developer.chrome.com/docs/lighthouse/accessibility/?utm_source=lighthouse&utm_medium=lr
+    - text: . Automatic detection can only detect a subset of issues and does not guarantee the accessibility of your web app, so
+    - link "manual testing":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: is also encouraged.
+    - generic: Contrast
+    - generic "Background and foreground colors do not have a sufficient contrast ratio.":
+      - generic: Background and foreground colors do not have a sufficient contrast ratio.
+    - generic: These are opportunities to improve the legibility of your content.
+    - generic: Best practices
+    - generic "Touch targets do not have sufficient size or spacing.":
+      - generic: Touch targets do not have sufficient size or spacing.
+    - generic: These items highlight common accessibility best practices.
+    - generic: Names and labels
+    - generic "Image elements do not have [alt] attributes that are redundant text.":
+      - text: Image elements do not have
+      - code: "[alt]"
+      - text: attributes that are redundant text.
+    - generic: These are opportunities to improve the semantics of the controls in your application. This may enhance the experience for users of assistive technology, like a screen reader.
+    - generic "Additional items to manually check (10) Show":
+      - generic: Additional items to manually check (10)
+      - generic: Show
+    - text: These items address areas which an automated testing tool cannot cover. Learn more in our guide on
+    - link "conducting an accessibility review":
+      - /url: https://web.dev/articles/how-to-review?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - generic "Passed audits (33) Show":
+      - generic: Passed audits (33)
+      - generic: Show
+    - generic "Not applicable (27) Show":
+      - generic: Not applicable (27)
+      - generic: Show
+    - heading "92 Best Practices" [level=2]:
+      - generic: "92"
+      - generic: Best Practices
+    - generic: General
+    - generic "Browser errors were logged to the console":
+      - generic: Browser errors were logged to the console
+    - generic "Issues were logged in the Issues panel in Chrome Devtools":
+      - text: Issues were logged in the
+      - code: Issues
+      - text: panel in Chrome Devtools
+    - generic "Detected JavaScript libraries":
+      - generic: Detected JavaScript libraries
+    - generic: Trust and Safety
+    - generic "Ensure CSP is effective against XSS attacks":
+      - generic: Ensure CSP is effective against XSS attacks
+    - generic "Use a strong HSTS policy":
+      - generic: Use a strong HSTS policy
+    - generic "Ensure proper origin isolation with COOP":
+      - generic: Ensure proper origin isolation with COOP
+    - generic "Mitigate DOM-based XSS with Trusted Types":
+      - generic: Mitigate DOM-based XSS with Trusted Types
+    - generic: Browser Compatibility
+    - generic "Baseline Features":
+      - generic: Baseline Features
+    - generic "Passed audits (11) Show":
+      - generic: Passed audits (11)
+      - generic: Show
+    - generic "Not applicable (2) Show":
+      - generic: Not applicable (2)
+      - generic: Show
+    - heading "100 SEO" [level=2]:
+      - generic: "100"
+      - generic: SEO
+    - text: These checks ensure that your page is following basic search engine optimization advice. There are many additional factors Lighthouse does not score here that may affect your search ranking, including performance on
+    - link "Core Web Vitals":
+      - /url: https://web.dev/explore/vitals?utm_source=lighthouse&utm_medium=lr
+    - text: .
+    - link "Learn more about Google Search Essentials":
+      - /url: https://support.google.com/webmasters/answer/35769
+    - text: .
+    - generic "Additional items to manually check (1) Hide":
+      - generic: Additional items to manually check (1)
+      - generic: Hide
+    - generic "Structured data is valid":
+      - generic: Structured data is valid
+    - generic: Run these additional validators on your site to check additional SEO best practices.
+    - generic "Passed audits (10) Show":
+      - generic: Passed audits (10)
+      - generic: Show
+    - heading "4/4 Agentic Browsing" [level=2]:
+      - generic: 4/4
+      - generic: Agentic Browsing
+    - text: These checks ensure high-quality,
+    - link "browsable websites for AI agents":
+      - /url: https://goo.gle/lighthouse-agentic-web
+    - text: and validate the correctness of WebMCP integrations. This category is still under development and subject to change.
+    - generic: WebMCP
+    - generic "WebMCP form coverage —12 forms missing annotations":
+      - generic: WebMCP form coverage
+      - text: —12 forms missing annotations
+    - generic "WebMCP tools registered":
+      - generic: WebMCP tools registered
+    - generic: Audits validating WebMCP integration.
+    - generic "Passed audits (4) Show":
+      - generic: Passed audits (4)
+      - generic: Show
+    - text: — —
+- text: — — — — — — — — — — — — — — —
+- contentinfo:
+  - generic: More on PageSpeed Insights
+  - link "What's new":
+    - /url: https://developers.google.com/speed/docs/insights/release_notes
+  - link "Documentation":
+    - /url: https://developers.google.com/speed/docs/insights/v5/about
+  - link "Learn about Web Performance":
+    - /url: https://developers.google.com/speed
+  - link "Ask questions on Stack Overflow":
+    - /url: https://stackoverflow.com/questions/tagged/pagespeed-insights
+  - link "Mailing list":
+    - /url: https://groups.google.com/g/pagespeed-insights-discuss
+  - generic: Related Content
+  - link "Updates":
+    - /url: https://developer.chrome.com/blog
+  - link "Web Fundamentals":
+    - /url: https://developers.google.com/focus/web-development
+  - link "Case Studies":
+    - /url: https://web.dev/case-studies
+  - link "Podcasts":
+    - /url: https://web.dev/shows
+  - generic: Connect
+  - link "Twitter":
+    - /url: https://twitter.com/ChromiumDev
+  - link "Youtube":
+    - /url: https://www.youtube.com/user/ChromeDevelopers
+  - link "Google Developers Logo":
+    - /url: https://developers.google.com/
+    - img "Google Developers Logo"
+  - link "Chrome":
+    - /url: https://developer.chrome.com/
+  - link "Firebase":
+    - /url: https://firebase.google.com/
+  - link "All products":
+    - /url: https://developers.google.com/products/
+  - link "Terms and Privacy Policy":
+    - /url: https://policies.google.com/
+  - text: For details, see the
+  - link "Google Developers Site Policies":
+    - /url: https://developers.google.com/terms/site-policies
+  - text: .

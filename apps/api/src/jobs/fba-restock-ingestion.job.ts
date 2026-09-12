@@ -61,7 +61,7 @@ export function startFbaRestockCron(): void {
     logger.error('fba-restock cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runFbaRestockCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runFbaRestockCronOnce() })
   logger.info('fba-restock cron: scheduled', { schedule })
 }
 

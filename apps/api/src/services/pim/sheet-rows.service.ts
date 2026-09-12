@@ -24,6 +24,8 @@ import { computeMasterCompleteness, type MasterCompleteness } from './master-com
 import type { MasterAttribute } from './master-schema.service.js'
 import { columnApplies as applies, columnRequiredHere as requiredHere } from '@nexus/shared/master-sheet'
 import { coordinatesFor, getSheetColumns, type SheetColumn, type SheetCoordinate, type SheetColumnSet } from './sheet-columns.service.js'
+import { buildCoordinateValidators, evaluateRow, type CoordinateValidators, type FlatRow } from './readiness.service.js'
+import { projectCellValue, isBlankValue } from './sheet-values.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -48,8 +50,43 @@ export interface SheetReadiness {
 
 export interface SheetListing {
   id: string
+  /**
+   * When a sync last RAN for this listing — #327(8), for the Listings pane,
+   * which had no time reference at all.
+   *
+   * ⚠ This is NOT "last checked against the channel". Nothing polls the channel
+   * to confirm the remote still matches; this is only the last time our own sync
+   * executed. A renderer that labels it "last checked" would be displaying a
+   * freshness guarantee that does not exist. `null` = never synced.
+   *
+   * OPTIONAL because two other constructors build this type
+   * (`sheet-rows.service.ts:416` and the test factory); a required field would
+   * break them for a value only the studio read supplies.
+   */
+  lastSyncedAt?: string | null
+  /**
+   * The LISTING's own optimistic-concurrency token — NOT the product's.
+   *
+   * A channel-scoped write CASes on this (products.routes.ts), so a client that
+   * sends `Product.version` instead conflicts against the wrong number.
+   * Measured 2026-09-01: **868 of 977 listings (89%) carry a version differing
+   * from their product's**, gaps up to 88. Without this field the read contract
+   * simply could not supply what the write contract checks, and every channel
+   * write would 409 on a conflict that never happened — which trains an
+   * operator to dismiss the one message that must always mean something.
+   */
+  version: number
   listingStatus: string
   isPublished: boolean
+  /**
+   * MA.1 operator offer control, distinct from `isPublished`: false means the
+   * OFFER is paused for this coordinate (listing data preserved, buy box
+   * suppressed) rather than the listing being unpublished. It exists on
+   * ChannelListing and was never exposed, so a drawer could not render the
+   * offer state honestly — it had to infer it from isPublished, which is a
+   * different thing.
+   */
+  offerActive: boolean
   price: number | null
   quantity: number | null
   externalListingId: string | null
@@ -58,6 +95,11 @@ export interface SheetListing {
 }
 
 export interface SheetCellValue {
+  mapped?: { requiredByRule?: boolean } | null
+  requestedLocale?: string
+  effectiveLocale?: string
+  translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
+  needsTranslation?: boolean
   value: unknown
   source: string
   inheritedFrom: string | null
@@ -187,42 +229,37 @@ export { columnApplies, columnRequiredHere } from '@nexus/shared/master-sheet'
 export function computeReadiness(input: {
   columns: SheetColumn[]
   values: Record<string, SheetCellValue>
-  row: { isParent: boolean; productType: string | null }
+  row: { isParent: boolean; productType: string | null; familyId?: string | null }
   coordinate: SheetCoordinate
   listing?: SheetListing | null
+  /**
+   * PES.5 — pre-built validator inputs for this (coordinate, productType,
+   * isParent). Deriving them is per-COORDINATE work, not per-row, so the batched
+   * reader builds them once and hands them in. Omitted (every existing caller
+   * and every test), they are built here and behaviour is identical.
+   */
+  validators?: CoordinateValidators
 }): SheetReadiness {
   const { columns, values, row, coordinate, listing } = input
-  const issues: ReadinessIssue[] = []
+  const validators = input.validators ?? buildCoordinateValidators(columns, coordinate, row)
 
-  for (const col of columns) {
-    if (!applies(col, row)) continue
-    const v = values[col.key]?.value
-    const required = requiredHere(col, coordinate.label, row.productType)
+  // PES.5 — validation is no longer implemented here. `readiness.service.ts`
+  // delegates to the SAME pure validators the publish path uses, so the pill and
+  // the preview can no longer disagree about one product. See that file's header
+  // for what the inline version was silently missing (GPSR, GTIN mod-10) and for
+  // the one thing deliberately NOT delegated (closed-list severity).
+  const flat: FlatRow = {}
+  for (const [key, cell] of Object.entries(values)) flat[key] = cell?.value
 
-    if (isBlank(v)) {
-      if (required) issues.push({ key: col.key, label: col.label, message: `${col.label} is required by ${coordinate.label}`, severity: 'error' })
-      continue
-    }
-
-    const s = typeof v === 'string' ? v : Array.isArray(v) ? v.join(' ') : String(v)
-    // Amazon enforces BYTES; an accented Italian character is 2+ bytes, so a title inside the
-    // character cap can still be refused at submit.
-    if (col.maxBytes && Buffer.byteLength(s, 'utf8') > col.maxBytes) {
-      issues.push({ key: col.key, label: col.label, message: `${col.label} is ${Buffer.byteLength(s, 'utf8')} bytes, over ${col.capFrom ?? coordinate.label}'s ${col.maxBytes}`, severity: 'error' })
-    } else if (col.maxLength && s.length > col.maxLength) {
-      issues.push({ key: col.key, label: col.label, message: `${col.label} is ${s.length} characters, over ${col.capFrom ?? coordinate.label}'s ${col.maxLength}`, severity: 'error' })
-    }
-
-    // An off-list value on a closed list is a WARNING, never a block — the operator may know
-    // something the cached schema does not, and Amazon is the one that decides.
-    if (col.mode === 'strict' && col.options && col.options.length > 0) {
-      const hit = col.options.some((o) => o.toLowerCase() === s.trim().toLowerCase())
-      if (!hit) issues.push({ key: col.key, label: col.label, message: `"${s}" is not in ${coordinate.label}'s list for ${col.label}`, severity: 'warn' })
-    }
-    if (col.deprecatedOptions?.some((o) => o.toLowerCase() === s.trim().toLowerCase())) {
-      issues.push({ key: col.key, label: col.label, message: `${coordinate.label} has deprecated "${s}" for ${col.label}`, severity: 'warn' })
-    }
-  }
+  const labelByKey = new Map(columns.map((c) => [c.key, c.label]))
+  const issues: ReadinessIssue[] = evaluateRow(flat, validators).map((i) => ({
+    key: i.field,
+    label: labelByKey.get(i.field) ?? i.field,
+    message: i.message,
+    // PreflightIssue says 'warning'; the sheet's wire contract has always said
+    // 'warn'. Mapped at the boundary rather than renaming a shipped API field.
+    severity: i.severity === 'error' ? 'error' : 'warn',
+  }))
 
   const ref = listing?.externalListingId ?? undefined
   const hasErrors = issues.some((i) => i.severity === 'error')
@@ -239,18 +276,18 @@ export function computeReadiness(input: {
 // Completeness — reuses the MA.4 pure function so there is ONE definition
 // ────────────────────────────────────────────────────────────────────
 
-export function completenessFor(columns: SheetColumn[], row: { isParent: boolean; productType: string | null }, values: Record<string, SheetCellValue>): MasterCompleteness {
+export function completenessFor(columns: SheetColumn[], row: { isParent: boolean; productType: string | null; familyId?: string | null }, values: Record<string, SheetCellValue>): MasterCompleteness {
   const applicable = columns.filter((c) => applies(c, row))
   const asMaster: MasterAttribute[] = applicable.map((c) => ({
     key: c.key,
     label: c.label,
     type: (c.kind === 'longtext' ? 'text' : c.kind === 'date' ? 'text' : c.kind) as MasterAttribute['type'],
-    required: c.requiredBy.length > 0,
+    required: values[c.key]?.mapped?.requiredByRule === true || requiredHere(c, 'Master', row.productType, row.familyId, values) || c.requiredBy.some(label => requiredHere(c, label, row.productType, row.familyId, values)),
     group: c.group,
     source: 'schema',
   }))
   const flat: Record<string, unknown> = {}
-  for (const c of applicable) flat[c.key] = values[c.key]?.value
+  for (const c of applicable) flat[c.key] = values[c.key]?.needsTranslation ? null : values[c.key]?.value
   return computeMasterCompleteness(asMaster, flat)
 }
 
@@ -261,6 +298,11 @@ export function completenessFor(columns: SheetColumn[], row: { isParent: boolean
 const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterPrice', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
 
 const PRODUCT_SELECT = {
+  familyId: true, weightValue: true, weightUnit: true, dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
+  costPrice: true, minMargin: true, minPrice: true, maxPrice: true, lowStockThreshold: true,
+  hsCode: true, countryOfOrigin: true, ppeCategory: true, garmentClass: true,
+  hazmatClass: true, hazmatUnNumber: true, notifiedBodyNumber: true, notifiedBodyName: true,
+  declarationOfConformityUrl: true, impactProtectors: true,
   id: true, sku: true, name: true, parentId: true, isParent: true, status: true, productType: true,
   version: true, basePrice: true, categoryAttributes: true, localizedContent: true, variantAttributes: true,
   description: true, bulletPoints: true, keywords: true, brand: true, manufacturer: true,
@@ -327,7 +369,13 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
   // What these families actually vary by decides which columns belong to a variation rather than to
   // the parent — the catalogue's own answer, not a hardcoded guess.
   const variationAxes = [...new Set(flat.flatMap((r) => (Array.isArray(r.variationAxes) ? (r.variationAxes as string[]) : [])))]
-  const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes })
+  // AM.1 — the eBay leaf categories these products are listed under decide the eBay aspects.
+  const ebayCategoryRows = flat.length === 0 ? [] : await prisma.channelListing.findMany({
+    where: { productId: { in: flat.map((r) => r.id as string) }, channel: 'EBAY', marketplace: market },
+    select: { platformAttributes: true },
+  })
+  const ebayCategoryIds = [...new Set(ebayCategoryRows.map((r) => (r.platformAttributes as { categoryId?: unknown } | null)?.categoryId).filter((c): c is string => typeof c === 'string' && c.length > 0))].sort()
+  const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes, ebayCategoryIds })
   const { columns, coordinates, locale, droppedKeys, schemaMissing, schemaAge, availableMarkets } = columnSet
 
   // ── 3. the listings for these products on this market's coordinates ─
@@ -339,10 +387,12 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
     },
     select: {
       id: true, productId: true, channel: true, marketplace: true, listingStatus: true, isPublished: true,
+      version: true,
       price: true, quantity: true, externalListingId: true, overrideData: true,
       titleOverride: true, descriptionOverride: true, priceOverride: true, quantityOverride: true, bulletPointsOverride: true,
       followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
       followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
+      offerActive: true,
     },
   })
 
@@ -368,20 +418,31 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       // A `column`-stored key (sku, name, status, basePrice…) is NOT in the resolver's output — the
       // resolver walks the JSONB bags. Reading only from it left every identity and pricing cell
       // empty on real data while the values sat right there on the row.
+      // AM.1 — a slot reads its LIST's store (`bulletPoints` for `bulletPoints_3`) and shows one
+      // item; a list/measure column normalises the stored shape. Same projection as the studio.
+      const baseKey = col.slot ? col.slot.of : col.key
       if (col.storage === 'column') {
-        const raw = normaliseColumnValue((product as unknown as Record<string, unknown>)[col.key], col.kind)
-        if (isBlank(raw)) continue
+        const raw = projectCellValue(col, normaliseColumnValue((product as unknown as Record<string, unknown>)[baseKey], col.kind))
+        if (isBlankValue(raw)) continue
         values[col.key] = { value: raw, source: 'masterColumn', inheritedFrom: null, inherited: false }
         continue
       }
 
-      const hit = resolved[col.key]
+      let hit = resolved[baseKey]
+      // The content trio lives per locale AND as a Product column; the column is the master's
+      // default text and is the fallback here as it already is for `name`.
+      if ((!hit || isBlankValue(hit.value)) && col.storage === 'localizedContent' && baseKey in (product as object)) {
+        const colRaw = (product as unknown as Record<string, unknown>)[baseKey]
+        if (!isBlankValue(colRaw)) hit = { value: colRaw, source: 'masterColumn', inheritedFrom: null }
+      }
       // A key the resolver returns with a null value is ABSENT, not "inherited nothing" — reporting
       // it as inherited paints a tint on an empty cell and tells the operator a parent supplied it.
-      if (!hit || isBlank(hit.value)) continue
-      const own = ownValue(product, col, locale)
+      if (!hit || isBlankValue(hit.value)) continue
+      const projected = projectCellValue(col, hit.value)
+      if (isBlankValue(projected)) continue
+      const own = ownValue(product, { ...col, key: baseKey }, locale)
       values[col.key] = {
-        value: hit.value,
+        value: projected,
         source: hit.source,
         inheritedFrom: hit.inheritedFrom,
         inherited: !isParent && col.scope === 'global' && isBlank(own) && hit.inheritedFrom !== null,
@@ -397,11 +458,13 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       const listing: SheetListing | null = l
         ? {
             id: l.id,
+            version: l.version,
             listingStatus: l.listingStatus,
             isPublished: l.isPublished,
             price: decimalToNumber(l.priceOverride ?? l.price),
             quantity: l.quantityOverride ?? l.quantity ?? null,
             externalListingId: l.externalListingId,
+            offerActive: l.offerActive !== false,
             follows: Object.fromEntries(FOLLOW_FLAGS.map((f) => [f, (l as unknown as Record<string, boolean>)[f] !== false])),
           }
         : null

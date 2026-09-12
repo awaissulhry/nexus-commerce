@@ -20,7 +20,8 @@
  * page simply does not write multipliers, which is H10's shape too.
  */
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 // Returns routes. R0.2 extracted them out of the 8358-line
 // fulfillment.routes.ts; R0.3 layers on bug fixes — idempotency on
 // create (B7), pagination on list (B6), AuditLog on every state
@@ -567,7 +568,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (idemKey) {
         const existing = await prisma.return.findUnique({
-          where: { idempotencyKey: idemKey },
+          where: { workspace_idempotencyKey: workspaceKey({ idempotencyKey: idemKey }) },
           include: { items: true },
         })
         if (existing) {
@@ -628,7 +629,7 @@ const returnsRoutes: FastifyPluginAsync = async (fastify) => {
           (request.headers['idempotency-key'] as string | undefined)?.trim()
         if (idemKey) {
           const existing = await prisma.return.findUnique({
-            where: { idempotencyKey: idemKey },
+            where: { workspace_idempotencyKey: workspaceKey({ idempotencyKey: idemKey }) },
             include: { items: true },
           })
           if (existing) {

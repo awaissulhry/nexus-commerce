@@ -334,7 +334,7 @@ export async function verifyApiKey(
       // back-compat. Anything else requires the exact scope or
       // the 'admin' super-scope.
       const ok =
-        scopes.length === 0 ||
+        (scopes.length === 0 && process.env.NEXUS_WORKSPACES_ENABLED !== '1') ||
         scopes.includes('admin') ||
         scopes.includes(input.requiredScope)
       if (!ok) {

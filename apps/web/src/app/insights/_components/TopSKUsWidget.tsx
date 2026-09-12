@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Card } from '@/components/ui/Card'
 import { TableWithSparkline, type TableColumn } from '@/components/insights'
 import type { TopSKURow } from './useInsightsData'

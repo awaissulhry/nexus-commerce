@@ -1,0 +1,34 @@
+── [workspace] #metrics  —  24 difference(s) in 354 judged properties
+── [workspace] #enabled-first  —  15 difference(s) in 266 judged properties
+── [workspace] #group-by  —  31 difference(s) in 347 judged properties
+── [workspace] #freeze-right  —  19 difference(s) in 292 judged properties
+── [workspace] #selection  —  21 difference(s) in 297 judged properties
+── [workspace] #edit-mode  —  20 difference(s) in 297 judged properties
+── [workspace] #search  —  15 difference(s) in 271 judged properties
+── [workspace] #filters  —  19 difference(s) in 292 judged properties
+── [workspace] #hierarchy  —  25 difference(s) in 331 judged properties
+── [workspace] #server  —  19 difference(s) in 305 judged properties
+── [workspace] #keyboard-nav  —  15 difference(s) in 266 judged properties
+── [workspace] #row-click  —  20 difference(s) in 292 judged properties
+── [workspace] #loading  —  4 difference(s) in 83 judged properties
+── [workspace] #empty-node  (exempt: totals)  —  3 difference(s) in 90 judged properties
+── [workspace] #empty-label  (exempt: totals)  —  4 difference(s) in 86 judged properties
+── [workspace] #customizable  —  24 difference(s) in 318 judged properties
+── [workspace] #chromeless  (exempt: toolbar, pager)  —  24 difference(s) in 232 judged properties
+── [workspace] #pager-centered  —  15 difference(s) in 279 judged properties
+── [workspace] #controlled-filters  —  19 difference(s) in 292 judged properties
+── [datagrid] #dg-inline-edit  (exempt: totals)  —  9 difference(s) in 54 judged properties
+── [datagrid] #dg-base  —  21 difference(s) in 157 judged properties
+── [datagrid] #dg-selection  —  24 difference(s) in 144 judged properties
+── [datagrid] #dg-expanded  (exempt: totals)  —  13 difference(s) in 121 judged properties
+── [datagrid] #dg-sub-rows  (exempt: totals)  —  23 difference(s) in 148 judged properties
+── [datagrid] #dg-row-props  (exempt: totals)  —  15 difference(s) in 116 judged properties
+── [datagrid] #dg-size-sm  —  22 difference(s) in 142 judged properties
+── [datagrid] #dg-size-lg  —  21 difference(s) in 142 judged properties
+── [datagrid] #dg-size-xs  —  22 difference(s) in 142 judged properties
+── [datagrid] #dg-size-xl  —  21 difference(s) in 142 judged properties
+── [datagrid] #dg-max-height  —  28 difference(s) in 165 judged properties
+── [datagrid] #dg-empty  (exempt: totals)  —  1 difference(s) in 26 judged properties
+── [datagrid] #dg-customizable  (exempt: totals)  —  18 difference(s) in 122 judged properties
+── [datagrid] #dg-controlled  (exempt: totals)  —  18 difference(s) in 116 judged properties
+❌ grid parity: 592 difference(s) across 6727 judged properties.

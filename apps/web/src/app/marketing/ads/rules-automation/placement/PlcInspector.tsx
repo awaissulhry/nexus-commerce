@@ -32,7 +32,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, ToolbarButton } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, Loader2, Pin, PinOff, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

@@ -1,0 +1,59 @@
+{
+  "dock1280": {
+    "clipped": [],
+    "height": 40,
+    "labels": [
+      "Excluded\n0",
+      "Pinned\n2",
+      "Mapping\n0",
+      "Customise",
+      "Export",
+      "Import",
+      ""
+    ],
+    "scrollWidth": 792,
+    "viewport": {
+      "h": 900,
+      "w": 1280
+    },
+    "width": 792
+  },
+  "master1280": {
+    "clipped": [],
+    "height": 40,
+    "labels": [
+      "Excluded somewhere\n20",
+      "Missing axis values\n0",
+      "Duplicate combinations\n2",
+      "Customise",
+      "Export",
+      "Import",
+      ""
+    ],
+    "scrollWidth": 1212,
+    "viewport": {
+      "h": 900,
+      "w": 1280
+    },
+    "width": 1212
+  },
+  "ebay1280": {
+    "clipped": [],
+    "height": 40,
+    "labels": [
+      "Excluded\n0",
+      "Pinned values\n2",
+      "Mapping errors\n0",
+      "Customise",
+      "Export",
+      "Import",
+      ""
+    ],
+    "scrollWidth": 1212,
+    "viewport": {
+      "h": 900,
+      "w": 1280
+    },
+    "width": 1212
+  }
+}

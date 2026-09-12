@@ -30,7 +30,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Plus, RefreshCw, Target, AlertTriangle, Layers, Globe, Trash2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { searchOptions } from '@/lib/option-search'

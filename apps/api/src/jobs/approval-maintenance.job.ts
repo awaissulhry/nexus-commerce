@@ -41,8 +41,8 @@ export function startApprovalMaintenanceCron(): void {
     logger.error(`[approval-maintenance] invalid schedule "${schedule}" — cron not started`)
     return
   }
-  task = cron.schedule(schedule, () => {
-    void runApprovalMaintenanceOnce().catch((err) =>
+  task = cron.schedule(schedule, async () => {
+    await runApprovalMaintenanceOnce().catch((err) =>
       logger.error('[approval-maintenance] failed', { error: String(err) }),
     )
   })

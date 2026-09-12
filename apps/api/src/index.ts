@@ -1,3 +1,5 @@
+import { visitActiveWorkspaces } from './lib/workspace-sweep.js'
+import { legacyIngress } from './lib/workspace-ingress.js'
 import "./db.js"; // ensure dotenv loads before anything else
 import { initOtel } from "./utils/otel-setup.js";
 // L.26.0 — start OTel SDK as early as possible so HTTP/Prisma
@@ -12,6 +14,7 @@ import { runWithRequestId } from "./utils/request-context.js";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { ALLOWED_WEB_ORIGINS } from "./lib/cors-origins.js";
+import { apiContentSecurityPolicy } from './lib/api-content-security-policy.js'
 import compress from "@fastify/compress";
 import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
@@ -60,6 +63,9 @@ import stockRoutes from "./routes/stock.routes.js";
 import brandSettingsRoutes from "./routes/brand-settings.routes.js";
 import settingsAuditRoutes from "./routes/settings-audit.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
+import workspacesRoutes from "./routes/workspaces.routes.js";
+import { workspaceHook } from "./lib/workspace-hook.js";
+import workspaceInvitationsRoutes from './routes/workspace-invitations.routes.js';
 import settingsWebhooksRoutes from "./routes/settings-webhooks.routes.js";
 import settingsPrivacyRoutes from "./routes/settings-privacy.routes.js";
 import marketingRoutes from "./routes/marketing.routes.js";
@@ -97,6 +103,8 @@ import cloudinaryWebhookRoutes from "./routes/cloudinary-webhook.routes.js";
 import repricingRulesRoutes from "./routes/repricing-rules.routes.js";
 import categoriesRoutes from "./routes/categories.routes.js";
 import pimCategoriesRoutes from "./routes/pim-categories.routes.js";
+import taxonomyRoutes from "./routes/taxonomy.routes.js";
+import { startTaxonomyRefreshCron } from "./jobs/taxonomy-refresh.job.js";
 import listingWizardRoutes from "./routes/listing-wizard.routes.js";
 import wizardTemplateRoutes from "./routes/wizard-templates.routes.js";
 import gtinExemptionRoutes from "./routes/gtin-exemption.routes.js";
@@ -119,8 +127,12 @@ import outboundQueueRoutes from "./routes/outbound-queue.routes.js";
 import pimRoutes from "./routes/pim.routes.js";
 import pimGlobalRoutes from "./routes/pim-global.routes.js";
 import productsSheetRoutes from "./routes/products-sheet.routes.js";
+import productStudioRoutes from "./routes/product-studio.routes.js";
+import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
 import catalogMatrixRoutes from "./routes/catalog-matrix.routes.js";
 import pimMappingRoutes from "./routes/pim-mapping.routes.js";
+import channelMappingRoutes from "./routes/channel-mapping.routes.js"; // PES.6
+import cellFormulaRoutes from "./routes/cell-formula.routes.js"; // PES.6 wave-4
 import valueMapRoutes from "./routes/value-map.routes.js";
 import mappingPropagationRoutes from "./routes/mapping-propagation.routes.js";
 import amazonCockpitRoutes from "./routes/amazon-cockpit.routes.js";
@@ -132,6 +144,7 @@ import { fieldLinksRoutes } from "./routes/field-links.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
 import productsSearchRoutes from "./routes/products-search.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
+import { productEnrichmentAiRoutes, productAiDraftRoutes } from "./routes/product-enrichment.routes.js";
 import productsImagesRoutes from "./routes/products-images.routes.js";
 import listingImagesRoutes from "./routes/listing-images.routes.js";
 import amazonImagesRoutes from "./routes/images/amazon-images.routes.js";
@@ -260,6 +273,7 @@ import { startLotExpiryAlertCron } from "./jobs/lot-expiry-alert.job.js";
 import { startCertExpiryAlertCron } from "./jobs/cert-expiry-alert.job.js";
 import { getAmazonPublishMode } from "./services/amazon-publish-gate.service.js";
 import { getEbayPublishMode } from "./services/ebay-publish-gate.service.js";
+import { startShopifyLinkedAutomationCron } from './jobs/shopify-linked-automation.job.js';
 import { getShopifyPublishMode } from "./services/shopify-publish-gate.service.js";
 import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
 import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
@@ -278,6 +292,7 @@ import { seedPromptTemplateDefaults } from "./services/ai/prompt-template.servic
 import { startScheduledWizardPublishCron } from "./jobs/scheduled-wizard-publish.job.js";
 import { startScheduledImagePublishCron } from "./jobs/scheduled-image-publish.job.js";
 import { startImagePublishReconcileCron } from "./jobs/image-publish-reconcile.job.js";
+import { startAmazonMediaWorker } from "./jobs/amazon-media.job.js";
 import { startScheduledPoCron } from "./jobs/scheduled-po.job.js";
 import { startObservabilityRetentionCron } from "./jobs/observability-retention.job.js";
 import { startAlertEvaluatorCron } from "./jobs/alert-evaluator.job.js";
@@ -515,22 +530,31 @@ app.addHook('onRequest', (request, reply, done) => {
  * no scripts, no images, no fonts, no connections, no framing. The payload is server-generated
  * from our own template with every interpolation escaped.
  */
-const HTML_PREVIEW_PATHS = ['/api/advertising/digest/weekly/preview']
-
 app.addHook('onSend', (request, reply, payload, done) => {
+  // DEV-ONLY instrumentation. Cross-origin Resource Timing reads back zeroed
+  // without this, so a browser-side lane cannot measure what a request spent
+  // where — it is what makes that question answerable at all.
+  //
+  // BOTH gates, and the env flag is not redundant with NODE_ENV: this API runs
+  // in contexts where NODE_ENV is not reliably 'production' (a staging box, a
+  // container with the var unset, a `railway run` shell). A missing variable
+  // must produce "no header", never "header on production" — so enabling it is
+  // the deliberate act, not disabling it.
+  //
+  //   run recipe: NEXUS_ENABLE_TIMING_ALLOW_ORIGIN=1 on the dev API only
+  if (
+    process.env.NODE_ENV !== 'production' &&
+    process.env.NEXUS_ENABLE_TIMING_ALLOW_ORIGIN === '1'
+  ) {
+    reply.header('Timing-Allow-Origin', '*')
+  }
   reply.header('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
   reply.header('X-Content-Type-Options', 'nosniff')
   reply.header('X-Frame-Options', 'DENY')
   reply.header('Referrer-Policy', 'no-referrer')
   // Set here rather than in the route: this hook runs AFTER the handler, so a header the
   // handler sets would be silently overwritten.
-  const isPreview = HTML_PREVIEW_PATHS.some((p) => (request.url ?? '').split('?')[0] === p)
-  reply.header(
-    'Content-Security-Policy',
-    isPreview
-      ? "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'"
-      : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-  )
+  reply.header('Content-Security-Policy', apiContentSecurityPolicy(request.url ?? '', reply))
   done(null, payload)
 });
 
@@ -609,6 +633,7 @@ app.register(cookie);
 // the route→permission manifest; runs in shadow mode (log-only) until S3
 // flips NEXUS_RBAC_MODE=enforce. Registered as a preHandler so it sits
 // after body parsing and can read cookies / short-circuit with a reply.
+app.addHook('preHandler', workspaceHook);
 app.addHook('preHandler', rbacHook);
 
 // Phase S2 (RBAC engine) — strip restricted financial fields from every
@@ -626,6 +651,7 @@ app.addHook('preSerialization', financialFilterHook);
 app.register(authRoutes);
 // Phase S5 — self-service TOTP 2FA (/api/auth/2fa/*).
 app.register(mfaRoutes);
+app.register(workspaceInvitationsRoutes);
 // Phase S4 — Team & Access API (/api/team/*), gated by the RBAC manifest.
 app.register(teamRoutes);
 app.register(listingsRoutes);
@@ -682,6 +708,7 @@ app.register(stockRoutes, { prefix: '/api' });
 app.register(brandSettingsRoutes, { prefix: '/api' });
 app.register(settingsAuditRoutes, { prefix: '/api' });
 app.register(profileRoutes, { prefix: '/api' });
+app.register(workspacesRoutes, { prefix: '/api' });
 app.register(settingsWebhooksRoutes, { prefix: '/api' });
 app.register(settingsPrivacyRoutes, { prefix: '/api' });
 app.register(pricingRoutes, { prefix: '/api' });
@@ -720,6 +747,7 @@ app.register(cloudinaryWebhookRoutes, { prefix: '/api' });
 app.register(repricingRulesRoutes, { prefix: '/api' });
 app.register(categoriesRoutes, { prefix: '/api' });
 app.register(pimCategoriesRoutes, { prefix: '/api' });
+app.register(taxonomyRoutes, { prefix: '/api' });
 app.register(listingWizardRoutes, { prefix: '/api' });
 app.register(wizardTemplateRoutes, { prefix: '/api' });
 app.register(gtinExemptionRoutes, { prefix: '/api' });
@@ -743,8 +771,14 @@ app.register(pimRoutes, { prefix: '/api' });
 app.register(pimGlobalRoutes, { prefix: '/api' });
 // MS.1/MS.2 — the master sheet's reads (docs/2026-08-29-master-sheet-design.md).
 app.register(productsSheetRoutes, { prefix: '/api' });
+// PES.5 — the Product Edit Studio's reads. Under /api/products, so the RBAC
+// prefix rule maps GET->products:view and writes->products:edit automatically.
+app.register(productStudioRoutes, { prefix: '/api' });
+app.register(catalogTransferRoutes, { prefix: '/api' });
 app.register(catalogMatrixRoutes, { prefix: '/api' });
 app.register(pimMappingRoutes, { prefix: '/api' });
+app.register(channelMappingRoutes, { prefix: '/api' }); // PES.6 — global mapping engine
+app.register(cellFormulaRoutes, { prefix: '/api' }); // PES.6 wave-4 — cell formulas + master rules
 app.register(valueMapRoutes, { prefix: '/api' });
 app.register(mappingPropagationRoutes, { prefix: '/api' });
 app.register(amazonCockpitRoutes, { prefix: '/api' });
@@ -754,6 +788,10 @@ app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
 app.register(productsSearchRoutes, { prefix: '/api' });
 app.register(productsAiRoutes, { prefix: '/api' });
+// PES.8 — generation resolves to ai:run via pfx('/api/ai/'); draft review/approve
+// resolves to products:view/products:edit via pfx('/api/products').
+app.register(productEnrichmentAiRoutes, { prefix: '/api' });
+app.register(productAiDraftRoutes, { prefix: '/api' });
 app.register(productsImagesRoutes, { prefix: '/api' });
 app.register(listingImagesRoutes, { prefix: '/api' });
 app.register(amazonImagesRoutes, { prefix: '/api' });
@@ -821,12 +859,28 @@ const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
 async function start() {
   try {
+    // ── Bind host ────────────────────────────────────────────────
+    // Default is UNCHANGED ('0.0.0.0'), so every deployed environment binds
+    // exactly as before. The override exists for local browser verification:
+    // `localhost` resolves to ::1 (IPv6) BEFORE 127.0.0.1 on macOS, and Chrome
+    // honours that order, so it reaches for ::1 where an IPv4-only bind is not
+    // listening. Measured here: with host '0.0.0.0' a direct IPv6 request to ::1
+    // gets ECONNREFUSED; with '::' it gets HTTP 200. curl and node fall back to
+    // IPv4 silently, so in-process probes and curl checks all passed — while
+    // Chrome stalled rather than falling back (PES.3 measured the hang in-page),
+    // which is what timed out every browser pass and the grid:conformance
+    // networkidle gate.
+    //
+    // `NEXUS_API_HOST=::` binds dual-stack so both families answer.
+    const host = process.env.NEXUS_API_HOST ?? '0.0.0.0';
     await app.listen({
       port: port,
-      host: '0.0.0.0'
+      host,
     });
 
-    app.log.info(`API server listening at http://0.0.0.0:${port}`);
+    // Report the host actually bound, not the default — a log line that says
+    // 0.0.0.0 while listening on :: is the kind of small lie that costs an hour.
+    app.log.info(`API server listening at http://${host}:${port}`);
 
     // ── Seed env-managed ChannelConnection rows (H.2 Phase 2) ──────
     // Amazon SP-API today is single-tenant via process.env.AMAZON_*
@@ -835,7 +889,7 @@ async function start() {
     // the codebase can FK to it and the connections endpoint can
     // read uniformly. Idempotent: upsert keyed on (channelType,
     // managedBy='env').
-    await seedEnvManagedConnections();
+    await legacyIngress(() => seedEnvManagedConnections());
     // CX.1 — our per-channel app credentials become rows (once), so connection rows never carry them.
     await seedChannelApps().catch((err) =>
       logger.error("seedChannelApps failed (non-fatal)", { error: err instanceof Error ? err.message : String(err) }),
@@ -982,9 +1036,11 @@ async function start() {
         const { seedBulkActionTemplates } = await import(
           './services/bulk-action-template-seeds.js'
         );
-        const result = await seedBulkActionTemplates(
-          (await import('./db.js')).default,
-        );
+        const result = { created: 0, updated: 0 };
+        await visitActiveWorkspaces(async () => {
+          const count = await seedBulkActionTemplates(prisma);
+          result.created += count.created; result.updated += count.updated;
+        });
         logger.info(
           `[boot] bulk-action-template seeds: ${result.created} created, ${result.updated} updated`,
         );
@@ -1002,7 +1058,7 @@ async function start() {
       // starvation + a cron silently stopping) so the operator is actively
       // notified, not just via logs/the dashboard banner. Idempotent.
       void import('./services/alert-evaluator.service.js')
-        .then(({ seedDefaultAlertRules }) => seedDefaultAlertRules())
+        .then(({ seedDefaultAlertRules }) => visitActiveWorkspaces(async () => { await seedDefaultAlertRules() }))
         .catch((e) => logger.warn('[startup] seedDefaultAlertRules failed (non-fatal)', { error: e instanceof Error ? e.message : String(e) }));
 
       // W4.10 — Repricing evaluator cron (every 5 min). Walks every
@@ -1069,6 +1125,7 @@ async function start() {
       // ALA Phase 5 — proactive Amazon schema refresh (self-gates on
       // NEXUS_ENABLE_SCHEMA_REFRESH_CRON=1; dormant otherwise). 04:00 UTC daily.
       startSchemaRefreshCron();
+      startTaxonomyRefreshCron();
 
       // Proactive eBay access-token refresh sweep. The reactive refresh
       // in EbayAuthService.getValidToken handles per-call refresh, but
@@ -1113,6 +1170,7 @@ async function start() {
       // listings (blank required fields in the flat-file editor) and store ONLY
       // platformAttributes.attributes. Bounded per tick; self-guards on creds.
       startAttrHydrateCron();
+      startShopifyLinkedAutomationCron();
 
       // R5.3 — failed-refund retry queue. Hourly sweep that re-runs
       // the channel publisher against Returns stuck in CHANNEL_FAILED.
@@ -1666,7 +1724,7 @@ async function start() {
       // body isn't clobbered. Failures here mustn't kill startup —
       // the inline-prompt path in listing-content.service.ts still
       // works without the DB rows.
-      seedPromptTemplateDefaults(prisma).catch((err: unknown) => {
+      visitActiveWorkspaces(async () => { await seedPromptTemplateDefaults(prisma) }).catch((err: unknown) => {
         console.warn(
           '[api] prompt-template seed failed (non-fatal):',
           err instanceof Error ? err.message : err,
@@ -1687,6 +1745,7 @@ async function start() {
       // DRAFT (empty-report finalize / missed poll). On by default; status-only,
       // never calls Amazon. Tick 3min + a boot sweep ~30s after start.
       startImagePublishReconcileCron();
+      startAmazonMediaWorker();
 
       // PO-Plus.6 — recurring PO cron. Default-OFF unless
       // NEXUS_ENABLE_SCHEDULED_PO=1. Tick 5min; cap 25 schedules per

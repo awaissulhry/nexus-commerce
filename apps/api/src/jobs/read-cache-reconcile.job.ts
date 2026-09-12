@@ -7,7 +7,7 @@
  * products vanish from the list and stock values freeze at stale numbers (a
  * SET-import looked like it did nothing). applyStockMovement now refreshes the
  * cache directly, but this cron is the worker-INDEPENDENT backstop that
- * guarantees the list can never silently drift again — for ANY write path.
+ * repairs missed updates independently of worker availability.
  *
  * Each run compares Product truth against ProductReadCache and heals:
  *   - live Product with NO cache row            → refresh (rebuild the row)
@@ -19,6 +19,7 @@
  *
  * Schedule: every 15 min. Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
  */
+import { productCacheDrifted } from '../services/products/cache-drift.js'
 import cron from '../lib/cron/clustered.js'
 import { prisma } from '@nexus/database'
 import { logger } from '../utils/logger.js'
@@ -34,16 +35,19 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runReadCacheReconcile(): Promise<string> {
   return recordCronRun(JOB, async () => {
-      const [liveProducts, cacheRows] = await Promise.all([
+      const [liveProducts, cacheRows, listings] = await Promise.all([
         prisma.product.findMany({
           where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, fulfillmentMethod: true },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, _count: { select: { children: true, channelListings: true } } },
         }),
         prisma.productReadCache.findMany({
           where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, fulfillmentMethod: true },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, childCount: true, channelCount: true, cacheRefreshedAt: true },
         }),
+        prisma.channelListing.findMany({ where: { product: { deletedAt: null } }, select: { productId: true, updatedAt: true } }),
       ])
+      const latestListing = new Map<string, Date>()
+      for (const listing of listings) if (!latestListing.has(listing.productId) || latestListing.get(listing.productId)! < listing.updatedAt) latestListing.set(listing.productId, listing.updatedAt)
       const cacheById = new Map(cacheRows.map((c) => [c.id, c]))
       const liveIds = new Set(liveProducts.map((p) => p.id))
 
@@ -56,17 +60,7 @@ export async function runReadCacheReconcile(): Promise<string> {
         if (!c) {
           missing++
           drifted.push(p.id)
-        } else if (
-          // FFT.6 — the 3-field diff let price/identity/family drift live
-          // forever; compare the full cheap Product-truth projection.
-          c.totalStock !== p.totalStock || c.status !== p.status || c.name !== p.name ||
-          c.sku !== p.sku ||
-          String(c.basePrice ?? '') !== String(p.basePrice ?? '') ||
-          c.isParent !== p.isParent ||
-          (c.parentId ?? null) !== (p.parentId ?? null) ||
-          (c.productType ?? null) !== (p.productType ?? null) ||
-          (c.fulfillmentMethod ?? null) !== (p.fulfillmentMethod ?? null)
-        ) {
+        } else if (productCacheDrifted(p, c, latestListing.get(p.id))) {
           stale++
           drifted.push(p.id)
         }
@@ -111,8 +105,8 @@ export function startReadCacheReconcileCron(): void {
     logger.error('read-cache-reconcile cron: invalid schedule expression', { schedule: SCHEDULE })
     return
   }
-  scheduledTask = cron.schedule(SCHEDULE, () => {
-    void runReadCacheReconcile()
+  scheduledTask = cron.schedule(SCHEDULE, async () => {
+    await runReadCacheReconcile()
   })
   logger.info(`read-cache-reconcile cron: scheduled (${SCHEDULE} UTC)`)
 }

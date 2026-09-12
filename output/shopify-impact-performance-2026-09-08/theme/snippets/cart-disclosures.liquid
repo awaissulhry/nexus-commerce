@@ -1,0 +1,33 @@
+{%- doc -%}
+  Renders the disclosure symbols and titles inline in a cart line item.
+
+  @param {object} product - the line item's product
+{%- enddoc -%}
+
+{%- assign disclosures = product.metafields.shopify.disclosure.value -%}
+
+{%- if disclosures != blank -%}
+  {%- capture cart_disclosures_content -%}
+    {%- for disclosure in disclosures -%}
+      {%- if disclosure.display_preferences.value.surfaces contains 'cart' -%}
+        <div class="h-stack gap-1 text-sm text-subdued">
+          {%- if disclosure.symbol.value != blank -%}
+            {{-
+              disclosure.symbol.value
+              | image_url: width: 32
+              | image_tag: loading: 'lazy', alt: '', widths: '16,32', style: 'width: 16px; height: auto'
+            -}}
+          {%- endif -%}
+
+          <span>{{ disclosure.title.value | escape }}</span>
+        </div>
+      {%- endif -%}
+    {%- endfor -%}
+  {%- endcapture -%}
+
+  {%- if cart_disclosures_content != blank -%}
+    <div class="v-stack gap-1">
+      {{- cart_disclosures_content -}}
+    </div>
+  {%- endif -%}
+{%- endif -%}

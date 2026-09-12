@@ -1,4 +1,12 @@
-# Nexus Design System
+# Legacy UI kit reference
+
+**For all new and changed UI, use `apps/web/src/design-system`.** Read
+[DESIGN.md](../DESIGN.md) for canonical tokens and
+[Contributing](../apps/web/src/design-system/docs/CONTRIBUTING.md) for components
+and reuse rules. New reusable UI belongs in that system and its living catalog.
+
+The reference below records the older `components/ui` kit during migration.
+Its Tailwind tokens and component APIs are historical, not guidance for new work.
 
 Reference for the tokens, primitives, and patterns shipped during the U.1–U.20 UX/UI overhaul. Source-of-truth lives in `apps/web/tailwind.config.ts` and `apps/web/src/components/ui/`.
 

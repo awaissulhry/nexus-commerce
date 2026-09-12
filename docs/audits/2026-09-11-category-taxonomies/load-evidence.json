@@ -1,0 +1,33 @@
+{
+  "at": "2026-09-11T00:11:55.774Z",
+  "engine": "local PostgreSQL 17; actual Fastify handlers via injection, Prisma pool max=1 and authenticated business RLS; synthetic 100,000 nodes",
+  "nodes": 100000,
+  "crossBusinessIsolation": true,
+  "revokedActorDeniedWarmCache": true,
+  "replacedSnapshotRejected": true,
+  "coldLoadMs": 1956.500791999999,
+  "metrics": [
+    {
+      "concurrency": 1,
+      "requests": 100,
+      "p50Ms": 1.7275419999987207,
+      "p95Ms": 4.8012089999992895,
+      "p99Ms": 6.241083999999319,
+      "wallMs": 216.83124999999927
+    },
+    {
+      "concurrency": 50,
+      "requests": 100,
+      "p50Ms": 9.819083000000319,
+      "p95Ms": 11.97491699999955,
+      "p99Ms": 12.008583000000726,
+      "wallMs": 21.860208999998576
+    }
+  ],
+  "distinctQueries": {
+    "concurrency": 50,
+    "requests": 50,
+    "p95Ms": 127.48895799999991,
+    "wallMs": 134.85062499999913
+  }
+}

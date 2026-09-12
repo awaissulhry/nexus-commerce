@@ -15,10 +15,10 @@
  * custom rules first-class is the operator's standing requirement. Nothing here writes.
  */
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, Plus, ShieldCheck } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { ruleBelongsToTab } from './tabs'
 import { NoDataIllus } from './NoDataIllus'
 

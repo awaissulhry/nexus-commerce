@@ -25,7 +25,8 @@ import {
   AlertTriangle, CheckCircle2, Loader2, RotateCcw, TrendingUp, Save,
   ArrowRight, Pencil, Info,
 } from 'lucide-react'
-import { DataGrid, Modal } from '@/design-system/components'
+import { Modal } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button, Input, RadioCard, ToolbarButton } from '@/design-system/primitives'
 import type { Plan, PlanCampaign, CopyScope, PlanEdits } from './replicate-types'
 import { COPY_ITEMS, BIDDING_STRATEGIES } from './replicate-types'

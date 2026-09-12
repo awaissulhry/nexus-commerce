@@ -15,7 +15,8 @@
  * the worker adds is "this runs out-of-process now."
  */
 
-import { Worker, type Job } from 'bullmq'
+import { type Job } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 

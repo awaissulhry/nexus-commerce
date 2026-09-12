@@ -46,18 +46,45 @@ const PATTERNS = {
 
 const EXEMPT = [/design-system\//, /-flat-file\//, /\.test\./, /\.stories\./, /\/catalog\//]
 
+/* 🔴 DISCLOSED EDIT by DS.1 under hub ruling #591 — enumeration only, no rule and no baseline
+   touched. This listed TRACKED files only; nothing in this programme is committed, so that is a
+   subset nobody chose, and every green it printed was over it. `--exclude-standard` keeps
+   `.gitignore` honoured. The function keeps its name for its callers. */
 function tracked() {
-  return execSync('git ls-files "apps/web/src/**/*.tsx"', { cwd: ROOT, encoding: 'utf8' })
-    .split('\n')
+  return [...new Set([
+    ...execSync('git ls-files "apps/web/src/**/*.tsx"', { cwd: ROOT, encoding: 'utf8' }).split('\n'),
+    ...execSync('git ls-files --others --exclude-standard "apps/web/src/**/*.tsx"', { cwd: ROOT, encoding: 'utf8' }).split('\n'),
+  ])]
     .filter(Boolean)
     .filter((f) => !EXEMPT.some((re) => re.test(f)))
 }
 
-/** Strip comments and string literals so `"<button>"` in a docstring is not a control. */
+/**
+ * Strip comments and string literals so `"<button>"` in a docstring or a string is not counted as a
+ * control. The docstring said this before the code did (DS.1's comment audit, #575c): only comments
+ * were stripped, so `'<button>'` inside a real string literal — the exact case named here — still
+ * counted.
+ *
+ * 🔴 QUOTED REGIONS ARE MATCHED ON ONE LINE ONLY, and that is a deliberate under-reach. A general
+ * string tokenizer breaks on JSX: `<p>don't stop</p>` is text, not a string, and a tokenizer that
+ * opens a string at that apostrophe stays open until the next one — blanking whatever lies between,
+ * which could include a REAL `<button` and make the ratchet UNDERCOUNT. For a gate, undercounting is
+ * the dangerous direction: it lets new raw controls in silently, where overcounting merely annoys.
+ * Requiring both quotes on one line means a lone apostrophe in JSX text can never open a region, and
+ * the only way to lose a real control is for one to sit BETWEEN two apostrophes on a single line of
+ * JSX text — which no longer parses as the tag it looks like anyway.
+ *
+ * Replacement preserves length so nothing downstream that counts offsets is disturbed.
+ */
 function code(src) {
+  const blank = (m) => ' '.repeat(m.length)
   return src
-    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    // same-line quoted regions only — see the note above on why this deliberately under-reaches
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, blank)
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, blank)
+    .replace(/`(?:[^`\\\n]|\\.)*`/g, blank)
 }
 
 const counts = {}

@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
 /**
  * NN.2 — idempotency-key dedup for critical writes.
  *
@@ -27,7 +28,7 @@ const TTL_MS = 10 * 60 * 1000 // 10 minutes
 const MAX_ENTRIES = 5000 // prevent unbounded memory growth
 
 class IdempotencyService {
-  private cache = new Map<string, CachedEntry>()
+  private cache = new WorkspaceCache<string, CachedEntry>()
 
   private compositeKey(scope: string, key: string): string {
     return `${scope}:${key}`

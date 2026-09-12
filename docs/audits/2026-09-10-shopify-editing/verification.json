@@ -1,0 +1,65 @@
+{
+  "date": "2026-09-10",
+  "apiVersion": "2026-07",
+  "boundary": "Mocked API/Prisma, isolated production-component browser fixture, real read-only Shopify schema/reader queries. No real Shopify writes, live database writes, commit or deployment.",
+  "tests": {
+    "api": {
+      "passed": 278,
+      "failed": 0,
+      "skipped": 1,
+      "files": 22,
+      "report": "api-tests.json"
+    },
+    "shared": {
+      "passed": 48,
+      "files": 4,
+      "command": "npm test -- shopify-information.vitest.test.ts shopify-linked-products.vitest.test.ts shopify-definition-validation.vitest.test.ts shopify-field-codecs.vitest.test.ts"
+    },
+    "web": {
+      "passed": 33,
+      "files": 7,
+      "paths": [
+        "src/app/products/[id]/edit/_studio/shopify",
+        "src/app/products/[id]/edit/_studio/media/mediaCellTransfer.vitest.test.ts"
+      ]
+    },
+    "additionalLiveWeb": {
+      "passed": 0,
+      "skipped": 13,
+      "reason": "Local API unavailable"
+    }
+  },
+  "types": {
+    "sharedBuild": "passed",
+    "api": "passed",
+    "web": "passed"
+  },
+  "guards": {
+    "tokensWeb": "passed",
+    "tokensFactory": "passed",
+    "cssParse": "14 DS stylesheets passed",
+    "tokenResolution": "passed; existing fallback notices",
+    "rawPrimitives": "4340 / baseline 4692; no file rose",
+    "radius": "897 / baseline 959; no stylesheet rose",
+    "dsShadow": "322 / baseline 394; no stylesheet rose",
+    "hex": "passed",
+    "agBoundary": "5639 TS + 103 CSS passed",
+    "gridModules": "2386 files passed",
+    "factoryDrift": "Reports unrelated components/index.ts drift; not changed or rebaselined",
+    "localhost3000BrowserGuards": "Skipped because server unavailable; separate browser fixture exercised production components"
+  },
+  "liveEvidence": [
+    "live-capabilities-1.json",
+    "live-definition-capabilities-1.json",
+    "live-applicability-1.json"
+  ],
+  "unverified": [
+    "Real Shopify mutation/readback",
+    "Real DB browser persistence",
+    "Upload/storefront integration",
+    "OS clipboard round trip",
+    "Actual browser zoom",
+    "Screen-reader speech",
+    "Forced reduced-motion preference"
+  ]
+}

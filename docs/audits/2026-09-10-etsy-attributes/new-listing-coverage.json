@@ -1,0 +1,796 @@
+[
+  {
+    "accountId": "cmtvy3wta00fjnjpxl22lly3k",
+    "observedAt": "2026-09-10T22:04:55.681Z",
+    "sellerCategoryCount": 3065,
+    "newListingColumnCount": 55,
+    "missing": [
+      "ETSY:*"
+    ],
+    "coverage": [
+      {
+        "coordinate": "Etsy · GLOBAL",
+        "channel": "ETSY",
+        "category": "*",
+        "declared": 54,
+        "columns": 54,
+        "fetchedAt": null,
+        "unrecognised": []
+      }
+    ],
+    "mappingCounts": {
+      "total": 53,
+      "mapped": 13,
+      "unmapped": 0,
+      "owned": 40,
+      "required": 8,
+      "requiredUnmapped": 0,
+      "coveragePct": 100
+    },
+    "fields": [
+      {
+        "key": "description",
+        "label": "Description",
+        "sheetKey": "description",
+        "rule": {
+          "source": "description",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "featured_rank",
+        "label": "Featured rank",
+        "sheetKey": "featured_rank",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.featured_rank"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "is_customizable",
+        "label": "Is customizable",
+        "sheetKey": "is_customizable",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.is_customizable"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "materials",
+        "label": "Materials",
+        "sheetKey": "material",
+        "rule": {
+          "source": "material",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "list",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "image_ids",
+        "label": "Product media",
+        "sheetKey": "productMedia",
+        "rule": null,
+        "editable": false,
+        "shape": "list",
+        "managedBy": "productMedia",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Product media",
+          "path": "listing.platformAttributes._productMediaLocales"
+        },
+        "status": "owned",
+        "readOnlyReason": "Manage images and their order in Product media. Etsy image IDs are remote references, not Nexus asset IDs."
+      },
+      {
+        "key": "styles",
+        "label": "Styles",
+        "sheetKey": "style",
+        "rule": {
+          "source": "style",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "list",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "title",
+        "label": "Title",
+        "sheetKey": "name",
+        "rule": {
+          "source": "title",
+          "fallback": "name",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "taxonomy_id",
+        "label": "Category",
+        "sheetKey": "taxonomy_id",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Etsy category selection",
+          "path": "listing.platformAttributes.taxonomy_id"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "is_supply",
+        "label": "Craft supply",
+        "sheetKey": "is_supply",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.is_supply"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "type",
+        "label": "Listing type",
+        "sheetKey": "type",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.type"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "production_partner_ids",
+        "label": "Production partner IDs",
+        "sheetKey": "production_partner_ids",
+        "rule": null,
+        "editable": true,
+        "shape": "list",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.production_partner_ids"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "shop_section_id",
+        "label": "Shop section ID",
+        "sheetKey": "shop_section_id",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.shop_section_id"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "when_made",
+        "label": "When made",
+        "sheetKey": "when_made",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.when_made"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "who_made",
+        "label": "Who made it",
+        "sheetKey": "who_made",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.who_made"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "tags",
+        "label": "Tags",
+        "sheetKey": "keywords",
+        "rule": {
+          "source": "keywords",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "list",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "converted_price__amount",
+        "label": "Converted price amount",
+        "sheetKey": "converted_price__amount",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.converted_price.amount"
+        },
+        "status": "owned",
+        "readOnlyReason": "Converted price reported by Etsy."
+      },
+      {
+        "key": "converted_price__currency_code",
+        "label": "Converted price currency",
+        "sheetKey": "converted_price__currency_code",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.converted_price.currency_code"
+        },
+        "status": "owned",
+        "readOnlyReason": "Converted price reported by Etsy."
+      },
+      {
+        "key": "converted_price__divisor",
+        "label": "Converted price divisor",
+        "sheetKey": "converted_price__divisor",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.converted_price.divisor"
+        },
+        "status": "owned",
+        "readOnlyReason": "Converted price reported by Etsy."
+      },
+      {
+        "key": "price_currency_code",
+        "label": "Currency",
+        "sheetKey": "price_currency_code",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.price.currency_code"
+        },
+        "status": "owned",
+        "readOnlyReason": "Currency reported by Etsy."
+      },
+      {
+        "key": "price",
+        "label": "Price",
+        "sheetKey": "price",
+        "rule": {
+          "source": "basePrice",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Pricing",
+          "path": "listing.price"
+        },
+        "status": "mapped"
+      },
+      {
+        "key": "quantity",
+        "label": "Quantity",
+        "sheetKey": "quantity",
+        "rule": {
+          "source": "totalStock",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Inventory",
+          "path": "listing.quantity"
+        },
+        "status": "mapped"
+      },
+      {
+        "key": "item_dimensions_unit",
+        "label": "Dimension unit",
+        "sheetKey": "dimUnit",
+        "rule": {
+          "source": "dimUnit",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "item_height",
+        "label": "Item height",
+        "sheetKey": "dimHeight",
+        "rule": {
+          "source": "dimHeight",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "item_length",
+        "label": "Item length",
+        "sheetKey": "dimLength",
+        "rule": {
+          "source": "dimLength",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "item_weight",
+        "label": "Item weight",
+        "sheetKey": "weightValue",
+        "rule": {
+          "source": "weightValue",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "item_width",
+        "label": "Item width",
+        "sheetKey": "dimWidth",
+        "rule": {
+          "source": "dimWidth",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "processing_max",
+        "label": "Processing max",
+        "sheetKey": "processing_max",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.processing_max"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "processing_min",
+        "label": "Processing min",
+        "sheetKey": "processing_min",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.processing_min"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "readiness_state_id",
+        "label": "Processing profile ID",
+        "sheetKey": "readiness_state_id",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.readiness_state_id"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "shipping_profile_id",
+        "label": "Shipping profile ID",
+        "sheetKey": "shipping_profile_id",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Listing settings",
+          "path": "listing.platformAttributes.shipping_profile_id"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "item_weight_unit",
+        "label": "Weight unit",
+        "sheetKey": "weightUnit",
+        "rule": {
+          "source": "weightUnit",
+          "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+        },
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": null,
+        "status": "mapped"
+      },
+      {
+        "key": "should_auto_renew",
+        "label": "Automatic renewal",
+        "sheetKey": "should_auto_renew",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Channel policies",
+          "path": "listing.platformAttributes.should_auto_renew"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "return_policy_id",
+        "label": "Return policy ID",
+        "sheetKey": "return_policy_id",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Channel policies",
+          "path": "listing.platformAttributes.return_policy_id"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "is_taxable",
+        "label": "Taxable",
+        "sheetKey": "is_taxable",
+        "rule": null,
+        "editable": true,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "listing",
+          "label": "Channel policies",
+          "path": "listing.platformAttributes.is_taxable"
+        },
+        "status": "owned"
+      },
+      {
+        "key": "created_timestamp",
+        "label": "Created on Etsy",
+        "sheetKey": "created_timestamp",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.created_timestamp"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "ending_timestamp",
+        "label": "Ending timestamp",
+        "sheetKey": "ending_timestamp",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.ending_timestamp"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "file_data",
+        "label": "File data",
+        "sheetKey": "file_data",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.file_data"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "has_variations",
+        "label": "Has variations",
+        "sheetKey": "has_variations",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.has_variations"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "is_personalizable",
+        "label": "Is personalizable",
+        "sheetKey": "is_personalizable",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.is_personalizable"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "is_private",
+        "label": "Is private",
+        "sheetKey": "is_private",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.is_private"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "language",
+        "label": "Language",
+        "sheetKey": "language",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.language"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "listing_id",
+        "label": "Listing id",
+        "sheetKey": "listing_id",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.listing_id"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "state",
+        "label": "Listing status",
+        "sheetKey": "state",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.state"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "non_taxable",
+        "label": "Non taxable",
+        "sheetKey": "non_taxable",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.non_taxable"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "num_favorers",
+        "label": "Num favorers",
+        "sheetKey": "num_favorers",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.num_favorers"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "original_creation_timestamp",
+        "label": "Original creation timestamp",
+        "sheetKey": "original_creation_timestamp",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.original_creation_timestamp"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "rich_description",
+        "label": "Rich description",
+        "sheetKey": "rich_description",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.rich_description"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "shop_id",
+        "label": "Shop id",
+        "sheetKey": "shop_id",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.shop_id"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "state_timestamp",
+        "label": "State timestamp",
+        "sheetKey": "state_timestamp",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.state_timestamp"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "suggested_title",
+        "label": "Suggested title",
+        "sheetKey": "suggested_title",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.suggested_title"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "updated_timestamp",
+        "label": "Updated on Etsy",
+        "sheetKey": "updated_timestamp",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.updated_timestamp"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "url",
+        "label": "Url",
+        "sheetKey": "url",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.url"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      },
+      {
+        "key": "user_id",
+        "label": "User id",
+        "sheetKey": "user_id",
+        "rule": null,
+        "editable": false,
+        "shape": "scalar",
+        "sourceOwner": {
+          "kind": "system",
+          "label": "Channel-reported data",
+          "path": "listing.platformAttributes.user_id"
+        },
+        "status": "owned",
+        "readOnlyReason": "Reported by Etsy. This field cannot be edited in the information sheet."
+      }
+    ]
+  }
+]

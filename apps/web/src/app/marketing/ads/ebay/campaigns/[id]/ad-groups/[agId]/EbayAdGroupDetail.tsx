@@ -7,7 +7,8 @@
  * Negative Keywords · Search Terms (PRI-only report gate applies upstream).
  */
 import { useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { CampaignDetailHeader, type DetailHeaderAction } from '../../../../../_shell/CampaignDetailHeader'
 import '../../../../ebay.css'
 import { useEbayAdsFetch, useWriteMode, SandboxBanner, FreshnessLine, type AdGroupDetailPayload } from '../../../../_lib'

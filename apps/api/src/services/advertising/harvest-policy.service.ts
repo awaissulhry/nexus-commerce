@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * HV.2 — the harvest policy: the criteria in force for a scope, and where they came from.
  *
@@ -190,7 +191,7 @@ export async function saveHarvestPolicy(args: {
   if (!updatedBy) throw new HarvestPolicyError('updatedBy is required — a threshold is a money decision', 'actor_required')
 
   const row = await prisma.adsHarvestPolicy.upsert({
-    where: { scopeGrain_scopeId_kind: { scopeGrain: args.scopeGrain, scopeId, kind: 'graduate' } },
+    where: { scopeGrain_scopeId_kind: workspaceKey({ scopeGrain: args.scopeGrain, scopeId, kind: 'graduate' }) },
     create: { scopeGrain: args.scopeGrain, scopeId, kind: 'graduate', ...criteria, updatedBy },
     update: { ...criteria, updatedBy },
   })
@@ -201,7 +202,7 @@ export async function saveHarvestPolicy(args: {
 export async function deleteHarvestPolicy(scopeGrain: HvPolicyGrain, scopeId: string | null) {
   const id = scopeGrain === 'account' ? HV_ACCOUNT_SCOPE : (scopeId ?? '').trim()
   if (scopeGrain !== 'account' && !id) throw new HarvestPolicyError(`a ${scopeGrain} policy needs a scope id`, 'scope_id_required')
-  const existing = await prisma.adsHarvestPolicy.findUnique({ where: { scopeGrain_scopeId_kind: { scopeGrain, scopeId: id, kind: 'graduate' } } })
+  const existing = await prisma.adsHarvestPolicy.findUnique({ where: { scopeGrain_scopeId_kind: workspaceKey({ scopeGrain, scopeId: id, kind: 'graduate' }) } })
   if (!existing) throw new HarvestPolicyError('there is no policy at that scope to remove', 'not_found')
   await prisma.adsHarvestPolicy.delete({ where: { id: existing.id } })
   return { removed: { scopeGrain, scopeId: scopeGrain === 'account' ? null : id } }

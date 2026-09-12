@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronLeft, Maximize2, Minimize2 } from 'lucide-react'
 import {
   KPICard,

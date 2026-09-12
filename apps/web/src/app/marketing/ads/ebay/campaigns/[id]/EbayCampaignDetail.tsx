@@ -8,7 +8,8 @@
  * owns a real {start,end} range (D1) shown on grid tabs only.
  */
 import { useCallback, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { CampaignDetailHeader, type DetailHeaderAction } from '../../../_shell/CampaignDetailHeader'
 import '../../ebay.css'
 import { useEbayAdsFetch, postEbayAds, useWriteMode, SandboxBanner, FreshnessLine, type CampaignDetailPayload } from '../../_lib'

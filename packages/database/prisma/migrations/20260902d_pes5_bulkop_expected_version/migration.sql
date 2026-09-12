@@ -1,0 +1,12 @@
+-- P10 / PES.5 — record the request's `expectedVersion` on the audit row.
+--
+-- ADDITIVE ONLY: one nullable column, nothing dropped, no existing row changes
+-- meaning. NULL means "this operation recorded no token" — for rows written
+-- before this shipped that is simply unknown, deliberately distinct from
+-- "the write was unguarded".
+--
+-- Motivation: a BulkOperation could not answer whether the write it records was
+-- version-guarded. `changes` holds the per-cell array only, and the token is a
+-- top-level request field, so an unparseable token that was silently dropped
+-- left no trace anywhere (measured on AIREON, 2026-09-02).
+ALTER TABLE "BulkOperation" ADD COLUMN IF NOT EXISTS "expectedVersion" INTEGER;

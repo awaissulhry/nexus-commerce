@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 /**
  * IM.2 — Amazon image routes.  [redeploy 2026-06-07: partial-publish]
  *
@@ -129,7 +130,12 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
             jobId: result.jobId,
             feedId: result.feedId,
             skuCount: result.skus.length,
-            dryRun,
+            // 🔴 `result.dryRun`, not the request's `dryRun`: the audit log must record what
+            // HAPPENED. It previously stored what was asked for, so an entry could read
+            // `dryRun: true` beside a feed that really went to Amazon — and reading those entries
+            // back told you about intent while looking exactly like a record of outcome.
+            dryRun: result.dryRun,
+            requestedDryRun: dryRun,
             forced: force,
             variantIds: variantIds && variantIds.length > 0 ? variantIds : undefined,
           },
@@ -241,7 +247,7 @@ const amazonImagesRoutes: FastifyPluginAsync = async (fastify) => {
     const mkt = (request.query.marketplace ?? 'ES').toUpperCase()
     const marketplaceId = marketplaceCodeToId(mkt)
     if (!marketplaceId) return reply.code(400).send({ error: `bad marketplace ${mkt}` })
-    const sellerId = request.query.sellerId || process.env.AMAZON_SELLER_ID || process.env.AMAZON_MERCHANT_ID || ''
+    const sellerId = request.query.sellerId || (await getAmazonSellerId()) || (await getAmazonSellerId()) || ''
     try {
       const res = await amazonSpApiClient.getListingsItem({
         sellerId,

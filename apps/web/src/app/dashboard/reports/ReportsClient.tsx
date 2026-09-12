@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
+import Link from '@/lib/workspaces/Link';
 import { generateReport, type ReportDefinition } from "./actions";
 
 export default function ReportsClient({ reports }: { reports: ReportDefinition[] }) {

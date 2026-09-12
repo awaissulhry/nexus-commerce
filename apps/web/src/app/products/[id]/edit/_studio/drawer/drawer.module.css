@@ -1,0 +1,867 @@
+/**
+ * PES.4 — the record drawer's page-scoped styles.
+ *
+ * Everything here is on the `--nds-*` namespace and nothing else. The platform aliases
+ * (--text-*, --surface-*, --border-*) are names that app/globals.css and .h10-shell ALSO define,
+ * as Tailwind RGB CHANNELS, where `var(--border-default)` is invalid and silently dropped.
+ *
+ * 🔴 Tone tokens are not all theme-aware, and the ones that are not fail SILENTLY — they resolve
+ * to a light-mode palette entry that is never redefined under `.dark`. Measured 2026-09-01 against
+ * tokens.css: `--nds-danger`, `--nds-warning`, `--nds-success`, every `--nds-note-*` and every
+ * `--nds-tonal-*` are absent from the `.dark` block, AND so are the palette scales they alias
+ * (`--nds-red-500`, `--nds-amber-600`, `--nds-green-600`, `--nds-blue-*`), so resolving the alias
+ * does not save them. This file therefore uses only the pairs that ARE redefined in both themes:
+ * `*-soft` backgrounds, `*-text` foregrounds, `--nds-pill-*`, `--nds-wash-primary`, and the
+ * text/surface/border families. Filed in .claude/DS-GAPS.md.
+ */
+
+/* ═══ Shell ═════════════════════════════════════════════════════════ */
+
+/* The dock's own body padding is wrong for a pane that hosts full-bleed tabs and grouped rows:
+   the DS pads `.nds-drawer-b` for prose. The panes manage their own gutters. */
+.body {
+  margin: -16px -18px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100% + 32px);
+}
+
+/* The pane strip is the same 40px bar as the studio's scope row (`--nds-toolbar-h`), hosting the
+   DS `sm` tab strip: it measured 38px beside a 31px row before (CT.1, 2026-09-04). The strip
+   draws the hairline; the tabs stretch to it. */
+.tabsRow {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  height: var(--nds-toolbar-h);
+  padding: 0 14px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+}
+
+/* The one scroll container. Every pane scrolls here, so switching tabs cannot leave a second
+   scrollbar behind, and `overscroll-behavior` stops a pane's end from scrolling the sheet. */
+.pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px;
+}
+
+/* ── Header identity ─────────────────────────────────────────────── */
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sku {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+.headMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── Empty / loading / error, shared by every pane ───────────────── */
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--nds-radius-md);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.noteInfo {
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.noteWarn {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.noteError {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.noteIcon {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+/* ═══ Record pane ═══════════════════════════════════════════════════ */
+
+.group {
+  margin-bottom: 6px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  /* NOT overflow:hidden. `.nds-gridcard` rounds its corners that way and the result is that a
+     select's popup is clipped by the CARD — rendered, invisible, and un-hit-testable when the
+     card is shorter than the list. The rows carry no background of their own, so the corners
+     stay clean without it. */
+}
+.groupHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nds-text);
+  text-align: left;
+  cursor: pointer;
+}
+.groupHead:hover {
+  background: var(--nds-surface-hover);
+  border-radius: var(--nds-radius-lg);
+}
+.groupHead:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.groupCount {
+  font-weight: 400;
+  color: var(--nds-text-muted);
+}
+.groupBody {
+  padding: 4px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* ── One field ───────────────────────────────────────────────────── */
+.field {
+  scroll-margin-top: 12px;
+}
+/* The cell the operator expanded from. A ring, not a focus steal: they are still navigating the
+   grid, and moving the caret in here would end that. */
+.fieldFocused {
+  border-radius: var(--nds-radius-md);
+  box-shadow: 0 0 0 2px var(--nds-primary);
+}
+.fieldHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.fieldActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inherited values read as a quotation of somewhere else, not as this scope's own answer. */
+.ghost {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--nds-text-muted);
+  text-align: left;
+  cursor: text;
+}
+.ghost:hover {
+  border-color: var(--nds-primary);
+  background: var(--nds-surface-hover);
+}
+.ghost:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.ghostEmpty {
+  /* "no value set anywhere" is a FACT about the record, not a disabled control. */
+  color: var(--nds-text-muted);
+}
+.ghostPencil {
+  flex: 0 0 auto;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  color: var(--nds-text-muted);
+}
+.ghost:hover .ghostPencil,
+.ghost:focus-visible .ghostPencil {
+  opacity: 1;
+}
+
+.capRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+.capOver {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+.issue {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.issueError {
+  color: var(--nds-danger-text);
+}
+.issueWarn {
+  color: var(--nds-warning-text);
+}
+
+/* Per-field save state — the same four states the sheet's cells use, so a value saved in the
+   drawer and a value saved in the grid do not report themselves differently. */
+.state {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.stateSaving {
+  color: var(--nds-text-muted);
+}
+.stateSaved {
+  color: var(--nds-success-text);
+}
+.stateRefused {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+/* ── Provenance chip ─────────────────────────────────────────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--nds-radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+/* The glyph carries the identity; colour only reinforces it. A chip that means something only
+   by its colour means nothing in a screenshot, in high contrast, or to a third of colour-blind
+   operators. */
+.chipMaster,
+.chipDefault,
+.chipUnknown {
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-pill-neutral-fg);
+}
+.chipChannel,
+.chipVariant {
+  background: var(--nds-wash-primary);
+  color: var(--nds-text-link);
+  border-color: var(--nds-primary);
+}
+.chipLinked,
+.chipMapped {
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.chipLocale {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.chipLocked {
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-pill-neutral-fg);
+  font-style: italic;
+}
+
+/* ═══ History pane ══════════════════════════════════════════════════ */
+
+.hEntry {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.hEntry:last-child {
+  border-bottom: 0;
+}
+.hWhen {
+  grid-column: 1;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+.hWho {
+  grid-column: 2;
+  font-size: 12px;
+  color: var(--nds-text);
+}
+/* Absence, said out loud. The write path records no author for a bulk cell edit, so this is not
+   an em dash pretending to be a name. */
+.hWhoUnknown {
+  color: var(--nds-text-muted);
+  font-style: italic;
+}
+.hDiff {
+  grid-column: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.hOld {
+  padding: 0 4px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  text-decoration: line-through;
+}
+.hNew {
+  padding: 0 4px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-success-soft);
+  color: var(--nds-success-text);
+}
+.hOldUnknown {
+  color: var(--nds-text-muted);
+  font-style: italic;
+}
+.hMeta {
+  grid-column: 2;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+
+/* ═══ Compare pane ═══════════════════════════════════════════════════ */
+
+/* One section per field, one card per coordinate — NOT a table. See ComparePane's header for
+   why: a second AG Grid in a non-modal dock would give the page two grids competing for the
+   arrow keys, and five target columns in a 380px panel is 70px each, which is what forced the
+   horizontal scroller the table needed. */
+.cmpGroup {
+  margin-bottom: 10px;
+}
+.cmpField {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--nds-text);
+}
+.cmpList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cmpItem {
+  padding: 8px 10px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+/* The record the drawer is open on — the value every copy is made FROM. */
+.cmpHere {
+  border-color: var(--nds-primary);
+  background: var(--nds-wash-primary);
+}
+.cmpHead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+.cmpTarget {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nds-text);
+}
+.cmpHereTag {
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--nds-text-link);
+}
+.cmpSameTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--nds-success-text);
+}
+.cmpCopy {
+  margin-left: auto;
+}
+.cmpValue {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--nds-text);
+  word-break: break-word;
+}
+.cmpValueSame {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--nds-text-2);
+  word-break: break-word;
+}
+/* "empty", "no listing here", "none yet" — shared by the compare and listings panes, because
+   they are the same statement and must not drift into two greys. INFORMATION, so muted and never
+   disabled-grey; see the contrast note at the top of this file. */
+.absent {
+  margin: 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--nds-text-muted);
+}
+.cmpNote {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+
+/* ═══ Listings pane ═════════════════════════════════════════════════ */
+
+.lCard {
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+.lHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.lName {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--nds-text);
+}
+.lFacts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px 12px;
+  font-size: 11px;
+}
+.lFact dt {
+  color: var(--nds-text-muted);
+}
+.lFact dd {
+  margin: 0;
+  color: var(--nds-text);
+}
+.lErrors {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-size: 11px;
+  line-height: 1.5;
+  list-style: none;
+}
+.lErrors li + li {
+  margin-top: 3px;
+}
+.lRef {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+/* ═══ In-panel confirmation ═════════════════════════════════════════ */
+
+.confirmCard {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  max-height: 100%;
+  border-radius: var(--nds-radius-lg);
+  /* Opaque in both themes — nothing behind this card may read through it. */
+  background: var(--nds-surface);
+  box-shadow: var(--nds-shadow-modal);
+  border: 1px solid var(--nds-border-strong);
+}
+.confirmDanger {
+  border-color: var(--nds-danger-text);
+}
+.confirmWarning {
+  border-color: var(--nds-warning-text);
+}
+.confirmHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.confirmHead h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--nds-text);
+}
+.confirmDanger .confirmHead {
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+}
+.confirmWarning .confirmHead {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+.confirmDanger .confirmHead h2 {
+  color: var(--nds-danger-text);
+}
+.confirmWarning .confirmHead h2 {
+  color: var(--nds-warning-text);
+}
+/* The scrollable region is the only place unbounded content may live: a long body in the fixed
+   header grows past the card and paints over the panel with no background of its own. */
+.confirmBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--nds-text-2);
+}
+.confirmFoot {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface-sunken);
+  /* The two corners this actually rounds, rather than a shorthand whose leading `0 0` are radius
+     literals with no token to express them. Identical rendering; the scale has no zero step. */
+  border-bottom-left-radius: var(--nds-radius-lg);
+  border-bottom-right-radius: var(--nds-radius-lg);
+}
+.confirmAck {
+  margin-right: auto;
+}
+
+/* ═══ HtmlField ═════════════════════════════════════════════════════ */
+
+.rt {
+  border: 1px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+}
+.rt:focus-within {
+  border-color: var(--nds-primary);
+  box-shadow: var(--nds-focus-ring);
+}
+.rtBar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  flex-wrap: wrap;
+}
+.rtSpacer {
+  flex: 1 1 auto;
+}
+.rtArea {
+  min-height: 110px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--nds-text);
+}
+.rtArea:focus-visible {
+  outline: none;
+}
+.rtArea p {
+  margin: 0 0 8px;
+}
+.rtArea ul,
+.rtArea ol {
+  margin: 0 0 8px;
+  padding-left: 20px;
+}
+.rtArea a {
+  color: var(--nds-text-link);
+}
+.rtArea:empty::before {
+  content: attr(data-placeholder);
+  color: var(--nds-text-muted);
+}
+.rtSource {
+  width: 100%;
+  min-height: 110px;
+  max-height: 320px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--nds-text);
+}
+.rtSource:focus-visible {
+  outline: none;
+}
+
+/* ═══ Gallery strip ═════════════════════════════════════════════════ */
+
+.gal {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.galItem {
+  position: relative;
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  overflow: hidden;
+  background: var(--nds-surface-sunken);
+}
+.galItem img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.galMain {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 1px var(--nds-primary);
+}
+.galBadge {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  padding: 0 4px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-pill-neutral-bg);
+  color: var(--nds-pill-neutral-fg);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+/* ═══ Restore mode (History pane) ═══════════════════════════════════ */
+
+.modeBar {
+  margin-bottom: 10px;
+}
+.lRefLink {
+  color: var(--nds-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lRefLink:hover {
+  text-decoration: underline;
+}
+.lRefLink:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
+  /* Was a 2px literal, off-scale; then `--nds-radius-pill` while that token was 4px. #687/P9 made
+     `pill` a true capsule (999px), which on a WIDE inline link — this is an <a> with text and an
+     icon, not a badge — would round the focus ring into a stadium. `sm` (6px) is the nearest step
+     that keeps a rounded RECTANGLE, and on a focus ring the 2px difference is invisible. This rule
+     is the one consumer in either app that read `pill` for a non-pill shape. */
+  border-radius: var(--nds-radius-sm);
+}
+
+.rpList {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-sm);
+}
+.rpRow {
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.rpRow:last-child {
+  border-bottom: 0;
+}
+.rpRowOn {
+  background: var(--nds-primary-soft);
+}
+.rpBtn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--nds-text);
+}
+.rpBtn:hover:not(:disabled) {
+  background: var(--nds-surface-hover);
+}
+.rpBtn:disabled {
+  cursor: default;
+  /* Not `--nds-text-disabled`: it measures 2.04:1 and this row still carries readable history. */
+  color: var(--nds-text-muted);
+}
+.rpBtn:focus-visible {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+}
+.rpWhen {
+  font-size: 12px;
+  font-weight: 600;
+}
+.rpMeta {
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+.rpReason {
+  display: block;
+  padding: 0 10px 8px;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+
+.compareBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.restoreBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.restoreRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+.restoreField {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+/* Not-restorable rows are shown, never omitted — so they get their own block rather than being
+   mixed into a list of things that CAN be ticked. */
+.restoreBlocked {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+}
+.restoreFoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* A typed confirmation takes the full row: the phrase must be readable while it is retyped. */
+.confirmTyped {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--nds-text-2);
+}
+
+/* Registry verbs, mirrored into the record. */
+.actionRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* Said once, above the strip — not stamped on every thumbnail, which would make an inherited
+   gallery look like twenty warnings instead of one fact. */
+.galNote {
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--nds-text-muted);
+}
+
+/* ── D16 formula authoring in a field (#708/#775) ─────────────────────────────────────────────
+   Only the STACK is local. The `$` autocomplete, the signature hint and the preview line wear the
+   engine's own `.nds-formula-*` classes — top-level rules in `grid/theme/grid.css`, always loaded
+   here because the sheet that mounts this drawer mounts the grid — so the two surfaces cannot drift
+   apart visually and no second copy of those styles exists to maintain.
+
+   🔴 `.nds-formula-editor` is deliberately NOT used as the wrapper. It carries
+   `.nds-formula-editor .nds-field input { color: transparent }` for the grid's syntax-highlight
+   overlay; without that overlay the field's text would be INVISIBLE, and nothing would say so —
+   the input's own text being transparent by design is exactly how that defect hid in the grid.
+
+   px, not `--nds-space-*`: this stylesheet uses literal px throughout (0 space tokens today), and
+   one tokenised rule among them would read as the start of a migration nobody has ruled. */
+.formulaField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}

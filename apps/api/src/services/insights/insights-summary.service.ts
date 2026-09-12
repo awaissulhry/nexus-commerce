@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
 /**
  * IH.0 — `/api/insights/summary` aggregator.
  *
@@ -99,15 +100,16 @@ function dayKey(d: Date): string {
  * fixed set (≤30 marketplaces total). Returns code (e.g. 'EUR') for
  * a (channel, marketplaceCode) pair. Falls back to EUR for unknown.
  */
-let marketplaceCurrencyCache: Map<string, string> | null = null
+const marketplaceCurrencies = new WorkspaceCache<string, Map<string, string>>()
 async function getMarketplaceCurrencyMap(): Promise<Map<string, string>> {
+  const marketplaceCurrencyCache = marketplaceCurrencies.get('currencies')
   if (marketplaceCurrencyCache) return marketplaceCurrencyCache
   const rows = await prisma.marketplace.findMany({
     select: { channel: true, code: true, currency: true },
   })
   const map = new Map<string, string>()
   for (const r of rows) map.set(`${r.channel}|${r.code}`, r.currency)
-  marketplaceCurrencyCache = map
+  marketplaceCurrencies.set('currencies', map)
   return map
 }
 

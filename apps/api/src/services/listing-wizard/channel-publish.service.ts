@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
 /**
  * Phase J — channel publish dispatcher.
  *
@@ -216,8 +217,8 @@ export class ChannelPublishService {
       }
     }
 
-    // S.3 — Shopify Admin REST adapter. v1 ships master-only as a
-    // draft listing. The operator activates on the Shopify admin
+    // Shopify uses the shared native-family GraphQL publisher and creates a
+    // complete draft family. The operator activates on the Shopify admin
     // after reviewing — listingUrl points to the admin URL since
     // draft products have no storefront URL. SUBMITTED instead of
     // LIVE because draft != live; a poll step can flip to LIVE
@@ -303,7 +304,7 @@ export class ChannelPublishService {
     }
 
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      (await getAmazonSellerId())
     if (!sellerId) {
       return { ...entry, updatedAt: new Date().toISOString() }
     }

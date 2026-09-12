@@ -25,8 +25,8 @@ export function startReviewAttributionCron(): void {
     logger.error('review-attribution: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void (async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await (async () => {
       try {
         await recordCronRun('review-attribution', async () => {
           const r = await runReviewAttributionOnce()

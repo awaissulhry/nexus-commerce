@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
 /**
  * M1 — Schema-driven Amazon image-slot taxonomy.
  *
@@ -17,6 +18,7 @@
  */
 
 import prisma from '../../db.js'
+import { logger } from '../../utils/logger.js'
 import { CategorySchemaService } from '../categories/schema-sync.service.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import {
@@ -46,7 +48,21 @@ export interface SlotTaxonomy {
 }
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
-const cache = new Map<string, { at: number; tax: SlotTaxonomy }>()
+/**
+ * 🔴 A FALLBACK is cached only briefly, and that asymmetry is the whole point.
+ *
+ * Both outcomes used to share the 24h TTL, so one transient schema failure pinned the legacy
+ * 10-slot set for a DAY — with no log and no signal. MAIN survives that (it is in both sets), but
+ * PS01–PS06 do not, and they are populated: on GALE-JACKET eighteen ListingImage rows sit in PS
+ * slots. For those 24 hours those images are invisible to preview, validation and publish, and the
+ * validator returns a CLEAN verdict for a listing whose safety images are not going out. A falsely
+ * clean gate is worse than a falsely blocked one.
+ *
+ * Short enough that a blip costs one minute rather than a day; long enough that a genuinely
+ * unavailable schema cannot turn every request into a fresh lookup.
+ */
+const FALLBACK_TTL_MS = 60 * 1000
+const cache = new WorkspaceCache<string, { at: number; tax: SlotTaxonomy }>()
 
 function isOfferImage(name: string): boolean {
   // B2B *offer* image locators are not part of the buyer-facing gallery.
@@ -147,7 +163,10 @@ function svc(): CategorySchemaService {
 export async function resolveSlotTaxonomy(marketplace: string, productType: string): Promise<SlotTaxonomy> {
   const key = `${marketplace}:${productType}`
   const hit = cache.get(key)
-  if (hit && Date.now() - hit.at < TWENTY_FOUR_HOURS_MS) return hit.tax
+  if (hit) {
+    const ttl = hit.tax.source === 'fallback' ? FALLBACK_TTL_MS : TWENTY_FOUR_HOURS_MS
+    if (Date.now() - hit.at < ttl) return hit.tax
+  }
 
   let tax: SlotTaxonomy
   try {
@@ -156,8 +175,22 @@ export async function resolveSlotTaxonomy(marketplace: string, productType: stri
     const props = (def.properties ?? {}) as Record<string, unknown>
     const built = buildSlotTaxonomy(props)
     // Require at least a MAIN slot to trust the schema result.
-    tax = built.slots.some((s) => s.kind === 'MAIN') ? built : fallbackTaxonomy()
-  } catch {
+    if (built.slots.some((s) => s.kind === 'MAIN')) {
+      tax = built
+    } else {
+      // A schema that answered but carried no MAIN locator. Silently identical to a failure before
+      // this log existed, and a different problem entirely — worth telling them apart.
+      logger.warn('[amazon-slot-taxonomy] schema returned no MAIN locator — using the fallback slot set', {
+        marketplace, productType, slotsFound: built.slots.length,
+      })
+      tax = fallbackTaxonomy()
+    }
+  } catch (err) {
+    // Was a bare catch. One blip used to pin the 10-slot fallback for 24 hours with nothing in the
+    // logs to say why PS/safety slots had vanished from preview, validation and publish.
+    logger.warn('[amazon-slot-taxonomy] schema lookup failed — using the fallback slot set for the next minute', {
+      marketplace, productType, err,
+    })
     tax = fallbackTaxonomy()
   }
   cache.set(key, { at: Date.now(), tax })

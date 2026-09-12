@@ -5,12 +5,12 @@
  * by matching the field key/label against a catalog of canonical master
  * attributes + their common channel aliases. Heuristic (no AI call) — fast,
  * deterministic, and good enough to seed the bulk of a mapping; the
- * operator reviews + applies via the existing PUT. (An AI re-rank can layer
- * on later for the long tail.) Read-only.
+ * operator reviews the catalog impact before activating a proposal.
+ * This service is read-only; AI suggestions use the same source inventory.
  */
 
-import prisma from '../../db.js'
-import { getResolvedRules } from './schema-mapping.service.js'
+import { getFieldCatalogue } from './mapping/field-catalogue.service.js'
+import { getMappingSources } from './mapping/mapping-sources.service.js'
 
 export type SuggestConfidence = 'high' | 'medium'
 
@@ -26,9 +26,9 @@ const CANDIDATES: SuggestCandidate[] = [
   { source: 'title', label: 'Master title', aliases: ['title', 'item_name', 'name', 'product_name', 'product_title'] },
   { source: 'description', label: 'Master description', aliases: ['description', 'product_description', 'desc', 'long_description', 'body_html'] },
   { source: 'brand', label: 'Brand', aliases: ['brand', 'brand_name', 'manufacturer_brand', 'vendor'] },
-  { source: 'manufacturer', label: 'Manufacturer', aliases: ['manufacturer', 'maker', 'supplier'] },
-  { source: 'our_price', label: 'Price', aliases: ['price', 'our_price', 'standard_price', 'list_price'] },
-  { source: 'categoryAttributes.material', label: 'Material', aliases: ['material', 'material_type', 'fabric', 'fabric_type', 'outer_material', 'material_composition'] },
+  { source: 'manufacturer', label: 'Manufacturer', aliases: ['manufacturer', 'maker'] },
+  { source: 'basePrice', label: 'Price', aliases: ['price', 'our_price', 'standard_price'] },
+  { source: 'categoryAttributes.material', label: 'Material', aliases: ['material', 'material_type'] },
   { source: 'categoryAttributes.color', label: 'Color', aliases: ['color', 'color_name', 'colour', 'color_map'] },
   { source: 'categoryAttributes.size', label: 'Size', aliases: ['size', 'size_name', 'apparel_size', 'size_map'] },
   { source: 'bulletPoints', label: 'Bullet points', aliases: ['bullet_point', 'bullet_points', 'feature_bullets', 'key_features'] },
@@ -50,11 +50,13 @@ export interface FieldSuggestion {
 
 /**
  * Suggest a master source for one channel field. Exact (normalized) alias
- * match → high; substring containment → medium; otherwise null. Pure.
+ * match → high; otherwise null. Substrings confuse prices with sale dates and
+ * manufacturer names with contact details. Pure.
  */
 export function suggestSourceForField(fieldKey: string, label?: string | null): FieldSuggestion | null {
   const fk = norm(fieldKey)
   const lbl = label ? norm(label) : ''
+  if (!fk) return null
 
   // Pass 1 — exact normalized match (key or label) against an alias.
   for (const c of CANDIDATES) {
@@ -62,17 +64,6 @@ export function suggestSourceForField(fieldKey: string, label?: string | null): 
       const na = norm(a)
       if (fk === na || (lbl && lbl === na)) {
         return { source: c.source, confidence: 'high', reason: `matches "${a}"` }
-      }
-    }
-  }
-  // Pass 2 — substring containment (≥5 chars to avoid spurious hits like
-  // "name" matching "color_name").
-  for (const c of CANDIDATES) {
-    for (const a of c.aliases) {
-      const na = norm(a)
-      if (na.length < 5) continue
-      if (fk.includes(na) || na.includes(fk) || (lbl && (lbl.includes(na) || na.includes(lbl)))) {
-        return { source: c.source, confidence: 'medium', reason: `partial match "${a}"` }
       }
     }
   }
@@ -89,43 +80,38 @@ export interface MappingSuggestion {
   required?: boolean
 }
 
-/** Suggest sources for every UNMAPPED field on a (channel, marketplace) for
- *  the given productType overlay. */
+/** Match against actual source definitions/observed Master paths. No invented destinations or sources. */
+export function suggestKnownSource(fieldKey: string, label: string | null, available: ReadonlySet<string>): FieldSuggestion | null {
+  if (!norm(fieldKey) || ['productType', 'categoryId', 'category_id'].includes(fieldKey)) return null
+  const direct = [...available].filter(path => !path.includes('.') && norm(path) === norm(fieldKey))
+  if (direct.length === 1) return { source: direct[0], confidence: 'high', reason: 'Matches an existing Master attribute code' }
+  const heuristic = suggestSourceForField(fieldKey, label)
+  if (!heuristic) return null
+  if (available.has(heuristic.source)) return heuristic
+  const short = heuristic.source.replace(/^categoryAttributes\./, '')
+  return available.has(short) ? { ...heuristic, source: short } : null
+}
+
+export async function mappingSuggestionContext(input: { channel: string; code: string; productType?: string | null; productId?: string }) {
+  const [catalogue, sourceCatalogue] = await Promise.all([
+    getFieldCatalogue({ channel: input.channel, marketplace: input.code, productType: input.productType }),
+    getMappingSources({ marketplace: input.code, productId: input.productId }),
+  ])
+  return { catalogue, available: new Set(sourceCatalogue.sources.map(s => s.path)) }
+}
+
 export async function suggestMappings(input: {
-  channel: string
-  code: string
-  productType?: string | null
-}): Promise<{ channel: string; code: string; productType: string | null; suggestions: MappingSuggestion[]; unmappedTotal: number }> {
-  const rules = await getResolvedRules(input.channel, input.code, input.productType)
-  const fields = await prisma.channelSchema.findMany({
-    where: { channel: input.channel, OR: [{ marketplace: input.code }, { marketplace: null }] },
-    orderBy: { fieldKey: 'asc' },
-    select: { fieldKey: true, label: true, required: true },
-  })
-
+  channel: string; code: string; productType?: string | null; productId?: string
+}) {
+  const { catalogue, available } = await mappingSuggestionContext(input)
+  const unmapped = catalogue.fields.filter(f => f.status === 'unmapped' && f.schemaKnown !== false)
   const suggestions: MappingSuggestion[] = []
-  let unmappedTotal = 0
-  for (const f of fields) {
-    if (rules[f.fieldKey]) continue // already mapped
-    unmappedTotal++
-    const s = suggestSourceForField(f.fieldKey, f.label)
-    if (s) {
-      suggestions.push({
-        fieldKey: f.fieldKey,
-        label: f.label,
-        suggestedSource: s.source,
-        confidence: s.confidence,
-        reason: s.reason,
-        required: f.required,
-      })
-    }
+  for (const field of unmapped) {
+    const suggestion = suggestKnownSource(field.fieldKey, field.label, available)
+    if (suggestion) suggestions.push({ fieldKey: field.fieldKey, label: field.label,
+      suggestedSource: suggestion.source, confidence: suggestion.confidence, reason: suggestion.reason,
+      required: field.priority === 'required' })
   }
-
-  return {
-    channel: input.channel,
-    code: input.code,
-    productType: input.productType ?? null,
-    suggestions,
-    unmappedTotal,
-  }
+  return { channel: catalogue.channel, code: input.code, productType: catalogue.productType,
+    suggestions, unmappedTotal: unmapped.length }
 }

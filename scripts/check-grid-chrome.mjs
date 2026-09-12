@@ -9,6 +9,10 @@
  * header/cell colours, row rule, hover/selected variables. The spec is the same table `GRID.md`
  * prints, so a number in the doc is a number a browser has confirmed.
  *
+ * Owned by DS.1 from 2026-09-02 (hub #522 — the claims table named nobody). Two changes that day:
+ * the liveness budget went 8s → 60s, and a reachable page with no `__gdsProbe` now says
+ * "production build" instead of timing out. See the comments at each.
+ *
  * Needs a dev server on :3000. Pre-push runs it ONLY when one answers and says loudly when it
  * skips — a silent pass with no server is the empty-assertion trap this repo has met before.
  * Run it by hand before showing any grid work:
@@ -24,7 +28,12 @@ const BASE = process.env.GDS_BASE ?? 'http://localhost:3000'
 const STRICT = process.argv.includes('--strict')
 const spec = JSON.parse(readFileSync('apps/web/src/design-system/grid/spec.json', 'utf8'))
 
-const alive = await fetch(`${BASE}/design/grid-lab`, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok).catch(() => false)
+// 🔴 60s, not 8s (hub #522). A cold Turbopack route under load is a COMPILE WAIT, not a down
+// server: on 2026-09-02 with the machine at load 23 and six concurrent tsc runs, :3000 was
+// LISTENING and this route did not answer inside 8s, so every push printed `SKIPPED — NOT MEASURED`
+// and exited 0. Loud, so not the empty-assertion trap — but the gate asserted nothing during the
+// busiest window of the programme, which is when grid work was actually landing.
+const alive = await fetch(`${BASE}/design/grid-lab`, { signal: AbortSignal.timeout(60000) }).then((r) => r.ok).catch(() => false)
 if (!alive) {
   const msg = `grid chrome conformance: no dev server at ${BASE} — NOT MEASURED. Run \`npm run grid:conformance\` with the dev server up before showing grid work.`
   if (STRICT) { console.error(`❌ ${msg}`); process.exit(1) }
@@ -49,11 +58,33 @@ const check = (where, what, got, want) => {
 const browser = await chromium.launch()
 const page = await browser.newPage()
 let probes = 0
+/** Set when the page is reachable but `__gdsProbe` never appears — reported after the browser closes. */
+let probeMissing = null
 try {
   for (const vp of VIEWPORTS) {
     await page.setViewportSize({ width: vp.w, height: vp.h })
-    await page.goto(`${BASE}/design/grid-lab?tab=gds`, { waitUntil: 'networkidle' })
-    await page.waitForFunction(() => typeof window.__gdsProbe === 'function' && document.querySelectorAll('[data-gds-scenario] .ag-row').length > 5, null, { timeout: 60000 })
+    // 🔴 NOT `networkidle`. The app holds long-lived connections (SSE / EventSource), and a page
+    // with a stream open never reaches two-idle-seconds — the gate hangs until Playwright's own
+    // timeout and reports a TimeoutError that reads like a broken grid. Measured 2026-09-01, and
+    // it is the same class as the hung-request trap already on file.
+    //
+    // `domcontentloaded` plus the EXPLICIT wait below is strictly better anyway: the real
+    // readiness signal is "the probe exists and the scenarios have rendered rows", which is
+    // asserted directly instead of inferred from network quiet.
+    await page.goto(`${BASE}/design/grid-lab?tab=gds`, { waitUntil: 'domcontentloaded' })
+    // Two waits, not one. Combined, a missing probe and an unrendered grid produced the same
+    // 60s TimeoutError, and since #519 guarded `__gdsProbe` behind `NODE_ENV !== 'production'`
+    // the most likely cause of a missing probe is that GDS_BASE points at a production build —
+    // a configuration mistake that should say so in one line, not time out and read like a
+    // broken grid. Splitting them costs nothing and makes the two causes distinguishable.
+    try {
+      await page.waitForFunction(() => typeof window.__gdsProbe === 'function', null, { timeout: 60000 })
+    } catch {
+      const scenarios = await page.evaluate(() => document.querySelectorAll('[data-gds-scenario]').length).catch(() => 0)
+      probeMissing = scenarios > 0 ? 'production' : 'norender'
+      break
+    }
+    await page.waitForFunction(() => document.querySelectorAll('[data-gds-scenario] .ag-row').length > 5, null, { timeout: 60000 })
     for (const theme of ['light', 'dark']) {
       if (theme === 'dark') { await page.getByRole('button', { name: 'Light', exact: true }).click(); await page.waitForTimeout(400) }
       for (const density of DENSITIES) {
@@ -95,6 +126,20 @@ try {
   }
 } finally {
   await browser.close()
+}
+
+if (probeMissing === 'production') {
+  console.error(`\n\u274c grid chrome conformance: the lab rendered, but \`window.__gdsProbe\` is undefined at ${BASE}.`)
+  console.error('   That is what a PRODUCTION build looks like. The probe is dev-only — guarded behind')
+  console.error("   `NODE_ENV !== 'production'` in GdsScenarios.tsx (#519) — so it is absent from a prod bundle.")
+  console.error('   Point GDS_BASE at a dev server. This is not a grid defect and not a broken guard.\n')
+  process.exit(1)
+}
+if (probeMissing === 'norender') {
+  console.error(`\n\u274c grid chrome conformance: ${BASE}/design/grid-lab answered, but rendered no`)
+  console.error('   `[data-gds-scenario]` elements and never defined `window.__gdsProbe` — the page itself')
+  console.error('   is broken, or the route changed. Open it in a browser before trusting any grid claim.\n')
+  process.exit(1)
 }
 
 if (failures.length) {

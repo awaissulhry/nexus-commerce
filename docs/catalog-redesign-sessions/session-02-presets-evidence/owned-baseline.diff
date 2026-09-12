@@ -1,0 +1,696 @@
+--- before/apps/api/src/routes/listing-wizard.routes.ts
++++ after/apps/api/src/routes/listing-wizard.routes.ts
+@@ -17,6 +17,7 @@
+ 
+ import type { FastifyPluginAsync } from 'fastify'
+ import prisma from '../db.js'
++import { parseProductPresetScope, productPresetScopeOf, sameProductPresetScope, validateProductPresetScope } from '../services/listing-wizard/product-presets.js'
+ import { listEtag, matches } from '../utils/list-etag.js'
+ import { AmazonService } from '../services/marketplaces/amazon.service.js'
+ import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
+@@ -269,6 +270,27 @@
+ ])
+ 
+ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
++  // Product-preset drafts have a frozen destination. Publication/scheduling must wait
++  // for account-aware orchestration; existing unbound wizard behavior is unchanged.
++  fastify.addHook('preHandler', async (request, reply) => {
++    if (!request.routeOptions.url.includes('/listing-wizard/:id')) return
++    const id = (request.params as { id?: string }).id
++    if (!id) return
++    const wizard = await prisma.listingWizard.findUnique({ where: { id } })
++    const scope = wizard && productPresetScopeOf(wizard)
++    if (!scope) return
++    try {
++      if (wizard.status !== 'DRAFT' || wizard.expiresAt <= new Date()) return reply.code(409).send({ error: 'This product draft is no longer active. Open the current product destination and review again.' })
++      await validateProductPresetScope(prisma, parseProductPresetScope(scope))
++      const draftPatch = request.method === 'PATCH' && request.routeOptions.url.endsWith('/listing-wizard/:id')
++      const telemetry = request.method === 'POST' && request.routeOptions.url.endsWith('/listing-wizard/:id/events')
++      if (request.method !== 'GET' && !draftPatch && !telemetry) {
++        return reply.code(409).send({ error: 'This draft is saved for a specific account and listing. Publishing, scheduling and other listing operations are not available for it yet.' })
++      }
++    } catch (error) {
++      return reply.code(409).send({ error: error instanceof Error ? error.message : 'The draft destination is unavailable.' })
++    }
++  })
+   // ── Phase B — Step 1 connection-status surface ────────────────
+   // GET /api/listing-wizard/connection-status
+   //
+@@ -905,6 +927,10 @@
+       if (!body.productId) {
+         return reply.code(400).send({ error: 'productId is required' })
+       }
++      const coordinates = ['accountId', 'channelConnectionId', 'aliasKey', 'aliasId', 'listingId', 'productContext']
++      if ([body, ...(Array.isArray(body.channels) ? body.channels : [])].some(value => coordinates.some(key => Object.prototype.hasOwnProperty.call(value, key)))) {
++        return reply.code(409).send({ error: 'This legacy start route cannot bind accounts or listing aliases. Apply a preset from the explicit product destination.' })
++      }
+ 
+       // Multi-channel input (Phase B canonical form): { productId,
+       // channels: [{platform, marketplace}, ...] }.
+@@ -968,6 +994,7 @@
+         orderBy: { createdAt: 'desc' },
+       })
+       const isNew = !wizard
++      if (wizard && productPresetScopeOf(wizard)) return reply.code(409).send({ error: 'Resume this destination-bound draft using its exact product/account/listing link.' })
+       if (!wizard) {
+         wizard = await prisma.listingWizard.create({
+           data: {
+@@ -1013,7 +1040,7 @@
+     },
+   )
+ 
+-  fastify.get<{ Params: { id: string } }>(
++  fastify.get<{ Params: { id: string }; Querystring: { productId?: string; channel?: string; accountId?: string; market?: string; listingId?: string; aliasKey?: string } }>(
+     '/listing-wizard/:id',
+     async (request, reply) => {
+       const wizard = await prisma.listingWizard.findUnique({
+@@ -1022,6 +1049,14 @@
+       if (!wizard) {
+         return reply.code(404).send({ error: 'Wizard not found' })
+       }
++      if (request.query.productId && request.query.productId !== wizard.productId) return reply.code(409).send({ error: 'This draft belongs to another product.' })
++      const scope = productPresetScopeOf(wizard)
++      if (scope) {
++        try {
++          const requested = parseProductPresetScope({ ...request.query, listingId: request.query.listingId || null })
++          if (!sameProductPresetScope(scope, requested)) throw new Error('This draft belongs to another product, account or listing scope.')
++        } catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : 'Use the exact draft link.' }) }
++      } else if (request.query.accountId !== undefined || request.query.listingId !== undefined || request.query.aliasKey !== undefined) return reply.code(409).send({ error: 'This legacy draft has no reviewed account/listing binding. Apply a preset from the product destination first.' })
+       const product = await prisma.product.findUnique({
+         where: { id: wizard.productId },
+         select: {
+@@ -1054,6 +1089,17 @@
+           .send({ error: `Wizard is ${wizard.status.toLowerCase()}` })
+       }
+       const body = request.body ?? {}
++      const scope = productPresetScopeOf(wizard)
++      if (body.channels?.some(value => ['accountId', 'channelConnectionId', 'aliasKey', 'aliasId', 'listingId'].some(key => Object.prototype.hasOwnProperty.call(value, key)))) return reply.code(409).send({ error: 'Account/listing coordinates cannot be stored in the legacy channel tuple.' })
++      if (scope) {
++        if (typeof body.expectedUpdatedAt !== 'string') return reply.code(409).send({ error: 'Reload this product draft before saving so its current revision can be checked.' })
++        const state = (wizard.state ?? {}) as Record<string, unknown>
++        if (['productPresetScope', 'productPresetReceipt'].some(key => body.state && Object.prototype.hasOwnProperty.call(body.state, key) && !sameProductPresetScope(body.state[key], state[key])) || body.channels && !sameProductPresetScope(body.channels, wizard.channels) || body.channelStates && Object.keys(body.channelStates).some(key => key !== `${scope.channel}:${scope.market}`)) {
++          return reply.code(409).send({ error: 'The reviewed product/account/listing destination cannot be replaced. Review another preset from that product scope.' })
++        }
++      } else if (body.state && ['productPresetScope', 'productPresetReceipt'].some(key => Object.prototype.hasOwnProperty.call(body.state, key))) {
++        return reply.code(400).send({ error: 'Product preset binding is created only by a reviewed preset application.' })
++      }
+       if (body.expectedUpdatedAt !== undefined && body.expectedUpdatedAt !== wizard.updatedAt.toISOString()) {
+         return reply.code(409).send({ error: 'The wizard changed. Reload it before saving these choices.' })
+       }
+--- before/apps/api/src/routes/wizard-templates.routes.ts
++++ after/apps/api/src/routes/wizard-templates.routes.ts
+@@ -28,6 +28,7 @@
+ import type { FastifyPluginAsync } from 'fastify'
+ import type { Prisma } from '@prisma/client'
+ import { fillPresetDefaults, reusablePresetDefaults } from '../services/listing-wizard/preset-defaults.js'
++import { ProductPresetService, productPresetScopeOf } from '../services/listing-wizard/product-presets.js'
+ import prisma from '../db.js'
+ import {
+   channelsHash,
+@@ -214,10 +215,22 @@
+ 
+   fastify.post<{
+     Params: { id: string }
+-    Body: { wizardId?: string; dryRun?: boolean; expectedVersion?: number; expectedWizardUpdatedAt?: string; expectedPresetUpdatedAt?: string }
++    Body: { wizardId?: string; dryRun?: boolean; expectedVersion?: number; expectedWizardUpdatedAt?: string; expectedPresetUpdatedAt?: string; productContext?: unknown; reviewKey?: string }
+   }>(
+     '/wizard-templates/:id/apply',
+     async (request, reply) => {
++      if (request.body && Object.prototype.hasOwnProperty.call(request.body, 'productContext')) {
++        try {
++          const service = new ProductPresetService(prisma)
++          return request.body.dryRun
++            ? { preview: await service.review(request.body.productContext, request.params.id, request.body.wizardId) }
++            : await service.apply(request.body.productContext, request.params.id, request.body.reviewKey ?? '', request.body.wizardId)
++        } catch (error) {
++          const status = error && typeof error === 'object' && 'statusCode' in error ? Number(error.statusCode) : 500
++          if (status === 500) fastify.log.error({ err: error }, '[wizard-templates] product apply failed')
++          return reply.code(status).send({ error: error instanceof Error ? error.message : 'Could not apply this preset.' })
++        }
++      }
+       const wizardId =
+         typeof request.body?.wizardId === 'string' && request.body.wizardId
+           ? request.body.wizardId
+@@ -231,6 +244,8 @@
+       ])
+       if (!tmpl) return reply.code(404).send({ error: 'Template not found' })
+       if (!wizard) return reply.code(404).send({ error: 'Wizard not found' })
++
++      if (productPresetScopeOf(wizard)) return reply.code(409).send({ error: 'Review this preset from the product destination. Its account and listing scope must be retained.' })
+ 
+       const channels = normalizeChannels(tmpl.channels)
+       if (channels.length === 0) {
+--- before/apps/web/src/app/channels/listing-presets/ListingPresetsClient.tsx
++++ after/apps/web/src/app/channels/listing-presets/ListingPresetsClient.tsx
+@@ -26,9 +26,9 @@
+ }
+ 
+ /** Canonical WizardTemplate administration, shared with the existing settings entry point. */
+-export default function ListingPresetsClient({ initialRows = [], channel = '', market = '', onChoose, choosing = false }: {
++export default function ListingPresetsClient({ initialRows = [], channel = '', market = '', onChoose, choosing = false, productContext = false }: {
+   initialRows?: WizardTemplateRow[]; channel?: string; market?: string
+-  onChoose?: (row: WizardTemplateRow) => void; choosing?: boolean
++  onChoose?: (row: WizardTemplateRow) => void; choosing?: boolean; productContext?: boolean
+ }) {
+   const { status } = useAuth()
+   const { has } = useProfileScope()
+@@ -82,7 +82,7 @@
+   }
+   return <section style={stack} aria-label="Listing presets">
+     <Banner tone="info" title="Reusable listing defaults">
+-      {onChoose ? 'Choose a preset to review its effect on this wizard before applying it. ' : "Apply a preset once from the listing wizard's destination step. Save a new preset from its Submit step. "}
++      {productContext ? 'Choose a preset to review only the compatible defaults for this product destination. ' : onChoose ? 'Choose a preset to review its effect on this wizard before applying it. ' : "Apply a preset once from the listing wizard's destination step. Save a new preset from its Submit step. "}
+       Presets store destination choices, SKU strategy and variation-theme defaults. They do not copy product facts, prices, stock or selected variants, and do not create a standing rule for future products.
+     </Banner>
+     {notice && <Banner tone="success" onDismiss={() => setNotice('')}>{notice}</Banner>}
+--- before/apps/web/src/app/products/[id]/list-wizard/ListWizardClient.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/ListWizardClient.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { productPresetStudioHref, type ProductPresetScope } from '../edit/_studio/presets/product-preset-contract'
+ 
+ import { useCallback, useEffect, useRef, useState } from 'react'
+ import { useRouter } from 'next/navigation'
+@@ -205,6 +207,7 @@
+       state?: Record<string, unknown>
+       channels?: ChannelTuple[]
+       expectedUpdatedAt?: string
++      channelStates?: Record<string, Record<string, unknown>>
+     }): Promise<boolean> => {
+       const target: Record<string, unknown> = {
+         currentStep: overrides?.currentStep ?? stateRef.current.currentStep,
+@@ -213,7 +216,9 @@
+       if (overrides?.channels !== undefined) {
+         target.channels = overrides.channels
+       }
+-      if (overrides?.expectedUpdatedAt) target.expectedUpdatedAt = overrides.expectedUpdatedAt
++      const expectedUpdatedAt = overrides?.expectedUpdatedAt ?? (stateRef.current.wizardState.productPresetScope ? savedUpdatedAt.current : undefined)
++      if (expectedUpdatedAt) target.expectedUpdatedAt = expectedUpdatedAt
++      if (overrides?.channelStates) target.channelStates = overrides.channelStates
+       setSaveState('saving')
+       try {
+         const res = await fetch(
+@@ -295,8 +300,9 @@
+   )
+ 
+   const handleClose = useCallback(async () => {
+-    await persist()
+-    router.push(`/products/${product.id}/edit`)
++    if (!await persist()) return
++    const scope = stateRef.current.wizardState.productPresetScope as ProductPresetScope | undefined
++    router.push(scope ? productPresetStudioHref(scope) : `/products/${product.id}/edit`)
+   }, [persist, router, product.id])
+ 
+   // C.0 / A5 — Discard wizard.
+@@ -363,7 +369,8 @@
+     if (
+       prev &&
+       prev.valid === next.valid &&
+-      prev.blockers === next.blockers
++      prev.blockers === next.blockers &&
++      JSON.stringify(prev.reasons ?? []) === JSON.stringify(next.reasons ?? [])
+     ) {
+       return
+     }
+@@ -579,6 +586,7 @@
+     <div className="flex flex-col h-[100dvh] bg-slate-50">
+       <WizardHeader
+         productId={product.id}
++        productHref={wizardState.productPresetScope ? productPresetStudioHref(wizardState.productPresetScope as ProductPresetScope) : undefined}
+         productSku={product.sku}
+         productName={product.name}
+         channels={channels}
+@@ -682,7 +690,13 @@
+           // Step1Identifiers via the embedded Step2GtinExemption.
+           if (currentStep === 3) return <Step1Identifiers {...stepProps} />
+           // Step 4: Variations (was Step 5).
+-          if (currentStep === 4) return <Step5Variations {...stepProps} />
++          if (currentStep === 4) return <Step5Variations {...stepProps} saveChoices={async (variations, channelStates) => {
++            const merged = { ...stateRef.current.wizardState, variations }
++            // Keep navigation/Save & exit on the same selection that the variation consumer reads.
++            stateRef.current = { ...stateRef.current, wizardState: merged }
++            setWizardState(merged)
++            return persist({ state: merged, channelStates, expectedUpdatedAt: savedUpdatedAt.current })
++          }} />
+           // Step 5: Attributes (was Step 6).
+           if (currentStep === 5) return <Step4Attributes {...stepProps} />
+           // L.3 — Content step removed; the 4 content fields
+--- before/apps/web/src/app/products/[id]/list-wizard/components/WizardHeader.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/components/WizardHeader.tsx
+@@ -11,6 +11,7 @@
+ 
+ interface Props {
+   productId: string
++  productHref?: string
+   productSku: string
+   productName: string
+   channels: ChannelTuple[]
+@@ -30,6 +31,7 @@
+ 
+ export default function WizardHeader({
+   productId,
++  productHref,
+   productSku,
+   productName,
+   channels,
+@@ -48,7 +50,8 @@
+     >
+       <div className="flex items-center gap-2 md:gap-3 min-w-0">
+         <Link
+-          href={`/products/${productId}/edit`}
++          href={productHref ?? `/products/${productId}/edit`}
++          onClick={productHref ? (event) => { event.preventDefault(); onClose() } : undefined}
+           className="text-tertiary hover:text-slate-700 flex-shrink-0 dark:text-slate-500 dark:hover:text-slate-300"
+           aria-label={t('listWizard.header.backToProduct')}
+         >
+--- before/apps/web/src/app/products/[id]/list-wizard/page.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/page.tsx
+@@ -73,14 +73,23 @@
+   const channel = searchParams.get('channel') ?? undefined
+   const marketplace = searchParams.get('marketplace') ?? undefined
+   const stepParam = searchParams.get('step') ?? undefined
++  const resumeId = searchParams.get('wizard') ?? undefined
++  const accountId = searchParams.get('accountId') ?? undefined
++  const listingId = searchParams.get('listingId') ?? undefined
++  const aliasKey = searchParams.get('aliasKey') ?? undefined
+ 
+   const [state, setState] = useState<StartState>({ phase: 'loading' })
+ 
+   useEffect(() => {
+     let alive = true
++    const controller = new AbortController()
+     setState({ phase: 'loading' })
+     ;(async () => {
+       const backend = getBackendUrl()
++      if (!resumeId && (accountId !== undefined || listingId !== undefined || aliasKey !== undefined)) {
++        if (alive) setState({ phase: 'error', title: 'An exact draft link is required', detail: 'Start from Listing presets in the product destination. This legacy start flow cannot bind an account or listing alias.' })
++        return
++      }
+ 
+       // Build the /start body. Phase B accepts either the legacy
+       // (channel, marketplace) pair or no channels at all (Step 1 picks).
+@@ -92,11 +101,18 @@
+ 
+       let res: Response
+       try {
+-        res = await fetch(`${backend}/api/listing-wizard/start`, {
++        const query = new URLSearchParams({ productId })
++        if (channel) query.set('channel', channel)
++        if (marketplace) query.set('market', marketplace)
++        if (accountId !== undefined) query.set('accountId', accountId)
++        if (listingId !== undefined) query.set('listingId', listingId)
++        if (aliasKey !== undefined) query.set('aliasKey', aliasKey)
++        res = resumeId ? await fetch(`${backend}/api/listing-wizard/${encodeURIComponent(resumeId)}?${query}`, { credentials: 'include', cache: 'no-store', signal: controller.signal }) : await fetch(`${backend}/api/listing-wizard/start`, {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify(startBody),
+           cache: 'no-store',
++          signal: controller.signal,
+         })
+       } catch {
+         if (alive)
+@@ -127,6 +143,10 @@
+       }
+ 
+       const json = (await res.json()) as RawWizardResponse
++      if (json.wizard?.productId !== productId || json.product?.id !== productId) {
++        if (alive) setState({ phase: 'error', title: 'Draft scope mismatch', detail: 'The returned draft does not belong to this product. Open it from the correct product destination.' })
++        return
++      }
+       if (!json.wizard || !json.product) {
+         if (alive)
+           setState({
+@@ -176,11 +196,12 @@
+           isNew: json.isNew === true,
+           stepFromUrl,
+         })
+-    })()
++    })().catch(error => { if (alive) setState({ phase: 'error', title: 'Could not read the draft', detail: error instanceof Error ? error.message : 'Reload the product destination and try again.' }) })
+     return () => {
+       alive = false
++      controller.abort()
+     }
+-  }, [productId, channel, marketplace, stepParam])
++  }, [productId, channel, marketplace, stepParam, resumeId, accountId, listingId, aliasKey])
+ 
+   if (state.phase === 'loading') return <StartingView />
+ 
+@@ -196,6 +217,7 @@
+ 
+   return (
+     <ListWizardClient
++      key={state.wizard.id}
+       initialWizard={state.wizard}
+       product={state.product}
+       isNew={state.isNew}
+--- before/apps/web/src/app/products/[id]/list-wizard/steps/Step1Channels.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/steps/Step1Channels.tsx
+@@ -21,6 +21,7 @@
+ import { Tooltip } from '@/components/ui/Tooltip'
+ import { useToast } from '@/components/ui/Toast'
+ import { ListingPresetPicker } from '@/app/channels/listing-presets/ListingPresetPicker'
++import { BoundPresetDestination } from '../../edit/_studio/presets/BoundPresetDestination'
+ import { useTranslations } from '@/lib/i18n/use-translations'
+ 
+ interface MarketplaceOption {
+@@ -108,7 +109,11 @@
+   reason: string
+ }
+ 
+-export default function Step1Channels({
++type ChannelStepProps = StepProps & { saveCurrentChoices: (patch: Record<string, unknown>, channels: ChannelTuple[]) => Promise<boolean> }
++export default function Step1Channels(props: ChannelStepProps) {
++  return props.wizardState.productPresetScope ? <BoundPresetDestination {...props} /> : <UnboundChannels {...props} />
++}
++function UnboundChannels({
+   channels: initialChannels,
+   wizardState,
+   updateWizardState,
+@@ -117,7 +122,7 @@
+   wizardId,
+   product,
+   saveCurrentChoices,
+-}: StepProps & { saveCurrentChoices: (patch: Record<string, unknown>, channels: ChannelTuple[]) => Promise<boolean> }) {
++}: ChannelStepProps) {
+   const confirm = useConfirm()
+   const { toast } = useToast()
+   const { t } = useTranslations()
+--- before/apps/web/src/app/products/[id]/list-wizard/steps/Step5Variations.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/steps/Step5Variations.tsx
+@@ -29,6 +29,7 @@
+ import { useTranslations } from '@/lib/i18n/use-translations'
+ import MatrixVariantBuilder from './_MatrixVariantBuilder'
+ import { Listbox } from '@/design-system/components/Listbox'
++import { changedVariationSelection, effectiveVariationTheme } from './variation-selection'
+ 
+ // Mirrors backend types from variations.service.ts.
+ interface ThemeOption {
+@@ -69,7 +70,7 @@
+   /** Common-theme pick that applies to all channels by default. */
+   commonTheme?: string
+   /** Per-channel selected theme (overrides commonTheme for that
+-   *  channel). Empty/absent → falls back to commonTheme. */
++   *  channel). Only absence falls back to commonTheme. */
+   themeByChannel?: Record<string, string>
+   /** Custom-theme attribute lists keyed by channel. Set when a
+    *  channel uses a CUSTOM_* theme id; the live-annotation logic
+@@ -97,6 +98,7 @@
+   reason: string
+   alternatives: Array<{ themeId: string; reason: string }>
+ }
++type SaveVariationChoices = (variations: Record<string, unknown>, channelStates: Record<string, Record<string, unknown>>) => Promise<boolean>
+ 
+ export default function Step5Variations({
+   wizardState,
+@@ -106,7 +108,8 @@
+   product,
+   reportValidity,
+   setJumpToBlocker,
+-}: StepProps) {
++  saveChoices,
++}: StepProps & { saveChoices: SaveVariationChoices }) {
+   const { t } = useTranslations()
+   const { toast } = useToast()
+   const slice = (wizardState.variations ?? {}) as VariationsSlice
+@@ -126,12 +129,13 @@
+   )
+   const [loading, setLoading] = useState(true)
+   const [error, setError] = useState<string | null>(null)
++  const [choicesSaving, setChoicesSaving] = useState(false)
+   // VV — single-product setup writes (link-to-parent, promote-to-parent,
+   // add-variants) refetch the variations payload via this counter.
+   const [refetchKey, setRefetchKey] = useState(0)
+ 
+   const [commonTheme, setCommonTheme] = useState<string | null>(
+-    slice.commonTheme ?? null,
++    typeof slice.commonTheme === 'string' ? slice.commonTheme : null,
+   )
+   const [themeByChannel, setThemeByChannel] = useState<Record<string, string>>(
+     slice.themeByChannel ?? {},
+@@ -140,8 +144,13 @@
+     Record<string, string[]>
+   >(slice.customAttributesByChannel ?? {})
+   const [includedSkus, setIncludedSkus] = useState<Set<string>>(
+-    new Set(slice.includedSkus ?? []),
++    new Set(Array.isArray(slice.includedSkus) ? slice.includedSkus : []),
+   )
++  const originalSelection = useRef({ ...slice })
++  const initialSelection = useRef({ commonTheme, themeByChannel, customAttributesByChannel: customAttrsByChannel, includedSkus: Array.from(includedSkus) })
++  const savedSelection = useRef(JSON.stringify(initialSelection.current))
++  const selectionSaveGeneration = useRef(0)
++  const pendingSelectionSaves = useRef(0)
+   // N.1 — per-marketplace themes always visible. The expandable
+   // collapse is gone; the grid below renders inline so the seller
+   // can see what each channel will publish under at a glance.
+@@ -182,12 +191,12 @@
+         const p = json as MultiChannelVariationsPayload
+         setPayload(p)
+         // First-render seed: include every child by default.
+-        if (includedSkus.size === 0 && p.children.length > 0) {
++        if (!wizardState.productPresetScope && !Object.prototype.hasOwnProperty.call(slice, 'includedSkus') && includedSkus.size === 0 && p.children.length > 0) {
+           setIncludedSkus(new Set(p.children.map((c) => c.sku)))
+         }
+         // Default-pick a common theme if one isn't set yet AND there
+         // are common themes available.
+-        if (!commonTheme && p.commonThemes.length > 0) {
++        if (!wizardState.productPresetScope && !Object.prototype.hasOwnProperty.call(slice, 'commonTheme') && !Object.keys(slice.themeByChannel ?? {}).length && !commonTheme && p.commonThemes.length > 0) {
+           const best = pickDefaultCommonTheme(
+             p.commonThemes,
+             p.presentAttributes,
+@@ -265,14 +274,22 @@
+   // so toggling chips doesn't fire one PATCH per click.
+   useEffect(() => {
+     if (loading || !payload) return
++    const generation = ++selectionSaveGeneration.current
++    const selectionKey = JSON.stringify({ commonTheme, themeByChannel, customAttributesByChannel: customAttrsByChannel, includedSkus: Array.from(includedSkus) })
++    if (savedSelection.current === selectionKey && pendingSelectionSaves.current === 0) { setChoicesSaving(false); return }
++    setChoicesSaving(true)
+     const t = window.setTimeout(() => {
+-      void persistThemes(wizardId, {
++      pendingSelectionSaves.current++
++      void persistThemes(saveChoices, {
+         commonTheme,
+         themeByChannel,
+         customAttrsByChannel,
+         includedSkus: Array.from(includedSkus),
+         channelKeys: Object.keys(payload.themesByChannel),
+-      })
++      }, originalSelection.current, initialSelection.current)
++        .then(() => { savedSelection.current = selectionKey })
++        .catch(e => { if (generation === selectionSaveGeneration.current) setError(e instanceof Error ? e.message : 'Could not save variation choices.') })
++        .finally(() => { pendingSelectionSaves.current--; if (generation === selectionSaveGeneration.current) setChoicesSaving(false) })
+     }, SAVE_DEBOUNCE_MS)
+     return () => window.clearTimeout(t)
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+@@ -281,7 +298,8 @@
+   // Effective theme per channel: per-channel override → commonTheme.
+   const effectiveTheme = useCallback(
+     (channelKey: string): string | null => {
+-      return themeByChannel[channelKey] || commonTheme || null
++      const value = effectiveVariationTheme(themeByChannel, commonTheme, channelKey)
++      return typeof value === 'string' ? value : null
+     },
+     [themeByChannel, commonTheme],
+   )
+@@ -412,11 +430,11 @@
+   // an effective theme on at least one channel, ≥1 included child,
+   // and no children with unfilled required attributes.
+   useEffect(() => {
+-    if (loading) {
++    if (loading || choicesSaving) {
+       reportValidity({
+         valid: false,
+         blockers: 1,
+-        reasons: ['Loading variations…'],
++        reasons: [choicesSaving ? 'Saving variation choices…' : 'Loading variations…'],
+       })
+       return
+     }
+@@ -431,7 +449,7 @@
+     const reasons: string[] = []
+     let blockers = 0
+     const anyThemeSet = Object.keys(effectivePayload.themesByChannel).some(
+-      (ch) => effectiveTheme(ch) !== null,
++      (ch) => !!effectiveTheme(ch),
+     )
+     if (!anyThemeSet) {
+       reasons.push('Pick a variation theme')
+@@ -451,8 +469,9 @@
+     reportValidity({ valid: blockers === 0, blockers, reasons })
+   }, [
+     loading,
++    choicesSaving,
+     error,
+-    payload,
++    effectivePayload,
+     includedChildren.length,
+     blockingChildren,
+     effectiveTheme,
+@@ -461,18 +480,24 @@
+ 
+   const onContinue = useCallback(async () => {
+     if (!effectivePayload) return
++    if (loading || choicesSaving || error) return
++    if (effectivePayload.isParent && !channelKeys.some(key => !!effectiveTheme(key))) return
+     if (effectivePayload.isParent && includedChildren.length === 0) return
+     if (blockingChildren.length > 0) return
+     // Persist before advance — bypass debounce.
+-    await persistThemes(wizardId, {
++    try { await persistThemes(saveChoices, {
+       commonTheme,
+       themeByChannel,
+       customAttrsByChannel,
+       includedSkus: Array.from(includedSkus),
+       channelKeys,
+-    })
++    }, originalSelection.current, initialSelection.current) } catch (e) { setError(e instanceof Error ? e.message : 'Could not save variation choices.'); return }
+     await updateWizardState({}, { advance: true })
+   }, [
++    loading,
++    choicesSaving,
++    error,
++    effectiveTheme,
+     blockingChildren.length,
+     channelKeys,
+     commonTheme,
+@@ -481,6 +506,7 @@
+     includedChildren.length,
+     includedSkus,
+     themeByChannel,
++    saveChoices,
+     updateWizardState,
+     wizardId,
+   ])
+@@ -1022,8 +1048,7 @@
+ 
+           <div className="mt-6 flex items-center justify-between gap-3">
+             <ContinueStatus
+-              commonTheme={commonTheme}
+-              channelKeys={channelKeys}
++              hasTheme={channelKeys.some(key => !!effectiveTheme(key))}
+               includedCount={includedChildren.length}
+               blockingCount={blockingChildren.length}
+               hasChildren={effectivePayload.children.length > 0}
+@@ -1034,6 +1059,8 @@
+               onClick={onContinue}
+               disabled={
+                 !effectivePayload ||
++                loading || choicesSaving || !!error ||
++                (effectivePayload.isParent && !channelKeys.some(key => !!effectiveTheme(key))) ||
+                 (effectivePayload.children.length > 0 &&
+                   (includedChildren.length === 0 ||
+                     blockingChildren.length > 0))
+@@ -1476,14 +1503,12 @@
+ }
+ 
+ function ContinueStatus({
+-  commonTheme,
+-  channelKeys,
++  hasTheme,
+   includedCount,
+   blockingCount,
+   hasChildren,
+ }: {
+-  commonTheme: string | null
+-  channelKeys: string[]
++  hasTheme: boolean
+   includedCount: number
+   blockingCount: number
+   hasChildren: boolean
+@@ -1506,7 +1531,7 @@
+       </span>
+     )
+   }
+-  if (!commonTheme && channelKeys.length > 0) {
++  if (!hasTheme) {
+     return (
+       <span className="text-base text-slate-500 dark:text-slate-400">
+         {includedCount} included — pick a theme to continue
+@@ -1534,7 +1559,7 @@
+ }
+ 
+ async function persistThemes(
+-  wizardId: string,
++  saveChoices: SaveVariationChoices,
+   args: {
+     commonTheme: string | null
+     themeByChannel: Record<string, string>
+@@ -1542,17 +1567,19 @@
+     includedSkus: string[]
+     channelKeys: string[]
+   },
++  original: Record<string, unknown>,
++  initial: Record<string, unknown>,
+ ): Promise<void> {
+   // Base slice: commonTheme + themeByChannel + customAttributes +
+   // includedSkus.
+   const basePatch = {
+     state: {
+-      variations: {
++      variations: changedVariationSelection(original, initial, {
+         commonTheme: args.commonTheme,
+         themeByChannel: args.themeByChannel,
+         customAttributesByChannel: args.customAttrsByChannel,
+         includedSkus: args.includedSkus,
+-      },
++      }),
+     },
+   }
+   // Per-channel slice: theme that should be used for that channel
+@@ -1562,12 +1589,12 @@
+   // themes carry the attribute list alongside.
+   const channelStates: Record<string, Record<string, unknown>> = {}
+   for (const channelKey of args.channelKeys) {
+-    const effective =
+-      args.themeByChannel[channelKey] || args.commonTheme || null
+-    if (effective) {
++    const savedSelection = basePatch.state.variations
++    const effective = effectiveVariationTheme((savedSelection.themeByChannel ?? {}) as Record<string, unknown>, savedSelection.commonTheme, channelKey)
++    if (effective !== undefined) {
+       const slice: Record<string, unknown> = { theme: effective }
+       if (
+-        effective.startsWith(CUSTOM_PREFIX) &&
++        typeof effective === 'string' && effective.startsWith(CUSTOM_PREFIX) &&
+         args.customAttrsByChannel[channelKey]
+       ) {
+         slice.customAttributes = args.customAttrsByChannel[channelKey]
+@@ -1575,15 +1602,7 @@
+       channelStates[channelKey] = { variations: slice }
+     }
+   }
+-  try {
+-    await fetch(`${getBackendUrl()}/api/listing-wizard/${wizardId}`, {
+-      method: 'PATCH',
+-      headers: { 'Content-Type': 'application/json' },
+-      body: JSON.stringify({ ...basePatch, channelStates }),
+-    })
+-  } catch {
+-    /* swallow — caller's debounce will retry */
+-  }
++  if (!await saveChoices(basePatch.state.variations, channelStates)) throw new Error('Could not save variation choices. Reload the draft before continuing.')
+ }
+ 
+ // ── VV — single-product setup ───────────────────────────────────────
+--- before/apps/web/src/app/products/[id]/list-wizard/steps/Step9Submit.tsx
++++ after/apps/web/src/app/products/[id]/list-wizard/steps/Step9Submit.tsx
+@@ -1,4 +1,6 @@
+ 'use client'
++
++import { Banner as PresetBanner } from '@/design-system/components'
+ 
+ import { useCallback, useEffect, useRef, useState } from 'react'
+ import {
+@@ -82,7 +84,11 @@
+ ] as const
+ const POLL_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+ 
+-export default function Step9Submit({
++export default function Step9Submit(props: StepProps) {
++  if (props.wizardState.productPresetScope) return <PresetBanner tone="info" title="Saved listing draft">The preset defaults are saved for the reviewed product, account and listing. Publishing from these product drafts is not available yet.</PresetBanner>
++  return <UnboundSubmit {...props} />
++}
++function UnboundSubmit({
+   wizardId,
+   channels,
+   product,

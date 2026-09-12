@@ -21,6 +21,8 @@ import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import type { EventEnvelope } from '@nexus/events'
 import type { EventBroker } from './broker.js'
+import { workspaceContext } from '../workspace-context.js'
+import { visitActiveWorkspaces } from '../workspace-sweep.js'
 
 interface OutboxRow {
   id: string
@@ -28,6 +30,7 @@ interface OutboxRow {
   type: string
   version: number
   accountId: string | null
+  workspaceId: string
   subject: string
   correlationId: string
   causationId: string | null
@@ -43,6 +46,7 @@ function rowToEnvelope(row: OutboxRow): EventEnvelope {
     version: row.version,
     occurredAt: row.occurredAt.toISOString(),
     accountId: row.accountId,
+    workspaceId: row.workspaceId,
     subject: row.subject,
     correlationId: row.correlationId,
     causationId: row.causationId,
@@ -85,9 +89,14 @@ export interface RelayResult {
  * instead of waiting on a timer, and so an operator can force a drain.
  */
 export async function relayOnce(broker: EventBroker, config: RelayConfig = relayConfig()): Promise<RelayResult> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && !workspaceContext()) {
+    const total = { claimed: 0, published: 0, failed: 0 }
+    await visitActiveWorkspaces(async () => { const result = await relayOnce(broker, config); total.claimed += result.claimed; total.published += result.published; total.failed += result.failed })
+    return total
+  }
   return prisma.$transaction(async (tx) => {
     const rows = await tx.$queryRaw<OutboxRow[]>`
-      SELECT id, "eventId", type, version, "accountId", subject,
+      SELECT id, "eventId", type, version, "accountId", "workspaceId", subject,
              "correlationId", "causationId", source, payload, "occurredAt"
       FROM "EventOutbox"
       WHERE "publishedAt" IS NULL
@@ -129,6 +138,11 @@ export async function relayOnce(broker: EventBroker, config: RelayConfig = relay
  * class of bug as any cleanup that only runs on a graceful exit.
  */
 export async function pruneOutbox(config: RelayConfig = relayConfig()): Promise<number> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && !workspaceContext()) {
+    let count = 0
+    await visitActiveWorkspaces(async () => { count += await pruneOutbox(config) })
+    return count
+  }
   const cutoff = new Date(Date.now() - config.retentionDays * 86_400_000)
   const deleted = await prisma.$executeRaw`
     DELETE FROM "EventOutbox"

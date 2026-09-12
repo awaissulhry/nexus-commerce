@@ -127,8 +127,8 @@ export function startOutboundQueueJanitorCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun(JOB_NAME, runOutboundQueueJanitor).catch((err) =>
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun(JOB_NAME, runOutboundQueueJanitor).catch((err) =>
       logger.error(`${JOB_NAME} run failed`, {
         error: err instanceof Error ? err.message : String(err),
       }),

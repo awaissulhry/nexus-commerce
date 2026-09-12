@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * NN.14 — abandoned-wizard cleanup.
  *
@@ -215,29 +216,27 @@ export async function cleanupAbandonedWizards(): Promise<{
 
 let cleanupTimer: NodeJS.Timeout | null = null
 
-/** Schedule the cleanup to run once per day (best-effort
- *  in-process). For multi-instance deploys, swap this for a real
- *  cron / queue worker so only one node runs the cleanup. */
+/** Daily cleanup; business mode acquires a lease per profile across replicas. */
 export function startWizardCleanupCron(): void {
   if (cleanupTimer) return
   const ONE_DAY = 24 * 60 * 60 * 1000
   // Run once at startup (skipped if last-run was very recent — the
   // service is idempotent so a duplicate run is harmless), then once
   // per day.
-  void recordCronRun('wizard-cleanup', async () => {
+  void runProfileTimer('wizard-cleanup', () => recordCronRun('wizard-cleanup', async () => {
     const r = await cleanupAbandonedWizards()
     return `deleted=${r.deleted} marked=${r.marked} orphans=${r.orphansDeleted} backfilled=${r.expiresAtBackfilled}`
-  }).catch((err) => {
+  }), ONE_DAY).catch((err) => {
     console.warn(
       '[wizard-cleanup] initial run failed:',
       err instanceof Error ? err.message : String(err),
     )
   })
   cleanupTimer = setInterval(() => {
-    void recordCronRun('wizard-cleanup', async () => {
+    void runProfileTimer('wizard-cleanup', () => recordCronRun('wizard-cleanup', async () => {
       const r = await cleanupAbandonedWizards()
       return `deleted=${r.deleted} marked=${r.marked} orphans=${r.orphansDeleted} backfilled=${r.expiresAtBackfilled}`
-    }).catch((err) => {
+    }), ONE_DAY).catch((err) => {
       console.warn(
         '[wizard-cleanup] tick failed:',
         err instanceof Error ? err.message : String(err),

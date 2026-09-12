@@ -1,0 +1,56 @@
+[
+  {
+    "name": "Amazon Listing information",
+    "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=AMAZON",
+    "rows": 21,
+    "scope": [
+      "Amazon\n·\nBlocked\n44%"
+    ]
+  },
+  {
+    "name": "eBay Description themes",
+    "headings": [
+      "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "Description themes"
+    ],
+    "rows": 0,
+    "text": "Skip to main content\nN\n⌘\nK\nawaissulhry\nHome\nProducts\n42\nListings\n99+\nStock\nInbound\nOutbound\n4\nReplenishment\nPurchase Orders\nSuppliers\nCarriers\nReturns\nOrders\n4\nPricing\nInsights\nAdvertising\nCalendar\nContent\nReviews\nAgent Fleet\nInbox\n99+\nSync Logs\nConnections\n19\nMappings\nSettings\nRecycle Bin\nProducts\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nGALE-JACKET\nB0F7J163XJ\nActive\nParent\nProduct autosave\nReview listing information\nEDITING\nShared product\n·\nWarnings\n100%\nAmazon\n·\nBlocked\n44%\neBay\n·\nBlocked\n100%\nShopify\nEtsy\nxaviaracing · primary\nIT · Italy\nDescription themes\n\nChoose how this listing looks to buyers. Each alias can use its own description and theme.\n\nListing alias\nPrimary\nAccount\nxaviaracing\nMarket\nIT\neBay item\n257584954808\nTheme for this alias\nDescription theme\nXavia Modernist · v5\n\nCustomized for this alias. Theme selections save automatically.\n\nDescription text\n\nEdit the listing’s description in Information. Use a listing override when this alias needs different copy.\n\nEdit listing description\nShared theme designs\n\nEditing a theme changes its design for every listing that uses it. Assign separate themes when aliases need independent designs.\n\nManage shared themes\n\nTheme selection and publication are separate. Review the saved description before sending it to eBay.\n\nBuyer preview\nRefresh\n\nPrimary · xaviaracing · IT\n\nNo reviewed delivery is recorded for this account and listing\n\nReview description publication",
+    "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&tab=presentation&scope=EBAY"
+  },
+  {
+    "name": "Shopify Product family",
+    "headings": [
+      "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "One family. Every variation."
+    ],
+    "rows": 0,
+    "text": "s its own variants and content\nShared content rules\n0\nOne source, with individual overrides\nSync status\nReady for review\nReview exact changes before enabling\nFamily discovery needs your input\nLink one Shopify product to this Nexus family or choose a source product to discover its existing links.\nFamily products\nThe storefront selector follows this order. Each product retains its own sizes, stock and product page.\n0 products\nDiscover family\nAdd product\nImport from product\nLet Nexus find your existing family\nDiscover the products already connected through Shopify. If the store has more than one possible family field, choose it below.\nDiscover family\nChoose the storefront relationship field\nTheme relationship field\nChoose a field from this store\nRelated products · shopify--discovery--product_recommendation.related_products\nComplementary products · shopify--discovery--product_recommendation.complementary_products\nVariation products · custom.variation_products\nThe product list used by your storefront variation selector.\nAutomation\nSet the rules once. Review the exceptions.\nPaused\nCheck every five minutes\n\nFamily links and shared content are checked even when this page is closed.\n\nKeep individual control\n\nProduct overrides stay independent. Conflicting Shopify edits stop for review.\n\nShopify values refreshed. Review before resuming automation.\n\nReview & enable\nMonitor only\n\nSaving new rules pauses automation until you review them.\n\nStore field coverage\nLive attribute notifications are unavailable\nXavia Racing · Nexus checks for changes every 30 seconds while this page is visible.",
+    "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=GLOBAL&tab=shopify-family&scope=SHOPIFY"
+  },
+  {
+    "name": "Shopify Listing information",
+    "rows": 21,
+    "scope": [
+      "Shopify\n·\nBlocked\n0%"
+    ],
+    "text": " Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n—\n+5\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n6%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n—\n+5\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n6%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n—\n+5\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n6%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n—\n+5\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n6%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\n—\n+3\nXavia\n—\n21 rows\n?",
+    "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=GLOBAL&scope=SHOPIFY"
+  },
+  {
+    "name": "Etsy Listing information",
+    "rows": 21,
+    "scope": [
+      "Etsy\n·\nBlocked\n—"
+    ],
+    "text": "-MEN-XL\n5%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n◆\n⚠ required\n!\n+5\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n5%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n◆\n⚠ required\n!\n+5\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n5%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\n◆\n⚠ required\n!\n+5\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n5%\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\n◆\n⚠ required\n!\n+3\n—\n—\n21 rows\n?",
+    "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=GLOBAL&scope=ETSY"
+  },
+  {
+    "name": "Return to Products",
+    "headings": [
+      "Products"
+    ],
+    "text": "Skip to main content\nN\n⌘\nK\nawaissulhry\nHome\nProducts\n42\nListings\n99+\nStock\nInbound\nOutbound\n4\nReplenishment\nPurchase Orders\nSuppliers\nCarriers\nReturns\nOrders\n4\nPricing\nInsights\nAdvertising\nCalendar\nContent\nReviews\nAgent Fleet\nInbox\n99+\nSync Logs\nConnections\n19\nMappings\nSettings\nRecycle Bin\nProducts\n18 products · shared catalog\nListing readiness\nImport & export\nNew product\nTotal\n18\nall statuses\nActive\n13\nlive & selling\nOut of stock\n7\nno available units\nNeeds attention\n29\nphotos · GTIN · description\nFilters\nHide\nChannel\nAll\nStatus\nAll\nStock\nAll\nFulfilment\nAll\nProduct type\nAll\nBrand\nAll\nTags\nAll\nFamily\nAll\nWorkflow stage\nAll\nMissing channel\nAll\nPrice\n€\n€\nStock units\nClear\n18 products\nCompact\nCozy\nSpacious\nCustomise\nViews\nExport table\nLive\nProduct\nChannels\nStatus\nTags\nAvailable\nSales\nUnits\nPrice\nLast updated\nActions\nXavia X-Tuta Da Motociclista Certificata CE AAA In Pelle Di Vacchetta Con Armatura\nxracing\nSUIT\n49 variations\n1 live\n1 draft\n2 missing\nActive\n0\nFBA\n83\nFBM\n€400\n1\n€399.95\n15 Jul 2026\nEdit\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nGALE-JACKET\nOUTERWEAR\n20 variations\n1 live\n2 draft\n1 missing\n",
+    "url": "http://localhost:3000/products/next"
+  }
+]

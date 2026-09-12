@@ -8,7 +8,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Rocket } from 'lucide-react'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Tag, type TagTone } from '@/design-system/primitives/Tag'

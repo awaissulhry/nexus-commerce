@@ -21,7 +21,8 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, X, FlaskConical, PlayCircle, ChevronDown, Wallet } from 'lucide-react'
-import { DataGrid, Drawer } from '@/design-system/components'
+import { Drawer } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'
 

@@ -19,7 +19,7 @@
 // /api/fulfillment/inbound/:id/items/:itemId/upload-photo.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   ArrowLeft, Camera, Check, ChevronRight, Minus, Plus,
   RefreshCw, Scan, Search, X, AlertTriangle, Unlock,

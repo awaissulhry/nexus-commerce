@@ -1,0 +1,38 @@
+/* Preserve Xavia's two-column image cards and dark titles. Scope every rule
+   to this adapter so merchant content and Impact components keep their styles. */
+nexus-impact-features { display: block; }
+/* The Liquid feature block adjoins Impact's native Description/Shipping
+   group. Features owns their shared border, containing its content margin. */
+.product-info > .product-info__block-item:has(nexus-impact-features) { margin-block-end: 0; }
+.product-info > .product-info__block-item:has(nexus-impact-features) + :is(.accordion-group, .product-info__block-item:has(.product-info__accordion)) { margin-block-start: 0; }
+.product-info > .product-info__block-item:has(nexus-impact-features) + .accordion-group > .product-info__block-item:first-child > .accordion,
+.product-info > .product-info__block-item:has(nexus-impact-features) + .product-info__block-item > .product-info__accordion { border-block-start-width: 0; }
+nexus-impact-features .accordion__content { padding-inline-end: 0; }
+nexus-impact-features .features-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--grid-gutter); }
+nexus-impact-features .features-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid rgb(var(--text-color) / .12); border-radius: 12px; background: rgb(var(--background)); box-shadow: var(--shadow-sm); text-align: center; cursor: pointer; }
+nexus-impact-features [hidden] { display: none !important; }
+nexus-impact-features .features-card__visual { display: grid; position: relative; height: 200px; place-items: center; width: 100%; }
+nexus-impact-features .features-card__image { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+nexus-impact-features .features-card__overlay { display: grid; position: absolute; inset: 0; place-items: center; padding: var(--spacing-3); background: #000c; color: #ff8300; opacity: 0; transition: opacity 150ms ease; font-size: var(--text-sm); }
+nexus-impact-features .features-card__title { display: flex; position: relative; justify-content: center; align-items: center; flex: 1; min-height: 44px; padding: var(--spacing-2) var(--spacing-8); background: #191919; color: #fff; font-size: var(--text-sm); font-weight: 600; line-height: 1.35; }
+nexus-impact-features .features-card__action { position: absolute; inset-inline-end: var(--spacing-3); font-size: 20px; font-weight: 400; }
+nexus-impact-features :is(button, summary):focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 4px; }
+nexus-impact-features .features-card:focus-visible .features-card__overlay { opacity: 1; }
+/* A stable, full-width disclosure with a separate remaining-count badge. */
+nexus-impact-features .features-show-more { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--spacing-2); width: 100%; min-height: 48px; margin-block-start: var(--spacing-4); padding: var(--spacing-3) var(--spacing-4); border: 1px solid rgb(var(--text-color) / .35); border-radius: 8px; color: rgb(var(--text-color)); background: rgb(var(--background)); font: inherit; font-weight: 500; line-height: 1.4; cursor: pointer; transition: background-color 150ms ease; }
+nexus-impact-features .features-show-more__count { min-width: 24px; padding: 1px 6px; border-radius: 100px; background: rgb(var(--text-color) / .08); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+nexus-impact-features .features-show-more__chevron { display: grid; place-items: center; width: 20px; height: 20px; transition: transform 150ms ease; }
+nexus-impact-features .features-show-more[aria-expanded="true"] .features-show-more__chevron { transform: rotate(180deg); }
+/* Native modal dialogs provide the top layer, focus containment and Escape.
+   Their large images are requested only when a shopper opens the card. */
+html:has(nexus-impact-features dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+nexus-impact-features .features-modal { position: fixed; inset: 0; margin: auto; padding: 0; width: min(700px, calc(100% - 32px)); max-width: none; max-height: min(90dvh, 900px); overflow-y: auto; overscroll-behavior: contain; border: 0; border-radius: 12px; background: rgb(var(--background)); color: rgb(var(--text-color)); box-shadow: var(--shadow-lg); }
+nexus-impact-features .features-modal::backdrop { background: #000c; }
+nexus-impact-features .features-modal__header { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-4); position: sticky; top: 0; z-index: 1; padding: var(--spacing-4) var(--spacing-6); border-block-end: 1px solid rgb(var(--text-color) / .15); background: rgb(var(--background)); }
+nexus-impact-features .features-modal__header h2 { overflow-wrap: anywhere; }
+nexus-impact-features .features-modal__close { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border: 1px solid rgb(var(--text-color) / .35); border-radius: 50%; cursor: pointer; }
+nexus-impact-features .features-modal__body { padding: var(--spacing-6); }
+nexus-impact-features .features-modal__image { display: block; width: 100%; height: auto; max-height: 45dvh; object-fit: contain; margin-block-end: var(--spacing-6); }
+@media (hover: hover) { nexus-impact-features .features-card:hover .features-card__overlay { opacity: 1; } nexus-impact-features :is(.features-show-more, .features-modal__close):hover { background: rgb(var(--text-color) / .06); } }
+@media (max-width: 699px) { nexus-impact-features .features-card__visual { height: 180px; } nexus-impact-features .features-card__title { font-size: var(--text-xs); padding-inline: var(--spacing-6); } nexus-impact-features .features-card__action { inset-inline-end: var(--spacing-2); } nexus-impact-features .features-modal__header { padding: var(--spacing-3) var(--spacing-4); } nexus-impact-features .features-modal__body { padding: var(--spacing-4); } }
+@media (prefers-reduced-motion: reduce) { nexus-impact-features * { transition: none !important; scroll-behavior: auto; } }

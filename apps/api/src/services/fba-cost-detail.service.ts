@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * HB.5 — FBA cost detail ingestion.
  *
@@ -139,7 +140,7 @@ export async function ingestFbaReimbursements(args: {
             marketplaceId,
           }
           const existing = await prisma.fbaReimbursement.findUnique({
-            where: { reimbursementId },
+            where: { workspace_reimbursementId: workspaceKey({ reimbursementId: reimbursementId }) },
             select: { id: true },
           })
           if (existing) {
@@ -271,7 +272,7 @@ export async function ingestFbaInventoryAdjustments(args: {
             marketplaceId,
           }
           const existing = await prisma.fbaInventoryAdjustment.findUnique({
-            where: { adjustmentId },
+            where: { workspace_adjustmentId: workspaceKey({ adjustmentId: adjustmentId }) },
             select: { id: true },
           })
           if (existing) {

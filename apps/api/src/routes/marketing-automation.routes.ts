@@ -313,8 +313,8 @@ const marketingAutomationRoutes: FastifyPluginAsync = async (fastify) => {
 
         if (!dryRun) {
           const writeData: Record<string, unknown> = {}
-          const targetLang = languageForMarketplace(isTranslate ? targetLocale : marketplace)
-          const isPrimary = !isTranslate || targetLang === languageForMarketplace('IT')
+          const targetLang = await languageForMarketplace(isTranslate ? targetLocale : marketplace, 'AMAZON')
+          const isPrimary = !isTranslate || targetLang === await languageForMarketplace('IT', 'AMAZON')
 
           if (generated.title && fields.includes('title') && isPrimary) writeData.name = generated.title.content
           if (generated.description && fields.includes('description') && isPrimary) writeData.description = generated.description.content

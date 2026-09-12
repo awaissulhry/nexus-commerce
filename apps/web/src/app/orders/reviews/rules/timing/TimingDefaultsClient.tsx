@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Plus, Trash2, ArrowUp, ArrowDown, RefreshCw, Save, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'

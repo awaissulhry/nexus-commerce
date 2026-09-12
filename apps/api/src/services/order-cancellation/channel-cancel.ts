@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
  * O.50 — Channel-side cancellation pushback.
  *
@@ -83,18 +85,10 @@ export async function cancelOnAmazon(
   }
   try {
     const { SellingPartner } = await import('amazon-sp-api')
-    const merchantToken = process.env.AMAZON_MERCHANT_TOKEN ?? process.env.AMAZON_SELLER_ID
+    const merchantToken = (await getAmazonSellerId())
     if (!merchantToken) throw new Error('AMAZON_MERCHANT_TOKEN missing')
 
-    const sp: any = new SellingPartner({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-        SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    })
+    const sp: any = amazonSpClient()
 
     const reasonCode = mapReasonToAmazon(reason)
     const xml = `<?xml version="1.0" encoding="UTF-8"?>

@@ -29,7 +29,7 @@ export function startEbayFinancialSyncCron(): void {
   if (scheduledTask) return
   const schedule = process.env.NEXUS_EBAY_FINANCIAL_CRON_SCHEDULE ?? '30 3 * * *'
   if (!cron.validate(schedule)) { logger.error('ebay-financial-sync: invalid schedule', { schedule }); return }
-  scheduledTask = cron.schedule(schedule, () => { void runEbayFinancialSync() })
+  scheduledTask = cron.schedule(schedule, async () => { await runEbayFinancialSync() })
   logger.info('ebay-financial-sync cron: scheduled', { schedule })
 }
 

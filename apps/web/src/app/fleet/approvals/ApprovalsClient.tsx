@@ -37,7 +37,7 @@ import {
   type ReactElement,
 } from 'react'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
   CheckCircle2,

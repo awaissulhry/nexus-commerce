@@ -6,10 +6,9 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
-import { PrismaClient } from '@prisma/client'
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 
-const prisma = new PrismaClient()
 
 /**
  * GET /api/products/:id/matrix

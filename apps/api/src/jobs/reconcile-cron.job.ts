@@ -58,8 +58,8 @@ export function startReconcileCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun(JOB, async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun(JOB, async () => {
       const driftThresholdPct = Number(process.env.NEXUS_RECONCILE_DRIFT_PCT ?? 5)
       const windowHours = Number(process.env.NEXUS_DRIFT_WINDOW_HOURS ?? 168)
       const cumulativeThresholdUnits = Number(process.env.NEXUS_CUMULATIVE_DRIFT_UNITS ?? 25)

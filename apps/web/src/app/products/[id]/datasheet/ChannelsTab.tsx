@@ -26,7 +26,7 @@
  */
 
 import { prisma } from '@nexus/database'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
   CheckCircle2,

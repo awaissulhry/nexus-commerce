@@ -1,4 +1,5 @@
 'use client'
+import { WORKSPACES_ENABLED, browserWorkspaceId } from '@/lib/workspaces/paths'
 
 /**
  * /settings/channels/[type] — one channel's connection, on the design system (CX.2 §5).
@@ -21,8 +22,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ArrowLeft } from 'lucide-react'
 import {
   Banner,
@@ -145,9 +146,9 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     }
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
-      if (!e.data || e.data.type !== 'nexus:channel-connected') return
+      if (!e.data || e.data.type !== 'nexus:channel-connected' || (WORKSPACES_ENABLED && e.data.workspaceId !== browserWorkspaceId())) return
       try {
-        ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin)
+        ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack', state: e.data.state }, e.origin)
       } catch {
         /* the popup may already be gone */
       }
@@ -158,8 +159,8 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     try {
       bc = new BroadcastChannel('nexus-oauth')
       bc.onmessage = (e) => {
-        if (!e.data || e.data.type !== 'nexus:channel-connected') return
-        bc?.postMessage({ type: 'nexus:ack' })
+        if (!e.data || e.data.type !== 'nexus:channel-connected' || (WORKSPACES_ENABLED && e.data.workspaceId !== browserWorkspaceId())) return
+        bc?.postMessage({ type: 'nexus:ack', state: e.data.state })
         void refetch()
       }
     } catch {
@@ -202,7 +203,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     const popup = window.open('about:blank', 'nexus-oauth', 'popup,width=600,height=760')
     setBusy('reconnect')
     try {
-      const r = await startReconnect(connection.id)
+      const r = await startReconnect(channelType, connection.id, connection.region)
       if ('error' in r) {
         popup?.close()
         setNote({ tone: 'danger', text: `Reconnect failed · ${r.error}` })
@@ -212,7 +213,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
       else window.location.href = r.authUrl
       setNote({
         tone: 'info',
-        text: 'Finish signing in with eBay in the popup — this page updates when it reports back.',
+        text: `Finish signing in with ${label} in the popup — this page updates when it reports back.`,
       })
     } catch (e) {
       popup?.close()
@@ -220,7 +221,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     } finally {
       setBusy(null)
     }
-  }, [channelType, connection])
+  }, [channelType, connection, label])
 
   const onDisconnect = useCallback(async () => {
     if (!connection) return
@@ -232,7 +233,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
     const ok = await confirm({
       title: `Disconnect ${label}?`,
       description:
-        'Revokes the grant at the channel and archives it. Syncs and listings for this account stop until it is reconnected.',
+        'Removes the stored grant from Nexus and revokes it at the channel when supported. Syncs and listings for this account stop until it is reconnected.',
       confirmLabel: 'Disconnect',
       tone: 'danger',
     })
@@ -244,7 +245,12 @@ export default function ChannelDetailClient({ channelType, initial, initialError
         setNote({ tone: 'danger', text: `Disconnect failed · ${r.error}` })
         return
       }
-      setNote({ tone: 'success', text: 'Disconnected — the grant was revoked at the channel.' })
+      setNote({
+        tone: 'success',
+        text: r.revokedAtChannel
+          ? 'Disconnected — the grant was revoked at the channel and removed from Nexus.'
+          : 'Disconnected — the stored grant was removed from Nexus.',
+      })
       await refetch()
       router.refresh()
     } finally {
@@ -301,7 +307,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
               aria-disabled={reconnectH.held || busy === 'reconnect'}
               aria-busy={busy === 'reconnect'}
             >
-              {busy === 'reconnect' ? 'Opening…' : reconnectLabel(drift.length)}
+              {busy === 'reconnect' ? 'Opening…' : reconnectLabel(drift.length, detail.scopes.length)}
             </Button>
             <Button
               size="sm"
@@ -331,7 +337,7 @@ export default function ChannelDetailClient({ channelType, initial, initialError
           (measured: a single 880px column left 502px empty at 1728px). */}
       <div className="nds-cd-pair">
         <ConnectionCard connection={connection} status={status} />
-        <PermissionsCard scopes={detail.scopes} drift={drift} />
+        <PermissionsCard scopes={detail.scopes} drift={drift} permissionModel={detail.permissionModel} />
       </div>
       <MarketplacesCard
         channelType={channelType}
@@ -483,12 +489,20 @@ function ConnectionCard({
   )
 }
 
-function PermissionsCard({ scopes, drift }: { scopes: string[]; drift: string[] }) {
+function PermissionsCard({
+  scopes,
+  drift,
+  permissionModel = 'oauth_scopes',
+}: {
+  scopes: string[]
+  drift: string[]
+  permissionModel?: 'oauth_scopes' | 'application_roles'
+}) {
   // Two labelled groups, not one mixed list with "· not granted" repeated on every
   // chip: the state belongs to the group, and the chip shows the scope's distinctive
   // tail with the full value in its title (22 identical 38-char prefixes read as noise).
   return (
-    <Card header="Permissions" description={permissionsCopy(scopes.length, drift.length)}>
+    <Card header="Permissions" description={permissionsCopy(scopes.length, drift.length, permissionModel)}>
       {scopes.length === 0 && drift.length === 0 ? null : (
         <div style={stack('var(--nds-space-10)')}>
           {scopes.length > 0 && (
@@ -505,10 +519,10 @@ function PermissionsCard({ scopes, drift }: { scopes: string[]; drift: string[] 
           )}
           {drift.length > 0 && (
             <div style={stack('var(--nds-space-6)')}>
-              <span className="nds-cd-grouplabel">Not granted — reconnect to grant them</span>
+              <span className="nds-cd-grouplabel">{scopes.length ? 'Not granted — reconnect to grant them' : 'Requested permissions — grant not recorded'}</span>
               <div style={row('var(--nds-space-6)')}>
                 {drift.map((s) => (
-                  <Pill key={`missing:${s}`} tone="warning">
+                  <Pill key={`missing:${s}`} tone={scopes.length ? 'warning' : 'neutral'}>
                     <span title={s}>{shortScope(s)}</span>
                   </Pill>
                 ))}

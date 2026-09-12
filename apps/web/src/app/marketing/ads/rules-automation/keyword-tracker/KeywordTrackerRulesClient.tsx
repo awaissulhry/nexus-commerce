@@ -25,7 +25,8 @@
  * with nothing behind it.
  */
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase 4 — Amazon Ads Reports API v3 ingestion w/ resumable polling.
  *
@@ -361,7 +362,7 @@ export async function pollPendingJobs(limit = 20): Promise<PollSummary> {
     summary.polled += 1
     try {
       const conn = await prisma.amazonAdsConnection.findUnique({
-        where: { profileId: job.profileId },
+        where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
         select: { region: true },
       })
       const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE')
@@ -601,12 +602,12 @@ export async function ingestCompletedJob(jobId: string): Promise<IngestResult> {
   }
 
   const profile = await prisma.amazonAdsProfile.findUnique({
-    where: { profileId: job.profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
     select: { currencyCode: true, marketplace: true },
   })
   // Fall back to AmazonAdsConnection.marketplace if AmazonAdsProfile not yet populated
   const conn = profile ? null : await prisma.amazonAdsConnection.findUnique({
-    where: { profileId: job.profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
     select: { marketplace: true },
   })
   const currencyCode = profile?.currencyCode ?? 'EUR'
@@ -799,13 +800,13 @@ async function ingestCampaignRows(
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
         where: {
-          profileId_adProduct_entityType_entityId_date: {
+          profileId_adProduct_entityType_entityId_date: workspaceKey({
             profileId: job.profileId,
             adProduct: job.adProduct,
             entityType: 'CAMPAIGN',
             entityId,
             date,
-          },
+          }),
         },
         create: {
           profileId: job.profileId, marketplace, adProduct: job.adProduct,
@@ -954,7 +955,7 @@ async function ingestPlacementRows(
     try {
       await prisma.amazonAdsPlacementReport.upsert({
         where: {
-          campaignId_date_placement: { campaignId, date, placement },
+          campaignId_date_placement: workspaceKey({ campaignId, date, placement }),
         },
         create: {
           profileId: job.profileId,
@@ -1037,10 +1038,10 @@ async function ingestTargetRows(
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
         where: {
-          profileId_adProduct_entityType_entityId_date: {
+          profileId_adProduct_entityType_entityId_date: workspaceKey({
             profileId: job.profileId, adProduct: job.adProduct,
             entityType: 'AD_TARGET', entityId: targetId, date,
-          },
+          }),
         },
         create: {
           profileId: job.profileId, marketplace, adProduct: job.adProduct,
@@ -1119,10 +1120,10 @@ async function ingestProductAdRows(
     try {
       await prisma.amazonAdsDailyPerformance.upsert({
         where: {
-          profileId_adProduct_entityType_entityId_date: {
+          profileId_adProduct_entityType_entityId_date: workspaceKey({
             profileId: job.profileId, adProduct: job.adProduct,
             entityType: 'PRODUCT_AD', entityId, date,
-          },
+          }),
         },
         create: {
           profileId: job.profileId, marketplace, adProduct: job.adProduct,
@@ -1284,7 +1285,7 @@ export async function runReportCreationCycle(
       : 'EU'
     // Resolve currency from AmazonAdsProfile if present, else fall back to EUR.
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: profile.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
@@ -1346,7 +1347,7 @@ export async function runSearchTermReportCycle(
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: profile.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
@@ -1401,7 +1402,7 @@ export async function runPlacementReportCycle(
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: profile.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
@@ -1456,7 +1457,7 @@ export async function runAdvertisedProductReportCycle(
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: profile.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
@@ -1497,7 +1498,7 @@ export async function runTargetingReportCycle(
     const region: AdsRegion = (profile.region === 'NA' || profile.region === 'FE')
       ? (profile.region as AdsRegion) : 'EU'
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: profile.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: profile.profileId }) },
       select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'

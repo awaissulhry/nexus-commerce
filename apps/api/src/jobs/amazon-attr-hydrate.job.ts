@@ -16,7 +16,7 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 const PER_TICK = Number(process.env.NEXUS_ATTR_HYDRATE_PER_TICK ?? '40')
 
 export async function runAttrHydrate(): Promise<HydrateResult> {
-  if (!amazonCredsConfigured()) return { scanned: 0, hydrated: 0, skipped: 0, errors: 0 }
+  if (!(await amazonCredsConfigured())) return { scanned: 0, hydrated: 0, skipped: 0, errors: 0 }
   return hydrateAmazonAttributes({ onlySparse: true, limit: PER_TICK })
 }
 
@@ -24,8 +24,8 @@ export function startAttrHydrateCron(): void {
   if (scheduledTask) { logger.warn('attr-hydrate cron already started'); return }
   const schedule = process.env.NEXUS_ATTR_HYDRATE_SCHEDULE ?? '17 */3 * * *' // every 3h at :17
   if (!cron.validate(schedule)) { logger.error('attr-hydrate cron: invalid schedule', { schedule }); return }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('attr-hydrate', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('attr-hydrate', async () => {
       const r = await runAttrHydrate()
       return `scanned=${r.scanned} hydrated=${r.hydrated} skipped=${r.skipped} errors=${r.errors}`
     })

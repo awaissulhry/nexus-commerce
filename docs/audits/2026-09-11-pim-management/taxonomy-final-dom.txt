@@ -1,0 +1,385 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to light mode":
+  - button "Notifications":
+- complementary:
+  - navigation "Application navigation":
+    - link "Home":
+      - /url: /
+      - generic: Home
+    - link "Products 37 pending":
+      - /url: /products
+      - generic: Products
+      - generic "37 pending": "37"
+    - link "Listings 999 pending":
+      - /url: /listings
+      - generic: Listings
+      - generic "999 pending": 99+
+    - link "Stock":
+      - /url: /fulfillment/stock
+      - generic: Stock
+    - link "Inbound":
+      - /url: /fulfillment/inbound
+      - generic: Inbound
+    - link "Outbound 4 pending":
+      - /url: /fulfillment/outbound
+      - generic: Outbound
+      - generic "4 pending": "4"
+    - link "Replenishment":
+      - /url: /fulfillment/replenishment
+      - generic: Replenishment
+    - link "Purchase Orders":
+      - /url: /fulfillment/purchase-orders
+      - generic: Purchase Orders
+    - link "Suppliers":
+      - /url: /fulfillment/suppliers
+      - generic: Suppliers
+    - link "Carriers":
+      - /url: /fulfillment/carriers
+      - generic: Carriers
+    - link "Returns":
+      - /url: /fulfillment/returns
+      - generic: Returns
+    - link "Orders 4 pending":
+      - /url: /orders
+      - generic: Orders
+      - generic "4 pending": "4"
+    - link "Pricing":
+      - /url: /pricing
+      - generic: Pricing
+    - link "Insights":
+      - /url: /insights
+      - generic: Insights
+    - link "Advertising":
+      - /url: /marketing/ads
+      - generic: Advertising
+    - link "Calendar":
+      - /url: /marketing/calendar
+      - generic: Calendar
+    - link "Content":
+      - /url: /marketing/content
+      - generic: Content
+    - link "Reviews":
+      - /url: /marketing/reviews
+      - generic: Reviews
+    - link "Agent Fleet":
+      - /url: /fleet
+      - generic: Agent Fleet
+    - link "Inbox 2208 pending":
+      - /url: /inbox
+      - generic: Inbox
+      - generic "2208 pending": 99+
+    - link "Sync Logs":
+      - /url: /sync-logs
+      - generic: Sync Logs
+    - link "Connections 19 pending":
+      - /url: /settings/channels
+      - generic: Connections
+      - generic "19 pending": "19"
+    - link "Mappings":
+      - /url: /channels/mapping
+      - generic: Mappings
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+    - link "Recycle Bin":
+      - /url: /admin/recycle-bin
+      - generic: Recycle Bin
+- main:
+  - generic: Products
+  - heading "Categories" [level=1]
+  - generic: Organize products once. Control how each channel classifies them.
+  - link "Product list":
+    - /url: /products
+  - button "New category":
+    - text: New category
+  - tablist "Category workspace":
+    - tab "Our categories"
+    - tab "Channel assignments"
+    - tab "Taxonomy updates" [selected]
+  - tabpanel "Taxonomy updates":
+    - paragraph: Review local category coverage and refresh status. Refreshing reference data does not change your assignments or publish listings.
+    - table "Marketplace taxonomy updates":
+      - rowgroup:
+        - row "Channel / market Status Categories cached Last successful tree sync Last tree changes Actions":
+          - columnheader "Channel / market"
+          - columnheader "Status"
+          - columnheader "Categories cached"
+          - columnheader "Last successful tree sync"
+          - columnheader "Last tree changes"
+          - columnheader "Actions"
+      - rowgroup:
+        - row "Amazon Belgium Product types · BE Up to date 1,644 11/09/2026, 02:00:49 1644 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Belgium Product types · BE":
+            - strong: Amazon Belgium
+            - generic: Product types · BE
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,644"
+          - cell "11/09/2026, 02:00:49"
+          - cell "1644 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Germany Product types · DE Up to date 1,876 11/09/2026, 02:00:50 1876 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Germany Product types · DE":
+            - strong: Amazon Germany
+            - generic: Product types · DE
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,876"
+          - cell "11/09/2026, 02:00:50"
+          - cell "1876 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Spain Product types · ES Up to date 1,877 11/09/2026, 02:01:03 1877 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Spain Product types · ES":
+            - strong: Amazon Spain
+            - generic: Product types · ES
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,877"
+          - cell "11/09/2026, 02:01:03"
+          - cell "1877 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon France Product types · FR Up to date 1,876 11/09/2026, 02:01:14 1876 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon France Product types · FR":
+            - strong: Amazon France
+            - generic: Product types · FR
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,876"
+          - cell "11/09/2026, 02:01:14"
+          - cell "1876 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Ireland Product types · IE Up to date 1,583 11/09/2026, 02:01:41 1583 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Ireland Product types · IE":
+            - strong: Amazon Ireland
+            - generic: Product types · IE
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,583"
+          - cell "11/09/2026, 02:01:41"
+          - cell "1583 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Italy Product types · IT Up to date 1,875 11/09/2026, 02:01:41 1875 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Italy Product types · IT":
+            - strong: Amazon Italy
+            - generic: Product types · IT
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,875"
+          - cell "11/09/2026, 02:01:41"
+          - cell "1875 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Netherlands Product types · NL Up to date 1,866 11/09/2026, 02:02:06 1866 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Netherlands Product types · NL":
+            - strong: Amazon Netherlands
+            - generic: Product types · NL
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,866"
+          - cell "11/09/2026, 02:02:06"
+          - cell "1866 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Poland Product types · PL Up to date 1,870 11/09/2026, 02:02:08 1870 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Poland Product types · PL":
+            - strong: Amazon Poland
+            - generic: Product types · PL
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,870"
+          - cell "11/09/2026, 02:02:08"
+          - cell "1870 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Sweden Product types · SE Up to date 1,871 11/09/2026, 02:02:08 1871 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Sweden Product types · SE":
+            - strong: Amazon Sweden
+            - generic: Product types · SE
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,871"
+          - cell "11/09/2026, 02:02:08"
+          - cell "1871 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon Turkey Product types · TR Up to date 1,840 11/09/2026, 02:02:11 1840 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon Turkey Product types · TR":
+            - strong: Amazon Turkey
+            - generic: Product types · TR
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,840"
+          - cell "11/09/2026, 02:02:11"
+          - cell "1840 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Amazon UK Product types · UK Up to date 1,878 11/09/2026, 02:02:12 1878 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Amazon UK Product types · UK":
+            - strong: Amazon UK
+            - generic: Product types · UK
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "1,878"
+          - cell "11/09/2026, 02:02:12"
+          - cell "1878 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "eBay Germany Category taxonomy · DE Up to date 17,051 11/09/2026, 01:59:07 17051 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "eBay Germany Category taxonomy · DE":
+            - strong: eBay Germany
+            - generic: Category taxonomy · DE
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "17,051"
+          - cell "11/09/2026, 01:59:07"
+          - cell "17051 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "eBay Spain Category taxonomy · ES Up to date 10,444 11/09/2026, 01:59:10 10444 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "eBay Spain Category taxonomy · ES":
+            - strong: eBay Spain
+            - generic: Category taxonomy · ES
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "10,444"
+          - cell "11/09/2026, 01:59:10"
+          - cell "10444 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "eBay France Category taxonomy · FR Up to date 12,036 11/09/2026, 01:59:14 12036 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "eBay France Category taxonomy · FR":
+            - strong: eBay France
+            - generic: Category taxonomy · FR
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "12,036"
+          - cell "11/09/2026, 01:59:14"
+          - cell "12036 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "eBay Italy Category taxonomy · IT Up to date 11,187 11/09/2026, 01:59:17 11187 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "eBay Italy Category taxonomy · IT":
+            - strong: eBay Italy
+            - generic: Category taxonomy · IT
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "11,187"
+          - cell "11/09/2026, 01:59:17"
+          - cell "11187 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "eBay UK Category taxonomy · UK Up to date 15,993 11/09/2026, 01:59:23 15993 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "eBay UK Category taxonomy · UK":
+            - strong: eBay UK
+            - generic: Category taxonomy · UK
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "15,993"
+          - cell "11/09/2026, 01:59:23"
+          - cell "15993 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Etsy Shop Category taxonomy · GLOBAL Up to date 3,065 11/09/2026, 01:59:26 3065 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Etsy Shop Category taxonomy · GLOBAL":
+            - strong: Etsy Shop
+            - generic: Category taxonomy · GLOBAL
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "3,065"
+          - cell "11/09/2026, 01:59:26"
+          - cell "3065 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "Shopify Store Category taxonomy · GLOBAL Up to date 14,606 11/09/2026, 01:59:38 14606 added · 0 changed · 0 removed Refresh Browse History":
+          - cell "Shopify Store Category taxonomy · GLOBAL":
+            - strong: Shopify Store
+            - generic: Category taxonomy · GLOBAL
+          - cell "Up to date":
+            - generic: Up to date
+          - cell "14,606"
+          - cell "11/09/2026, 01:59:38"
+          - cell "14606 added · 0 changed · 0 removed"
+          - cell "Refresh Browse History":
+            - button "Refresh"
+            - button "Browse"
+            - button "History"
+        - row "WooCommerce Store Category taxonomy · GLOBAL Adapter required — Never synchronized — Refresh Browse History":
+          - cell "WooCommerce Store Category taxonomy · GLOBAL":
+            - strong: WooCommerce Store
+            - generic: Category taxonomy · GLOBAL
+          - cell "Adapter required":
+            - generic: Adapter required
+          - cell "—"
+          - cell "Never synchronized"
+          - cell "—"
+          - cell "Refresh Browse History":
+            - button "Refresh" [disabled]
+            - button "Browse" [disabled]
+            - button "History" [disabled]
+        - row "AMAZON_ADS Category taxonomy · GLOBAL Adapter required — Never synchronized — Refresh Browse History":
+          - cell "AMAZON_ADS Category taxonomy · GLOBAL":
+            - strong: AMAZON_ADS
+            - generic: Category taxonomy · GLOBAL
+          - cell "Adapter required":
+            - generic: Adapter required
+          - cell "—"
+          - cell "Never synchronized"
+          - cell "—"
+          - cell "Refresh Browse History":
+            - button "Refresh" [disabled]
+            - button "Browse" [disabled]
+            - button "History" [disabled]
+- button "Ask AI":
+  - text: Ask AI
+- button "Open Next.js Dev Tools":
+- alert

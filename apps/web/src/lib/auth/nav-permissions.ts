@@ -8,6 +8,9 @@
 
 // href prefix → page permission (longest prefix wins).
 const NAV_PERMS: Array<[string, string]> = [
+  ['/dashboard/analytics', 'pages.analytics'],
+  ['/dashboard/reports', 'pages.analytics'],
+  ['/dashboard', 'pages.dashboard'],
   // ACR.6 — /marketing/advertising is retired to two parked Analytics pages, but the mapping
   // stays: they are still ads surfaces, and dropping it would fall through to the '/marketing'
   // prefix below and gate them on pages.marketing instead. Longest prefix wins, so this must
@@ -42,11 +45,14 @@ const NAV_PERMS: Array<[string, string]> = [
   ['/admin', 'pages.admin'],
   ['/command-matrix', 'pages.admin'],
   ['/settings', 'pages.settings'],
+  ['/channels/mapping', 'pages.settings'],
+  ['/channels/ebay', 'pages.products'],
+  ['/channels/listing-presets', 'pages.listings'],
 ]
 
 // Self-service settings any signed-in user may reach (their own profile,
 // notifications, security/2FA) — never gated by role permission.
-const SELF_SERVICE = ['/settings/profile', '/settings/notifications', '/settings/security']
+const SELF_SERVICE = ['/settings/profile', '/settings/profiles', '/settings/notifications', '/settings/security']
 function isSelfService(href: string): boolean {
   return SELF_SERVICE.some((p) => href === p || href.startsWith(p + '/'))
 }
@@ -75,6 +81,7 @@ const SETTINGS_NAV_PERMS: Array<[string, string]> = [
   ['/settings/dam', 'assets.manage'],
   ['/settings/channels', 'settings.integrations.manage'],
   ['/settings/mappings', 'settings.integrations.manage'],
+  ['/channels/mapping', 'pim.manage'],
   ['/settings/advertising', 'settings.integrations.manage'],
   ['/settings/ai', 'settings.integrations.manage'],
   ['/settings/api-keys', 'settings.apikeys.manage'],

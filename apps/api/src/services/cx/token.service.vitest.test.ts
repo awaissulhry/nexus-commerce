@@ -44,9 +44,9 @@ const prismaMock = {
       updates.push({ id: where.id, data })
       return { ...r }
     }),
-    updateMany: vi.fn(async ({ where, data }: { where: { id: string; credentialsEnc?: null }; data: Record<string, unknown> }) => {
+    updateMany: vi.fn(async ({ where, data }: { where: { id: string } & Record<string, unknown>; data: Record<string, unknown> }) => {
       const r = rows.get(where.id)
-      if (!r || ('credentialsEnc' in where && r.credentialsEnc !== null)) return { count: 0 }
+      if (!r || Object.entries(where).some(([key, value]) => value !== undefined && r[key] !== value)) return { count: 0 }
       for (const [k, v] of Object.entries(data)) if (v !== undefined) r[k] = v
       updates.push({ id: where.id, data })
       return { count: 1 }
@@ -117,6 +117,7 @@ const {
 
 const TOKEN_URL = 'https://token.test/identity/v1/oauth2/token'
 const REVOKE_URL = 'https://token.test/identity/v1/oauth2/token/revoke'
+const ETSY_TOKEN_URL = 'https://api.etsy.com/v3/public/oauth/token'
 const REFRESH_LIFE_SEC = 47_304_000
 
 registerChannel({
@@ -146,6 +147,60 @@ registerChannel({
   apiVersion: 'test-v1',
   sandbox: { available: false },
   tokenExpirationBufferSec: 600,
+})
+
+registerChannel({
+  key: 'SHOPIFY',
+  channelType: 'SHOPIFY',
+  displayName: 'Shopify (test)',
+  available: true,
+  auth: {
+    mode: 'oauth2_code',
+    authorizeUrl: ({ region }) => `https://${region}/admin/oauth/authorize`,
+    tokenUrl: ({ region }) => `https://${region}/admin/oauth/access_token`,
+    tokenRequestAuth: 'body',
+    scopeSeparator: ',',
+    codeParamInCallback: 'code',
+    pkce: false,
+    requiredScopes: ['write_products'],
+    accessTokenLifetimeSec: null,
+    refreshTokenLifetimeSec: null,
+    rotatesRefreshToken: false,
+  },
+  identity: async () => null,
+  heartbeat: async () => ({ ok: true, latencyMs: 1 }),
+  rateLimit: { parse: () => null, model: 'points' },
+  webhooks: { scheme: 'shopify-hmac', subscriptionApi: true, lifecycleTopics: [] },
+  apiVersion: '2026-07',
+  sandbox: { available: true },
+})
+
+registerChannel({
+  key: 'ETSY',
+  channelType: 'ETSY',
+  displayName: 'Etsy (test)',
+  available: true,
+  auth: {
+    mode: 'oauth2_pkce',
+    authorizeUrl: () => 'https://www.etsy.com/oauth/connect',
+    tokenUrl: () => ETSY_TOKEN_URL,
+    tokenRequestAuth: 'body',
+    includeClientSecretInTokenRequest: false,
+    scopeSeparator: ' ',
+    codeParamInCallback: 'code',
+    pkce: true,
+    requiredScopes: ['shops_r'],
+    accessTokenLifetimeSec: 3600,
+    refreshTokenLifetimeSec: 90 * 86_400,
+    refreshTokenRequired: true,
+    rotatesRefreshToken: true,
+  },
+  identity: async () => null,
+  heartbeat: async () => ({ ok: true, latencyMs: 1 }),
+  rateLimit: { parse: () => null, model: 'daily_quota' },
+  webhooks: { scheme: 'standard-webhooks', subscriptionApi: false, lifecycleTopics: [] },
+  apiVersion: '3.0.0',
+  sandbox: { available: false },
 })
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -296,14 +351,22 @@ describe('failRefresh thresholds', () => {
     expect(createAlert).not.toHaveBeenCalled()
   })
 
-  it('failure 10 → needs_reauth with a "needs reconnecting" alert', async () => {
+  it('failure 10 from a server outage stays degraded without requesting a new grant', async () => {
     const id = await seedRow({ row: { consecutiveFailures: 9, authStatus: 'degraded' } })
     await failOnce(id)
     expect(rows.get(id)!.consecutiveFailures).toBe(10)
-    expect(rows.get(id)!.authStatus).toBe('needs_reauth')
-    expect(eventsOf('status_change', id)[0].detail).toMatchObject({ from: 'degraded', to: 'needs_reauth' })
-    expect(alertTitles()).toEqual([expect.stringContaining('needs reconnecting')])
-    await expect(assertWritable(id)).rejects.toBeInstanceOf(ConnectionNeedsReauth)
+    expect(rows.get(id)!.authStatus).toBe('degraded')
+    expect(eventsOf('status_change', id)).toHaveLength(0)
+    expect(alertTitles()).toEqual([])
+    await expect(assertWritable(id)).resolves.toBeUndefined()
+  })
+
+  it('an invalid app client is a configuration failure, not a revoked seller grant', async () => {
+    const id = await seedRow()
+    const err = await failOnce(id, 401, '{"error":"invalid_client"}')
+    expect(err.errorClass).toBe('configuration')
+    expect(rows.get(id)!.authStatus).toBe('degraded')
+    expect(alertTitles()).not.toContain(expect.stringContaining('needs reconnecting'))
   })
 
   it('auth_revoked (401 invalid_grant) → needs_reauth on the very first failure', async () => {
@@ -426,12 +489,12 @@ describe('transition', () => {
     expect(createAlert).not.toHaveBeenCalled()
   })
 
-  it('terminal states can still be left by a new grant (→ connected) or flipped between each other', async () => {
+  it('terminal states require storeGrant to reconnect, but may be flipped between each other', async () => {
     await transition(row('revoked'), 'connected', 'grant')
-    expect(rows.get('row-t')!.authStatus).toBe('connected')
+    expect(rows.get('row-t')!.authStatus).toBe('revoked')
     await transition(row('disconnected', 'row-u'), 'revoked', 'channel said so')
     expect(rows.get('row-u')!.authStatus).toBe('revoked')
-    expect(events).toHaveLength(2)
+    expect(events).toHaveLength(1)
   })
 
   it('records the actor on the event', async () => {
@@ -450,6 +513,55 @@ describe('transition', () => {
 // ── (c) lease concurrency ────────────────────────────────────────────────────
 
 describe('refresh under the lease', () => {
+  it('does not persist token material echoed in a provider error', async () => {
+    const id = await seedRow()
+    fetchMock.mockResolvedValueOnce(tokenResponse({ error: 'invalid_grant', detail: 'secret-access-and-refresh-fixture' }, 400))
+    await expect(getAccessToken(id)).rejects.toMatchObject({ errorClass: 'auth_revoked' })
+    expect(JSON.stringify(events)).not.toContain('secret-access-and-refresh-fixture')
+    expect(String(rows.get(id)!.lastError)).not.toContain('secret-access-and-refresh-fixture')
+  })
+
+  it.each(['success', 'failure'])('does not resurrect an Etsy account disconnected during refresh: %s', async outcome => {
+    const id = await seedRow({ row: { channelType: 'ETSY' } })
+    fetchMock.mockImplementationOnce(async () => {
+      await revoke(id, { kind: 'operator', userId: 'operator' }, 'operator')
+      return tokenResponse(outcome === 'success' ? { access_token: 'late-access', refresh_token: 'late-refresh', expires_in: 3600 } : { error: 'invalid_grant' }, outcome === 'success' ? 200 : 400)
+    })
+    await expect(getAccessToken(id)).rejects.toBeInstanceOf(Error)
+    expect(rows.get(id)).toMatchObject({ authStatus: 'disconnected', isActive: false, credentialsEnc: null, refreshTokenExpiresAt: null })
+    expect(eventsOf('refresh', id)).toHaveLength(0)
+    expect(eventsOf('refresh_failed', id)).toHaveLength(0)
+  })
+
+  it.each(['success', 'failure'])('preserves a newer Etsy re-consent while an earlier refresh returns: %s', async outcome => {
+    const id = await seedRow({ row: { channelType: 'ETSY' } })
+    fetchMock.mockImplementationOnce(async () => {
+      await storeGrant(id, { accessToken: 'new-consent-access', refreshToken: 'new-consent-refresh', expiresInSec: 3600, grantedScopes: ['shops_r', 'shops_w'], identity: { userId: 'owner' } }, { kind: 'operator' }, 'reconsent')
+      return tokenResponse(outcome === 'success' ? { access_token: 'late-access', refresh_token: 'late-refresh', expires_in: 3600 } : { error: 'invalid_grant' }, outcome === 'success' ? 200 : 400)
+    })
+    await expect(getAccessToken(id)).rejects.toBeInstanceOf(Error)
+    expect(await credsOf(id)).toMatchObject({ accessToken: 'new-consent-access', refreshToken: 'new-consent-refresh' })
+    expect(rows.get(id)).toMatchObject({ authStatus: 'connected', consecutiveFailures: 0, grantedScopes: ['shops_r', 'shops_w'] })
+    expect(eventsOf('refresh', id)).toHaveLength(0)
+    expect(eventsOf('refresh_failed', id)).toHaveLength(0)
+  })
+
+  it('bounds refresh and body reads and updates even an explicitly empty scope grant', async () => {
+    const id = await seedRow({ row: { channelType: 'ETSY' } })
+    fetchMock.mockResolvedValueOnce(tokenResponse({ access_token: 'etsy-new', refresh_token: 'etsy-rotated', expires_in: 3600, scope: '' }))
+    await getAccessToken(id)
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ signal: expect.any(AbortSignal), redirect: 'error' })
+    expect(rows.get(id)!.grantedScopes).toEqual([])
+  })
+
+  it('records a stalled response-body failure and releases the lease without changing credentials', async () => {
+    const id = await seedRow()
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => { throw new DOMException('Timed out', 'TimeoutError') } } as unknown as Response)
+    await expect(getAccessToken(id)).rejects.toMatchObject({ errorClass: 'network' })
+    expect((await credsOf(id)).accessToken).toBe('old-access')
+    expect(releaseCalls).toBe(1)
+  })
+
   it('a valid token is returned without touching the lease or the network', async () => {
     const id = await seedRow({ creds: { accessToken: 'live-access', refreshToken: 'r', accessTokenExpiresAt: future().toISOString() } })
     await expect(getAccessToken(id)).resolves.toBe('live-access')
@@ -495,6 +607,50 @@ describe('refresh under the lease', () => {
     expect(body.get('grant_type')).toBe('refresh_token')
     expect(body.get('refresh_token')).toBe('old-refresh')
     expect(body.has('client_secret')).toBe(false)
+  })
+
+  it('refreshes Etsy with client_id but never the shared secret, and stores the rotated refresh token', async () => {
+    const id = await seedRow({
+      row: { channelType: 'ETSY', region: null, grantedScopes: ['shops_r'], connectionMetadata: { environment: 'production' } },
+    })
+    fetchMock.mockImplementationOnce(async () => tokenResponse({
+      access_token: 'etsy-new-access',
+      refresh_token: 'etsy-rotated-refresh',
+      expires_in: 3600,
+      token_type: 'Bearer',
+    }))
+
+    await expect(getAccessToken(id)).resolves.toBe('etsy-new-access')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(ETSY_TOKEN_URL)
+    expect((init?.headers as Record<string, string>).Authorization).toBeUndefined()
+    const body = lastExchange()
+    expect(body.get('grant_type')).toBe('refresh_token')
+    expect(body.get('refresh_token')).toBe('old-refresh')
+    expect(body.get('client_id')).toBe('test-client-id')
+    expect(body.has('client_secret')).toBe(false)
+
+    const stored = await credsOf(id)
+    expect(stored.refreshToken).toBe('etsy-rotated-refresh')
+    const remainingDays = (Date.parse(stored.refreshTokenExpiresAt!) - Date.now()) / 86_400_000
+    expect(remainingDays).toBeGreaterThan(89)
+    expect(remainingDays).toBeLessThanOrEqual(90)
+  })
+
+  it('refuses an incomplete Etsy refresh response without overwriting the stored grant', async () => {
+    const id = await seedRow({
+      row: { channelType: 'ETSY', region: null, grantedScopes: ['shops_r'], connectionMetadata: { environment: 'production' } },
+    })
+    fetchMock.mockImplementationOnce(async () => tokenResponse({ access_token: 'orphaned-access', expires_in: 3600 }))
+
+    await expect(getAccessToken(id)).rejects.toMatchObject({
+      errorClass: 'unknown',
+      message: 'No rotated refresh token in response',
+    })
+    const stored = await credsOf(id)
+    expect(stored.accessToken).toBe('old-access')
+    expect(stored.refreshToken).toBe('old-refresh')
+    expect(eventsOf('refresh_failed', id)).toHaveLength(1)
   })
 
   it('when a peer holds the lease, the caller waits and adopts the peer\'s token without fetching', async () => {
@@ -592,11 +748,12 @@ describe('refresh-token rotation', () => {
     expect(eventsOf('refresh', id)[0].detail).toMatchObject({ rotated: false })
   })
 
-  it('an empty-string refresh_token counts as "not rotated"', async () => {
+  it('rejects an empty refresh_token without replacing existing credentials', async () => {
     const id = await seedRow()
     fetchMock.mockImplementationOnce(async () => tokenResponse({ access_token: 'new-access', refresh_token: '', expires_in: 7200 }))
-    await getAccessToken(id)
+    await expect(getAccessToken(id)).rejects.toMatchObject({ code: 'REFRESH_FAILED' })
     expect((await credsOf(id)).refreshToken).toBe('old-refresh')
+    expect((await credsOf(id)).accessToken).toBe('old-access')
   })
 
   it('a successful refresh writes lastRefreshAt and resets failures — and never touches lastSyncAt', async () => {
@@ -626,6 +783,17 @@ describe('refresh-token rotation', () => {
 // ── (e) readCredentials / writeCredentials ───────────────────────────────────
 
 describe('readCredentials (via getAccessToken)', () => {
+  it('returns a non-expiring Shopify offline token without trying to refresh it', async () => {
+    const id = await seedRow({
+      creds: { accessToken: 'permanent-shopify-access', refreshToken: null, accessTokenExpiresAt: null },
+      row: { channelType: 'SHOPIFY', region: 'xavia-shop.myshopify.com' },
+    })
+    await expect(getAccessToken(id)).resolves.toBe('permanent-shopify-access')
+    await expect(getAccessToken(id, { forceRefresh: true })).resolves.toBe('permanent-shopify-access')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(acquireCalls).toBe(0)
+  })
+
   it('reads the envelope first', async () => {
     const id = await seedRow({
       creds: { accessToken: 'envelope-access', refreshToken: 'r', accessTokenExpiresAt: future().toISOString() },
@@ -761,6 +929,12 @@ describe('writeCredentials (via refresh / storeGrant)', () => {
 // ── the rest of the public surface ───────────────────────────────────────────
 
 describe('assertWritable', () => {
+  it.each(['needs_reauth', 'revoked', 'disconnected'])('does not expose an unexpired token or force-refresh it for %s', async status => {
+    const id = await seedRow({ row: { authStatus: status }, creds: { accessToken: 'cached-rejected-grant', refreshToken: 'r', accessTokenExpiresAt: future().toISOString() } })
+    await expect(getAccessToken(id)).rejects.toMatchObject({ code: 'CONNECTION_NEEDS_REAUTH', authStatus: status })
+    await expect(getAccessToken(id, { forceRefresh: true })).rejects.toMatchObject({ code: 'CONNECTION_NEEDS_REAUTH', authStatus: status })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
   it.each(['needs_reauth', 'revoked', 'disconnected'])('throws ConnectionNeedsReauth for %s', async (status) => {
     const id = await seedRow({ row: { authStatus: status } })
     await expect(assertWritable(id)).rejects.toMatchObject({ code: 'CONNECTION_NEEDS_REAUTH', connectionId: id, authStatus: status })

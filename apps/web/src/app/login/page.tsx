@@ -8,7 +8,8 @@
  */
 
 import { Suspense, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { installAuthFetch } from '@/lib/auth/install-fetch'
 import { setCsrfToken } from '@/lib/auth/csrf-store'
@@ -56,7 +57,7 @@ function LoginInner() {
       if (data.csrfToken) setCsrfToken(data.csrfToken)
       await refresh()
       const next = params.get('next')
-      router.replace(next && next.startsWith('/') ? next : '/dashboard/overview')
+      router.replace(next && next.startsWith('/') && !next.startsWith('//') && !next.includes('\\') ? next : '/dashboard/overview')
     } catch {
       setError('Could not reach the server. Try again.')
       setBusy(false)

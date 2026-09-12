@@ -25,7 +25,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
-import { Prisma } from '@prisma/client'
+import { OutboundSyncStatus, Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { sseResponseHeaders } from '../lib/sse.js'
 import {
@@ -1384,31 +1384,29 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/sync-logs/in-flight', async (_request, reply) => {
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
 
-    // One groupBy covers pending + processing + completedRecent +
-    // failedRecent by selecting on syncStatus + finishedAt. Three
-    // separate findMany counts would be N+1 against the same table.
+    // Group active work and recent outcomes separately, using updatedAt
+    // for the completion window and the database's actual status values.
     type Row = {
       targetChannel: string
-      syncStatus: string
+      syncStatus: OutboundSyncStatus
       _count: { _all: number }
     }
     // Prisma's groupBy generics struggle to infer when _count is
-    // present without an orderBy / having — the runtime is fine, we
-    // just cast through unknown to short-circuit the deep mapped-type
-    // inference that triggers a TS2615 in this version.
+    // present without an orderBy / having. Limit return-type inference
+    // while retaining typed query arguments, including status validation.
     const groupBy = prisma.outboundSyncQueue.groupBy.bind(
       prisma.outboundSyncQueue,
-    ) as unknown as (args: object) => Promise<Row[]>
+    ) as unknown as (args: Prisma.OutboundSyncQueueGroupByArgs) => Promise<Row[]>
     const [activeRows, recentRows] = await Promise.all([
       groupBy({
         by: ['targetChannel', 'syncStatus'],
-        where: { syncStatus: { in: ['PENDING', 'PROCESSING'] } },
+        where: { syncStatus: { in: [OutboundSyncStatus.PENDING, OutboundSyncStatus.IN_PROGRESS] } },
         _count: { _all: true },
       }),
       groupBy({
         by: ['targetChannel', 'syncStatus'],
         where: {
-          syncStatus: { in: ['COMPLETED', 'FAILED'] },
+          syncStatus: { in: [OutboundSyncStatus.SUCCESS, OutboundSyncStatus.FAILED] },
           updatedAt: { gte: fiveMinAgo },
         },
         _count: { _all: true },
@@ -1439,13 +1437,13 @@ const syncLogsRoutes: FastifyPluginAsync = async (fastify) => {
     }
     for (const r of activeRows) {
       const cell = getCell(r.targetChannel)
-      if (r.syncStatus === 'PENDING') cell.pending += r._count._all
-      else if (r.syncStatus === 'PROCESSING') cell.processing += r._count._all
+      if (r.syncStatus === OutboundSyncStatus.PENDING) cell.pending += r._count._all
+      else if (r.syncStatus === OutboundSyncStatus.IN_PROGRESS) cell.processing += r._count._all
     }
     for (const r of recentRows) {
       const cell = getCell(r.targetChannel)
-      if (r.syncStatus === 'COMPLETED') cell.completedRecent += r._count._all
-      else if (r.syncStatus === 'FAILED') cell.failedRecent += r._count._all
+      if (r.syncStatus === OutboundSyncStatus.SUCCESS) cell.completedRecent += r._count._all
+      else if (r.syncStatus === OutboundSyncStatus.FAILED) cell.failedRecent += r._count._all
     }
 
     const channels = Array.from(cells.values()).sort((a, b) =>

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AUTO.P0 — the durable record of an automation refusal.
  *
@@ -63,7 +64,7 @@ export async function recordAutomationRefusal(args: RecordRefusalArgs): Promise<
   try {
     await prisma.automationRefusalDaily.upsert({
       where: {
-        actorKind_actorId_dayUtc_reason: { actorKind, actorId: args.actorId, dayUtc, reason: args.reason },
+        actorKind_actorId_dayUtc_reason: workspaceKey({ actorKind, actorId: args.actorId, dayUtc, reason: args.reason }),
       },
       create: {
         actorKind,

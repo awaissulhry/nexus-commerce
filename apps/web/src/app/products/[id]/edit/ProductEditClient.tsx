@@ -1,5 +1,7 @@
 'use client'
 
+import { Pill } from '@/design-system/primitives'
+
 /**
  * Product Editor — multi-tab shell.
  *
@@ -19,7 +21,8 @@
  */
 
 import { cloneElement, isValidElement, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   ChevronLeft,
   AlertCircle,
@@ -143,20 +146,9 @@ const headerOpenInNewTabClass =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ' +
   'focus-visible:ring-offset-1 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-900'
 
-/** W5.1 — channel readiness scoring (Salsify cornerstone).
- *
- *  Five top-level dimensions per listing, 20% each:
- *    - title (non-empty string)
- *    - description (non-empty string)
- *    - bullets (≥3 entries)
- *    - price (positive number)
- *    - quantity (≥0 integer; 0 is acceptable for sold-out / pre-order)
- *
- *  Schema-driven attributes (platformAttributes.attributes) aren't
- *  scored here yet — that's a W5.2 concern that needs the per-channel
- *  required-fields schema. This baseline already separates "blank"
- *  from "ready to publish" cleanly enough for the tab badge.
- */
+/** Basic field completeness only: title, description, bullets, price and
+ * quantity. Category validation and publication readiness belong to mapping
+ * and the channel publisher, so this badge must not claim publish readiness. */
 function listingReadiness(listing: Listing | undefined): number {
   if (!listing) return 0
   let score = 0
@@ -1695,17 +1687,6 @@ function TopTabButton({
    *  operator can re-pin via the Customize Tabs modal if desired. */
   pinned?: boolean
 }) {
-  // W5.1 — readiness pill colour-codes the channel: rose for empty,
-  // amber while the operator is still filling fields, emerald once
-  // every required dimension has a value.
-  const readinessTone =
-    readiness == null
-      ? null
-      : readiness >= 100
-        ? 'success'
-        : readiness >= 60
-          ? 'warning'
-          : 'danger'
   return (
     <button
       type="button"
@@ -1741,21 +1722,10 @@ function TopTabButton({
           {count}
         </span>
       )}
-      {readinessTone && (
-        <span
-          className={cn(
-            'inline-flex items-center justify-center rounded text-[10px] tabular-nums px-1 py-px font-mono',
-            readinessTone === 'success' &&
-              'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-            readinessTone === 'warning' &&
-              'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-            readinessTone === 'danger' &&
-              'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
-          )}
-          title={`Readiness: ${readiness}%`}
-        >
-          {readiness}%
-        </span>
+      {readiness != null && (
+        <Pill tone="neutral" title={`Basic field completeness: ${readiness}%. Checks title, description, bullets, price and quantity. Category mapping and channel validation are separate.`}>
+          Basics {readiness}%
+        </Pill>
       )}
       {dirty != null && dirty > 0 && (
         <span

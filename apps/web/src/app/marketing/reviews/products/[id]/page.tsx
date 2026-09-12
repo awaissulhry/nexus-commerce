@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { notFound, useParams } from 'next/navigation'
 import { ChevronLeft, Star } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'

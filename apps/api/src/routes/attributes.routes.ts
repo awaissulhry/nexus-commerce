@@ -33,6 +33,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
 
 const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
@@ -52,6 +53,7 @@ const VALID_ATTRIBUTE_TYPES = new Set([
 const VALID_SCOPES = new Set(['global', 'per_variant'])
 
 const attributesRoutes: FastifyPluginAsync = async (fastify) => {
+  invalidateAttributeSchemasAfterWrites(fastify)
   // ── AttributeGroup ───────────────────────────────────────────
 
   fastify.get('/attribute-groups', async () => {

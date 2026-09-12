@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Nightly Amazon catalog refresh cron.
  *
@@ -32,7 +33,7 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 const amazonService = new AmazonService()
 
 async function runCatalogRefresh(): Promise<void> {
-  if (!amazonService.isConfigured()) {
+  if (!(await amazonService.isConfigured())) {
     logger.warn('catalog-refresh cron: Amazon SP-API not configured — skipping')
     return
   }
@@ -53,7 +54,7 @@ async function runCatalogRefresh(): Promise<void> {
     for (const item of items) {
       try {
         await prisma.product.upsert({
-          where: { sku: item.sku },
+          where: { workspace_sku: workspaceKey({ sku: item.sku }) },
           update: {
             name: item.title || item.sku,
             basePrice: item.price || 0,
@@ -111,7 +112,7 @@ async function runCatalogRefresh(): Promise<void> {
             .replace(/\s*[-–]\s*(size|color|colour|taglia|colore):?\s*\S+/gi, '')
             .trim()
           const parent = await prisma.product.upsert({
-            where: { sku: parentSku },
+            where: { workspace_sku: workspaceKey({ sku: parentSku }) },
             update: { isParent: true, amazonAsin: parentAsin },
             create: {
               sku: parentSku,
@@ -133,7 +134,7 @@ async function runCatalogRefresh(): Promise<void> {
         const parentDbId = parentAsinToDbId.get(item.parentAsin!)
         if (!parentDbId) continue
         await prisma.product.update({
-          where: { sku: item.sku },
+          where: { workspace_sku: workspaceKey({ sku: item.sku }) },
           data: {
             parentId: parentDbId,
             ...(item.variationTheme ? { variationTheme: item.variationTheme } : {}),
@@ -189,8 +190,8 @@ export function startCatalogRefreshCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runCatalogRefresh()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runCatalogRefresh()
   })
 
   logger.info('catalog-refresh cron: scheduled', { schedule })

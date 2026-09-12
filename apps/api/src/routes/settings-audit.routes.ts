@@ -1,3 +1,4 @@
+import { currentProfileUser } from '../lib/auth/current-user.js'
 /**
  * Settings rebuild — Phase B.4
  *
@@ -157,6 +158,9 @@ const settingsAuditRoutes: FastifyPluginAsync = async (fastify) => {
           })
         }
         const key = row.entityId as SettingsAuditKey
+        if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && (key === 'profile' || key === 'profile.password') && row.userId !== request.authUser?.id) {
+          return reply.code(403).send({ error: 'Personal settings can only be restored by their owner.' })
+        }
         if (!KNOWN_KEYS.includes(key)) {
           return reply.code(400).send({ error: `Unknown settings key: ${key}` })
         }
@@ -231,7 +235,7 @@ async function applyRevert(
       return { ok: true, before: beforeSnapshot, after: afterSnapshot }
     }
     case 'profile': {
-      const row = await (prisma as any).userProfile.findFirst()
+      const row = await currentProfileUser()
       if (!row) {
         return { ok: false, code: 404, error: 'UserProfile row not found' }
       }

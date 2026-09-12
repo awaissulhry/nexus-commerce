@@ -1,4 +1,5 @@
 'use server'
+import { requireWebPermission } from '@/lib/workspaces/server'
 
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
@@ -47,6 +48,7 @@ function looksLikeIpOrCidr(entry: string): boolean {
 }
 
 export async function generateApiKey(input: CreateInput) {
+  await requireWebPermission('settings.apikeys.manage')
   const label = input.label.trim()
   if (label.length === 0 || label.length > 80) {
     return { success: false as const, error: 'Label must be 1–80 characters.' }
@@ -112,6 +114,7 @@ export async function generateApiKey(input: CreateInput) {
 }
 
 export async function revokeApiKey(keyId: string) {
+  await requireWebPermission('settings.apikeys.manage')
   const before = await (prisma as any).apiKey.findUnique({ where: { id: keyId } })
   await (prisma as any).apiKey.update({
     where: { id: keyId },
@@ -141,6 +144,7 @@ export async function revokeApiKey(keyId: string) {
 }
 
 export async function deleteApiKey(keyId: string) {
+  await requireWebPermission('settings.apikeys.manage')
   const before = await (prisma as any).apiKey.findUnique({ where: { id: keyId } })
   await (prisma as any).apiKey.delete({ where: { id: keyId } })
   if (before) {
@@ -176,6 +180,7 @@ export async function rotateApiKey(input: {
   keyId: string
   graceHours: number
 }) {
+  await requireWebPermission('settings.apikeys.manage')
   const source = await (prisma as any).apiKey.findUnique({
     where: { id: input.keyId },
   })

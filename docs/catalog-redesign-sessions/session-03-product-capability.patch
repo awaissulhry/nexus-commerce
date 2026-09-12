@@ -1,0 +1,14 @@
+--- a/apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx
++++ b/apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx
+@@ -60,7 +60,10 @@
+     action={primary ? <Button onClick={() => setAccount(primary.id)}>Use {primary.label}</Button> : undefined}>
+     Select a connected account in the scope controls to continue. Product values will load for that account.
+   </Banner>
+-  if (scope !== MASTER_SCOPE && tab !== 'sheet' && !supportsPrimaryTools) return <Banner tone="neutral" title="This tool currently uses the primary account">
++  // Product Presentation validates its own named account/market/root-or-alias destination.
++  // Other primary-only tools retain their existing restriction.
++  const supportsPresentation = scope === 'EBAY' && tab === 'presentation'
++  if (scope !== MASTER_SCOPE && tab !== 'sheet' && !supportsPresentation && !supportsPrimaryTools) return <Banner tone="neutral" title="This tool currently uses the primary account">
+     {primary ? <>
+     Information supports editing the selected account. {STUDIO_TAB_LABELS[tab]} currently uses {primary.label}.
+     <Button onClick={() => setAccount(primary.id)}>Use {primary.label}</Button>

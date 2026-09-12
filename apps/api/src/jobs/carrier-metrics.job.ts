@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CR.23 — daily CarrierMetric pre-warm.
  *
@@ -101,7 +102,7 @@ export async function runCarrierMetricsSweep(): Promise<{
 
         await prisma.carrierMetric.upsert({
           where: {
-            carrierId_windowDays: { carrierId: carrier.id, windowDays },
+            carrierId_windowDays: workspaceKey({ carrierId: carrier.id, windowDays }),
           },
           create: {
             carrierId: carrier.id,
@@ -162,8 +163,8 @@ export function startCarrierMetricsCron(): void {
     logger.error('carrier-metrics cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('carrier-metrics', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('carrier-metrics', async () => {
       const r = await runCarrierMetricsSweep()
       return `carriers=${r.carriersScanned} upserted=${r.rowsUpserted}`
     }).catch((err) => {

@@ -33,7 +33,7 @@ import {
   AlertTriangle,
   ExternalLink,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 
 interface NotificationRow {
@@ -51,6 +51,8 @@ interface NotificationRow {
 }
 
 const POLL_MS = 30_000
+/** Shorter than POLL_MS, so a timed-out poll can never shadow the next tick. */
+const POLL_TIMEOUT_MS = 15_000
 
 const SEVERITY_STYLES: Record<
   string,
@@ -94,22 +96,48 @@ export default function NotificationsBell() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
+  /*
+   * Never stack a poll on one still in flight (measured 2026-09-01: three copies pending at once
+   * against a local API). Each pending request holds one of the ~6 connections the browser allows
+   * per origin, so a poll whose interval outruns the backend starves the rest of the page —
+   * see lib/sync/dev-stream-gate.ts. Behaviour is otherwise unchanged: the interval, the initial
+   * fetch and the dropdown all still call this.
+   *
+   * The flag is only safe because the fetch below carries a timeout. It clears in `finally`, and a
+   * `finally` on a promise that never settles never runs — so without the timeout the first hung
+   * poll would latch this on and kill the badge for the life of the page, silently, under exactly
+   * the conditions the guard was written for.
+   */
+  const inFlightRef = useRef(false)
 
   const refresh = useCallback(async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     setLoading(true)
     setError(null)
     try {
       const res = await fetch(`${getBackendUrl()}/api/notifications?limit=30`, {
         cache: 'no-store',
+        // Must always settle — see the note on `inFlightRef`. Well under the 30s tick.
+        signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       setRows(json.rows ?? [])
       setUnreadCount(json.unreadCount ?? 0)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      // A timeout rejects with a DOMException whose message ('signal timed out') means nothing to
+      // an operator. Say what actually happened.
+      setError(
+        e instanceof DOMException && e.name === 'TimeoutError'
+          ? `No answer in ${POLL_TIMEOUT_MS / 1000}s`
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      )
     } finally {
       setLoading(false)
+      inFlightRef.current = false
     }
   }, [])
 

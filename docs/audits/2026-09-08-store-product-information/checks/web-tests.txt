@@ -1,0 +1,13 @@
+
+> @nexus/web@1.0.2 test
+> vitest run src/app/products/[id]/edit/_studio/scopes.vitest.test.ts src/app/products/[id]/edit/_studio/navigationHref.vitest.test.ts src/app/products/[id]/edit/_studio/sheet/channel/channelWrite.vitest.test.ts src/app/products/catalog-transfer/workbookSelection.vitest.test.ts
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/web
+
+
+ Test Files  4 passed (4)
+      Tests  76 passed (76)
+   Start at  17:01:27
+   Duration  321ms (transform 296ms, setup 0ms, import 386ms, tests 50ms, environment 0ms)
+

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * F4 — bulk AI content generation for /products grid.
  *
@@ -253,7 +254,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
             // to the Product master row (existing behaviour). Otherwise
             // upsert a ProductTranslation row keyed on (productId,
             // language) so the master keeps its primary-language content.
-            const targetLang = languageForMarketplace(marketplace)
+            const targetLang = await languageForMarketplace(marketplace, 'AMAZON')
             const writeToMaster = isPrimaryLanguage(targetLang)
 
             const titleVal =
@@ -300,7 +301,7 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
                   : 'ai-gemini'
               await prisma.productTranslation.upsert({
                 where: {
-                  productId_language: { productId: id, language: targetLang },
+                  productId_language: workspaceKey({ productId: id, language: targetLang }),
                 },
                 create: {
                   productId: id,

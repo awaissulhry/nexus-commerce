@@ -1,3 +1,4 @@
+import { requireLegacyCredentials } from '../../lib/workspace-legacy-credentials.js'
 /**
  * Shopify Marketplace Service
  * Handles product listing, inventory, and pricing operations on Shopify
@@ -108,6 +109,7 @@ export class ShopifyService {
    * Get the base URL for Shopify API calls
    */
   private getBaseUrl(): string {
+    requireLegacyCredentials('Shopify')
     return `https://${this.shopName}.myshopify.com/admin/api/${this.apiVersion}`;
   }
 

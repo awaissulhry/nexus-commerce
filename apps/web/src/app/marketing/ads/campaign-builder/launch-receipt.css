@@ -61,11 +61,10 @@
    rest off-screen. Column `width` is only a hint under auto layout; this is the
    proven scoped fix, not a repaint. */
 .h10-vt-receipt-grid { border-top: 1px solid rgb(var(--border-subtle)); border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0; }
-.h10-vt-receipt-grid .nds-grid { table-layout: fixed; }
-.h10-vt-receipt-grid tbody td { vertical-align: top; overflow: hidden; }
+.h10-vt-receipt-grid .nds-dg-td { overflow: hidden; }
 /* the grid is `white-space: nowrap`; the deltas column is a stacked list of
    field → value pairs and must wrap, or fixed layout clips it. */
-.h10-vt-receipt-grid tbody td { white-space: normal; }
+.h10-vt-receipt-grid .nds-dg-td { white-space: normal; }
 
 .h10-vt-t { color: rgb(var(--text-secondary)); white-space: nowrap; }
 

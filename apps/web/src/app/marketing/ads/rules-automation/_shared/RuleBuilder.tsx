@@ -10,7 +10,8 @@
  * are the steps (Rule Name · {Setup} · Criteria · Search Terms · Advanced Settings · Control).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Plus, Trash2, Copy, MousePointerClick, Check, Search, Info, ChevronDown, Package, Eye, LayoutTemplate, Lock, AlertTriangle} from 'lucide-react'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { ruleTypeBySlug } from './ruleTypes'

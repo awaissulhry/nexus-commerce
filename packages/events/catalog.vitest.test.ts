@@ -174,6 +174,7 @@ describe('subject derivation', () => {
       },
       'ebay_push.status_changed': { jobId: 'j1', taskId: 't1', status: 'DONE', pushed: 1, failed: 0 },
       'account.health.changed': { accountStatus: 'WARNING', marketplaceId: 'A1PA6795UKMFR9' },
+      'shopify.schema.changed': { accountId: 'shopify-A' },
       'campaign.mutated': { campaignId: 'c1', channel: 'AMAZON', action: 'updated' },
       'campaign.metrics.refreshed': { channel: 'AMAZON', rows: 10 },
       'budget.rebalanced': { budgetId: 'b1', dryRun: false, totalShiftCents: 100 },

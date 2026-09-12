@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R.12 — Stockout ledger service.
  *
@@ -107,7 +108,7 @@ async function resolveSnapshot(args: SnapshotInput): Promise<Snapshot> {
       select: { basePrice: true, costPrice: true },
     }),
     prisma.replenishmentRule.findUnique({
-      where: { productId: args.productId },
+      where: { workspace_productId: workspaceKey({ productId: args.productId }) },
       select: { preferredSupplierId: true },
     }),
   ])

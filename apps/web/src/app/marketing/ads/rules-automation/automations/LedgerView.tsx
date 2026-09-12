@@ -15,7 +15,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DataGrid, Listbox } from '@/design-system/components'
+import { Listbox } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Checkbox } from '@/design-system/primitives'
 
 interface LedgerRow {

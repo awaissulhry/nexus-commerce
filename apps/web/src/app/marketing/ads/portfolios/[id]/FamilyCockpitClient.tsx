@@ -20,7 +20,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useParams } from 'next/navigation'
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Check, Crown, Info, Pause, Play, RefreshCw, X,
@@ -28,7 +28,8 @@ import {
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button } from '@/design-system/primitives/Button'
 import { Input, Select } from '@/design-system/primitives'
-import { DataGrid, Tabs } from '@/design-system/components'
+import { Tabs } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import '@/design-system/styles/components.css'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/primitives.css'

@@ -1,3 +1,5 @@
+import { languageTag } from '../pim/market-languages.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 // CategorySchemaService — fetch + cache live category schemas from
 // Amazon (and eventually eBay). Used by the dynamic field registry to
 // build editable bulk-grid columns without hardcoding category fields.
@@ -17,15 +19,20 @@
 // `schemaDefinition`.
 
 import type { PrismaClient } from '@prisma/client'
+import { createHash } from 'node:crypto'
+import { toInventoryCondition } from '../ebay-condition.js'
 import { AmazonService } from '../marketplaces/amazon.service.js'
 import { amazonMarketplaceId, amazonLocale } from './marketplace-ids.js'
 import { extractEnumLabels } from './enum-labels.js'
+import { downloadAmazonSchema, schemaFingerprint } from './schema-document.js'
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000
 
-export type SupportedChannel = 'AMAZON' | 'EBAY'
+export type SupportedChannel = 'AMAZON' | 'EBAY' | 'ETSY'
 
 export interface SchemaQuery {
+  marketplaceId?: string
+  accountId?: string
   channel: SupportedChannel
   marketplace?: string | null
   productType: string
@@ -76,6 +83,9 @@ export class CategorySchemaService {
    * configured (e.g. local dev without SP-API creds).
    */
   async getSchema(query: SchemaQuery, opts: { force?: boolean } = {}) {
+    query = { ...query, marketplace: query.channel === 'EBAY'
+      ? (query.marketplace ?? 'IT').replace(/^EBAY_/i, '').toUpperCase()
+      : query.channel === 'ETSY' ? 'GLOBAL' : query.marketplace?.toUpperCase() ?? null }
     if (!opts.force) {
       const cached = await this.findFreshCache(query)
       if (cached) return cached
@@ -85,8 +95,9 @@ export class CategorySchemaService {
       return this.fetchAndCacheAmazon(query)
     }
     if (query.channel === 'EBAY') {
-      throw new Error('eBay schema sync is not implemented yet')
+      return this.fetchAndCacheEbay(query)
     }
+    if (query.channel === 'ETSY') return this.fetchAndCacheEtsy(query)
     throw new Error(`Unsupported channel: ${query.channel}`)
   }
 
@@ -115,7 +126,7 @@ export class CategorySchemaService {
     if (hit && Date.now() - hit.at < TWENTY_FOUR_HOURS_MS) return hit.labels
 
     let labels: Record<string, Record<string, string>> = {}
-    if (this.amazon.isConfigured()) {
+    if ((await this.amazon.isConfigured())) {
       try {
         const sp = await (this.amazon as any).getClient()
         const envelope = (await sp.callAPI({
@@ -123,15 +134,11 @@ export class CategorySchemaService {
           endpoint: 'productTypeDefinitions',
           version: '2020-09-01',
           path: { productType },
-          query: { marketplaceIds: [amazonMarketplaceId(marketplace)], requirements: 'LISTING', locale: 'en_US' },
+          query: { marketplaceIds: [amazonMarketplaceId(marketplace)], requirements: 'LISTING', requirementsEnforced: 'ENFORCED', locale: languageTag('en', 'US') },
         })) as AmazonProductTypeMeta
-        const link = envelope?.schema?.link?.resource
-        if (link) {
-          const res = await fetch(link)
-          if (res.ok) labels = extractEnumLabels((await res.json()) as Record<string, unknown>)
-        }
+        labels = extractEnumLabels(await downloadAmazonSchema(envelope.schema))
       } catch {
-        labels = {}
+        return {}
       }
     }
     CategorySchemaService.enLabelCache.set(key, { at: Date.now(), labels })
@@ -151,6 +158,56 @@ export class CategorySchemaService {
   }
 
   // ── Internals ─────────────────────────────────────────────────────
+
+  private async fetchAndCacheEbay(query: SchemaQuery) {
+    if (!/^\d+$/.test(query.productType)) throw new Error('Select an eBay leaf category before refreshing requirements')
+    const { EbayCategoryService } = await import('../ebay-category.service.js')
+    const ebay = new EbayCategoryService()
+    const marketplace = (query.marketplace ?? 'IT').replace(/^EBAY_/i, '').toUpperCase()
+    // Both requests must succeed before replacing a usable cached definition.
+    const [aspects, conditions] = await Promise.all([
+      ebay.getCategoryAspectsRich(query.productType, marketplace, { forceRefresh: true, throwOnError: true }),
+      ebay.getItemConditionPolicies(query.productType, marketplace, { forceRefresh: true, throwOnError: true }),
+    ])
+    const definition = {
+      aspects: aspects.map(a => ({
+        id: `aspect_${a.englishName ?? a.name}`, label: a.name, localizedName: a.name,
+        englishName: a.englishName, dataType: a.dataType,
+        kind: a.values.length ? 'enum' : a.dataType === 'NUMBER' ? 'number' : a.dataType === 'DATE' ? 'date' : 'text',
+        options: a.values, enumMode: a.mode === 'SELECTION_ONLY' ? 'strict' : 'open',
+        required: a.required, recommended: a.usage === 'RECOMMENDED',
+        cardinality: a.cardinality, variantEligible: a.variantEligible, maxLength: a.maxLength,
+      })),
+      conditions: conditions.map(c => ({ value: toInventoryCondition(c.conditionId), label: c.conditionDescription })),
+    }
+    const schemaVersion = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
+    const data = {
+      schemaDefinition: definition as any, isActive: true, fetchedAt: new Date(),
+      expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
+    }
+    return this.prisma.categorySchema.upsert({
+      where: { channel_marketplace_productType_schemaVersion: workspaceKey({ channel: 'EBAY', marketplace, productType: query.productType, schemaVersion }) },
+      create: { channel: 'EBAY', marketplace, productType: query.productType, schemaVersion, ...data },
+      update: data,
+    })
+  }
+
+  private async fetchAndCacheEtsy(query: SchemaQuery) {
+    if (!/^[1-9]\d*$/.test(query.productType)) throw new Error('Select an Etsy seller taxonomy category before refreshing requirements.')
+    const { etsyReader } = await import('../etsy/read-client.js')
+    const { resolveConnection } = await import('../connection-resolver.service.js')
+    const { readEtsyProperties } = await import('../pim/channel-specs/etsy-loader.js')
+    const account = await resolveConnection(query.accountId ? { accountId: query.accountId } : { channel: 'ETSY', primary: true })
+    const { get } = await etsyReader(account.id)
+    const definition = await get<{ count: number; results: unknown[] }>(`/seller-taxonomy/nodes/${query.productType}/properties`)
+    readEtsyProperties(definition)
+    const schemaVersion = createHash('sha256').update(JSON.stringify(definition)).digest('hex')
+    const data = { schemaDefinition: definition as any, isActive: true, fetchedAt: new Date(), expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS) }
+    return this.prisma.categorySchema.upsert({
+      where: { channel_marketplace_productType_schemaVersion: workspaceKey({ channel: 'ETSY', marketplace: 'GLOBAL', productType: query.productType, schemaVersion }) },
+      create: { channel: 'ETSY', marketplace: 'GLOBAL', productType: query.productType, schemaVersion, ...data }, update: data,
+    })
+  }
 
   private async findFreshCache(query: SchemaQuery) {
     return this.prisma.categorySchema.findFirst({
@@ -178,14 +235,14 @@ export class CategorySchemaService {
   }
 
   private async fetchAndCacheAmazon(query: SchemaQuery) {
-    if (!this.amazon.isConfigured()) {
+    if (!query.accountId && !(await this.amazon.isConfigured())) {
       throw new Error(
-        'Amazon SP-API not configured — set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN',
+        'Amazon SP-API not configured — set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN',
       )
     }
 
-    const sp = await (this.amazon as any).getClient()
-    const marketplaceId = amazonMarketplaceId(query.marketplace)
+    const sp = query.accountId ? await (await import('../../lib/amazon-sp-client.js')).getAmazonSpClient(query.accountId) : await (this.amazon as any).getClient()
+    const marketplaceId = query.marketplaceId ?? amazonMarketplaceId(query.marketplace)
 
     const envelope = (await sp.callAPI({
       operation: 'getDefinitionsProductType',
@@ -195,7 +252,8 @@ export class CategorySchemaService {
       query: {
         marketplaceIds: [marketplaceId],
         requirements: 'LISTING',
-        locale: amazonLocale(query.marketplace),
+        requirementsEnforced: 'ENFORCED',
+        locale: await amazonLocale(query.marketplace),
       },
     })) as AmazonProductTypeMeta
 
@@ -206,13 +264,7 @@ export class CategorySchemaService {
     }
 
     // Step 2 — fetch the actual JSON Schema from the S3 link.
-    const schemaRes = await fetch(envelope.schema.link.resource)
-    if (!schemaRes.ok) {
-      throw new Error(
-        `Failed to fetch schema body for ${query.productType}: HTTP ${schemaRes.status}`,
-      )
-    }
-    const schemaDefinition = (await schemaRes.json()) as Record<string, unknown>
+    const schemaDefinition = await downloadAmazonSchema(envelope.schema)
 
     // Embed Amazon's group metadata into the schema so the flat-file
     // service can reproduce the exact grouping per marketplace without
@@ -233,39 +285,41 @@ export class CategorySchemaService {
       schemaDefinition.__requirementsEnforced = envelope.requirementsEnforced
     }
 
-    const schemaVersion = envelope.productTypeVersion?.version ?? 'unknown'
+    // This cache is deliberately marketplace-wide. Account-specific acceptance
+    // is checked by the dispatch adapter, never inferred from this shared schema.
+    schemaDefinition.__schemaProvenance = {
+      scope: 'marketplace', marketplaceId,
+      providerVersion: envelope.productTypeVersion?.version ?? null,
+      checksum: envelope.schema.checksum,
+      requirements: envelope.requirements ?? 'LISTING',
+      locale: envelope.locale ?? await amazonLocale(query.marketplace),
+    }
+    // Provider version labels can survive changes to document contents or groups.
+    // Reviewed manifests must invalidate when either changes.
+    const schemaVersion = schemaFingerprint(schemaDefinition)
     const variationThemes = extractVariationThemes(schemaDefinition)
 
     // If we already have this exact version cached, just bump the
     // expiry — no new row, no change detection.
     const existing = await this.prisma.categorySchema.findUnique({
       where: {
-        channel_marketplace_productType_schemaVersion: {
+        channel_marketplace_productType_schemaVersion: workspaceKey({
           channel: 'AMAZON',
           marketplace: query.marketplace ?? null,
           productType: query.productType,
           schemaVersion,
-        },
+        }),
       },
     })
     if (existing) {
-      // Also write schemaDefinition when __propertyGroups is now available
-      // but wasn't stored yet (schemas cached before FF.10 won't have it), or
-      // when __requirementsEnforced is newly available (UFX P6g backfill for
-      // rows cached before the capture) — same version, refreshed metadata.
-      const needsDefinitionUpdate =
-        (envelope.propertyGroups &&
-          !(existing.schemaDefinition as any)?.__propertyGroups) ||
-        (typeof envelope.requirementsEnforced === 'string' &&
-          !(existing.schemaDefinition as any)?.__requirementsEnforced)
-
       return this.prisma.categorySchema.update({
         where: { id: existing.id },
         data: {
           fetchedAt: new Date(),
           expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
           isActive: true,
-          ...(needsDefinitionUpdate ? { schemaDefinition: schemaDefinition as any } : {}),
+          schemaDefinition: schemaDefinition as any,
+          variationThemes: variationThemes as any,
         },
       })
     }
@@ -286,16 +340,24 @@ export class CategorySchemaService {
       `version ${previous?.schemaVersion ?? '(first fetch)'} → ${schemaVersion}`,
     )
 
-    return this.prisma.categorySchema.create({
-      data: {
+    // Concurrent refreshes of identical content converge on the same row.
+    const data = {
         channel: 'AMAZON',
         marketplace: query.marketplace ?? null,
         productType: query.productType,
         schemaVersion,
         schemaDefinition: schemaDefinition as any,
         variationThemes: variationThemes as any,
+        fetchedAt: new Date(),
+        isActive: true,
         expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS),
-      },
+    }
+    return this.prisma.categorySchema.upsert({
+      where: { channel_marketplace_productType_schemaVersion: workspaceKey({
+        channel: data.channel, marketplace: data.marketplace, productType: data.productType, schemaVersion,
+      }) },
+      create: data,
+      update: data,
     })
   }
 

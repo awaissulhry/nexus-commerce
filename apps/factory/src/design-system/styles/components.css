@@ -3,10 +3,37 @@
  * ../docs/NAMING.md). Depends only on tokens.css. Phase 4.
  */
 
+/* ── Value source ────────────────────────────────────────────────── */
+.nds-source-indicator.nds-source-indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--nds-radius-sm);
+  background: transparent;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.3;
+  cursor: default;
+}
+.nds-source-indicator.nds-source-indicator > svg { flex: 0 0 auto; }
+.nds-source-indicator.nds-source-indicator--label { justify-content: flex-start; }
+button.nds-source-indicator.nds-source-indicator { cursor: pointer; }
+button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
+.nds-source-indicator.nds-source-indicator:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: -2px;
+}
+
 /* ── Card ────────────────────────────────────────────────────────── */
 .nds-card {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-2xl);
 }
 .nds-card.pad {
@@ -21,16 +48,52 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-card-head .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
+/* 9.3 — a headed card whose body meets its own edges (charts, tables, heatmaps). Before this
+   the head forced 16px on the body, which is why 17 call sites kept the second Card. */
+.nds-card-body.flush { padding: 0; }
+/* 9.3 — title + sub-line stack. Only applied when a description is passed, so the 23 existing
+   headed cards keep byte-identical markup and centring. */
+.nds-card-head.stacked { align-items: flex-start; }
+.nds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-card-head .d { font-size: var(--nds-font-size-sm-plus); font-weight: 500; color: var(--nds-text-2); }
 .nds-card-body {
   padding: 16px;
 }
+
+/* ── Disclosure ──────────────────────────────────────────────────── */
+.nds-disclosure {
+  min-width: 0;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  line-height: 1.5;
+}
+.nds-disclosure-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) 0;
+  border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-2);
+  font-weight: var(--nds-font-weight-medium);
+  list-style: none;
+  cursor: pointer;
+}
+.nds-disclosure-summary::-webkit-details-marker { display: none; }
+.nds-disclosure-summary:hover { color: var(--nds-text); }
+.nds-disclosure-summary:focus-visible {
+  outline: none;
+  box-shadow: var(--nds-focus-ring);
+}
+.nds-disclosure-chevron { flex-shrink: 0; }
+.nds-disclosure[open] > .nds-disclosure-summary > .nds-disclosure-chevron { transform: rotate(90deg); }
+.nds-disclosure-body { padding-top: var(--nds-space-8); }
 
 /* ── EmptyState ──────────────────────────────────────────────────── */
 .nds-empty {
@@ -48,18 +111,18 @@
   height: 46px;
   border-radius: 50%;
   background: var(--nds-wash-primary);
-  color: var(--color-primary);
+  color: var(--nds-primary);
   margin-bottom: 14px;
 }
 .nds-empty .t {
-  font-size: 14px;
+  font-size: var(--nds-font-size-md-minus);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   margin-bottom: 5px;
 }
 .nds-empty .d {
-  font-size: 12.5px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-muted);
   line-height: 1.5;
   max-width: 320px;
 }
@@ -72,26 +135,33 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
+.nds-tabs.scrollable {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: var(--nds-space-4);
+}
+.nds-tabs.scrollable .nds-tab { flex-shrink: 0; }
 .nds-tab {
   position: relative;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   padding: 9px 12px;
   cursor: pointer;
   white-space: nowrap;
   transition: color 0.12s ease;
 }
 .nds-tab:hover {
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-tab.on {
-  color: var(--color-primary);
+  color: var(--nds-text-link);
 }
 .nds-tab.on::after {
   content: '';
@@ -100,8 +170,152 @@
   right: 12px;
   bottom: -1px;
   height: 2px;
-  background: var(--color-primary);
+  background: var(--nds-primary);
   border-radius: 2px;
+}
+
+/* The PAGE-level tab bar (size="lg") — the section bar, as Rules & Automation wears it.
+ *
+ * 🔴 SGX2 (2026-08-24) supersedes SG.1's treatment on the operator's instruction, and the reason
+ * is worth keeping so it is not "restored" later. SG.1 shipped this bold: 15px/700 in
+ * near-black `--text-primary`, on H10's own Suggestions bar. On our page that put the tab labels
+ * at the SAME visual weight as the `Suggestions` H1 directly above them, so the header and the
+ * navigation read as one undifferentiated block — operator: *"they have a bold appearance that's
+ * main text and headings … there is no differentiation between the sections and this."*
+ *
+ * The fix is not a new look, it is the one the console already had: `.h10-cd-tab` (ads.css), the
+ * Rules & Automation bar, which the operator pointed at as the reference. Matched here in tokens
+ * rather than by copying its raw hex — every value lands within a shade of it (grey-600 vs its
+ * #3f4754, grey-150 vs its #e3e7ec).
+ *
+ * 🔴 The label colour uses the PALETTE token `--nds-text-2`, not the semantic `--text-secondary`,
+ * and must stay that way. `globals.css` and `ads.css` both redefine the semantic text aliases as
+ * bare RGB CHANNELS (`--text-secondary: 71 85 105`) for `rgb()` composition, so inside those
+ * scopes `color: var(--text-secondary)` is an invalid declaration and is DROPPED — the label
+ * silently inherits the page's near-black instead. That is measurable on prod: the tabs computed
+ * to rgb(28,37,48) while the rule "said" grey. It also means SG.1's own
+ * `color: var(--text-primary)` never applied either — its near-black came from inheritance, and
+ * the boldness from `font-weight: 700` alone. `--nds-text-2` is a real hex in every scope
+ * (#5b6573 at :root AND inside `.h10-shell`), so it resolves wherever this bar is used.
+ * See memory: reference_ds_channel_tokens_used_raw.
+ *
+ * Now the heading owns the top of the page, the hairline under the bar separates navigation from
+ * content, and the blue label + indicator is the only thing competing for attention — which is
+ * the tab you are on. Suggestions is the ONLY `<Tabs size="lg">` consumer, so this is a
+ * one-page change; the default 'md' bar above is untouched. */
+/* A tab that cannot be entered. Dimmed AND non-interactive — the label is expected to say
+   why, so hue is never the only carrier. */
+.nds-tab:disabled { opacity: .45; cursor: not-allowed; }
+.nds-tab:disabled:hover { color: inherit; }
+
+.nds-tabs.lg {
+  gap: 28px;
+  align-items: stretch;
+  /* The hairline is inherited from `.nds-tabs` above. SGX2 had to re-declare it here
+     because the base rule used `--border-subtle`, which is RGB channels inside the ads shell
+     — the bar measured `border-bottom: 0px none` and the operator reported it as "no
+     differentiation between the sections". Phase 9.0b fixed that at the source (the base rule
+     now uses the palette token), so the re-declaration is redundant and has been removed. */
+}
+.nds-tabs.lg .nds-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14.5px; /* no token: 14.5px is a lone half-step between md-minus/md — hub #617 left it literal */
+  font-weight: 600;
+  color: var(--nds-text-2);
+  /* no horizontal padding: the indicator below spans the LABEL, as the reference bar's does */
+  padding: 0 0 11px;
+  margin-bottom: -1px;
+}
+.nds-tabs.lg .nds-tab:not(.on):hover {
+  color: var(--nds-text);
+}
+.nds-tabs.lg .nds-tab.on {
+  color: var(--nds-text-link);
+}
+.nds-tabs.lg .nds-tab.on::after {
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  border-radius: 0;
+}
+/* `sm` — a tab strip that sits INSIDE a bar beside 28px controls: the studio's 40px scope row and
+   the record drawer's pane strip. The tabs stretch to the strip so the indicator meets its bottom
+   edge; the HOST draws the hairline; the type is the bar's (sm-plus, 600). Default `md` untouched. */
+.nds-tabs.sm {
+  align-items: stretch;
+  gap: 2px;
+  border-bottom: none;
+}
+.nds-tabs.sm .nds-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: var(--nds-font-size-sm-plus);
+}
+.nds-tabs.sm .nds-tab.on::after {
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+}
+.nds-tab-ic {
+  display: inline-flex;
+  align-items: center;
+}
+.nds-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  padding: 1px 8px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-surface-sunken);
+  /* the bar sits on the page canvas, where the sunken grey alone can vanish — the inset
+     ring keeps the pill legible without changing its box size */
+  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+.nds-tab.on .nds-tab-count {
+  background: var(--nds-primary-soft);
+  color: var(--nds-text-link);
+}
+
+/* size="lg" count pill — placed AFTER the base rules it overrides so the cascade reads top-down.
+   It loses the inset ring and the 26px floor it needed while the labels were heavy: beside a
+   600-weight label it reads on the sunken grey alone, as the reference bar's does.
+   🔴 And it gets its background BACK. The base rule sets `background: var(--surface-sunken)`,
+   which is the same channel trap — `--surface-sunken` is `241 245 249` inside the ads shell, so
+   the declaration was dropped and every idle count chip has rendered fully TRANSPARENT since
+   SG.1 (measured on prod: `rgba(0, 0, 0, 0)`). Only the ACTIVE pill ever showed its fill, because
+   `--color-primary-soft` happens to be a real hex — which is exactly why this went unnoticed. */
+.nds-tabs.lg .nds-tab-count {
+  min-width: 0;
+  padding: 1px 7px;
+  box-shadow: none;
+  font-size: var(--nds-font-size-xs-plus);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+.nds-tabs.lg .nds-tab.on .nds-tab-count {
+  background: var(--nds-primary-soft);
+  color: var(--nds-text-link);
+}
+.nds-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-primary-soft);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  line-height: 1.5;
 }
 
 /* ── Pagination ──────────────────────────────────────────────────── */
@@ -117,13 +331,13 @@
   min-width: 30px;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid var(--border-subtle);
-  background: var(--surface-card);
+  border: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
   border-radius: var(--nds-radius-md);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
@@ -131,31 +345,31 @@
   background: var(--nds-surface-hover);
 }
 .nds-pgbtn.on {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--nds-primary);
+  border-color: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
 .nds-pgbtn:disabled {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
   cursor: default;
 }
 .nds-pgell {
   padding: 0 4px;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
 }
 
 /* ── ProgressBar ─────────────────────────────────────────────────── */
 .nds-progress {
   display: block;
   width: 100%;
-  background: var(--surface-sunken);
+  background: var(--nds-surface-sunken);
   border-radius: var(--nds-radius-full);
   overflow: hidden;
 }
 .nds-progress > .bar {
   display: block;
   height: 100%;
-  background: var(--color-primary);
+  background: var(--nds-primary);
   border-radius: var(--nds-radius-full);
   transition: width 0.2s ease;
 }
@@ -184,13 +398,14 @@
   background: rgb(var(--nds-shadow-rgb) / 0.42);
 }
 .nds-modal {
+  color: var(--nds-text);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   width: 440px;
   max-width: 100%;
   max-height: 82vh;
-  background: var(--surface-card);
+  background: var(--nds-surface);
   border-radius: var(--nds-radius-3xl);
   box-shadow: var(--nds-shadow-modal);
 }
@@ -203,8 +418,8 @@
 .nds-modal.xl {
   width: 920px;
 }
-/* one step past xl, for modals holding a table. Its padding scales with it —
-   18px reads thin at this width. */
+/* one step past xl, for modals holding a table (keyword/target pickers). Its padding
+   scales with it — 18px reads thin at this width. */
 .nds-modal.xxl {
   width: 1040px;
 }
@@ -217,7 +432,27 @@
 .nds-modal.xxl .nds-modal-f {
   padding: 16px 28px;
 }
+/* A MEDIA surface, not a dialog: the content IS the picture, so it takes the viewport it can get
+   and the chrome stays thin. `min()` keeps it from stretching absurdly on an ultrawide panel. */
+.nds-modal.full {
+  width: min(1680px, 96vw);
+  height: 94vh;
+  max-height: 94vh;
+}
+.nds-modal.full .nds-modal-h {
+  padding: 14px 20px 12px;
+}
+/* The body is the viewer's own layout container — it must not add padding around a picture that
+   is already positioned, nor scroll: the media pane manages its own overflow. */
+.nds-modal.full .nds-modal-b {
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  min-height: 0;
+}
+
 .nds-modal-h {
+  flex-shrink: 0;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -225,38 +460,48 @@
   padding: 16px 18px 12px;
 }
 .nds-modal-h .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-modal-h .sub {
   margin-top: 3px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text);
 }
 .nds-modal-x {
   border: none;
   background: none;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   cursor: pointer;
-  padding: 4px;
+  /* A square on the `sm` control tier, so the close glyph in a drawer or modal header lines up
+     with the 28px controls beside it instead of measuring 26 (CT.1). */
+  width: var(--nds-control-h-sm);
+  height: var(--nds-control-h-sm);
+  padding: 0;
+  flex: none;
   border-radius: var(--nds-radius-sm);
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .nds-modal-x:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-modal-b {
+  min-height: 0;
   flex: 1;
   overflow-y: auto;
   padding: 12px 18px;
-  border-top: 1px solid var(--border-subtle);
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 13px;
-  color: var(--text-secondary);
+  border-top: 1px solid var(--nds-border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
 }
 .nds-modal-f {
+  flex-shrink: 0;
+  flex-wrap: wrap;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -275,13 +520,13 @@
   position: fixed;
   top: 0;
   right: 0;
-  z-index: var(--nds-z-modal);
+  z-index: var(--nds-z-drawer);
   height: 100%;
   width: 420px;
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--surface-card);
+  background: var(--nds-surface);
   box-shadow: var(--nds-shadow-modal);
   animation: nds-slidein 0.18s ease;
 }
@@ -299,12 +544,12 @@
   justify-content: space-between;
   gap: 12px;
   padding: 16px 18px;
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
 }
 .nds-drawer-h .t {
-  font-size: 15px;
+  font-size: var(--nds-font-size-md);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 /* EFX P6 — title/subtitle stack (subtitle is optional) */
 .nds-drawer-ht {
@@ -314,23 +559,134 @@
   min-width: 0;
 }
 .nds-drawer-ht .st {
-  font-size: 12px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
 }
 .nds-drawer-b {
   flex: 1;
   overflow-y: auto;
+  /* NAF.SB.ACT.S5R — without this, scrolling past the end of a drawer chains
+     into the page behind it, so the thing you were reading slides away under a
+     panel you did not close. Fixed here rather than in one feature for the same
+     reason this component's focus trap is here: 22 files render it. Safe across
+     browsers since 2022. */
+  overscroll-behavior: contain;
   padding: 16px 18px;
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text-2);
 }
 .nds-drawer-f {
   display: flex;
+  flex: none;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 18px;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+/* In-drawer modal surface (see Drawer's `overlay` prop). Covers the whole
+   panel — header, body AND footer — so no background action stays clickable
+   behind a pending confirmation. The scrim is opaque enough that panel text
+   never reads through it. */
+.nds-drawer-ov {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(var(--nds-shadow-rgb) / 0.68);
+}
+
+/* ── Drawer — NON-MODAL panel (PES.4.1; slide-over per layout-v2 §5) ──
+   The same drawer, overlaying the surface instead of blocking it.
+
+   🔴 `--nds-z-rail`, and it is load-bearing rather than arbitrary. `ActionConfirm` portals a DS
+   `Modal` whose backdrop is `--nds-z-overlay` (1400); a panel at `--nds-z-drawer` (1410) would put
+   every shared registry confirmation BEHIND the panel that raised it — the third recurrence of
+   reference_drawer_confirm_overlay. Below 1400, the confirm lands on top BY CONSTRUCTION: no new
+   token, no re-routing, and no z-race left to maintain. Raising this value re-opens that bug.
+
+   No backdrop: one that does not block input is a lie about interactivity, and the sheet behind
+   this genuinely stays live — it keeps its full width underneath, because an overlay does not
+   reflow what it covers. */
+.nds-drawer-dock {
+  position: fixed;
+  top: var(--nds-topbar-h, 56px);
+  right: 0;
+  bottom: 0;
+  z-index: var(--nds-z-rail);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 520px;
+  max-width: 100%;
+  background: var(--nds-surface);
+  border-left: 1px solid var(--nds-border-subtle);
+  box-shadow: var(--nds-shadow-modal);
+  animation: nds-slidein 0.18s ease;
+}
+
+/* A panel that flies in is motion for its own sake to anyone who asked not to see it; the panel
+   still arrives, it just arrives already there. */
+@media (prefers-reduced-motion: reduce) {
+  .nds-drawer-dock {
+    animation: none;
+  }
+}
+
+/* The splitter. Wider than it looks (7px hit area over a 1px seam) because a 1px drag target is a
+   target most people miss. */
+.nds-drawer-grip {
+  position: absolute;
+  top: 0;
+  left: -3px;
+  z-index: 1;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  background: transparent;
+  touch-action: none;
+}
+.nds-drawer-grip::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+.nds-drawer-grip:hover::after,
+.nds-drawer-grip:focus-visible::after {
+  background: var(--nds-primary);
+}
+.nds-drawer-grip:focus-visible {
+  /* `--nds-focus-ring` is a 12%-alpha shadow (tokens.css:202) — on the grip's transparent
+     background that measured 1.17:1, which is not a focus indicator (DS.1, #335). The bar below
+     already lights up on focus, so this was not invisible focus, but the ring itself did nothing.
+     Offset INWARD: the grip sits at `left: -3px`, straddling the panel border, so a positive
+     offset would draw the ring over the sheet behind it. */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -1px;
+}
+
+/* Set on <body> for the length of a drag: the pointer routinely outruns a 7px handle, and without
+   this the drag selects the sheet's text and the cursor flickers back to the arrow the moment it
+   leaves the grip. */
+body.nds-drawer-resizing,
+body.nds-drawer-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Narrow viewports: the panel is the whole working area rather than a slice of it. Still no
+   backdrop, still not modal — the sheet is simply behind it. */
+@media (max-width: 719px) {
+  .nds-drawer-dock {
+    width: 100%;
+    border-left: 0;
+  }
 }
 
 /* ── Menu (anchored dropdown) ────────────────────────────────────── */
@@ -341,9 +697,11 @@
 .nds-menu {
   position: fixed;
   z-index: var(--nds-z-popover);
-  min-width: 180px;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  /* No fixed floor. It was `min-width: 180px`, measured rendering a 93px menu at 180 — 87px of dead
+     width, which is exactly "wider than its longest option" (Owner #461). The floor is now the
+     trigger, supplied inline by usePopoverPosition like every other DS panel. */
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-menu);
   padding: 6px;
@@ -351,31 +709,77 @@
   flex-direction: column;
   gap: 1px;
 }
-.nds-menu button {
+.nds-menu button,
+.nds-menu a[role='menuitem'] {
   display: flex;
   align-items: center;
   gap: 9px;
   width: 100%;
   text-align: left;
+  /* the anchor form must look identical to the button form */
+  text-decoration: none;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 500;
   color: var(--nds-text-strong);
   padding: 8px 10px;
   border-radius: var(--nds-radius-md);
   cursor: pointer;
 }
-.nds-menu button:hover {
+.nds-menu button:hover,
+.nds-menu a[role='menuitem']:hover {
   background: var(--nds-surface-hover);
 }
+/* 🔴 `--nds-text-disabled` is 2.04:1 and this rule put it on the item's NAME — measured on the
+   studio's `Publish ▾`, where "Amazon · DE" and "eBay · DE" rendered rgb(174,182,194) on white at
+   2.04:1 while the note beside each rendered 5.91:1. The identifying half of the row was the
+   unreadable half, in every menu in the app, not just that one.
+   WCAG exempts inactive controls, and that exemption is correct right up until the disabled item is
+   what has to be read — which is precisely what a menu of unavailable channels is (hub rulings
+   #133/#231). Unavailability is already carried by `cursor: default`, the suppressed hover, and now
+   by `description`; it does not also need the name to be illegible. `--nds-text-2` (5.91:1) still
+   reads as clearly secondary against an enabled item's `--nds-text-strong`. */
 .nds-menu button:disabled {
-  color: var(--text-disabled);
+  color: var(--nds-text-2);
   cursor: default;
 }
 .nds-menu button:disabled:hover {
   background: none;
+}
+/* An icon MAY fade where a word may not: it names nothing on its own, so losing it costs no
+   information, and it keeps a disabled row visibly distinct at a glance. */
+.nds-menu button:disabled svg {
+  opacity: 0.55;
+}
+
+/* ── Menu item with a `description` (MenuItemDef.description) ─────── */
+/* The DS owns this wrap width on purpose. Left to callers it became two policies in one menu: a
+   nowrap note running 520.1px beside a sibling wrapping at 222.6px, and a 617–629px menu. */
+.nds-menu button.has-desc,
+.nds-menu a[role='menuitem'].has-desc {
+  align-items: flex-start;
+}
+.nds-menu-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.nds-menu-item-desc {
+  display: block;
+  max-width: 34ch;
+  white-space: normal;
+  font-size: var(--nds-font-size-xs-plus);
+  font-weight: var(--nds-font-weight-normal);
+  line-height: 1.45;
+  color: var(--nds-text-2);
+}
+/* The description keeps its own legible tone when the item is disabled — it is the reason the item
+   is disabled, so it is the last thing that should dim with it. */
+.nds-menu button:disabled .nds-menu-item-desc {
+  color: var(--nds-text-2);
 }
 
 /* ── Toast ───────────────────────────────────────────────────────── */
@@ -394,9 +798,9 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  background: var(--text-primary);
+  background: var(--nds-text);
   color: var(--nds-text-inverse);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   padding: 11px 16px;
   border-radius: var(--nds-radius-xl);
@@ -407,20 +811,20 @@
   width: 8px;
   height: 8px;
   border-radius: var(--nds-radius-full);
-  background: var(--status-info-line);
+  background: var(--nds-info);
   flex-shrink: 0;
 }
 .nds-toast.success .dot {
   background: var(--nds-live);
 }
 .nds-toast.danger .dot {
-  background: var(--status-danger-line);
+  background: var(--nds-danger);
 }
 .nds-toast.warning .dot {
-  background: var(--status-warning-line);
+  background: var(--nds-warning);
 }
 .nds-toast.neutral .dot {
-  background: var(--text-tertiary);
+  background: var(--nds-text-3);
 }
 @keyframes nds-toastin {
   from {
@@ -444,24 +848,24 @@
   justify-content: space-between;
   gap: 8px;
   min-width: 160px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-lg);
   padding: 7px 11px;
   font: inherit;
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--surface-card);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+  background: var(--nds-surface);
   cursor: pointer;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .nds-ms-btn:hover {
-  border-color: var(--border-strong);
+  border-color: var(--nds-border-strong);
 }
 .nds-ms-btn .ph {
-  color: var(--text-disabled);
+  color: var(--nds-text-muted);
 }
 .nds-ms-btn svg {
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   flex-shrink: 0;
 }
 .nds-ms-pop {
@@ -470,8 +874,8 @@
   min-width: 200px;
   max-height: 260px;
   overflow-y: auto;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-menu);
   padding: 5px;
@@ -482,7 +886,7 @@
   gap: 9px;
   padding: 7px 9px;
   border-radius: var(--nds-radius-md);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   cursor: pointer;
 }
@@ -493,7 +897,7 @@
   background: var(--nds-wash-primary);
 }
 .nds-ms-opt.all {
-  border-bottom: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--nds-border-subtle);
   border-radius: 0;
   margin-bottom: 3px;
   font-weight: 600;
@@ -501,12 +905,12 @@
 .nds-ms-opt input {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--nds-primary);
 }
 /* Facet count rendered after an option label (FilterBar `count`). */
 .nds-ms-count {
-  color: var(--text-tertiary);
-  font-size: 11px;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -519,44 +923,82 @@
 .nds-combo-in {
   width: 100%;
   min-width: 200px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-lg);
   padding: 7px 30px 7px 11px;
   font: inherit;
-  font-size: 13px;
-  color: var(--text-primary);
-  background: var(--surface-card);
+  font-size: var(--nds-font-size-base);
+  color: var(--nds-text);
+  background: var(--nds-surface);
 }
 .nds-combo-in:focus {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
 .nds-combo-in::placeholder {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
 }
 .nds-combo .chev {
   position: absolute;
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   pointer-events: none;
 }
+/* ── ONE width rule for every DS popover panel (Owner #461, hub #669) ──────────────────────────
+ * .nds-pop-clamp-rule — the panel is clamp(anchor, content, --nds-popover-max-w):
+ *   FLOOR   the anchor, applied inline by `usePopoverPosition` as `min-width: <trigger width>`, so
+ *           placement stays owned in one place. Where a panel is mounted WITHOUT that hook — AG's
+ *           cell editor mounts ListboxPanel inside its own popup — the per-class `min-width` below
+ *           is the fallback floor. Those are not dead rules; inline simply wins when it is present.
+ *   CONTENT does the rest, because none of these panels set `width`.
+ *   CAP     this rule. Before it, ONLY .nds-combo-pop was capped: measured `max-width: none` on
+ *           .nds-menu and .nds-ms-pop, so a long label grew them without limit.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-combo-pop,
+.nds-ms-pop,
+.nds-menu {
+  max-width: var(--nds-popover-max-w);
+}
+
+/* D18 — one closed-list popover shape for the whole app.
+   `--nds-combo-row-h` is component-local on purpose, not a DS token: it is the option row's own
+   box (13px text in 8px padding), and the only thing outside this file that needs it is nothing.
+   The height is the CALC rather than a literal so "8 rows" stays true if the row ever changes —
+   240px silently meant 6.5 rows at the row height this component actually renders. */
 .nds-combo-pop {
-  position: fixed;
+  --nds-combo-row-h: 36px;
+  --nds-combo-rows: 8;
+  /* 🔴 NO `position` here. It used to be `position: fixed`, and a class that positions itself is
+     wrong for any consumer it was not written for: inside AG's absolutely-positioned cell-editor
+     popup a `fixed` child anchors to the VIEWPORT, ignores AG's placement and does not move when
+     the popup does (AG.1, D18 gotcha 4). Placement now comes from the `style` its owner passes —
+     `usePopoverPosition` for `Listbox`, AG's own coordinates for the grid editor. */
   z-index: var(--nds-z-popover);
-  max-height: 240px;
+  /* 8 rows + this element's own 5px padding, top and bottom. */
+  max-height: calc(var(--nds-combo-rows) * var(--nds-combo-row-h) + 10px);
+  /* Width is max(anchor, content) capped — the anchor floor is applied as `min-width` by
+     `usePopoverPosition`, the content does the rest, and this stops "too long in a single cell".
+     Deliberately NOT `width`, which is what made the panel ignore its own labels. */
+  max-width: var(--nds-popover-max-w);
   overflow-y: auto;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-menu);
   padding: 5px;
 }
 /* A picker's popover must not inherit a narrow trigger's width — the ads console's rows-per-page
-   select is 84px and its options are not. Scoped to Listbox so Combobox is untouched. */
-.nds-listbox .nds-combo-pop {
+   select is 84px and its options are not. Scoped to Listbox so Combobox is untouched.
+   🔴 The scope is a class ON THE PANEL, never an ancestor. This was `.nds-listbox .nds-combo-pop`
+   until 2026-09-01, and the panel portals to `<body>` — so `.nds-listbox` is not an ancestor by the
+   time it renders and the rule never matched: measured `pop.matches('.nds-listbox .nds-combo-pop')
+   === false` with a computed `min-width: 0px`, while the rule sat loaded and plausible in
+   `document.styleSheets`. A floor a portalled panel cannot see is not a floor. Same trap as the
+   `.h10-shell` token pin, which is why that one is written `body:has(.h10-shell)`. */
+.nds-combo-pop.nds-listbox-pop {
   min-width: 210px;
 }
 .nds-combo-search {
@@ -576,7 +1018,7 @@
   border: none;
   outline: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   width: 100%;
   background: transparent;
   color: var(--nds-text);
@@ -584,21 +1026,17 @@
 .nds-combo-search input::placeholder {
   color: var(--nds-text-disabled);
 }
-.nds-combo-empty {
-  padding: 12px 9px;
-  font-size: 12.5px;
-  color: var(--nds-text-3);
-  text-align: center;
-}
 .nds-combo-pop button {
   position: relative;
-  display: block;
+  display: flex;
+  align-items: center;
+  min-height: var(--nds-combo-row-h);
   width: 100%;
   text-align: left;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   padding: 8px 9px;
   border-radius: var(--nds-radius-md);
@@ -626,14 +1064,14 @@
 }
 .nds-combo-pop button.on {
   background: var(--nds-wash-primary);
-  color: var(--color-primary);
+  color: var(--nds-text-link);
   font-weight: 600;
 }
 .nds-combo-empty {
   padding: 12px 9px;
   text-align: center;
-  font-size: 12.5px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-muted);
 }
 
 /* ── MetricStrip (KPI tiles) ─────────────────────────────────────── */
@@ -643,34 +1081,34 @@
   gap: 12px;
 }
 .nds-metric {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-2xl);
   padding: 14px 16px;
 }
 .nds-metric .lbl {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
   margin-bottom: 6px;
 }
 .nds-metric .val {
-  font-size: 22px;
+  font-size: var(--nds-font-size-xl);
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--nds-text);
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
 .nds-metric .dlt {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
   margin-top: 4px;
 }
 .nds-metric .dlt.up {
-  color: var(--status-success-strong);
+  color: var(--nds-success-strong);
 }
 .nds-metric .dlt.down {
-  color: var(--status-danger-strong);
+  color: var(--nds-danger-strong);
 }
 /* Sub-line that says what the number COUNTS. Muted tier, not the icon tier: it is running text
    at 11.5px, below the 18.66px where --nds-text-3 would clear AA. */
@@ -705,8 +1143,11 @@
   border-color: var(--nds-border-strong);
 }
 .nds-metric.btn:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 /* Engaged. The ring is what carries it — a border-colour change alone is a 1px cue that reads as
    hover, and these tiles toggle a filter the rest of the page is then showing. */
@@ -714,7 +1155,6 @@
   border-color: var(--nds-primary);
   box-shadow: 0 0 0 1px var(--nds-primary);
 }
-
 
 /* ── CoverageSummary (channel footprint in one non-growing line) ──── */
 /* Separated by a middot generated in CSS, so the markup carries only the facts and a part can be
@@ -764,10 +1204,18 @@
   border-radius: var(--nds-radius-xl);
   box-shadow: var(--nds-shadow-pop);
   padding: 11px 14px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   line-height: 1.7;
   white-space: nowrap;
   pointer-events: none;
+  /* 🔴 Measured on /marketing/ads/reporting?tab=library, 2026-09-02 (hub #678, found by DS.2 at
+     source): with `nowrap` and no cap, the Hourly-performance card rendered its 179-character
+     Caveat on ONE line — 1147.3px, 66.4% of a 1728px viewport, against a 320px popover cap. The
+     Owner's dropdown complaint, on a hovercard.
+
+     The cap alone would be a worse bug than the one it fixes: `nowrap` inside a bounded box
+     overflows it. So the cap and the wrapping below are ONE change, not two. */
+  max-width: var(--nds-popover-max-w);
 }
 .nds-hovercard-card.above {
   transform: translateY(-100%);
@@ -775,14 +1223,25 @@
 .nds-hovercard-card .r1 {
   color: var(--nds-text-strong);
   font-weight: 500;
+  /* The single-hint form wraps for the same reason and is NOT optional once the card is capped:
+     most HoverCard call sites pass `text`, several of them full sentences, and `nowrap` inside a
+     320px box would overflow rather than grow. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .nds-hovercard-card .r .k {
   color: var(--nds-text);
   font-weight: 700;
+  /* The KEY stays on one line: it is short by construction and a wrapped label reads as two rows. */
+  white-space: nowrap;
 }
 .nds-hovercard-card .r .v {
   color: var(--nds-text-2);
-  font-weight: 400;
+  font-weight: var(--nds-font-weight-normal);
+  /* The VALUE is the unbounded one — a note, a product name, a joined list. `anywhere` rather than
+     `break-word` so a long unbroken token (an ASIN list, a URL) also yields. */
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* ── DateRangePicker ─────────────────────────────────────────────── */
@@ -796,8 +1255,8 @@
   left: 0;
   z-index: var(--nds-z-popover);
   display: flex;
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-2xl);
   box-shadow: var(--nds-shadow-pop);
   overflow: hidden;
@@ -807,7 +1266,7 @@
   flex-direction: column;
   gap: 2px;
   padding: 10px;
-  border-right: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--nds-border-subtle);
   min-width: 132px;
 }
 .nds-dp-preset {
@@ -815,8 +1274,8 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
   padding: 7px 10px;
   border-radius: var(--nds-radius-md);
   cursor: pointer;
@@ -824,7 +1283,7 @@
 }
 .nds-dp-preset:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-dp-cal {
   padding: 14px 16px;
@@ -838,7 +1297,7 @@
 .nds-dp-nav button {
   border: none;
   background: none;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
   cursor: pointer;
   padding: 4px;
   border-radius: var(--nds-radius-sm);
@@ -853,9 +1312,9 @@
 }
 .nds-dp-mh {
   text-align: center;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   margin-bottom: 8px;
 }
 .nds-dp-grid {
@@ -867,9 +1326,9 @@
   height: 22px;
   line-height: 22px;
   text-align: center;
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
 }
 .nds-dp-day {
   width: 30px;
@@ -877,8 +1336,8 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12.5px;
-  color: var(--text-primary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text);
   border-radius: var(--nds-radius-md);
   cursor: pointer;
 }
@@ -891,14 +1350,14 @@
 }
 .nds-dp-day.start,
 .nds-dp-day.end {
-  background: var(--color-primary);
+  background: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
 .nds-dp-day.today {
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  box-shadow: inset 0 0 0 1px var(--nds-border-strong);
 }
 .nds-dp-day.dis {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
   cursor: default;
 }
 .nds-dp-day.dis:hover {
@@ -914,8 +1373,8 @@
   justify-content: center;
   gap: 18px;
   margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
 }
 .nds-chart-legend .sw {
   display: inline-flex;
@@ -928,17 +1387,17 @@
   border-radius: 2px;
 }
 .nds-chart-tt {
-  background: var(--surface-card);
-  border: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
   border-radius: var(--nds-radius-lg);
   box-shadow: var(--nds-shadow-menu);
   padding: 8px 11px;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   min-width: 180px;
 }
 .nds-chart-tt .d {
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--nds-text);
   margin-bottom: 6px;
 }
 .nds-chart-tt .r {
@@ -969,9 +1428,9 @@
   flex: 1;
   min-width: 0;
   text-align: center;
-  font-size: 9px;
+  font-size: var(--nds-font-size-nano);
   font-weight: 600;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
 }
 .nds-heat-row {
   display: flex;
@@ -983,21 +1442,26 @@
   flex-shrink: 0;
   padding-right: 6px;
   text-align: right;
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   font-weight: 700;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
 }
 .nds-heat-cell {
   flex: 1;
   min-width: 0;
   height: 22px;
-  border-radius: 3px;
+  border-radius: var(--nds-radius-xs);
 }
 
 /* ── DataGrid ────────────────────────────────────────────────────── */
+.nds-grid-prefsbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--nds-space-8);
+}
 .nds-grid-wrap {
-  background: var(--surface-card);
-  border: 1px solid var(--border-default);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
   border-radius: var(--nds-radius-2xl);
   overflow: auto;
 }
@@ -1005,36 +1469,31 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
 }
 .nds-grid thead th {
   position: sticky;
   top: 0;
   z-index: 4;
   background: var(--nds-surface-raised);
-  border-bottom: 1px solid var(--border-default);
-  font-size: 11.5px;
+  border-bottom: 1px solid var(--nds-border);
+  font-size: var(--nds-font-size-xs-plus);
   font-weight: 700;
-  color: var(--text-secondary);
+  /* --nds-text-strong (9.87:1), NOT --nds-text-2 (5.60:1). A column heading is the thing you scan
+     to find a column, and it was sitting two tiers below its own body text (--nds-text, 15.48:1).
+     Still lighter than the body, so the hierarchy holds; it only ever rises. Raised because the
+     ads console's own headers are 18.94:1 and every converted table dropped them by a factor of
+     three. */
+  color: var(--nds-text-strong);
   text-align: left;
   padding: 10px 14px;
   white-space: nowrap;
 }
-/* ...EXCEPT the selection column. A row checkbox selects the WHOLE row, not its first line, so
-   pinning it to the top puts it out of alignment with everything it acts on the moment a row is
-   taller than 15px. Measured on a grid with 56px thumbnails: the checkbox sat 17px above the
-   row's centre (10.8px at the `xs` tier) — three different baselines in one row. Middle is the
-   only alignment a control-for-the-row can have; `top` remains right for every DATA cell, which
-   is what that rule above is about. */
-.nds-grid tbody td.ck {
-  vertical-align: middle;
-}
-
 .nds-grid tbody td {
-  background: var(--surface-card);
-  border-bottom: 1px solid var(--border-subtle);
+  background: var(--nds-surface);
+  border-bottom: 1px solid var(--nds-border-subtle);
   padding: 11px 14px;
-  color: var(--text-primary);
+  color: var(--nds-text);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -1073,7 +1532,7 @@
 /* a left edge-shadow separates a right-pinned column from scrolling content */
 .nds-grid td.sticky-right,
 .nds-grid th.sticky-right {
-  box-shadow: inset 1px 0 0 var(--border-subtle);
+  box-shadow: inset 1px 0 0 var(--nds-border-subtle);
 }
 .nds-grid .sortbtn {
   display: inline-flex;
@@ -1087,20 +1546,20 @@
   padding: 0;
 }
 .nds-grid .sortbtn:hover {
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-grid .sortbtn svg {
-  color: var(--text-disabled);
+  color: var(--nds-text-disabled);
 }
 .nds-grid th.sorted,
 .nds-grid th.sorted .sortbtn,
 .nds-grid th.sorted .sortbtn svg {
-  color: var(--color-primary);
+  color: var(--nds-text-link);
 }
 .nds-grid input[type='checkbox'] {
   width: 15px;
   height: 15px;
-  accent-color: var(--color-primary);
+  accent-color: var(--nds-primary);
   vertical-align: middle;
 }
 .nds-grid tr.totals td {
@@ -1108,43 +1567,43 @@
   bottom: 0;
   font-weight: 700;
   background: var(--nds-surface-raised);
-  color: var(--text-primary);
-  border-top: 1px solid var(--border-default);
+  color: var(--nds-text);
+  border-top: 1px solid var(--nds-border);
   border-bottom: none;
 }
 .nds-grid-empty {
   padding: 40px;
   text-align: center;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
 }
 
 /* ── ImageUpload ───────────────────────────────────────────────────────── */
 .nds-imgup { display: flex; flex-direction: column; gap: 8px; }
-.nds-imgup-lbl { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.nds-imgup-lbl { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text-2); }
 .nds-imgup-row { display: flex; gap: 18px; align-items: stretch; flex-wrap: wrap; }
 .nds-imgup-zone {
   width: 200px; max-width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 6px; padding: 16px; border: 1.5px dashed var(--border-default); border-radius: 10px; background: var(--nds-imgup-surface);
-  color: var(--text-tertiary); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
+  gap: 6px; padding: 16px; border: 1.5px dashed var(--nds-border); border-radius: 10px; background: var(--nds-imgup-surface);
+  color: var(--nds-text-muted); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
 }
-.nds-imgup-zone:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); background: var(--nds-imgup-hover); }
-.nds-imgup-zone.drag { border-color: var(--color-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--color-primary); }
+.nds-imgup-zone:hover:not(:disabled) { border-color: var(--nds-primary); color: var(--nds-text-link); background: var(--nds-imgup-hover); }
+.nds-imgup-zone.drag { border-color: var(--nds-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--nds-text-link); }
 .nds-imgup-zone:disabled { opacity: .6; cursor: not-allowed; }
-.nds-imgup-zone .t { font-size: 13px; font-weight: 600; }
-.nds-imgup-zone .d { font-size: 11.5px; }
-.nds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--nds-imgup-spin-track); border-top-color: var(--color-primary); border-radius: 50%; animation: nds-imgup-spin .7s linear infinite; }
+.nds-imgup-zone .t { font-size: var(--nds-font-size-base); font-weight: 600; }
+.nds-imgup-zone .d { font-size: var(--nds-font-size-xs-plus); }
+.nds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--nds-imgup-spin-track); border-top-color: var(--nds-primary); border-radius: 50%; animation: nds-imgup-spin .7s linear infinite; }
 @keyframes nds-imgup-spin { to { transform: rotate(360deg); } }
-.nds-imgup-preview { position: relative; width: 200px; max-width: 100%; border: 1px solid var(--border-default); border-radius: 10px; overflow: hidden; background: var(--surface-card); }
+.nds-imgup-preview { position: relative; width: 200px; max-width: 100%; border: 1px solid var(--nds-border); border-radius: 10px; overflow: hidden; background: var(--nds-surface); }
 .nds-imgup-preview img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .nds-imgup-preview .rm { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(20,29,40,.72); color: var(--nds-text-inverse); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
 .nds-imgup-preview .rm:hover { background: rgba(20,29,40,.9); }
-.nds-imgup-crit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; background: var(--nds-imgup-surface); border: 1px solid var(--surface-sunken); border-radius: 10px; }
-.nds-imgup-crit .h { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 2px; }
-.nds-imgup-crit .c { font-size: 12px; color: var(--text-tertiary); line-height: 1.5; }
-.nds-imgup-crit .c b { color: var(--text-secondary); font-weight: 600; }
-.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--color-primary); cursor: pointer; }
+.nds-imgup-crit { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; background: var(--nds-imgup-surface); border: 1px solid var(--nds-surface-sunken); border-radius: 10px; }
+.nds-imgup-crit .h { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-text-2); margin-bottom: 2px; }
+.nds-imgup-crit .c { font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); line-height: 1.5; }
+.nds-imgup-crit .c b { color: var(--nds-text-2); font-weight: 600; }
+.nds-imgup-assets { align-self: flex-start; background: none; border: none; padding: 0; font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600; color: var(--nds-text-link); cursor: pointer; }
 .nds-imgup-assets:hover { text-decoration: underline; }
-.nds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--nds-imgup-err); }
+.nds-imgup-err { display: inline-flex; align-items: center; gap: 5px; font-size: var(--nds-font-size-sm); color: var(--nds-imgup-err); }
 
 /* ── Banner (inline status callout) ────────────────────────────────────── */
 .nds-banner {
@@ -1152,11 +1611,11 @@
   align-items: flex-start;
   gap: 11px;
   padding: 12px 14px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--nds-border-subtle);
   border-left-width: 3px;
   border-radius: var(--nds-radius-lg);
-  background: var(--surface-card);
-  color: var(--text-primary);
+  background: var(--nds-surface);
+  color: var(--nds-text);
 }
 .nds-banner-icon {
   display: inline-flex;
@@ -1171,14 +1630,14 @@
   gap: 2px;
 }
 .nds-banner-title {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--nds-text);
   line-height: 1.35;
 }
 .nds-banner-desc {
-  font-size: 12.5px;
-  color: var(--text-secondary);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
   line-height: 1.45;
 }
 .nds-banner-action {
@@ -1199,39 +1658,40 @@
   border: none;
   border-radius: var(--nds-radius-sm);
   background: none;
-  color: var(--text-tertiary);
+  color: var(--nds-text-3);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 .nds-banner-dismiss:hover {
   background: var(--nds-surface-hover);
-  color: var(--text-primary);
+  color: var(--nds-text);
 }
 .nds-banner.info {
-  border-left-color: var(--status-info-line);
-  background: var(--status-info-soft);
+  border-left-color: var(--nds-info);
+  background: var(--nds-info-soft);
 }
-.nds-banner.info .nds-banner-icon { color: var(--status-info-line); }
+.nds-banner.info .nds-banner-icon { color: var(--nds-info); }
 .nds-banner.success {
-  border-left-color: var(--status-success-line);
-  background: var(--status-success-soft);
+  border-left-color: var(--nds-success);
+  background: var(--nds-success-soft);
 }
-.nds-banner.success .nds-banner-icon { color: var(--status-success-strong); }
+.nds-banner.success .nds-banner-icon { color: var(--nds-success-strong); }
 .nds-banner.warning {
-  border-left-color: var(--status-warning-line);
-  background: var(--status-warning-soft);
+  border-left-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
 }
-.nds-banner.warning .nds-banner-icon { color: var(--status-warning-strong); }
+.nds-banner.warning .nds-banner-icon { color: var(--nds-warning-strong); }
 .nds-banner.danger {
-  border-left-color: var(--status-danger-line);
-  background: var(--status-danger-soft);
+  border-left-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
 }
-.nds-banner.danger .nds-banner-icon { color: var(--status-danger-strong); }
+.nds-banner.danger .nds-banner-icon { color: var(--nds-danger-strong); }
 .nds-banner.neutral {
-  border-left-color: var(--border-strong);
-  background: var(--surface-sunken);
+  border-left-color: var(--nds-border-strong);
+  background: var(--nds-surface-sunken);
 }
-.nds-banner.neutral .nds-banner-icon { color: var(--text-secondary); }
+.nds-banner.neutral .nds-banner-icon { color: var(--nds-text-2); }
+.nds-banner.neutral .nds-banner-desc { color: var(--nds-text); }
 
 /* ── Stepper (horizontal step progress) ────────────────────────────────── */
 .nds-stepper {
@@ -1258,22 +1718,22 @@
   width: 26px;
   height: 26px;
   border-radius: var(--nds-radius-round);
-  background: var(--surface-card);
-  border: 1.5px solid var(--border-strong);
-  color: var(--text-tertiary);
+  background: var(--nds-surface);
+  border: 1.5px solid var(--nds-border-strong);
+  color: var(--nds-text-muted);
   z-index: 1;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .nds-step-num {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 700;
   line-height: 1;
 }
 .nds-step-label {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 500;
   line-height: 1.3;
-  color: var(--text-tertiary);
+  color: var(--nds-text-muted);
   max-width: 130px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1286,27 +1746,27 @@
   left: calc(50% + 17px);
   right: calc(-50% + 17px);
   height: 2px;
-  background: var(--border-default);
+  background: var(--nds-border);
 }
 .nds-step.done .nds-step-badge {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--nds-primary);
+  border-color: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
 .nds-step.done .nds-step-label {
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
 }
 .nds-step.done .nds-step-line {
-  background: var(--color-primary);
+  background: var(--nds-primary);
 }
 .nds-step.active .nds-step-badge {
-  background: var(--surface-card);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  background: var(--nds-surface);
+  border-color: var(--nds-primary);
+  color: var(--nds-text-link);
   box-shadow: var(--nds-focus-ring);
 }
 .nds-step.active .nds-step-label {
-  color: var(--text-primary);
+  color: var(--nds-text);
   font-weight: 600;
 }
 
@@ -1324,47 +1784,47 @@
   gap: 8px;
   width: 100%;
   padding: 26px 18px;
-  border: 1.5px dashed var(--border-strong);
+  border: 1.5px dashed var(--nds-border-strong);
   border-radius: var(--nds-radius-xl);
-  background: var(--surface-sunken);
-  color: var(--text-tertiary);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
   font: inherit;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 .nds-dropzone:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
+  border-color: var(--nds-primary);
+  color: var(--nds-text-link);
+  background: var(--nds-primary-soft);
 }
 .nds-dropzone:focus-visible {
   outline: none;
-  border-color: var(--color-primary);
+  border-color: var(--nds-primary);
   border-style: solid;
   box-shadow: var(--nds-focus-ring);
 }
 .nds-dropzone.drag {
-  border-color: var(--color-primary);
+  border-color: var(--nds-primary);
   border-style: solid;
-  background: var(--color-primary-soft);
-  color: var(--color-primary);
+  background: var(--nds-primary-soft);
+  color: var(--nds-text-link);
 }
 .nds-dropzone:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 .nds-dropzone-primary {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--nds-text-2);
 }
 .nds-dropzone:hover:not(:disabled) .nds-dropzone-primary,
 .nds-dropzone.drag .nds-dropzone-primary {
-  color: var(--color-primary);
+  color: var(--nds-text-link);
 }
 .nds-dropzone-hint {
-  font-size: 11.5px;
-  color: var(--text-tertiary);
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-muted);
 }
 .nds-dropzone-input {
   display: none;
@@ -1373,8 +1833,8 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
-  color: var(--status-danger-strong);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-strong);
 }
 
 /* ── Listbox (Wave 1 gap-fill) — plain single-select dropdown, zero native
@@ -1383,13 +1843,13 @@
 .nds-listbox { position: relative; display: inline-flex; width: 100%; }
 .nds-listbox-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  width: 100%; border: 1px solid var(--border-default); border-radius: var(--nds-radius-lg);
-  padding: 7px 11px; font: inherit; font-size: 13px; color: var(--text-primary);
-  background: var(--surface-card); cursor: pointer; text-align: left;
+  width: 100%; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg);
+  padding: 7px 11px; font: inherit; font-size: var(--nds-font-size-base); color: var(--nds-text);
+  background: var(--nds-surface); cursor: pointer; text-align: left;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.nds-listbox-btn:hover:not(:disabled) { border-color: var(--border-strong); }
-.nds-listbox-btn:focus-visible { outline: none; border-color: var(--color-primary); box-shadow: var(--nds-focus-ring); }
+.nds-listbox-btn:hover:not(:disabled) { border-color: var(--nds-border-strong); }
+.nds-listbox-btn:focus-visible { outline: none; border-color: var(--nds-primary); box-shadow: var(--nds-focus-ring); }
 .nds-listbox-btn:disabled { opacity: 0.55; cursor: default; }
 .nds-listbox-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nds-listbox-btn > span.ph { color: var(--nds-text-muted); }
@@ -1402,67 +1862,273 @@
 .nds-dp-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .nds-dp-nav button { border: none; background: none; color: var(--nds-text-2); cursor: pointer; padding: 4px; border-radius: 6px; display: inline-flex; }
 .nds-dp-nav button:hover { background: var(--nds-surface-hover); }
-.nds-datefield-foot { border-top: 1px solid var(--border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
-.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: 12.5px; color: var(--color-primary); cursor: pointer; }
+.nds-datefield-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; display: flex; justify-content: flex-end; }
+.nds-datefield-foot button { border: none; background: none; font: inherit; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-link); cursor: pointer; }
 
-/* ── ported from apps/web components.css on 2026-08-25 ──────────────────────────────
-   ColumnGroupModal / ToolbarButton / Tabs / Card use these; factory had the
-   components' older markup and none of this CSS, so copying the newer .tsx
-   without them would have rendered unstyled with every gate green. ── */
-.nds-card-headmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.nds-tab-ic {
-  display: inline-flex;
-  align-items: center;
+/* ── BurnDownChart (BSP.1) ─────────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched.
+   The legend is always rendered, so no series is identified by colour alone. */
+.nds-burn { display: flex; flex-direction: column; gap: 6px; }
+.nds-burn-key { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.nds-burn-key span { display: inline-flex; align-items: center; gap: 5px; font-size: var(--nds-font-size-micro-plus); font-weight: 600; color: var(--nds-text-2); }
+/* `--nds-surface-raised`, not `--surface-raised`: that platform name is defined by
+   globals.css / ads.css as RGB CHANNELS (`255 255 255`), and this file loads alongside
+   both. `var(--surface-raised, #fff)` therefore resolved to `background: 255 255 255`
+   — invalid at computed-value time, so the tip painted TRANSPARENT and the `#fff`
+   fallback never applied (a fallback covers an undefined var, not an invalid one).
+   Aliasing the platform name to a colour here would have broken the reverse case:
+   reporting.css's `rgb(var(--surface-raised))` on a page that loads this file. */
+/* The hue arrives as `--c` so the dash gradient survives; an inline `background` shorthand would
+   reset `background-image` and render every swatch solid. */
+.nds-burn-key .ln { display: inline-block; width: 14px; height: 2px; border-radius: 1px; }
+.nds-burn-key .ln.solid { background: var(--c); }
+/* The dashed marks repeat the line's own dash pattern, so the key reads as the chart does. */
+.nds-burn-key .ln.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 9px); }
+.nds-burn-tip { display: flex; flex-direction: column; gap: 3px; padding: 7px 9px; background: var(--nds-surface-raised); border: 1px solid var(--nds-border); border-radius: 8px; box-shadow: 0 4px 14px rgba(16, 24, 40, .1); }
+.nds-burn-tip b { font-size: var(--nds-font-size-xs); font-weight: 800; color: var(--nds-text); }
+.nds-burn-tip span { display: inline-flex; align-items: center; gap: 6px; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.nds-burn-tip i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.nds-burn-tip em { margin-left: auto; padding-left: 10px; font-style: normal; font-weight: 800; color: var(--nds-text); font-variant-numeric: tabular-nums; }
+
+/* ── AccountSwitcher (MAP.1) ───────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched.
+   Colour comes only from tokens, so `.dark` (tokens.css) re-themes it with no
+   rules here. The health dot is never the ONLY carrier of state — every row
+   also prints its status in words, so the control does not depend on hue. */
+.nds-acct { position: relative; display: inline-flex; }
+
+.nds-acct-skeleton { display: block; width: 148px; height: 28px; border-radius: var(--nds-radius-round); background: var(--nds-surface-hover); }
+
+.nds-acct-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px 3px 4px;
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-round);
+  background: var(--nds-surface); color: var(--nds-text);
+  font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600;
+  cursor: pointer; text-decoration: none;
 }
-.nds-tab-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 26px;
-  padding: 1px 8px;
-  border-radius: var(--nds-radius-full);
-  background: var(--nds-surface-sunken);
-  
-  box-shadow: inset 0 0 0 1px var(--nds-border-subtle);
-  color: var(--nds-text-2);
-  font-size: 12px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.5;
+.nds-acct-trigger:hover { background: var(--nds-surface-hover); }
+.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-acct-trigger.is-muted { color: var(--nds-text-2); font-weight: 500; }
+.nds-acct-summary { padding-left: 2px; }
+
+.nds-acct-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: var(--nds-radius-round);
+  background: var(--nds-surface-sunken); color: var(--nds-text);
+  font-size: var(--nds-font-size-sm); font-weight: 600; white-space: nowrap;
 }
-.nds-tab.on .nds-tab-count {
-  background: var(--nds-primary-soft);
-  color: var(--nds-text-link);
+.nds-acct-caret { color: var(--nds-text-3); flex: none; }
+/* Count badge on a channel pill — only rendered when that channel holds >1 account. */
+.nds-acct-pill-n {
+  min-width: 15px; padding: 0 4px; margin-left: 1px;
+  border-radius: var(--nds-radius-round);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-micro); font-weight: 800; line-height: 15px; text-align: center;
 }
-.nds-tabs.lg .nds-tab-count {
-  min-width: 0;
-  padding: 1px 7px;
-  box-shadow: none;
-  font-size: 11.5px;
-  background: var(--nds-surface-sunken);
-  color: var(--nds-text-2);
+
+/* Dots share one class so the legend in the panel and the chip cannot drift. */
+.nds-acct-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--nds-text-3); }
+.nds-acct-dot[data-health='ok'] { background: var(--nds-success); }
+.nds-acct-dot[data-health='warn'] { background: var(--nds-warning); }
+.nds-acct-dot[data-health='error'] { background: var(--nds-danger); }
+.nds-acct-dot[data-health='unknown'] { background: var(--nds-text-3); }
+.nds-acct-dot[data-health='off'] { background: transparent; border: 1.5px solid var(--nds-border-strong); }
+
+.nds-acct-panel {
+  position: absolute; top: calc(100% + 8px); right: 0;
+  /* Above the DS menu (40) and any sticky page header, below Modal (50) so an
+     open modal still covers the chrome. */
+  z-index: var(--nds-z-popover);
+  width: 320px; max-height: min(70vh, 520px); overflow-y: auto;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-xl);
+  box-shadow: var(--nds-shadow-menu);
+  padding: 6px;
 }
-.nds-tabs.lg .nds-tab.on .nds-tab-count {
-  background: var(--nds-primary-soft);
-  color: var(--nds-text-link);
+.nds-acct-panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 8px 8px; font-size: var(--nds-font-size-xs); font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; color: var(--nds-text-2);
 }
-.nds-tab-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border-radius: var(--nds-radius-full);
-  background: var(--nds-primary-soft);
-  color: var(--nds-text-link);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.5;
+.nds-acct-count {
+  min-width: 18px; text-align: center; padding: 1px 6px;
+  border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
+  color: var(--nds-text-2); font-size: var(--nds-font-size-xs); letter-spacing: 0;
 }
+
+.nds-acct-group + .nds-acct-group { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding-top: 6px; }
+.nds-acct-group-head { padding: 4px 8px; font-size: var(--nds-font-size-xs); font-weight: 700; color: var(--nds-text-2); }
+
+.nds-acct-row {
+  display: flex; align-items: flex-start; gap: 9px;
+  padding: 8px; border-radius: var(--nds-radius-md);
+  text-decoration: none; color: inherit;
+}
+.nds-acct-row .nds-acct-dot { margin-top: 5px; }
+.nds-acct-row.is-link { cursor: pointer; }
+.nds-acct-row.is-link:hover { background: var(--nds-surface-hover); }
+/* MAP.4 — a selectable row is a real button; strip the UA chrome and keep the
+   row layout identical to the informational <div> so nothing shifts when a
+   second account appears. */
+button.nds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
+button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-acct-row[data-selected] { background: var(--nds-surface-sunken); }
+/* The tick is never the only marker of the current account — the row is also
+   tinted and carries aria-current, so the state does not depend on one glyph. */
+/* The tick means SELECTED, not healthy — and the row already carries a health dot
+   two elements to its left, so a green tick conflated two different meanings on
+   one row. It takes the text colour instead: semantically right, and it clears AA
+   where green did not (measured 2.91:1 with --nds-success, 4.43:1 with
+   --nds-success-strong, both under the 4.5 bar for 13px text). Selection is also
+   carried by the row tint and aria-current, so this is never the only signal. */
+.nds-acct-check { margin-left: auto; align-self: center; color: var(--nds-text); font-weight: 800; font-size: var(--nds-font-size-base); }
+.nds-acct-row-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-acct-row-label { font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-text); }
+.nds-acct-row-sub { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
+.nds-acct-row-sub code { font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.nds-acct-row-warn { font-size: var(--nds-font-size-xs-plus); color: var(--nds-warning-strong); }
+.nds-acct-row-warn[data-tone='error'] { color: var(--nds-danger-strong); }
+/* Dark-mode tone text: no rule needed. `.dark` (tokens.css) now carries
+   --nds-{success,warning,danger}-strong and --nds-text-link, so the rules above
+   re-theme themselves. The per-component hex overrides that stood here until
+   2026-08-24 were a DS-wide gap patched locally — fixed at the token tier. */
+.nds-acct-tag {
+  padding: 1px 6px; border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
+  font-size: var(--nds-font-size-micro-plus); font-weight: 700; letter-spacing: .02em;
+}
+.nds-acct-markets { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.nds-acct-market {
+  padding: 1px 5px; border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
+  font-size: var(--nds-font-size-micro-plus); font-weight: 700;
+}
+
+.nds-acct-foot { border-top: 1px solid var(--nds-border-subtle); margin-top: 6px; padding: 8px 8px 4px; }
+.nds-acct-foot a { font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-link); text-decoration: none; }
+.nds-acct-foot a:hover { text-decoration: underline; }
+
+/* ── AccountsPanel (MAP.4) ─────────────────────────────────────────────────
+   Appended at EOF under a new prefix; no existing selector is touched. Tokens
+   only, so `.dark` re-themes it with no rules here. Reuses .nds-acct-dot and
+   .nds-acct-tag from the AccountSwitcher so a health dot means the same thing
+   in the chip and on this page — one concept, one definition. */
+.nds-acctp {
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  padding: 14px 16px;
+}
+.nds-acctp-head h3 { margin: 0; font-size: var(--nds-font-size-md-minus); font-weight: 700; color: var(--nds-text); }
+.nds-acctp-head p { margin: 4px 0 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); max-width: 62ch; }
+
+.nds-acctp-notice { margin: 10px 0 0; font-size: var(--nds-font-size-sm-plus); font-weight: 600; }
+.nds-acctp-notice[data-tone='ok'] { color: var(--nds-success-strong); }
+.nds-acctp-notice[data-tone='error'] { color: var(--nds-danger-strong); }
+
+.nds-acctp-group { margin-top: 14px; }
+.nds-acctp-group header { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-acctp-ch { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-text); }
+.nds-acctp-count {
+  min-width: 18px; text-align: center; padding: 0 6px;
+  border-radius: var(--nds-radius-round); background: var(--nds-surface-sunken);
+  color: var(--nds-text-2); font-size: var(--nds-font-size-xs); font-weight: 700;
+}
+.nds-acctp-empty { margin: 8px 0; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-2); }
+
+.nds-acctp-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--nds-border-subtle); }
+.nds-acctp-row:last-of-type { border-bottom: none; }
+.nds-acctp-row[data-busy] { opacity: 0.6; }
+.nds-acctp-row .nds-acct-dot { margin-top: 6px; }
+.nds-acctp-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.nds-acctp-name { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: var(--nds-font-size-base-plus); font-weight: 600; color: var(--nds-text); }
+.nds-acctp-sub { font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.nds-acctp-warn { color: var(--nds-warning-strong); }
+.nds-acctp-badge {
+  padding: 1px 7px; border-radius: var(--nds-radius-round);
+  background: var(--nds-primary); color: var(--nds-text-inverse);
+  font-size: var(--nds-font-size-micro-plus); font-weight: 800; letter-spacing: .02em;
+}
+.nds-acctp-input {
+  font: inherit; font-size: var(--nds-font-size-base-plus); font-weight: 600;
+  padding: 3px 7px; width: min(280px, 100%);
+  border: 1px solid var(--nds-primary); border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface); color: var(--nds-text);
+}
+
+/* CX.2 — the row's actions are DS `Button size="sm"` (Disconnect = `danger-outline`), so
+   the hand-rolled `.nds-acctp-actions button` idiom that used to live here is gone: one
+   surface, one button object. Five actions now sit here, so they wrap, right-aligned. */
+.nds-acctp-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px; flex-shrink: 0; max-width: 46%; }
+/* Why an action is absent, in words a screen reader and an eye can both reach —
+   never a `title` on a disabled control, which fires no pointer events. */
+.nds-acctp-note { font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); max-width: 20ch; text-align: right; }
+
+.nds-acctp-add {
+  margin-top: 10px; font: inherit; font-size: var(--nds-font-size-sm-plus); font-weight: 600;
+  padding: 6px 11px; border-radius: var(--nds-radius-md);
+  border: 1px dashed var(--nds-border-strong); background: none;
+  color: var(--nds-text-link); cursor: pointer;
+}
+.nds-acctp-add:hover { background: var(--nds-surface-hover); }
+
+/* MAP.4 — the account identity colour. A bar, never the only carrier of identity:
+   every row also prints its account name, so the colour is a shortcut, not the
+   information itself. */
+.nds-acct-swatch { width: 3px; align-self: stretch; border-radius: 2px; flex: none; margin-top: 2px; }
+.nds-acctp-swatches { display: inline-flex; gap: 4px; align-items: center; }
+.nds-acctp-swatch {
+  width: 16px; height: 16px; border-radius: 50%; padding: 0;
+  border: 2px solid transparent; cursor: pointer;
+}
+.nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
+.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: var(--nds-font-size-micro); color: var(--nds-text-2); line-height: 1; }
+
+/* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
+   permissions + timestamps line and the error line stack under it in `.nds-acctp-main`'s
+   gap, so the row keeps equal padding top and bottom and no orphan margins. */
+.nds-acctp-status { flex: none; }
+.nds-acctp-scopes { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.nds-acctp-times {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px;
+  font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); font-variant-numeric: tabular-nums;
+}
+/* The stored `lastError`, verbatim — already redacted server-side. Long tokens wrap
+   inside the column rather than pushing the actions off the row. */
+.nds-acctp-err { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-danger-strong); overflow-wrap: anywhere; }
+/* The inline result of Test: "OK · 412 ms" / "Failed · auth_expired · …". */
+.nds-acctp-test { font-size: var(--nds-font-size-sm); font-weight: 600; overflow-wrap: anywhere; }
+.nds-acctp-test[data-tone='ok'] { color: var(--nds-success-strong); }
+.nds-acctp-test[data-tone='error'] { color: var(--nds-danger-strong); }
+
+/* Account details keep a full reading column when this panel is narrow. */
+.nds-acctp { container-type: inline-size; }
+@container (max-width: 640px) {
+  .nds-acctp-row { flex-wrap: wrap; }
+  .nds-acctp-main { flex-basis: calc(100% - 26px); }
+  .nds-acctp-actions { flex-basis: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; }
+  .nds-acctp-note { max-width: none; text-align: left; }
+}
+
+/* ── ColumnGroupModal (2026-08-24) ──────────────────────────────────────────────
+   Was the DS's other Tailwind-styled component (see the ToolbarButton note in
+   primitives.css for why that was load-bearing, not cosmetic). Rewritten onto
+   `.nds-*` + tokens.
+
+   The group DOT: `color` on a group is a free-form string chosen by the consumer,
+   so the eleven Tailwind hues it used to accept are collapsed onto the DS's own
+   palette here — one system, not two. An unknown key falls through to the neutral
+   dot, and colour is never the only carrier: every row prints its label. */
 .nds-cgm-list { display: flex; flex-direction: column; gap: 2px; }
+
 .nds-cgm-row {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 4px; border-radius: var(--nds-radius-lg);
 }
 .nds-cgm-row:hover { background: var(--nds-surface-hover); }
+
 .nds-cgm-grip {
   flex: none; display: inline-flex; padding: 0;
   border: none; background: none; color: var(--nds-text-disabled);
@@ -1471,6 +2137,7 @@
 .nds-cgm-grip:hover { color: var(--nds-text-3); }
 .nds-cgm-grip:active { cursor: grabbing; }
 .nds-cgm-grip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-pill); }
+
 .nds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--nds-text-3); }
 .nds-cgm-dot[data-color='blue'],
 .nds-cgm-dot[data-color='sky'] { background: var(--nds-primary); }
@@ -1482,14 +2149,18 @@
 .nds-cgm-dot[data-color='orange'] { background: var(--nds-warning); }
 .nds-cgm-dot[data-color='cyan'] { background: var(--nds-badge-sd-fg); }
 .nds-cgm-dot[data-color='red'] { background: var(--nds-danger); }
+
 .nds-cgm-main { flex: 1; min-width: 0; }
-.nds-cgm-label { font-size: 13px; font-weight: 500; color: var(--nds-text-strong); }
+.nds-cgm-label { font-size: var(--nds-font-size-base); font-weight: 500; color: var(--nds-text-strong); }
+/* A hidden group is dimmed, but it also keeps its Toggle in the off position —
+   the tint is a second signal, never the only one. */
 .nds-cgm-label[data-hidden] { color: var(--nds-text-3); }
-.nds-cgm-count { margin-left: 8px; font-size: 11.5px; color: var(--nds-text-muted); }
+.nds-cgm-count { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-muted); }
+
 .nds-cgm-foot { display: flex; width: 100%; align-items: center; justify-content: space-between; }
 .nds-cgm-foot-actions { display: flex; gap: 8px; }
 .nds-cgm-reset { display: inline-flex; align-items: center; gap: 6px; }
-.nds-cgm-note { margin: 12px 0 0; font-size: 11.5px; color: var(--nds-text-muted); }
+.nds-cgm-note { margin: 12px 0 0; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-muted); }
 
 /* ── Field ─────────────────────────────────────────────────────────────────
    Label + required marker + info slot + control + hint. Replaces six spellings across the ads
@@ -1505,7 +2176,7 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
   line-height: 1.25;
   color: var(--nds-text-strong);
@@ -1519,7 +2190,7 @@
   align-items: center;
 }
 .nds-field-hint {
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   line-height: 1.4;
   color: var(--nds-text-muted);
 }
@@ -1527,12 +2198,25 @@
 /* A Card that is a <button> — a KPI tile that filters a chart, a card that scrolls to its
    section. Four surfaces hand-rolled this. Resets the button chrome and inherits type, so the
    card looks identical whether or not it is clickable. */
+/* LAYOUT at zero specificity. `.nds-card.btn` is (0,2,0) and was beating the one-class layout
+   every hand-rolled tile already carries: `.h10-cd-algo` (flex column) flattened to a block and
+   `.az-kpi` (`flex: none; min-width: 132px` in a scrolling strip) stretched. Keeping the legacy
+   class did not protect them, because two classes beat one. `:where()` scores 0, so it supplies
+   a default that ANY single class overrides — which is what a DS layout default should do.
+
+   `width: 100%` is load-bearing, not redundant: measured, a `<button>` at `display: block` and
+   no width is 120.5px in a 400px container — a form control does not fill its parent the way a
+   div does. So a tile in a flex strip must set `width: auto` itself to opt out. Measured with
+   the real cascade: `.az-kpi { flex: none; min-width: 132px; width: auto }` renders 132px, and
+   the same class WITHOUT `width` renders 400px. One class beats `:where()`; nothing beat
+   `.nds-card.btn` before. */
 :where(.nds-card.btn) {
   display: block;
   width: 100%;
   text-align: left;
 }
-/* Layout at zero specificity so a legacy one-class rule wins — see apps/web's copy. */
+/* CHROME stays at normal specificity: a legacy tile is not setting `font: inherit` on a button,
+   and a button that keeps the UA's 13.33px Arial is the defect, not the override. */
 .nds-card.btn {
   font: inherit;
   color: inherit;
@@ -1568,7 +2252,7 @@
 }
 .nds-combo-grouphd {
   padding: 5px 9px 3px;
-  font-size: 10.5px;
+  font-size: var(--nds-font-size-micro-plus);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1590,6 +2274,12 @@
   flex: none;
   margin-right: 7px;
 }
+.nds-listbox-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nds-listbox-trailing {
+  margin-left: auto; max-width: 36%; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--nds-text-muted); font-size: var(--nds-font-size-sm);
+}
 .nds-listbox-lead img,
 .nds-listbox-lead svg {
   display: block;
@@ -1603,12 +2293,16 @@
 /* Listbox dense tiers, matching Button/Input/Select exactly (13 / 12.5 / 11.5). Without these a
    Listbox trigger sat at 13px beside 11.5px grid fields. */
 .nds-listbox.sm .nds-listbox-btn {
-  padding: 5px 9px;
-  font-size: 12.5px;
+  /* On the `sm` control tier (28px), like the buttons it stands beside: `5px 9px` plus the line
+     box measured 31px in a 40px bar (2026-09-04, CT.1). */
+  height: var(--nds-control-h-sm);
+  padding: 0 9px;
+  line-height: 1.1;
+  font-size: var(--nds-font-size-sm-plus);
 }
 .nds-listbox.xs .nds-listbox-btn {
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
 }
 .nds-listbox.xs .nds-listbox-btn .chev,
 .nds-listbox.sm .nds-listbox-btn .chev {
@@ -1640,15 +2334,15 @@
 }
 .nds-grid.sm tbody td {
   padding: 7px 10px;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
 }
 .nds-grid.xs thead th {
   padding: 5px 9px;
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
 }
 .nds-grid.xs tbody td {
   padding: 5px 9px;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
 }
 /* Chips ride the density tier. `Pill` and `Tag` are fixed at 11px, so in a compacted grid they
    stayed put while the text around them stepped down — leaving the chip the biggest thing in the
@@ -1663,12 +2357,14 @@
   font-size: var(--nds-font-size-micro);
 }
 
-
 /* A navigable step. The hit target is the badge AND the label together — clicking the number of a
    finished step is the gesture people reach for, and a label-only target misses it. Inherits the
    li's layout so adding interactivity does not move anything. */
 .nds-step-hit {
-  /* MUST mirror .nds-step's axis — see apps/web's copy. */
+  /* MUST mirror `.nds-step`'s axis. `display: inline-flex` defaults to `row`, and `.nds-step` is
+     `column` — so a selectable step read badge-beside-label while an inert one read
+     badge-above-label, inside the same bar, and the bar grew 47px to 68px. `gap: inherit` does
+     not carry direction; nothing does. Written out. */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1721,6 +2417,15 @@
 .nds-grid thead th {
   vertical-align: top;
 }
+/* ...EXCEPT the selection column. A row checkbox selects the WHOLE row, not its first line, so
+   pinning it to the top puts it out of alignment with everything it acts on the moment a row is
+   taller than 15px. Measured on a grid with 56px thumbnails: the checkbox sat 17px above the
+   row's centre (10.8px at the `xs` tier) — three different baselines in one row. Middle is the
+   only alignment a control-for-the-row can have; `top` remains right for every DATA cell, which
+   is what that rule above is about. */
+.nds-grid tbody td.ck {
+  vertical-align: middle;
+}
 
 /* ── BenchmarkBar (RPX) ──────────────────────────────────────────────────
    A figure against a benchmark. ONE hue for the bar in both directions: ahead is not
@@ -1733,7 +2438,7 @@
   gap: 0 12px;
   padding: 9px 0;
   border-bottom: 1px solid var(--nds-border-subtle);
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
 }
 .nds-bmk:last-child { border-bottom: none; }
 .nds-bmk-label { font-weight: 600; color: var(--nds-text-strong); min-width: 0; }
@@ -1746,8 +2451,8 @@
 }
 .nds-bmk-tick { position: absolute; top: 4px; width: 1px; height: 10px; background: var(--nds-border-subtle); }
 .nds-bmk-fill { position: absolute; top: 5px; height: 8px; background: var(--nds-primary); }
-.nds-bmk-note { font-size: 11.5px; color: var(--nds-text-3); line-height: 18px; }
-.nds-bmk-verdict { text-align: right; font-weight: 700; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.nds-bmk-note { font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-3); line-height: 18px; }
+.nds-bmk-verdict { text-align: right; font-weight: 700; font-size: var(--nds-font-size-sm-plus); font-variant-numeric: tabular-nums; }
 .nds-bmk.is-ahead .nds-bmk-verdict { color: var(--nds-success-strong); }
 .nds-bmk.is-behind .nds-bmk-verdict { color: var(--nds-warning-strong); }
 .nds-bmk.is-level .nds-bmk-verdict,
@@ -1785,11 +2490,11 @@
 .nds-savedchip-main {
   display: inline-flex; align-items: center; gap: 6px;
   border: 0; background: transparent; cursor: pointer;
-  padding: 4px 9px; font: inherit; font-size: 12.5px; color: var(--nds-text-strong);
+  padding: 4px 9px; font: inherit; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text-strong);
 }
 .nds-savedchip.is-active .nds-savedchip-main { color: var(--nds-primary); font-weight: 600; }
 .nds-savedchip-meta {
-  font-size: 10.5px; color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
+  font-size: var(--nds-font-size-micro-plus); color: var(--nds-text-muted); font-variant-numeric: tabular-nums;
 }
 .nds-savedchip-act {
   display: inline-flex; align-items: center; justify-content: center;
@@ -1808,7 +2513,7 @@
    surface, the corner and the fade. `.nds-thumb-preview` portals to <body>, above the grid. */
 .nds-thumb { position: relative; flex-shrink: 0; display: inline-block; line-height: 0; }
 .nds-thumb-btn { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm); }
-.nds-thumb-btn:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); }
+.nds-thumb-btn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
 .nds-thumb-img { display: block; object-fit: cover; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); opacity: 0; transition: opacity 150ms ease; }
 .nds-thumb-img.is-loaded { opacity: 1; }
 .nds-thumb-skel { position: absolute; inset: 0; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); animation: nds-thumb-pulse 1.6s ease-in-out infinite; }
@@ -1818,3 +2523,277 @@
 .nds-thumb-preview-count { padding: 2px 4px; font-size: var(--nds-font-size-micro); color: var(--nds-text-muted); }
 @keyframes nds-thumb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 @media (prefers-reduced-motion: reduce) { .nds-thumb-skel { animation: none; } .nds-thumb-img { transition: none; } }
+
+/* ── KeyValue (CX.2) ──────────────────────────────────────────────────────────
+   A `<dl>` term/value grid — the description list four pages had each spelled by hand
+   (the channels detail page's `Stat` was the fourth). Term 11px uppercase secondary, value
+   13px primary; `data-columns` is a grid that collapses to one column on a narrow viewport
+   so a pair never splits. `.dense` tightens the row gap for a compact card body. */
+.nds-kv { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px 20px; margin: 0; }
+.nds-kv[data-columns='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nds-kv[data-columns='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.nds-kv.dense { row-gap: 6px; }
+.nds-kv-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.nds-kv dt {
+  margin: 0; font-size: var(--nds-font-size-xs); font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--nds-text-2);
+}
+.nds-kv dd { margin: 0; font-size: var(--nds-font-size-base); color: var(--nds-text); overflow-wrap: anywhere; }
+.nds-kv-hint { display: block; margin-top: 1px; font-size: var(--nds-font-size-xs-plus); color: var(--nds-text-2); }
+@media (max-width: 640px) {
+  .nds-kv[data-columns='2'], .nds-kv[data-columns='3'] { grid-template-columns: minmax(0, 1fr); }
+}
+
+/*
+ * SearchTrigger — a field-shaped control that opens a search surface.
+ *
+ * Only the parts `.nds-field` does not already give it: the trailing adornment slot, and a
+ * pointer cursor so it reads as actionable rather than editable. Height and width are the
+ * consumer's business (a top bar and a page toolbar want different ones).
+ */
+.nds-searchtrigger > input { cursor: pointer; }
+
+.nds-searchtrigger-ad {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 8px;
+  flex: none;
+}
+
+
+/* Visually hidden, still announced. The DS had no such utility until PressableRow's `description`
+ * needed one (hub #657). NOT `display:none` or `visibility:hidden` — both remove the node from the
+ * accessibility tree, which is the opposite of the requirement. The 1px-clip form is the one that
+ * keeps it readable by assistive tech. */
+.nds-vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── PressableRow ───────────────────────────────────────────────────────────────────────────────
+ * The whole row activates, and it can still hold its own controls. The primary action is a real
+ * `<button>`; its ::after stretches over the row, so a click anywhere hits it. `.nds-prow-actions`
+ * carries `z-index: 1` and therefore sits ABOVE that overlay — nested controls are unreachable from
+ * the row's button by construction, with no event guard to keep in sync (hub #648).
+ * ⚠ Text under the overlay is not selectable. The row is a control.
+ * ─────────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-prow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.nds-prow:hover { background: var(--nds-surface-hover); }
+.nds-prow.is-active { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-prow.is-current { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
+.nds-prow.is-disabled { opacity: 0.55; }
+.nds-prow.is-disabled:hover { background: var(--nds-surface); }
+
+.nds-prow-leading { display: flex; align-items: center; flex: none; pointer-events: none; }
+.nds-prow-action {
+  /* a real button that reads as row text */
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--nds-font-size-base);
+  font-weight: var(--nds-font-weight-medium);
+  color: var(--nds-text);
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.nds-prow.is-disabled .nds-prow-action { cursor: default; }
+/* The overlay. `inset: 0` resolves against .nds-prow, the nearest positioned ancestor. */
+.nds-prow-action::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+/* The ring belongs on the ROW, not on the label — the hit area is what is focused. */
+.nds-prow-action:focus-visible { outline: none; }
+.nds-prow-action:focus-visible::after {
+  outline: 2px solid var(--nds-primary);
+  outline-offset: -2px;
+  border-radius: var(--nds-radius-lg);
+}
+
+.nds-prow-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  min-width: 0;
+}
+/* 🔴 `position: relative` is the load-bearing line, NOT the z-index. Measured by mutation:
+   with z-index removed, a click at 93% of the row still reaches the nested control — because among
+   positioned elements at `z-index: auto` the LATER one in DOM order paints on top, and this region
+   follows the button. Make it `position: static` and the same click hits the row instead.
+   The z-index is kept as insurance: it pins the order if the overlay is ever given a z-index of its
+   own, at which point DOM order would stop deciding. An earlier version of this comment claimed the
+   z-index was the contract — it was not, and the mutation test is what said so. */
+.nds-prow-actions {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+/* Shell-anchored secondary navigation uses the shared drawer behavior. */
+.nds-drawer.from-left { left: 0; right: auto; animation-name: nds-slidein-left; }
+.nds-drawer-bd.transparent { background: transparent; }
+@keyframes nds-slidein-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+.nds-menu [role='menuitem'][data-selected='true'] { background: var(--nds-primary-soft); color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-menu [role='menuitem'][data-selected='true']:hover { background: var(--nds-primary-soft); text-decoration: underline; }
+.nds-menu [role='menuitem']:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) { .nds-drawer { animation: none; } }
+
+/* OrderedList: shared axis, value and priority ordering. */
+.nds-ordered-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nds-space-6); }
+.nds-ordered-list-item { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-6); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); color: var(--nds-text); background: var(--nds-surface); }
+.nds-ordered-list-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.nds-ordered-list-item [draggable='true'] { cursor: grab; }
+
+/* A full editor hosted below the workspace header. Existing dock/record overlays retain their geometry. */
+.nds-drawer-embedded {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--nds-surface);
+  color: var(--nds-text);
+}
+.nds-drawer-embedded > .nds-drawer-h,
+.nds-drawer-embedded > .nds-drawer-f { flex: none; flex-wrap: wrap; }
+.nds-drawer-embedded > .nds-drawer-h { flex-wrap: nowrap; align-items: flex-start; }
+.nds-drawer-embedded > .nds-drawer-h > .nds-drawer-ht { flex: 1; overflow-wrap: anywhere; }
+.nds-drawer-embedded > .nds-drawer-b { min-height: 0; }
+/* Media composition: uncropped previews, explicit selection, visible action targets. */
+.nds-media-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 244px), 1fr)); gap: var(--nds-space-16); list-style: none; padding: 0; margin: 0; }
+.nds-media-gallery > li { min-width: 0; }
+.nds-media-card { min-width: 0; overflow: hidden; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-xl); background: var(--nds-surface); color: var(--nds-text); }
+.nds-media-card.is-selected { border-color: var(--nds-primary); box-shadow: inset 0 0 0 1px var(--nds-primary); }
+.nds-media-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
+.nds-media-card-marker { flex-shrink: 0; padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); color: var(--nds-text); font-size: var(--nds-font-size-sm); }
+.nds-media-card-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1; padding: var(--nds-space-12); background: var(--nds-surface); color: var(--nds-text); border: 0; border-top: 1px solid var(--nds-border-subtle); border-bottom: 1px solid var(--nds-border-subtle); cursor: zoom-in; }
+.nds-media-card-preview:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -4px; }
+.nds-media-card-preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+.nds-media-card-failure { display: flex; flex-direction: column; align-items: center; gap: var(--nds-space-12); font: inherit; }
+.nds-media-card-detail { padding: var(--nds-space-10) var(--nds-space-12); color: var(--nds-text); font-size: var(--nds-font-size-sm); line-height: 1.6; overflow-wrap: anywhere; }
+.nds-media-card-actions { display: flex; align-items: center; gap: var(--nds-space-4); flex-wrap: wrap; padding: var(--nds-space-4) var(--nds-space-8); border-top: 1px solid var(--nds-border-subtle); }
+/* Enhanced readability is opt-in, shared by focused editors and Modal's readable variant. */
+.nds-readable {
+  --nds-text-2: var(--nds-text);
+  --nds-text-3: var(--nds-text);
+  --nds-text-muted: var(--nds-text);
+}
+.nds-readable .nds-field > input::placeholder { color: var(--nds-text-muted); opacity: 1; }
+/* The field owns its focus ring; an inner input outline is clipped into a dark vertical bar. */
+.nds-readable .nds-field > input:focus-visible { outline: none; }
+/* Readability changes contrast and focus, never control size or typography. */
+.nds-readable .nds-btn.primary {
+  background: var(--nds-primary-dark);
+  border-color: var(--nds-primary-dark);
+  color: var(--nds-white);
+}
+.nds-readable :focus-visible {
+  outline: 3px solid var(--nds-text);
+  outline-offset: 2px;
+}
+.nds-readable .nds-combo-pop .active,
+.nds-readable .nds-combo-grouphd { color: var(--nds-text); }
+/* Controlled search and recovery for choices fetched by the host. */
+.nds-async-listbox {
+  display: flex; flex-direction: column; gap: var(--nds-space-8);
+  box-sizing: border-box; min-width: 0; padding: var(--nds-space-8);
+  color: var(--nds-text); background: var(--nds-surface);
+  border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md);
+  box-shadow: var(--nds-shadow-pop);
+}
+.nds-async-listbox > p { margin: 0; }
+.nds-async-listbox-actions { display: flex; justify-content: flex-end; gap: var(--nds-space-8); }
+
+/* Gallery insertion feedback uses the shared focus colour and remains visible without motion. */
+.nds-media-gallery > li[data-drop-target="true"] { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-media-gallery-status { color: var(--nds-text-muted); font-size: var(--nds-font-size-base); }
+
+/* Featured media composition for an anchored gallery; images retain their geometry. */
+.nds-media-gallery.compact { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 136px; gap: var(--nds-space-8); }
+.nds-media-gallery.compact > li:first-child { grid-column: span 2; grid-row: span 2; }
+.nds-media-gallery.compact .nds-media-card { display: flex; flex-direction: column; height: 100%; }
+.nds-media-gallery.compact .nds-media-card-head { justify-content: flex-end; padding: var(--nds-space-4); }
+.nds-media-gallery.compact .nds-media-card-head > span:not(.nds-media-card-marker) { display: none; }
+.nds-media-gallery.compact .nds-media-card-preview { flex: 1; min-height: 0; aspect-ratio: auto; padding: var(--nds-space-4); }
+.nds-media-gallery.compact .nds-media-card-preview img { max-height: 100%; }
+.nds-media-gallery.compact .nds-media-card-actions { justify-content: space-between; flex-wrap: nowrap; }
+.nds-media-gallery.compact .nds-media-card-detail { padding: var(--nds-space-2) var(--nds-space-4); }
+@media (max-width: 420px) { .nds-media-gallery.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Mixed media previews use the original aspect ratio and explicit playback. */
+.nds-media-card-preview { position: relative; }
+.nds-media-card-type { position: absolute; inset-inline-end: var(--nds-space-4); bottom: var(--nds-space-4); display: inline-flex; align-items: center; gap: var(--nds-space-4); padding: var(--nds-space-2) var(--nds-space-4); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); background: var(--nds-surface); color: var(--nds-text); font-size: var(--nds-font-size-xs); }
+.nds-media-preview { display: grid; gap: var(--nds-space-12); min-width: 0; color: var(--nds-text); }
+.nds-media-preview-stage { display: grid; place-items: center; min-height: 180px; background: var(--nds-surface-sunken); border-radius: var(--nds-radius-lg); overflow: hidden; }
+.nds-media-preview-stage > img, .nds-media-preview-stage > video { display: block; width: 100%; max-height: 64dvh; object-fit: contain; }
+.nds-media-preview-stage > audio { max-width: 100%; }
+.nds-media-preview-stage > video:focus-visible, .nds-media-preview-stage > audio:focus-visible, .nds-media-preview-transcript > summary:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-preview-fallback { display: grid; justify-items: center; gap: var(--nds-space-12); padding: var(--nds-space-24); text-align: center; }
+.nds-media-preview-fallback p { margin: 0; }
+.nds-media-preview-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.nds-media-preview-transcript { overflow-wrap: anywhere; }
+.nds-media-preview-transcript > summary { cursor: pointer; padding: var(--nds-space-8) 0; }
+.nds-media-preview-transcript > p { white-space: pre-wrap; }
+
+.nds-media-strip { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; overflow: hidden; color: var(--nds-text); }
+.nds-media-strip-thumbnail { position: relative; display: inline-grid; place-items: center; flex: 0 0 32px; width: 32px; height: 32px; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-sm); background: var(--nds-surface); overflow: hidden; }
+.nds-media-strip-thumbnail > img { width: 100%; height: 100%; object-fit: contain; }
+.nds-media-strip-kind { position: absolute; bottom: 0; inset-inline-end: 0; display: flex; padding: 1px; color: var(--nds-text); background: var(--nds-surface); border-start-start-radius: var(--nds-radius-sm); }
+.nds-media-strip-count { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 360px) { .nds-media-gallery.compact { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.nds-media-strip > .nds-tooltip { flex: none; }
+.nds-media-strip-move { display: inline-flex; padding: 0; border: 0; border-radius: var(--nds-radius-sm); background: transparent; color: inherit; cursor: grab; }
+.nds-media-strip-move:active { cursor: grabbing; }
+.nds-media-strip-move[data-drop-target="true"] { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-strip-move:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+
+/* Repeated records: composition, technical assemblies and other paired facts. */
+.nds-record-list, .nds-record-list-item { display: grid; gap: var(--nds-space-8); min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.nds-record-list-item { padding-block: var(--nds-space-8); }
+.nds-record-list-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--nds-space-8); }
+.nds-record-list > button, .nds-record-list-item > button { justify-self: start; }
+
+/* Compact read-only comparison in a card or drawer. */
+.nds-summary-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: var(--nds-font-size-sm-plus); color: var(--nds-text); }
+.nds-summary-table th { color: var(--nds-text-2); font-weight: 500; text-align: left; }
+.nds-summary-table th, .nds-summary-table td { height: 24px; padding: 2px 8px; border-bottom: 1px solid var(--nds-border-subtle); overflow-wrap: anywhere; }
+.nds-summary-table th:last-child, .nds-summary-table td:last-child { text-align: right; }
+.nds-ordered-list.compact .nds-ordered-list-item { padding: 0; border: 0; background: transparent; }
+
+.nds-ordered-list .nds-ordered-list-item.dragging { background: var(--nds-surface-hover); }
+.nds-ordered-list-grip { touch-action: none; cursor: grab; }

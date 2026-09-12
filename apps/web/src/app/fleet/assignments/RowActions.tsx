@@ -34,7 +34,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { AssignmentRow } from './AssignmentsClient'

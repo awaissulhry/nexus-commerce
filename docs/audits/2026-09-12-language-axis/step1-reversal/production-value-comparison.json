@@ -1,0 +1,43 @@
+{
+  "from": "2026-09-11T23:10:58.462Z",
+  "to": "2026-09-11T23:38:16.942Z",
+  "tables": {
+    "Product": {
+      "added": [],
+      "removed": [],
+      "changed": [
+        "cmokmy0yq0016pm0pv151jk3a",
+        "cmokmy14a001lpm0pd3okpt79",
+        "cmokmy17z001vpm0pcwob2uja",
+        "cmokmy19r0020pm0ptsu7hldk",
+        "cmokmy25r004dpm0pto3mdieg",
+        "cmokmy267004epm0p3zwlfs75",
+        "cmokmy27q004ipm0pulqrqc3q",
+        "cmokmy282004jpm0pp4tvaicp",
+        "cmokmy28e004kpm0phglcwa5f",
+        "cmokmy28t004lpm0p553jej2g",
+        "cmokmy296004mpm0p8f8agifv",
+        "cmokmy2fo0053pm0pwafjwwk6",
+        "cmokmy2li005ipm0phqzk03r6",
+        "cmokmy2vm0067pm0pjk9tsyr2",
+        "cmokmy2xg006cpm0pyd90xxsj",
+        "cmokmy2xu006dpm0p6rxokcgm",
+        "cmokmy30p006kpm0pdul6j1xd"
+      ],
+      "count": 338
+    },
+    "ChannelListing": {
+      "added": [],
+      "removed": [],
+      "changed": [],
+      "count": 977
+    },
+    "Marketplace": {
+      "added": [],
+      "removed": [],
+      "changed": [],
+      "count": 20
+    }
+  },
+  "note": "ProductTranslation hash format changed to include four new columns; not compared here. Correction SQL has no business DML."
+}

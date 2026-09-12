@@ -156,11 +156,12 @@ export async function syncProductToAmazon(
     })
 
     // FM.7 — let the catalog mapping shape the payload (flag-gated via
-    // FM_SYNC_AMAZON; off by default → returns `payload` unchanged).
+    // FM_SYNC_AMAZON; canonical for Amazon/eBay).
     return applyMappingToSyncPayload({
       productId: product.id,
       channel: 'AMAZON',
       marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      channelConnectionId: channelListing.channelConnectionId ?? null, aliasKey: channelListing.aliasKey ?? '',
       legacyPayload: payload,
     })
   } catch (error) {

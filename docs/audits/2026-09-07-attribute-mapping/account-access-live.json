@@ -1,0 +1,200 @@
+{
+  "checkedAt": "2026-09-07T15:03:04.855Z",
+  "configuration": "local",
+  "listingWrites": 0,
+  "accounts": [
+    {
+      "connectionId": "cmr4aaqb00025nz016k18rup9",
+      "channel": "EBAY",
+      "name": "xaviaracing",
+      "checks": {
+        "identity": {
+          "status": 200,
+          "ok": true,
+          "matchesStored": true,
+          "username": "xaviaracing"
+        },
+        "inventoryRead": {
+          "status": 200,
+          "ok": true,
+          "total": 226
+        },
+        "accountPrivileges": {
+          "status": 200,
+          "ok": true
+        }
+      }
+    },
+    {
+      "connectionId": "cmt142bli01vcp4010fjo2k13",
+      "channel": "EBAY",
+      "name": "motovento",
+      "checks": {
+        "identity": {
+          "status": 200,
+          "ok": true,
+          "matchesStored": true,
+          "username": "motovento"
+        },
+        "inventoryRead": {
+          "status": 200,
+          "ok": true,
+          "total": 0
+        },
+        "accountPrivileges": {
+          "status": 200,
+          "ok": true
+        }
+      }
+    },
+    {
+      "connectionId": "cmothu9bo0000nz01asw6wx8j",
+      "channel": "AMAZON",
+      "name": "A1VRHKTGYO1JNU",
+      "checks": {
+        "sellerConfiguration": {
+          "ok": true
+        },
+        "tokenRefresh": {
+          "status": 200,
+          "ok": true
+        },
+        "marketplaces": {
+          "status": 200,
+          "ok": true,
+          "participating": [
+            {
+              "id": "A13V1IB3VIYZZH",
+              "country": "FR",
+              "suspended": false
+            },
+            {
+              "id": "A17E79C6D8DWNP",
+              "country": "SA",
+              "suspended": false
+            },
+            {
+              "id": "A1805IZSGTT6HS",
+              "country": "NL",
+              "suspended": false
+            },
+            {
+              "id": "A1C3SOZRARQ6R3",
+              "country": "PL",
+              "suspended": false
+            },
+            {
+              "id": "A1F83G8C2ARO7P",
+              "country": "GB",
+              "suspended": false
+            },
+            {
+              "id": "A1PA6795UKMFR9",
+              "country": "DE",
+              "suspended": false
+            },
+            {
+              "id": "A1RKKUPIHCS9HS",
+              "country": "ES",
+              "suspended": false
+            },
+            {
+              "id": "A1ZFFQZ3HTUKT9",
+              "country": "FR",
+              "suspended": false
+            },
+            {
+              "id": "A28R8C7NBKEWEA",
+              "country": "IE",
+              "suspended": false
+            },
+            {
+              "id": "A2NODRKZP88ZB9",
+              "country": "SE",
+              "suspended": false
+            },
+            {
+              "id": "A2VIGQ35RCS4UG",
+              "country": "AE",
+              "suspended": false
+            },
+            {
+              "id": "A33AVAJ2PDY3EV",
+              "country": "TR",
+              "suspended": false
+            },
+            {
+              "id": "A38D8NSA03LJTC",
+              "country": "DE",
+              "suspended": false
+            },
+            {
+              "id": "A62U237T8HV6N",
+              "country": "IT",
+              "suspended": false
+            },
+            {
+              "id": "AFQLKURYRPEL8",
+              "country": "ES",
+              "suspended": false
+            },
+            {
+              "id": "AMEN7PMS3EDWL",
+              "country": "BE",
+              "suspended": false
+            },
+            {
+              "id": "APJ6JRA9NG5V4",
+              "country": "IT",
+              "suspended": false
+            },
+            {
+              "id": "AZMDEXL2RVFNN",
+              "country": "GB",
+              "suspended": false
+            }
+          ]
+        },
+        "listingRead": {
+          "status": 200,
+          "ok": true,
+          "sku": "AIRMESH-JACKET-BLACK-MEN-XL",
+          "productType": "COAT"
+        },
+        "categorySchema": {
+          "status": 200,
+          "ok": true,
+          "productType": "COAT",
+          "sellerSpecific": true
+        },
+        "schemaDocument": {
+          "status": 200,
+          "ok": true,
+          "propertyCount": 157
+        }
+      }
+    }
+  ],
+  "applications": [
+    {
+      "channel": "EBAY",
+      "checks": {
+        "appToken": {
+          "status": 200,
+          "ok": true
+        },
+        "taxonomy": {
+          "status": 200,
+          "ok": true,
+          "treeId": "101"
+        },
+        "categorySchema": {
+          "status": 200,
+          "ok": true,
+          "categoryId": "177101",
+          "aspectCount": 14
+        }
+      }
+    }
+  ]
+}

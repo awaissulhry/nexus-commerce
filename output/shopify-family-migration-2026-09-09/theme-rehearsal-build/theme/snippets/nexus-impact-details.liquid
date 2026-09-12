@@ -1,0 +1,17 @@
+{%- assign nexus_contract = product.selected_or_first_available_variant.metafields.nexus.resolved.value -%}
+{%- for nexus_display in nexus_contract.displayFields -%}
+  {%- assign nexus_parts = nexus_display.key | split: '.' -%}
+  {%- assign nexus_value = product.selected_or_first_available_variant.metafields[nexus_parts.first][nexus_parts.last] -%}
+  {%- if nexus_value != blank -%}
+    <div class="product-info__text"><p class="h6">{{ nexus_display.label | escape }}</p><div class="prose">
+      {%- case nexus_value.type -%}
+        {%- when 'json' -%}<pre>{{ nexus_value.value | json | escape }}</pre>
+        {%- when 'metaobject_reference', 'list.metaobject_reference' -%}
+          {%- assign nexus_entries = nexus_value.value -%}
+          {%- if nexus_value.type == 'metaobject_reference' -%}{%- assign nexus_entries = nexus_entries | sort -%}{%- endif -%}
+          {%- for nexus_entry in nexus_entries -%}{%- render 'nexus-impact-entry', entry: nexus_entry, definitions: nexus_contract.entryTypes, depth: 0 -%}{%- endfor -%}
+        {%- else -%}{{ nexus_value | metafield_tag }}
+      {%- endcase -%}
+    </div></div>
+  {%- endif -%}
+{%- endfor -%}

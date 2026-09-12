@@ -56,8 +56,8 @@ export function startSavedViewAlertsCron(): void {
     })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('saved-view-alerts', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('saved-view-alerts', async () => {
       const r = await runSavedViewAlertsSweep()
       return `evaluated=${r.evaluated} fired=${r.fired}`
     }).catch((err) => {

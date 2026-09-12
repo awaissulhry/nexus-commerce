@@ -1,0 +1,84 @@
+{
+  "auditDate": "2026-09-11",
+  "recordedAt": "2026-09-11T00:10:58.066075+00:00",
+  "baseCommit": "80f6cfb84afa3a18f62bf9adccd16c1d27d17ebb",
+  "workingTree": "Existing uncommitted work was inspected and preserved; baseCommit alone does not identify all audited code.",
+  "tests": [
+    {
+      "command": "npm test --workspace=@nexus/api -- src/services/pim/workspace-destination.vitest.test.ts src/services/pim/scope-readiness.vitest.test.ts src/services/pim/listing-readiness.vitest.test.ts src/services/pim/family-source-shapes.vitest.test.ts src/services/pim/channel-value-write.vitest.test.ts src/services/pim/channel-value-mutation.vitest.test.ts src/services/pim/mapping/schema-requirements.vitest.test.ts src/services/pim/channel-specs src/services/taxonomy src/services/shopify/information-translations.vitest.test.ts",
+      "filesPassed": 20,
+      "testsPassed": 185,
+      "testsSkipped": 1,
+      "skipReason": "workspace-destination.vitest.test.ts includes an opt-in isolated browser fixture server, gated by NEXUS_WORKSPACE_SCOPE_BROWSER=1."
+    },
+    {
+      "command": "npm test --workspace=@nexus/web -- scopes.vitest.test.ts accountScope.vitest.test.ts sheet/channel/value-source.vitest.test.ts",
+      "filesPassed": 3,
+      "testsPassed": 48,
+      "testsSkipped": 0
+    }
+  ],
+  "totals": {
+    "filesPassed": 23,
+    "testsPassed": 233,
+    "testsSkipped": 1
+  },
+  "reproductions": {
+    "command": "node --import tsx docs/audits/2026-09-11-pim-management/reproduce-resolver-gaps.mts",
+    "result": "resolver-gap-results.json",
+    "findings": [
+      "Requested German resolves English-only title without needsTranslation.",
+      "Conditional Amazon maxUtf8ByteLength violation is not reported."
+    ],
+    "externalWrites": false
+  },
+  "browser": {
+    "environment": "Existing local Nexus application in the connected browser; agent-created audit tabs.",
+    "product": "GALE-JACKET",
+    "familyRows": 21,
+    "scopesInspected": [
+      "Shared product",
+      "AMAZON IT",
+      "EBAY IT",
+      "SHOPIFY GLOBAL",
+      "ETSY GLOBAL"
+    ],
+    "chooserCountsObserved": {
+      "Shared product": 227,
+      "SHOPIFY GLOBAL": 72,
+      "ETSY GLOBAL": 56
+    },
+    "notes": [
+      "Counts include structural columns and are not distinct editable-attribute counts.",
+      "Shared Ready 100%; Jackets has zero required custom family definitions.",
+      "Amazon sample Blocked 100%, with 457 affected cells across 24 columns and 20 rows.",
+      "eBay sample Ready 100% for the counted requirements; not a publication verification.",
+      "Etsy sample had no selected category, 8 required columns and 105 missing required cells across 5 columns and 21 rows.",
+      "Taxonomy updates initially returned a temporary error; a final Retry succeeded and all 18 supported sources were up to date.",
+      "No taxonomy refresh action was invoked by this audit."
+    ],
+    "evidence": [
+      "taxonomy-final-dom.txt",
+      "etsy-status-dom.txt"
+    ]
+  },
+  "database": {
+    "readOnly": true,
+    "evidence": "workspace-evidence.json",
+    "products": 338,
+    "roots": 37,
+    "exampleEffectiveDefinitions": 198,
+    "exampleRequiredDefinitions": 0,
+    "exampleLocalizableDefinitions": 57,
+    "unreviewedCategoryMappings": 12,
+    "supportedTaxonomySourcesReadyAtFinalCheck": 18
+  },
+  "notVerified": [
+    "Live provider mutation/publication and exact readback",
+    "Every product-category-account-market-locale combination",
+    "Full build/type/token/design-system guard suite in this audit",
+    "Formal WCAG AA/AAA accessibility conformance",
+    "Full catalog-scale performance and race/timeout behavior"
+  ],
+  "artifactsOnly": true
+}

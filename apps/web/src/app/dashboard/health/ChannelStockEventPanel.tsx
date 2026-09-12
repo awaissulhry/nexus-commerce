@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ArrowRight, CheckCircle2, Cable, Loader2 } from 'lucide-react'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'
 import { AutoRefreshSelect } from '@/app/_shared/grid-lens'

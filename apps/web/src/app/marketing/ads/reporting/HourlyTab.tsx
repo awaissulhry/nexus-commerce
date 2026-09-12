@@ -24,7 +24,7 @@
  * scale by construction and needs no new chart. The same component then draws the 7 × 24 grid.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Card } from '@/design-system/components/Card'
 import { Heatmap } from '@/design-system/components/Heatmap'
 import { Pill } from '@/design-system/primitives/Pill'

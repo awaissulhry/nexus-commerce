@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * A7 (XLSM hybrid) — Amazon template vault + "Export for Amazon (.xlsm)".
  *
@@ -64,7 +65,7 @@ export async function captureTemplateToVault(
     bytes: Buffer.from(bytes),
   }
   await prisma.amazonTemplateVault.upsert({
-    where: { templateIdentifier: key },
+    where: { workspace_templateIdentifier: workspaceKey({ templateIdentifier: key }) },
     create: { templateIdentifier: key, ...data },
     update: data,
   })
@@ -143,7 +144,7 @@ export async function captureFamilyWorkbook(
     rowCount: rows.length,
   }
   await prisma.amazonFamilyWorkbook.upsert({
-    where: { familyKey_marketplace: { familyKey, marketplace } },
+    where: { familyKey_marketplace: workspaceKey({ familyKey, marketplace }) },
     create: { familyKey, marketplace, ...data },
     update: data,
   })
@@ -158,12 +159,12 @@ export async function resolveExportBase(
   opts: { marketplace: string; templateIdentifier?: string; familyKey?: string | null },
 ): Promise<{ source: 'template' | 'family'; entry: { templateIdentifier: string; filename: string; bytes: Buffer; marketplace: string } } | null> {
   if (opts.templateIdentifier) {
-    const t = await prisma.amazonTemplateVault.findUnique({ where: { templateIdentifier: opts.templateIdentifier } })
+    const t = await prisma.amazonTemplateVault.findUnique({ where: { workspace_templateIdentifier: workspaceKey({ templateIdentifier: opts.templateIdentifier }) } })
     return t ? { source: 'template', entry: t as never } : null
   }
   if (opts.familyKey) {
     const f = await prisma.amazonFamilyWorkbook.findUnique({
-      where: { familyKey_marketplace: { familyKey: opts.familyKey, marketplace: opts.marketplace } },
+      where: { familyKey_marketplace: workspaceKey({ familyKey: opts.familyKey, marketplace: opts.marketplace }) },
     })
     if (f) return { source: 'family', entry: f as never }
   }

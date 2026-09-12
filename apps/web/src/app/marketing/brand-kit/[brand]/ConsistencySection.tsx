@@ -9,7 +9,7 @@
 // kit) so the operator can fix in one click.
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   ShieldCheck,
   AlertOctagon,

@@ -1,0 +1,16 @@
+{
+  "channel": "ETSY",
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "documentWidth": 390,
+  "selectedScopeBounds": {
+    "left": 235.3359375,
+    "right": 373.8046875,
+    "top": 143,
+    "bottom": 171
+  },
+  "gridPresent": true,
+  "browserWarningsAndErrors": []
+}

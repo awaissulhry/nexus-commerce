@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * Image-publish reconcile cron — safety net for the publish writeback.
  *
@@ -116,14 +117,14 @@ export async function runImagePublishReconcileOnce(): Promise<string> {
 export function startImagePublishReconcileCron(): void {
   if (cronTimer) return
   // Boot sweep so a deploy heals already-stuck rows promptly (after the app settles).
-  setTimeout(() => {
-    void runImagePublishReconcileOnce()
+  setTimeout(() => { void runProfileTimer('image-publish-reconcile', async () => {
+    await runImagePublishReconcileOnce()
       .then((s) => { if (s !== 'nothing to reconcile') logger.info(`image-publish-reconcile: boot — ${s}`) })
       .catch(() => {})
-  }, 30 * 1000)
+  }, TICK_INTERVAL_MS) }, 30 * 1000)
 
-  cronTimer = setInterval(() => {
-    void (async () => {
+  cronTimer = setInterval(() => { void runProfileTimer('image-publish-reconcile', async () => {
+    await (async () => {
       try {
         const summary = await runImagePublishReconcileOnce()
         if (summary !== 'nothing to reconcile') logger.info(`image-publish-reconcile: ${summary}`)
@@ -131,7 +132,7 @@ export function startImagePublishReconcileCron(): void {
         logger.warn('image-publish-reconcile: tick failed', { err: err instanceof Error ? err.message : String(err) })
       }
     })()
-  }, TICK_INTERVAL_MS)
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
   logger.info(`image-publish-reconcile: cron started (interval ${TICK_INTERVAL_MS}ms)`)
 }
 

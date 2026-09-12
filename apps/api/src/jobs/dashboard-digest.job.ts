@@ -175,8 +175,8 @@ export function startDashboardDigestCron(): void {
     logger.error('digest cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void (async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await (async () => {
       try {
         await recordCronRun('dashboard-digest', async () => {
           const r = await runDigestTick()

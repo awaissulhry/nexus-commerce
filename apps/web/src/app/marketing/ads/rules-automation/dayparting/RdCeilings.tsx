@@ -20,7 +20,7 @@
  * values are set there, the gate enforces them everywhere) — this section says so instead of
  * growing a second editor.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, Ruler } from 'lucide-react'
 import { useRdData } from './_rd/RdData'
 import { RdSection } from './_rd/RdSection'

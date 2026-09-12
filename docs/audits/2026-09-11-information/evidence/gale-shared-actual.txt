@@ -1,0 +1,908 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to dark mode":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+        - generic: Home
+      - link "Products 37 pending":
+        - /url: /products
+        - generic: Products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic: Listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+        - generic: Stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+        - generic: Inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic: Outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+        - generic: Replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+        - generic: Purchase Orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+        - generic: Suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+        - generic: Carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+        - generic: Returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic: Orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+        - generic: Pricing
+      - link "Insights":
+        - /url: /insights
+        - generic: Insights
+      - link "Advertising":
+        - /url: /marketing/ads
+        - generic: Advertising
+      - link "Calendar":
+        - /url: /marketing/calendar
+        - generic: Calendar
+      - link "Content":
+        - /url: /marketing/content
+        - generic: Content
+      - link "Reviews":
+        - /url: /marketing/reviews
+        - generic: Reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+        - generic: Agent Fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic: Inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+        - generic: Sync Logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic: Connections
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+        - generic: Mappings
+      - link "Settings":
+        - /url: /settings
+        - generic: Settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+        - generic: Recycle Bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic: Active
+  - generic: Parent
+  - generic "Every cell saves on its own. There is no page Save.": Autosave on
+  - link "Choose listing destinations":
+    - /url: /products/cmokmy3a40078pm0p1fvnu523/list-wizard
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Blocked 0%" [checked]:
+      - generic: Shared product
+      - generic: ·
+      - generic: Blocked
+      - generic: 0%
+    - radio "Amazon":
+      - generic: Amazon
+    - radio "eBay":
+      - generic: eBay
+    - radio "Shopify Not set up":
+      - generic: Shopify
+      - generic: ·
+      - generic: Not set up
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Content language":
+    - generic: English (en)
+  - region "Information":
+    - text: 21 rows
+    - generic: · Parent · 20 children · Colore × Taglia
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (235)":
+      - text: All attributes (235)
+    - button "Required 1 column":
+      - generic: Required
+      - generic: 1 column
+    - button "Essentials 9 columns":
+      - generic: Essentials
+      - generic: 9 columns
+    - button "Family facts 200 columns":
+      - generic: Family facts
+      - generic: 200 columns
+    - button "Localized content 65 columns":
+      - generic: Localized content
+      - generic: 65 columns
+    - 'button "Missing required: 21 affected cells across 1 column and 21 rows"':
+      - generic: Missing required
+      - generic: 1 column
+    - 'button "Warnings: 42 affected cells across 2 columns and 21 rows. A value the channel would accept but flag — the same rule the channel scopes count"':
+      - generic: Warnings
+      - generic: 2 columns
+    - button "Classification"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product role Parent SKU Name * Brand Manufacturer Status Description Product media Bullet points":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product role":
+            - generic: Product role
+          - columnheader "Parent SKU":
+            - generic: Parent SKU
+          - columnheader "Name *":
+            - generic: Name *
+          - columnheader "Brand":
+            - generic: Brand
+          - columnheader "Manufacturer":
+            - generic: Manufacturer
+          - columnheader "Status":
+            - generic: Status
+          - columnheader "Description":
+            - generic: Description
+          - columnheader "Product media":
+            - generic: Product media
+          - columnheader "Bullet points":
+            - generic: Bullet points
+        - 'row "Press Space to toggle row selection (unchecked) Collapse children Parent · 20 children GALE-JACKET 8% — filled ÷ applicable master attributes Actions for GALE-JACKET Parent Not measured Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Not measured Not measured ACTIVE Not measured GALE-JACKET, 24 media items Edit product media: GALE-JACKET draft content. Requested en; showing en Not measured" [expanded]':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse children Parent · 20 children GALE-JACKET 8% — filled ÷ applicable master attributes Actions for GALE-JACKET":
+            - button "Collapse children" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: GALE-JACKET
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET":
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET, 24 media items Edit product media: GALE-JACKET"':
+            - group "GALE-JACKET, 24 media items":
+              - button "MAIN, position 1 of 24"
+              - button "Image, position 2 of 24"
+              - button "Image, position 3 of 24"
+              - button "Image, position 4 of 24"
+              - button "Image, position 5 of 24"
+              - generic: "+19"
+            - 'button "Edit product media: GALE-JACKET"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-3XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-3XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-3XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-3XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-3XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+            - group "GALE-JACKET-BLACK-MEN-3XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-4XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-4XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-4XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-4XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-4XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+            - group "GALE-JACKET-BLACK-MEN-4XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-5XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-5XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-5XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-5XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-5XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+            - group "GALE-JACKET-BLACK-MEN-5XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-L Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-L, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-L draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-L
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-L, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-L"':
+            - group "GALE-JACKET-BLACK-MEN-L, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-L"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-M Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-M, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-M draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-M
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-M, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-M"':
+            - group "GALE-JACKET-BLACK-MEN-M, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-M"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-S Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-S, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-S draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-S
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-S, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-S"':
+            - group "GALE-JACKET-BLACK-MEN-S, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-S"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-XL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+            - group "GALE-JACKET-BLACK-MEN-XL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT02, position 2 of 7"
+              - button "PT01, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XS Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-XS, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-XS draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XS
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XS, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+            - group "GALE-JACKET-BLACK-MEN-XS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XXL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-XXL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+            - group "GALE-JACKET-BLACK-MEN-XXL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS 9% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XXS Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero) Xavia Not measured ACTIVE Not measured GALE-JACKET-BLACK-MEN-XXS, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXS draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS 9% — filled ÷ applicable master attributes Actions for GALE-JACKET-BLACK-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXS
+            - img "9% — filled ÷ applicable master attributes":
+              - generic: 9%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXS, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+            - group "GALE-JACKET-BLACK-MEN-XXS, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-3XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-3XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-3XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-3XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-3XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+            - group "GALE-JACKET-YELLOW-MEN-3XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-4XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-4XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-4XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-4XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-4XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+            - group "GALE-JACKET-YELLOW-MEN-4XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-5XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-5XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-5XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-5XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-5XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+            - group "GALE-JACKET-YELLOW-MEN-5XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-L Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-L, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-L draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-L
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-L, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+            - group "GALE-JACKET-YELLOW-MEN-L, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-M Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-M, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-M draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-M
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-M, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+            - group "GALE-JACKET-YELLOW-MEN-M, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-S Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-S, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-S draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-S
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-S, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+            - group "GALE-JACKET-YELLOW-MEN-S, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+            - group "GALE-JACKET-YELLOW-MEN-XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XS Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-XS, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XS draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XS
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XS, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+            - group "GALE-JACKET-YELLOW-MEN-XS, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XXL Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-XXL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXL draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL 8% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXL
+            - img "8% — filled ÷ applicable master attributes":
+              - generic: 8%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+            - group "GALE-JACKET-YELLOW-MEN-XXL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS 9% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XXS Child GALE-JACKET Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo) Xavia Not measured ACTIVE Not measured GALE-JACKET-YELLOW-MEN-XXS, 8 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXS draft content. Requested en; showing en Not measured"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS 9% — filled ÷ applicable master attributes Actions for GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXS
+            - img "9% — filled ÷ applicable master attributes":
+              - generic: 9%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - gridcell "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)":
+            - img "Language fallback. Requested en; showing it. This content does not satisfy the requested language requirement":
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)
+          - gridcell "Xavia":
+            - generic: Xavia
+          - gridcell "Not measured":
+            - generic: —
+          - gridcell "ACTIVE":
+            - generic: ACTIVE
+          - gridcell "Not measured":
+            - generic: —
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXS, 8 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+            - group "GALE-JACKET-YELLOW-MEN-XXS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "MAIN, position 2 of 8"
+              - button "PT01, position 3 of 8"
+              - button "PT02, position 4 of 8"
+              - button "PT03, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+          - gridcell "draft content. Requested en; showing en Not measured":
+            - img "draft content. Requested en; showing en":
+            - generic: —
+    - status:
+      - generic: 21 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

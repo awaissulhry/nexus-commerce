@@ -1,3 +1,4 @@
+import { languageTag } from './pim/market-languages.js'
 /**
  * C1 — canonical product-compliance resolver (the shared Track C foundation).
  *
@@ -262,16 +263,16 @@ export function buildAmazonComplianceColumns(payload: CompliancePayload): Record
  * UK is not GPSR-mandatory — the EN manual is emitted there as harmless extra.
  */
 export const COMPLIANCE_MEDIA_BY_MARKETPLACE: Record<string, { doc: string; contentLanguage: string }> = {
-  DE: { doc: 'DE', contentLanguage: 'de_DE' },
-  FR: { doc: 'FR', contentLanguage: 'fr_FR' },
-  ES: { doc: 'ES', contentLanguage: 'es_ES' },
-  NL: { doc: 'NL', contentLanguage: 'nl_NL' },
-  PL: { doc: 'PL', contentLanguage: 'pl_PL' },
-  SE: { doc: 'SV', contentLanguage: 'sv_SE' },
-  BE: { doc: 'FR', contentLanguage: 'fr_BE' },
-  IT: { doc: 'EN', contentLanguage: 'en_GB' }, // gap — no Italian pages yet (warn-only)
-  UK: { doc: 'EN', contentLanguage: 'en_GB' },
-  GB: { doc: 'EN', contentLanguage: 'en_GB' },
+  DE: { doc: 'DE', contentLanguage: languageTag('de', 'DE') },
+  FR: { doc: 'FR', contentLanguage: languageTag('fr', 'FR') },
+  ES: { doc: 'ES', contentLanguage: languageTag('es', 'ES') },
+  NL: { doc: 'NL', contentLanguage: languageTag('nl', 'NL') },
+  PL: { doc: 'PL', contentLanguage: languageTag('pl', 'PL') },
+  SE: { doc: 'SV', contentLanguage: languageTag('sv', 'SE') },
+  BE: { doc: 'FR', contentLanguage: languageTag('fr', 'BE') },
+  IT: { doc: 'EN', contentLanguage: languageTag('en', 'GB') }, // gap — no Italian pages yet (warn-only)
+  UK: { doc: 'EN', contentLanguage: languageTag('en', 'GB') },
+  GB: { doc: 'EN', contentLanguage: languageTag('en', 'GB') },
 }
 
 /**

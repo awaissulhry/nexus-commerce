@@ -29,7 +29,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Search, CornerDownLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SETTINGS_NAV, type SettingsNavItem } from './settings-nav'

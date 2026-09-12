@@ -25,8 +25,9 @@
  * adGroup= ?rule= ?row= — a copied link reproduces the view you are looking at.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Check, X, RefreshCw, Sparkles, ExternalLink, RotateCcw, Pause, Volume2, Settings } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter, type FilterState } from '../campaigns/_grid/AdsDataGrid'

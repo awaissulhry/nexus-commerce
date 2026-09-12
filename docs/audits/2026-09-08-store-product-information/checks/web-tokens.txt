@@ -1,0 +1,5 @@
+
+> nexus-commerce@1.0.0 tokens:check
+> tsx apps/web/src/design-system/tools/generate-tokens-css.ts --check
+
+✓ tokens.css + tokens-global.css are in sync with tokens/css-vars.ts

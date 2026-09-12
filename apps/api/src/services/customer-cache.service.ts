@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * O.21a — Customer aggregate-cache + auto-link service.
  *
@@ -79,7 +80,7 @@ export async function ensureCustomerForOrder(orderId: string): Promise<string | 
   // re-link of an existing row (e.g. operator-edited name wins
   // over the channel-supplied value).
   const customer = await prisma.customer.upsert({
-    where: { email },
+    where: { workspace_email: workspaceKey({ email: email }) },
     create: {
       id,
       email,

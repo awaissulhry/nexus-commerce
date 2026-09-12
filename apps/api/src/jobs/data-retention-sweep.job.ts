@@ -119,9 +119,9 @@ export function startRetentionSweepCron(): void {
     logger.error('retention-sweep: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
+  scheduledTask = cron.schedule(schedule, async () => {
     if (process.env.NEXUS_ENABLE_RETENTION_SWEEP === '0') return
-    void recordCronRun('retention-sweep', async () => {
+    await recordCronRun('retention-sweep', async () => {
       const r = await runRetentionSweepOnce()
       return `keys=${r.scannedKeys} deleted=${r.totalDeleted} skipped=${r.skippedKeys.length}`
     }).catch((err) => {

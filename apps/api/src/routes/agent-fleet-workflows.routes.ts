@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.WF.2 — workflow routes, in their OWN file per the session-locks
  * protocol (a duplicate path in the 771-line agent-fleet.routes.ts is a
@@ -56,7 +57,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       if (builtinByKey(key)) {
         return reply.code(409).send({ error: `"${key}" is a built-in routine — pick another name` })
       }
-      const existing = await prisma.agentWorkflow.findUnique({ where: { key } })
+      const existing = await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } })
       if (existing) {
         return reply.code(409).send({ error: `a workflow named "${key}" already exists` })
       }
@@ -79,7 +80,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { key } = request.params
       const builtin = builtinByKey(key)
-      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      const row = await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } })
       // WF.6a — a custom exists the moment its row does, revisions or not;
       // a freshly created workflow must not 404 its own page.
       if (!builtin && !row) return reply.code(404).send({ error: 'workflow not found' })
@@ -106,7 +107,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
     const { definition, note } = request.body ?? {}
     // WF.6a — any workflow that exists may take revisions: built-ins and
     // customs alike. An orphan key still refuses.
-    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { key } }))) {
+    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } }))) {
       return reply.code(404).send({ error: 'unknown workflow' })
     }
     if (!note || !note.trim()) {
@@ -157,7 +158,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
   }>('/agent/fleet/workflows/:key/test', async (request, reply) => {
     const { key } = request.params
     // WF.6a — the test lane is key-generic, like the editor it serves.
-    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { key } }))) {
+    if (!builtinByKey(key) && !(await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } }))) {
       return reply.code(404).send({ error: 'unknown workflow' })
     }
     if (isAiKillSwitchOn()) {
@@ -197,7 +198,7 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       if (builtinByKey(key)) {
         return reply.code(400).send({ error: 'built-ins run on their own clocks and jobs — Run-now is for custom routines' })
       }
-      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      const row = await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } })
       if (!row) return reply.code(404).send({ error: 'unknown workflow' })
       if (isAiKillSwitchOn()) {
         return reply.code(503).send({ error: 'AI is temporarily disabled (kill switch).' })
@@ -231,10 +232,10 @@ const agentFleetWorkflowRoutes: FastifyPluginAsync = async (fastify) => {
       if (builtinByKey(key)) {
         return reply.code(400).send({ error: 'a built-in rides the fleet clock and its workers’ dials — this switch is for custom routines' })
       }
-      const row = await prisma.agentWorkflow.findUnique({ where: { key } })
+      const row = await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: key }) } })
       if (!row) return reply.code(404).send({ error: 'unknown workflow' })
       if (row.enabled !== enabled) {
-        await prisma.agentWorkflow.update({ where: { key }, data: { enabled } })
+        await prisma.agentWorkflow.update({ where: { workspace_key: workspaceKey({ key: key }) }, data: { enabled } })
         void resyncFleetSchedules().catch(() => {})
       }
       return { key, enabled }

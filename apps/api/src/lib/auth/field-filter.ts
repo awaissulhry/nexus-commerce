@@ -64,7 +64,7 @@ export async function financialFilterHook(
   _reply: unknown,
   payload: unknown,
 ): Promise<unknown> {
-  if (process.env.NEXUS_RBAC_MODE !== 'enforce') return payload
+  if (process.env.NEXUS_RBAC_MODE !== 'enforce' && process.env.NEXUS_WORKSPACES_ENABLED !== '1') return payload
   // Reuse the perms the RBAC gate already resolved this request; absent
   // (no session / PUBLIC route) → no financial perms → strip everything.
   const resolved = req.__rbacResolved ?? NO_PERMS

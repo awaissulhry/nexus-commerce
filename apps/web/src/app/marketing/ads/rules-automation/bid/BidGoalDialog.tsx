@@ -30,7 +30,7 @@
  *   · Manual / none — outcomes, not choices. The dialog says why they cannot be picked.
  */
 import { useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Check, ExternalLink, Target } from 'lucide-react'
 import { Button, Input } from '@/design-system/primitives'
 import { getBackendUrl } from '@/lib/backend-url'

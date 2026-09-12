@@ -1,0 +1,29 @@
+{%- if product.metafields.nexus.resolved.value.managed and product.metafields.nexus.resolved.value.cards.size > 0 -%}
+  {%- for nexus_chunk in (0..4) -%}
+    {%- assign nexus_offset = nexus_chunk | times: 50 -%}
+    {%- for nexus_card in product.metafields.nexus.resolved.value.cards limit: 50 offset: nexus_offset -%}
+      {%- liquid
+        assign nexus_candidates = null | sort
+        for nexus_variant_chunk in (0..4)
+          assign nexus_variant_offset = nexus_variant_chunk | times: 50
+          for nexus_variant_id in nexus_card.variantIds limit: 50 offset: nexus_variant_offset
+            assign nexus_numeric_id = nexus_variant_id | plus: 0
+            assign nexus_matches = product.variants | where: 'id', nexus_numeric_id | where: 'matched', true
+            assign nexus_candidates = nexus_candidates | concat: nexus_matches
+          endfor
+        endfor
+        assign nexus_available = nexus_candidates | where: 'available', true | sort: 'price'
+        assign nexus_variant = nexus_available.first
+        if nexus_variant == blank
+          assign nexus_candidates = nexus_candidates | sort: 'price'
+          assign nexus_variant = nexus_candidates.first
+        endif
+        if nexus_variant != blank
+          render 'nexus-impact-product-card', product: product, nexus_variant: nexus_variant, nexus_card: nexus_card, stacked: true, position: position, show_badges: true
+        endif
+      -%}
+    {%- endfor -%}
+  {%- endfor -%}
+{%- else -%}
+  <div data-nexus-card="{{ product.id }}:family" data-nexus-price="{{ product.price }}" data-nexus-title="{{ product.title | escape }}">{%- render 'product-card', product: product, stacked: true, position: position, show_badges: true -%}</div>
+{%- endif -%}

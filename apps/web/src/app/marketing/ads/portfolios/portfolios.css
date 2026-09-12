@@ -92,7 +92,7 @@
 
 /* The figures were bold and near-black before the swap; the grid's own cell is 500.
    Weight only — the colour stays the DS's, which is darker than the grey-900 it replaces. */
-.pf-grid td.num { font-weight: 700; }
+.pf-grid .nds-dg-td.num { font-weight: 700; }
 /* “No cap” is real text and was grey-400 — 2.36:1 on white, under even the 3:1
    non-text floor. The DS muted tier is 5.01:1. A conversion may only ever raise it. */
 .pf-grid .pf-nocap { color: var(--nds-text-muted); font-weight: 600; }

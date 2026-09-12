@@ -1,0 +1,74 @@
+{
+  "status": "live-partial-performance-improvement",
+  "themeId": "200489992519",
+  "rollbackThemeId": "200486879559",
+  "editorInsertionCharacters": {
+    "assets/theme.css": 248610,
+    "layout/theme.liquid": 5167,
+    "snippets/media.liquid": 3726,
+    "snippets/nexus-impact-media.liquid": 3774,
+    "assets/theme.js": 238855,
+    "snippets/variant-picker.liquid": 10505
+  },
+  "themeCheck": {
+    "errors": 0,
+    "warnings": 18,
+    "baselineWarnings": 18
+  },
+  "shopifyPreview": {
+    "noLiquidErrors": true,
+    "featureCards": 8,
+    "featureShowMore": true,
+    "nativeFeatureDialog": true,
+    "variantSelected": "M",
+    "variantId": "52531150553415",
+    "cartConfirmed": "GALE jacket / M / EUR 99.00",
+    "testCartRestoredEmpty": true,
+    "mobileWidth": 390,
+    "mobileScrollWidth": 390,
+    "fiveThumbnailsContained": true,
+    "menuHidesChatAndLoyalty": true,
+    "selectedImageHTTPPreload": true,
+    "separateCustomizationStylesheetRemoved": true,
+    "sizeGuideImagesBeforeOpen": 0,
+    "sizeGuideImagesAfterOpen": 2,
+    "sizeGuideNaturalWidths": [
+      2100,
+      2074
+    ],
+    "cartRetestedAfterPrefetchRemoval": true,
+    "finalMobileSizeGuide": {
+      "width": 390,
+      "scrollWidth": 390,
+      "imageWidths": [
+        326,
+        325.9921875
+      ],
+      "fullResolutionLoaded": true
+    },
+    "freshFinalMobileConsoleErrors": 0
+  },
+  "limitations": [
+    "CDN minifies CSS; remote byte hash differs from source by expected processing. Full editor insertion length verified.",
+    "No new managed Nexus product published; existing real catalog used.",
+    "Mobile lab targets remain unmet; promotion auto-popup and app costs need follow-up."
+  ],
+  "completedPerformanceSamples": 9,
+  "performanceReports": {
+    "home": "https://pagespeed.web.dev/analysis/https-xaviaracing-it/gnprpv4wep",
+    "collection": "https://pagespeed.web.dev/analysis/https-xaviaracing-it-collections-all/mr3oonoitu",
+    "productPass1": "https://pagespeed.web.dev/analysis/https-xaviaracing-it-products-gale-jacket/oom67cmxry",
+    "productPass2": "https://pagespeed.web.dev/analysis/https-xaviaracing-it-products-gale-jacket/vqxu9pekdg",
+    "productRepeat": "https://pagespeed.web.dev/analysis/https-xaviaracing-it-products-gale-jacket/4b5kzg2at2"
+  },
+  "artifactChecks": {
+    "zipIntegrity": "pass",
+    "zipContents": "byte-exact",
+    "patchRoundTrip": "byte-exact"
+  },
+  "pending": [
+    "Promotion display timing decision: automatic 5-second popup versus offer opened by shopper tap.",
+    "CWILL Loyalty expanded data-access request must be reviewed before inspecting its configuration.",
+    "Mobile performance acceptance remains unmet."
+  ]
+}

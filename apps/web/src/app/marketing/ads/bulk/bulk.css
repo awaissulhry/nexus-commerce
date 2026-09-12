@@ -227,8 +227,8 @@
    padding, the hover and the right-alignment. The two row tints stay — they are this page's own
    meaning (a row Amazon changed under you, a row that archives something) and ride `rowClassName`
    now rather than a hand-written `<tr className>`. */
-.bulk-table tbody tr.is-conflict td { background: var(--ds-warning-soft, #fffbeb); }
-.bulk-table tbody tr.is-archive td { background: var(--ds-danger-soft, #fef2f2); }
+.bulk-table .nds-dg-tr.is-conflict .nds-dg-td { background: var(--nds-note-warn-bg); }
+.bulk-table .nds-dg-tr.is-archive .nds-dg-td { background: var(--nds-danger-soft); }
 
 .bulk-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .bulk-num.is-danger { color: var(--ds-danger, #dc2626); font-weight: 600; }

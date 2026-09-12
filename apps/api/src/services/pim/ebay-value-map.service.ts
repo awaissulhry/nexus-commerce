@@ -1,3 +1,4 @@
+import { marketLanguages } from './market-languages.js'
 /**
  * VL.3 — eBay value-map seeder.
  *
@@ -25,22 +26,15 @@ import { EbayCategoryService } from '../ebay-category.service.js'
 import { upsertValueMap } from './value-map.service.js'
 import { parseAiJson } from './mapping-suggest-ai.service.js'
 
-const MARKET_LANG: Record<string, string> = {
-  IT: 'Italian',
-  DE: 'German',
-  FR: 'French',
-  ES: 'Spanish',
-  UK: 'English',
-  GB: 'English',
-}
 
 async function translateValuesToEnglish(
   values: string[],
   marketplace: string,
   aspect: string,
 ): Promise<Record<string, string>> {
-  const lang = MARKET_LANG[marketplace.toUpperCase()] ?? marketplace
-  if (lang === 'English') {
+  const language = (await marketLanguages('EBAY', marketplace))[0]
+  const lang = new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
+  if (language === 'en') {
     // Already English — identity map (canonical == value).
     const out: Record<string, string> = {}
     for (const v of values) out[v] = v
@@ -127,7 +121,7 @@ export async function seedEbayValueMaps(input: {
     if (selectAspects.length === 0) continue
     markets.add(l.marketplace)
 
-    const isEnglish = MARKET_LANG[l.marketplace.toUpperCase()] === 'English'
+    const isEnglish = (await marketLanguages('EBAY', l.marketplace))[0] === 'en'
     for (const a of selectAspects) {
       aspects++
       const attribute = `aspect_${a.englishName || a.name}`

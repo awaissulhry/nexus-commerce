@@ -38,8 +38,8 @@ export function startEbayImageReadbackCron(): void {
     return
   }
   const schedule = process.env.NEXUS_EBAY_IMAGE_READBACK_SCHEDULE || '45 */6 * * *'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runEbayImageReadbackOnce().catch((err) =>
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runEbayImageReadbackOnce().catch((err) =>
       logger.error('ebay-image-readback: run failed', { error: err instanceof Error ? err.message : String(err) }),
     )
   })

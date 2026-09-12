@@ -1,10 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
+import { workspacePrisma } from './workspace-router.js';
 
 export * from '@prisma/client';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const globalForPrisma = global as unknown as { workspacePrisma: PrismaClient };
 
 // Serverless-safe pool config:
 // - max:1 avoids exhausting Neon's connection limit per cold-start invocation
@@ -18,12 +18,9 @@ const pool = new Pool({
 });
 
 export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    adapter: new PrismaPg(pool),
-    log: process.env.NODE_ENV === 'development' ? ['query'] : ['error'],
-  });
+  globalForPrisma.workspacePrisma ||
+  workspacePrisma(pool);
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== 'production') globalForPrisma.workspacePrisma = prisma;
 
 export default prisma;

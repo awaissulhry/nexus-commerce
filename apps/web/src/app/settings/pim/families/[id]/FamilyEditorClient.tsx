@@ -26,7 +26,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   DndContext,
   KeyboardSensor,

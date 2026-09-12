@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.2 — Amazon Ads API v1 unified sync service.
  *
@@ -153,7 +154,7 @@ export interface CreateExportResult {
 export async function createExportJob(args: CreateExportArgs): Promise<CreateExportResult> {
   const adProducts = args.adProducts ?? ALL_AD_PRODUCTS
   const conn = await prisma.amazonAdsConnection.findUnique({
-    where: { profileId: args.profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: args.profileId }) },
     select: { region: true },
   })
   const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE')
@@ -210,7 +211,7 @@ export async function pollPendingExports(limit = 20): Promise<PollSummary> {
     summary.polled += 1
     try {
       const conn = await prisma.amazonAdsConnection.findUnique({
-        where: { profileId: job.profileId },
+        where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
         select: { region: true },
       })
       const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE')
@@ -298,7 +299,7 @@ export async function refreshExpiredCompletedExports(limit = 40): Promise<{ refr
   const errors: string[] = []
   for (const job of jobs) {
     try {
-      const conn = await prisma.amazonAdsConnection.findUnique({ where: { profileId: job.profileId }, select: { region: true } })
+      const conn = await prisma.amazonAdsConnection.findUnique({ where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) }, select: { region: true } })
       const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE') ? (conn.region as AdsRegion) : 'EU'
       const mime = RESOURCE_MIME[job.resource as V1Resource]
       const status = await liveCall<{ status: string; url?: string; urlExpiresAt?: string }>({
@@ -331,7 +332,7 @@ export interface IngestResult {
  * Returns the fresh URL, or null when Amazon no longer offers one.
  */
 async function remintExportUrl(job: { id: string; profileId: string; resource: string; externalExportId: string }): Promise<string | null> {
-  const conn = await prisma.amazonAdsConnection.findUnique({ where: { profileId: job.profileId }, select: { region: true } })
+  const conn = await prisma.amazonAdsConnection.findUnique({ where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) }, select: { region: true } })
   const region: AdsRegion = (conn?.region === 'NA' || conn?.region === 'FE') ? (conn.region as AdsRegion) : 'EU'
   const status = await liveCall<{ status: string; url?: string; urlExpiresAt?: string }>({
     profileId: job.profileId, region, method: 'GET',
@@ -444,7 +445,7 @@ export async function ingestCompletedExport(jobId: string): Promise<IngestResult
 
 async function ingestCampaigns(profileId: string, records: V1Campaign[]): Promise<number> {
   const conn = await prisma.amazonAdsConnection.findUnique({
-    where: { profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: profileId }) },
     select: { marketplace: true },
   })
   const marketplace = conn?.marketplace ?? ''

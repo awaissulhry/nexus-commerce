@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { CATEGORY_LABEL } from '../_shared/ReviewsNav'
 
 interface Cell {

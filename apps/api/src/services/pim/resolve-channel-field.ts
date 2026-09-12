@@ -39,7 +39,7 @@
 
 import type { ResolvedAttributes, ValueSource } from './attribute-resolver.js'
 import type { FieldMappingRule, TransformOp } from './schema-mapping.service.js'
-import { languageForMarketplace } from '../products/translation-resolver.service.js'
+import { evaluateExpr, exprDependencies } from './mapping/expr.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Shared primitives (moved here from publish-validator / payload-preview)
@@ -95,10 +95,16 @@ export function resolveSourcePath(
       cursor = product.localizedContent
       break
     case 'categoryAttributes':
-      cursor = product.categoryAttributes
+      // Attribute-bag paths still follow the parent/variant cascade. Reading the raw
+      // child bag here discarded inherited Master facts for otherwise valid mappings.
+      cursor = Object.prototype.hasOwnProperty.call(resolved, rest[0])
+        ? { ...(product.categoryAttributes as Record<string, unknown> ?? {}), [rest[0]]: resolved[rest[0]] }
+        : product.categoryAttributes
       break
     case 'variantAttributes':
-      cursor = product.variantAttributes
+      cursor = Object.prototype.hasOwnProperty.call(resolved, rest[0])
+        ? { ...(product.variantAttributes as Record<string, unknown> ?? {}), [rest[0]]: resolved[rest[0]] }
+        : product.variantAttributes
       break
     default:
       // Unknown root → try resolved map first (handles `title.foo`
@@ -129,6 +135,14 @@ export interface TransformContext {
   lookupSizeScale?: (scale: string, from: string, to: string, value: string) => string | null
   /** FM.9 — channel field max length from the manifest, for channelLimit. */
   maxLength?: number
+  /** PES.6 — resolve a saved business rule name to its expression body
+   *  (`MarketplaceSchemaMapping.expressions`). Absent = `rule("…")` and `ref` both
+   *  report "no business rule named …" rather than resolving to nothing. */
+  namedExpression?: (name: string) => string | undefined
+  /** PES.6 — resolve a dotted `$path` for the expression engine. When absent the
+   *  engine falls back to the flat `values` map, which covers single-segment paths
+   *  only; the callers that own a Product pass the full path resolver. */
+  lookupPath?: (path: string) => unknown
 }
 
 // ── FM.3 transform helpers (pure) ───────────────────────────────────
@@ -337,6 +351,45 @@ export function applyTransforms(
           applied.push('sizeScale')
           break
         }
+        // ── PES.6: the formula engine ───────────────────────────────
+        case 'expr': {
+          // An expression IGNORES the incoming value and computes from the resolved
+          // attributes — an expression field normally has an empty `source`. Failures
+          // land in `warnings` and null the value: a broken formula must read as
+          // unresolved, never as a legitimately-empty field.
+          let body = t.expr
+          if (t.ref) {
+            body = ctx?.namedExpression?.(t.ref)
+            if (body === undefined) {
+              warnings.push(`expr skipped — no business rule named "${t.ref}"`)
+              current = null
+              applied.push('expr')
+              break
+            }
+          }
+          if (typeof body !== 'string' || body.trim() === '') {
+            warnings.push('expr skipped — the rule has neither a formula nor a business-rule name')
+            applied.push('expr')
+            break
+          }
+          const flat = ctx?.values ?? {}
+          const res = evaluateExpr(body, {
+            // Prefer the caller's full path resolver; fall back to the flat map so the
+            // op still works for single-segment paths when no resolver was supplied.
+            lookup: (path) =>
+              ctx?.lookupPath ? ctx.lookupPath(path) : Object.prototype.hasOwnProperty.call(flat, path) ? flat[path] : undefined,
+            namedExpression: ctx?.namedExpression,
+          })
+          if (res.error) {
+            warnings.push(`expr failed — ${res.error}`)
+            current = null
+          } else {
+            for (const w of res.warnings) warnings.push(`expr: ${w}`)
+            current = res.value
+          }
+          applied.push('expr')
+          break
+        }
         case 'translate':
           // Deferred marker — never mutates the value inline; the resolver
           // forces needsTranslation when this op is present (FM.5 fills it).
@@ -413,7 +466,8 @@ export function linkForCoordinate(
   fieldKey: string,
   channel: string,
   marketplace: string,
-  variantId?: string | null,
+  variantId: string | null | undefined,
+  targetLanguage: string,
 ): FieldLinkMembership | null {
   const vid = variantId ?? null
   for (const g of groups) {
@@ -426,7 +480,7 @@ export function linkForCoordinate(
     return {
       translatePolicy: g.translatePolicy,
       sourceLanguage: g.sourceLanguage,
-      targetLanguage: languageForMarketplace(marketplace),
+      targetLanguage,
     }
   }
   return null
@@ -452,7 +506,7 @@ export interface ResolveChannelFieldInput {
   /** FM.4 — value-map / size-scale lookups + manifest maxLength for the
    *  data-backed transform ops. resolveChannelField fills ctx.values
    *  (the resolved attributes) itself; the caller supplies the lookups. */
-  transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'lookupSizeScale' | 'maxLength'>
+  transformCtx?: Pick<TransformContext, 'lookupValueMap' | 'lookupSizeScale' | 'maxLength' | 'namedExpression' | 'lookupPath'>
 }
 
 export interface ResolvedChannelField {
@@ -471,6 +525,9 @@ export interface ResolvedChannelField {
   /** Cross-language TRANSLATE member whose translation isn't pinned yet —
    *  the FM.5 propagation step fills it. */
   needsTranslation: boolean
+  requestedLocale?: string
+  effectiveLocale?: string
+  translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
 }
 
 function flattenResolved(r: ResolvedAttributes): Record<string, unknown> {
@@ -493,9 +550,11 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
 
   // 1. rule.source → fallback → transforms (the legacy value formula).
   const sourceRaw = resolveSourcePath(rule.source, flat, product, locale)
+  const sourceKey = rule.source.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]
+  warnings.push(...(resolvedAttrs[sourceKey]?.warnings ?? []))
   let value: unknown = sourceRaw
   let usedFallback = false
-  if (!isPresent(value) && rule.fallback) {
+  if (value == null && (!Object.prototype.hasOwnProperty.call(resolvedAttrs, sourceKey) || resolvedAttrs[sourceKey]?.source === 'default') && rule.fallback) {
     const fb = resolveSourcePath(rule.fallback, flat, product, locale)
     if (isPresent(fb)) {
       value = fb
@@ -504,6 +563,16 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
   }
   const { out, applied } = applyTransforms(value, rule.transforms, warnings, {
     values: flat,
+    // PES.6 — the resolver owns the Product + locale, so it supplies the FULL path
+    // resolver to the expression engine here. A caller that only has a flat value map
+    // may still override it; nobody has to remember to pass it.
+    lookupPath: (path: string) => {
+      const subbedPath = path.replace(/\{locale\}/g, locale)
+      // `undefined` means "no such attribute" (the engine warns); a known-but-empty
+      // attribute must come back as null so isblank() reads true without a warning.
+      if (!subbedPath.includes('.') && !(subbedPath in flat)) return undefined
+      return resolveSourcePath(path, flat, product, locale)
+    },
     ...input.transformCtx,
   })
   value = out
@@ -520,9 +589,34 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
   const isOverride = !!overrideSource && OVERRIDE_SOURCES.has(overrideSource)
 
   // 3. Cross-language translate flag (linked TRANSLATE, different langs).
-  let needsTranslation = false
+  const effectivePath = (usedFallback ? rule.fallback! : rule.source).replace(/\{locale\}/g, locale)
+  const localizedPath = /^localizedContent\.([^.]+)\./.exec(effectivePath)
+  const resolvedSource = resolvedAttrs[effectivePath.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]]
+  let effectiveLocale = localizedPath?.[1] ?? resolvedSource?.effectiveLocale
+  let translationState = effectiveLocale && effectiveLocale.toLowerCase() !== locale.toLowerCase() ? 'fallback' : resolvedSource?.translationState
+  const dependencies = new Set<string>()
+  const visited = new Set<string>()
+  const collect = (expression: string) => {
+    if (visited.has(expression)) return
+    visited.add(expression)
+    const parsed = exprDependencies(expression)
+    for (const key of parsed?.attributes ?? []) dependencies.add(key)
+    for (const name of parsed?.rules ?? []) { const nested = input.transformCtx?.namedExpression?.(name); if (nested) collect(nested) }
+  }
+  for (const transform of rule.transforms ?? []) {
+    if (transform.type === 'expr') collect(transform.expr ?? input.transformCtx?.namedExpression?.(transform.ref ?? '') ?? '')
+    if (transform.type === 'template') for (const match of (transform.expr ?? '').matchAll(/\{\{\s*([^{}\s]+)\s*\}\}/g)) dependencies.add(match[1])
+  }
+  for (const dependency of dependencies) {
+    const hit = resolvedAttrs[dependency.replace(/^(categoryAttributes|variantAttributes)\./, '').replace(/^localizedContent\.[^.]+\./, '')]
+    if (hit?.translationState === 'fallback' || hit?.translationState === 'outdated') {
+      effectiveLocale = hit.effectiveLocale; translationState = hit.translationState
+      warnings.push(`Mapping uses ${dependency} with ${hit.translationState} content for ${locale}.`)
+    }
+  }
+  let needsTranslation = isPresent(value) && (translationState === 'fallback' || translationState === 'outdated')
   if (link && isPresent(value)) {
-    needsTranslation =
+    needsTranslation ||=
       link.translatePolicy === 'TRANSLATE' &&
       !!link.targetLanguage &&
       !!link.sourceLanguage &&
@@ -556,7 +650,7 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
 
   return {
     fieldKey,
-    value: isPresent(value) ? value : null,
+    value: value ?? null,
     source,
     raw: sourceRaw,
     appliedTransforms: applied,
@@ -564,5 +658,6 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
     required: rule.required === true,
     legacySource,
     needsTranslation,
+    ...(effectiveLocale ? { requestedLocale: locale, effectiveLocale, translationState: translationState ?? 'current' } : {}),
   }
 }

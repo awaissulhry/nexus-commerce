@@ -10,7 +10,7 @@
 // landing page.
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Truck, PackageCheck, Boxes, Undo2, TrendingDown, RefreshCw,
   Warehouse as WarehouseIcon, AlertTriangle, ArrowRight, ShoppingCart,

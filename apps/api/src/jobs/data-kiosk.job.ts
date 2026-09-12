@@ -59,7 +59,7 @@ export function startDataKioskCrons(): void {
   if (!cron.validate(createSchedule)) { logger.error('data-kiosk-create: invalid schedule', { createSchedule }); return }
   if (!cron.validate(pollSchedule)) { logger.error('data-kiosk-poll: invalid schedule', { pollSchedule }); return }
 
-  createTask = cron.schedule(createSchedule, () => { void runDataKioskCreateCron() })
-  pollTask = cron.schedule(pollSchedule, () => { void runDataKioskPollCron() })
+  createTask = cron.schedule(createSchedule, async () => { await runDataKioskCreateCron() })
+  pollTask = cron.schedule(pollSchedule, async () => { await runDataKioskPollCron() })
   logger.info('data-kiosk crons: scheduled', { createSchedule, pollSchedule })
 }

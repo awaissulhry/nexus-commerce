@@ -1,0 +1,508 @@
+2026-09-11T23:46:00.949Z
+http://localhost:3000/products/cmokmy0lr0009pm0p9yxk7ho0/edit
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to dark mode":
+  - button "Notifications":
+- complementary:
+  - navigation "Application navigation":
+    - link "Home":
+      - /url: /
+      - generic: Home
+    - link "Products 42 pending":
+      - /url: /products
+      - generic: Products
+      - generic "42 pending": "42"
+    - link "Listings 1003 pending":
+      - /url: /listings
+      - generic: Listings
+      - generic "1003 pending": 99+
+    - link "Stock":
+      - /url: /fulfillment/stock
+      - generic: Stock
+    - link "Inbound":
+      - /url: /fulfillment/inbound
+      - generic: Inbound
+    - link "Outbound 4 pending":
+      - /url: /fulfillment/outbound
+      - generic: Outbound
+      - generic "4 pending": "4"
+    - link "Replenishment":
+      - /url: /fulfillment/replenishment
+      - generic: Replenishment
+    - link "Purchase Orders":
+      - /url: /fulfillment/purchase-orders
+      - generic: Purchase Orders
+    - link "Suppliers":
+      - /url: /fulfillment/suppliers
+      - generic: Suppliers
+    - link "Carriers":
+      - /url: /fulfillment/carriers
+      - generic: Carriers
+    - link "Returns":
+      - /url: /fulfillment/returns
+      - generic: Returns
+    - link "Orders 4 pending":
+      - /url: /orders
+      - generic: Orders
+      - generic "4 pending": "4"
+    - link "Pricing":
+      - /url: /pricing
+      - generic: Pricing
+    - link "Insights":
+      - /url: /insights
+      - generic: Insights
+    - link "Advertising":
+      - /url: /marketing/ads
+      - generic: Advertising
+    - link "Calendar":
+      - /url: /marketing/calendar
+      - generic: Calendar
+    - link "Content":
+      - /url: /marketing/content
+      - generic: Content
+    - link "Reviews":
+      - /url: /marketing/reviews
+      - generic: Reviews
+    - link "Agent Fleet":
+      - /url: /fleet
+      - generic: Agent Fleet
+    - link "Inbox 2208 pending":
+      - /url: /inbox
+      - generic: Inbox
+      - generic "2208 pending": 99+
+    - link "Sync Logs":
+      - /url: /sync-logs
+      - generic: Sync Logs
+    - link "Connections 19 pending":
+      - /url: /settings/channels
+      - generic: Connections
+      - generic "19 pending": "19"
+    - link "Mappings":
+      - /url: /channels/mapping
+      - generic: Mappings
+    - link "Settings":
+      - /url: /settings
+      - generic: Settings
+    - link "Recycle Bin":
+      - /url: /admin/recycle-bin
+      - generic: Recycle Bin
+- main:
+  - button "Back to products":
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic: GALE-JACKET-BLACK-MEN-XS
+  - generic: B0DJ4926YX
+  - link "Datasheet (opens in new tab)":
+    - /url: /products/cmokmy0lr0009pm0p9yxk7ho0/datasheet
+    - text: Datasheet
+    - generic: (opens in new tab)
+  - link "Amazon File (opens in new tab)":
+    - /url: /products/amazon-flat-file?familyId=cmokmy3a40078pm0p1fvnu523&productType=OUTERWEAR
+    - text: Amazon File
+    - generic: (opens in new tab)
+  - link "eBay File (opens in new tab)":
+    - /url: /products/ebay-flat-file?familyId=cmokmy3a40078pm0p1fvnu523
+    - text: eBay File
+    - generic: (opens in new tab)
+  - link "Recover (opens in new tab)":
+    - /url: /products/cmokmy0lr0009pm0p9yxk7ho0/recover
+    - text: Recover
+    - generic: (opens in new tab)
+  - button "List on Channel":
+    - text: List on Channel
+  - button "Save" [disabled]:
+    - text: Save
+  - button "Discard"
+  - generic: Variant of
+  - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+  - generic: GALE-JACKET
+  - link "Go to parent":
+    - /url: /products/cmokmy3a40078pm0p1fvnu523/edit
+    - text: Go to parent
+  - generic: "Amazon ASIN:"
+  - generic: B0F7J163XJ
+  - generic: "eBay:"
+  - generic: "257584954808"
+  - link "3XL / Nero":
+    - /url: /products/cmokmy0jf0003pm0ppnu1b2yy/edit
+  - link "4XL / Nero":
+    - /url: /products/cmokmy0jt0004pm0p0gaufo1b/edit
+  - link "5XL / Nero":
+    - /url: /products/cmokmy2ir005bpm0p0sm1rxx8/edit
+  - link "L / Nero":
+    - /url: /products/cmokmy0k70005pm0puvz2ucxu/edit
+  - link "M / Nero":
+    - /url: /products/cmokmy0kl0006pm0p9auaundx/edit
+  - link "S / Nero":
+    - /url: /products/cmokmy0ky0007pm0p3vj7q0mh/edit
+  - link "XL / Nero":
+    - /url: /products/cmokmy0lc0008pm0p2thzmlqq/edit
+  - link "XS / Nero":
+    - /url: /products/cmokmy0lr0009pm0p9yxk7ho0/edit
+    - text: XS / Nero
+  - link "XXL / Nero":
+    - /url: /products/cmokmy0m9000apm0pm52rd77m/edit
+  - link "[object Object]":
+    - /url: /products/cmokmy0mm000bpm0pm7k7eke4/edit
+  - link "3XL / Giallo":
+    - /url: /products/cmokmy0n4000cpm0ptkjitr0f/edit
+  - link "4XL / Giallo":
+    - /url: /products/cmokmy0ni000dpm0p2xvcpkma/edit
+  - link "5XL / Giallo":
+    - /url: /products/cmokmy0o1000epm0pca79fbbf/edit
+  - link "L / Giallo":
+    - /url: /products/cmokmy0og000fpm0pdwckcnq0/edit
+  - link "M / Giallo":
+    - /url: /products/cmokmy0ot000gpm0p4z5vwnoo/edit
+  - link "S / Giallo":
+    - /url: /products/cmokmy0p6000hpm0ptee51htd/edit
+  - link "XL / Giallo":
+    - /url: /products/cmokmy0pk000ipm0pi8nl7pbn/edit
+  - link "XS / Giallo":
+    - /url: /products/cmokmy0py000jpm0pc2jcd5ul/edit
+  - link "XXL / Giallo":
+    - /url: /products/cmokmy0qb000kpm0p06pmx2vt/edit
+  - link "[object Object]":
+    - /url: /products/cmokmy0qp000lpm0p2yxw35ku/edit
+  - tablist "Product sections — use arrow keys to navigate, Home / End to jump to ends":
+    - tab "Master Data" [selected]
+    - tab "Images"
+    - tab "Matrix"
+    - tab "Analytics"
+    - tab "Ads"
+    - tab "Mapping"
+    - tab "Amazon 4 Basics 100%":
+      - text: Amazon
+      - generic: "4"
+      - 'generic "Basic field completeness: 100%. Checks title, description, bullets, price and quantity. Category mapping and channel validation are separate."': Basics 100%
+    - tab "eBay 2 Basics 60%":
+      - text: eBay
+      - generic: "2"
+      - 'generic "Basic field completeness: 60%. Checks title, description, bullets, price and quantity. Category mapping and channel validation are separate."': Basics 60%
+    - tab "Shopify 1 Basics 0%":
+      - text: Shopify
+      - generic: "1"
+      - 'generic "Basic field completeness: 0%. Checks title, description, bullets, price and quantity. Category mapping and channel validation are separate."': Basics 0%
+    - button "Customize tabs":
+  - main:
+    - tabpanel "Master Data":
+      - button "Import from flat file":
+        - text: Import from flat file
+      - button "Cascade to channels":
+        - text: Cascade to channels
+      - generic: Identity
+      - generic: Core information shared across all channels.
+      - generic: Master SKU
+      - textbox: GALE-JACKET-BLACK-MEN-XS
+      - generic: Product name
+      - textbox: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+      - button "Suggest a product name via Gemini using the master Italian context.":
+      - 'generic "eBay: 80 · Amazon: 200"': 127 / 80 (eBay)
+      - generic: Brand
+      - textbox: Xavia
+      - generic: Manufacturer
+      - textbox
+      - generic: UPC
+      - textbox
+      - generic: EAN
+      - textbox
+      - text: This is a variant — values shown are merged from the parent product. Editing here overrides the parent for this variant.
+      - generic: Content
+      - generic: Per-locale title, description, bullets, keywords. Channel tabs inherit from here unless overridden.
+      - generic: en
+      - generic: English
+      - generic: Title
+      - textbox "Product title…": XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+      - generic: Description
+      - textbox "Description…"
+      - generic: Bullet points
+      - button "add":
+        - text: add
+      - generic: No bullet points yet.
+      - generic: Keywords
+      - button "add":
+        - text: add
+      - generic: No keywords yet.
+      - generic: it
+      - generic: Italiano
+      - generic: Title
+      - textbox "Titolo del prodotto…": XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+      - generic: Description
+      - textbox "Descrizione…"
+      - generic: Bullet points
+      - button "add":
+        - text: add
+      - generic: No bullet points yet.
+      - generic: Keywords
+      - button "add":
+        - text: add
+      - generic: No keywords yet.
+      - generic: Physical
+      - generic: Weight
+      - spinbutton
+      - textbox "kg"
+      - generic: Length
+      - spinbutton
+      - generic: Width
+      - spinbutton
+      - generic: Height
+      - spinbutton
+      - generic: Dim unit
+      - textbox "cm"
+      - generic: Attributes
+      - generic: Category attributes for this product type. Channel mappings pull from these — fill them so listings publish complete.
+      - textbox "Search attributes…"
+      - text: 0/49 filled
+      - generic: · 3 required missing
+      - button "Suggest with AI":
+        - text: Suggest with AI
+      - generic: "Required missing:"
+      - button "Country Of Origin"
+      - button "Fabric Type"
+      - button "Supplier Declared Dg Hz Regulation"
+      - generic: Category attributes
+      - text: Country Of Origin
+      - generic: "*"
+      - button "Country Of Origin":
+        - generic: —
+      - text: Fabric Type
+      - generic: "*"
+      - textbox
+      - text: Supplier Declared Dg Hz Regulation
+      - generic: "*"
+      - button "Supplier Declared Dg Hz Regulation":
+        - generic: —
+      - generic: Age Range Description
+      - textbox
+      - generic: ArmorType
+      - button "ArmorType":
+        - generic: —
+      - generic: Batteries Included
+      - button "Batteries Included":
+        - generic: —
+      - generic: Batteries Required
+      - button "Batteries Required":
+        - generic: —
+      - generic: Care Instructions
+      - textbox
+      - generic: CeCertification
+      - textbox
+      - generic: Color
+      - textbox
+      - generic: Department
+      - textbox
+      - generic: Dsa Responsible Party Address
+      - textbox
+      - generic: Ec Medical Device Sales Channel
+      - button "Ec Medical Device Sales Channel":
+        - generic: —
+      - generic: Fit Type
+      - textbox
+      - generic: Ghs Chemical H Code
+      - button "Ghs Chemical H Code":
+        - generic: —
+      - generic: Gpsr Safety Attestation
+      - button "Gpsr Safety Attestation":
+        - generic: —
+      - generic: Handmade Classification
+      - button "Handmade Classification":
+        - generic: —
+      - generic: Is Expiration Dated Product
+      - button "Is Expiration Dated Product":
+        - generic: —
+      - generic: Is This Product Subject To Buyer Age Restrictions
+      - button "Is This Product Subject To Buyer Age Restrictions":
+        - generic: —
+      - generic: Item Package Quantity
+      - spinbutton
+      - generic: Item Type Name
+      - textbox
+      - generic: League Name
+      - textbox
+      - generic: Lifestyle
+      - textbox
+      - generic: Map Policy
+      - button "Map Policy":
+        - generic: —
+      - generic: Material
+      - textbox
+      - generic: Merchant Release Date
+      - textbox
+      - generic: Model Name
+      - textbox
+      - generic: Model Number
+      - textbox
+      - generic: Number Of Items
+      - spinbutton
+      - generic: Number Of Lithium Ion Cells
+      - spinbutton
+      - generic: Number Of Lithium Metal Cells
+      - spinbutton
+      - generic: Part Number
+      - textbox
+      - generic: Pattern
+      - textbox
+      - generic: Product Expiration Type
+      - button "Product Expiration Type":
+        - generic: —
+      - generic: Product Site Launch Date
+      - textbox
+      - generic: Safety Data Sheet Url
+      - textbox
+      - generic: Ships Globally
+      - button "Ships Globally":
+        - generic: —
+      - generic: Size
+      - textbox
+      - generic: Special Size Type
+      - textbox
+      - generic: Style
+      - textbox
+      - generic: Subject Character
+      - textbox
+      - generic: Target Gender
+      - button "Target Gender":
+        - generic: —
+      - generic: Team Name
+      - textbox
+      - generic: Temperature Rating
+      - textbox
+      - generic: Theme
+      - textbox
+      - generic: Title Differentiation
+      - textbox
+      - generic: Water Resistance Level
+      - button "Water Resistance Level":
+        - generic: —
+      - generic: WaterproofRating
+      - button "WaterproofRating":
+        - generic: —
+      - generic: Weave Type
+      - textbox
+      - generic: Custom attributes
+      - textbox "Key for variations": variations
+      - textbox "Value for variations": "{\"Size\":\"XS\",\"Color\":\"Nero\"}"
+      - button "Remove variations":
+      - textbox "New attribute key":
+        - /placeholder: key (e.g. material)
+      - textbox "New attribute value":
+        - /placeholder: value (e.g. Cowhide)
+      - button "Add attribute":
+      - generic: Status
+      - generic: Lifecycle gate for selling. ACTIVE → buyable; DRAFT hides from channels; INACTIVE pauses without delisting.
+      - text: Status
+      - button "Status":
+        - generic: Active
+      - text: Linking suggestions
+      - list:
+        - text: Description is identical
+        - generic: (test)
+        - text: on 2 markets
+        - button "Link 2"
+        - button "Dismiss Description suggestion":
+        - text: Price is identical
+        - generic: (105)
+        - text: on 4 markets
+        - button "Link 4"
+        - button "Dismiss Price suggestion":
+      - checkbox "Select all listings"
+      - generic: Listing Hub
+      - text: 8 of 8 listings active
+      - generic: · 3 need attention
+      - link "Automation":
+        - /url: /products/automation
+        - text: Automation
+      - button "Cross-channel":
+        - text: Cross-channel
+      - button "Pause non-IT"
+      - button "Activate all" [disabled]
+      - button "Pause all"
+      - checkbox "Select Amazon DE"
+      - button "Open Amazon DE cockpit":
+        - generic "Listing ready"
+        - generic: Amazon
+        - generic: DE
+        - generic: Live
+      - generic: €99.00
+      - generic: Active
+      - switch "Pause offer on Amazon DE" [checked]
+      - checkbox "Select Amazon ES"
+      - button "Open Amazon ES cockpit":
+        - generic "Listing ready"
+        - generic: Amazon
+        - generic: ES
+        - generic: Live
+      - generic: €105.00
+      - generic "Last synced 3mo ago": 3mo ago
+      - generic: Active
+      - switch "Pause offer on Amazon ES" [checked]
+      - checkbox "Select Amazon FR"
+      - button "Open Amazon FR cockpit":
+        - generic "Listing ready"
+        - generic: Amazon
+        - generic: FR
+      - generic: €105.00
+      - generic: Active
+      - switch "Pause offer on Amazon FR" [checked]
+      - checkbox "Select Amazon IT"
+      - button "Open Amazon IT cockpit":
+        - generic "Listing ready"
+        - generic: Amazon
+        - generic: IT
+        - generic: Live
+      - generic: €105.00
+      - generic "Last synced 2mo ago": 2mo ago
+      - generic: Active
+      - switch "Pause offer on Amazon IT" [checked]
+      - checkbox "Select eBay DE"
+      - button "Open eBay DE cockpit":
+        - generic "Listing incomplete, missing price"
+        - generic: eBay
+        - generic: DE
+        - generic: Draft
+      - generic: Active
+      - switch "Pause offer on eBay DE" [checked]
+      - checkbox "Select eBay IT"
+      - button "Open eBay IT cockpit":
+        - generic "Listing ready"
+        - generic: eBay
+        - generic: IT
+        - generic: Live
+      - generic: €105.00
+      - generic: Active
+      - switch "Pause offer on eBay IT" [checked]
+      - checkbox "Select Etsy GLOBAL"
+      - button "Listing incomplete, missing title, description, price Etsy GLOBAL Draft" [disabled]:
+        - generic "Listing incomplete, missing title, description, price"
+        - generic: Etsy
+        - generic: GLOBAL
+        - generic: Draft
+      - generic: Active
+      - switch "Pause offer on Etsy GLOBAL" [checked]
+      - checkbox "Select Shopify GLOBAL"
+      - button "Open Shopify GLOBAL cockpit":
+        - generic "Listing incomplete, missing title, description, price"
+        - generic: Shopify
+        - generic: GLOBAL
+        - generic: Draft
+      - generic: Active
+      - switch "Pause offer on Shopify GLOBAL" [checked]
+- button "Ask AI":
+  - text: Ask AI
+- button "Open Next.js Dev Tools":
+- button "Open issues overlay":
+  - generic: "0"
+  - generic: "1"
+  - generic: Issue
+- button "Collapse issues badge":
+- alert

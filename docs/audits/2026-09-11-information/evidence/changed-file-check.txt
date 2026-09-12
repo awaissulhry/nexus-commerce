@@ -1,0 +1,3 @@
+Changed-file whitespace check: 0
+components/RecordListInput.tsx: identical
+catalog/RecordListExample.tsx: identical

@@ -1,48 +1,12 @@
-/**
- * PIM D.6 — Payload preview / dry-run.  (FM.2: delegates to the unified
- * resolver.)
- *
- * Generates the exact key/value payload a publish would send for one
- * product on one marketplace, given the current Marketplace.schemaMapping
- * rules (FM.1 productType-resolved). Per field it delegates to the FM.2
- * unified resolver (resolveChannelField), so the value + transforms here
- * match exactly what cascade / sync (FM.5–FM.8) will produce — "what you
- * preview" == "what ships".
- *
- * The legacy `source` vocabulary ('source' | 'fallback' | 'default' |
- * 'missing') is preserved byte-for-byte for the mapping canvas via
- * resolveChannelField's `legacySource`. The richer FM.2 signal —
- * `provenance` (locked/override/linked/catalogRule/…) and
- * `needsTranslation` — rides alongside as additive fields.
- *
- * Returns per-field provenance:
- *   value         — the final value after transforms (or null if skipped)
- *   source        — 'source' | 'fallback' | 'default' | 'missing' (legacy)
- *   provenance    — FM.2 enriched origin (optional)
- *   needsTranslation — FM.2 cross-language linked flag (optional)
- *   raw           — what the source path resolved to before transforms
- *   appliedTransforms — list of transform types that ran
- *   warnings      — non-blocking notes (e.g. truncated from 250→200)
- */
-
+/** Preview and validation consume the same effective values as the mapping grid. */
 import prisma from '../../db.js'
-import { resolveAttributes } from './attribute-resolver.js'
-import {
-  getResolvedRules,
-  type FieldMappingRule,
-  type TransformOp,
-} from './schema-mapping.service.js'
-import {
-  resolveChannelField,
-  linkForCoordinate,
-  isPresent,
-  type ChannelFieldSource,
-  type FieldLinkGroupLike,
-} from './resolve-channel-field.js'
-import { loadValueMapLookup, loadSizeScaleLookup } from './value-map.service.js'
+import { resolveBatch, type ResolveBatchResult } from './mapping/resolve-batch.service.js'
+import type { FieldMappingRule, TransformOp } from './schema-mapping.service.js'
+import { isPresent, type ChannelFieldSource, type FieldLinkGroupLike } from './resolve-channel-field.js'
 
 export interface PreviewField {
   fieldKey: string
+  label?: string
   rule: FieldMappingRule
   value: unknown
   source: 'source' | 'fallback' | 'default' | 'missing'
@@ -55,6 +19,7 @@ export interface PreviewField {
   raw: unknown
   appliedTransforms: TransformOp['type'][]
   warnings: string[]
+  errors?: string[]
   required: boolean
 }
 
@@ -63,6 +28,7 @@ export interface PreviewResult {
   productSku: string
   channel: string
   marketplace: string
+  categoryId?: string | null
   payload: Record<string, unknown>
   fields: PreviewField[]
   /** Field keys that the mapping marks required and that have no
@@ -87,92 +53,42 @@ export async function loadFieldLinkGroups(productId: string): Promise<FieldLinkG
   return groups as unknown as FieldLinkGroupLike[]
 }
 
-/**
- * Generate the dry-run payload for one product against one
- * marketplace's mapping rules.
- */
 export async function previewPayload(input: {
+  channelConnectionId?: string | null
+  aliasKey?: string
   productId: string
   channel: string
   marketplace: string
   locale?: string
 }): Promise<PreviewResult> {
-  const { productId, channel, marketplace, locale = 'en' } = input
+  const result = await resolveBatch({ ...input, productIds: [input.productId], includeCatalogue: false })
+  return previewFromResolution(result, input.productId)
+}
 
-  const product = await prisma.product.findUnique({ where: { id: productId } })
+/** Reuse an existing resolution when a workflow also needs provenance or a baseline. */
+export function previewFromResolution(result: ResolveBatchResult, productId: string): PreviewResult {
+  const product = result.products[0]
   if (!product) throw new Error(`Product not found: ${productId}`)
-  const parent = product.parentId
-    ? await prisma.product.findUnique({ where: { id: product.parentId } })
-    : null
-
-  // FM.1 — resolve the effective rule set for this product's type.
-  const rules = await getResolvedRules(channel, marketplace, product.productType)
-  const channelListing = await prisma.channelListing.findFirst({
-    where: { productId, channel, marketplace },
-  })
-
-  // FM.2 — provenance-carrying resolve (vs the flat map) so the resolver
-  // can detect per-coordinate overrides; link groups enrich provenance +
-  // the needs-translation flag without changing the value.
-  const resolvedAttrs = resolveAttributes({
-    product: product as any,
-    parent: parent as any,
-    channelListing: channelListing as any,
-    locale,
-  })
-  const linkGroups = await loadFieldLinkGroups(productId)
-  // FM.4 — value-map / size-scale lookups for the data-backed transform
-  // ops (cached; inert until a rule uses valueMap/sizeScale).
-  const lookupValueMap = await loadValueMapLookup(channel, marketplace)
-  const lookupSizeScale = await loadSizeScaleLookup()
-
-  const fields: PreviewField[] = []
   const payload: Record<string, unknown> = {}
   const missingRequired: string[] = []
-
-  for (const fieldKey of Object.keys(rules)) {
-    const rule = rules[fieldKey]
-    if (!rule) continue
-
-    // Preview is product-level → match PARENT link groups (variantId null).
-    const link = linkForCoordinate(linkGroups, fieldKey, channel, marketplace, null)
-    const r = resolveChannelField({
-      fieldKey,
-      rule,
-      resolvedAttrs,
-      product: product as any,
-      locale,
-      link,
-      transformCtx: { lookupValueMap, lookupSizeScale },
-    })
-
-    if (isPresent(r.value)) {
-      payload[fieldKey] = r.value
-    } else if (r.required) {
-      missingRequired.push(fieldKey)
+  const fields: PreviewField[] = Object.values(product.cells).map(cell => {
+    if (isPresent(cell.value)) payload[cell.fieldKey] = cell.value
+    else if (cell.required) missingRequired.push(cell.fieldKey)
+    return {
+      fieldKey: cell.fieldKey,
+      label: result.catalogue?.fields.find(field => field.fieldKey === cell.fieldKey)?.label,
+      rule: cell.rule ?? { source: '' },
+      value: cell.value,
+      source: cell.legacySource ?? (isPresent(cell.value) ? 'source' : 'missing'),
+      provenance: (cell.provenance ?? 'missing') as ChannelFieldSource,
+      needsTranslation: cell.needsTranslation,
+      raw: cell.raw ?? null,
+      appliedTransforms: cell.appliedTransforms as TransformOp['type'][],
+      warnings: [...cell.warnings, ...cell.errors],
+      errors: cell.errors,
+      required: cell.required,
     }
-
-    fields.push({
-      fieldKey,
-      rule,
-      value: r.value,
-      source: r.legacySource,
-      provenance: r.source,
-      needsTranslation: r.needsTranslation,
-      raw: r.raw,
-      appliedTransforms: r.appliedTransforms,
-      warnings: r.warnings,
-      required: r.required,
-    })
-  }
-
-  return {
-    productId,
-    productSku: product.sku,
-    channel,
-    marketplace,
-    payload,
-    fields,
-    missingRequired,
-  }
+  })
+  return { productId: product.productId, productSku: product.sku, channel: result.channel,
+    marketplace: result.marketplace, categoryId: product.category.channelCategoryId, payload, fields, missingRequired }
 }

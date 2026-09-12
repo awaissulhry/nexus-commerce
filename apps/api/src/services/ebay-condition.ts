@@ -23,7 +23,9 @@ export const CONDITION_ID_TO_ENUM: Record<string, string> = {
   '2030': 'GOOD_REFURBISHED',
   '2500': 'SELLER_REFURBISHED',
   '2750': 'LIKE_NEW',
+  '2990': 'PRE_OWNED_EXCELLENT',
   '3000': 'USED_EXCELLENT',
+  '3010': 'PRE_OWNED_FAIR',
   '4000': 'USED_VERY_GOOD',
   '5000': 'USED_GOOD',
   '6000': 'USED_ACCEPTABLE',
@@ -54,4 +56,10 @@ export function toTradingConditionId(raw: string): string {
   if (!v) return ''
   if (/^\d+$/.test(v)) return v
   return ENUM_TO_CONDITION_ID[v.toUpperCase().replace(/[\s-]+/g, '_')] ?? ''
+}
+
+/** Normalize known Trading/Inventory values; preserve unknown input for validation. */
+export function toInventoryCondition(raw: string): string {
+  const value = String(raw ?? '').trim()
+  return CONDITION_ID_TO_ENUM[toTradingConditionId(value)] ?? value
 }

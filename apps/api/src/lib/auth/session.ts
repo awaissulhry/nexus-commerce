@@ -109,7 +109,7 @@ export async function validateSession(
   // round trip in front of every authenticated response (~600ms, measured). A hit skips the
   // query entirely; a miss, a timeout or a Redis outage falls through to the database below and
   // answers correctly, only slower. Only VALID sessions are cached — never a negative result.
-  const cached = await getCachedSession(hash)
+  const cached = process.env.NEXUS_WORKSPACES_ENABLED === '1' ? null : await getCachedSession(hash)
   if (cached) return cached
 
   const row = await (prisma as any).userSession.findUnique({
@@ -189,13 +189,13 @@ export async function validateSession(
  * rows, and the cache is keyed by hash. One extra read on a rare operation is the price of
  * revocation staying immediate for the constant one.
  */
-export async function revokeSession(sessionId: string): Promise<boolean> {
+export async function revokeSession(sessionId: string, userId?: string): Promise<boolean> {
   const row = await (prisma as any).userSession.findUnique({
     where: { id: sessionId },
     select: { sessionTokenHash: true },
   })
   const r = await (prisma as any).userSession.updateMany({
-    where: { id: sessionId, revokedAt: null },
+    where: { id: sessionId, revokedAt: null, ...(userId ? { userId } : {}) },
     data: { revokedAt: new Date() },
   })
   if (row?.sessionTokenHash) void dropCachedSessions([row.sessionTokenHash])

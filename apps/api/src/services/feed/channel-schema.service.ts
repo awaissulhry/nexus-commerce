@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CE.1 — Channel Schema service.
  *
@@ -173,11 +174,11 @@ async function seedBuiltInSchemasFiltered(
     if (!predicate(entry)) continue
     await prisma.channelSchema.upsert({
       where: {
-        channel_marketplace_fieldKey: {
+        channel_marketplace_fieldKey: workspaceKey({
           channel: entry.channel,
           marketplace: entry.marketplace ?? '',
           fieldKey: entry.fieldKey,
-        },
+        }),
       },
       create: {
         channel: entry.channel,

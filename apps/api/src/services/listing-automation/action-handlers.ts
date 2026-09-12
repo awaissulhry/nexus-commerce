@@ -1,3 +1,4 @@
+import { marketLanguages } from '../pim/market-languages.js'
 /**
  * OL.D.1 — Listings-domain action handlers for the AutomationRule engine.
  *
@@ -22,7 +23,7 @@
 import { ACTION_HANDLERS, getFieldPath, type ActionResult } from '../automation-rule.service.js'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
-import { currencyForMarket, marketLanguage } from './triggers.js'
+import { currencyForMarket } from './triggers.js'
 import { translateProductCopy } from '../ai/translate.service.js'
 
 const GRACE_MS = 5 * 60 * 1000 // 5-minute undo window before the worker pushes
@@ -203,8 +204,10 @@ ACTION_HANDLERS.cascade_translate_content = async (action, context, meta): Promi
 
   // Group targets by language (one translate call per distinct language).
   const byLang = new Map<string, EligibleListing[]>()
+  const languageByListing = new Map<string, string>()
   for (const l of listings) {
-    const lang = marketLanguage(l.marketplace)
+    const lang = (await marketLanguages(l.channel, l.marketplace))[0]
+    languageByListing.set(l.id, lang)
     const arr = byLang.get(lang) ?? []
     arr.push(l)
     byLang.set(lang, arr)
@@ -258,7 +261,7 @@ ACTION_HANDLERS.cascade_translate_content = async (action, context, meta): Promi
 
   const rows = listings
     .map((l) => {
-      const t = translated.get(marketLanguage(l.marketplace))
+      const t = translated.get(languageByListing.get(l.id)!)
       if (!t || (t.title == null && t.description == null)) return null
       return {
         productId: l.productId ?? productId,

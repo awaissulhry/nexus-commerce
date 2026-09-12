@@ -20,6 +20,8 @@
  */
 import { execSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import ts from 'typescript'
+import { stripComments } from './lib/strip-comments.mjs'
 
 const ALLOWED = [
   'apps/web/src/design-system/grid/',
@@ -29,16 +31,36 @@ const ALLOWED = [
 // Matches a real import/require of the packages, not the words in prose.
 const IMPORT = /(?:^|\n)\s*(?:import[\s\S]{0,200}?from\s*|import\s*|export[\s\S]{0,200}?from\s*)['"](ag-grid-[a-z]+|ag-charts-[a-z]+)['"]|require\(\s*['"](ag-grid-[a-z]+|ag-charts-[a-z]+)['"]\s*\)/
 
-// Tracked files only — an untracked scratch file is not something a push can ship.
-const files = execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx"', { encoding: 'utf8' })
-  .split('\n')
-  .filter(Boolean)
+// The current migration is intentionally local and includes untracked adapters.
+const files = [...new Set([
+  ...execSync('git ls-files "apps/**/*.ts" "apps/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
+  ...execSync('git ls-files --others --exclude-standard "apps/**/*.ts" "apps/**/*.tsx"', { encoding: 'utf8' }).split('\n'),
+])].filter(Boolean)
 
 const offenders = []
 for (const f of files) {
   if (ALLOWED.some((a) => f.startsWith(a))) continue
   let src
   try { src = readFileSync(f, 'utf8') } catch { continue }
+  if (f.startsWith('apps/web/src/app/marketing/ads/') && !/\.test\./.test(f)) {
+    const parsed = ts.createSourceFile(f, src, ts.ScriptTarget.Latest, true)
+    for (const node of parsed.statements) {
+      if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier)) continue
+      const module = node.moduleSpecifier.text
+      const clause = node.importClause
+      const names = clause?.namedBindings
+      if (/design-system\/components(?:\/DataGrid)?$/.test(module) && !clause?.isTypeOnly && names && ts.isNamedImports(names) && names.elements.some((n) => !n.isTypeOnly && (n.propertyName ?? n.name).text === 'DataGrid')) {
+        offenders.push(`${f} → advertising must import DataGrid from design-system/grid/datagrid`)
+      }
+      if (module.includes('styles/workspace-grid.css')) offenders.push(`${f} → retired workspace table stylesheet`)
+    }
+    const visit = (node) => {
+      if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) && node.tagName.getText(parsed) === 'table') offenders.push(`${f} → advertising grids must use the Nexus AG Grid adapters`)
+      ts.forEachChild(node, visit)
+    }
+    visit(parsed)
+  }
+  src = stripComments(src)
   if (!src.includes('ag-grid-') && !src.includes('ag-charts-')) continue
   const m = src.match(IMPORT)
   if (m) offenders.push(`${f} → ${m[1] ?? m[2]}`)

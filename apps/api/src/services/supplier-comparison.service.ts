@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R.9 — Multi-supplier comparison service.
  *
@@ -189,7 +190,7 @@ export async function loadCandidatesForProduct(args: {
       },
     }),
     prisma.replenishmentRule.findUnique({
-      where: { productId: args.productId },
+      where: { workspace_productId: workspaceKey({ productId: args.productId }) },
       select: { preferredSupplierId: true },
     }),
   ])
@@ -230,14 +231,14 @@ export async function setPreferredSupplier(args: {
   supplierId: string
 }): Promise<{ ok: true }> {
   const sp = await prisma.supplierProduct.findUnique({
-    where: { supplierId_productId: { supplierId: args.supplierId, productId: args.productId } },
+    where: { supplierId_productId: workspaceKey({ supplierId: args.supplierId, productId: args.productId }) },
     select: { id: true },
   })
   if (!sp) {
     throw new Error(`No SupplierProduct row for supplier ${args.supplierId} + product ${args.productId}`)
   }
   await prisma.replenishmentRule.upsert({
-    where: { productId: args.productId },
+    where: { workspace_productId: workspaceKey({ productId: args.productId }) },
     create: {
       productId: args.productId,
       preferredSupplierId: args.supplierId,

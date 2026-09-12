@@ -7,11 +7,10 @@
  * - Creates Offer records (FBA detection)
  */
 
-import { PrismaClient } from '@prisma/client'
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
 import { AmazonService } from './marketplaces/amazon.service.js'
 
-const prisma = new PrismaClient()
 
 /**
  * Unpack Amazon catalog item into Matrix structure

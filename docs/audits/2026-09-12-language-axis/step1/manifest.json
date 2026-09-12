@@ -1,0 +1,179 @@
+{
+  "recordedAt": "2026-09-11T23:26:59.777409+00:00",
+  "status": "step-1-complete-awaiting-owner-gate",
+  "sources": [
+    {
+      "path": "packages/database/prisma/schema.prisma",
+      "bytes": 855621,
+      "mtimeUtc": "2026-09-11T23:10:37.891114+00:00",
+      "sha256": "65e4f6f44582548c6cd66581e5102a002f1ec7b4a72869ced145ff2fb9d3091a",
+      "line": 13502,
+      "anchor": "// LX.1 language tier."
+    },
+    {
+      "path": "packages/database/prisma/migrations/20260912_lx1_translation_store/migration.sql",
+      "bytes": 1423,
+      "mtimeUtc": "2026-09-11T23:01:05.807956+00:00",
+      "sha256": "80f73ca6f43bb2d9c0e419563506096f338152263c60ddd544ac869468d8e58f",
+      "line": 6,
+      "anchor": "ALTER TABLE \"ProductTranslation\""
+    },
+    {
+      "path": "apps/api/src/routes/pim-global.routes.ts",
+      "bytes": 29465,
+      "mtimeUtc": "2026-09-11T23:12:57.077396+00:00",
+      "sha256": "73b7fd63eb29204a04f873a018e84c982fedf1aafb75e8384ad0b28e82722857",
+      "line": 136,
+      "anchor": "locales: globalContentLocales"
+    },
+    {
+      "path": "apps/api/src/services/pim/global-content.ts",
+      "bytes": 1495,
+      "mtimeUtc": "2026-09-11T23:05:41.093854+00:00",
+      "sha256": "03fd845b7dae1918d22919983dd61c20eedfdaf40e67e23e5728d87fa9db1e49",
+      "line": 16,
+      "anchor": "export function globalContentLocales"
+    },
+    {
+      "path": "apps/api/src/services/pim/global-content.vitest.test.ts",
+      "bytes": 2825,
+      "mtimeUtc": "2026-09-11T23:06:22.229698+00:00",
+      "sha256": "67c0eb932205ffe063a201d3c0fb01bbde88bff89bc428bd9f82477505de61a7",
+      "line": 6,
+      "anchor": "describe('LX.1"
+    },
+    {
+      "path": "apps/api/src/services/pim/language-axis-schema.vitest.test.ts",
+      "bytes": 4180,
+      "mtimeUtc": "2026-09-11T23:05:41.179816+00:00",
+      "sha256": "4f34f619ec4c7481d3682bc6155a12369805f7904182467396f53bedf2d06e70",
+      "line": 23,
+      "anchor": "describe('LX.1"
+    },
+    {
+      "path": "apps/api/src/services/pim/localized-route.vitest.test.ts",
+      "bytes": 4341,
+      "mtimeUtc": "2026-09-11T23:14:20.587020+00:00",
+      "sha256": "4429e94a00e60a9bfb245e28f44dc3b62a14572751c2ba8cde26a91d0940e546",
+      "line": 23,
+      "anchor": "it('GET loads table"
+    },
+    {
+      "path": "apps/api/src/services/pim/information-database.vitest.test.ts",
+      "bytes": 28567,
+      "mtimeUtc": "2026-09-11T23:23:44.568027+00:00",
+      "sha256": "fffbe42bafc386c39712992a72c2a32d5199c7a73e27bb2fb5f846219a47ed24",
+      "line": 119,
+      "anchor": "it('refuses legacy Shared"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/capture-http.mjs",
+      "bytes": 2188,
+      "mtimeUtc": "2026-09-11T23:06:56.610263+00:00",
+      "sha256": "fd6937e21f632945ef9def54bde07f36604936a784f94b3aa14c7498c3b5fdcc"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/http-after.json",
+      "bytes": 20675,
+      "mtimeUtc": "2026-09-11T23:20:35.191015+00:00",
+      "sha256": "9c4eee2a6d5494fde4eddebbf9b0120b98111fe8aadef1e87bb1d249d998d792"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/http-before.json",
+      "bytes": 20655,
+      "mtimeUtc": "2026-09-11T23:07:36.739490+00:00",
+      "sha256": "5dbf2dc1b9da1c2fbf49bf3eaea0eb7508037b5cb29ca2175445482e05d94f63"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/inspect.mjs",
+      "bytes": 5858,
+      "mtimeUtc": "2026-09-11T23:03:32.659868+00:00",
+      "sha256": "8fc56afda373d85e36918cf60c515681d8ea9c19ffa1405c222232015260401c"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/local-after.json",
+      "bytes": 295891,
+      "mtimeUtc": "2026-09-11T23:11:33.404593+00:00",
+      "sha256": "a66c262792953001d09f800e99f58214c8c89fcea5ade193da0db6e88499b765"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/local-before.json",
+      "bytes": 293913,
+      "mtimeUtc": "2026-09-11T23:04:03.486126+00:00",
+      "sha256": "4c5b02bb12b57732e8ff453b8d6e1cb8d43a213f70df73e37269d2ee694ae4a6"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/production-after.json",
+      "bytes": 290142,
+      "mtimeUtc": "2026-09-11T23:10:59.982134+00:00",
+      "sha256": "ddfda3e1b7f0d66810f79f58a895137e367cbd7e89cce5efec4fc697db26c68e"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/production-before.json",
+      "bytes": 288657,
+      "mtimeUtc": "2026-09-11T23:04:02.193394+00:00",
+      "sha256": "171fef1f2b99dbe178f8a9a0a04c2dc471a1065ab6b13b7829067f6f2d2a4992"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/schema-command.mjs",
+      "bytes": 1170,
+      "mtimeUtc": "2026-09-11T23:03:32.699288+00:00",
+      "sha256": "bcddffa015cb5532bee99f5734f8f8077ee724aedfadfc54c70ee1ea05f21ef3"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/target.mjs",
+      "bytes": 1056,
+      "mtimeUtc": "2026-09-11T23:03:32.619107+00:00",
+      "sha256": "29f032d714d629a7687d62880b2ae74e84c3145b8d97080f608ead01a97eae2c"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/tests.json",
+      "bytes": 12234,
+      "mtimeUtc": "2026-09-11T23:24:40.015970+00:00",
+      "sha256": "49bab94efcbfb63a855b78462f2a481acc5ab8ede3fb183a1e3ed9b6f65a5544"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/typecheck-final.log",
+      "bytes": 285,
+      "mtimeUtc": "2026-09-11T23:23:55.313878+00:00",
+      "sha256": "11d73984787264c8b73a69a30f22719e9ba2a632c2e6a2f5a39ff507e4c26f13"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step1/typecheck.log",
+      "bytes": 6516,
+      "mtimeUtc": "2026-09-11T23:20:56.817880+00:00",
+      "sha256": "1cdec23851d4e361b5be13b10435c6c2c451f79d672421e86db91895e8f43c3c"
+    }
+  ],
+  "ledgerSnapshot": {
+    "path": "docs/pes-claims.md",
+    "bytes": 3523187,
+    "mtimeUtc": "2026-09-11T23:26:59.789650+00:00",
+    "sha256": "9a794bd7c482e8f69078285f39c61d9e3fe8d45fc252f17ad504bba813167e2d"
+  },
+  "gates": {
+    "tests": {
+      "exitCode": 0,
+      "passed": 33,
+      "files": 4
+    },
+    "scopedTypecheck": {
+      "exitCode": 0,
+      "files": 6
+    },
+    "prismaValidate": 0,
+    "prismaGenerate": 0,
+    "productionExecute": 0,
+    "productionResolve": 0,
+    "localExecute": 0,
+    "localResolve": 0,
+    "productionExistingValuesChanged": 0,
+    "localConcurrentListingAdditions": 3,
+    "localConcurrentListingChanges": 1,
+    "httpFamilyRows": 21,
+    "httpFieldComparisons": 168,
+    "httpDifferences": 0
+  }
+}

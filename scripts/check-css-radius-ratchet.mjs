@@ -35,7 +35,29 @@ const BASELINE = join(ROOT, 'scripts/css-radius-baseline.json')
 
 let tracked = new Set()
 try {
-  tracked = new Set(execSync('git ls-files "apps/web/src/app/**/*.css"', { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean))
+/* 🔴 DISCLOSED EDIT by DS.1 under hub ruling #591 — ENUMERATION ONLY. No rule, threshold or
+   baseline is touched.
+
+   The rationale below was deliberate and is preserved because it is right in the general case: in a
+   shared tree, another session's untracked work-in-progress should not fail your push. **It is wrong
+   for this programme.** Nothing here is committed; the whole rebuild lands in ONE push on the
+   Owner's word, so at that moment every untracked file IS part of the push — ~563 of them. Excluding
+   them means every green this gate printed was over a subset nobody chose, and the surfaces it has
+   never read are the new ones. `--exclude-standard` keeps `.gitignore` honoured. */
+  tracked = new Set([
+/* 🔴 TWO globs, and the second is not redundant (hub #601). A `git ls-files` double-star pattern
+   does NOT match a file sitting directly in the named directory — measured 0 vs 1 — so
+   `apps/web/src/app/globals.css` had never been scanned by this ratchet, tracked or not, since
+   before the untracked union. A double-star that reads as "everything below here" silently means
+   "everything at least one directory below here". Found while proving an untracked control: the
+   control did not move, and the scratch file was simply too shallow to be seen.
+
+   (The glob is spelled out in the execSync call below rather than in this comment on purpose — a
+   star immediately followed by a slash ENDS a block comment, which is the #262 incident, and I put
+   it here on the first attempt.) */
+    ...execSync('git ls-files "apps/web/src/app/**/*.css" "apps/web/src/app/*.css"', { cwd: ROOT, encoding: 'utf8' }).split('\n'),
+    ...execSync('git ls-files --others --exclude-standard "apps/web/src/app/**/*.css" "apps/web/src/app/*.css"', { cwd: ROOT, encoding: 'utf8' }).split('\n'),
+  ].filter(Boolean))
 } catch { /* not a git tree — scan everything */ }
 
 function* walk(dir) {

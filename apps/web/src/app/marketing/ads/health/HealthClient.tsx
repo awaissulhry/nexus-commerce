@@ -7,7 +7,7 @@
  * transparent rolled-up Health Score. Read-only: every row drills through to the campaign to act.
  */
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Package, Bot, ChevronRight, ShieldCheck } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { ProbePanel } from './ProbePanel'

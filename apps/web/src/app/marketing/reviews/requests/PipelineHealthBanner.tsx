@@ -18,7 +18,7 @@
 
 import { AlertTriangle, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 
 export interface PipelineCronSummary {

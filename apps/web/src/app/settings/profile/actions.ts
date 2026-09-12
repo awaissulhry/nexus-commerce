@@ -1,5 +1,7 @@
 'use server'
 
+import { currentWebProfile } from '@/lib/workspaces/server'
+
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import { createHash, timingSafeEqual } from 'crypto'
@@ -83,7 +85,7 @@ export async function saveProfile(input: ProfileInput) {
     workingHoursEnd: input.workingHoursEnd.trim() || null,
   }
 
-  const existing = await (prisma as any).userProfile.findFirst()
+  const existing = await currentWebProfile()
   let next: any
   if (existing) {
     next = await (prisma as any).userProfile.update({
@@ -112,6 +114,12 @@ export async function changePassword(input: {
   confirmPassword: string
 }) {
   const { currentPassword, newPassword, confirmPassword } = input
+  if (process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1') {
+    const { getBackendUrl } = await import('@/lib/backend-url')
+    const response = await fetch(`${getBackendUrl()}/api/auth/password/change`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input), cache: 'no-store' })
+    const result = await response.json()
+    return response.ok ? { success: true as const } : { success: false as const, error: result.error ?? 'Password could not be changed.' }
+  }
   if (!newPassword || newPassword.length < 8) {
     return { success: false as const, error: 'Password must be at least 8 characters' }
   }
@@ -120,7 +128,7 @@ export async function changePassword(input: {
   }
   // Reject if identical to the current one — common foot-gun where
   // the user "rotates" the same password.
-  const existing = await (prisma as any).userProfile.findFirst()
+  const existing = await currentWebProfile()
   if (existing?.passwordHash) {
     const sameAsCurrent = await verifyPassword(newPassword, existing.passwordHash)
     if (sameAsCurrent) {

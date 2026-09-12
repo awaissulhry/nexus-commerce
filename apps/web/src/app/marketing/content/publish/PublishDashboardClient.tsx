@@ -8,7 +8,7 @@
 // own input. Fire button POSTs to each enabled channel's endpoint
 // in parallel + renders the result list.
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useState } from 'react'
 import {
   ArrowLeft,

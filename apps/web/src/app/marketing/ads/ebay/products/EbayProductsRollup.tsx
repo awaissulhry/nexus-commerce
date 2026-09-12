@@ -8,8 +8,9 @@
  * Per-row hover action = Promote; selection → bulk Promote.
  */
 import { useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
+import Link from '@/lib/workspaces/Link'
 import { Megaphone, ExternalLink } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker } from '../../_shell/DateRangePicker'

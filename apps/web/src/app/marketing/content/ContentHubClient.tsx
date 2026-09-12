@@ -5,8 +5,8 @@
 // sidebar, dedicated search, detail drawer land in MC.1.3 → MC.1.5.
 
 import { useEffect, useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { usePathname } from '@/lib/workspaces/navigation'
 import {
   Layers,
   Image as ImageIcon,
@@ -39,6 +39,7 @@ import { formatBytes, formatCount } from './_lib/format'
 import type { LibraryItem, OverviewPayload } from './_lib/types'
 
 interface Props {
+  embedded?: boolean
   overview: OverviewPayload
   overviewError: string | null
   apiBase: string
@@ -49,6 +50,7 @@ export default function ContentHubClient({
   overview,
   overviewError,
   apiBase,
+  embedded = false,
 }: Props) {
   const { t } = useTranslations()
   const pathname = usePathname()
@@ -222,7 +224,7 @@ export default function ContentHubClient({
   return (
     <div className="space-y-4">
       {/* Sub-navigation */}
-      <nav className="border-b border-default dark:border-slate-800">
+      {!embedded && <nav className="border-b border-default dark:border-slate-800">
         <ul className="flex items-center gap-1 -mb-px">
           {contentTabs.map((tab) => {
             const active = tab.exact ? pathname === tab.href : pathname.startsWith(tab.href)
@@ -245,12 +247,12 @@ export default function ContentHubClient({
             )
           })}
         </ul>
-      </nav>
+      </nav>}
 
-      <PageHeader
+      {!embedded && <PageHeader
         title={t('marketingContent.title')}
         description={t('marketingContent.description')}
-      />
+      />}
 
       {overviewError && (
         <div

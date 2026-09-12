@@ -25,7 +25,7 @@
 import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Boxes,
   Check,
@@ -54,7 +54,8 @@ import { Listbox } from '@/design-system/components/Listbox'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Tooltip } from '@/components/ui/Tooltip'
 import { useConfirm } from '@/components/ui/ConfirmProvider'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import PageHeader from '@/components/layout/PageHeader'
 import FreshnessIndicator from '@/components/filters/FreshnessIndicator'

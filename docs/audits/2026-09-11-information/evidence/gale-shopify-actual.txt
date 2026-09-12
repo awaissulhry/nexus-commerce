@@ -1,0 +1,1026 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to system theme":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+        - generic: Home
+      - link "Products 37 pending":
+        - /url: /products
+        - generic: Products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic: Listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+        - generic: Stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+        - generic: Inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic: Outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+        - generic: Replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+        - generic: Purchase Orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+        - generic: Suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+        - generic: Carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+        - generic: Returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic: Orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+        - generic: Pricing
+      - link "Insights":
+        - /url: /insights
+        - generic: Insights
+      - link "Advertising":
+        - /url: /marketing/ads
+        - generic: Advertising
+      - link "Calendar":
+        - /url: /marketing/calendar
+        - generic: Calendar
+      - link "Content":
+        - /url: /marketing/content
+        - generic: Content
+      - link "Reviews":
+        - /url: /marketing/reviews
+        - generic: Reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+        - generic: Agent Fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic: Inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+        - generic: Sync Logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic: Connections
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+        - generic: Mappings
+      - link "Settings":
+        - /url: /settings
+        - generic: Settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+        - generic: Recycle Bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic: Active
+  - generic: Parent
+  - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Blocked 0%":
+      - generic: Shared product
+      - generic: ·
+      - generic: Blocked
+      - generic: 0%
+    - radio "Amazon":
+      - generic: Amazon
+    - radio "eBay":
+      - generic: eBay
+    - radio "Shopify Blocked 0%" [checked] [active]:
+      - generic: Shopify
+      - generic: ·
+      - generic: Blocked
+      - generic: 0%
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Market":
+    - generic: GLOBAL
+  - button "Content language":
+    - generic: English (en) · primary
+  - region "Information":
+    - text: 21 rows
+    - generic: · 1 listing · 20 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (72)":
+      - text: All attributes (72)
+    - button "Required 1 column":
+      - generic: Required
+      - generic: 1 column
+    - button "Essentials 4 columns":
+      - generic: Essentials
+      - generic: 4 columns
+    - button "Localized content 3 columns":
+      - generic: Localized content
+      - generic: 3 columns
+    - 'button "Missing required: 21 affected cells across 1 column and 21 rows"':
+      - generic: Missing required
+      - generic: 1 column
+    - button "Requirements"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product role Parent SKU Name Description Product media Brand Product category Product type":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product role":
+            - generic: Product role
+          - columnheader "Parent SKU":
+            - generic: Parent SKU
+          - columnheader "Name":
+            - generic: Name
+          - columnheader "Description":
+            - generic: Description
+          - columnheader "Product media":
+            - generic: Product media
+          - columnheader "Brand":
+            - generic: Brand
+          - columnheader "Product category":
+            - generic: Product category
+          - columnheader "Product type":
+            - generic: Product type
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing draft · 20 variants · Errors — 0% of required fields filled · 21 rows missing required · 21 blocked":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: GALE-JACKET
+            - img "Primary · Listing draft · 20 variants · Errors — 0% of required fields filled · 21 rows missing required · 21 blocked":
+              - generic: 0%
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Edit: GALE-JACKET, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Edit: GALE-JACKET, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET, Name"':
+          - 'gridcell "Not measured Edit: GALE-JACKET, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Description"':
+            - generic: —
+            - 'button "Edit: GALE-JACKET, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Description"':
+          - 'gridcell "GALE-JACKET, 24 media items Edit product media: GALE-JACKET"':
+            - group "GALE-JACKET, 24 media items":
+              - button "MAIN, position 1 of 24"
+              - button "Image, position 2 of 24"
+              - button "Image, position 3 of 24"
+              - button "Image, position 4 of 24"
+              - button "Image, position 5 of 24"
+              - generic: "+19"
+            - 'button "Edit product media: GALE-JACKET"':
+          - 'gridcell "XAVIA RACING WWW.XAVIARACING.IT Edit: GALE-JACKET, Brand Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET, Brand"':
+            - generic: XAVIA RACING WWW.XAVIARACING.IT
+            - 'button "Edit: GALE-JACKET, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. Show cell details: GALE-JACKET, Brand"':
+          - 'gridcell "Not measured Edit: GALE-JACKET, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Product category"':
+            - generic: —
+            - 'button "Edit: GALE-JACKET, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Product category"':
+          - 'gridcell "Not measured Edit: GALE-JACKET, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Product type"':
+            - generic: —
+            - 'button "Edit: GALE-JACKET, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL GALE-JACKET-BLACK-MEN-3XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-3XL
+            - img "GALE-JACKET-BLACK-MEN-3XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-3XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-3XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-3XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-3XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+            - group "GALE-JACKET-BLACK-MEN-3XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-3XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-3XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-3XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-3XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-3XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-3XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL GALE-JACKET-BLACK-MEN-4XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-4XL
+            - img "GALE-JACKET-BLACK-MEN-4XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-4XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-4XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-4XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-4XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+            - group "GALE-JACKET-BLACK-MEN-4XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-4XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-4XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-4XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-4XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-4XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-4XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL GALE-JACKET-BLACK-MEN-5XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-5XL
+            - img "GALE-JACKET-BLACK-MEN-5XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-5XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-5XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-5XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-5XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+            - group "GALE-JACKET-BLACK-MEN-5XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-5XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-5XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-5XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-5XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-5XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-5XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L GALE-JACKET-BLACK-MEN-L — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-L
+            - img "GALE-JACKET-BLACK-MEN-L — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-L, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-L, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-L, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-L, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-L, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-L, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-L, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-L"':
+            - group "GALE-JACKET-BLACK-MEN-L, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-L"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-L, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-L, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-L, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-L, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-L, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-L, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-L, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M GALE-JACKET-BLACK-MEN-M — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-M
+            - img "GALE-JACKET-BLACK-MEN-M — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-M, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-M, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-M, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-M, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-M, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-M, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-M, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-M"':
+            - group "GALE-JACKET-BLACK-MEN-M, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-M"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-M, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-M, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-M, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-M, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-M, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-M, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-M, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S GALE-JACKET-BLACK-MEN-S — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-S
+            - img "GALE-JACKET-BLACK-MEN-S — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-S, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-S, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-S, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-S, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-S, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-S, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-S, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-S"':
+            - group "GALE-JACKET-BLACK-MEN-S, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-S"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-S, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-S, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-S, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-S, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-S, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-S, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-S, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL GALE-JACKET-BLACK-MEN-XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XL
+            - img "GALE-JACKET-BLACK-MEN-XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+            - group "GALE-JACKET-BLACK-MEN-XL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT02, position 2 of 7"
+              - button "PT01, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS GALE-JACKET-BLACK-MEN-XS — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XS
+            - img "GALE-JACKET-BLACK-MEN-XS — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-XS, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XS, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XS, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XS, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XS, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XS, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XS, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+            - group "GALE-JACKET-BLACK-MEN-XS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-XS, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XS, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XS, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XS, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XS, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XS, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XS, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL GALE-JACKET-BLACK-MEN-XXL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXL
+            - img "GALE-JACKET-BLACK-MEN-XXL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-BLACK-MEN-XXL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+            - group "GALE-JACKET-BLACK-MEN-XXL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-XXL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS GALE-JACKET-BLACK-MEN-XXS — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXS
+            - img "GALE-JACKET-BLACK-MEN-XXS — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero) Details: GALE-JACKET-BLACK-MEN-XXS, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXS, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXS, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXS, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+            - group "GALE-JACKET-BLACK-MEN-XXS, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+          - 'gridcell "Xavia Details: GALE-JACKET-BLACK-MEN-XXS, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXS, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXS, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXS, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-BLACK-MEN-XXS, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-BLACK-MEN-XXS, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL GALE-JACKET-YELLOW-MEN-3XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-3XL
+            - img "GALE-JACKET-YELLOW-MEN-3XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-3XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-3XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-3XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-3XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+            - group "GALE-JACKET-YELLOW-MEN-3XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-3XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-3XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-3XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-3XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-3XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-3XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL GALE-JACKET-YELLOW-MEN-4XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-4XL
+            - img "GALE-JACKET-YELLOW-MEN-4XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-4XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-4XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-4XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-4XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+            - group "GALE-JACKET-YELLOW-MEN-4XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-4XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-4XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-4XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-4XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-4XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-4XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL GALE-JACKET-YELLOW-MEN-5XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-5XL
+            - img "GALE-JACKET-YELLOW-MEN-5XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-5XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-5XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-5XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-5XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+            - group "GALE-JACKET-YELLOW-MEN-5XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-5XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-5XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-5XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-5XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-5XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-5XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L GALE-JACKET-YELLOW-MEN-L — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-L
+            - img "GALE-JACKET-YELLOW-MEN-L — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-L, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-L, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-L, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-L, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-L, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-L, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-L, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+            - group "GALE-JACKET-YELLOW-MEN-L, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-L, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-L, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-L, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-L, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-L, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-L, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-L, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M GALE-JACKET-YELLOW-MEN-M — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-M
+            - img "GALE-JACKET-YELLOW-MEN-M — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-M, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-M, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-M, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-M, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-M, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-M, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-M, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+            - group "GALE-JACKET-YELLOW-MEN-M, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-M, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-M, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-M, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-M, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-M, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-M, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-M, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S GALE-JACKET-YELLOW-MEN-S — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-S
+            - img "GALE-JACKET-YELLOW-MEN-S — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-S, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-S, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-S, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-S, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-S, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-S, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-S, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+            - group "GALE-JACKET-YELLOW-MEN-S, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-S, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-S, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-S, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-S, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-S, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-S, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-S, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL GALE-JACKET-YELLOW-MEN-XL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XL
+            - img "GALE-JACKET-YELLOW-MEN-XL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-XL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+            - group "GALE-JACKET-YELLOW-MEN-XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-XL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS GALE-JACKET-YELLOW-MEN-XS — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XS
+            - img "GALE-JACKET-YELLOW-MEN-XS — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-XS, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XS, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XS, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XS, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+            - group "GALE-JACKET-YELLOW-MEN-XS, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-XS, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XS, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XS, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XS, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XS, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XS, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL GALE-JACKET-YELLOW-MEN-XXL — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXL
+            - img "GALE-JACKET-YELLOW-MEN-XXL — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni Details: GALE-JACKET-YELLOW-MEN-XXL, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXL, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXL, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+            - group "GALE-JACKET-YELLOW-MEN-XXL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-XXL, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXL, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXL, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXL, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXL, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXL, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Product type"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS GALE-JACKET-YELLOW-MEN-XXS — 4 of 71 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXS
+            - img "GALE-JACKET-YELLOW-MEN-XXS — 4 of 71 channel fields filled (including optional fields) · errors":
+              - generic: 6%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo) Details: GALE-JACKET-YELLOW-MEN-XXS, Name Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Name"':
+            - generic: XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXS, Name"':
+            - 'button "Language fallback. Showing it content. en content is missing. This value does not count as translated content. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Name"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXS, Description Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXS, 8 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+            - group "GALE-JACKET-YELLOW-MEN-XXS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "MAIN, position 2 of 8"
+              - button "PT01, position 3 of 8"
+              - button "PT02, position 4 of 8"
+              - button "PT03, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+          - 'gridcell "Xavia Details: GALE-JACKET-YELLOW-MEN-XXS, Brand Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Brand"':
+            - generic: Xavia
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXS, Brand"':
+            - 'button "Follows Master. Uses Master’s brand for this product and content language. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Brand"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXS, Product category Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product category"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXS, Product category"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product category"':
+          - 'gridcell "Not measured Details: GALE-JACKET-YELLOW-MEN-XXS, Product type Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product type"':
+            - generic: —
+            - 'button "Details: GALE-JACKET-YELLOW-MEN-XXS, Product type"':
+            - 'button "Follows Master. Uses Master’s shopify_product_type for this product and content language. The configured source currently produces no value. This Shopify field belongs to the product row. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Product type"':
+    - status:
+      - generic: 21 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

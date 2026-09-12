@@ -12,7 +12,7 @@
 // re-fetches via router.refresh() afterwards.
 
 import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, History, RotateCcw, Camera, Loader2, Sparkles, FileClock, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

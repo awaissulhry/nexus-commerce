@@ -5,5 +5,6 @@
 // that sent tsx scripts to localhost instead of the configured database.
 import "./env.js";
 import prisma from "@nexus/database";
+import { contextualDatabase } from './lib/database-context.js';
 
-export default prisma;
+export default contextualDatabase(prisma);

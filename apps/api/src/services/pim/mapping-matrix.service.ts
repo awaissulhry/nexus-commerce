@@ -12,10 +12,18 @@
  */
 
 import prisma from '../../db.js'
-import { previewPayload, type PreviewResult } from './payload-preview.js'
-import { scanProductDivergence, type DivergenceEntry } from './reconcile-divergence.service.js'
+import { previewFromResolution, type PreviewResult } from './payload-preview.js'
+import { type DivergenceEntry } from './reconcile-divergence.service.js'
+import { resolveBatch } from './mapping/resolve-batch.service.js'
+import { valuesEqual } from './resolver-shadow.js'
 
 export interface MatrixCoordinate {
+  listingId?: string
+  channelConnectionId?: string | null
+  aliasKey?: string
+  listingVersion?: number
+  categoryId?: string | null
+  accountName?: string | null
   channel: string
   marketplace: string
   hasListing: boolean
@@ -23,6 +31,8 @@ export interface MatrixCoordinate {
 }
 
 export interface MatrixCell {
+  errors?: string[]
+  masterValue?: unknown
   value: unknown
   /** legacy source (source|fallback|default|missing) */
   source: string
@@ -77,7 +87,7 @@ export function pivotMatrix(args: {
   // `${channel}:${marketplace}:${fieldKey}` → master value (divergent only)
   const divMaster = new Map<string, unknown>()
   for (const d of args.divergences) {
-    divMaster.set(`${d.channel}:${d.marketplace}:${d.fieldKey}`, d.masterValue)
+    divMaster.set(`${d.listingId ?? `${d.channel}:${d.marketplace}`}:${d.fieldKey}`, d.masterValue)
   }
 
   const rows = new Map<string, MatrixRow>()
@@ -86,14 +96,14 @@ export function pivotMatrix(args: {
   args.coordinates.forEach((coord, i) => {
     const preview = args.previews[i]
     if (!preview) return
-    const coordKey = `${coord.channel}:${coord.marketplace}`
+    const coordKey = coord.listingId ?? `${coord.channel}:${coord.marketplace}`
     for (const f of preview.fields) {
       let row = rows.get(f.fieldKey)
       if (!row) {
         const src = (f.rule as { source?: unknown } | undefined)?.source
         row = {
           fieldKey: f.fieldKey,
-          label: f.fieldKey,
+          label: f.label ?? f.fieldKey,
           required: f.required,
           sourceAttr: typeof src === 'string' ? src : undefined,
           master: undefined,
@@ -109,6 +119,8 @@ export function pivotMatrix(args: {
       if (missing) missingRequired++
 
       row.cells[coordKey] = {
+        errors: f.errors ?? [],
+        ...(diverges ? { masterValue: divMaster.get(divKey) } : {}),
         value: f.value,
         source: f.source,
         provenance: f.provenance,
@@ -134,7 +146,7 @@ export async function buildMappingMatrix(input: {
   productId: string
   locale?: string
 }): Promise<MappingMatrix> {
-  const locale = input.locale ?? 'en'
+  const locale = input.locale
 
   const product = await prisma.product.findUnique({
     where: { id: input.productId },
@@ -144,36 +156,42 @@ export async function buildMappingMatrix(input: {
 
   const listings = await prisma.channelListing.findMany({
     where: { productId: input.productId },
-    select: { channel: true, marketplace: true, isPublished: true },
+    select: { id: true, channel: true, marketplace: true, isPublished: true, channelConnectionId: true, aliasKey: true, version: true, channelConnection: { select: { displayName: true } } },
     orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }],
   })
   const coordinates: MatrixCoordinate[] = listings
     .filter((l) => l.channel && l.marketplace)
     .map((l) => ({
+      listingId: l.id, accountName: l.channelConnection?.displayName ?? null, channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey, listingVersion: l.version,
       channel: l.channel,
       marketplace: l.marketplace as string,
       hasListing: true,
       isPublished: !!l.isPublished,
     }))
 
-  // Channel cells via the real preview path (parity); divergence + master
-  // values via FM.12 (one pass over all coordinates).
-  const [previews, divergence] = await Promise.all([
-    mapBounded(coordinates, 4, (c) =>
-      previewPayload({ productId: input.productId, channel: c.channel, marketplace: c.marketplace, locale }).catch(
-        () => null,
-      ),
-    ),
-    scanProductDivergence({ productId: input.productId, locale }).catch(
-      () => ({ entries: [] as DivergenceEntry[] } as { entries: DivergenceEntry[] }),
-    ),
-  ])
+  // Resolve a coordinate once; only listings with mapped overrides need a
+  // second baseline. Do not repeat every read in a separate divergence scan.
+  const inspected = await mapBounded(coordinates, 4, async c => {
+    const args = { productIds: [input.productId], channel: c.channel, marketplace: c.marketplace,
+      channelConnectionId: c.channelConnectionId, aliasKey: c.aliasKey, locale }
+    const current = await resolveBatch(args)
+    const overrides = Object.values(current.products[0]?.cells ?? {}).filter(cell => cell.provenance === 'override' && cell.rule)
+    const inherited = overrides.length ? await resolveBatch({ ...args, inheritMappedFields: true, includeCatalogue: false }) : current
+    const divergences: DivergenceEntry[] = []
+    for (const cell of overrides) {
+      const master = inherited.products[0]?.cells[cell.fieldKey]
+      if (master && !valuesEqual(cell.value, master.value)) divergences.push({ ...c, fieldKey: cell.fieldKey, overrideValue: cell.value, masterValue: master.value })
+    }
+    return { preview: previewFromResolution(current, input.productId), divergences }
+  })
+  const previews = inspected.map(r => r.preview)
 
   const { fields, divergent, missingRequired } = pivotMatrix({
     coordinates,
     previews,
-    divergences: divergence.entries,
+    divergences: inspected.flatMap(r => r.divergences),
   })
+  coordinates.forEach((coordinate, index) => { coordinate.categoryId = previews[index]?.categoryId ?? null })
 
   return {
     productId: input.productId,

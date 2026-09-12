@@ -19,7 +19,7 @@
 // existing /reorder endpoint if operators ask for it.
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Image as ImageIcon, ExternalLink, AlertTriangle, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useTranslations } from '@/lib/i18n/use-translations'

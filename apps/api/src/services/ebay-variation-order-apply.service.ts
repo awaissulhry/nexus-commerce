@@ -1,3 +1,4 @@
+import { mappingToken, MappingConflict } from './pim/mapping/revision-token.js'
 /**
  * Variation ORDER on live eBay listings — without a full publish.
  *
@@ -126,6 +127,17 @@ export function buildReorderXml(itemId: string, plan: SpecificsSetReorderPlan): 
 </ReviseFixedPriceItemRequest>`
 }
 
+/** Decode one XML layer before re-escaping a permutation; &amp; must never become &amp;amp;. */
+export function parseOrderSpecifics(raw: string): Record<string, string[]> {
+  const decode = (text: string) => text.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (whole, entity: string) => {
+    const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
+    if (entity[0] !== '#') return named[entity.toLowerCase()] ?? whole
+    const point = parseInt(entity.slice(entity[1].toLowerCase() === 'x' ? 2 : 1), entity[1].toLowerCase() === 'x' ? 16 : 10)
+    return point > 0 && point <= 0x10ffff ? String.fromCodePoint(point) : whole
+  })
+  return Object.fromEntries(Object.entries(parseVariationSpecificsSet(raw)).map(([key, values]) => [decode(key), values.map(decode)]))
+}
+
 // ── Per-listing apply ─────────────────────────────────────────────────────
 
 export interface ApplyOrderListingResult {
@@ -137,6 +149,7 @@ export interface ApplyOrderListingResult {
   axisOrder?: { from: string[]; to: string[] }
   valueChanges?: Array<{ axis: string; from: string[]; to: string[] }>
   message?: string
+  liveToken?: string
 }
 
 const INVENTORY_MANAGED_RE = /inventor|magazzino/i
@@ -147,7 +160,7 @@ export async function applyVariationOrderToListing(
   storedAxisSeq: string[] | undefined,
   valueOrderByAxis: Record<string, string[]> | undefined,
   ctx: { oauthToken: string },
-  opts?: { dryRun?: boolean },
+  opts?: { dryRun?: boolean; expectedLiveToken?: string; beforeWrite?: () => Promise<void> },
 ): Promise<ApplyOrderListingResult> {
   const market = marketplace.toUpperCase()
   const siteId = siteIdForMarket(market)
@@ -175,17 +188,21 @@ export async function applyVariationOrderToListing(
     return { itemId, title, status: 'not-active', message: `listing is ${listingStatus}` }
   }
 
-  const declared = parseVariationSpecificsSet(raw)
+  const declared = parseOrderSpecifics(raw)
+  const liveToken = mappingToken({ declared, listingStatus })
   if (Object.keys(declared).length === 0) {
     return { itemId, title, status: 'no-variations', message: 'no VariationSpecificsSet on this listing' }
   }
 
   const plan = planSpecificsSetReorder(declared, storedAxisSeq, valueOrderByAxis)
   const diff = { axisOrder: plan.axisOrder, valueChanges: plan.valueChanges }
-  if (!plan.changed) return { itemId, title, status: 'unchanged' }
-  if (opts?.dryRun) return { itemId, title, status: 'dry-run', ...diff }
+  if (!plan.changed) return { itemId, title, status: 'unchanged', liveToken }
+  if (opts?.dryRun) return { itemId, title, status: 'dry-run', liveToken, ...diff }
+  if (opts?.expectedLiveToken && opts.expectedLiveToken !== liveToken) return { itemId, title, status: 'error', message: 'Live variation order changed after review. Review this destination again.' }
 
   try {
+    if (!opts?.beforeWrite || !opts.expectedLiveToken) throw new MappingConflict('Create a destination-bound order publication review first')
+    await opts.beforeWrite()
     await callTradingApi('ReviseFixedPriceItem', buildReorderXml(itemId, plan), {
       oauthToken: ctx.oauthToken,
       siteId,
@@ -202,13 +219,14 @@ export async function applyVariationOrderToListing(
   let verified = false
   try {
     const again = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId })
-    const liveNow = parseVariationSpecificsSet(again.raw)
+    const liveNow = parseOrderSpecifics(again.raw)
     verified =
       JSON.stringify(Object.keys(liveNow)) === JSON.stringify(plan.names) &&
       plan.names.every((n) => JSON.stringify(liveNow[n] ?? []) === JSON.stringify(plan.set[n] ?? []))
   } catch {
     /* verification is best-effort — the revise itself was acked */
   }
+  if (!verified) return { itemId, title, status: 'error', verified: false, message: 'eBay accepted the order revision, but read-back did not confirm it. Retry this review to check it again', ...diff }
   return { itemId, title, status: 'applied', verified, ...diff }
 }
 
@@ -232,56 +250,5 @@ export async function applyVariationOrderForFamily(
   ctx: { oauthToken: string },
   opts?: { dryRun?: boolean },
 ): Promise<ApplyOrderFamilyResult> {
-  const market = marketplace.toUpperCase()
-  const parent = await prisma.product.findUnique({
-    where: { id: parentProductId },
-    select: { id: true, sku: true },
-  })
-  if (!parent) throw new Error('parent product not found')
-  const children = await prisma.product.findMany({
-    where: { parentId: parentProductId, deletedAt: null },
-    select: { id: true, sku: true },
-  })
-  const ids = [parent.id, ...children.map((c) => c.id)]
-  const skus = [parent.sku, ...children.map((c) => c.sku)].filter(Boolean) as string[]
-
-  // Stored order — the SAME lookup the push runs (incident #39).
-  const parentCl = await prisma.channelListing.findFirst({
-    where: { productId: parent.id, channel: 'EBAY', marketplace: market },
-    select: { platformAttributes: true },
-  })
-  const pa = (parentCl?.platformAttributes ?? {}) as Record<string, unknown>
-  const storedAxisSeq = Array.isArray(pa._variationAxes) ? (pa._variationAxes as string[]) : undefined
-  const storedValueOrder = (pa._axisValueOrder ?? pa._axisSortOrder) as Record<string, string[]> | undefined
-  const valueOrderByAxis =
-    storedValueOrder && typeof storedValueOrder === 'object' ? storedValueOrder : undefined
-
-  const memberships = await prisma.sharedListingMembership.findMany({
-    where: { marketplace: market, OR: [{ productId: { in: ids } }, { sku: { in: skus } }] },
-    select: { itemId: true },
-  })
-  const laneA = await prisma.channelListing.findMany({
-    where: { productId: { in: ids }, channel: 'EBAY', marketplace: market, externalListingId: { not: null } },
-    select: { externalListingId: true },
-  })
-  const itemIds = [
-    ...new Set(
-      [...memberships.map((m) => m.itemId), ...laneA.map((l) => l.externalListingId)]
-        .map((id) => String(id ?? '').trim())
-        .filter((id) => /^\d+$/.test(id)),
-    ),
-  ]
-
-  const listings: ApplyOrderListingResult[] = []
-  for (const itemId of itemIds) {
-    listings.push(
-      await applyVariationOrderToListing(itemId, market, storedAxisSeq, valueOrderByAxis, ctx, opts),
-    )
-  }
-  return {
-    marketplace: market,
-    storedAxes: storedAxisSeq ?? [],
-    hasStoredValueOrder: !!valueOrderByAxis && Object.keys(valueOrderByAxis).length > 0,
-    listings,
-  }
+  throw new MappingConflict('Family-wide order revision cannot select an account or alternate listing safely. Use /api/ebay/presentation-publications/review with explicit destinations, then execute that review')
 }

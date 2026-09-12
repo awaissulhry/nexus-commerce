@@ -55,8 +55,8 @@ export function startRefundRetryCron(): void {
     logger.error('refund-retry cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runRetrySweep()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runRetrySweep()
   })
   logger.info('refund-retry cron: scheduled', { schedule })
 }

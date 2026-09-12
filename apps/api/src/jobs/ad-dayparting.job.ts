@@ -211,10 +211,10 @@ let task: ReturnType<typeof cron.schedule> | null = null
 let running = false // C3 — overlap guard: a slow tick must not run concurrently with the next
 export function startDaypartingCron(): void {
   if (task) return
-  task = cron.schedule('*/15 * * * *', () => {
-    if (running) { logger.warn('[ad-dayparting] previous tick still in flight — skipping this run'); return }
+  task = cron.schedule('*/15 * * * *', async () => {
+    if (running) { await logger.warn('[ad-dayparting] previous tick still in flight — skipping this run'); return }
     running = true
-    void runDaypartingCron().finally(() => { running = false })
+    await runDaypartingCron().finally(() => { running = false })
   })
   logger.info('ad-dayparting cron scheduled (*/15 * * * *)')
 }

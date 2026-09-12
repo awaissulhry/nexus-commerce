@@ -1,0 +1,278 @@
+/**
+ * AGW — the ads console's grid on AG Grid: the legacy `workspace-grid.css` rules restated for
+ * AG's DOM, with their FINAL effective values (the legacy sheet restated several selectors and the
+ * last declaration won; each is written once here). The mapping (design doc §4):
+ *
+ *   .nds-wsgrid              → .nds-wsgrid.nds-ag-ws (the wrapper — the card's frame)
+ *   tbody tr                 → .nds-ws-tr (AG 36.1 renders ONE row element per row, pinned parts
+ *                              inside it, so `:hover` on the row reaches every cell)
+ *   td.nm / .num / .ed / …   → .nds-ws-td.nm / .num / …  (an AG cell; the identity cell is `.nm`)
+ *   tr.h10-am-total          → .ag-row-pinned (AG's pinned top row)
+ *   tr.h10-am-grp            → the full-width group row, its band is `.nds-ws-grp`
+ *   thead th …               → the engine's header (the Owner's exemption) — nothing restated
+ *
+ * This is the ONE stylesheet outside `theme/grid.css` allowed to address `.ag-*`, because it lives in
+ * `design-system/grid/`. Every colour uses a Nexus semantic or component token; `tokens/workspace.ts` preserves
+ * the advertising palette independently of the default grid theme.
+ */
+
+/* ── the frame: `.nds-wsgrid { background; border; radius 12; overflow }` — AG's root draws none ── */
+.nds-wsgrid.nds-ag-ws {
+  background: var(--nds-wsgrid-surface);
+  border: 1px solid var(--nds-wsgrid-frame-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.nds-ag-ws .ag-root-wrapper {
+  --ag-wrapper-border: none;
+  --ag-wrapper-border-radius: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+/* The row rule — `tbody td { border-bottom: 1px solid grey-150 }`. The engine sheet states this
+   variable for every NexusGrid with its own token; the ads grid's rule is the legacy's. */
+.nds-ag-wrap.nds-ag-ws {
+  --ag-row-border: 1px solid var(--nds-wsgrid-border);
+}
+/* `tr.sk td { border-bottom: grey-75 }` */
+.nds-ag-ws .ag-row.sk {
+  --ag-row-border: 1px solid var(--nds-wsgrid-surface-hover);
+}
+/* The card is exactly as tall as its rows, as a `<table>` is: AG's auto-height layout otherwise holds a
+   minimum body (measured: a one-row explorer grid carried ~100px of blank card under its row). An empty
+   grid keeps no body either — the empty state is rendered under the header by the component, at the
+   legacy cell's own height (28px padding around its content), whatever that content is. */
+.nds-ag-ws .ag-root-wrapper {
+  --ag-auto-height-min-body-height: 0px;
+}
+
+/* ── cells: `tbody td { padding: 12px 14px; color; weight 500; nowrap }` — the horizontal padding is the theme's;
+   a cell is a flex row centred on the row (engine). The VERTICAL padding is stated below for content-driven
+   rows (`.is-auto`): AG measures a row as the cell's wrapper + the cell's padding + its borders, so 12 + content
+   + 12 + the 1px rule is the legacy `td` exactly. A grid whose consumer fixes `rowHeight` has no `.is-auto`. ── */
+.nds-ag-ws .ag-cell.nds-ws-td {
+  white-space: nowrap;
+  overflow: visible;
+  /* `td { padding: 12px 14px }`. AG paints the theme's `cellHorizontalPadding` one pixel under the
+     value on cells (measured 13 at 14) and exactly on headers; the cell is stated here so both
+     read 14 like the legacy `td` and `th`. */
+  padding-left: 14px;
+  padding-right: 14px;
+}
+/* The legacy cell inherited the page's `html { line-height: 1.5 }` (measured 19.5px at 13px on every baseline
+   page); AG's root sets `normal` (~16px), which would shrink every text line by 3.5px and every row with it. */
+.nds-ag-ws .ag-cell.nds-ws-td { line-height: 1.5; cursor: auto; } /* a `td` has no cursor of its own; AG's cell says `default` */
+/* AG resets `line-height: normal` on the value box (measured): the consumers' markup inside it must inherit the
+   legacy 1.5 — the Open pill is 22.5px tall on the legacy (3 + 16.5 + 3), 19 under `normal`. */
+.nds-ag-ws .ag-cell.nds-ws-td .ag-cell-value { line-height: inherit; }
+.nds-ag-ws.is-auto .ag-cell.nds-ws-td { padding-top: 12px; padding-bottom: 12px; border-top-width: 0; height: 100%; }
+/* `td.editing { padding-top: 7px; padding-bottom: 7px }` · `td.nm.nds-tree-cell { padding-block: 8px }` */
+.nds-ag-ws.is-auto .ag-cell.nds-ws-td.editing { padding-top: 7px; padding-bottom: 7px; }
+.nds-ag-ws.is-auto .ag-cell.nds-ws-td.nm.nds-tree-cell { padding-top: 8px; padding-bottom: 8px; }
+.nds-ag-ws .ag-cell.nds-ws-td.num { justify-content: flex-end; text-align: right; }
+.nds-ag-ws .ag-cell.nds-ws-td.ed { justify-content: flex-start; text-align: left; }
+.nds-ag-ws .ag-cell.nds-ws-td.ctr { justify-content: center; text-align: center; }
+.nds-ag-ws .ag-cell.nds-ws-td.st { justify-content: flex-start; text-align: left; white-space: nowrap; }
+/* `td.editing { text-align: left }` — the vertical 7px is the row's business, not the cell's */
+.nds-ag-ws .ag-cell.nds-ws-td.editing { justify-content: flex-start; text-align: left; }
+/* The identity cell: `td.nm { max-width: 360 }` is the column's `maxWidth`; here only what is inside it. */
+.nds-ag-ws .ag-cell.nds-ws-td.nm { overflow: hidden; }
+.nds-ag-ws .ag-cell.nds-ws-td.nm > .ag-cell-value,
+.nds-ag-ws .ag-cell.nds-ws-td.nm > .ag-cell-wrapper { min-width: 0; max-width: 100%; }
+
+/* ── the selection column: `th.ck, td.ck { width: 46; text-align: center }` ── */
+.nds-ag-ws .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-header-cell.nds-ws-th-ck { justify-content: center; padding-left: 0; padding-right: 0; }
+.nds-ag-ws .ag-header-cell.nds-ws-th-ck .ag-header-cell-comp-wrapper,
+.nds-ag-ws .ag-header-cell.nds-ws-th-ck .ag-header-select-all { justify-content: center; margin: 0; }
+/* Beside the select-all box AG mounts a 16px label/menu container (measured: box at x 0, container at x 32 in a
+   48px cell); the selection column has no menu, so the container goes and the box centres, as the legacy `th.ck` did. */
+.nds-ag-ws .ag-header-cell.nds-ws-th-ck .ag-header-cell-comp-wrapper { display: none; }
+.nds-ag-ws .ag-cell.nds-ws-td.ck .ag-cell-wrapper,
+.nds-ag-ws .ag-cell.nds-ws-td.ck .ag-selection-checkbox { justify-content: center; margin: 0; }
+/* The selection cell has no value: AG still mounts an empty `.ag-cell-value` that flexes to the rest of the
+   cell and pushes the box to the left edge (measured: x 98 in a 46px cell; the legacy centred it at 111). */
+.nds-ag-ws .ag-cell.nds-ws-td.ck .ag-cell-value { display: none; }
+/* CBN.2h.9/2h.10 — the 20px rounded checkbox. AG draws its own from theme params (./theme.ts); the
+   SIZE is the icon size, scoped to the checkbox alone so the header's sort and menu icons keep theirs. */
+.nds-ag-ws .ag-checkbox-input-wrapper { --ag-icon-size: 20px; cursor: pointer; }
+.nds-ag-ws .ag-checkbox-input-wrapper:hover { border-color: var(--nds-wsgrid-accent); }
+/* A consumer's own checkbox inside a cell (never AG's — that one is the wrapper above) */
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input) {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  width: 20px; height: 20px; min-width: 20px; margin: 0; padding: 0;
+  border: 1.5px solid var(--nds-wsgrid-control-border); border-radius: 5px; background: var(--nds-wsgrid-surface);
+  cursor: pointer; position: relative; box-sizing: border-box; vertical-align: middle;
+}
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input):hover { border-color: var(--nds-wsgrid-accent); }
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input):checked,
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input):indeterminate {
+  background-color: var(--nds-wsgrid-accent); border-color: var(--nds-wsgrid-accent);
+  background-repeat: no-repeat; background-position: center; background-size: 13px 13px;
+}
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input):checked {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 12.5l4.5 4.5L19 7'/></svg>");
+}
+.nds-ag-ws .ag-cell.nds-ws-td input[type="checkbox"]:not(.ag-checkbox-input):indeterminate {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'><path d='M6 12h12'/></svg>");
+}
+
+/* ── the frozen columns: `td.nm.fz { border-right: wsgrid-rule; box-shadow: 4px 0 6px -3px }` (the rule is the
+   theme's `pinnedColumnBorder`); SG.2 `td.fzr0 { border-left; box-shadow: -4px 0 6px -3px }` ── */
+.nds-ag-ws .ag-grid-pinned-left-cells { box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-ag-ws .ag-grid-pinned-right-cells { box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+/* the header's frozen part reads the same (`th.nm.fz`) */
+.nds-ag-ws .ag-header-row .ag-grid-pinned-left-cells { box-shadow: 4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+.nds-ag-ws .ag-header-row .ag-grid-pinned-right-cells { box-shadow: -4px 0 6px -3px rgba(16, 24, 40, 0.08); }
+
+/* ── the frozen cells keep their OWN ground, as the legacy sticky `td` did (workspace-grid.css 166 · 312 · 320 · 329 ·
+   331 · 367 · 384 · 396–401): white by default — so a page tint on the row (`rowClassName`) leaves the frozen
+   identity and checkbox cells white, exactly as the legacy cascade did — then the hover, selected, focused and
+   totals grounds restated on them, because AG paints those on the row BEHIND the cells. ── */
+.nds-ag-ws .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-cell.nds-ws-td.fz,
+.nds-ag-ws .ag-cell.nds-ws-td.fzr { background-color: var(--nds-wsgrid-surface); }
+.nds-ag-ws .ag-row:hover .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-row:hover .ag-cell.nds-ws-td.fz,
+.nds-ag-ws .ag-row:hover .ag-cell.nds-ws-td.fzr { background-color: var(--nds-imgup-surface); }
+.nds-ag-ws .ag-row.ag-row-selected .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-row.ag-row-selected .ag-cell.nds-ws-td.fz,
+.nds-ag-ws .ag-row.ag-row-selected .ag-cell.nds-ws-td.fzr,
+.nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.fz,
+.nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.fzr { background-color: var(--nds-wsgrid-selection-bg); }
+.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td.ck,
+.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td.fz,
+.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td.fzr { background-color: var(--nds-wsgrid-surface-raised); }
+/* a remainder row tints every cell, the frozen one included (legacy 488, later in the sheet than 320) */
+.nds-ag-ws .ag-row.nds-tree-remainder .ag-cell.nds-ws-td.fz { background-color: var(--nds-surface-sunken); }
+
+/* ── the rows ── */
+/* Design §2.7 / §4 — the hover contract for page CSS that must not name `.ag-*`: AG 36.1 renders ONE
+   row element per row (the pinned parts are containers inside it), so `.nds-ws-tr:hover` reaches every
+   cell — the exact analogue of the legacy `tbody tr:hover`. The variables are published as well, for a
+   rule that prefers to read the state rather than restate the selector. */
+.nds-ag-ws .ag-row { --nds-ws-hover: 0; --nds-ws-reveal: none; --nds-ws-reveal-w: 0; }
+.nds-ag-ws .ag-row:hover, .nds-ag-ws .ag-row.ag-row-hover { --nds-ws-hover: 1; --nds-ws-reveal: inline-flex; --nds-ws-reveal-w: auto; }
+.nds-ag-ws .ag-row.clickable { cursor: pointer; }
+/* keyboard-focused row (`keyboardNav`: j/k) — `tr.kbd-focus td { blue-50 }`, the rail on the frozen cell */
+.nds-ag-ws .ag-row.kbd-focus { background-color: var(--nds-wsgrid-selection-bg); }
+.nds-ag-ws .ag-row.kbd-focus .ag-cell.nds-ws-td.nm.fz { box-shadow: inset 3px 0 0 var(--nds-wsgrid-accent); }
+/* the pinned Total row: `tr.h10-am-total td { grey-25; 700; grey-900 }`, `td.nm.fz { text-align: right }` */
+.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td { color: var(--nds-wsgrid-text-strong); font-weight: 700; }
+.nds-ag-ws .ag-row-pinned .ag-cell.nds-ws-td.nm.fz { justify-content: flex-end; text-align: right; }
+.nds-ag-ws .ag-floating-top { border-bottom: 1px solid var(--nds-wsgrid-border); }
+/* the group band: `tr.h10-am-grp td { grey-100; padding 7px 16px; rules grey-150 }` */
+.nds-ag-ws .ag-row.h10-am-grp { background-color: var(--nds-wsgrid-surface-sunken); }
+.nds-ag-ws .ag-row.h10-am-grp .ag-cell-wrapper { width: 100%; }
+.nds-ag-ws .nds-ws-grp { display: flex; align-items: center; height: 100%; padding: 0 16px; box-sizing: border-box; }
+.nds-ag-ws .nds-ws-grp .gl { font-size: var(--nds-font-size-sm); font-weight: 700; color: var(--nds-wsgrid-text-emphasis); }
+.nds-ag-ws .nds-ws-grp .gc { margin-left: 8px; font-size: var(--nds-font-size-xs-plus); font-weight: 600; color: var(--nds-wsgrid-text-muted); }
+/* a remainder is arithmetic, not an entity — it reads as a note, and it is not selectable */
+.nds-ag-ws .ag-row.nds-tree-remainder { background-color: var(--nds-surface-sunken); font-style: italic; }
+.nds-ag-ws .ag-row.nds-tree-remainder .ag-cell.nds-ws-td.nm { color: var(--nds-warning-strong); font-style: normal; font-weight: 600; }
+
+/* ── the empty state: `td.empty { center; text-2; padding 28 }` — SGX: the sentence must WRAP ── */
+.nds-ag-ws .nds-ws-empty { text-align: center; color: var(--nds-text-2); padding: 28px; white-space: normal; font-size: var(--nds-font-size-base); font-weight: 500; }
+.nds-ag-ws .nds-ws-empty * { white-space: normal; }
+
+/* ── loading skeleton (CBN.2e.1) — the bars; the shimmer keyframes are `ads.css` `h10sh` ── */
+.nds-ag-ws .skb { display: inline-block; height: 11px; border-radius: 6px; background: linear-gradient(90deg, var(--nds-wsgrid-surface-sunken) 25%, var(--nds-wsgrid-border) 37%, var(--nds-wsgrid-surface-sunken) 63%); background-size: 400% 100%; animation: h10sh 1.3s ease infinite; }
+@keyframes h10sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* ── the identity cell's anatomy (CBN.2e.1 · 2h.1 · 2h.3 · 2h.4 · 2h.5 · 2h.10), final values ── */
+.nds-ag-ws .nds-ws-td.nm .dot { width: 7px; height: 7px; border-radius: var(--nds-radius-full); background: var(--nds-wsgrid-dot); flex-shrink: 0; }
+.nds-ag-ws .nds-ws-td.nm .dot.live { background: var(--nds-wsgrid-live-dot); }
+.nds-ag-ws .nds-ws-td.nm .badge { font-size: var(--nds-font-size-nano); font-weight: 800; color: var(--nds-wsgrid-sponsored-products-fg); background: var(--nds-purple-bg); border-radius: 4px; padding: 2px 5px; }
+.nds-ag-ws .nds-ws-td.nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; color: var(--nds-wsgrid-accent); cursor: pointer; }
+.nds-ag-ws .nds-ws-td.nm .t:hover { text-decoration: underline; }
+.nds-ag-ws .nds-ws-td.nm .mk { font-size: var(--nds-font-size-micro); color: var(--nds-wsgrid-text-muted); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 1px 5px; }
+.nds-ag-ws .nds-ws-td.nm .pin { color: var(--nds-wsgrid-icon-muted); flex-shrink: 0; }
+.nds-ag-ws .nds-ws-td.nm .tg { font-size: var(--nds-font-size-micro); font-weight: 800; color: var(--nds-pill-neutral-fg); background: var(--nds-pill-neutral-bg); border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.nds-ag-ws .nds-ws-td.nm .pb { font-size: var(--nds-font-size-nano); font-weight: 800; border-radius: 4px; padding: 2px 5px; flex-shrink: 0; }
+.nds-ag-ws .nds-ws-td.nm .pb[data-p="SP"] { color: var(--nds-wsgrid-sponsored-products-fg); background: var(--nds-purple-bg); }
+.nds-ag-ws .nds-ws-td.nm .pb[data-p="SD"] { color: var(--nds-wsgrid-sponsored-display-fg); background: var(--nds-cyan-bg); }
+.nds-ag-ws .nds-ws-td.nm .pb[data-p="SB"] { color: var(--nds-wsgrid-badge-sb-fg); background: var(--nds-badge-sb-bg); }
+/* per-cell hover-edit: value + pencil */
+.nds-ag-ws .nds-ws-td .h10-ec { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.nds-ag-ws .nds-ws-td.nm .h10-ec { display: flex; }
+.nds-ag-ws .nds-ws-td.nm .h10-ec .nmw { flex: 1; min-width: 0; }
+/* the name wrapper and its 20px squares */
+.nds-ag-ws .nds-ws-td.nm .nmw { display: flex; align-items: center; gap: 7px; max-width: 300px; min-width: 0; }
+.nds-ag-ws .nds-ws-td.nm .nmw .h10-hc-anchor { gap: 7px; }
+.nds-ag-ws .nds-ws-td.nm .nmw .bulb,
+.nds-ag-ws .nds-ws-td.nm .nmw .tg,
+.nds-ag-ws .nds-ws-td.nm .nmw .pb {
+  width: 20px; height: 20px; min-width: 20px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 5px; line-height: 1; flex-shrink: 0; box-sizing: border-box;
+}
+.nds-ag-ws .nds-ws-td.nm .nmw .bulb { background: var(--nds-rail-text); color: var(--nds-wsgrid-icon-muted); }
+.nds-ag-ws .nds-ws-td.nm .nmw .bulb svg { color: var(--nds-wsgrid-on-accent); width: 12px; height: 12px; }
+.nds-ag-ws .nds-ws-td.nm .nmw .tg { font-size: var(--nds-font-size-xs); font-weight: 800; color: var(--nds-wsgrid-on-accent); }
+.nds-ag-ws .nds-ws-td.nm .nmw .tg[data-t="A"] { background: var(--nds-wsgrid-auto-bg); }
+.nds-ag-ws .nds-ws-td.nm .nmw .tg[data-t="M"] { background: var(--nds-wsgrid-manual-bg); }
+.nds-ag-ws .nds-ws-td.nm .nmw .pb { font-size: var(--nds-font-size-nano); font-weight: 800; letter-spacing: -0.3px; color: var(--nds-text-muted); background: var(--nds-surface); border: 1px solid var(--nds-wsgrid-pb-border); }
+.nds-ag-ws .nds-ws-td.nm .nmw .t { color: var(--nds-wsgrid-accent); font-weight: 600; font-size: var(--nds-font-size-base); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nds-ag-ws .nds-ws-td.nm .nmw .t:hover { text-decoration: underline; }
+.nds-ag-ws .nds-ws-td.nm .nmw a.t { text-decoration: none; }
+.nds-ag-ws .nds-ws-td.nm .nmw .mk { font-size: var(--nds-font-size-micro-plus); color: var(--nds-wsgrid-text-muted); border: 1px solid var(--nds-wsgrid-border); border-radius: 4px; padding: 2px 6px; flex-shrink: 0; height: 19px; display: inline-flex; align-items: center; }
+.nds-ag-ws .nds-ws-td.nm .nmw .agi { color: var(--nds-wsgrid-accent); flex-shrink: 0; }
+/* CBN.2h.5 — "Open in new tab", revealed on row hover */
+.nds-ag-ws .nds-ws-td.nm .nmw .h10-open { display: none; align-items: center; gap: 4px; font-size: var(--nds-font-size-xs); font-weight: 600; color: var(--nds-wsgrid-on-accent); background: var(--nds-wsgrid-accent); border-radius: 6px; padding: 3px 8px; text-decoration: none; margin-left: 2px; flex-shrink: 0; white-space: nowrap; }
+.nds-ag-ws .ag-row:hover .nmw .h10-open { display: inline-flex; }
+.nds-ag-ws .nds-ws-td.nm .nmw .h10-open:hover { background: var(--nds-wsgrid-accent-hover); }
+/* CBN.3 G3 — Ad Groups affordances */
+.nds-ag-ws .nds-ws-td.num .h10-tgt { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.nds-ag-ws .nds-ws-td.num .h10-tgt .og { color: var(--nds-wsgrid-text-emphasis); flex-shrink: 0; cursor: pointer; }
+.nds-ag-ws .nds-ws-td.num .h10-tgt .og:hover { color: var(--nds-wsgrid-accent); }
+.nds-ag-ws .nds-ws-td.num .h10-acos { display: inline-flex; align-items: center; gap: 7px; justify-content: flex-end; }
+.nds-ag-ws .nds-ws-td.num .h10-acos .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--nds-wsgrid-icon-soft); flex-shrink: 0; }
+/* the row-hover reveals (`tr:hover .h10-editpen`, `tr:hover .h10-statuscell .ch`) */
+.nds-ag-ws .ag-row:hover .h10-editpen, .nds-ag-ws .h10-editpen:focus-visible { opacity: 1; }
+.nds-ag-ws .ag-row:hover .h10-statuscell .ch, .nds-ag-ws .h10-statuscell .ch:focus-visible { opacity: 1; }
+/* the header `tip` — the DS HoverCard's card, positioned by AG rather than by the card itself */
+.ag-tooltip-custom .nds-hovercard-card.nds-ws-headtip { position: static; transform: none; }
+
+/* ── GX.2 · drill-down mode — the chevron INSIDE the identity cell, the indent a spacer ── */
+.nds-ag-ws .nds-tree-lead { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.nds-ag-ws .nds-tree-label { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.nds-ag-ws .nds-tree-chev {
+  flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; padding: 0;
+  border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm);
+  color: var(--nds-text-3);
+  transition: transform .12s ease, color .12s ease, background .12s ease;
+  transform: rotate(-90deg);
+}
+.nds-ag-ws .nds-tree-chev:hover { color: var(--nds-primary); background: var(--nds-surface-hover); }
+.nds-ag-ws .nds-tree-chev:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); color: var(--nds-primary); }
+.nds-ag-ws .nds-tree-chev.on { transform: rotate(0deg); color: var(--nds-text-2); }
+.nds-ag-ws .nds-tree-chev.is-leaf { cursor: default; pointer-events: none; }
+.nds-ag-ws .nds-tree-chev.busy { color: var(--nds-primary); animation: nds-tree-spin .9s linear infinite; }
+@keyframes nds-tree-spin { to { transform: rotate(315deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .nds-ag-ws .nds-tree-chev { transition: none; }
+  .nds-ag-ws .nds-tree-chev.busy { animation: none; opacity: .6; }
+}
+
+/* ── the grid's own satellites — moved verbatim from workspace-grid.css: pager, search box ── */
+.h10-am-pager { display: flex; align-items: center; gap: 14px; padding: 2px 2px 0; }
+.h10-am-pager .grow { flex: 1; }
+.h10-am-pager .pg { display: inline-flex; align-items: center; gap: 4px; }
+.h10-am-pager .pgbtn { min-width: 30px; height: 30px; border: 1px solid var(--nds-wsgrid-border); background: var(--nds-wsgrid-surface); border-radius: 7px; font: inherit; font-size: var(--nds-font-size-base); font-weight: 600; color: var(--nds-wsgrid-text-secondary); cursor: pointer; }
+.h10-am-pager .pgbtn:hover:not(:disabled) { background: var(--nds-wsgrid-surface-hover); }
+.h10-am-pager .pgbtn.on { background: var(--nds-wsgrid-accent); border-color: var(--nds-wsgrid-accent); color: var(--nds-wsgrid-on-accent); }
+.h10-am-pager .pgbtn:disabled { color: var(--nds-wsgrid-control-border); cursor: default; }
+.h10-am-pager .rpp { display: inline-flex; align-items: center; gap: 7px; font-size: var(--nds-font-size-sm-plus); color: var(--nds-wsgrid-text-secondary); }
+.h10-am-pager .rpp select { border: 1px solid var(--nds-wsgrid-frame-border); border-radius: 7px; padding: 5px 8px; font: inherit; font-size: var(--nds-font-size-sm-plus); background: var(--nds-wsgrid-surface); cursor: pointer; }
+.h10-am-pager .rpp .h10-dd-btn { height: 30px; padding: 5px 10px; font-size: var(--nds-font-size-sm-plus); font-weight: 600; }
+.h10-am-searchbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border: none; background: none; color: var(--nds-text-muted); border-radius: 7px; cursor: pointer; }
+.h10-am-searchbtn:hover { background: var(--nds-surface-hover); color: var(--nds-text-link); }
+.h10-am-searchbox { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border: 1px solid var(--nds-wsgrid-control-border); border-radius: 8px; background: var(--nds-wsgrid-surface); }
+.h10-am-searchbox svg { color: var(--nds-wsgrid-text-muted); flex-shrink: 0; }
+.h10-am-searchbox input { border: none; outline: none; font: inherit; font-size: var(--nds-font-size-base); color: var(--nds-wsgrid-text-strong); width: 210px; background: transparent; }
+.h10-am-searchbox .x { display: inline-flex; align-items: center; border: none; background: none; color: var(--nds-wsgrid-icon-soft); cursor: pointer; padding: 2px; border-radius: 5px; }
+.h10-am-searchbox .x:hover { color: var(--nds-wsgrid-text-secondary); background: var(--nds-wsgrid-surface-sunken); }

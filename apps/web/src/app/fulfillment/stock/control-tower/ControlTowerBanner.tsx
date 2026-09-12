@@ -17,6 +17,7 @@
 import { useEffect, useState } from 'react'
 import { Banner } from '@/design-system/components/Banner'
 import { getBackendUrl } from '@/lib/backend-url'
+import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 
 // ── Event type specs ───────────────────────────────────────────────────────
 
@@ -96,6 +97,11 @@ export default function ControlTowerBanner() {
 
     let es: EventSource | null = null
     try {
+      // Held open for the life of the page, so it permanently occupies one of the ~6 connections
+      // the browser allows per origin. Against a LOCAL backend that is enough to starve the rest of
+      // the page; `streamsEnabled()` turns it off there only (deployed behaviour is unchanged, and
+      // `enableDevStreams(true)` re-opens it for a live test). See lib/sync/dev-stream-gate.ts.
+      if (!streamsEnabled()) return
       es = new EventSource(`${getBackendUrl()}/api/orders/events`)
     } catch {
       return

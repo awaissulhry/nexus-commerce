@@ -1,0 +1,2287 @@
+{
+  "store": "xaviaracing.myshopify.com",
+  "observedAt": "2026-09-10T05:35:29.857Z",
+  "apiVersion": "2026-07",
+  "chooserFields": 60,
+  "physicalColumns": 61,
+  "fields": [
+    {
+      "number": 1,
+      "id": "title",
+      "label": "Product title",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "title",
+      "type": "single_line_text_field",
+      "width": 360,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "implicit",
+      "adapterTarget": "Product.title",
+      "physicalHeaders": [
+        "Product title"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 2,
+      "id": "descriptionHtml",
+      "label": "Description",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "descriptionHtml",
+      "type": "multi_line_text_field",
+      "width": 360,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "description",
+      "adapterTarget": "Product.descriptionHtml",
+      "physicalHeaders": [
+        "Description"
+      ],
+      "coverage": "HTML source editor; rich composition and sanitizer integration incomplete"
+    },
+    {
+      "number": 3,
+      "id": "media",
+      "label": "Product media",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "media",
+      "type": "media",
+      "width": 360,
+      "editor": "media",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "media",
+      "adapterTarget": "Product.media associations \u2192 productReorderMedia",
+      "physicalHeaders": [
+        "Product media"
+      ],
+      "coverage": "Reorder, preview, async job checkpoint and verification; attachment and shared-file editing incomplete"
+    },
+    {
+      "number": 4,
+      "id": "tags",
+      "label": "Tags",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "tags",
+      "type": "list.single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "tags",
+      "adapterTarget": "Product.tags",
+      "physicalHeaders": [
+        "Tags"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 5,
+      "id": "status",
+      "label": "Status",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "status",
+      "type": "status",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Use the publication workspace to change status after reviewing channel visibility.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "status",
+      "adapterTarget": "Product.status",
+      "physicalHeaders": [
+        "Status"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 6,
+      "id": "category",
+      "label": "Product category",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "category",
+      "type": "category",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Category changes require an applicability review. Manage the category in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "product_taxonomy_node_id",
+      "adapterTarget": "Product.category",
+      "physicalHeaders": [
+        "Product category"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 7,
+      "id": "productType",
+      "label": "Product type",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "productType",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "product_type",
+      "adapterTarget": "Product.productType",
+      "physicalHeaders": [
+        "Product type"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 8,
+      "id": "vendor",
+      "label": "Vendor",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "vendor",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "vendor",
+      "adapterTarget": "Product.vendor",
+      "physicalHeaders": [
+        "Vendor"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 9,
+      "id": "templateSuffix",
+      "label": "Template",
+      "group": "General",
+      "owner": "PRODUCT",
+      "source": "templateSuffix",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Available templates must be discovered from the active store theme. Manage the template in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "template_suffix",
+      "adapterTarget": "Product.templateSuffix",
+      "physicalHeaders": [
+        "Template"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 10,
+      "id": "salesChannels",
+      "label": "Sales channels",
+      "group": "Publishing",
+      "owner": "PRODUCT",
+      "source": "salesChannels",
+      "type": "publication",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Use Shopify to manage publications. Variant publication writes are not enabled.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "sales_channels",
+      "adapterTarget": "Product resource publications; variant publication needs verification",
+      "physicalHeaders": [
+        "Sales channels"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 11,
+      "id": "scheduled",
+      "label": "Online store schedule",
+      "group": "Publishing",
+      "owner": "PRODUCT",
+      "source": "scheduled",
+      "type": "boolean",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Publication scheduling is not connected to this editor. Manage it in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "online_store_scheduled",
+      "adapterTarget": "Publication schedule",
+      "physicalHeaders": [
+        "Online store schedule"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 12,
+      "id": "publishDate",
+      "label": "Publish date",
+      "group": "Publishing",
+      "owner": "PRODUCT",
+      "source": "publishDate",
+      "type": "date_time",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Publication scheduling requires the store timezone and publication identity. Manage it in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "online_store_publish_date",
+      "adapterTarget": "Publication publishDate + store timezone",
+      "physicalHeaders": [
+        "Publish date"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 13,
+      "id": "price",
+      "label": "Base price",
+      "group": "Pricing",
+      "owner": "PRODUCTVARIANT",
+      "source": "price",
+      "type": "money",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.price",
+      "adapterTarget": "ProductVariant.price",
+      "physicalHeaders": [
+        "Base price"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 14,
+      "id": "unitPriceMeasurement",
+      "label": "Unit price",
+      "group": "Pricing",
+      "owner": "PRODUCTVARIANT",
+      "source": "unitPriceMeasurement",
+      "type": "measurement",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Unit-price measurement editing is not connected. Its existing value is preserved.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.unit_price_measurement",
+      "adapterTarget": "ProductVariant.unitPriceMeasurement",
+      "physicalHeaders": [
+        "Unit price"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 15,
+      "id": "compareAtPrice",
+      "label": "Compare-at price",
+      "group": "Pricing",
+      "owner": "PRODUCTVARIANT",
+      "source": "compareAtPrice",
+      "type": "money",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.compare_at_price",
+      "adapterTarget": "ProductVariant.compareAtPrice",
+      "physicalHeaders": [
+        "Compare-at price"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 16,
+      "id": "cost",
+      "label": "Cost per item",
+      "group": "Pricing",
+      "owner": "PRODUCTVARIANT",
+      "source": "cost",
+      "type": "money",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Inventory-item cost uses its own permission and currency context. Manage it in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.cost",
+      "adapterTarget": "InventoryItem.unitCost",
+      "physicalHeaders": [
+        "Cost per item"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 17,
+      "id": "taxable",
+      "label": "Charge taxes",
+      "group": "Pricing",
+      "owner": "PRODUCTVARIANT",
+      "source": "taxable",
+      "type": "boolean",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.taxable",
+      "adapterTarget": "ProductVariant.taxable",
+      "physicalHeaders": [
+        "Charge taxes"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 18,
+      "id": "sku",
+      "label": "SKU",
+      "group": "Inventory",
+      "owner": "PRODUCTVARIANT",
+      "source": "sku",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.sku",
+      "adapterTarget": "ProductVariant.inventoryItem.sku",
+      "physicalHeaders": [
+        "SKU"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 19,
+      "id": "barcode",
+      "label": "Barcodes",
+      "group": "Inventory",
+      "owner": "PRODUCTVARIANT",
+      "source": "barcode",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "This connector uses Shopify API 2026-07. Multiple typed barcodes require 2026-10. Manage barcodes in Shopify; secondary entries are never replaced here.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.barcode",
+      "adapterTarget": "ProductVariant.barcode (single in 2026-07)",
+      "physicalHeaders": [
+        "Barcodes"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 20,
+      "id": "inventory",
+      "label": "Inventory quantity",
+      "group": "Inventory",
+      "owner": "PRODUCTVARIANT",
+      "source": "inventory",
+      "type": "inventory",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Choose an inventory location in the stock workspace. Available and on-hand quantities cannot be set independently here.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.inventory_on_hand_adjustment",
+      "adapterTarget": "InventoryItem + location + quantity state",
+      "physicalHeaders": [
+        "Available quantity",
+        "On hand quantity"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 21,
+      "id": "inventoryPolicy",
+      "label": "Continue selling when out of stock",
+      "group": "Inventory",
+      "owner": "PRODUCTVARIANT",
+      "source": "inventoryPolicy",
+      "type": "inventory_policy",
+      "width": 240,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.inventory_policy",
+      "adapterTarget": "ProductVariant.inventoryPolicy",
+      "physicalHeaders": [
+        "Continue selling when out of stock"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 22,
+      "id": "tracked",
+      "label": "Track quantity",
+      "group": "Inventory",
+      "owner": "PRODUCTVARIANT",
+      "source": "tracked",
+      "type": "boolean",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Tracking changes require inventory authority. Manage tracking in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.inventory_management",
+      "adapterTarget": "InventoryItem.tracked",
+      "physicalHeaders": [
+        "Track quantity"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 23,
+      "id": "package",
+      "label": "Package",
+      "group": "Shipping",
+      "owner": "PRODUCTVARIANT",
+      "source": "package",
+      "type": "package",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Store package identifiers and the package adapter are not available. Manage the package in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.defaultPackage",
+      "adapterTarget": "Variant package identifier (not discovered)",
+      "physicalHeaders": [
+        "Package"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 24,
+      "id": "weight",
+      "label": "Weight",
+      "group": "Shipping",
+      "owner": "PRODUCTVARIANT",
+      "source": "weight",
+      "type": "weight",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Weight units and inventory-item measurement changes are preserved. Manage them in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.weight",
+      "adapterTarget": "InventoryItem.measurement.weight",
+      "physicalHeaders": [
+        "Weight"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 25,
+      "id": "requiresShipping",
+      "label": "Physical product",
+      "group": "Shipping",
+      "owner": "PRODUCTVARIANT",
+      "source": "requiresShipping",
+      "type": "boolean",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.requires_shipping",
+      "adapterTarget": "InventoryItem.requiresShipping",
+      "physicalHeaders": [
+        "Physical product"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 26,
+      "id": "harmonizedSystemCode",
+      "label": "Harmonized system code",
+      "group": "Shipping",
+      "owner": "PRODUCTVARIANT",
+      "source": "harmonizedSystemCode",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.metafields_global_harmonized_system_code",
+      "adapterTarget": "InventoryItem.harmonizedSystemCode",
+      "physicalHeaders": [
+        "Harmonized system code"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 27,
+      "id": "countryCodeOfOrigin",
+      "label": "Country of origin",
+      "group": "Shipping",
+      "owner": "PRODUCTVARIANT",
+      "source": "countryCodeOfOrigin",
+      "type": "country",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "The canonical country picker is not connected. Manage origin in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "variants.country_code_of_origin",
+      "adapterTarget": "InventoryItem.countryCodeOfOrigin",
+      "physicalHeaders": [
+        "Country of origin"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 28,
+      "id": "seo.title",
+      "label": "Page title (SEO)",
+      "group": "SEO",
+      "owner": "PRODUCT",
+      "source": "seo.title",
+      "type": "single_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "metafields_global_title_tag",
+      "adapterTarget": "Product.seo.title",
+      "physicalHeaders": [
+        "Page title (SEO)"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 29,
+      "id": "seo.description",
+      "label": "Meta description (SEO)",
+      "group": "SEO",
+      "owner": "PRODUCT",
+      "source": "seo.description",
+      "type": "multi_line_text_field",
+      "width": 160,
+      "editor": "scalar",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "metafields_global_description_tag",
+      "adapterTarget": "Product.seo.description",
+      "physicalHeaders": [
+        "Meta description (SEO)"
+      ],
+      "coverage": "Implemented scoped scalar draft and patch adapter"
+    },
+    {
+      "number": 30,
+      "id": "handle",
+      "label": "URL handle (SEO)",
+      "group": "SEO",
+      "owner": "PRODUCT",
+      "source": "handle",
+      "type": "handle",
+      "width": 160,
+      "editor": "unavailable",
+      "reason": "Handle changes need a collision check and redirect decision. Manage the URL in Shopify.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "adapter",
+      "observedUiToken": "handle",
+      "adapterTarget": "Product.handle + redirect policy",
+      "physicalHeaders": [
+        "URL handle (SEO)"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 31,
+      "id": "metafield:PRODUCT:custom.size_chart",
+      "label": "Size Chart",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.size_chart",
+      "type": "page_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/284141715783",
+        "name": "Size Chart",
+        "description": "",
+        "namespace": "custom",
+        "key": "size_chart",
+        "ownerType": "PRODUCT",
+        "type": "page_reference",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.size_chart",
+      "adapterTarget": "PRODUCT metafield custom.size_chart",
+      "physicalHeaders": [
+        "Size Chart"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 32,
+      "id": "metafield:PRODUCT:custom.variation_value",
+      "label": "Variation value",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.variation_value",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281890292039",
+        "name": "Variation value",
+        "description": "",
+        "namespace": "custom",
+        "key": "variation_value",
+        "ownerType": "PRODUCT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.variation_value",
+      "adapterTarget": "PRODUCT metafield custom.variation_value",
+      "physicalHeaders": [
+        "Variation value"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 33,
+      "id": "metafield:PRODUCT:custom.variation_products",
+      "label": "Variation products",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.variation_products",
+      "type": "list.product_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281890324807",
+        "name": "Variation products",
+        "description": "",
+        "namespace": "custom",
+        "key": "variation_products",
+        "ownerType": "PRODUCT",
+        "type": "list.product_reference",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.variation_products",
+      "adapterTarget": "PRODUCT metafield custom.variation_products",
+      "physicalHeaders": [
+        "Variation products"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 34,
+      "id": "metafield:PRODUCT:custom.concise_description",
+      "label": "Concise description",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.concise_description",
+      "type": "metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280556699975",
+        "name": "Concise description",
+        "description": "",
+        "namespace": "custom",
+        "key": "concise_description",
+        "ownerType": "PRODUCT",
+        "type": "metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22791225671"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.concise_description",
+      "adapterTarget": "PRODUCT metafield custom.concise_description",
+      "physicalHeaders": [
+        "Concise description"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 35,
+      "id": "metafield:PRODUCT:custom.custom_button_product_page",
+      "label": "Custom Button product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.custom_button_product_page",
+      "type": "metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/294328795463",
+        "name": "Custom Button product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "custom_button_product_page",
+        "ownerType": "PRODUCT",
+        "type": "metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/24166990151"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.custom_button_product_page",
+      "adapterTarget": "PRODUCT metafield custom.custom_button_product_page",
+      "physicalHeaders": [
+        "Custom Button product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 36,
+      "id": "metafield:PRODUCT:custom.features",
+      "label": "Features",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.features",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280394203463",
+        "name": "Features",
+        "description": "",
+        "namespace": "custom",
+        "key": "features",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22776054087"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.features",
+      "adapterTarget": "PRODUCT metafield custom.features",
+      "physicalHeaders": [
+        "Features"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 37,
+      "id": "metafield:PRODUCT:custom.collapsible_text",
+      "label": "Collapsible text",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.collapsible_text",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281909494087",
+        "name": "Collapsible text",
+        "description": "",
+        "namespace": "custom",
+        "key": "collapsible_text",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22935798087"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.collapsible_text",
+      "adapterTarget": "PRODUCT metafield custom.collapsible_text",
+      "physicalHeaders": [
+        "Collapsible text"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 38,
+      "id": "metafield:PRODUCT:custom.complementary_products_heading",
+      "label": "Complementary products heading",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.complementary_products_heading",
+      "type": "metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280755896647",
+        "name": "Complementary products heading",
+        "description": "",
+        "namespace": "custom",
+        "key": "complementary_products_heading",
+        "ownerType": "PRODUCT",
+        "type": "metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22810624327"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.complementary_products_heading",
+      "adapterTarget": "PRODUCT metafield custom.complementary_products_heading",
+      "physicalHeaders": [
+        "Complementary products heading"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 39,
+      "id": "metafield:PRODUCT:custom.text_with_icon",
+      "label": "Text with icon",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.text_with_icon",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280596545863",
+        "name": "Text with icon",
+        "description": "",
+        "namespace": "custom",
+        "key": "text_with_icon",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22793683271"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.text_with_icon",
+      "adapterTarget": "PRODUCT metafield custom.text_with_icon",
+      "physicalHeaders": [
+        "Text with icon"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 40,
+      "id": "metafield:PRODUCT:custom.media_with_text_product_page",
+      "label": "Media with text product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.media_with_text_product_page",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280602935623",
+        "name": "Media with text product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "media_with_text_product_page",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22794076487"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.media_with_text_product_page",
+      "adapterTarget": "PRODUCT metafield custom.media_with_text_product_page",
+      "physicalHeaders": [
+        "Media with text product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 41,
+      "id": "metafield:PRODUCT:custom.scrolling_text_product_page",
+      "label": "Scrolling text product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.scrolling_text_product_page",
+      "type": "metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280757174599",
+        "name": "Scrolling text product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "scrolling_text_product_page",
+        "ownerType": "PRODUCT",
+        "type": "metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22811246919"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.scrolling_text_product_page",
+      "adapterTarget": "PRODUCT metafield custom.scrolling_text_product_page",
+      "physicalHeaders": [
+        "Scrolling text product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 42,
+      "id": "metafield:PRODUCT:custom.video_product_page",
+      "label": "Video product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.video_product_page",
+      "type": "metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280758812999",
+        "name": "Video product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "video_product_page",
+        "ownerType": "PRODUCT",
+        "type": "metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22811705671"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.video_product_page",
+      "adapterTarget": "PRODUCT metafield custom.video_product_page",
+      "physicalHeaders": [
+        "Video product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 43,
+      "id": "metafield:PRODUCT:custom.press_product_page",
+      "label": "Press product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.press_product_page",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280768676167",
+        "name": "Press product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "press_product_page",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22814228807"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.press_product_page",
+      "adapterTarget": "PRODUCT metafield custom.press_product_page",
+      "physicalHeaders": [
+        "Press product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 44,
+      "id": "metafield:PRODUCT:custom.multiple_images_with_text_product_page",
+      "label": "Multiple images with text product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.multiple_images_with_text_product_page",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281143640391",
+        "name": "Multiple images with text product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "multiple_images_with_text_product_page",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22849519943"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.multiple_images_with_text_product_page",
+      "adapterTarget": "PRODUCT metafield custom.multiple_images_with_text_product_page",
+      "physicalHeaders": [
+        "Multiple images with text product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 45,
+      "id": "metafield:PRODUCT:custom.media_grid_product_page",
+      "label": "Media grid product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.media_grid_product_page",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281148064071",
+        "name": "Media grid product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "media_grid_product_page",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22850666823"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.media_grid_product_page",
+      "adapterTarget": "PRODUCT metafield custom.media_grid_product_page",
+      "physicalHeaders": [
+        "Media grid product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 46,
+      "id": "metafield:PRODUCT:custom.slideshow_product_page",
+      "label": "Slideshow product page",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "custom.slideshow_product_page",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281152258375",
+        "name": "Slideshow product page",
+        "description": "",
+        "namespace": "custom",
+        "key": "slideshow_product_page",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/22851354951"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "custom.slideshow_product_page",
+      "adapterTarget": "PRODUCT metafield custom.slideshow_product_page",
+      "physicalHeaders": [
+        "Slideshow product page"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 47,
+      "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.complementary_products",
+      "label": "Complementary products",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "shopify--discovery--product_recommendation.complementary_products",
+      "type": "list.product_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280755568967",
+        "name": "Complementary products",
+        "description": "List of complementary products",
+        "namespace": "shopify--discovery--product_recommendation",
+        "key": "complementary_products",
+        "ownerType": "PRODUCT",
+        "type": "list.product_reference",
+        "validations": [
+          {
+            "name": "list.max",
+            "value": "10"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "shopify--discovery--product_recommendation.complementary_products",
+      "adapterTarget": "PRODUCT metafield shopify--discovery--product_recommendation.complementary_products",
+      "physicalHeaders": [
+        "Complementary products"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 48,
+      "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.related_products_display",
+      "label": "Related products settings",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "shopify--discovery--product_recommendation.related_products_display",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280755536199",
+        "name": "Related products settings",
+        "description": "Determines how related products are displayed along with algorithmic product recommendations",
+        "namespace": "shopify--discovery--product_recommendation",
+        "key": "related_products_display",
+        "ownerType": "PRODUCT",
+        "type": "single_line_text_field",
+        "validations": [
+          {
+            "name": "choices",
+            "value": "[\"ahead\",\"only manual\"]"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "shopify--discovery--product_recommendation.related_products_display",
+      "adapterTarget": "PRODUCT metafield shopify--discovery--product_recommendation.related_products_display",
+      "physicalHeaders": [
+        "Related products settings"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 49,
+      "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.related_products",
+      "label": "Related products",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "shopify--discovery--product_recommendation.related_products",
+      "type": "list.product_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280755503431",
+        "name": "Related products",
+        "description": "List of related products",
+        "namespace": "shopify--discovery--product_recommendation",
+        "key": "related_products",
+        "ownerType": "PRODUCT",
+        "type": "list.product_reference",
+        "validations": [
+          {
+            "name": "list.max",
+            "value": "10"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "shopify--discovery--product_recommendation.related_products",
+      "adapterTarget": "PRODUCT metafield shopify--discovery--product_recommendation.related_products",
+      "physicalHeaders": [
+        "Related products"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 50,
+      "id": "metafield:PRODUCT:shopify--discovery--product_search_boost.queries",
+      "label": "Search product boosts",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "shopify--discovery--product_search_boost.queries",
+      "type": "list.single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/280755470663",
+        "name": "Search product boosts",
+        "description": "List of search queries for which a product gets higher rank in search results",
+        "namespace": "shopify--discovery--product_search_boost",
+        "key": "queries",
+        "ownerType": "PRODUCT",
+        "type": "list.single_line_text_field",
+        "validations": [
+          {
+            "name": "max",
+            "value": "100"
+          },
+          {
+            "name": "list.max",
+            "value": "10"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "shopify--discovery--product_search_boost.queries",
+      "adapterTarget": "PRODUCT metafield shopify--discovery--product_search_boost.queries",
+      "physicalHeaders": [
+        "Search product boosts"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 51,
+      "id": "metafield:PRODUCT:craftshift.rubik_configuration",
+      "label": "Rubik Configuration",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "craftshift.rubik_configuration",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/279002874183",
+        "name": "Rubik Configuration",
+        "description": null,
+        "namespace": "craftshift",
+        "key": "rubik_configuration",
+        "ownerType": "PRODUCT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "craftshift.rubik_configuration",
+      "adapterTarget": "PRODUCT metafield craftshift.rubik_configuration",
+      "physicalHeaders": [
+        "Rubik Configuration"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 52,
+      "id": "metafield:PRODUCT:mm-google-shopping.custom_product",
+      "label": "Google: Custom Product",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "mm-google-shopping.custom_product",
+      "type": "boolean",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214211399",
+        "name": "Google: Custom Product",
+        "description": "Use to indicate whether or not the unique product identifiers (UPIs) GTIN, MPN, and brand are available for your product.",
+        "namespace": "mm-google-shopping",
+        "key": "custom_product",
+        "ownerType": "PRODUCT",
+        "type": "boolean",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "mm-google-shopping.custom_product",
+      "adapterTarget": "PRODUCT metafield mm-google-shopping.custom_product",
+      "physicalHeaders": [
+        "Google: Custom Product"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 53,
+      "id": "metafield:PRODUCT:shopify.color-pattern",
+      "label": "Color",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": "shopify.color-pattern",
+      "type": "list.metaobject_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/82757091655",
+        "name": "Color",
+        "description": "Defines the primary color or pattern, such as blue or striped",
+        "namespace": "shopify",
+        "key": "color-pattern",
+        "ownerType": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "validations": [
+          {
+            "name": "metaobject_definition_id",
+            "value": "gid://shopify/MetaobjectDefinition/5175542087"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "list",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition",
+      "observedUiToken": "shopify.color-pattern",
+      "adapterTarget": "PRODUCT metafield shopify.color-pattern",
+      "physicalHeaders": [
+        "Color"
+      ],
+      "coverage": "Implemented typed editor and existing metafield pipeline"
+    },
+    {
+      "number": 54,
+      "id": "metafield:PRODUCT:category:Age group",
+      "label": "Age group",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Age group"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 55,
+      "id": "metafield:PRODUCT:category:Target gender",
+      "label": "Target gender",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Target gender"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 56,
+      "id": "metafield:PRODUCT:category:Care instructions",
+      "label": "Care instructions",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Care instructions"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 57,
+      "id": "metafield:PRODUCT:category:Fabric",
+      "label": "Fabric",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Fabric"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 58,
+      "id": "metafield:PRODUCT:category:Size",
+      "label": "Size",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Size"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 59,
+      "id": "metafield:PRODUCT:category:Clothing features",
+      "label": "Clothing features",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Clothing features"
+      ],
+      "coverage": "Read-only / capability not connected"
+    },
+    {
+      "number": 60,
+      "id": "metafield:PRODUCT:category:Size type",
+      "label": "Size type",
+      "group": "Category Metafields",
+      "owner": "PRODUCT",
+      "source": null,
+      "type": "unknown",
+      "width": 240,
+      "editor": "unavailable",
+      "reason": "This store definition is unavailable. Refresh definitions or manage the field in Shopify; no key or type is assumed.",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "unresolved",
+      "observedUiToken": null,
+      "adapterTarget": "Category definition discovery required",
+      "physicalHeaders": [
+        "Size type"
+      ],
+      "coverage": "Read-only / capability not connected"
+    }
+  ],
+  "additionalDiscoveredFields": [
+    {
+      "id": "metafield:PRODUCTVARIANT:craftshift.swatch_image",
+      "label": "Rubik swatch image",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "craftshift.swatch_image",
+      "type": "file_reference",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/279003103559",
+        "name": "Rubik swatch image",
+        "description": "This image will be used as a swatch for the variant.",
+        "namespace": "craftshift",
+        "key": "swatch_image",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "file_reference",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:craftshift.swatch_color",
+      "label": "Rubik swatch color",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "craftshift.swatch_color",
+      "type": "color",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/279003136327",
+        "name": "Rubik swatch color",
+        "description": "This color will be used as a swatch for the variant.",
+        "namespace": "craftshift",
+        "key": "swatch_color",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "color",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:custom.variant_sort_order",
+      "label": "Variant Sort Order",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "custom.variant_sort_order",
+      "type": "number_integer",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/281795756359",
+        "name": "Variant Sort Order",
+        "description": "",
+        "namespace": "custom",
+        "key": "variant_sort_order",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "number_integer",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCT:reviews.rating",
+      "label": "Product rating",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "reviews.rating",
+      "type": "rating",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/4844421447",
+        "name": "Product rating",
+        "description": "Average rating from customers",
+        "namespace": "reviews",
+        "key": "rating",
+        "ownerType": "PRODUCT",
+        "type": "rating",
+        "validations": [
+          {
+            "name": "scale_min",
+            "value": "1.0"
+          },
+          {
+            "name": "scale_max",
+            "value": "5.0"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCT:reviews.rating_count",
+      "label": "Product rating count",
+      "group": "Metafields",
+      "owner": "PRODUCT",
+      "source": "reviews.rating_count",
+      "type": "number_integer",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/4844454215",
+        "name": "Product rating count",
+        "description": "Total number of ratings from customers",
+        "namespace": "reviews",
+        "key": "rating_count",
+        "ownerType": "PRODUCT",
+        "type": "number_integer",
+        "validations": [
+          {
+            "name": "min",
+            "value": "0"
+          }
+        ],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "PUBLIC_READ"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_4",
+      "label": "Google: Custom Label 4",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.custom_label_4",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214244167",
+        "name": "Google: Custom Label 4",
+        "description": "Label that you assign to a product to help organize bidding and reporting in Shopping campaigns",
+        "namespace": "mm-google-shopping",
+        "key": "custom_label_4",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_3",
+      "label": "Google: Custom Label 3",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.custom_label_3",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214276935",
+        "name": "Google: Custom Label 3",
+        "description": "Label that you assign to a product to help organize bidding and reporting in Shopping campaigns",
+        "namespace": "mm-google-shopping",
+        "key": "custom_label_3",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_2",
+      "label": "Google: Custom Label 2",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.custom_label_2",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214309703",
+        "name": "Google: Custom Label 2",
+        "description": "Label that you assign to a product to help organize bidding and reporting in Shopping campaigns",
+        "namespace": "mm-google-shopping",
+        "key": "custom_label_2",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_1",
+      "label": "Google: Custom Label 1",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.custom_label_1",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214342471",
+        "name": "Google: Custom Label 1",
+        "description": "Label that you assign to a product to help organize bidding and reporting in Shopping campaigns",
+        "namespace": "mm-google-shopping",
+        "key": "custom_label_1",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_0",
+      "label": "Google: Custom Label 0",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.custom_label_0",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214375239",
+        "name": "Google: Custom Label 0",
+        "description": "Label that you assign to a product to help organize bidding and reporting in Shopping campaigns",
+        "namespace": "mm-google-shopping",
+        "key": "custom_label_0",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.size_system",
+      "label": "Google: Size System",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.size_system",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214408007",
+        "name": "Google: Size System",
+        "description": "The country of the size system used by your product.",
+        "namespace": "mm-google-shopping",
+        "key": "size_system",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.size_type",
+      "label": "Google: Size Type",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.size_type",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214440775",
+        "name": "Google: Size Type",
+        "description": "Your apparel product\u2019s cut.",
+        "namespace": "mm-google-shopping",
+        "key": "size_type",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.mpn",
+      "label": "Google: MPN",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.mpn",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214473543",
+        "name": "Google: MPN",
+        "description": "Your product\u2019s Manufacturer Part Number (MPN).",
+        "namespace": "mm-google-shopping",
+        "key": "mpn",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.gender",
+      "label": "Google: Gender",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.gender",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214506311",
+        "name": "Google: Gender",
+        "description": "The gender for which your product is intended.",
+        "namespace": "mm-google-shopping",
+        "key": "gender",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.condition",
+      "label": "Google: Condition",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.condition",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214539079",
+        "name": "Google: Condition",
+        "description": "The condition of your product at time of sale.",
+        "namespace": "mm-google-shopping",
+        "key": "condition",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    },
+    {
+      "id": "metafield:PRODUCTVARIANT:mm-google-shopping.age_group",
+      "label": "Google: Age Group",
+      "group": "Metafields",
+      "owner": "PRODUCTVARIANT",
+      "source": "mm-google-shopping.age_group",
+      "type": "single_line_text_field",
+      "width": 240,
+      "definition": {
+        "id": "gid://shopify/MetafieldDefinition/55214571847",
+        "name": "Google: Age Group",
+        "description": "The demographic for which your product is intended.",
+        "namespace": "mm-google-shopping",
+        "key": "age_group",
+        "ownerType": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "validations": [],
+        "access": {
+          "admin": "PUBLIC_READ_WRITE",
+          "storefront": "NONE"
+        },
+        "readOnlyReason": null
+      },
+      "editor": "typed",
+      "cardinality": "scalar",
+      "sortable": false,
+      "filterable": false,
+      "permission": "products.edit",
+      "discovery": "definition"
+    }
+  ]
+}

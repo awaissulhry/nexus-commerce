@@ -47,7 +47,7 @@ export function startForecastAccuracyCron(): void {
     logger.error('forecast-accuracy cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runForecastAccuracyCronOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runForecastAccuracyCronOnce() })
   logger.info('forecast-accuracy cron: scheduled', { schedule })
 }
 

@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { AlertTriangle, Check, FlaskConical, History, PlayCircle, RotateCcw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, Textarea } from '@/design-system/primitives'

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CS.1 — Channel → us inbound stock reconciliation.
  *
@@ -103,10 +104,10 @@ export async function recordChannelStockEvent(
   // product on a retry.
   const existing = await prisma.channelStockEvent.findUnique({
     where: {
-      channel_channelEventId: {
+      channel_channelEventId: workspaceKey({
         channel: input.channel,
         channelEventId: input.channelEventId,
-      },
+      }),
     },
     select: {
       id: true,

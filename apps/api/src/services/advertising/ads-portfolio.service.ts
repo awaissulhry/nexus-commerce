@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Portfolios P1 — sync Amazon Ads portfolios into the DB + a read model enriched with
  * campaign counts and spend/sales rolled up from our own Campaign rows.
@@ -31,7 +32,7 @@ async function upsertSynced(profileId: string, pf: AdsPortfolioDTO): Promise<voi
     inBudget: pf.inBudget ?? true,
   }
   await prisma.amazonAdsPortfolio.upsert({
-    where: { profileId_externalPortfolioId: { profileId, externalPortfolioId: pf.portfolioId } },
+    where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: pf.portfolioId }) },
     update: { name: pf.name, ...(state ? { state } : {}), ...budget, lastSyncedAt: new Date() },
     create: { profileId, externalPortfolioId: pf.portfolioId, name: pf.name, state, ...budget, lastSyncedAt: new Date() },
   })
@@ -110,7 +111,7 @@ async function recordMembershipLoss(externalCampaignIds: string[]): Promise<void
       lastWriteAt: c.lastSyncedAt, lastWriteStatus: c.lastSyncStatus, now,
     })
     await prisma.adDrift.upsert({
-      where: { entityType_entityId_field: { entityType: 'CAMPAIGN', entityId: c.id, field: 'portfolioId' } },
+      where: { entityType_entityId_field: workspaceKey({ entityType: 'CAMPAIGN', entityId: c.id, field: 'portfolioId' }) },
       create: {
         entityType: 'CAMPAIGN', entityId: c.id, externalId: c.externalCampaignId,
         marketplace: c.marketplace, entityName: c.name,

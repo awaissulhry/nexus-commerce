@@ -1,0 +1,6639 @@
+{
+  "generatedAt": "2026-09-09T10:04:37.453375+00:00",
+  "status": "PUBLIC_AUDIT_ONLY_ADMIN_VERIFICATION_REQUIRED",
+  "writesPerformed": false,
+  "source": "https://xaviaracing.it/products.json?limit=250&page=1",
+  "coverage": "Public default-market catalogue and server-rendered colour selectors only",
+  "publicProductCount": 40,
+  "publicVariantCount": 306,
+  "publicEmptySkuCount": 267,
+  "linkedProductCount": 29,
+  "candidateFamilyCount": 11,
+  "linkedVariantCount": 221,
+  "linkedEmptySkuCount": 187,
+  "groupsWithLinkIssues": 2,
+  "unlinkedHandles": [
+    "classic-jacket",
+    "classic-jacket-1",
+    "classic-pant",
+    "classic-vest",
+    "custom-mx-suit",
+    "gift-card",
+    "riser-jacket",
+    "waterproof-overjacket",
+    "xavia-riser-unisex-leather-motorcycle-gloves",
+    "xri01-gloves",
+    "xri01-vest"
+  ],
+  "issues": [],
+  "families": [
+    {
+      "title": "MOSS Jacket",
+      "handles": [
+        "moss-jacket",
+        "moss-jacket-2"
+      ],
+      "sourceTags": {
+        "moss-jacket": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Moss",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "moss-jacket-2": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Moss",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ]
+      },
+      "colours": {
+        "moss-jacket": [
+          "Black"
+        ],
+        "moss-jacket-2": [
+          "Grey"
+        ]
+      },
+      "variantCount": 12,
+      "emptySkuCount": 6,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "49830306087239",
+          "sku": "MOSS-JACKET-BLACK-MEN-S",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "52531150291271",
+          "sku": "MOSS-JACKET-BLACK-MEN-M",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "52531150324039",
+          "sku": "MOSS-JACKET-BLACK-MEN-L",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "52531150356807",
+          "sku": "MOSS-JACKET-BLACK-MEN-XL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "52531150389575",
+          "sku": "MOSS-JACKET-BLACK-MEN-XXL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326749811015",
+          "sourceHandle": "moss-jacket",
+          "sourceVariantId": "52531150422343",
+          "sku": "MOSS-JACKET-BLACK-MEN-3XL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321493831",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321526599",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321559367",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321592135",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321624903",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10437606146375",
+          "sourceHandle": "moss-jacket-2",
+          "sourceVariantId": "52599321657671",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "moss-jacket": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2024-07-06T01:52:10Z",
+          "isCompleteReviewBackup": false
+        },
+        "moss-jacket-2": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-22T08:24:55Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "AIREON Jacket",
+      "handles": [
+        "aireon-jacket",
+        "aireon-jacket-1",
+        "aireon-jacket-copy",
+        "aireon-pant"
+      ],
+      "sourceTags": {
+        "aireon-jacket": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "aireon-jacket-1": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "aireon-jacket-copy": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "men clothing pant",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing pant"
+        ],
+        "aireon-pant": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "men clothing pant",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing pant"
+        ]
+      },
+      "colours": {
+        "aireon-jacket": [
+          "Crema e Vino"
+        ],
+        "aireon-jacket-1": [
+          "Nero Neo"
+        ],
+        "aireon-jacket-copy": [
+          "Nero Neo"
+        ],
+        "aireon-pant": [
+          "Crema e Vino"
+        ]
+      },
+      "variantCount": 36,
+      "emptySkuCount": 36,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": false,
+      "publicLinkChecksPassed": false,
+      "issues": [
+        {
+          "code": "MIXED_PRODUCT_TITLES",
+          "titles": {
+            "aireon-jacket": "AIREON Jacket",
+            "aireon-jacket-1": "AIREON Jacket",
+            "aireon-jacket-copy": "AIREON Pant",
+            "aireon-pant": "AIREON Pant"
+          }
+        },
+        {
+          "code": "DUPLICATE_COLOUR_LABEL"
+        }
+      ],
+      "variants": [
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52522215539015",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143049543",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143082311",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143115079",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143147847",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143180615",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143213383",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143246151",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419669172551",
+          "sourceHandle": "aireon-jacket",
+          "sourceVariantId": "52531143278919",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52522242638151",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142689095",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142721863",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142754631",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142787399",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142820167",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142852935",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142885703",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419681198407",
+          "sourceHandle": "aireon-jacket-1",
+          "sourceVariantId": "52531142918471",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52522292478279",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142164807",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142197575",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142230343",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142263111",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142295879",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142328647",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142361415",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419699679559",
+          "sourceHandle": "aireon-jacket-copy",
+          "sourceVariantId": "52531142394183",
+          "sku": null,
+          "colourCandidates": [
+            "Nero Neo"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "159.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52522302964039",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141673287",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141706055",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141738823",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141771591",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141804359",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141837127",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141869895",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419704955207",
+          "sourceHandle": "aireon-pant",
+          "sourceVariantId": "52531141902663",
+          "sku": null,
+          "colourCandidates": [
+            "Crema e Vino"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "129.00",
+          "compareAtPrice": "149.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "aireon-jacket": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:37:47Z",
+          "isCompleteReviewBackup": false
+        },
+        "aireon-jacket-1": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:43:57Z",
+          "isCompleteReviewBackup": false
+        },
+        "aireon-jacket-copy": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:51:17Z",
+          "isCompleteReviewBackup": false
+        },
+        "aireon-pant": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:53:50Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "AIRMESH Jacket",
+      "handles": [
+        "airmesh-jacket",
+        "airmesh-jacket-1"
+      ],
+      "sourceTags": {
+        "airmesh-jacket": [
+          "black",
+          "gale",
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Moss",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "airmesh-jacket-1": [
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ]
+      },
+      "colours": {
+        "airmesh-jacket": [
+          "Black"
+        ],
+        "airmesh-jacket-1": [
+          "Yellow"
+        ]
+      },
+      "variantCount": 18,
+      "emptySkuCount": 18,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52522179494215",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143835975",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143868743",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143901511",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143934279",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143967047",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531143999815",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531144032583",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419663831367",
+          "sourceHandle": "airmesh-jacket",
+          "sourceVariantId": "52531144065351",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52522209640775",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143311687",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143344455",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143377223",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143409991",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143442759",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143475527",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143508295",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419668091207",
+          "sourceHandle": "airmesh-jacket-1",
+          "sourceVariantId": "52531143541063",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "airmesh-jacket": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:19:16Z",
+          "isCompleteReviewBackup": false
+        },
+        "airmesh-jacket-1": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:34:51Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "EVO Gloves",
+      "handles": [
+        "xavia-evo-unisex-leather-motorcycle-gloves",
+        "evo-gloves"
+      ],
+      "sourceTags": {
+        "xavia-evo-unisex-leather-motorcycle-gloves": [
+          "Gloves",
+          "men",
+          "men clothing",
+          "men clothing glove",
+          "motorcycle gloves",
+          "Riser",
+          "riser gloves",
+          "women",
+          "women clothing",
+          "women clothing glove"
+        ],
+        "evo-gloves": [
+          "Gloves",
+          "men",
+          "men clothing",
+          "men clothing glove",
+          "motorcycle gloves",
+          "Riser",
+          "riser gloves",
+          "women",
+          "women clothing",
+          "women clothing glove"
+        ]
+      },
+      "colours": {
+        "xavia-evo-unisex-leather-motorcycle-gloves": [
+          "Brown"
+        ],
+        "evo-gloves": [
+          "Black"
+        ]
+      },
+      "variantCount": 10,
+      "emptySkuCount": 10,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "8368665854279",
+          "sourceHandle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "sourceVariantId": "46494780162375",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368665854279",
+          "sourceHandle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "sourceVariantId": "52531152617799",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368665854279",
+          "sourceHandle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "sourceVariantId": "52531152650567",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368665854279",
+          "sourceHandle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "sourceVariantId": "52531152683335",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368665854279",
+          "sourceHandle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "sourceVariantId": "52531152716103",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419659866439",
+          "sourceHandle": "evo-gloves",
+          "sourceVariantId": "52522129752391",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419659866439",
+          "sourceHandle": "evo-gloves",
+          "sourceVariantId": "52531144163655",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419659866439",
+          "sourceHandle": "evo-gloves",
+          "sourceVariantId": "52531144196423",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419659866439",
+          "sourceHandle": "evo-gloves",
+          "sourceVariantId": "52531144229191",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419659866439",
+          "sourceHandle": "evo-gloves",
+          "sourceVariantId": "52531144261959",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "34.94",
+          "compareAtPrice": "39.95",
+          "available": false,
+          "grams": 500,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "xavia-evo-unisex-leather-motorcycle-gloves": {
+          "displayedCount": 2,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2025-10-05T20:22:47Z",
+          "isCompleteReviewBackup": false
+        },
+        "evo-gloves": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:13:25Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "Xavia X - AAA CE Certified Leather Suit",
+      "handles": [
+        "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+        "xavia-x-aaa-ce-certified-leather-suit",
+        "xavia-x-aaa-ce-certified-leather-suit-1",
+        "xavia-x-aaa-ce-certified-leather-suit-2",
+        "xavia-x-aaa-ce-certified-leather-suit-3",
+        "xavia-x-aaa-ce-certified-leather-suit-4",
+        "xavia-x-aaa-ce-certified-leather-suit-5"
+      ],
+      "sourceTags": {
+        "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-1": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-2": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-3": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-4": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-5": [
+          "men",
+          "men clothing",
+          "men clothing suit",
+          "Suits",
+          "women",
+          "women clothing",
+          "women clothing suit"
+        ]
+      },
+      "colours": {
+        "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour": [
+          "Black"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit": [
+          "Black x Green"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-1": [
+          "Black x Red"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-2": [
+          "Black x Yellow"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-3": [
+          "White x Black"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-4": [
+          "White x Red x Green"
+        ],
+        "xavia-x-aaa-ce-certified-leather-suit-5": [
+          "White x Yellow x Black"
+        ]
+      },
+      "variantCount": 49,
+      "emptySkuCount": 49,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "46494782619975",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151765831",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151798599",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151831367",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151864135",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151896903",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368672670023",
+          "sourceHandle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "sourceVariantId": "52531151929671",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52521940189511",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531146883399",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531146916167",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531146948935",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531146981703",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531147014471",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419630571847",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit",
+          "sourceVariantId": "52531147047239",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Green"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52521953001799",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146654023",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146686791",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146719559",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146752327",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146785095",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419632570695",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "sourceVariantId": "52531146817863",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Red"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52522000220487",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531145965895",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531145998663",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531146031431",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531146064199",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531146096967",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638042951",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "sourceVariantId": "52531146129735",
+          "sku": null,
+          "colourCandidates": [
+            "Black x Yellow"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52522002252103",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145736519",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145769287",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145802055",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145834823",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145867591",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638403399",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "sourceVariantId": "52531145900359",
+          "sku": null,
+          "colourCandidates": [
+            "White x Black"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52522003136839",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145507143",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145539911",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145572679",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145605447",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145638215",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638600007",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "sourceVariantId": "52531145670983",
+          "sku": null,
+          "colourCandidates": [
+            "White x Red x Green"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52522005135687",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "46",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145277767",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "48",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145310535",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "50",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145343303",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "52",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145376071",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "54",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145408839",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "56",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419638927687",
+          "sourceHandle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "sourceVariantId": "52531145441607",
+          "sku": null,
+          "colourCandidates": [
+            "White x Yellow x Black"
+          ],
+          "existingOptions": [
+            "58",
+            null,
+            null
+          ],
+          "price": "599.00",
+          "compareAtPrice": null,
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour": null,
+        "xavia-x-aaa-ce-certified-leather-suit": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:49:41Z",
+          "isCompleteReviewBackup": false
+        },
+        "xavia-x-aaa-ce-certified-leather-suit-1": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:49:12Z",
+          "isCompleteReviewBackup": false
+        },
+        "xavia-x-aaa-ce-certified-leather-suit-2": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:59:30Z",
+          "isCompleteReviewBackup": false
+        },
+        "xavia-x-aaa-ce-certified-leather-suit-3": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:57:55Z",
+          "isCompleteReviewBackup": false
+        },
+        "xavia-x-aaa-ce-certified-leather-suit-4": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T10:00:55Z",
+          "isCompleteReviewBackup": false
+        },
+        "xavia-x-aaa-ce-certified-leather-suit-5": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:59:44Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "VENTRA Jacket",
+      "handles": [
+        "ventra-jacket-2",
+        "ventra-jacket-3"
+      ],
+      "sourceTags": {
+        "ventra-jacket-2": [
+          "JACKET",
+          "TOURING",
+          "VENTRA",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "ventra-jacket-3": [
+          "JACKET",
+          "TOURING",
+          "VENTRA",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ]
+      },
+      "colours": {
+        "ventra-jacket-2": [
+          "Dark Grey-Yellow-Black"
+        ],
+        "ventra-jacket-3": [
+          "Grey-Red-Black"
+        ]
+      },
+      "variantCount": 16,
+      "emptySkuCount": 16,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52521905717575",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147407687",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147440455",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147473223",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147505991",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147538759",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147571527",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624870215",
+          "sourceHandle": "ventra-jacket-2",
+          "sourceVariantId": "52531147604295",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52521906929991",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147145543",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147178311",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147211079",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147243847",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147276615",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147309383",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419625394503",
+          "sourceHandle": "ventra-jacket-3",
+          "sourceVariantId": "52531147342151",
+          "sku": null,
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "ventra-jacket-2": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:33:48Z",
+          "isCompleteReviewBackup": false
+        },
+        "ventra-jacket-3": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T09:34:52Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "VENTRA Jacket",
+      "handles": [
+        "ventra-jacket",
+        "ventra-jacket-1"
+      ],
+      "sourceTags": {
+        "ventra-jacket": [
+          "JACKET",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "TOURING",
+          "VENTRA"
+        ],
+        "ventra-jacket-1": [
+          "JACKET",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "TOURING",
+          "VENTRA"
+        ]
+      },
+      "colours": {
+        "ventra-jacket": [
+          "Grey-Red-Black"
+        ],
+        "ventra-jacket-1": [
+          "Dark Grey-Yellow-Black"
+        ]
+      },
+      "variantCount": 16,
+      "emptySkuCount": 8,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "48898192015687",
+          "sku": "VENTRA-JACKET-XS-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151307079",
+          "sku": "VENTRA-JACKET-S-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151339847",
+          "sku": "VENTRA-JACKET-M-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151372615",
+          "sku": "VENTRA-JACKET-L-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151405383",
+          "sku": "VENTRA-JACKET-XL-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151438151",
+          "sku": "VENTRA-JACKET-XXL-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151470919",
+          "sku": "VENTRA-JACKET-3XL-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964601610567",
+          "sourceHandle": "ventra-jacket",
+          "sourceVariantId": "52531151503687",
+          "sku": "VENTRA-JACKET-4XL-YELLOW-MEN",
+          "colourCandidates": [
+            "Grey-Red-Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52521901818183",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147669831",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147702599",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147735367",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147768135",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147800903",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147833671",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419624247623",
+          "sourceHandle": "ventra-jacket-1",
+          "sourceVariantId": "52531147866439",
+          "sku": null,
+          "colourCandidates": [
+            "Dark Grey-Yellow-Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "189.00",
+          "compareAtPrice": "200.00",
+          "available": true,
+          "grams": 0,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "ventra-jacket": {
+          "displayedCount": 2,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2025-10-05T20:22:47Z",
+          "isCompleteReviewBackup": false
+        },
+        "ventra-jacket-1": {
+          "displayedCount": 1,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2025-11-01T22:04:35Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "REGAL Jacket",
+      "handles": [
+        "regal-jacket",
+        "regal-jacket-3"
+      ],
+      "sourceTags": {
+        "regal-jacket": [
+          "JACKET",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Regal",
+          "textile",
+          "Textile Jacket"
+        ],
+        "regal-jacket-3": [
+          "JACKET",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Regal",
+          "textile",
+          "Textile Jacket"
+        ]
+      },
+      "colours": {
+        "regal-jacket": [
+          "Grey"
+        ],
+        "regal-jacket-3": [
+          "Black"
+        ]
+      },
+      "variantCount": 14,
+      "emptySkuCount": 7,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "48899822813511",
+          "sku": "REGAL-JACKET-XS-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150815559",
+          "sku": "REGAL-JACKET-S-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150848327",
+          "sku": "REGAL-JACKET-M-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150881095",
+          "sku": "REGAL-JACKET-L-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150913863",
+          "sku": "REGAL-JACKET-XL-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150946631",
+          "sku": "REGAL-JACKET-XXL-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8964997906759",
+          "sourceHandle": "regal-jacket",
+          "sourceVariantId": "52531150979399",
+          "sku": "REGAL-JACKET-3XL-BLACK-MEN",
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52520398324039",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148390727",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148423495",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148456263",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148489031",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148521799",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419344605511",
+          "sourceHandle": "regal-jacket-3",
+          "sourceVariantId": "52531148554567",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "regal-jacket": null,
+        "regal-jacket-3": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T00:13:52Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "MISANO Jacket",
+      "handles": [
+        "misano",
+        "misano-jacket"
+      ],
+      "sourceTags": {
+        "misano": [
+          "JACKET",
+          "leather",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Misano"
+        ],
+        "misano-jacket": [
+          "JACKET",
+          "leather",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Misano"
+        ]
+      },
+      "colours": {
+        "misano": [
+          "Black"
+        ],
+        "misano-jacket": [
+          "Brown"
+        ]
+      },
+      "variantCount": 18,
+      "emptySkuCount": 12,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "48126271521095",
+          "sku": "MISANO-JACKET-XS-BLACK",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066063687",
+          "sku": "85-A8DQ-UNYF",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066096455",
+          "sku": "SQ-75VQ-OZ1Q",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066129223",
+          "sku": "AE-304M-9LSW",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066161991",
+          "sku": "SQ-0SRL-MWT1",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066194759",
+          "sku": "YK-29A3-CH9D",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066227527",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066260295",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "8368667918663",
+          "sourceHandle": "misano",
+          "sourceVariantId": "52530066293063",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52520389214535",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067079495",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067112263",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067145031",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067177799",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067210567",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067243335",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067276103",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10419339559239",
+          "sourceHandle": "misano-jacket",
+          "sourceVariantId": "52530067308871",
+          "sku": null,
+          "colourCandidates": [
+            "Brown"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "199.00",
+          "compareAtPrice": "291.90",
+          "available": true,
+          "grams": 3000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "misano": {
+          "displayedCount": 2,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2026-05-19T13:29:52Z",
+          "isCompleteReviewBackup": false
+        },
+        "misano-jacket": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-13T00:04:42Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "GALE jacket",
+      "handles": [
+        "gale-jacket",
+        "gale-jacket-1"
+      ],
+      "sourceTags": {
+        "gale-jacket": [
+          "black",
+          "gale",
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Moss",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "gale-jacket-1": [
+          "black",
+          "gale",
+          "Jacket",
+          "men",
+          "men clothing",
+          "MEN CLOTHING JACKET",
+          "Moss",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ]
+      },
+      "colours": {
+        "gale-jacket": [
+          "Black"
+        ],
+        "gale-jacket-1": [
+          "Yellow"
+        ]
+      },
+      "variantCount": 18,
+      "emptySkuCount": 11,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": true,
+      "issues": [],
+      "variants": [
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "50333966172487",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150520647",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-S",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150553415",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-M",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150586183",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-L",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150618951",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-XL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150651719",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-XXL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150684487",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-3XL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150717255",
+          "sku": "IT-GALE-JACKET-BLACK-MEN-4XL",
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "9326637384007",
+          "sourceHandle": "gale-jacket",
+          "sourceVariantId": "52531150750023",
+          "sku": null,
+          "colourCandidates": [
+            "Black"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52516557881671",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148816711",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148849479",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148882247",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148915015",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148947783",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531148980551",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531149013319",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "4XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10418670108999",
+          "sourceHandle": "gale-jacket-1",
+          "sourceVariantId": "52531149046087",
+          "sku": null,
+          "colourCandidates": [
+            "Yellow"
+          ],
+          "existingOptions": [
+            "5XL",
+            null,
+            null
+          ],
+          "price": "99.00",
+          "compareAtPrice": "148.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "gale-jacket": {
+          "displayedCount": 9,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2025-12-01T11:20:18Z",
+          "isCompleteReviewBackup": false
+        },
+        "gale-jacket-1": {
+          "displayedCount": 1,
+          "displayedAverage": "5.00",
+          "widgetUpdatedAt": "2026-05-12T07:02:12Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    },
+    {
+      "title": "REGAL Jacket",
+      "handles": [
+        "regal-jacket-1",
+        "regal-jacket-2"
+      ],
+      "sourceTags": {
+        "regal-jacket-1": [
+          "JACKET",
+          "Regal",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ],
+        "regal-jacket-2": [
+          "JACKET",
+          "Regal",
+          "textile",
+          "Textile Jacket",
+          "women",
+          "women clothing",
+          "women clothing jacket"
+        ]
+      },
+      "colours": {
+        "regal-jacket-1": [
+          "Grey"
+        ],
+        "regal-jacket-2": [
+          "Gray"
+        ]
+      },
+      "variantCount": 14,
+      "emptySkuCount": 14,
+      "sameOrderedSizeMatrix": true,
+      "sameDescriptionHtml": true,
+      "publicLinkChecksPassed": false,
+      "issues": [
+        {
+          "code": "POSSIBLE_EQUIVALENT_COLOUR_LABELS",
+          "note": "Grey/Gray differ only in spelling; inspect actual colour before assigning options."
+        }
+      ],
+      "variants": [
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52497512595783",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149504839",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149537607",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149570375",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149603143",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149635911",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413384040775",
+          "sourceHandle": "regal-jacket-1",
+          "sourceVariantId": "52531149668679",
+          "sku": null,
+          "colourCandidates": [
+            "Grey"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52497553752391",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "XS",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149144391",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "S",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149177159",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "M",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149209927",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "L",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149242695",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149275463",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "XXL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        },
+        {
+          "sourceProductId": "10413388595527",
+          "sourceHandle": "regal-jacket-2",
+          "sourceVariantId": "52531149308231",
+          "sku": null,
+          "colourCandidates": [
+            "Gray"
+          ],
+          "existingOptions": [
+            "3XL",
+            null,
+            null
+          ],
+          "price": "149.00",
+          "compareAtPrice": "171.00",
+          "available": true,
+          "grams": 2000,
+          "requiresShipping": true,
+          "taxable": true,
+          "destinationProductId": null,
+          "destinationVariantId": null
+        }
+      ],
+      "reviewSummaries": {
+        "regal-jacket-1": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-09T12:10:01Z",
+          "isCompleteReviewBackup": false
+        },
+        "regal-jacket-2": {
+          "displayedCount": 0,
+          "displayedAverage": "0.00",
+          "widgetUpdatedAt": "2025-10-09T12:15:03Z",
+          "isCompleteReviewBackup": false
+        }
+      },
+      "readyToMigrate": false
+    }
+  ],
+  "pageEvidence": {
+    "custom-mx-suit": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2026-03-07T16:22:56Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "59cd22cbefb04a4aad3613de4ee6d70e694834d93c49938816120aaa358881db"
+    },
+    "moss-jacket-2": {
+      "colourLinks": [
+        {
+          "handle": "moss-jacket",
+          "label": "Black",
+          "href": "/products/moss-jacket"
+        },
+        {
+          "handle": "moss-jacket-2",
+          "label": "Grey",
+          "href": "/products/moss-jacket-2"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-22T08:24:55Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "d5e088349a40cacfa935778d2651af2eb66d9821521526d370c0e7fff5a60b21"
+    },
+    "waterproof-overjacket": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:35:39Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "4b2fc4df8f7369bcb7be00aeffcfc112335b9482f91f8c37ef707e1a26fe67df"
+    },
+    "xri01-gloves": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:23:37Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "ebbba98b135547dd992836c79e02222400b92a81d13297e3e9322f1fd4d1da82"
+    },
+    "classic-pant": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:21:10Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "2bdccf767ab7f7412e8a62d9dee2a07a68a3ef3f2ef1202975b8b462ffca7466"
+    },
+    "xri01-vest": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:16:32Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "6bed16c8d301e542ec02e66d34cbccaa7f746e19449b4c595ae4c45cf4b33c03"
+    },
+    "classic-vest": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:15:22Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "e9ed2807f56347d4fe6e02f801b727191c725b25b8d2210bc548a5a9422d9fbc"
+    },
+    "classic-jacket-1": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:13:19Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "edf06d7799a034ab22c28c263a221f827e5c0db4c8ee803613964ca9ba4137b9"
+    },
+    "classic-jacket": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:08:57Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "91d1201aab2344bc19fa9748dc8d37c8be4d944cd7f4602442805b7287612a39"
+    },
+    "riser-jacket": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T11:03:37Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "1e9fc7d47abb702c05625b287c6d14d399578190ea9186c39e28233d0cd7c498"
+    },
+    "aireon-pant": {
+      "colourLinks": [
+        {
+          "handle": "aireon-jacket",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-jacket"
+        },
+        {
+          "handle": "aireon-jacket-1",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-1"
+        },
+        {
+          "handle": "aireon-jacket-copy",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-copy"
+        },
+        {
+          "handle": "aireon-pant",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-pant"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:53:50Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "60667fa0664414e1ca5a6ffa452cf68063d178de3db2232bcfb5a518abd4e912"
+    },
+    "aireon-jacket-copy": {
+      "colourLinks": [
+        {
+          "handle": "aireon-jacket",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-jacket"
+        },
+        {
+          "handle": "aireon-jacket-1",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-1"
+        },
+        {
+          "handle": "aireon-jacket-copy",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-copy"
+        },
+        {
+          "handle": "aireon-pant",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-pant"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:51:17Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "1cfd8d3dbefd3bb62006d7315ad5a01570c23ba72ae714652b94c77d2742ab82"
+    },
+    "aireon-jacket-1": {
+      "colourLinks": [
+        {
+          "handle": "aireon-jacket",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-jacket"
+        },
+        {
+          "handle": "aireon-jacket-1",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-1"
+        },
+        {
+          "handle": "aireon-jacket-copy",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-copy"
+        },
+        {
+          "handle": "aireon-pant",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-pant"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:43:57Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "290b425f1a8363983864a38412e05797631bf6a533deed9591e1c3f1db55e5dc"
+    },
+    "aireon-jacket": {
+      "colourLinks": [
+        {
+          "handle": "aireon-jacket-1",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-1"
+        },
+        {
+          "handle": "aireon-jacket",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-jacket"
+        },
+        {
+          "handle": "aireon-jacket-copy",
+          "label": "Nero Neo",
+          "href": "/products/aireon-jacket-copy"
+        },
+        {
+          "handle": "aireon-pant",
+          "label": "Crema e Vino",
+          "href": "/products/aireon-pant"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:37:47Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "ff8ff69e05fc995077e3d402fb19d75a37d8381cec6e31eec24c235a85a3558a"
+    },
+    "airmesh-jacket-1": {
+      "colourLinks": [
+        {
+          "handle": "airmesh-jacket",
+          "label": "Black",
+          "href": "/products/airmesh-jacket"
+        },
+        {
+          "handle": "airmesh-jacket-1",
+          "label": "Yellow",
+          "href": "/products/airmesh-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:34:51Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "90a23b7f944c3e64eed68bce12cdfd9041d127bdde4e974321ac6437cf5bbca6"
+    },
+    "airmesh-jacket": {
+      "colourLinks": [
+        {
+          "handle": "airmesh-jacket",
+          "label": "Black",
+          "href": "/products/airmesh-jacket"
+        },
+        {
+          "handle": "airmesh-jacket-1",
+          "label": "Yellow",
+          "href": "/products/airmesh-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:19:16Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "8dd9643dbf245e323834362ba792a08e695fbae221f48edcf05362222c3874a9"
+    },
+    "evo-gloves": {
+      "colourLinks": [
+        {
+          "handle": "evo-gloves",
+          "label": "Black",
+          "href": "/products/evo-gloves"
+        },
+        {
+          "handle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "label": "Brown",
+          "href": "/products/xavia-evo-unisex-leather-motorcycle-gloves"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:13:25Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "6517e36d9a2f672b33a66be644a6488430191e25e85a5c78c5ded9def90abe74"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit-5": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:59:44Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "fad3cb2c13e25afbe8c7c8f4c06d5eb01de8f5ccc14b451e67053d5b6208928c"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit-4": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T10:00:55Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "6e97ad0d3998b8c68f8703511497fd1f0c4e6f18efe3b8fc6bbad0a02113cb69"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit-3": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:57:55Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "487288569eca67d7ac6ae2b482717230199e09a2047b8cca2949fb6ba2585fca"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit-2": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:59:30Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "9fdbee3d0755830be56bfe1eed80f062af38ac805d58b1dd01e8da66c8635d53"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit-1": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:49:12Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "ad7a429bebbc3844b58d0aa3b416b9313c9391fab53eedceadc92efbf42c6d19"
+    },
+    "xavia-x-aaa-ce-certified-leather-suit": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:49:41Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "925ccc8f060140b0d813cc0261b3e4c0bf1583010f4ea237cbf1c7922d23ca3f"
+    },
+    "ventra-jacket-3": {
+      "colourLinks": [
+        {
+          "handle": "ventra-jacket-2",
+          "label": "Dark Grey-Yellow-Black",
+          "href": "/products/ventra-jacket-2"
+        },
+        {
+          "handle": "ventra-jacket-3",
+          "label": "Grey-Red-Black",
+          "href": "/products/ventra-jacket-3"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:34:52Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "805b08e8cd5420b19839c7012713ecc1d1e6538fd4754d3902c445d053ce9b06"
+    },
+    "ventra-jacket-2": {
+      "colourLinks": [
+        {
+          "handle": "ventra-jacket-2",
+          "label": "Dark Grey-Yellow-Black",
+          "href": "/products/ventra-jacket-2"
+        },
+        {
+          "handle": "ventra-jacket-3",
+          "label": "Grey-Red-Black",
+          "href": "/products/ventra-jacket-3"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T09:33:48Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "11573c6bf8797641edb71e0f7bd0a8b6f3b060ed98b1d5477c5eca1677e2fb7c"
+    },
+    "ventra-jacket-1": {
+      "colourLinks": [
+        {
+          "handle": "ventra-jacket",
+          "label": "Grey-Red-Black",
+          "href": "/products/ventra-jacket"
+        },
+        {
+          "handle": "ventra-jacket-1",
+          "label": "Dark Grey-Yellow-Black",
+          "href": "/products/ventra-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 1,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2025-11-01T22:04:35Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "03a95da4acec9ad6e29c606f93cbcda3bc3c56cb6d7a5e540c5dff747e63998e"
+    },
+    "regal-jacket-3": {
+      "colourLinks": [
+        {
+          "handle": "regal-jacket",
+          "label": "Grey",
+          "href": "/products/regal-jacket"
+        },
+        {
+          "handle": "regal-jacket-3",
+          "label": "Black",
+          "href": "/products/regal-jacket-3"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T00:13:52Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "fe1c40dff9cee827d45b7311588f6d428b49e62552a3a8e03fd1dc68e7f691f2"
+    },
+    "misano-jacket": {
+      "colourLinks": [
+        {
+          "handle": "misano",
+          "label": "Black",
+          "href": "/products/misano"
+        },
+        {
+          "handle": "misano-jacket",
+          "label": "Brown",
+          "href": "/products/misano-jacket"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-13T00:04:42Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "8ea04272a71016398e3d4a7b1afdef2f50308614c28313309a85b4beb2ffad14"
+    },
+    "gale-jacket-1": {
+      "colourLinks": [
+        {
+          "handle": "gale-jacket",
+          "label": "Black",
+          "href": "/products/gale-jacket"
+        },
+        {
+          "handle": "gale-jacket-1",
+          "label": "Yellow",
+          "href": "/products/gale-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 1,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2026-05-12T07:02:12Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "26d7ec1af1f578c5e7973cf3d7c3a1b53fe80833f0157cdc125909311dd96b49"
+    },
+    "regal-jacket-2": {
+      "colourLinks": [
+        {
+          "handle": "regal-jacket-1",
+          "label": "Grey",
+          "href": "/products/regal-jacket-1"
+        },
+        {
+          "handle": "regal-jacket-2",
+          "label": "Gray",
+          "href": "/products/regal-jacket-2"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-09T12:15:03Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "ccdc410fe484d45d6cfe8c5ee006e2105823fbbc5f853ec0177a4ab99393c768"
+    },
+    "regal-jacket-1": {
+      "colourLinks": [
+        {
+          "handle": "regal-jacket-1",
+          "label": "Grey",
+          "href": "/products/regal-jacket-1"
+        },
+        {
+          "handle": "regal-jacket-2",
+          "label": "Gray",
+          "href": "/products/regal-jacket-2"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-09T12:10:01Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "d26965c0e45e68748b4ef20aa9d42779525e75819f1ac9e9b5ec815b2d983322"
+    },
+    "gift-card": {
+      "colourLinks": [],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2025-10-06T18:48:00Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "64f2f10c641f48ff6dedf99fc7abe6c05d50d447f7ec5d174c43115ae4e0052d"
+    },
+    "moss-jacket": {
+      "colourLinks": [
+        {
+          "handle": "moss-jacket",
+          "label": "Black",
+          "href": "/products/moss-jacket"
+        },
+        {
+          "handle": "moss-jacket-2",
+          "label": "Grey",
+          "href": "/products/moss-jacket-2"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 0,
+        "displayedAverage": "0.00",
+        "widgetUpdatedAt": "2024-07-06T01:52:10Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "a51cfff6060da3da8e68a1d1a02b547cf9b58af353ba0c475d92c6e486d9c3a9"
+    },
+    "gale-jacket": {
+      "colourLinks": [
+        {
+          "handle": "gale-jacket",
+          "label": "Black",
+          "href": "/products/gale-jacket"
+        },
+        {
+          "handle": "gale-jacket-1",
+          "label": "Yellow",
+          "href": "/products/gale-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 9,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2025-12-01T11:20:18Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "5cd253127f16e4e2588fbb4f2b497a682b97ff9864bcb544c54160a1fe4e9851"
+    },
+    "regal-jacket": {
+      "colourLinks": [
+        {
+          "handle": "regal-jacket",
+          "label": "Grey",
+          "href": "/products/regal-jacket"
+        },
+        {
+          "handle": "regal-jacket-3",
+          "label": "Black",
+          "href": "/products/regal-jacket-3"
+        }
+      ],
+      "reviewSummary": null,
+      "pageSha256": "e05caf663d31efb4c2c63764a6fc57af4721b8607a40c25edf896812e07c0e2c"
+    },
+    "ventra-jacket": {
+      "colourLinks": [
+        {
+          "handle": "ventra-jacket",
+          "label": "Grey-Red-Black",
+          "href": "/products/ventra-jacket"
+        },
+        {
+          "handle": "ventra-jacket-1",
+          "label": "Dark Grey-Yellow-Black",
+          "href": "/products/ventra-jacket-1"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 2,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2025-10-05T20:22:47Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "8c6a2081e31e1976f477195871b9a46b12ead395b2aab55009479d63e18c6595"
+    },
+    "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour": {
+      "colourLinks": [
+        {
+          "handle": "xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour",
+          "label": "Black",
+          "href": "/products/xavia-x-aaa-ce-certified-cowhide-leather-motorcycle-suit-with-armour"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit",
+          "label": "Black x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-1",
+          "label": "Black x Red",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-1"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-2",
+          "label": "Black x Yellow",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-2"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-3",
+          "label": "White x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-3"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-4",
+          "label": "White x Red x Green",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-4"
+        },
+        {
+          "handle": "xavia-x-aaa-ce-certified-leather-suit-5",
+          "label": "White x Yellow x Black",
+          "href": "/products/xavia-x-aaa-ce-certified-leather-suit-5"
+        }
+      ],
+      "reviewSummary": null,
+      "pageSha256": "40a7ca6141cb9ac984b52528c2acde10d28c85a46c89aa8a04e2b16bbf2c8dc1"
+    },
+    "misano": {
+      "colourLinks": [
+        {
+          "handle": "misano",
+          "label": "Black",
+          "href": "/products/misano"
+        },
+        {
+          "handle": "misano-jacket",
+          "label": "Brown",
+          "href": "/products/misano-jacket"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 2,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2026-05-19T13:29:52Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "a17f93391e7e872e76666db6a488d9c36ad9b5271db4ce60f6f340a67c5e7136"
+    },
+    "xavia-evo-unisex-leather-motorcycle-gloves": {
+      "colourLinks": [
+        {
+          "handle": "xavia-evo-unisex-leather-motorcycle-gloves",
+          "label": "Brown",
+          "href": "/products/xavia-evo-unisex-leather-motorcycle-gloves"
+        },
+        {
+          "handle": "evo-gloves",
+          "label": "Black",
+          "href": "/products/evo-gloves"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 2,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2025-10-05T20:22:47Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "65399303d44dccbc585f65c4d68901908b3cf27bdbb911a99835e543caa45886"
+    },
+    "xavia-riser-unisex-leather-motorcycle-gloves": {
+      "colourLinks": [
+        {
+          "handle": "xavia-riser-unisex-leather-motorcycle-gloves",
+          "label": "Black",
+          "href": "/products/xavia-riser-unisex-leather-motorcycle-gloves"
+        }
+      ],
+      "reviewSummary": {
+        "displayedCount": 1,
+        "displayedAverage": "5.00",
+        "widgetUpdatedAt": "2025-10-05T20:22:47Z",
+        "isCompleteReviewBackup": false
+      },
+      "pageSha256": "eb13a119fca34568f9345749ae053ce2015504e97e1d5b9f8bdc525d993ea8e1"
+    }
+  },
+  "snapshotHashes": {
+    "products-page-1.json": "85e2b855489adff57e8f2eb31e9b4dd47c35618c4d7ea21bb1f0e9ea4b3d7453",
+    "products-page-2.json": "86d8b086af0fc30d06856e218fcfdb6b803f91b45f50b1b753d8deac627fc054"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-07T17:23:47.886Z",
+  "deploymentWrites": 0,
+  "publicDomainConfigured": true,
+  "redisConfigured": true,
+  "endpoint": "https://api.xavia.it/api/health",
+  "error": "Unable to verify deployed queue health; private command output withheld",
+  "failedStage": "health-request",
+  "errorType": "TypeError",
+  "errorCode": "ENOTFOUND"
+}

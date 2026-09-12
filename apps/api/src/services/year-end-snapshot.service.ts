@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * T.8 part 2 — Year-end inventory valuation snapshot service.
  *
@@ -189,7 +190,7 @@ export async function snapshotYearEndValuation(
   const computed = await computeYearEndValuation({ year, asOf })
 
   await prisma.yearEndSnapshot.upsert({
-    where: { year },
+    where: { workspace_year: workspaceKey({ year: year }) },
     create: {
       year,
       asOf,
@@ -225,7 +226,7 @@ export async function snapshotYearEndValuation(
  * live compute or surface the absence.
  */
 export async function readYearEndSnapshot(year: number): Promise<YearEndValuation | null> {
-  const row = await prisma.yearEndSnapshot.findUnique({ where: { year } })
+  const row = await prisma.yearEndSnapshot.findUnique({ where: { workspace_year: workspaceKey({ year: year }) } })
   if (!row) return null
   return {
     year: row.year,

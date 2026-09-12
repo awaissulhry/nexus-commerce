@@ -199,6 +199,7 @@ export async function syncProductToShopify(
       productId: product.id,
       channel: 'SHOPIFY',
       marketplace: channelListing.marketplace ?? channelListing.region ?? '',
+      channelConnectionId: channelListing.channelConnectionId ?? null, aliasKey: channelListing.aliasKey ?? '',
       legacyPayload: payload,
     })
   } catch (error) {

@@ -47,7 +47,7 @@ import {
   Sparkles,
   Trash2,
 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'

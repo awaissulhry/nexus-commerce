@@ -13,8 +13,11 @@
  */
 import { palette, pill, badge } from './colors'
 import { space } from './spacing'
+import { duration, easing } from './motion'
 import { fontSize, fontWeight } from './typography'
+import { radius } from './radius'
 import { gridVars, gridVarsDark } from './grid'
+import { workspaceVars } from './workspace'
 import { chromeVars } from './chrome'
 import { topbarVars } from './topbar'
 
@@ -47,6 +50,20 @@ const typeVars: ReadonlyArray<CssVar> = [
     value: String(v),
   })),
 ]
+
+/**
+ * Radius — DERIVED from ./radius (hub #648), not restated. It used to be a second copy of the same
+ * scale: `radius.ts` fed TS consumers through tokens/index.ts while this file fed the stylesheet,
+ * hand-synced with no guard. Minting `--nds-radius-xs` in `radius.ts` alone therefore regenerated
+ * tokens.css successfully and added nothing, leaving a consumer pointing at an undefined property —
+ * which is invalid at computed-value time, so the declaration is dropped and the value silently
+ * inherits. One source removes the failure mode rather than guarding it.
+ */
+const radiusVars: ReadonlyArray<CssVar> = Object.entries(radius).map(([k, v], i) => ({
+  ...(i === 0 ? { section: 'Radius' } : {}),
+  name: `--nds-radius-${kebab(k)}`,
+  value: v,
+}))
 
 export const cssVars: ReadonlyArray<CssVar> = [
   // ── Tier 1: primitive ramps ──────────────────────────────────────
@@ -258,7 +275,23 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-note-warn-border', value: '#e0d4a8' },
   { name: '--nds-note-error-border', value: '#eec9c4' },
   { name: '--nds-danger-text', value: '#9c2f2a' },
-  { name: '--nds-info-text', value: '#10457f' },
+  { name: '--nds-info-text-light', value: '#10457f' },
+  { name: '--nds-info-text', value: 'var(--nds-info-text-light)' },
+
+  // ── Provenance marks (D-#533) ───────────────────────────────────────────────────────────────
+  // SEMANTIC, because a palette step is not where a theme lives. `.nds-cell-prov-ai` read
+  // `--nds-purple-700` directly, and that step is correctly declared once and never re-declared in
+  // `.dark` — so the mark carried its LIGHT value onto a #18263b cell and measured 2.14:1 there
+  // (`64` read 2.07 as shipped). Light was never the problem: purple-700 is 7.10 on the cell and
+  // 5.88 on the AI tint. The defect was the absence of a dark value, which only a semantic token
+  // can carry. `grid.css:527` already reads `var(--nds-prov-ai-fg, var(--nds-purple-700))`, so
+  // these take over with no edit there.
+  { name: '--nds-prov-ai-fg', value: '#6d28d9' },        // surface 7.10 · ai-tint 5.88 · pinned 6.48
+  { name: '--nds-prov-formula-fg', value: '#0e7490' },   // surface 5.36 · ai-tint 4.43 · pinned 4.88
+  // `inherited` / `via` read `--nds-info-strong`, which is `var(--nds-blue-700)` declared once at
+  // `:root` and never in `.dark` — the third instance of the same class in one night. The light
+  // value is unchanged (5.98 / 4.94 / 5.45); only dark was ever broken.
+  { name: '--nds-prov-inherited-fg', value: '#1a60c4' },  // surface 5.98 · ai-tint 4.94 · pinned 5.45
 
   // status pills
   // TONAL — a tinted fill with a tinted border and dark tinted text. Tier 2, because two
@@ -306,6 +339,10 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-wsgrid-pb-border', value: '#cfd6de' }, // placement badge edge
   { name: '--nds-wsgrid-rule', value: '#d0d5dd' }, // frozen-column and checkbox-column rules
   { name: '--nds-wsgrid-drag-ring', value: '#2f6bff' }, // the ring on a header being dragged
+  // Frozen comparison grid only: preserve the measured rectangular badges and checkboxes.
+  // The current radius scale uses capsules for pills; changing the reference would invalidate parity.
+  { name: '--nds-wsgrid-legacy-badge-radius', value: '4px' },
+  { name: '--nds-wsgrid-legacy-control-radius', value: '5px' },
   { name: '--nds-pill-danger-bg', value: 'var(--nds-danger-soft)' },
 
   // ── Tier 3: program / targeting chips ────────────────────────────
@@ -334,7 +371,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-tooltip-light-bg', value: 'var(--nds-white)' },
   { name: '--nds-tooltip-light-fg', value: 'var(--nds-grey-900)' },
   { name: '--nds-tooltip-light-border', value: 'var(--nds-grey-150)' },
-  { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-600)' },
+  { name: '--nds-tooltip-light-fg-2', value: 'var(--nds-grey-700)' },
   { name: '--nds-tip-bg', value: 'var(--nds-grey-800)' },
   { name: '--nds-tip-fg', value: 'var(--nds-white)' },
 
@@ -351,23 +388,27 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { section: 'Layering', name: '--nds-z-sticky', value: '5' },
   { name: '--nds-z-actionbar', value: '20' },
   { name: '--nds-z-rail', value: '50' },
+  // The app top bar. 60 rather than sharing the rail's 50 because the rail HOVER-EXPANDS to 344px
+  // and must slide UNDER the bar, never over it (`app/_shared/app-topbar.css`, which carried the
+  // literal and the reason before this token existed). Named because a layer nobody names is the
+  // next accident: AG's popups sat at 5 — below the rail — for exactly that reason (#232).
+  { name: '--nds-z-topbar', value: '60' },
   { name: '--nds-z-overlay', value: '1400' },
-  { name: '--nds-z-modal', value: '1410' },
+  // Renamed from `--nds-z-modal` (PES ruling #136). Its ONLY consumer, in both apps, is
+  // `.nds-drawer` — while modals have no layer of their own and ride `.nds-backdrop` at
+  // `--nds-z-overlay` below. A token named for the surface it is NOT is how a confirmation ended up
+  // rendering behind a drawer. Value unchanged: this is a naming fix, not a stacking change.
+  { name: '--nds-z-drawer', value: '1410' },
   { name: '--nds-z-popover', value: '1450' },
+  // ── Popover geometry (D18) ──────────────────────────────────────────────────────────────────
+  // The widest a closed-list popover may grow. Minted at the POPOVER level, not on `Listbox`:
+  // `Menu`, `MultiSelect` and `HoverCard` share the same failure — the Owner's "too long in a
+  // single cell" was about width, and any of them can produce it. A cap belongs where the surface
+  // is defined, or the next popover re-derives its own number.
+  { name: '--nds-popover-max-w', value: '320px' },
   { name: '--nds-z-toast', value: '1600' },
   { name: '--nds-z-tooltip', value: '1700' },
-  { section: 'Radius', name: '--nds-radius-pill', value: '4px' },
-  { name: '--nds-radius-sm', value: '6px' },
-  { name: '--nds-radius-md', value: '7px' },
-  { name: '--nds-radius-lg', value: '8px' },
-  { name: '--nds-radius-xl', value: '10px' },
-  { name: '--nds-radius-2xl', value: '12px' },
-  { name: '--nds-radius-3xl', value: '14px' },
-  // A full capsule — toggles, progress bars, icon buttons. NOT `--nds-radius-pill` (4px), which is
-  // the status-pill rounded rect. The DS was writing 999px as a literal 9 times and the ads
-  // console 75 more; neither could say it meant the same shape.
-  { name: '--nds-radius-full', value: '999px' },
-  { name: '--nds-radius-round', value: '999px' },
+  ...radiusVars,
 
   // ── Elevation + focus ────────────────────────────────────────────
   { section: 'Elevation + focus', name: '--nds-shadow-card', value: '0 6px 22px rgb(var(--nds-shadow-rgb) / 0.16)' },
@@ -379,13 +420,41 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-focus-ring', value: '0 0 0 2px rgb(var(--nds-focus-rgb) / 0.12)' },
 
   // ── Structural dimensions ────────────────────────────────────────
+  { section: 'Secondary navigation', name: '--nds-secondary-nav-w', value: '224px' },
+  { name: '--nds-secondary-nav-toggle-w', value: 'var(--nds-space-48)' },
+  { name: '--nds-duration-panel', value: duration.panel },
+  { name: '--nds-easing-standard', value: easing.standard },
   { section: 'Structural dimensions', name: '--nds-rail-collapsed', value: '66px' },
   { name: '--nds-rail-expanded', value: '344px' },
   { name: '--nds-row-nav', value: '46px' },
   { name: '--nds-icon-zone', value: '50px' },
+  { name: '--nds-toolbar-h', value: '40px' },
+  // Control heights — the two tiers every bar control lands on, NAMED from measurement (CT.1,
+  // 2026-09-04): `sm` = 28px is what `.nds-btn.sm`, `.nds-scope` and `.nds-pill.md` already
+  // measure; `md` = 30px is `.nds-btn` at its default padding. Before these existed a control's
+  // height was an emergent sum of padding + line-height, which is how one 40px bar came to hold
+  // 26, 28, 30 and 31px controls side by side (DS-GAPS DS1-7). A bar control PINS to a tier.
+  { name: '--nds-control-h-sm', value: '28px' },
+  { name: '--nds-control-h-md', value: '30px' },
+  // The one content gutter. Every band on a studio page — detail header, scope+tabs bar, sheet
+  // footstrip, sheet toolbar — insets its content by this much; they now all agree on 16px
+  // (measured by DS.2 2026-09-01, four bands, innerWidth 1728), and this NAMES that agreement
+  // so the next band does not pick 14 the way `.nds-grid-footstrip` did. A named role, not an
+  // `--nds-space-N` step: the space scale is 1px-granular and is used ONCE in 429 spacing
+  // declarations across the DS's own stylesheets, so a step token demonstrably does not get
+  // adopted. NB the sheet's own bands sit 1px inboard of the frame bands because
+  // `.nds-gridcard` has a 1px border — that residual is the card's cost, not a gutter mismatch.
+  { name: '--nds-gutter-content', value: '16px' },
+  // The global "Ask AI" FAB (components/AiCopilot.tsx) floats over every route. Its footprint is
+  // published so a surface owning its bottom-right corner can reserve the space instead of being
+  // silently covered — measured 104x48 at a 24px inset (DS.1, 2026-09-01).
+  { name: '--nds-fab-inset', value: '24px' },
+  { name: '--nds-fab-reserve-inline', value: '128px' },
+  { name: '--nds-fab-reserve-block', value: '72px' },
 
   // ── Type ─────────────────────────────────────────────────────────
   { section: 'Type', name: '--nds-font-sans', value: "var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" },
+  { name: '--nds-font-mono', value: "var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace" },
   { name: '--nds-font-smoothing', value: 'auto' },
 
   // ── Platform-semantic aliases ────────────────────────────────────────
@@ -417,6 +486,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // properties the theme binds are the same table. Every colour is a semantic role, so the
   // .dark block below needs no grid entry.
   ...gridVars,
+  ...workspaceVars,
 
   // TB — the app-wide top bar's own tokens (tokens/topbar.ts). Colours alias the RAIL rather
   // than the general surfaces, so the bar and the rail below it resolve the same ground, rule
@@ -463,6 +533,24 @@ export const cssVars: ReadonlyArray<CssVar> = [
 
 /** Dark-mode overrides (the `.dark` block). Provisional inversions; their only home. */
 export const cssVarsDark: ReadonlyArray<CssVar> = [
+  // Mapping status pills and selected controls share readable dark semantic roles.
+  { name: '--nds-info-strong', value: 'var(--nds-text)' },
+  { name: '--nds-tonal-bg', value: 'var(--nds-primary-soft)' },
+  { name: '--nds-tonal-border', value: 'var(--nds-border-strong)' },
+  { name: '--nds-tonal-fg', value: 'var(--nds-text)' },
+  /* 🔴 A var() ALIAS resolves in the scope where it is DECLARED. `--nds-fchip-on-*` alias the
+     three tonal roles at `:root`, so redefining the tonal roles here never reached them: an
+     ENGAGED FilterChip kept its light values in dark mode — blue-900 on blue-50, a pale capsule
+     at 13.88:1 against the dark toolbar it sits in, where the intended pair is 11.23:1. Measured
+     2026-09-11 (VP.5). Re-declaring with the SAME var() is the fix; inside this block the
+     reference resolves against this block's tokens. `scripts/check-dark-alias-scope.mjs` is the
+     guard for exactly this and did not catch it — its `.dark` locator matches nothing in the
+     generated file, so it has been inspecting zero tokens. Filed in .claude/DS-GAPS.md. */
+  { name: '--nds-fchip-on-bg', value: 'var(--nds-tonal-bg)' },
+  { name: '--nds-fchip-on-border', value: 'var(--nds-tonal-border)' },
+  { name: '--nds-fchip-on-fg', value: 'var(--nds-tonal-fg)' },
+  { name: '--nds-info-soft', value: 'var(--nds-primary-soft)' },
+  { name: '--nds-info-text', value: 'var(--nds-text)' },
   { name: '--nds-text', value: '#e7ebf1' },
   { name: '--nds-text-2', value: '#aab6c2' },
   { name: '--nds-text-3', value: '#8a94a6' },
@@ -491,6 +579,40 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
   { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
   { name: '--nds-danger-text', value: '#ef9c93' },       // on surface 7.14
+  // Provenance marks in dark. The light values are dark-by-construction (they exist to be read on
+  // a white cell), so on #18263b they measure 2.14 and 2.00 — the exact failure a semantic token
+  // exists to prevent. Measured over all three grounds a mark can land on: the cell, the AI-draft
+  // tint (10% purple-600) and the pinned tint (7% primary) — which are two DIFFERENT tokens, not
+  // one, and the ruling's phrasing merged them.
+  // ── App chrome in dark (D-#540) ─────────────────────────────────────────────────────────────
+  // `tokens/chrome.ts` declares chrome as literals, theme-independent BY DESIGN, and that is still
+  // true of every chrome token except this ONE — the border needed no dark value in the end, because
+  // a single #6b7f99 clears 3:1 on all four grounds. In dark the page is #14223a and the chrome was
+  // #18263b — **1.05:1**, so the rail was a strip distinguished only by a 1px border that was
+  // itself 1.17:1 against the chrome and 1.22:1 against the page. Three surfaces, no boundary.
+  //
+  // The lift goes UP, not down, and the reason is arithmetic rather than taste: the page is already
+  // near the floor, so the ENTIRE range below it tops out at 1.34:1 even at pure black, while there
+  // is headroom above. Going darker could not have bought separation and would have made the frame
+  // heavy for nothing.
+  //
+  // The BOUNDARY carries the separation, per the ruling — the border clears 3:1 against both
+  // grounds, which is the non-text rule every other DS edge meets. The ground lift is deliberately
+  // quiet (1.21): it stops the two surfaces being the same colour without making the rail loud.
+  { name: '--nds-chrome-bg', value: '#1e3050' },         // vs page #14223a 1.21 (border is theme-independent)
+  // `--nds-topbar-bg` is an ALIAS of the token above (topbar.ts:77, `var(--nds-chrome-bg)`), and
+  // it is declared on `:root` only. A var() alias resolves in the scope where it is DECLARED, not
+  // where it is used, so without this line the top bar kept its :root-computed LIGHT ground
+  // (#18263b) inside `.dark` while the rail moved to #1e3050 — the two halves of one chrome
+  // surface drifting apart in dark. Re-declaring the SAME var(X) here is the whole fix; the
+  // value still follows `--nds-chrome-bg`, so this never needs updating when that ground moves.
+  { name: '--nds-topbar-bg', value: 'var(--nds-chrome-bg)' },
+  { name: '--nds-prov-ai-fg', value: '#c4b5fd' },        // surface 8.25 · ai-tint 8.18 · pinned 7.70
+  { name: '--nds-prov-formula-fg', value: '#22d3ee' },   // surface 8.43 · ai-tint 8.36 · pinned 7.87
+  // Deliberately NOT #8ab6f0: that is `--nds-text-link` in dark, and reusing it would make
+  // "inherited" and "a link" the same colour in dark and different in light — the same reasoning
+  // the dark `--nds-primary` entry above already records for itself.
+  { name: '--nds-prov-inherited-fg', value: '#93c5fd' },  // surface 8.44 · ai-tint 8.38 · pinned 7.55
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
   { name: '--nds-imgup-surface', value: '#1a2330' },     // text-muted on it 7.67

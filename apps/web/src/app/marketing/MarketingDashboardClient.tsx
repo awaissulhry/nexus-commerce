@@ -3,7 +3,7 @@
 // MC.14.6 — Marketing dashboard client.
 
 import type { ReactNode } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Image as ImageIcon,
   Film,

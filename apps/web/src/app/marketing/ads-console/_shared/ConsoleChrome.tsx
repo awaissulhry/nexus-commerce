@@ -6,9 +6,10 @@
  * When main nav is collapsed a hamburger in the top bar re-expands it.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import type { ReactNode } from 'react'
-import { usePathname, useSearchParams, useRouter } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Zap, Crosshair, Activity, FileSpreadsheet, Settings,

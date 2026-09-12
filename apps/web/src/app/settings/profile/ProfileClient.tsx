@@ -25,7 +25,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Upload,
   Loader2,
@@ -37,7 +37,7 @@ import {
   Globe,
   Clock,
 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { getBackendUrl } from '@/lib/backend-url'
 import { useSettingsForm } from '../_shell/SettingsSaveBar'
 import { saveProfile, changePassword } from './actions'
@@ -382,7 +382,7 @@ function IdentitySection({
         <Field
           label="Email"
           htmlFor="email"
-          hint="Email is not editable here. Phase I (multi-user auth) adds the change-email flow with a verification step."
+          hint="This is the email you use to sign in. It cannot be changed here."
         >
           <input
             id="email"
@@ -496,7 +496,7 @@ function WorkingHoursSection({
   return (
     <Card
       title="Working hours"
-      description="Used by quiet-hours notification routing (Phase E) and scheduled-publish nudges."
+      description="Your preferred working hours for notifications and scheduling reminders."
       icon={<Clock size={14} />}
     >
       <div className="grid grid-cols-2 gap-4 max-w-md">
@@ -584,7 +584,7 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
       title="Password"
       description={
         hasPassword
-          ? 'Change your password. We hash with bcrypt (cost 12) before storing.'
+          ? 'Update the password you use to sign in to all your business profiles.'
           : 'No password set. Pick a strong one.'
       }
     >

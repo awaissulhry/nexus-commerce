@@ -1,0 +1,92 @@
+{
+  "apiRegression": {
+    "passed": true,
+    "evidence": [
+      "Test Files  35 passed (35)",
+      "Tests  335 passed (335)"
+    ],
+    "errors": []
+  },
+  "webContracts": {
+    "passed": true,
+    "evidence": [
+      "Test Files  2 passed (2)",
+      "Tests  9 passed (9)"
+    ],
+    "errors": []
+  },
+  "apiTypes": {
+    "passed": true,
+    "evidence": [
+      "> tsc --noEmit -p tsconfig.json"
+    ],
+    "errors": []
+  },
+  "webTypes": {
+    "passed": true,
+    "evidence": [
+      "> tsc --noEmit -p tsconfig.json"
+    ],
+    "errors": []
+  },
+  "factoryTypes": {
+    "passed": true,
+    "evidence": [
+      "> tsc --noEmit -p tsconfig.json"
+    ],
+    "errors": []
+  },
+  "productionBuild": {
+    "passed": true,
+    "evidence": [
+      "Finished TypeScript in 37.1s ..."
+    ],
+    "errors": []
+  },
+  "webTokens": {
+    "passed": true,
+    "evidence": [
+      "\u2713 tokens.css + tokens-global.css are in sync with tokens/css-vars.ts"
+    ],
+    "errors": []
+  },
+  "factoryTokens": {
+    "passed": true,
+    "evidence": [
+      "\u2713 tokens.css is in sync with tokens/css-vars.ts"
+    ],
+    "errors": []
+  },
+  "webTokenGuard": {
+    "passed": true,
+    "evidence": [
+      "\u2713 token-guard [web]: 165 files \u2014 no raw hex, no numbered ramps in component CSS,"
+    ],
+    "errors": []
+  },
+  "factoryTokenGuard": {
+    "passed": true,
+    "evidence": [
+      "\u2713 token-guard [factory]: 105 files \u2014 no raw hex, no numbered ramps in component CSS,"
+    ],
+    "errors": []
+  },
+  "browser": {
+    "matrix": {
+      "fields": 253,
+      "listings": 5,
+      "attentionFields": 24
+    },
+    "amazonItCoat": {
+      "populated": 9,
+      "total": 205,
+      "invalidMappedFields": 22,
+      "requiredMissing": 22,
+      "listingOwnerFields": 71,
+      "pendingTranslations": 0,
+      "remoteValidation": "not-checked"
+    },
+    "exactAccountAndFieldLink": true,
+    "historyKeyboardFocusReturn": true
+  }
+}

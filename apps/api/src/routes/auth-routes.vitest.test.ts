@@ -25,6 +25,13 @@ afterAll(async () => {
 })
 
 describe('GET /api/auth/csrf', () => {
+  it('preserves the token when a second profile tab refreshes its session', async () => {
+    const first = await app.inject({ method: 'GET', url: '/api/auth/csrf' })
+    const token = first.json().csrfToken
+    const second = await app.inject({ method: 'GET', url: '/api/auth/csrf', cookies: { [csrfCookieName()]: token } })
+    expect(second.json().csrfToken).toBe(token)
+    expect(second.headers['cache-control']).toBe('private, no-store')
+  })
   it('mints a token and sets the CSRF cookie', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/auth/csrf' })
     expect(res.statusCode).toBe(200)

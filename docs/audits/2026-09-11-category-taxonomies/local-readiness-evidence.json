@@ -1,0 +1,344 @@
+{
+  "at": "2026-09-11T00:15:46.335Z",
+  "target": "local development",
+  "version": "17.11 (Debian 17.11-1.pgdg12+2)",
+  "pending": [
+    "20260908d_profile_directory_pagination",
+    "20260908e_guarded_account_assignment"
+  ],
+  "failed": [],
+  "taxonomyMigration": {
+    "migration_name": "20260911_category_taxonomies",
+    "checksum": "a89683283f06aafdaf163ea9947d914ea1e87a4e86ee435a115d35a8abded372",
+    "finished_at": "2026-09-10T23:58:01.578Z",
+    "rolled_back_at": null
+  },
+  "expectedChecksum": "a89683283f06aafdaf163ea9947d914ea1e87a4e86ee435a115d35a8abded372",
+  "workspaces": [
+    {
+      "id": "nexus_legacy_workspace",
+      "name": "Existing business",
+      "status": "active"
+    }
+  ],
+  "connections": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "AMAZON_ADS",
+      "region": "EU",
+      "managedBy": "oauth",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": true,
+      "encrypted": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": false,
+      "encrypted": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": false,
+      "authStatus": "disconnected",
+      "isPrimary": false,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "SHOPIFY",
+      "region": "xaviaracing.myshopify.com",
+      "managedBy": "oauth",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": false,
+      "encrypted": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "EBAY",
+      "region": "GLOBAL",
+      "managedBy": "oauth",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": true,
+      "encrypted": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "AMAZON",
+      "region": "EU",
+      "managedBy": "env",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": true,
+      "encrypted": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channelType": "ETSY",
+      "region": null,
+      "managedBy": "oauth",
+      "isActive": true,
+      "authStatus": "connected",
+      "isPrimary": false,
+      "encrypted": true
+    }
+  ],
+  "markets": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "BE",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "DE",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "ES",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "FR",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "IE",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "IT",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "NL",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "PL",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "SE",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "TR",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "UK",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "AMAZON",
+      "code": "US",
+      "region": "NA",
+      "isActive": false
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "EBAY",
+      "code": "DE",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "EBAY",
+      "code": "ES",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "EBAY",
+      "code": "FR",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "EBAY",
+      "code": "IT",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "EBAY",
+      "code": "UK",
+      "region": "EU",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "ETSY",
+      "code": "GLOBAL",
+      "region": "GLOBAL",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "SHOPIFY",
+      "code": "GLOBAL",
+      "region": "GLOBAL",
+      "isActive": true
+    },
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "channel": "WOOCOMMERCE",
+      "code": "GLOBAL",
+      "region": "GLOBAL",
+      "isActive": true
+    }
+  ],
+  "products": [
+    {
+      "workspaceId": "nexus_legacy_workspace",
+      "products": 338
+    }
+  ]
+}

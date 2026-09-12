@@ -120,7 +120,11 @@
   --nds-note-warn-border: #e0d4a8;
   --nds-note-error-border: #eec9c4;
   --nds-danger-text: #9c2f2a;
-  --nds-info-text: #10457f;
+  --nds-info-text-light: #10457f;
+  --nds-info-text: var(--nds-info-text-light);
+  --nds-prov-ai-fg: #6d28d9;
+  --nds-prov-formula-fg: #0e7490;
+  --nds-prov-inherited-fg: #1a60c4;
 
   /* ── Tonal ── */
   --nds-tonal-bg: var(--nds-blue-50);
@@ -148,6 +152,8 @@
   --nds-wsgrid-pb-border: #cfd6de;
   --nds-wsgrid-rule: #d0d5dd;
   --nds-wsgrid-drag-ring: #2f6bff;
+  --nds-wsgrid-legacy-badge-radius: 4px;
+  --nds-wsgrid-legacy-control-radius: 5px;
   --nds-pill-danger-bg: var(--nds-danger-soft);
 
   /* ── Tier 3: program / targeting chips ── */
@@ -167,7 +173,7 @@
   --nds-tooltip-light-bg: var(--nds-white);
   --nds-tooltip-light-fg: var(--nds-grey-900);
   --nds-tooltip-light-border: var(--nds-grey-150);
-  --nds-tooltip-light-fg-2: var(--nds-grey-600);
+  --nds-tooltip-light-fg-2: var(--nds-grey-700);
   --nds-tip-bg: var(--nds-grey-800);
   --nds-tip-fg: var(--nds-white);
 
@@ -175,14 +181,17 @@
   --nds-z-sticky: 5;
   --nds-z-actionbar: 20;
   --nds-z-rail: 50;
+  --nds-z-topbar: 60;
   --nds-z-overlay: 1400;
-  --nds-z-modal: 1410;
+  --nds-z-drawer: 1410;
   --nds-z-popover: 1450;
+  --nds-popover-max-w: 320px;
   --nds-z-toast: 1600;
   --nds-z-tooltip: 1700;
 
   /* ── Radius ── */
-  --nds-radius-pill: 4px;
+  --nds-radius-xs: 3px;
+  --nds-radius-pill: 999px;
   --nds-radius-sm: 6px;
   --nds-radius-md: 7px;
   --nds-radius-lg: 8px;
@@ -201,14 +210,28 @@
   --nds-shadow-tip: 0 10px 26px rgb(var(--nds-shadow-rgb) / 0.3);
   --nds-focus-ring: 0 0 0 2px rgb(var(--nds-focus-rgb) / 0.12);
 
+  /* ── Secondary navigation ── */
+  --nds-secondary-nav-w: 224px;
+  --nds-secondary-nav-toggle-w: var(--nds-space-48);
+  --nds-duration-panel: 180ms;
+  --nds-easing-standard: ease;
+
   /* ── Structural dimensions ── */
   --nds-rail-collapsed: 66px;
   --nds-rail-expanded: 344px;
   --nds-row-nav: 46px;
   --nds-icon-zone: 50px;
+  --nds-toolbar-h: 40px;
+  --nds-control-h-sm: 28px;
+  --nds-control-h-md: 30px;
+  --nds-gutter-content: 16px;
+  --nds-fab-inset: 24px;
+  --nds-fab-reserve-inline: 128px;
+  --nds-fab-reserve-block: 72px;
 
   /* ── Type ── */
   --nds-font-sans: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --nds-font-mono: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
   --nds-font-smoothing: auto;
 
   /* ── Tier 3: grid (tokens/grid.ts — every colour a semantic role; each alias is re-declared in .dark) ── */
@@ -248,6 +271,9 @@
   --nds-grid-row-media-compact: 52px;
   --nds-grid-row-media-cozy: 68px;
   --nds-grid-row-media-spacious: 85px;
+  --nds-grid-row-media-line-compact: 36px;
+  --nds-grid-row-media-line-cozy: 44px;
+  --nds-grid-row-media-line-spacious: 60px;
   --nds-grid-header-compact: 28px;
   --nds-grid-header-cozy: 38px;
   --nds-grid-header-spacious: 46px;
@@ -277,14 +303,37 @@
   --nds-grid-delta-neg-bg: var(--nds-danger);
   --nds-grid-delta-fg: var(--nds-text-inverse);
   --nds-grid-locked-fg: var(--nds-text-muted);
+  --nds-grid-ai-draft-bg: color-mix(in srgb, var(--nds-purple-600) 10%, transparent);
   --nds-grid-skeleton-bg: var(--nds-surface-sunken);
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
+  --nds-wsgrid-surface: var(--nds-white);
+  --nds-wsgrid-surface-raised: var(--nds-grey-25);
+  --nds-wsgrid-surface-hover: var(--nds-grey-75);
+  --nds-wsgrid-surface-sunken: var(--nds-grey-100);
+  --nds-wsgrid-border: var(--nds-grey-150);
+  --nds-wsgrid-frame-border: var(--nds-grey-200);
+  --nds-wsgrid-control-border: var(--nds-grey-300);
+  --nds-wsgrid-icon-soft: var(--nds-grey-450);
+  --nds-wsgrid-text-muted: var(--nds-grey-500);
+  --nds-wsgrid-text-secondary: var(--nds-grey-600);
+  --nds-wsgrid-text-emphasis: var(--nds-grey-700);
+  --nds-wsgrid-text: var(--nds-grey-800);
+  --nds-wsgrid-text-strong: var(--nds-grey-900);
+  --nds-wsgrid-selection-bg: var(--nds-blue-50);
+  --nds-wsgrid-accent: var(--nds-blue-600);
+  --nds-wsgrid-accent-hover: var(--nds-blue-700);
+  --nds-wsgrid-auto-bg: var(--nds-blue-800);
+  --nds-wsgrid-manual-bg: var(--nds-purple-600);
+  --nds-wsgrid-sponsored-products-fg: var(--nds-purple-700);
+  --nds-wsgrid-sponsored-display-fg: var(--nds-cyan-700);
+  --nds-wsgrid-live-dot: var(--nds-green-500);
+  --nds-wsgrid-on-accent: var(--nds-white);
 
-  /* ── Tier 3: app chrome (tokens/chrome.ts — top bar + rail, ONE dark surface, theme-independent by design; literals so there is no .dark block and no alias scope to resolve) ── */
+  /* ── Tier 3: app chrome (tokens/chrome.ts — top bar + rail, ONE dark surface; literals so there is no alias scope to resolve. 🔴 NO LONGER FULLY THEME-INDEPENDENT: --nds-chrome-bg takes a DARK value from the dark list in css-vars.ts (D-#540), because in dark the page is #14223a and this ground was #18263b — 1.05:1, a rail with no boundary. Every OTHER chrome token here is still theme-independent by design.) ── */
   --nds-chrome-bg: #18263b;
-  --nds-chrome-border: #26323f;
+  --nds-chrome-border: #6b7f99;
   --nds-chrome-fg: #aab6c2;
   --nds-chrome-fg-2: #97a3b1;
   --nds-chrome-fg-strong: #e7ebf1;
@@ -363,26 +412,39 @@
   --nds-space-48: 48px;
 
   /* ── Dimension: type scale (tokens/typography.ts) ── */
+  --nds-font-size-nano: 9px;
   --nds-font-size-micro: 10px;
+  --nds-font-size-micro-plus: 10.5px;
   --nds-font-size-xs: 11px;
   --nds-font-size-xs-plus: 11.5px;
   --nds-font-size-sm: 12px;
   --nds-font-size-sm-plus: 12.5px;
   --nds-font-size-base: 13px;
   --nds-font-size-base-plus: 13.5px;
+  --nds-font-size-md-minus: 14px;
   --nds-font-size-md: 15px;
   --nds-font-size-lg: 18px;
   --nds-font-size-xl: 22px;
   --nds-font-size-2xl: 27px;
 
   /* ── Dimension: type weight ── */
+  --nds-font-weight-normal: 400;
   --nds-font-weight-medium: 500;
   --nds-font-weight-semibold: 600;
   --nds-font-weight-bold: 700;
   --nds-font-weight-extrabold: 800;
 }
 
-.dark {
+.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {
+  --nds-info-strong: var(--nds-text);
+  --nds-tonal-bg: var(--nds-primary-soft);
+  --nds-tonal-border: var(--nds-border-strong);
+  --nds-tonal-fg: var(--nds-text);
+  --nds-fchip-on-bg: var(--nds-tonal-bg);
+  --nds-fchip-on-border: var(--nds-tonal-border);
+  --nds-fchip-on-fg: var(--nds-tonal-fg);
+  --nds-info-soft: var(--nds-primary-soft);
+  --nds-info-text: var(--nds-text);
   --nds-text: #e7ebf1;
   --nds-text-2: #aab6c2;
   --nds-text-3: #8a94a6;
@@ -400,6 +462,11 @@
   --nds-success-soft: #173a2c;
   --nds-danger-soft: #3a1c1c;
   --nds-danger-text: #ef9c93;
+  --nds-chrome-bg: #1e3050;
+  --nds-topbar-bg: var(--nds-chrome-bg);
+  --nds-prov-ai-fg: #c4b5fd;
+  --nds-prov-formula-fg: #22d3ee;
+  --nds-prov-inherited-fg: #93c5fd;
   --nds-targeting-auto: #7fd4b0;
   --nds-targeting-manual: #c9a86a;
   --nds-imgup-surface: #1a2330;
@@ -476,6 +543,7 @@
   --nds-grid-delta-neg-bg: var(--nds-danger);
   --nds-grid-delta-fg: var(--nds-text-inverse);
   --nds-grid-locked-fg: var(--nds-text-muted);
+  --nds-grid-ai-draft-bg: color-mix(in srgb, var(--nds-purple-600) 10%, transparent);
   --nds-grid-skeleton-bg: var(--nds-surface-sunken);
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);

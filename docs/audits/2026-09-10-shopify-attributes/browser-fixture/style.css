@@ -1,0 +1,4 @@
+body { margin: 0; background: var(--nds-surface); color: var(--nds-text); font-family: var(--nds-font-sans); font-size: var(--nds-font-size-base); }
+main { padding: var(--nds-space-16); }
+.qa-controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+:root { --font-sans: system-ui; }

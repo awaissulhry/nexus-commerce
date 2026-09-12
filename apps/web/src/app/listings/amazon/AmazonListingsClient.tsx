@@ -16,7 +16,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 import ListingsWorkspace from '../ListingsWorkspace'
 import { Card } from '@/components/ui/Card'

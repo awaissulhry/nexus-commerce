@@ -13,7 +13,7 @@
 //   - spend         all-time total
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertCircle, ExternalLink, Loader2, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { formatCurrency } from './po-lens'

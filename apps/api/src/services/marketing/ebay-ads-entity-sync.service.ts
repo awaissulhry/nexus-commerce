@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E2 (eBay Ads) — entity sync: campaigns → ads (CPS) / ad groups + keywords +
  * negatives (CPC), idempotent upserts into the E2 tables. Read-only against
@@ -74,7 +75,7 @@ async function upsertCampaign(connectionId: string, c: EbayCampaignDTO): Promise
     lastEntitySyncAt: new Date(),
   }
   const row = await prisma.ebayCampaign.upsert({
-    where: { channelConnectionId_externalCampaignId: { channelConnectionId: connectionId, externalCampaignId: c.campaignId } },
+    where: { channelConnectionId_externalCampaignId: workspaceKey({ channelConnectionId: connectionId, externalCampaignId: c.campaignId }) },
     create: {
       channelConnectionId: connectionId,
       externalCampaignId: c.campaignId,
@@ -113,13 +114,13 @@ async function syncCpsAds(localCampaignId: string, marketplace: string, token: s
     }
     if (listingId) {
       await prisma.ebayAd.upsert({
-        where: { campaignId_listingId: { campaignId: localCampaignId, listingId } },
+        where: { campaignId_listingId: workspaceKey({ campaignId: localCampaignId, listingId }) },
         create: { campaignId: localCampaignId, listingId, createdVia: 'DISCOVERED', ...data },
         update: data,
       })
     } else if (invRef) {
       await prisma.ebayAd.upsert({
-        where: { campaignId_inventoryReference: { campaignId: localCampaignId, inventoryReference: invRef } },
+        where: { campaignId_inventoryReference: workspaceKey({ campaignId: localCampaignId, inventoryReference: invRef }) },
         create: { campaignId: localCampaignId, listingId: null, createdVia: 'DISCOVERED', ...data },
         update: data,
       })
@@ -157,7 +158,7 @@ async function syncCpcStructure(localCampaignId: string, token: string, external
   const groupIdByExternal = new Map<string, string>()
   for (const g of groups) {
     const row = await prisma.ebayAdGroup.upsert({
-      where: { campaignId_externalAdGroupId: { campaignId: localCampaignId, externalAdGroupId: g.adGroupId } },
+      where: { campaignId_externalAdGroupId: workspaceKey({ campaignId: localCampaignId, externalAdGroupId: g.adGroupId }) },
       create: {
         campaignId: localCampaignId,
         externalAdGroupId: g.adGroupId,
@@ -183,7 +184,7 @@ async function syncCpcStructure(localCampaignId: string, token: string, external
       const localGroup = k.adGroupId ? groupIdByExternal.get(k.adGroupId) : undefined
       if (!localGroup) continue
       await prisma.ebayKeyword.upsert({
-        where: { adGroupId_externalKeywordId: { adGroupId: localGroup, externalKeywordId: k.keywordId } },
+        where: { adGroupId_externalKeywordId: workspaceKey({ adGroupId: localGroup, externalKeywordId: k.keywordId }) },
         create: {
           campaignId: localCampaignId,
           adGroupId: localGroup,
@@ -214,7 +215,7 @@ async function syncCpcStructure(localCampaignId: string, token: string, external
     ).flat()
     for (const n of negatives) {
       await prisma.ebayNegativeKeyword.upsert({
-        where: { campaignId_externalId: { campaignId: localCampaignId, externalId: n.negativeKeywordId } },
+        where: { campaignId_externalId: workspaceKey({ campaignId: localCampaignId, externalId: n.negativeKeywordId }) },
         create: {
           campaignId: localCampaignId,
           adGroupId: n.adGroupId ?? null,

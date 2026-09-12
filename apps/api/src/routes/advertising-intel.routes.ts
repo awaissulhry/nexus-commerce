@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Apex C.2 — advertising intelligence routes (profit-native target ACOS).
  *
@@ -2650,7 +2651,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'dailyCapCents must be a non-negative integer, or null for "opened but not set"' }
     }
     const row = await prisma.adSpendCeiling.upsert({
-      where: { grain_scopeId: { grain: b.grain, scopeId: b.scopeId } },
+      where: { grain_scopeId: workspaceKey({ grain: b.grain, scopeId: b.scopeId }) },
       create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
       update: { label: b.label.trim(), dailyCapCents: b.dailyCapCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
     })
@@ -2660,7 +2661,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/advertising/spend-ceilings', async (request, reply) => {
     const q = request.query as { grain?: string; scopeId?: string }
     if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
-    const existing = await prisma.adSpendCeiling.findUnique({ where: { grain_scopeId: { grain: q.grain, scopeId: q.scopeId } } })
+    const existing = await prisma.adSpendCeiling.findUnique({ where: { grain_scopeId: workspaceKey({ grain: q.grain, scopeId: q.scopeId }) } })
     if (!existing) { reply.code(404); return { error: 'not_found' } }
     await prisma.adSpendCeiling.delete({ where: { id: existing.id } })
     return { ok: true }
@@ -2691,7 +2692,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: `minBidCents (${b.minBidCents}¢) is above maxBidCents (${b.maxBidCents}¢)` }
     }
     const row = await prisma.adBidPolicy.upsert({
-      where: { grain_scopeId: { grain: b.grain, scopeId: b.scopeId } },
+      where: { grain_scopeId: workspaceKey({ grain: b.grain, scopeId: b.scopeId }) },
       create: { grain: b.grain, scopeId: b.scopeId, label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, enabled: b.enabled ?? true, note: b.note ?? null, createdBy: 'operator' },
       update: { label: b.label.trim(), minBidCents: b.minBidCents ?? null, maxBidCents: b.maxBidCents ?? null, ...(b.enabled !== undefined ? { enabled: b.enabled } : {}), ...(b.note !== undefined ? { note: b.note } : {}) },
     })
@@ -2701,7 +2702,7 @@ const advertisingIntelRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/advertising/bid-policies', async (request, reply) => {
     const q = request.query as { grain?: string; scopeId?: string }
     if (!q.grain || !q.scopeId) { reply.code(400); return { error: 'grain + scopeId required' } }
-    const existing = await prisma.adBidPolicy.findUnique({ where: { grain_scopeId: { grain: q.grain, scopeId: q.scopeId } } })
+    const existing = await prisma.adBidPolicy.findUnique({ where: { grain_scopeId: workspaceKey({ grain: q.grain, scopeId: q.scopeId }) } })
     if (!existing) { reply.code(404); return { error: 'not_found' } }
     await prisma.adBidPolicy.delete({ where: { id: existing.id } })
     return { ok: true }

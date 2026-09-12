@@ -1,3 +1,5 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * CX.3b — the one place that answers "which Amazon Ads profile serves this market?".
  *
@@ -96,10 +98,11 @@ function sameMarket(a: unknown, b: unknown): boolean {
  * id is the one genuinely stable thing here — the operator's DECISIONS are never
  * cached, because enabling or revoking permission to spend has to take effect now.
  */
-let connCache: { id: string | null; at: number } | null = null
+const connectionCache = new WorkspaceCache<string, { id: string | null; at: number }>()
 const CONN_CACHE_MS = 60_000
 
 async function adsConnectionId(): Promise<string | null> {
+  const connCache = connectionCache.get('connection')
   if (connCache && Date.now() - connCache.at < CONN_CACHE_MS) return connCache.id
   const resolver = await import('../connection-resolver.service.js')
   let id: string | null = null
@@ -110,7 +113,7 @@ async function adsConnectionId(): Promise<string | null> {
     // cannot answer", and the caller falls back. Anything else is a real fault.
     if (!(err instanceof resolver.NoConnectionError || err instanceof resolver.AmbiguousConnectionError)) throw err
   }
-  connCache = { id, at: Date.now() }
+  connectionCache.set('connection', { id, at: Date.now() })
   return id
 }
 
@@ -132,7 +135,7 @@ function asDate(v: unknown): Date | null {
  */
 async function decisionFromRow(profileId: string): Promise<{ mode: string; writesEnabledAt: Date | null; lastWriteAt: Date | null } | null> {
   const row = await prisma.amazonAdsConnection.findUnique({
-    where: { profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: profileId }) },
     select: { mode: true, writesEnabledAt: true, lastWriteAt: true },
   })
   return row ?? null
@@ -257,7 +260,7 @@ export async function recordOperatorDecision(
     const connectionId = await adsConnectionId()
     if (!connectionId) return
     const scope = await prisma.connectionScope.findUnique({
-      where: { connectionId_kind_externalId: { connectionId, kind: 'profile', externalId: profileId } },
+      where: { connectionId_kind_externalId: workspaceKey({ connectionId, kind: 'profile', externalId: profileId }) },
       select: { metadata: true },
     })
     if (!scope) return
@@ -266,7 +269,7 @@ export async function recordOperatorDecision(
     if (patch.writesEnabledAt !== undefined) next.writesEnabledAt = patch.writesEnabledAt ? patch.writesEnabledAt.toISOString() : null
     if (patch.lastWriteAt !== undefined) next.lastWriteAt = patch.lastWriteAt.toISOString()
     await prisma.connectionScope.update({
-      where: { connectionId_kind_externalId: { connectionId, kind: 'profile', externalId: profileId } },
+      where: { connectionId_kind_externalId: workspaceKey({ connectionId, kind: 'profile', externalId: profileId }) },
       data: { metadata: next as never, isActive: next.mode === 'production' },
     })
   } catch (err) {
@@ -310,5 +313,5 @@ export const __adsResolverTest = {
   fromScopes,
   fromRow,
   /** Tests and the reseed job need a clean slate; nothing in production clears it. */
-  clearConnectionCache: () => { connCache = null },
+  clearConnectionCache: () => { connectionCache.clear() },
 }

@@ -12,7 +12,7 @@
  * read engine with ProductReadCache as the always-present fallback.
  */
 
-import { Worker } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'
 import { productSearchIndexerService } from '../services/product-search-indexer.service.js'
 import { logger } from '../utils/logger.js'

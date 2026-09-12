@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * BulkActionService
  * Manages asynchronous bulk operations with progress tracking and error handling
@@ -2379,7 +2381,7 @@ export class BulkActionService {
         './channel-batch/amazon-batch-feed.service.js'
       );
       const sellerId =
-        process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID;
+        (await getAmazonSellerId());
       if (!sellerId) {
         throw new Error(
           'CHANNEL_BATCH AMAZON: AMAZON_SELLER_ID env required',
@@ -2606,7 +2608,7 @@ export class BulkActionService {
       });
       await this.prisma.productSeo.upsert({
         where: {
-          productId_locale: { productId: product.id, locale },
+          productId_locale: workspaceKey({ productId: product.id, locale }),
         },
         create: {
           productId: product.id,
@@ -2692,7 +2694,7 @@ export class BulkActionService {
       if (skipReviewed) {
         const existing = await this.prisma.productTranslation.findUnique({
           where: {
-            productId_language: { productId: product.id, language },
+            productId_language: workspaceKey({ productId: product.id, language }),
           },
         });
         if (existing?.reviewedAt) continue;
@@ -2712,7 +2714,7 @@ export class BulkActionService {
       });
       await this.prisma.productTranslation.upsert({
         where: {
-          productId_language: { productId: product.id, language },
+          productId_language: workspaceKey({ productId: product.id, language }),
         },
         create: {
           productId: product.id,

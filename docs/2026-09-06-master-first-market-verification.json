@@ -1,0 +1,869 @@
+{
+  "productId": "cmokmy3a40078pm0p1fvnu523",
+  "generatedAt": "2026-09-06T00:31:31.589Z",
+  "results": [
+    {
+      "scope": "master",
+      "market": "IT",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "it",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 1123,
+      "serverMs": 1050,
+      "phases": {
+        "family": 232,
+        "columns": 476,
+        "formulas": 300,
+        "related": 33,
+        "preRows": 0,
+        "rows": 9
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "IT",
+      "status": 200,
+      "columns": 162,
+      "rows": 21,
+      "cells": 3402,
+      "editable": 3379,
+      "overrides": 279,
+      "locale": "it",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2433,
+      "serverMs": 2352,
+      "phases": {
+        "family": 176,
+        "columns": 1079,
+        "formulas": 39,
+        "related": 200,
+        "mapping": 841,
+        "preRows": 0,
+        "rows": 17
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Fabric Type is required by Amazon · IT",
+        "GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces",
+        "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL"
+      ]
+    },
+    {
+      "scope": "EBAY",
+      "market": "IT",
+      "status": 200,
+      "columns": 49,
+      "rows": 21,
+      "cells": 1029,
+      "editable": 1006,
+      "overrides": 834,
+      "locale": "it",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 1404,
+      "serverMs": 1354,
+      "phases": {
+        "family": 229,
+        "columns": 267,
+        "formulas": 34,
+        "related": 84,
+        "mapping": 731,
+        "preRows": 0,
+        "rows": 9
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Description is required by eBay · IT",
+        "\"Title\" is 127 characters — exceeds the 80-character limit",
+        "Season contains an unaccepted value. Allowed values: Estate · Inverno · Tutte le stagione."
+      ]
+    },
+    {
+      "scope": "master",
+      "market": "DE",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "de",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 764,
+      "serverMs": 754,
+      "phases": {
+        "family": 125,
+        "columns": 548,
+        "formulas": 26,
+        "related": 52,
+        "preRows": 0,
+        "rows": 3
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "DE",
+      "status": 200,
+      "columns": 164,
+      "rows": 21,
+      "cells": 3444,
+      "editable": 3423,
+      "overrides": 243,
+      "locale": "de",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2148,
+      "serverMs": 2089,
+      "phases": {
+        "family": 126,
+        "columns": 529,
+        "formulas": 29,
+        "related": 167,
+        "mapping": 1195,
+        "preRows": 1,
+        "rows": 42
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product Description is required by Amazon · DE",
+        "Fabric Type is required by Amazon · DE",
+        "Bullet points is required by Amazon · DE",
+        "Dangerous Goods Regulations is required by Amazon · DE",
+        "GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces",
+        "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+        "Field 'Bullet Point' is required."
+      ]
+    },
+    {
+      "scope": "EBAY",
+      "market": "DE",
+      "status": 200,
+      "columns": 29,
+      "rows": 21,
+      "cells": 609,
+      "editable": 588,
+      "overrides": 0,
+      "locale": "de",
+      "schemaMissing": [
+        "EBAY:*"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1235,
+      "serverMs": 1222,
+      "phases": {
+        "family": 187,
+        "columns": 337,
+        "formulas": 69,
+        "related": 50,
+        "mapping": 576,
+        "preRows": 0,
+        "rows": 3
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product type is not set, so no channel schema can be resolved — nothing on this row has been validated",
+        "Description is required by eBay · DE",
+        "Condition is required by eBay · DE",
+        "\"Title\" is 127 characters — exceeds the 80-character limit",
+        "Requirements for this category on eBay · DE are unavailable. Readiness cannot be verified until the category schema is loaded.",
+        "\"Title\" is 138 characters — exceeds the 80-character limit",
+        "\"Title\" is 140 characters — exceeds the 80-character limit"
+      ]
+    },
+    {
+      "scope": "master",
+      "market": "FR",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "fr",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 1288,
+      "serverMs": 1275,
+      "phases": {
+        "family": 756,
+        "columns": 456,
+        "formulas": 30,
+        "related": 24,
+        "preRows": 0,
+        "rows": 9
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "FR",
+      "status": 200,
+      "columns": 167,
+      "rows": 21,
+      "cells": 3507,
+      "editable": 3486,
+      "overrides": 243,
+      "locale": "fr",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2514,
+      "serverMs": 2459,
+      "phases": {
+        "family": 780,
+        "columns": 651,
+        "formulas": 158,
+        "related": 139,
+        "mapping": 720,
+        "preRows": 0,
+        "rows": 11
+      },
+      "rowsWithErrors": 3,
+      "issues": [
+        "Product Description is required by Amazon · FR",
+        "Bullet points is required by Amazon · FR",
+        "GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces",
+        "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+        "Field 'Bullet Point' is required."
+      ]
+    },
+    {
+      "scope": "EBAY",
+      "market": "FR",
+      "status": 200,
+      "columns": 29,
+      "rows": 21,
+      "cells": 609,
+      "editable": 588,
+      "overrides": 0,
+      "locale": "fr",
+      "schemaMissing": [
+        "EBAY:*"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1722,
+      "serverMs": 1708,
+      "phases": {
+        "family": 779,
+        "columns": 190,
+        "formulas": 28,
+        "related": 33,
+        "mapping": 674,
+        "preRows": 0,
+        "rows": 4
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product type is not set, so no channel schema can be resolved — nothing on this row has been validated",
+        "Description is required by eBay · FR",
+        "Condition is required by eBay · FR",
+        "\"Title\" is 127 characters — exceeds the 80-character limit",
+        "Requirements for this category on eBay · FR are unavailable. Readiness cannot be verified until the category schema is loaded.",
+        "\"Title\" is 138 characters — exceeds the 80-character limit",
+        "\"Title\" is 140 characters — exceeds the 80-character limit"
+      ]
+    },
+    {
+      "scope": "master",
+      "market": "ES",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "es",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 804,
+      "serverMs": 795,
+      "phases": {
+        "family": 180,
+        "columns": 519,
+        "formulas": 31,
+        "related": 61,
+        "preRows": 0,
+        "rows": 4
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "ES",
+      "status": 200,
+      "columns": 167,
+      "rows": 21,
+      "cells": 3507,
+      "editable": 3486,
+      "overrides": 243,
+      "locale": "es",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2936,
+      "serverMs": 2889,
+      "phases": {
+        "family": 154,
+        "columns": 441,
+        "formulas": 45,
+        "related": 571,
+        "mapping": 1662,
+        "preRows": 0,
+        "rows": 16
+      },
+      "rowsWithErrors": 3,
+      "issues": [
+        "Product Description is required by Amazon · ES",
+        "Bullet points is required by Amazon · ES",
+        "GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces",
+        "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+        "Field 'Bullet Point' is required."
+      ]
+    },
+    {
+      "scope": "EBAY",
+      "market": "ES",
+      "status": 200,
+      "columns": 29,
+      "rows": 21,
+      "cells": 609,
+      "editable": 588,
+      "overrides": 0,
+      "locale": "es",
+      "schemaMissing": [
+        "EBAY:*"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1933,
+      "serverMs": 1916,
+      "phases": {
+        "family": 204,
+        "columns": 192,
+        "formulas": 43,
+        "related": 48,
+        "mapping": 1427,
+        "preRows": 0,
+        "rows": 2
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product type is not set, so no channel schema can be resolved — nothing on this row has been validated",
+        "Description is required by eBay · ES",
+        "Condition is required by eBay · ES",
+        "\"Title\" is 127 characters — exceeds the 80-character limit",
+        "Requirements for this category on eBay · ES are unavailable. Readiness cannot be verified until the category schema is loaded.",
+        "\"Title\" is 138 characters — exceeds the 80-character limit",
+        "\"Title\" is 140 characters — exceeds the 80-character limit"
+      ]
+    },
+    {
+      "scope": "master",
+      "market": "BE",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "nl",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 813,
+      "serverMs": 796,
+      "phases": {
+        "family": 168,
+        "columns": 553,
+        "formulas": 32,
+        "related": 38,
+        "preRows": 0,
+        "rows": 5
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "BE",
+      "status": 200,
+      "columns": 2,
+      "rows": 21,
+      "cells": 42,
+      "editable": 21,
+      "overrides": 0,
+      "locale": "nl",
+      "schemaMissing": [
+        "OUTERWEAR"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 2388,
+      "serverMs": 2376,
+      "phases": {
+        "family": 344,
+        "columns": 207,
+        "formulas": 40,
+        "related": 42,
+        "mapping": 1740,
+        "preRows": 0,
+        "rows": 3
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Requirements for OUTERWEAR on Amazon · BE are unavailable. Readiness cannot be verified until the category schema is loaded."
+      ]
+    },
+    {
+      "market": "BE",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on BE. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 533
+    },
+    {
+      "scope": "master",
+      "market": "IE",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "en",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 936,
+      "serverMs": 894,
+      "phases": {
+        "family": 186,
+        "columns": 634,
+        "formulas": 29,
+        "related": 28,
+        "preRows": 0,
+        "rows": 17
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "IE",
+      "status": 200,
+      "columns": 2,
+      "rows": 21,
+      "cells": 42,
+      "editable": 21,
+      "overrides": 0,
+      "locale": "en",
+      "schemaMissing": [
+        "OUTERWEAR"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1330,
+      "serverMs": 1313,
+      "phases": {
+        "family": 118,
+        "columns": 268,
+        "formulas": 71,
+        "related": 47,
+        "mapping": 808,
+        "preRows": 0,
+        "rows": 1
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Requirements for OUTERWEAR on Amazon · IE are unavailable. Readiness cannot be verified until the category schema is loaded."
+      ]
+    },
+    {
+      "market": "IE",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on IE. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 424
+    },
+    {
+      "scope": "master",
+      "market": "NL",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "nl",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 1015,
+      "serverMs": 998,
+      "phases": {
+        "family": 125,
+        "columns": 779,
+        "formulas": 50,
+        "related": 34,
+        "preRows": 0,
+        "rows": 10
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "NL",
+      "status": 200,
+      "columns": 166,
+      "rows": 21,
+      "cells": 3486,
+      "editable": 3465,
+      "overrides": 0,
+      "locale": "nl",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2807,
+      "serverMs": 2756,
+      "phases": {
+        "family": 177,
+        "columns": 773,
+        "formulas": 53,
+        "related": 37,
+        "mapping": 1700,
+        "preRows": 0,
+        "rows": 16
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product Description is required by Amazon · NL",
+        "Bullet points is required by Amazon · NL",
+        "GPSR: registered manufacturer/Responsible Person email missing — listing can be suppressed on EU marketplaces",
+        "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+        "Field 'Bullet Point' is required."
+      ]
+    },
+    {
+      "market": "NL",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on NL. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 1324
+    },
+    {
+      "scope": "master",
+      "market": "PL",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "pl",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 877,
+      "serverMs": 864,
+      "phases": {
+        "family": 244,
+        "columns": 543,
+        "formulas": 39,
+        "related": 32,
+        "preRows": 0,
+        "rows": 6
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "PL",
+      "status": 200,
+      "columns": 2,
+      "rows": 21,
+      "cells": 42,
+      "editable": 21,
+      "overrides": 0,
+      "locale": "pl",
+      "schemaMissing": [
+        "OUTERWEAR"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1763,
+      "serverMs": 1754,
+      "phases": {
+        "family": 215,
+        "columns": 389,
+        "formulas": 33,
+        "related": 36,
+        "mapping": 1080,
+        "preRows": 0,
+        "rows": 1
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Requirements for OUTERWEAR on Amazon · PL are unavailable. Readiness cannot be verified until the category schema is loaded."
+      ]
+    },
+    {
+      "market": "PL",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on PL. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 653
+    },
+    {
+      "scope": "master",
+      "market": "SE",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "sv",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 879,
+      "serverMs": 868,
+      "phases": {
+        "family": 272,
+        "columns": 503,
+        "formulas": 37,
+        "related": 46,
+        "preRows": 0,
+        "rows": 10
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "SE",
+      "status": 200,
+      "columns": 2,
+      "rows": 21,
+      "cells": 42,
+      "editable": 21,
+      "overrides": 0,
+      "locale": "sv",
+      "schemaMissing": [
+        "OUTERWEAR"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1598,
+      "serverMs": 1593,
+      "phases": {
+        "family": 273,
+        "columns": 298,
+        "formulas": 39,
+        "related": 44,
+        "mapping": 938,
+        "preRows": 0,
+        "rows": 1
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Requirements for OUTERWEAR on Amazon · SE are unavailable. Readiness cannot be verified until the category schema is loaded."
+      ]
+    },
+    {
+      "market": "SE",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on SE. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 627
+    },
+    {
+      "scope": "master",
+      "market": "TR",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "tr",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 679,
+      "serverMs": 645,
+      "phases": {
+        "family": 128,
+        "columns": 439,
+        "formulas": 34,
+        "related": 33,
+        "preRows": 0,
+        "rows": 11
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "TR",
+      "status": 200,
+      "columns": 2,
+      "rows": 21,
+      "cells": 42,
+      "editable": 21,
+      "overrides": 0,
+      "locale": "tr",
+      "schemaMissing": [
+        "OUTERWEAR"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1581,
+      "serverMs": 1576,
+      "phases": {
+        "family": 192,
+        "columns": 250,
+        "formulas": 26,
+        "related": 44,
+        "mapping": 1063,
+        "preRows": 0,
+        "rows": 1
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Requirements for OUTERWEAR on Amazon · TR are unavailable. Readiness cannot be verified until the category schema is loaded."
+      ]
+    },
+    {
+      "market": "TR",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "scope_not_available",
+      "message": "EBAY has no marketplace configured on TR. Configured here: AMAZON, SHOPIFY, WOOCOMMERCE, ETSY",
+      "elapsedMs": 454
+    },
+    {
+      "scope": "master",
+      "market": "UK",
+      "status": 200,
+      "columns": 56,
+      "rows": 21,
+      "cells": 1176,
+      "editable": 1150,
+      "overrides": 0,
+      "locale": "en",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 938,
+      "serverMs": 925,
+      "phases": {
+        "family": 224,
+        "columns": 600,
+        "formulas": 63,
+        "related": 29,
+        "preRows": 0,
+        "rows": 9
+      },
+      "rowsWithErrors": 0,
+      "issues": []
+    },
+    {
+      "scope": "AMAZON",
+      "market": "UK",
+      "status": 200,
+      "columns": 161,
+      "rows": 21,
+      "cells": 3381,
+      "editable": 3360,
+      "overrides": 0,
+      "locale": "en",
+      "schemaMissing": [],
+      "mappingSkipped": null,
+      "elapsedMs": 2297,
+      "serverMs": 2251,
+      "phases": {
+        "family": 170,
+        "columns": 820,
+        "formulas": 26,
+        "related": 40,
+        "mapping": 1185,
+        "preRows": 0,
+        "rows": 10
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product Description is required by Amazon · UK",
+        "Bullet points is required by Amazon · UK",
+        "Field 'Bullet Point' is required."
+      ]
+    },
+    {
+      "scope": "EBAY",
+      "market": "UK",
+      "status": 200,
+      "columns": 29,
+      "rows": 21,
+      "cells": 609,
+      "editable": 588,
+      "overrides": 0,
+      "locale": "en",
+      "schemaMissing": [
+        "EBAY:*"
+      ],
+      "mappingSkipped": null,
+      "elapsedMs": 1293,
+      "serverMs": 1279,
+      "phases": {
+        "family": 184,
+        "columns": 316,
+        "formulas": 81,
+        "related": 90,
+        "mapping": 602,
+        "preRows": 0,
+        "rows": 6
+      },
+      "rowsWithErrors": 21,
+      "issues": [
+        "Product type is not set, so no channel schema can be resolved — nothing on this row has been validated",
+        "Description is required by eBay · UK",
+        "Condition is required by eBay · UK",
+        "\"Title\" is 127 characters — exceeds the 80-character limit",
+        "Requirements for this category on eBay · UK are unavailable. Readiness cannot be verified until the category schema is loaded.",
+        "\"Title\" is 138 characters — exceeds the 80-character limit",
+        "\"Title\" is 140 characters — exceeds the 80-character limit"
+      ]
+    },
+    {
+      "market": "GLOBAL",
+      "scope": "master",
+      "status": 400,
+      "error": "unknown_market",
+      "message": "Unknown market \"GLOBAL\". This platform has: BE, DE, ES, FR, IE, IT, NL, PL, SE, TR, UK",
+      "elapsedMs": 215
+    },
+    {
+      "market": "GLOBAL",
+      "scope": "AMAZON",
+      "status": 400,
+      "error": "unknown_market",
+      "message": "Unknown market \"GLOBAL\". This platform has: BE, DE, ES, FR, IE, IT, NL, PL, SE, TR, UK",
+      "elapsedMs": 364
+    },
+    {
+      "market": "GLOBAL",
+      "scope": "EBAY",
+      "status": 400,
+      "error": "unknown_market",
+      "message": "Unknown market \"GLOBAL\". This platform has: BE, DE, ES, FR, IE, IT, NL, PL, SE, TR, UK",
+      "elapsedMs": 407
+    }
+  ],
+  "findings": [],
+  "productValuesChanged": 0
+}

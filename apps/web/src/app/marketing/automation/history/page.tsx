@@ -12,7 +12,7 @@
 // an empty history + error banner for everyone.
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft, History, AlertTriangle } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { getBackendUrl } from '@/lib/backend-url'

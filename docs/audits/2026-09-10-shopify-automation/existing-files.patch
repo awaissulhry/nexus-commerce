@@ -1,0 +1,959 @@
+--- a/apps/api/src/index.ts
++++ b/apps/api/src/index.ts
+@@ -271,6 +271,7 @@
+ import { startCertExpiryAlertCron } from "./jobs/cert-expiry-alert.job.js";
+ import { getAmazonPublishMode } from "./services/amazon-publish-gate.service.js";
+ import { getEbayPublishMode } from "./services/ebay-publish-gate.service.js";
++import { startShopifyLinkedAutomationCron } from './jobs/shopify-linked-automation.job.js';
+ import { getShopifyPublishMode } from "./services/shopify-publish-gate.service.js";
+ import { startScheduledChangesCron } from "./jobs/scheduled-changes.job.js";
+ import { startPurgeSoftDeletedCron } from "./jobs/purge-soft-deleted-products.job.js";
+@@ -1165,6 +1166,7 @@
+       // listings (blank required fields in the flat-file editor) and store ONLY
+       // platformAttributes.attributes. Bounded per tick; self-guards on creds.
+       startAttrHydrateCron();
++      startShopifyLinkedAutomationCron();
+ 
+       // R5.3 — failed-refund retry queue. Hourly sweep that re-runs
+       // the channel publisher against Returns stuck in CHANNEL_FAILED.
+--- a/apps/api/src/lib/auth/permissions-manifest.ts
++++ b/apps/api/src/lib/auth/permissions-manifest.ts
+@@ -217,6 +217,9 @@
+   // in the financial restricted registry, so PUBLIC costs no field masking.
+   P(PUBLIC, pfx('/api/internal/bidding')),
+ 
++  // Shopify publication controls must precede the broad advertising /automation matcher.
++  P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry|automation|automation-check)$/.test(p)),
++
+   // ── Advertising ─────────────────────────────────────────────────
+   // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:
+   // without this, saving a personal view falls through to the /api/advertising
+@@ -386,9 +389,8 @@
+   P(F.productsExport, pfx('/api/scheduled-exports')),
+   P(F.productsExport, pfx('/api/export-jobs')),
+   RW(F.productsView, F.productsImagesEdit, (_m, p) => /^\/api\/products\/[^/]+\/images-workspace\/ebay$/.test(p)),
+-  P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry)$/.test(p)),
+   P(F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/rebase$/.test(p)),
+-  P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/(schema|owner|references|reference-names|products|read-links|field-values|import|preview|entry)$/.test(p)),
++  P(F.productsView, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked\/(schema|owner|references|reference-names|products|read-links|field-values|import|discover|suggest-sharing|preview|entry)$/.test(p)),
+   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-linked$/.test(p)),
+   P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/(collections\/[^/]+\/)?synchronize$/.test(p)),
+   RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/shopify-content\/collections(?:\/[^/]+)?$/.test(p)),
+--- a/apps/api/src/routes/images/shopify-linked-products.routes.ts
++++ b/apps/api/src/routes/images/shopify-linked-products.routes.ts
+@@ -8,11 +8,15 @@
+ import { getLinkedEntry, saveLinkedEntry } from '../../services/shopify/linked-metaobjects.service.js'
+ import { WorkspaceScopeError } from '../../services/pim/workspace-destination.js'
+ 
++import { discoverLinkedFamily } from '../../services/shopify/linked-discovery.service.js'
++import { configureLinkedAutomation, runLinkedAutomation } from '../../services/shopify/linked-automation.service.js'
++import { suggestSharedContent } from '../../services/shopify/linked-shared-content.service.js'
++
+ const querySchema = z.object({ accountId: z.string().min(1), listingId: z.string().min(1).optional(), market: z.literal('GLOBAL').default('GLOBAL'),
+   ownerId: z.string().optional(), id: z.string().optional(), type: z.string().optional(), query: z.string().max(200).optional(), cursor: z.string().max(2000).optional(), metaobjectType: z.string().optional() }).strict()
+ export const shopifyLinkedProductsRoutes: FastifyPluginAsync = async app => {
+   const routes = [['GET', ''], ['PUT', ''], ['GET', '/schema'], ['GET', '/owner'], ['GET', '/references'], ['POST', '/reference-names'],
+-    ['POST', '/products'], ['POST', '/read-links'], ['POST', '/field-values'], ['POST', '/import'], ['POST', '/preview'], ['POST', '/rebase'], ['POST', '/synchronize'], ['POST', '/advance'], ['GET', '/entry'], ['POST', '/entry']] as const
++    ['POST', '/discover'], ['POST', '/suggest-sharing'], ['POST', '/automation'], ['POST', '/automation-check'], ['POST', '/products'], ['POST', '/read-links'], ['POST', '/field-values'], ['POST', '/import'], ['POST', '/preview'], ['POST', '/rebase'], ['POST', '/synchronize'], ['POST', '/advance'], ['GET', '/entry'], ['POST', '/entry']] as const
+   for (const [method, suffix] of routes) app.route<{ Params: { productId: string }; Querystring: ContentScope; Body: unknown }>({
+     method, url: `/products/:productId/shopify-linked${suffix}`, bodyLimit: 10 * 1024 * 1024,
+     handler: async (request, reply) => {
+@@ -21,11 +25,22 @@
+         // Every route resolves the business, family and explicit connected store before any remote access.
+         const destination = await contentDestination(id, query)
+         if (!suffix) return method === 'GET' ? await getLinkedWorkspace(id, query) : await saveLinkedWorkspace(id, query, request.body)
++        if (suffix === '/automation') return await configureLinkedAutomation(id, query, request.body)
++        if (suffix === '/automation-check') return await runLinkedAutomation(id, query)
+         if (suffix === '/preview') return await previewLinkedWorkspace(id, query)
+         if (suffix === '/synchronize') return await beginLinkedSync(id, query, request.body)
+         if (suffix === '/advance') return await advanceLinkedSync(id, query, z.object({ operationId: z.string().uuid() }).parse(request.body).operationId)
+         if (suffix === '/rebase') return await rebaseLinkedWorkspace(id, query, z.object({ expectedRevision: z.string() }).parse(request.body).expectedRevision)
+         const { graphql } = await shopifyAdmin(destination.accountId)
++        if (suffix === '/suggest-sharing') {
++          const input = z.object({ draft: shopifyLinkedDraftSchema }).strict().parse(request.body)
++          return await suggestSharedContent(graphql, input.draft, await readLinkedStoreSchema(graphql))
++        }
++        if (suffix === '/discover') {
++          const input = z.object({ sourceId: shopifyProductGid.optional(), relationship: z.object({ namespace: z.string().min(1), key: z.string().min(1), includeSelf: z.boolean() }).nullable().optional() }).strict().parse(request.body)
++          const workspace = await getLinkedWorkspace(id, query)
++          return await discoverLinkedFamily(graphql, input.sourceId ? [input.sourceId] : workspace.suggestedProductIds, input.relationship ?? workspace.draft.relationship)
++        }
+         if (suffix === '/schema') return await readLinkedStoreSchema(graphql)
+         if (suffix === '/owner') return await readLinkedOwner(graphql, query.ownerId ?? '')
+         if (suffix === '/references') return await searchLinkedReferences(graphql, { type: query.type ?? '', query: query.query, cursor: query.cursor, metaobjectType: query.metaobjectType })
+--- a/apps/api/src/routes/listings-publication-guard.vitest.test.ts
++++ b/apps/api/src/routes/listings-publication-guard.vitest.test.ts
+@@ -31,3 +31,9 @@
+   expect(response.json()).toMatchObject({ code: 'CHANNEL_WORKFLOW_REQUIRED' })
+   expect(mocks.write).not.toHaveBeenCalled()
+ })
++it.each(['_nexusLinkedAutomation', '_nexusLinkedProducts', '_nexusLinkedProductsOperation'])('refuses a generic %s patch before any database write', async key => {
++  const response = await app.inject({ method: 'PATCH', url: '/listings/listing-a', payload: { platformAttributes: { [key]: { mode: 'AUTOMATIC' } } } })
++  expect(response.statusCode).toBe(409)
++  expect(response.json()).toMatchObject({ code: 'SHOPIFY_WORKSPACE_REQUIRED' })
++  expect(mocks.write).not.toHaveBeenCalled()
++})
+--- a/apps/api/src/routes/listings-syndication.routes.ts
++++ b/apps/api/src/routes/listings-syndication.routes.ts
+@@ -20,6 +20,7 @@
+ import { setFollowMasterQuantity, setStockBuffer } from '../services/follow-master.service.js'
+ import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+ import { tryResolveConnection } from '../services/connection-resolver.service.js'
++import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
+ 
+ // ─────────────────────────────────────────────────────────────────────
+ // SYNDICATION — universal /listings workspace endpoints
+@@ -1272,6 +1273,10 @@
+         !Array.isArray(body.platformAttributes)
+           ? body.platformAttributes
+           : null
++
++      if (mergePlatformAttrs && Object.keys(mergePlatformAttrs).some(isManagedShopifyAttribute)) return reply.code(409).send({
++        code: 'SHOPIFY_WORKSPACE_REQUIRED', error: 'Use the Shopify family workspace to change family rules, automation or synchronization progress.',
++      })
+ 
+       if (Object.keys(data).length === 0 && !mergePlatformAttrs) {
+         return reply.code(400).send({ error: 'No updatable fields provided' })
+--- a/apps/api/src/services/pim/channel-value-mutation.ts
++++ b/apps/api/src/services/pim/channel-value-mutation.ts
+@@ -1,6 +1,7 @@
+ import type { ChannelStore } from './channel-specs/types.js'
+ import { readStoredChannelValue, CHANNEL_OVERRIDE_COLUMNS } from './channel-inheritance.js'
+ import { readPath } from './sheet-values.js'
++import { isManagedShopifyAttribute } from '../shopify/linked-state-guard.js'
+ 
+ export type ChannelValueAction = 'SET' | 'CLEAR' | 'INHERIT'
+ export type ValueRecord = Record<string, unknown>
+@@ -36,6 +37,7 @@
+   const mutation: ChannelValueMutation = { columns: {}, overrideSet: {}, overrideRemove: [...new Set(keys)], platform: [] }
+   if (store?.kind === 'listingColumn') {
+     assertKey(store.column)
++    if (store.column === 'platformAttributes' || store.followFlag === 'platformAttributes') throw new Error('Use a validated platform-attribute path instead of replacing the listing attributes.')
+     if (store.column === 'bulletPointsOverride') {
+       if (value !== null && (!Array.isArray(value) || value.some(item => item !== null && typeof item === 'object'))) {
+         throw new Error('Bullet points require a list of simple values')
+@@ -52,6 +54,7 @@
+     if (store.unitPath) mutation.platform.push({ path: store.unitPath, value: measure?.unit ?? null, remove: inherit })
+     for (const { path } of mutation.platform) {
+       if (!path.length) throw new Error('Invalid channel storage path')
++      if (isManagedShopifyAttribute(path[0])) throw new Error('Use the Shopify family workspace to change managed family state.')
+       path.forEach(assertKey)
+     }
+   } else if (!inherit) {
+@@ -65,6 +68,7 @@
+   const bag = clone(value)
+   for (const { path, value, remove } of mutations) {
+     if (!path.length) throw new Error('Invalid channel storage path')
++    if (isManagedShopifyAttribute(path[0])) throw new Error('Use the Shopify family workspace to change managed family state.')
+     path.forEach(assertKey)
+     let current = bag
+     let absent = false
+--- a/apps/api/src/services/pim/channel-value-mutation.vitest.test.ts
++++ b/apps/api/src/services/pim/channel-value-mutation.vitest.test.ts
+@@ -1,5 +1,5 @@
+ import { describe, expect, it } from 'vitest'
+-import { channelValueMutation, channelValuePatch, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
++import { applyPlatformMutations, channelValueMutation, channelValuePatch, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
+ import { readStoredChannelValue } from './channel-inheritance.js'
+ import type { ChannelStore } from './channel-specs/types.js'
+ 
+@@ -14,6 +14,16 @@
+ ]
+ 
+ describe('one stored-value contract for editor, import and mapping', () => {
++  it.each(['_nexusLinkedAutomation', '_nexusLinkedProducts', '_nexusLinkedProductsOperation'])('prevents imports and mapped edits from changing %s', key => {
++    expect(() => channelValueMutation({ kind: 'platformAttributes', path: [key, 'mode'] }, ['x'], 'SET', 'AUTOMATIC')).toThrow('Shopify family workspace')
++    expect(() => applyPlatformMutations({}, [{ path: [key], value: {}, remove: true }])).toThrow('Shopify family workspace')
++  })
++  it('refuses whole attribute-column replacements and preserves managed state during ordinary path edits', () => {
++    expect(() => channelValueMutation({ kind: 'listingColumn', column: 'platformAttributes' }, ['x'], 'SET', {})).toThrow('validated platform-attribute path')
++    const original = { _nexusLinkedAutomation: { mode: 'PAUSED' }, colour: 'Red' }
++    expect(applyPlatformMutations(original, [{ path: ['colour'], value: 'Blue', remove: false }])).toEqual({ ...original, colour: 'Blue' })
++    expect(original.colour).toBe('Red')
++  })
+   it.each(cases)('$name: set → read → clear → read → inherit → read', ({ store, keys, value }) => {
+     let listing: ValueRecord = { overrideData: { unrelated: 'keep' }, platformAttributes: { policies: { returns: 'keep' } } }
+     const original = JSON.stringify(listing)
+--- a/apps/api/src/services/shopify/linked-products-gateway.ts
++++ b/apps/api/src/services/shopify/linked-products-gateway.ts
+@@ -74,7 +74,7 @@
+   const products: ShopifyLinkedMember[] = []
+   for (let i = 0; i < ids.length; i += 100) {
+     const data = await gql(`query NexusLinkedProducts($ids:[ID!]!) { nodes(ids:$ids) { ... on Product { id title handle featuredMedia { preview { image { url } } } } } }`, { ids: ids.slice(i, i + 100) })
+-    if (data.nodes.length !== ids.slice(i, i + 100).length || data.nodes.some((n: any) => !n?.id)) throw new WorkspaceScopeError('A family member is unavailable in the selected store. Refresh the family.', 409)
++    if (data.nodes.length !== ids.slice(i, i + 100).length || data.nodes.some((n: any, index: number) => n?.id !== ids[i + index])) throw new WorkspaceScopeError('A family member is unavailable in the selected store. Refresh the family.', 409)
+     products.push(...data.nodes.map((p: any) => ({ id: p.id, title: p.title, handle: p.handle, image: p.featuredMedia?.preview?.image?.url ?? null })))
+   }
+   return products
+@@ -118,6 +118,7 @@
+ export async function resolveLinkedReferences(gql: ShopifyGraphql, ids: string[]) {
+   if (ids.length > 100 || ids.some(id => !shopifyGid.safeParse(id).success)) throw new WorkspaceScopeError('Select at most 100 references at a time.', 400)
+   const { nodes } = await gql(`query NexusLinkedReferenceNames($ids:[ID!]!) { nodes(ids:$ids) { id __typename ... on Product { title } ... on ProductVariant { title product { title } } ... on Collection { title } ... on Page { title } ... on Metaobject { displayName type } ... on MediaImage { alt image { url } } ... on GenericFile { alt } ... on Video { alt preview { image { url } } } } }`, { ids })
++  if (!Array.isArray(nodes) || nodes.length !== ids.length || nodes.some((n: any, i: number) => n && n.id !== ids[i])) throw new WorkspaceScopeError('Shopify returned incomplete or mismatched references. Retry before synchronizing.', 502)
+   return nodes.map((n: any, i: number) => ({ id: ids[i], label: n?.displayName ?? (n?.product ? `${n.product.title} / ${n.title}` : n?.title ?? n?.alt ?? (n ? ids[i] : 'Unavailable reference')), image: n?.image?.url ?? n?.preview?.image?.url ?? null, available: !!n, type: n?.type ?? n?.__typename }))
+ }
+ 
+--- a/apps/api/src/services/shopify/linked-products.service.ts
++++ b/apps/api/src/services/shopify/linked-products.service.ts
+@@ -2,18 +2,22 @@
+ import type { Prisma } from '@prisma/client'
+ import prisma from '../../db.js'
+ import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField,
+-  type ShopifyFieldEdit, type ShopifyLinkedDraft, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace } from '@nexus/shared/shopify-linked-products'
++  type ShopifyFieldEdit, type ShopifyFieldSnapshot, type ShopifyLinkedAutomation, type ShopifyLinkedDraft, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace } from '@nexus/shared/shopify-linked-products'
+ import { contentDestination, object, PUBLISH_KEY, type ContentScope } from './content-workspace.service.js'
+ import { shopifyAdmin, assertShopifyResult, type ShopifyGraphql } from './admin-client.js'
+ import { linkedDigest, readLinkedFields, readLinkedOwner, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences } from './linked-products-gateway.js'
+ import { WorkspaceScopeError, type WorkspaceDestination } from '../pim/workspace-destination.js'
+ 
++import { resolveSharedContent } from './linked-shared-content.service.js'
++
++export const AUTOMATION_KEY = '_nexusLinkedAutomation'
++const pausedAutomation = (): ShopifyLinkedAutomation => ({ mode: 'PAUSED', status: 'IDLE', lastCheckedAt: null, lastVerifiedAt: null, message: null, changes: 0 })
+ export const LINKED_KEY = '_nexusLinkedProducts'
+ const OPERATION_KEY = '_nexusLinkedProductsOperation'
+-interface Operation { id: string; status: 'RUNNING' | 'UNVERIFIED' | 'VERIFIED'; changes: ShopifyFieldEdit[]; verification: ShopifyFieldEdit[]; completed: number; error: string | null; schemaRevision: string; lease: string | null; leaseUntil: number }
++interface Operation { origin?: 'MANUAL' | 'AUTOMATIC'; sources?: ShopifyFieldSnapshot[]; id: string; status: 'RUNNING' | 'UNVERIFIED' | 'VERIFIED'; changes: ShopifyFieldEdit[]; verification: ShopifyFieldEdit[]; completed: number; error: string | null; schemaRevision: string; lease: string | null; leaseUntil: number }
+ type Tx = Prisma.TransactionClient
+ 
+-async function state(tx: Tx, destination: WorkspaceDestination) {
++export async function linkedState(tx: Tx, destination: WorkspaceDestination) {
+   const family = await tx.product.findFirst({ where: { id: destination.familyId, deletedAt: null }, select: { id: true, name: true, children: { where: { deletedAt: null }, select: { id: true } } } })
+   if (!family) throw new WorkspaceScopeError('The Nexus family is unavailable.', 404)
+   const listings = await tx.channelListing.findMany({ where: { productId: { in: [family.id, ...family.children.map(c => c.id)] }, channel: 'SHOPIFY', channelConnectionId: destination.accountId, marketplace: destination.marketplace, aliasKey: '' } })
+@@ -25,37 +29,37 @@
+   const revision = linkedDigest([destination.accountId, destination.familyId, listing?.id, listing?.version, parsed.data, operation])
+   const suggestedProductIds = [...new Set(listings.map(l => l.externalListingId).filter((id): id is string => !!id && /^(gid:\/\/shopify\/Product\/)?\d+$/.test(id)).map(id => id.startsWith('gid:') ? id : `gid://shopify/Product/${id}`))]
+   const workspace: ShopifyLinkedWorkspace = { productId: destination.productId, familyId: family.id, name: family.name,
+-    destination: { accountId: destination.accountId, listingId: listing?.id ?? null, market: destination.marketplace }, revision, draft: parsed.data, suggestedProductIds,
++    destination: { accountId: destination.accountId, listingId: listing?.id ?? null, market: destination.marketplace }, revision, draft: parsed.data, suggestedProductIds, automation: { ...pausedAutomation(), ...object(pa[AUTOMATION_KEY]) },
+     operation: operation ? { id: operation.id, status: operation.status, completed: operation.completed, total: operation.changes.length, error: operation.error } : null }
+   return { family, listing, pa, draft: parsed.data, operation, revision, workspace }
+ }
+ 
+-async function writeState(tx: Tx, destination: WorkspaceDestination, current: Awaited<ReturnType<typeof state>>, patch: Record<string, unknown>) {
++export async function writeLinkedState(tx: Tx, destination: WorkspaceDestination, current: Awaited<ReturnType<typeof linkedState>>, patch: Record<string, unknown>) {
+   const platformAttributes = { ...current.pa, ...patch } as Prisma.InputJsonValue
+   if (current.listing) {
+     const saved = await tx.channelListing.updateMany({ where: { id: current.listing.id, version: current.listing.version }, data: { platformAttributes, version: { increment: 1 } } })
+     if (saved.count !== 1) throw new WorkspaceScopeError('Another editor changed this family. Reload the saved draft.')
+   } else await tx.channelListing.create({ data: { productId: current.family.id, channel: 'SHOPIFY', channelMarket: 'SHOPIFY_GLOBAL', marketplace: destination.marketplace, region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: '', platformAttributes, isPublished: false } })
+ }
+-async function transaction<T>(fn: (tx: Tx) => Promise<T>) {
++export async function linkedTransaction<T>(fn: (tx: Tx) => Promise<T>) {
+   try { return await prisma.$transaction(fn, { isolationLevel: 'Serializable', timeout: 20000 }) }
+   catch (error) { if (['P2034', 'P2002'].includes((error as { code?: string }).code ?? '')) throw new WorkspaceScopeError('Another editor changed this family. Reload the saved draft.'); throw error }
+ }
+ export async function getLinkedWorkspace(productId: string, scope: ContentScope) {
+   const destination = await contentDestination(productId, scope)
+-  return transaction(async tx => (await state(tx, destination)).workspace)
++  return linkedTransaction(async tx => (await linkedState(tx, destination)).workspace)
+ }
+ export async function saveLinkedWorkspace(productId: string, scope: ContentScope, body: unknown) {
+   const input = object(body), parsed = shopifyLinkedDraftSchema.safeParse(input.draft)
+   if (!parsed.success || typeof input.expectedRevision !== 'string') throw new WorkspaceScopeError(parsed.success ? 'The observed revision is required.' : parsed.error.issues.map(i => i.message).join(' '), 400)
+   const destination = await contentDestination(productId, scope)
+-  return transaction(async tx => {
+-    const current = await state(tx, destination)
++  return linkedTransaction(async tx => {
++    const current = await linkedState(tx, destination)
+     if (object(current.pa[PUBLISH_KEY]).status === 'PUBLISHING') throw new WorkspaceScopeError('A native Shopify publication is running. Reconcile it before setting up separate products.')
+     if (current.revision !== input.expectedRevision) throw new WorkspaceScopeError('The saved family changed. Keep your edits and reload before retrying.')
+     if (current.operation && current.operation.status !== 'VERIFIED') throw new WorkspaceScopeError('Resume the pending synchronization or review the latest Shopify values first.')
+-    await writeState(tx, destination, current, { [LINKED_KEY]: parsed.data, [OPERATION_KEY]: null })
+-    return (await state(tx, destination)).workspace
++    await writeLinkedState(tx, destination, current, { [LINKED_KEY]: parsed.data, [OPERATION_KEY]: null, [AUTOMATION_KEY]: { ...current.workspace.automation, mode: 'PAUSED', status: 'IDLE', message: 'Draft changed. Review the saved rules before enabling automation.' } })
++    return (await linkedState(tx, destination)).workspace
+   })
+ }
+ 
+@@ -86,7 +90,8 @@
+ export async function buildLinkedPlan(gql: ShopifyGraphql, draft: ShopifyLinkedDraft): Promise<ShopifyLinkedPlan> {
+   const schema = await readLinkedStoreSchema(gql)
+   await readLinkedProducts(gql, [...new Set([...draft.members.map(m => m.id), ...draft.baselineLinks.map(f => f.ownerId)])])
+-  const changes = [...linkedFamilyChanges(draft), ...draft.edits.filter(e => e.value !== e.nextValue)]
++  const shared = await resolveSharedContent(gql, draft, schema)
++  const changes = [...linkedFamilyChanges(draft), ...draft.edits.filter(e => e.value !== e.nextValue), ...shared.changes]
+   // A sibling that needed no change when imported may have changed remotely.
+   // Validate every observed relationship, including the already-compliant rows.
+   const links = await readLinkedFields(gql, draft.baselineLinks)
+@@ -123,7 +128,7 @@
+   }
+   const warnings = changes.some(c => c.nextValue === null) ? ['Clearing removes the selected metafield value from Shopify. Its definition remains.'] : []
+   if (changes.length > 25 || changes.some(c => c.nextValue === null)) warnings.push('Shopify applies this plan in multiple operations. Progress is saved and interrupted operations can be resumed.')
+-  return { changes, schemaRevision: schema.revision, warnings, revision: linkedDigest([schema.revision, changes]) }
++  return { changes, verification: shared.verification, sources: shared.sources, schemaRevision: schema.revision, warnings, revision: linkedDigest([schema.revision, changes, shared.verification, shared.sources]) }
+ }
+ 
+ export async function previewLinkedWorkspace(productId: string, scope: ContentScope) {
+@@ -148,74 +153,86 @@
+   if (changes.some((c, i) => verified[i].value !== c.nextValue || (c.nextValue !== null && verified[i].type !== c.type))) throw new WorkspaceScopeError('Shopify readback differs from the reviewed changes. Synchronization remains unverified.', 502)
+ }
+ 
+-export async function beginLinkedSync(productId: string, scope: ContentScope, body: unknown) {
++export async function beginLinkedSync(productId: string, scope: ContentScope, body: unknown, origin: 'MANUAL' | 'AUTOMATIC' = 'MANUAL') {
+   const input = object(body), destination = await contentDestination(productId, scope)
+   const { workspace, plan } = await previewLinkedWorkspace(productId, scope)
+   if (input.expectedRevision !== workspace.revision || input.planRevision !== plan.revision) throw new WorkspaceScopeError('The draft or Shopify changed after review. Refresh the review.')
+   if (!plan.changes.length) return workspace
+-  return transaction(async tx => {
+-    const current = await state(tx, destination)
++  return linkedTransaction(async tx => {
++    const current = await linkedState(tx, destination)
+     if (current.revision !== input.expectedRevision) throw new WorkspaceScopeError('The draft changed after review.')
++    if (origin === 'AUTOMATIC' && current.workspace.automation?.mode !== 'AUTOMATIC') throw new WorkspaceScopeError('Automation is paused. Review its settings before continuing.')
+     if (current.listing?.syncPaused || current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
+     if (current.operation && current.operation.status !== 'VERIFIED') throw new WorkspaceScopeError('Resume or reconcile the previous operation first.')
+     const verification = new Map<string, ShopifyFieldEdit>(current.draft.baselineLinks.map(f => [fieldAddress(f), { ...f, nextValue: f.value, ownerLabel: 'Family member' }]))
+-    for (const change of plan.changes) verification.set(fieldAddress(change), change)
+-    const operation: Operation = { id: randomUUID(), status: 'RUNNING', changes: plan.changes, verification: [...verification.values()], completed: 0, error: null, schemaRevision: plan.schemaRevision, lease: null, leaseUntil: 0 }
+-    await writeState(tx, destination, current, { [OPERATION_KEY]: operation })
+-    return (await state(tx, destination)).workspace
+-  })
+-}
+-
+-export async function advanceLinkedSync(productId: string, scope: ContentScope, operationId: string) {
++    for (const change of [...(plan.verification ?? []), ...plan.changes]) verification.set(fieldAddress(change), change)
++    const operation: Operation = { origin, sources: plan.sources, id: randomUUID(), status: 'RUNNING', changes: plan.changes, verification: [...verification.values()], completed: 0, error: null, schemaRevision: plan.schemaRevision, lease: null, leaseUntil: 0 }
++    await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: operation })
++    return (await linkedState(tx, destination)).workspace
++  })
++}
++
++export async function advanceLinkedSync(productId: string, scope: ContentScope, operationId: string, automated = false) {
+   const destination = await contentDestination(productId, scope), lease = randomUUID()
+   let initialDraft: ShopifyLinkedDraft | null = null
+-  const operation = await transaction(async tx => {
+-    const current = await state(tx, destination), op = current.operation
++  const operation = await linkedTransaction(async tx => {
++    const current = await linkedState(tx, destination), op = current.operation
+     initialDraft = current.draft
+     if (!op || op.id !== operationId) throw new WorkspaceScopeError('This synchronization is unavailable. Reload its status.')
+     if (op.status === 'VERIFIED') return op
++    if (automated && (op.origin !== 'AUTOMATIC' || current.workspace.automation?.mode !== 'AUTOMATIC')) throw new WorkspaceScopeError('Automation is paused. Review or resume it before continuing.')
+     if (op.lease && op.leaseUntil > Date.now()) throw new WorkspaceScopeError('This synchronization is already running. Reload its progress before retrying.')
+     if (current.listing?.syncPaused || current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
+     const next = { ...op, lease, leaseUntil: Date.now() + 5 * 60_000, status: 'RUNNING' as const, error: null }
+-    await writeState(tx, destination, current, { [OPERATION_KEY]: next }); return next
++    await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: next }); return next
+   })
+   if (operation.status === 'VERIFIED') return getLinkedWorkspace(productId, scope)
+   try {
+     const { graphql } = await shopifyAdmin(destination.accountId)
+     const schema = await readLinkedStoreSchema(graphql)
+     if (schema.revision !== operation.schemaRevision) throw new WorkspaceScopeError('Shopify definitions changed during synchronization. Review the latest schema.')
+-    await transaction(async tx => {
+-      const current = await state(tx, destination)
++    await linkedTransaction(async tx => {
++      const current = await linkedState(tx, destination)
+       if (current.operation?.lease !== lease || current.operation.leaseUntil < Date.now()) throw new WorkspaceScopeError('This synchronization lease expired. Reload and resume its saved progress.')
+-      await writeState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, leaseUntil: Date.now() + 5 * 60_000 } })
++      await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, leaseUntil: Date.now() + 5 * 60_000 } })
+     })
++    const sourceValues = await readLinkedFields(graphql, operation.sources ?? [])
++    if (sourceValues.some((f, i) => { const before = operation.sources![i]; const edit = operation.changes.find(c => fieldAddress(c) === fieldAddress(f)); return !(f.value === before.value && f.compareDigest === before.compareDigest) && !(edit && f.value === edit.nextValue && f.type === edit.type) })) throw new WorkspaceScopeError('Shared source content changed during synchronization. Refresh and review its latest value.')
+     const batch = operation.changes.slice(operation.completed, operation.completed + 25)
+     await applyLinkedBatch(graphql, batch)
+     const completed = operation.completed + batch.length, finished = completed === operation.changes.length
++    const verified = new Map<string, ShopifyFieldSnapshot>()
+     // Verify the whole plan before claiming family-wide completion, including earlier batches.
+     if (finished) {
+       const expected = operation.verification ?? operation.changes
+       const all = await readLinkedFields(graphql, expected)
+       if (expected.some((c, i) => all[i].value !== c.nextValue || (c.nextValue !== null && all[i].type !== c.type))) throw new WorkspaceScopeError('A family field changed before final verification. Review Shopify again.')
++      for (const field of all) verified.set(fieldAddress(field), field)
+     }
+     const draftBefore = initialDraft as ShopifyLinkedDraft | null
+-    const baselineLinks = finished && draftBefore?.relationship
+-      ? (await readLinkedFields(graphql, draftBefore.members.map(m => ({ ownerId: m.id, namespace: draftBefore.relationship!.namespace, key: draftBefore.relationship!.key })))).map(f => ({ ...f, type: f.type || 'list.product_reference' })) : null
+-    return transaction(async tx => {
+-      const current = await state(tx, destination)
++    // Persist exactly the observations we verified. A later read must not silently
++    // adopt a concurrent Shopify edit as the baseline of an automatic rule.
++    const baselineLinks = finished && draftBefore?.relationship ? draftBefore.members.map(m => {
++      const field = verified.get(fieldAddress({ ownerId: m.id, ...draftBefore.relationship! }))!
++      return { ...field, type: field.type || 'list.product_reference' }
++    }) : null
++    const sharedBaselines = finished ? draftBefore?.sharedFields?.map(rule => ({ ...rule, baseline: rule.baseline.map(f => verified.get(fieldAddress(f)) ?? f) })) : null
++    return linkedTransaction(async tx => {
++      const current = await linkedState(tx, destination)
+       if (current.operation?.lease !== lease || current.operation.id !== operationId) throw new WorkspaceScopeError('Synchronization ownership changed. Reload its progress.')
+       const draft = structuredClone(current.draft)
+       if (finished) {
+         draft.edits = []
+         draft.baselineLinks = baselineLinks ?? []
++        if (draft.sharedFields) draft.sharedFields = sharedBaselines ?? []
+       }
+-      await writeState(tx, destination, current, { [OPERATION_KEY]: { ...operation, completed, status: finished ? 'VERIFIED' : 'RUNNING', error: null, lease: null, leaseUntil: 0 }, [LINKED_KEY]: draft })
+-      return (await state(tx, destination)).workspace
++      await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: { ...operation, completed, status: finished ? 'VERIFIED' : 'RUNNING', error: null, lease: null, leaseUntil: 0 }, [LINKED_KEY]: draft })
++      return (await linkedState(tx, destination)).workspace
+     })
+   } catch (error) {
+-    await transaction(async tx => {
+-      const current = await state(tx, destination)
+-      if (current.operation?.lease === lease) await writeState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, status: 'UNVERIFIED', error: error instanceof Error ? error.message : 'The result could not be verified.', lease: null, leaseUntil: 0 } })
++    await linkedTransaction(async tx => {
++      const current = await linkedState(tx, destination)
++      if (current.operation?.lease === lease) await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: { ...current.operation, status: 'UNVERIFIED', error: error instanceof Error ? error.message : 'The result could not be verified.', lease: null, leaseUntil: 0 } })
+     }).catch(() => {})
+     throw error
+   }
+@@ -223,7 +240,7 @@
+ 
+ /** Explicit operator reconciliation keeps intended edits while adopting current remote baselines. */
+ export async function rebaseLinkedWorkspace(productId: string, scope: ContentScope, expectedRevision: string) {
+-  const destination = await contentDestination(productId, scope), initial = await transaction(tx => state(tx, destination))
++  const destination = await contentDestination(productId, scope), initial = await linkedTransaction(tx => linkedState(tx, destination))
+   if (initial.revision !== expectedRevision) throw new WorkspaceScopeError('The draft changed. Reload its saved state.')
+   if (initial.operation?.lease && initial.operation.leaseUntil > Date.now()) throw new WorkspaceScopeError('Wait for the running synchronization before refreshing Shopify.')
+   const { graphql } = await shopifyAdmin(destination.accountId), draft = structuredClone(initial.draft)
+@@ -232,12 +249,13 @@
+     const ids = [...new Set([...draft.members.map(m => m.id), ...draft.baselineLinks.map(f => f.ownerId)])]
+     draft.baselineLinks = (await readLinkedFields(graphql, ids.map(ownerId => ({ ownerId, namespace: draft.relationship!.namespace, key: draft.relationship!.key })))).map(f => ({ ...f, type: f.type || 'list.product_reference' }))
+   }
++  for (const rule of draft.sharedFields ?? []) rule.baseline = (await readLinkedFields(graphql, draft.members.map(m => ({ ownerId: m.id, namespace: rule.namespace, key: rule.key })))).map(f => ({ ...f, type: f.type || rule.baseline[0]?.type || 'single_line_text_field' }))
+   const fields = await readLinkedFields(graphql, draft.edits)
+   draft.edits = draft.edits.map((e, i) => ({ ...e, value: fields[i].value, compareDigest: fields[i].compareDigest })).filter(e => e.value !== e.nextValue)
+-  return transaction(async tx => {
+-    const current = await state(tx, destination)
++  return linkedTransaction(async tx => {
++    const current = await linkedState(tx, destination)
+     if (current.revision !== expectedRevision) throw new WorkspaceScopeError('The draft changed while refreshing Shopify. Reload its saved state.')
+-    await writeState(tx, destination, current, { [LINKED_KEY]: draft, [OPERATION_KEY]: null })
+-    return (await state(tx, destination)).workspace
+-  })
+-}
++    await writeLinkedState(tx, destination, current, { [LINKED_KEY]: draft, [OPERATION_KEY]: null, [AUTOMATION_KEY]: { ...current.workspace.automation, mode: 'PAUSED', status: 'IDLE', message: 'Shopify values refreshed. Review before resuming automation.' } })
++    return (await linkedState(tx, destination)).workspace
++  })
++}
+--- a/apps/api/src/services/shopify/linked-products.vitest.test.ts
++++ b/apps/api/src/services/shopify/linked-products.vitest.test.ts
+@@ -1,6 +1,6 @@
+ import { beforeEach, describe, expect, it, vi } from 'vitest'
+ import { parse } from 'graphql'
+-import { emptyShopifyLinkedDraft, fieldAddress, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
++import { emptyShopifyLinkedDraft, fieldAddress, shopifyLinkedDraftSchema, type ShopifyLinkedDraft } from '@nexus/shared/shopify-linked-products'
+ 
+ const fixture = vi.hoisted(() => {
+   const data = { listings: [] as any[], gql: null as any, failSave: false }
+@@ -22,8 +22,11 @@
+ vi.mock('../connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_: string, account: string) => { if (!['A', 'B'].includes(account)) throw new Error('Account unavailable'); return account } }))
+ vi.mock('./admin-client.js', () => ({ shopifyAdmin: async (account: string) => ({ graphql: (q: string, v: any) => fixture.data.gql(q, v, account) }), assertShopifyResult: (payload: any) => { if (!payload || payload.userErrors?.length) throw new Error(payload?.userErrors?.[0]?.message ?? 'Missing result'); return payload } }))
+ import { applyLinkedBatch, beginLinkedSync, advanceLinkedSync, buildLinkedPlan, getLinkedWorkspace, importLinkedFamily, LINKED_KEY, previewLinkedWorkspace, rebaseLinkedWorkspace, saveLinkedWorkspace } from './linked-products.service'
+-import { collectShopifyPages, readLinkedFields, readLinkedStoreSchema } from './linked-products-gateway'
++import { collectShopifyPages, readLinkedFields, readLinkedProducts, readLinkedStoreSchema, resolveLinkedReferences } from './linked-products-gateway'
+ import { synchronizeContent } from './content-sync.service'
++import { discoverLinkedFamily } from './linked-discovery.service'
++import { configureLinkedAutomation, runLinkedAutomation } from './linked-automation.service'
++import { suggestSharedContent } from './linked-shared-content.service'
+ const gid = (id: number) => `gid://shopify/Product/${id}`
+ const scope = { accountId: 'A', market: 'GLOBAL' }
+ let fields: Map<string, any>, calls: { name: string; variables: any; account: string }[], loseAck: boolean, schemaChanged: boolean
+@@ -64,6 +67,176 @@
+   const current = await getLinkedWorkspace('family', scope)
+   return saveLinkedWorkspace('family', scope, { expectedRevision: current.revision, draft })
+ }
++
++function contentFields() {
++  const original = fixture.data.gql
++  fixture.data.gql = async (query: string, variables: any, account: string) => {
++    const result = await original(query, variables, account)
++    if (query.includes('query NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes.push({ ...def, id: 'gid://shopify/MetafieldDefinition/2', key: 'caption', name: 'Shared caption', type: { name: 'single_line_text_field' } })
++    if (query.includes('query NexusLinkedSettings')) result.metafieldDefinitionTypes.push({ name: 'single_line_text_field', category: 'TEXT' })
++    return result
++  }
++  for (const id of [1, 2]) {
++    const field = { ownerId: gid(id), namespace: 'custom', key: 'caption', type: 'single_line_text_field', value: id === 1 ? 'Source content' : 'Previous content', compareDigest: `caption-${id}` }
++    fields.set(fieldAddress(field), field)
++  }
++}
++async function sharedWorkspace() {
++  contentFields()
++  const workspace = await initialized()
++  workspace.draft.sharedFields = [{ namespace: 'custom', key: 'caption', sourceProductId: gid(1), excludedProductIds: [], baseline: structuredClone([lookup(gid(1), 'caption'), lookup(gid(2), 'caption')]) }]
++  return saveLinkedWorkspace('family', scope, { draft: workspace.draft, expectedRevision: workspace.revision })
++}
++async function automaticWorkspace() {
++  await sharedWorkspace()
++  const { workspace, plan } = await previewLinkedWorkspace('family', scope)
++  return configureLinkedAutomation('family', scope, { mode: 'AUTOMATIC', expectedRevision: workspace.revision, planRevision: plan.revision })
++}
++describe('family discovery without title or colour assumptions', () => {
++  it('refuses mismatched product identities instead of importing a different family', async () => {
++    await expect(readLinkedProducts(async () => ({ nodes: [{ id: gid(99) }] }) as any, [gid(1)])).rejects.toThrow('unavailable')
++  })
++  it('refuses incomplete reference responses instead of reporting them as available', async () => {
++    await expect(resolveLinkedReferences(async () => ({ nodes: [] }) as any, [gid(1)])).rejects.toThrow('incomplete')
++  })
++  it('discovers the single reciprocal reference list from linked Nexus IDs without writes', async () => {
++    const result = await discoverLinkedFamily(gql, [gid(1)], null)
++    expect(result.draft?.members.map(m => m.id)).toEqual([gid(1), gid(2)])
++    expect(result.draft?.relationship?.key).toBe('siblings')
++    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
++  })
++  it('does not infer a family from one-way recommendations', async () => {
++    lookup(gid(2)).value = '[]'
++    expect((await discoverLinkedFamily(gql, [gid(1)], null)).draft).toBeNull()
++  })
++  it('requires an explicit field when two reciprocal lists are possible', async () => {
++    const original = fixture.data.gql
++    fixture.data.gql = async (query: string, variables: any, account: string) => {
++      const result = await original(query, variables, account)
++      if (query.includes('query NexusLinkedDefinitions') && variables.ownerType === 'PRODUCT') result.metafieldDefinitions.nodes.push({ ...def, id: 'gid://shopify/MetafieldDefinition/3', key: 'other', name: 'Other list' })
++      return result
++    }
++    for (const id of [1, 2]) { const f = { ...lookup(gid(id)), key: 'other' }; fields.set(fieldAddress(f), f) }
++    const ambiguous = await discoverLinkedFamily(gql, [gid(1)], null)
++    expect(ambiguous.draft).toBeNull(); expect(ambiguous.candidates).toHaveLength(2)
++    expect((await discoverLinkedFamily(gql, [gid(1)], { namespace: 'custom', key: 'other', includeSelf: true })).draft?.relationship?.key).toBe('other')
++  })
++  it('does not discard other linked Nexus listing identities', async () => {
++    expect((await discoverLinkedFamily(gql, [gid(1), gid(3)], null)).draft).toBeNull()
++  })
++})
++describe('persistent shared content and server automation', () => {
++  it('proposes matching content in bulk and retains differing or empty products as overrides', async () => {
++    contentFields()
++    const workspace = await initialized(), template = workspace.draft.members[0]
++    workspace.draft.members.push({ ...template, id: gid(3) }, { ...template, id: gid(4) })
++    const shared = { ...lookup(gid(1), 'caption'), ownerId: gid(3) }; fields.set(fieldAddress(shared), shared)
++    const suggestions = await suggestSharedContent(gql, workspace.draft, await readLinkedStoreSchema(gql))
++    expect(suggestions).toHaveLength(1)
++    expect(suggestions[0].rule.sourceProductId).toBe(gid(1))
++    expect(suggestions[0].rule.excludedProductIds).toEqual([gid(2), gid(4)])
++    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
++  })
++  it('does not choose a shared source when equally common values disagree', async () => {
++    contentFields()
++    const workspace = await initialized(), template = workspace.draft.members[0]
++    for (const id of [3, 4]) { workspace.draft.members.push({ ...template, id: gid(id) }); const f = { ...lookup(gid(id - 2), 'caption'), ownerId: gid(id) }; fields.set(fieldAddress(f), f) }
++    expect(await suggestSharedContent(gql, workspace.draft, await readLinkedStoreSchema(gql))).toEqual([])
++  })
++  it('keeps pending individual edits out of bulk sharing suggestions', async () => {
++    contentFields(); lookup(gid(2), 'caption').value = 'Source content'
++    const workspace = await initialized()
++    workspace.draft.edits.push({ ...lookup(gid(2), 'caption'), nextValue: 'Pending individual', ownerLabel: 'Product 2' })
++    expect(await suggestSharedContent(gql, workspace.draft, await readLinkedStoreSchema(gql))).toEqual([])
++  })
++  it('propagates a source update on later checks without another manual copy, and is idempotent', async () => {
++    await automaticWorkspace()
++    const first = await runLinkedAutomation('family', scope)
++    expect(first.automation?.status).toBe('VERIFIED')
++    expect(lookup(gid(2), 'caption').value).toBe('Source content')
++    const source = lookup(gid(1), 'caption'); source.value = 'Updated source'; source.compareDigest = 'updated-source'
++    await runLinkedAutomation('family', scope)
++    expect(lookup(gid(2), 'caption').value).toBe('Updated source')
++    const writes = calls.filter(c => c.name === 'NexusLinkedSet').length
++    await runLinkedAutomation('family', scope)
++    expect(calls.filter(c => c.name === 'NexusLinkedSet')).toHaveLength(writes)
++    expect(fixture.data.listings.find(l => l.channelConnectionId === 'B').platformAttributes).toEqual({ untouched: 'B' })
++  })
++  it('flags a separately edited follower and preserves its value', async () => {
++    await automaticWorkspace(); await runLinkedAutomation('family', scope)
++    const target = lookup(gid(2), 'caption'); target.value = 'Merchant override'; target.compareDigest = 'merchant-digest'
++    const writes = calls.filter(c => c.name === 'NexusLinkedSet').length
++    const result = await runLinkedAutomation('family', scope)
++    expect(result.automation?.status).toBe('NEEDS_REVIEW')
++    expect(result.automation?.message).toContain('product override')
++    expect(target.value).toBe('Merchant override')
++    expect(calls.filter(c => c.name === 'NexusLinkedSet')).toHaveLength(writes)
++  })
++  it('keeps excluded products independent and permits their individual edits', async () => {
++    const workspace = await sharedWorkspace()
++    workspace.draft.sharedFields![0].excludedProductIds = [gid(2)]
++    workspace.draft.edits.push({ ...lookup(gid(2), 'caption'), nextValue: 'Individual', ownerLabel: 'Product 2' })
++    expect(shopifyLinkedDraftSchema.safeParse(workspace.draft).success).toBe(true)
++    const plan = await buildLinkedPlan(gql, workspace.draft)
++    expect(plan.changes.map(c => c.nextValue)).toEqual(['Individual'])
++  })
++  it('refuses a direct edit of inherited content until the product becomes an override', async () => {
++    const workspace = await sharedWorkspace()
++    workspace.draft.edits.push({ ...lookup(gid(2), 'caption'), nextValue: 'Individual', ownerLabel: 'Product 2' })
++    expect(shopifyLinkedDraftSchema.safeParse(workspace.draft).success).toBe(false)
++  })
++  it('monitor mode finds changes without making Shopify writes', async () => {
++    const workspace = await sharedWorkspace()
++    await configureLinkedAutomation('family', scope, { mode: 'MONITOR', expectedRevision: workspace.revision })
++    const result = await runLinkedAutomation('family', scope)
++    expect(result.automation?.status).toBe('NEEDS_REVIEW'); expect(result.automation?.changes).toBe(1)
++    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
++  })
++  it('pauses automation whenever an editor saves a different draft', async () => {
++    const workspace = await automaticWorkspace()
++    workspace.draft.members.reverse()
++    const saved = await saveLinkedWorkspace('family', scope, { draft: workspace.draft, expectedRevision: workspace.revision })
++    expect(saved.automation?.mode).toBe('PAUSED')
++    await runLinkedAutomation('family', scope)
++    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
++  })
++  it('requires review of exactly the current source values before enabling automation', async () => {
++    await sharedWorkspace()
++    const { workspace, plan } = await previewLinkedWorkspace('family', scope)
++    lookup(gid(1), 'caption').value = 'Changed after review'
++    await expect(configureLinkedAutomation('family', scope, { mode: 'AUTOMATIC', expectedRevision: workspace.revision, planRevision: plan.revision })).rejects.toThrow('changed')
++  })
++  it('does not propagate deletion of source content', async () => {
++    await automaticWorkspace(); await runLinkedAutomation('family', scope)
++    fields.delete(fieldAddress({ ownerId: gid(1), namespace: 'custom', key: 'caption' }))
++    const result = await runLinkedAutomation('family', scope)
++    expect(result.automation?.status).toBe('NEEDS_REVIEW')
++    expect(lookup(gid(2), 'caption').value).toBe('Source content')
++  })
++  it('recovers a lost acknowledgement on the next scheduled check without duplicate writes', async () => {
++    await automaticWorkspace(); loseAck = true
++    const interrupted = await runLinkedAutomation('family', scope)
++    expect(interrupted.operation?.status).toBe('UNVERIFIED')
++    const writes = calls.filter(c => c.name === 'NexusLinkedSet').length
++    const recovered = await runLinkedAutomation('family', scope)
++    expect(recovered.operation?.status).toBe('VERIFIED')
++    expect(calls.filter(c => c.name === 'NexusLinkedSet')).toHaveLength(writes)
++  })
++  it('stops later automatic batches when paused', async () => {
++    await automaticWorkspace(); loseAck = true
++    const interrupted = await runLinkedAutomation('family', scope)
++    await configureLinkedAutomation('family', scope, { mode: 'PAUSED', expectedRevision: interrupted.revision })
++    await expect(advanceLinkedSync('family', scope, interrupted.operation!.id, true)).rejects.toThrow('paused')
++  })
++  it('refuses a changed shared source after review and before the first write', async () => {
++    await sharedWorkspace()
++    const { workspace, plan } = await previewLinkedWorkspace('family', scope)
++    const started = await beginLinkedSync('family', scope, { expectedRevision: workspace.revision, planRevision: plan.revision })
++    lookup(gid(1), 'caption').value = 'Changed during operation'; lookup(gid(1), 'caption').compareDigest = 'changed-source'
++    await expect(advanceLinkedSync('family', scope, started.operation!.id)).rejects.toThrow('Shared source content changed')
++    expect(calls.some(c => c.name === 'NexusLinkedSet')).toBe(false)
++  })
++})
+ describe('complete store discovery and source reads', () => {
+   it('imports exact product order, detects self-inclusion and reads each owner’s baseline', async () => {
+     const data = await initialized()
+--- a/apps/web/src/app/products/[id]/edit/_studio/shopify/ShopifyLinkedWorkspace.tsx
++++ b/apps/web/src/app/products/[id]/edit/_studio/shopify/ShopifyLinkedWorkspace.tsx
+@@ -1,16 +1,17 @@
+ 'use client'
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+-import { Link2, RefreshCw, Save } from 'lucide-react'
++import { Link2, RefreshCw, Save, Search, Layers, Wand2 } from 'lucide-react'
+ import { definitionAddress, fieldAddress, mergeImportedLinkedFamily, shopifyLinkedDraftSchema, type ShopifyFieldDefinition, type ShopifyFieldOwner, type ShopifyFieldSnapshot,
+-  type ShopifyLinkedDraft, type ShopifyLinkedMember, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace as Workspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
++  type ShopifySharedSuggestion, type ShopifyLinkedDiscovery, type ShopifyLinkedDraft, type ShopifyLinkedMember, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace as Workspace, type ShopifyReference, type ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+ import { Banner, Card, Disclosure, EmptyState, Field, Modal, OrderedList } from '@/design-system/components'
+-import { Button, Checkbox, Input, Select } from '@/design-system/primitives'
++import { Button, Checkbox, Input, Select, Pill, SegmentedControl } from '@/design-system/primitives'
+ import { usePermission } from '@/lib/auth/AuthProvider'
+ import { usePresentationNavigationGuard } from '@/app/products/ebay-flat-file/Presentation/usePresentationNavigationGuard'
+ import { useSaveReporter } from '../contracts'
+ import { linkedEndpoint, linkedRequest } from './api'
+ import { LinkedFieldEditor } from './LinkedFieldEditor'
+ import { ReferencePicker } from './ReferencePicker'
++import { AutomationPanel } from './AutomationPanel'
+ import { EntryEditor } from './EntryEditor'
+ import styles from './linked.module.css'
+ 
+@@ -18,6 +19,10 @@
+   const [workspace, setWorkspace] = useState<Workspace | null>(null), [draft, setDraft] = useState<ShopifyLinkedDraft | null>(null), [schema, setSchema] = useState<ShopifyStoreSchema | null>(null)
+   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [schemaError, setSchemaError] = useState('')
+   const [selected, setSelected] = useState(''), [variantId, setVariantId] = useState(''), [owner, setOwner] = useState<ShopifyFieldOwner | null>(null), [ownerError, setOwnerError] = useState(''), [ownerLoading, setOwnerLoading] = useState(false), [ownerRefresh, setOwnerRefresh] = useState(0)
++  const [suggestions, setSuggestions] = useState<ShopifySharedSuggestion[] | null>(null), [chosenSuggestions, setChosenSuggestions] = useState<string[]>([])
++  const [discovery, setDiscovery] = useState<ShopifyLinkedDiscovery | null>(null), [discovering, setDiscovering] = useState(false)
++  const [fieldSelection, setFieldSelection] = useState(''), [fieldView, setFieldView] = useState('all'), [reviewIntent, setReviewIntent] = useState<'sync' | 'automatic'>('sync')
++  const discovered = useRef(false)
+   const [filter, setFilter] = useState(''), [picker, setPicker] = useState<'add' | 'import' | null>(null), [imported, setImported] = useState<ShopifyLinkedDraft | null>(null)
+   const [entry, setEntry] = useState<{ id: string | null; copy?: boolean; replace?(newId: string): void } | null>(null), [review, setReview] = useState<ShopifyLinkedPlan | null>(null), [reviewNames, setReviewNames] = useState<ShopifyReference[]>([])
+   const [confirmation, setConfirmation] = useState<{ title: string; text: string; run(): void } | null>(null), [leave, setLeave] = useState<((value: boolean) => void) | null>(null)
+@@ -40,6 +45,25 @@
+     void linkedRequest<ShopifyStoreSchema>(linkedEndpoint(path, '/schema'), 'GET', undefined, controller.signal).then(data => { if (!controller.signal.aborted) setSchema(data) }).catch(e => { if (!controller.signal.aborted) setSchemaError(e.message) })
+     return () => { alive.current = false; controller.abort() }
+   }, [path, accept])
++  useEffect(() => {
++    if (!workspace || workspace.draft.members.length || discovered.current) return
++    discovered.current = true
++    const controller = new AbortController(); setDiscovering(true)
++    void linkedRequest<ShopifyLinkedDiscovery>(linkedEndpoint(path, '/discover'), 'POST', {}, controller.signal).then(setDiscovery).catch(e => { if (!controller.signal.aborted) setError(e.message) }).finally(() => { if (!controller.signal.aborted) setDiscovering(false) })
++    return () => controller.abort()
++  }, [workspace?.productId, path])
++  useEffect(() => {
++    if (!workspace?.automation || workspace.automation.mode === 'PAUSED' || dirty || busy || entry || review) return
++    const controller = new AbortController()
++    const timer = setInterval(() => {
++      const observed = currentWorkspace.current
++      if (pending.current || !observed || JSON.stringify(currentDraft.current) !== JSON.stringify(observed.draft)) return
++      void linkedRequest<Workspace>(path, 'GET', undefined, controller.signal).then(data => {
++        if (!controller.signal.aborted && !pending.current && currentWorkspace.current?.revision === observed.revision && JSON.stringify(currentDraft.current) === JSON.stringify(observed.draft) && data.revision !== observed.revision) accept(data)
++      }).catch(() => { /* Explicit actions retain their actionable network errors. */ })
++    }, 15_000)
++    return () => { clearInterval(timer); controller.abort() }
++  }, [workspace?.automation?.mode, dirty, busy, entry, review, path, accept])
+   usePresentationNavigationGuard(dirty || busy || !!entry, async () => {
+     if (pending.current || entry) { setError('Finish the current operation or close the reusable entry editor before leaving.'); return false }
+     return new Promise(resolve => setLeave(() => resolve))
+@@ -103,9 +127,11 @@
+     if (!current || current.members.some(m => m.id === reference.id)) return
+     const members = await linkedRequest<ShopifyLinkedMember[]>(linkedEndpoint(path, '/products'), 'POST', { ids: [reference.id] })
+     const baseline = current.relationship ? await readLinks([reference.id], current.relationship) : []
+-    setDraft({ ...current, members: [...current.members, ...members], baselineLinks: [...current.baselineLinks.filter(f => f.ownerId !== reference.id), ...baseline] }); setReview(null)
+-  }
+-  async function reviewChanges() {
++    const sharedFields = await Promise.all((current.sharedFields ?? []).map(async rule => ({ ...rule, baseline: [...rule.baseline, ...(await linkedRequest<ShopifyFieldSnapshot[]>(linkedEndpoint(path, '/field-values'), 'POST', { addresses: [{ ownerId: reference.id, namespace: rule.namespace, key: rule.key }] })).map(f => ({ ...f, type: f.type || rule.baseline[0]?.type || 'single_line_text_field' }))] })))
++    setDraft({ ...current, members: [...current.members, ...members], baselineLinks: [...current.baselineLinks.filter(f => f.ownerId !== reference.id), ...baseline], ...(current.sharedFields ? { sharedFields } : {}) }); setReview(null)
++  }
++  async function reviewChanges(intent: 'sync' | 'automatic' = 'sync') {
++    setReviewIntent(intent)
+     if (dirty) await saveDraft()
+     const result = await linkedRequest<{ workspace: Workspace; plan: ShopifyLinkedPlan }>(linkedEndpoint(path, '/preview'), 'POST', {})
+     if (result.workspace.revision !== currentWorkspace.current?.revision) throw new Error('The saved draft changed. Reload before reviewing Shopify changes.')
+@@ -135,6 +161,25 @@
+       throw error
+     }
+   }
++  async function setAutomation(mode: 'PAUSED' | 'MONITOR' | 'AUTOMATIC') {
++    const current = currentWorkspace.current
++    if (!current) return
++    const result = await linkedRequest<Workspace>(linkedEndpoint(path, '/automation'), 'POST', { mode, expectedRevision: current.revision, ...(mode === 'AUTOMATIC' ? { planRevision: review?.revision } : {}) })
++    if (mode === 'PAUSED' && JSON.stringify(currentDraft.current) !== JSON.stringify(current.draft)) { setWorkspace(result); currentWorkspace.current = result; setReview(null) }
++    else { accept(result); currentWorkspace.current = result; currentDraft.current = result.draft }
++    setNotice(mode === 'AUTOMATIC' ? 'Automation enabled for the reviewed rules. Checks continue on the server.' : mode === 'MONITOR' ? 'Background monitoring enabled. Changes wait for review.' : 'Automation paused.')
++  }
++  async function discoverFamily() {
++    setDiscovery(await linkedRequest<ShopifyLinkedDiscovery>(linkedEndpoint(path, '/discover'), 'POST', { relationship: currentDraft.current?.relationship ?? null }))
++  }
++  async function shareField(def: ShopifyFieldDefinition) {
++    const current = currentDraft.current
++    if (!current || !owner) return
++    const baseline = (await linkedRequest<ShopifyFieldSnapshot[]>(linkedEndpoint(path, '/field-values'), 'POST', { addresses: current.members.map(m => ({ ownerId: m.id, namespace: def.namespace, key: def.key })) })).map(f => ({ ...f, type: f.type || def.type }))
++    const excludedProductIds = current.edits.filter(e => e.namespace === def.namespace && e.key === def.key && e.ownerId !== owner.id).map(e => e.ownerId).filter(id => current.members.some(m => m.id === id))
++    setDraft({ ...current, sharedFields: [...(current.sharedFields ?? []).filter(r => definitionAddress(r) !== definitionAddress(def)), { namespace: def.namespace, key: def.key, sourceProductId: owner.id, excludedProductIds, baseline }] }); setReview(null)
++    setNotice('Shared-content rule added. Existing product edits remain independent. Save and review to start automation.')
++  }
+   async function refreshRemote() {
+     const current = currentWorkspace.current
+     if (!current) return
+@@ -149,7 +194,8 @@
+     for (const f of owner.fields) if (!fields.some(d => d.namespace === f.namespace && d.key === f.key)) fields.push({ ...f, id: fieldAddress(f), name: f.key, description: 'Existing Shopify value without a definition.', ownerType: owner.ownerType, validations: [], access: { admin: null, storefront: null }, readOnlyReason: /^(\$app|app--|apps--)/.test(f.namespace) ? 'This field is managed by an app.' : null })
+     return fields.sort((a, b) => a.name.localeCompare(b.name))
+   }, [schema, owner])
+-  const visibleFields = definitions.filter(d => `${d.name} ${d.namespace}.${d.key} ${d.type}`.toLowerCase().includes(filter.toLowerCase()))
++  const visibleFields = definitions.filter(d => (fieldView === 'all' || (fieldView === 'shared' ? draft?.sharedFields?.some(r => definitionAddress(r) === definitionAddress(d)) && owner?.ownerType === 'PRODUCT' : draft?.edits.some(e => e.ownerId === ownerId && definitionAddress(e) === definitionAddress(d)))) && `${d.name} ${d.namespace}.${d.key} ${d.type}`.toLowerCase().includes(filter.toLowerCase()))
++  const activeField = visibleFields.find(d => d.id === fieldSelection) ?? visibleFields.find(d => d.type.includes('metaobject_reference') && owner?.fields.some(f => definitionAddress(f) === definitionAddress(d) && f.value !== null)) ?? visibleFields[0]
+   function changeField(def: ShopifyFieldDefinition, nextValue: string | null) {
+     if (!owner) return
+     mutate(next => {
+@@ -178,58 +224,83 @@
+   }
+   if (!workspace || !draft) return <div className={styles.workspace}>{error ? <EmptyState title="Shopify family could not load" description={error} action={<Button onClick={() => { void action(async () => accept(await linkedRequest<Workspace>(path))) }}>Try again</Button>} /> : <p role="status">Loading Shopify family…</p>}</div>
+   const relation = schema?.definitions.find(d => d.ownerType === 'PRODUCT' && d.namespace === draft.relationship?.namespace && d.key === draft.relationship?.key)
++  const syncLabel = workspace.operation?.status === 'UNVERIFIED' || ['NEEDS_REVIEW', 'ERROR'].includes(workspace.automation?.status ?? '') ? 'Needs attention' : running ? 'In progress' : dirty ? 'Draft changes' : workspace.operation?.status === 'VERIFIED' || workspace.automation?.status === 'VERIFIED' ? 'Verified' : 'Ready for review'
+   return <div className={styles.workspace}>
+-    <header className={styles.header}><div><h2>{view === 'family' ? 'Product family' : 'Metafields & content'}</h2><p className={styles.hint}>{accountLabel} · {workspace.name}</p></div><div className={styles.toolbar}>
+-      <Button size="sm" disabled={busy || !canEdit || dirty} onClick={() => setConfirmation({ title: 'Review latest Shopify values?', text: 'This refreshes the saved baselines and ends any interrupted synchronization. Your saved field edits remain for a new review.', run: () => { void action(refreshRemote) } })}><RefreshCw size={14} />Refresh Shopify</Button>
++    <header className={styles.header}><div><p className={styles.eyebrow}>SHOPIFY WORKSPACE</p><h2>{view === 'family' ? 'One family. Every variation.' : 'Content, with a single source.'}</h2><p className={styles.hint}>{accountLabel} · {workspace.name}</p></div><div className={styles.toolbar}>
++      {view === 'content' && workspace.automation && workspace.automation.mode !== 'PAUSED' && <Button size="sm" disabled={busy || !canPublish} onClick={() => { void action(() => setAutomation('PAUSED')) }}>Pause automation</Button>}
++      <Button size="sm" disabled={busy || !canEdit || dirty} onClick={() => setConfirmation({ title: 'Review latest Shopify values?', text: 'This loads current Shopify values for a new review and pauses automation. Saved edits and sharing rules remain. Review the resulting changes before replacing any Shopify content.', run: () => { void action(refreshRemote) } })}><RefreshCw size={14} />Refresh Shopify</Button>
+       <Button size="sm" disabled={disabled || !dirty} onClick={() => { void action(saveDraft) }}><Save size={14} />Save draft</Button>
+       <Button size="sm" variant="primary" disabled={busy || running || !schema || !canPublish || (dirty && !canEdit)} onClick={() => { void action(reviewChanges) }}>Review & synchronize</Button>
+     </div></header>
+     {error && <Banner tone="danger" onDismiss={() => setError('')} action={<Button size="sm" disabled={busy} onClick={() => setConfirmation({ title: 'Reload the saved Nexus draft?', text: 'Unsaved changes on this page will be discarded. The latest saved family and synchronization status will be loaded.', run: () => { void action(async () => { accept(await linkedRequest<Workspace>(path)); setOwnerRefresh(v => v + 1) }) } })}>Reload saved draft</Button>}>{error}</Banner>}{notice && <Banner tone="success" onDismiss={() => setNotice('')}>{notice}</Banner>}
+     {schemaError && <Banner tone="warning" title="Store definitions could not load" action={<Button size="sm" disabled={busy} onClick={() => { void action(async () => { setSchema(await linkedRequest<ShopifyStoreSchema>(linkedEndpoint(path, '/schema'))); setSchemaError('') }) }}>Retry definitions</Button>}>{schemaError}</Banner>}
+     {!schema && !schemaError && <p role="status">Discovering this store’s fields and reusable content…</p>}
+-    <p role="status" className={styles.hint}>{busy ? 'Working with Shopify…' : dirty ? 'Unsaved draft changes' : 'Draft matches saved Nexus data'}{schema && ` · ${schema.definitions.length} product and variant definitions · ${schema.metaobjectDefinitions.length} reusable entry type${schema.metaobjectDefinitions.length === 1 ? '' : 's'}`}</p>
++    <p role="status" className={styles.hint}>{busy ? 'Working with Shopify…' : dirty ? 'Unsaved draft changes' : 'Draft matches saved Nexus data'}</p>
+     {running && <Banner tone={workspace.operation?.status === 'UNVERIFIED' ? 'warning' : 'info'} title="Synchronization progress" action={<Button size="sm" disabled={busy || !canPublish} onClick={() => { void action(() => sync(true)) }}>Resume synchronization</Button>}>
+       {workspace.operation!.completed} of {workspace.operation!.total} field changes verified. {workspace.operation!.error ?? 'Progress is saved in Nexus.'}</Banner>}
+-    {schema && view === 'family' && <Card header="Linked Shopify products" description="Keep each colour as its own product. One ordered family list updates the selected relationship field on every member.">
+-      <div className={styles.stack}><div className={styles.settings}><Field label="Theme relationship field" hint="Choose the product-reference list your theme uses for its variation selector."><Select size="sm" disabled={disabled} value={relation?.id ?? ''} onChange={e => requestRelationship(e.target.value)}><option value="">Choose a field from this store</option>{schema.definitions.filter(d => d.ownerType === 'PRODUCT' && d.type === 'list.product_reference').map(d => <option key={d.id} value={d.id} disabled={!!d.readOnlyReason}>{d.name} · {definitionAddress(d)}</option>)}</Select></Field>
+-        {draft.relationship && <Checkbox disabled={disabled} checked={draft.relationship.includeSelf} label="Include each product in its own variation list" onChange={e => mutate(d => { if (d.relationship) d.relationship.includeSelf = e.target.checked })} />}</div>
+-        <div className={styles.toolbar}><Button size="sm" disabled={disabled} onClick={() => setPicker('import')}>Import existing family links</Button><Button size="sm" disabled={disabled} onClick={() => setPicker('add')}>Add Shopify product</Button>
+-          {!draft.members.length && workspace.suggestedProductIds.length > 0 && <Button size="sm" disabled={disabled} onClick={() => { void action(async () => { const members = await linkedRequest<ShopifyLinkedMember[]>(linkedEndpoint(path, '/products'), 'POST', { ids: workspace.suggestedProductIds }); const baselineLinks = draft.relationship ? await readLinks(members.map(m => m.id), draft.relationship) : []; setDraft({ ...draft, members, baselineLinks }) }) }}>Use linked Nexus listings ({workspace.suggestedProductIds.length})</Button>}</div>
+-        {draft.members.length ? <OrderedList label="Shopify family order" items={draft.members.map(m => m.id)} disabled={disabled} itemLabel={id => draft.members.find(m => m.id === id)!.title} onChange={ids => mutate(d => { d.members = ids.map(id => d.members.find(m => m.id === id)!) })} renderItem={id => { const member = draft.members.find(m => m.id === id)!; return <div className={styles.member}>{member.image && <img src={member.image} alt="" loading="lazy" />}<span>{member.title}<small className={styles.hint}>/{member.handle}</small></span><Button size="xs" disabled={disabled} onClick={() => setConfirmation({ title: `Unlink ${member.title}?`, text: 'The reviewed synchronization will remove this product’s links to the family and update the remaining siblings. The Shopify product stays available.', run: () => mutate(d => { d.members = d.members.filter(m => m.id !== id) }) })}>Unlink</Button></div> }} />
+-          : <EmptyState icon={<Link2 size={24} />} title="Choose the family’s Shopify products" description="Import the theme’s existing links or add products from this connected store." />}
+-        {draft.members.length > 0 && !draft.relationship && <Banner tone="neutral">Choose the theme’s relationship field to automate sibling linking. Metafield editing is available for the selected products.</Banner>}
++    <div className={styles.summary} aria-label="Family overview">
++      <Card padded><span className={styles.hint}>Linked products</span><strong className={styles.metric}>{draft.members.length}</strong><span className={styles.hint}>Each keeps its own variants and content</span></Card>
++      <Card padded><span className={styles.hint}>Shared content rules</span><strong className={styles.metric}>{draft.sharedFields?.length ?? 0}</strong><span className={styles.hint}>One source, with individual overrides</span></Card>
++      <Card padded><span className={styles.hint}>Sync status</span><strong className={styles.metricLabel}>{syncLabel}</strong><span className={styles.hint}>{dirty ? 'Save your changes to update the rules' : syncLabel === 'Verified' ? 'Saved changes verified in Shopify' : 'Review exact changes before enabling'}</span></Card>
++    </div>
++    {discovering && <p role="status">Discovering existing family links from this store…</p>}
++    {discovery && <Banner tone={discovery.draft ? 'info' : 'warning'} title={discovery.draft ? `Found ${discovery.draft.members.length} linked products` : 'Family discovery needs your input'} onDismiss={() => setDiscovery(null)} action={discovery.draft ? <Button size="sm" disabled={disabled} onClick={() => { setImported(discovery.draft); setDiscovery(null) }}>Review discovered family</Button> : undefined}>{discovery.reasons.join(' ')}{discovery.candidates.length > 1 && <p>{discovery.candidates.map(c => c.name).join(' · ')}</p>}</Banner>}
++    {schema && view === 'family' && <div className={styles.familyLayout}><Card header="Family products" description="The storefront selector follows this order. Each product retains its own sizes, stock and product page." headerAction={<Pill tone="neutral">{draft.members.length} products</Pill>}>
++      <div className={styles.stack}>
++        <div className={styles.toolbar}><Button size="sm" disabled={disabled} onClick={() => { void action(discoverFamily) }}><Wand2 size={14} aria-hidden />Discover family</Button><Button size="sm" disabled={disabled} onClick={() => setPicker('add')}>Add product</Button><Button size="sm" variant="quiet" disabled={disabled} onClick={() => setPicker('import')}>Import from product</Button></div>
++        {draft.members.length ? <OrderedList label="Shopify family order" items={draft.members.map(m => m.id)} disabled={disabled} itemLabel={id => draft.members.find(m => m.id === id)!.title} onChange={ids => mutate(d => { d.members = ids.map(id => d.members.find(m => m.id === id)!) })} renderItem={id => { const member = draft.members.find(m => m.id === id)!; return <div className={styles.member}>{member.image ? <img src={member.image} alt="" loading="lazy" /> : <span className={styles.productPlaceholder}><Layers size={20} aria-hidden /></span>}<span><strong>{member.title}</strong><small className={styles.hint}>/{member.handle}</small></span><Button size="xs" variant="quiet" disabled={disabled} onClick={() => setConfirmation({ title: `Unlink ${member.title}?`, text: 'The reviewed synchronization will remove this product’s links to the family. Shared rules sourced from this product will also be removed. The Shopify product stays available.', run: () => mutate(d => { d.members = d.members.filter(m => m.id !== id); if (d.sharedFields) d.sharedFields = d.sharedFields.filter(r => r.sourceProductId !== id).map(r => ({ ...r, excludedProductIds: r.excludedProductIds.filter(v => v !== id), baseline: r.baseline.filter(f => f.ownerId !== id) })) }) })}>Unlink</Button></div> }} />
++          : <EmptyState icon={<Link2 size={24} />} title="Let Nexus find your existing family" description="Discover the products already connected through Shopify. If the store has more than one possible family field, choose it below." action={<Button size="sm" disabled={disabled} onClick={() => { void action(discoverFamily) }}>Discover family</Button>} />}
++        <Disclosure summary={relation ? `Storefront connection · ${relation.name}` : 'Choose the storefront relationship field'} open={!draft.relationship}>
++          <div className={styles.stack}><Field label="Theme relationship field" hint="The product list used by your storefront variation selector."><Select size="sm" disabled={disabled} value={relation?.id ?? ''} onChange={e => requestRelationship(e.target.value)}><option value="">Choose a field from this store</option>{schema.definitions.filter(d => d.ownerType === 'PRODUCT' && d.type === 'list.product_reference').map(d => <option key={d.id} value={d.id} disabled={!!d.readOnlyReason}>{d.name} · {definitionAddress(d)}</option>)}</Select></Field>
++          {draft.relationship && <Checkbox disabled={disabled} checked={draft.relationship.includeSelf} label="Include each product in its own variation list" onChange={e => mutate(d => { if (d.relationship) d.relationship.includeSelf = e.target.checked })} />}</div>
++        </Disclosure>
+       </div>
+-    </Card>}
+-    {schema && view === 'content' && <Card header="Product and variant metafields" description="Fields and validation come from this Shopify store. Choose a product or its size variant to edit the correct owner.">
+-      <div className={styles.stack}>
+-      <div className={styles.toolbar}><Button size="sm" disabled={busy || !canPublish} onClick={() => setEntry({ id: null })}>Create reusable entry</Button></div>
+-      {draft.members.length ? <div className={styles.stack}>
+-        <div className={styles.settings}><Field label="Shopify product"><Select size="sm" disabled={busy} value={productId} onChange={e => { setSelected(e.target.value); setVariantId(''); setVariants([]) }}>{draft.members.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}</Select></Field><Field label="Field owner"><Select size="sm" disabled={busy || ownerLoading} value={variantId} onChange={e => setVariantId(e.target.value)}><option value="">Product metafields</option>{variants.map(v => <option key={v.id} value={v.id}>{v.title}{v.sku ? ` · ${v.sku}` : ''}</option>)}</Select></Field><Field label="Find a metafield"><Input size="sm" value={filter} onChange={e => setFilter(e.target.value)} placeholder="Name, key or type" /></Field></div>
++    </Card><AutomationPanel workspace={workspace} disabled={busy} dirty={dirty} canPublish={canPublish} onReview={() => { void action(() => reviewChanges('automatic')) }} onMode={mode => { void action(() => setAutomation(mode)) }} onCheck={() => { void action(async () => accept(await linkedRequest<Workspace>(linkedEndpoint(path, '/automation-check'), 'POST', {}))) }} /></div>}
++    {schema && view === 'content' && <div className={styles.stack}>
++      {draft.members.length > 1 && <div className={styles.header}><p className={styles.hint}>Find content that is already shared, then keep it consistent automatically.</p><Button size="sm" disabled={disabled} onClick={() => { void action(async () => { const found = await linkedRequest<ShopifySharedSuggestion[]>(linkedEndpoint(path, '/suggest-sharing'), 'POST', { draft: currentDraft.current }); setSuggestions(found); setChosenSuggestions(found.map(s => definitionAddress(s.rule))) }) }}><Wand2 size={14} aria-hidden />Find shared content</Button></div>}
++      {draft.members.length ? <>
++        <div className={styles.settings}><Field label="Product"><Select size="sm" disabled={busy} value={productId} onChange={e => { setSelected(e.target.value); setVariantId(''); setVariants([]) }}>{draft.members.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}</Select></Field><Field label="Content belongs to"><Select size="sm" disabled={busy || ownerLoading} value={variantId} onChange={e => setVariantId(e.target.value)}><option value="">This product</option>{variants.map(v => <option key={v.id} value={v.id}>{v.title}{v.sku ? ` · ${v.sku}` : ''}</option>)}</Select></Field></div>
++        <div className={styles.contentLayout}><Card header="Content library" description="Choose a field to edit its content or sharing rule."><div className={styles.stack}>
++          <Field label="Find content"><Input size="sm" leadingIcon={<Search size={14} aria-hidden />} value={filter} onChange={e => setFilter(e.target.value)} placeholder="Search content" /></Field>
++          <SegmentedControl size="sm" wrap ariaLabel="Filter content fields" value={fieldView} onChange={setFieldView} options={[{ value: 'all', label: 'All' }, { value: 'shared', label: 'Shared' }, { value: 'changed', label: 'Changed' }]} />
++          <nav className={styles.fieldNavigation} aria-label="Content fields">{visibleFields.map(def => <Button key={def.id} size="sm" block variant={activeField?.id === def.id ? 'tonal' : 'quiet'} aria-current={activeField?.id === def.id ? 'true' : undefined} onClick={() => setFieldSelection(def.id)}>{def.name}</Button>)}</nav>
++          <Button size="sm" disabled={busy || !canPublish} onClick={() => setEntry({ id: null })}>Create reusable entry</Button>
++        </div></Card><Card header={activeField?.name ?? 'Product content'} description={owner?.ownerType === 'PRODUCTVARIANT' ? `${draft.members.find(m => m.id === productId)?.title} · ${owner.title}` : owner?.title}>
+         {ownerLoading && <p role="status">Reading current Shopify values…</p>}{ownerError && <Banner tone="danger" action={<Button size="sm" onClick={() => setOwnerRefresh(v => v + 1)}>Retry</Button>}>{ownerError}</Banner>}
+-        {owner && visibleFields.map(def => {
++        {owner && (activeField ? [activeField] : []).map(def => {
+           const field = owner.fields.find(f => f.namespace === def.namespace && f.key === def.key), edit = draft.edits.find(e => e.ownerId === owner.id && e.namespace === def.namespace && e.key === def.key)
+           const value = edit ? edit.nextValue : field?.value ?? null, isRelationship = owner.ownerType === 'PRODUCT' && draft.relationship?.namespace === def.namespace && draft.relationship.key === def.key
+-          const definition = isRelationship ? { ...def, readOnlyReason: 'Managed by Product family so sibling lists remain consistent.' } : def
+-          return <section key={def.id} className={styles.field}><div className={styles.header}><div><h3>{def.name}</h3><p className={styles.hint}>{definitionAddress(def)} · {def.type}{edit ? ' · Pending change' : ''}</p></div>
+-            <div className={styles.toolbar}>{edit && <Button size="xs" disabled={disabled} onClick={() => mutate(d => { d.edits = d.edits.filter(e => fieldAddress(e) !== fieldAddress(edit)) })}>Use Shopify value</Button>}
+-              {!definition.readOnlyReason && owner.ownerType === 'PRODUCT' && draft.members.length > 1 && <Button size="xs" disabled={disabled} onClick={() => setConfirmation({ title: `Apply ${def.name} to all family products?`, text: `The ${value === null ? 'clear' : 'current value'} will be staged for ${draft.members.length} Shopify products. You can review every change before synchronization.`, run: () => { void action(() => copyToFamily(def, value)) } })}>Apply to family</Button>}</div></div>
++          const rule = owner.ownerType === 'PRODUCT' ? draft.sharedFields?.find(r => definitionAddress(r) === definitionAddress(def)) : undefined
++          const inherited = !!rule && rule.sourceProductId !== owner.id && !rule.excludedProductIds.includes(owner.id)
++          const definition = inherited ? { ...def, readOnlyReason: 'This product follows the shared source. Make an override to edit it independently.' } : isRelationship ? { ...def, readOnlyReason: 'Managed by Product family so sibling lists remain consistent.' } : def
++          return <section key={def.id} className={styles.field}><div className={styles.header}><div>{def.description && <p className={styles.hint}>{def.description}</p>}</div>
++            <div className={styles.toolbar}>{edit && <Pill tone="warning">Pending change</Pill>}{edit && <Button size="xs" disabled={disabled} onClick={() => mutate(d => { d.edits = d.edits.filter(e => fieldAddress(e) !== fieldAddress(edit)) })}>Use Shopify value</Button>}
++              {!definition.readOnlyReason && !rule && owner.ownerType === 'PRODUCT' && draft.members.length > 1 && <Button size="xs" disabled={disabled} onClick={() => setConfirmation({ title: `Apply ${def.name} to all family products?`, text: `The ${value === null ? 'clear' : 'current value'} will be staged for ${draft.members.length} Shopify products. You can review every change before synchronization.`, run: () => { void action(() => copyToFamily(def, value)) } })}>Apply to family</Button>}</div></div>
+             {edit && (edit.value !== (field?.value ?? null) || edit.compareDigest !== (field?.compareDigest ?? null)) && <Banner tone="warning">This field changed in Shopify since the draft began. Refresh Shopify and review both values before synchronization.</Banner>}
++            {rule && <Banner tone="info" title={rule.sourceProductId === owner.id ? 'Shared source for this family' : inherited ? 'Follows shared content' : 'Individual product override'} action={rule.sourceProductId === owner.id ? <Button size="xs" disabled={disabled} onClick={() => mutate(d => { d.sharedFields = d.sharedFields?.filter(r => definitionAddress(r) !== definitionAddress(def)) })}>Stop sharing</Button> : inherited ? <Button size="xs" disabled={disabled} onClick={() => mutate(d => { const r = d.sharedFields!.find(r => definitionAddress(r) === definitionAddress(def))!; r.excludedProductIds.push(owner.id) })}>Make product override</Button> : <Button size="xs" disabled={disabled} onClick={() => { void action(async () => { const baseline = await linkedRequest<ShopifyFieldSnapshot[]>(linkedEndpoint(path, '/field-values'), 'POST', { addresses: [{ ownerId: owner.id, namespace: def.namespace, key: def.key }] }); setDraft(current => { const next = structuredClone(current!); const r = next.sharedFields!.find(r => definitionAddress(r) === definitionAddress(def))!; r.excludedProductIds = r.excludedProductIds.filter(id => id !== owner.id); r.baseline = [...r.baseline.filter(f => f.ownerId !== owner.id), ...baseline.map(f => ({ ...f, type: f.type || def.type }))]; next.edits = next.edits.filter(e => !(e.ownerId === owner.id && definitionAddress(e) === definitionAddress(def))); return next }); setReview(null) }) }}>Use shared content</Button>}>{rule.sourceProductId === owner.id ? `Changes here flow to ${draft.members.length - 1 - rule.excludedProductIds.length} family ${draft.members.length - 1 - rule.excludedProductIds.length === 1 ? 'product' : 'products'} when synchronized.` : `Source: ${draft.members.find(m => m.id === rule.sourceProductId)?.title}. ${inherited ? 'Synchronization uses the latest source value.' : 'This product keeps its own value.'}`}</Banner>}
++            {!rule && !definition.readOnlyReason && owner.ownerType === 'PRODUCT' && draft.members.length > 1 && value !== null && <div><Button size="sm" disabled={disabled} onClick={() => setConfirmation({ title: `Keep ${def.name} shared with the family?`, text: 'Use this product as the source. Future changes can flow automatically to the other products. Products with pending individual edits remain overrides.', run: () => { void action(() => shareField(def)) } })}>Keep shared with family</Button></div>}
++            {rule?.excludedProductIds.includes(owner.id) && def.type.includes('metaobject_reference') && <p className={styles.hint}>Referenced entries can still be shared. Make a separate copy to change this product’s entry independently.</p>}
+             <LinkedFieldEditor path={path} definition={definition} value={value} disabled={disabled || ownerLoading} schema={schema} onChange={v => changeField(def, v)} onOpenEntry={id => setEntry({ id })} onCopyEntry={canPublish && canEdit ? id => setEntry({ id, copy: true, replace: newId => changeField(def, def.type.startsWith('list.') ? JSON.stringify(JSON.parse(value!).map((ref: string) => ref === id ? newId : ref)) : newId) }) : undefined} />
++            <Disclosure summary="Field details"><p className={styles.hint}>{definitionAddress(def)} · {def.type}</p></Disclosure>
+           </section>
+         })}
+-        {owner && !visibleFields.length && <EmptyState title="No matching metafields" description="Refresh definitions after adding fields in Shopify, or change your search." />}
+-      </div> : <EmptyState title="Choose products in Product family" description="The product selection determines which Shopify metafields and variants appear here." />}
+-      </div>
+-    </Card>}
++        {owner && !visibleFields.length && <EmptyState title="No matching content" description="Choose All or change your search to find another field." />}
++        </Card></div>
++      </> : <EmptyState title="Start with your product family" description="Discover or import its products in Product family. Their existing content appears here automatically." />}
++    </div>}
++    <Modal open={suggestions !== null} title="Shared content found in Shopify" size="lg" onClose={() => setSuggestions(null)} footer={<><Button onClick={() => setSuggestions(null)}>Cancel</Button><Button variant="primary" disabled={disabled || !chosenSuggestions.length} onClick={() => { mutate(d => { d.sharedFields = [...(d.sharedFields ?? []), ...(suggestions ?? []).filter(s => chosenSuggestions.includes(definitionAddress(s.rule))).map(s => s.rule)] }); setSuggestions(null); setNotice('Shared rules added to the draft. Save and review to enable automation.') }}>Add {chosenSuggestions.length} sharing {chosenSuggestions.length === 1 ? 'rule' : 'rules'}</Button></>}>
++      <div className={styles.stack}><p>Matching values can follow one source. Different and empty values stay as individual product overrides. Choose which fields should stay shared.</p>{suggestions?.length === 0 && <EmptyState title="No additional common content" description="No unambiguous matching values were found. You can choose an individual field and keep it shared with the family." />}{suggestions?.map(s => <div key={definitionAddress(s.rule)} className={styles.field}><Checkbox label={s.name} checked={chosenSuggestions.includes(definitionAddress(s.rule))} onChange={e => setChosenSuggestions(ids => e.target.checked ? [...ids, definitionAddress(s.rule)] : ids.filter(id => id !== definitionAddress(s.rule)))} /><p className={styles.hint}>Source: {draft.members.find(m => m.id === s.rule.sourceProductId)?.title} · {draft.members.length - 1 - s.rule.excludedProductIds.length} {draft.members.length - 1 - s.rule.excludedProductIds.length === 1 ? 'follower' : 'followers'} · {s.rule.excludedProductIds.length} individual overrides</p></div>)}</div>
++    </Modal>
+     {schema && picker && <ReferencePicker path={path} type="product_reference" schema={schema} excluded={picker === 'add' ? draft.members.map(m => m.id) : []} onClose={() => setPicker(null)} onChoose={ref => { const mode = picker; void action(() => chooseProduct(ref, mode)) }} />}
+-    <Modal open={!!imported} title="Use these existing Shopify family links?" size="lg" onClose={() => setImported(null)} footer={<><Button onClick={() => setImported(null)}>Cancel</Button><Button variant="primary" disabled={disabled} onClick={() => { if (imported) { try { setDraft(mergeImportedLinkedFamily(draft, imported)); setImported(null); setReview(null) } catch (e) { setError((e as Error).message); setImported(null) } } }}>Use this family</Button></>}><p>The ordered members below will become this editor’s Shopify family. Existing saved field edits remain available for review. Removed products will be unlinked during synchronization.</p><ol>{imported?.members.map(m => <li key={m.id}>{m.title}</li>)}</ol><p>All sibling lists will follow this order when you synchronize.</p></Modal>
+-    <Modal open={!!review} title="Review Shopify changes" size="xl" readable onClose={() => { if (!busy) setReview(null) }} footer={<><Button disabled={busy} onClick={() => setReview(null)}>Keep editing</Button><Button variant="primary" disabled={busy || !canPublish || !review?.changes.length} onClick={() => { void action(() => sync()) }}>Synchronize {review?.changes.length ?? 0} {review?.changes.length === 1 ? 'change' : 'changes'}</Button></>}>
+-      <div className={styles.stack}>{review?.warnings.map(w => <Banner key={w} tone="warning">{w}</Banner>)}{review?.changes.length === 0 && <p>The selected fields already match Shopify.</p>}{review?.changes.map(c => <section key={fieldAddress(c)} className={styles.field}><h3>{c.ownerLabel}</h3><p className={styles.hint}>{definitionAddress(c)}</p><div className={styles.review}><div><p>Shopify now</p><pre className={styles.value}>{reviewValue(c.type, c.value)}</pre></div><div><p>After synchronization</p><pre className={styles.value}>{reviewValue(c.type, c.nextValue)}</pre></div></div></section>)}</div>
++    <Modal open={!!imported} title="Use these existing Shopify family links?" size="lg" onClose={() => setImported(null)} footer={<><Button onClick={() => setImported(null)}>Cancel</Button><Button variant="primary" disabled={disabled} onClick={() => { if (imported) { try { const merged = mergeImportedLinkedFamily(draft, imported); const parsed = shopifyLinkedDraftSchema.safeParse(merged); if (!parsed.success) throw new Error('Update or remove sharing rules that depend on the current family before replacing its products. Your current draft is preserved.'); setDraft(parsed.data); setImported(null); setReview(null) } catch (e) { setError((e as Error).message); setImported(null) } } }}>Use this family</Button></>}><p>The ordered members below will become this editor’s Shopify family. Existing saved field edits remain available for review. Removed products will be unlinked during synchronization.</p><ol>{imported?.members.map(m => <li key={m.id}>{m.title}</li>)}</ol><p>All sibling lists will follow this order when you synchronize.</p></Modal>
++    <Modal open={!!review} title={reviewIntent === 'automatic' ? 'Review & enable automation' : 'Review Shopify changes'} size="xl" readable onClose={() => { if (!busy) setReview(null) }} footer={<><Button disabled={busy} onClick={() => setReview(null)}>Keep editing</Button><Button variant="primary" disabled={busy || !canPublish || (reviewIntent === 'sync' && !review?.changes.length)} onClick={() => { void action(() => reviewIntent === 'automatic' ? setAutomation('AUTOMATIC') : sync()) }}>{reviewIntent === 'automatic' ? 'Enable automatic synchronization' : `Synchronize ${review?.changes.length ?? 0} ${review?.changes.length === 1 ? 'change' : 'changes'}`}</Button></>}>
++      <div className={styles.stack}>{reviewIntent === 'automatic' && <Banner tone="info" title="These rules continue running in the background">Nexus checks every five minutes and synchronizes the reviewed family links and {draft.sharedFields?.length ?? 0} shared-content {draft.sharedFields?.length === 1 ? 'rule' : 'rules'}. Source changes flow to followers. Product overrides stay independent; conflicting edits stop for review. You can pause at any time.</Banner>}{reviewIntent === 'automatic' && draft.sharedFields?.map(rule => <p key={definitionAddress(rule)}>{schema?.definitions.find(d => d.ownerType === 'PRODUCT' && definitionAddress(d) === definitionAddress(rule))?.name ?? definitionAddress(rule)} · source: {draft.members.find(m => m.id === rule.sourceProductId)?.title} · {rule.excludedProductIds.length} {rule.excludedProductIds.length === 1 ? 'override' : 'overrides'}</p>)}{review?.warnings.map(w => <Banner key={w} tone="warning">{w}</Banner>)}{review?.changes.length === 0 && <p>The selected fields already match Shopify.</p>}{review?.changes.map(c => <section key={fieldAddress(c)} className={styles.field}><h3>{c.ownerLabel}</h3><p className={styles.hint}>{definitionAddress(c)}</p><div className={styles.review}><div><p>Shopify now</p><pre className={styles.value}>{reviewValue(c.type, c.value)}</pre></div><div><p>After synchronization</p><pre className={styles.value}>{reviewValue(c.type, c.nextValue)}</pre></div></div></section>)}</div>
+     </Modal>
+     <Modal open={!!confirmation} title={confirmation?.title} onClose={() => setConfirmation(null)} footer={<><Button onClick={() => setConfirmation(null)}>Cancel</Button><Button variant="primary" onClick={() => { const run = confirmation?.run; setConfirmation(null); run?.() }}>Continue</Button></>}><p>{confirmation?.text}</p></Modal>
+     <Modal open={!!leave} title="Discard unsaved draft changes?" onClose={() => { leave?.(false); setLeave(null) }} footer={<><Button onClick={() => { leave?.(false); setLeave(null) }}>Keep editing</Button><Button variant="danger-outline" onClick={() => { leave?.(true); setLeave(null) }}>Discard changes</Button></>}><p>Your last saved Nexus draft remains available.</p></Modal>
+     {schema && entry && <EntryEditor key={`${entry.id ?? 'new'}:${!!entry.copy}`} id={entry.id} copy={entry.copy} path={path} schema={schema} canPublish={canPublish} onClose={() => setEntry(null)} onSaved={saved => { setOwnerRefresh(v => v + 1); if (entry.copy) { entry.replace?.(saved.id); setEntry(null); setNotice('The separate entry was created. Its reference is staged for this product; save and review the draft to use it.') } }} />}
+     {draft.edits.length > 0 && <Disclosure summary={`Pending field changes (${draft.edits.length})`}><p>Changes for a removed product must be discarded here or the product restored before synchronization.</p>{draft.edits.map(edit => <div key={fieldAddress(edit)} className={styles.field}><span>{edit.ownerLabel} · {definitionAddress(edit)}</span><Button size="xs" disabled={disabled} onClick={() => mutate(d => { d.edits = d.edits.filter(e => fieldAddress(e) !== fieldAddress(edit)) })}>Discard this change</Button></div>)}</Disclosure>}
++    {draft.edits.length > 0 && <Disclosure summary={`Pending field edits · ${draft.edits.length}`}><div className={styles.stack}>{draft.edits.map(edit => <div key={fieldAddress(edit)} className={styles.header}><div><strong>{edit.ownerLabel}</strong><p className={styles.hint}>{schema?.definitions.find(d => d.ownerType === (edit.ownerId.includes('/Product/') ? 'PRODUCT' : 'PRODUCTVARIANT') && definitionAddress(d) === definitionAddress(edit))?.name ?? definitionAddress(edit)}</p></div><Button size="xs" disabled={disabled} aria-label={`Discard ${definitionAddress(edit)} edit for ${edit.ownerLabel}`} onClick={() => mutate(d => { d.edits = d.edits.filter(e => fieldAddress(e) !== fieldAddress(edit)) })}>Discard edit</Button></div>)}</div></Disclosure>}
+     {schema && <Disclosure summary="Store field coverage"><p>{schema.types.length} types discovered from Shopify. Product and variant definitions are kept separate. App-owned fields remain read-only. Changes are verified against Shopify; the theme controls how storefront content appears.</p></Disclosure>}
+   </div>
+ }
+--- a/apps/web/src/app/products/[id]/edit/_studio/shopify/linked.module.css
++++ b/apps/web/src/app/products/[id]/edit/_studio/shopify/linked.module.css
+@@ -6,7 +6,7 @@
+ .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: var(--nds-space-12); }
+ .columns { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(340px, 2fr); gap: var(--nds-space-16); align-items: start; }
+ .member, .reference { display: flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-8); min-width: 0; }
+-.member > span, .reference > span { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
++.member > span:not(.productPlaceholder), .reference > span { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
+ .member img, .reference img { width: 48px; height: 48px; object-fit: contain; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); }
+ .member small, .reference small { display: block; overflow-wrap: anywhere; }
+ .field { display: flex; flex-direction: column; gap: var(--nds-space-8); border-bottom: 1px solid var(--nds-border); padding-block: var(--nds-space-12); min-width: 0; }
+@@ -16,5 +16,20 @@
+ .value { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; padding: var(--nds-space-8); background: var(--nds-surface-sunken); border-radius: var(--nds-radius-sm); font-size: var(--nds-font-size-sm); }
+ .review { display: grid; grid-template-columns: 1fr 1fr; gap: var(--nds-space-8); }
+ .workspace dd { margin-inline-start: var(--nds-space-12); overflow-wrap: anywhere; }
++.eyebrow { margin: 0 0 var(--nds-space-6); font-size: var(--nds-font-size-xs); font-weight: var(--nds-font-weight-semibold); color: var(--nds-text-2); letter-spacing: 0.08em; }
++.summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nds-space-12); }
++.summary > * { display: flex; flex-direction: column; gap: var(--nds-space-6); min-width: 0; }
++.metric { font-size: var(--nds-font-size-2xl); line-height: 1.2; }
++.metricLabel { font-size: var(--nds-font-size-lg); line-height: 1.8; }
++.familyLayout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(290px, 1fr); gap: var(--nds-space-16); align-items: start; }
++.contentLayout { display: grid; grid-template-columns: minmax(230px, 0.7fr) minmax(0, 2fr); gap: var(--nds-space-16); align-items: start; }
++.familyLayout > *, .contentLayout > * { min-width: 0; }
++.automationStep { display: flex; align-items: flex-start; gap: var(--nds-space-10); padding-block: var(--nds-space-6); }
++.automationStep > svg { flex-shrink: 0; color: var(--nds-text-2); }
++.automationStep strong { display: block; margin-bottom: var(--nds-space-4); font-size: var(--nds-font-size-base); }
++.productPlaceholder { display: grid; place-items: center; width: 48px; height: 48px; flex: 0 0 48px; min-width: 0; color: var(--nds-text-2); background: var(--nds-surface-sunken); border-radius: var(--nds-radius-sm); }
++.fieldNavigation { display: flex; flex-direction: column; gap: var(--nds-space-4); max-height: 480px; overflow: auto; }
+ @media (max-width: 900px) { .columns { grid-template-columns: minmax(0, 1fr); } }
+-@media (max-width: 560px) { .workspace { padding: var(--nds-space-10); } .review { grid-template-columns: minmax(0, 1fr); } }
++@media (max-width: 1080px) { .familyLayout { grid-template-columns: minmax(0, 1fr); } }
++@media (max-width: 700px) { .contentLayout { grid-template-columns: minmax(0, 1fr); } .fieldNavigation { max-height: 180px; } }
++@media (max-width: 560px) { .workspace { padding: var(--nds-space-10); } .review { grid-template-columns: minmax(0, 1fr); } .summary { gap: var(--nds-space-6); } .summary > * > :last-child { display: none; } .metricLabel { font-size: var(--nds-font-size-base); line-height: 1.4; } }
+--- a/packages/shared/shopify-linked-products.ts
++++ b/packages/shared/shopify-linked-products.ts
+@@ -7,18 +7,37 @@
+   ownerId: shopifyGid, ...address, type: z.string().min(1), value: z.string().nullable(), compareDigest: z.string().nullable(),
+ }).strict()
+ export const shopifyFieldEditSchema = shopifyFieldSnapshotSchema.extend({ nextValue: z.string().nullable(), ownerLabel: z.string().max(1000) })
++export const shopifySharedFieldSchema = z.object({
++  ...address, sourceProductId: shopifyProductGid, excludedProductIds: z.array(shopifyProductGid).max(2048),
++  baseline: z.array(shopifyFieldSnapshotSchema).max(2048),
++}).strict()
++export type ShopifySharedField = z.infer<typeof shopifySharedFieldSchema>
++export interface ShopifySharedSuggestion { name: string; rule: ShopifySharedField }
+ export const shopifyLinkedDraftSchema = z.object({
+   version: z.literal(1),
+   members: z.array(z.object({ id: shopifyProductGid, title: z.string().max(1000), handle: z.string(), image: z.string().nullable() }).strict()).max(2048),
+   relationship: z.object({ ...address, includeSelf: z.boolean() }).strict().nullable(),
+   baselineLinks: z.array(shopifyFieldSnapshotSchema).max(4096),
+   edits: z.array(shopifyFieldEditSchema).max(10000),
++  sharedFields: z.array(shopifySharedFieldSchema).max(100).optional(),
+ }).strict().superRefine((draft, ctx) => {
+   for (const [name, keys] of [
+     ['members', draft.members.map(m => m.id)],
+     ['baselineLinks', draft.baselineLinks.map(fieldAddress)],
+     ['edits', draft.edits.map(fieldAddress)],
+   ] as const) if (new Set(keys).size !== keys.length) ctx.addIssue({ code: 'custom', message: `Duplicate ${name}.` })
++  const rules = draft.sharedFields ?? [], members = new Set(draft.members.map(m => m.id))
++  if (new Set(rules.map(definitionAddress)).size !== rules.length) ctx.addIssue({ code: 'custom', message: 'A field can have only one shared-content rule.' })
++  for (const rule of rules) {
++    if (!members.has(rule.sourceProductId) || rule.excludedProductIds.some(id => !members.has(id)) || rule.excludedProductIds.includes(rule.sourceProductId))
++      ctx.addIssue({ code: 'custom', message: 'Shared content sources and overrides must belong to this family.' })
++    const followers = draft.members.filter(m => m.id !== rule.sourceProductId && !rule.excludedProductIds.includes(m.id))
++    if (new Set(rule.baseline.map(fieldAddress)).size !== rule.baseline.length || rule.baseline.some(f => !members.has(f.ownerId) || f.namespace !== rule.namespace || f.key !== rule.key)
++      || followers.some(m => !rule.baseline.some(f => f.ownerId === m.id))) ctx.addIssue({ code: 'custom', message: 'Read each shared-content destination before saving its rule.' })
++    if (draft.relationship?.namespace === rule.namespace && draft.relationship.key === rule.key) ctx.addIssue({ code: 'custom', message: 'Family links cannot be a shared-content rule.' })
++    if (draft.edits.some(e => e.namespace === rule.namespace && e.key === rule.key && followers.some(m => m.id === e.ownerId)))
++      ctx.addIssue({ code: 'custom', message: 'Make a product override before editing inherited content.' })
++  }
+   if (draft.baselineLinks.some(f => !shopifyProductGid.safeParse(f.ownerId).success || f.type !== 'list.product_reference'
+     || f.namespace !== draft.relationship?.namespace || f.key !== draft.relationship?.key))
+     ctx.addIssue({ code: 'custom', message: 'The observed links must belong to the selected product relationship field.' })
+@@ -41,7 +60,7 @@
+   // Keep previous observations for existing members; importing must not silently
+   // acknowledge an external edit. New members carry their freshly read baseline.
+   for (const field of imported.baselineLinks) if (!baseline.has(fieldAddress(field))) baseline.set(fieldAddress(field), field)
+-  return { ...imported, baselineLinks: [...baseline.values()], edits: current.edits }
++  return { ...imported, baselineLinks: [...baseline.values()], edits: current.edits, ...(current.sharedFields ? { sharedFields: current.sharedFields } : {}) }
+ }
+ 
+ export interface ShopifyFieldDefinition {
+@@ -71,11 +90,22 @@
+ }
+ export interface ShopifyLinkedPlan {
+   revision: string; schemaRevision: string; changes: ShopifyFieldEdit[]; warnings: string[]
++  /** Sources and unchanged followers are verified too, including after the final batch. */
++  verification?: ShopifyFieldEdit[]
++  sources?: ShopifyFieldSnapshot[]
++}
++export interface ShopifyLinkedDiscovery {
++  draft: ShopifyLinkedDraft | null; candidates: { namespace: string; key: string; name: string; linkedProducts: number }[]; reasons: string[]
++}
++export interface ShopifyLinkedAutomation {
++  mode: 'PAUSED' | 'MONITOR' | 'AUTOMATIC'; status: 'IDLE' | 'CHECKING' | 'VERIFIED' | 'NEEDS_REVIEW' | 'ERROR'
++  lastCheckedAt: string | null; lastVerifiedAt: string | null; message: string | null; changes: number
+ }
+ export interface ShopifyLinkedWorkspace {
+   productId: string; familyId: string; name: string; destination: { accountId: string; listingId: string | null; market: string }
+   revision: string; draft: ShopifyLinkedDraft; suggestedProductIds: string[]
+   operation: { id: string; status: 'RUNNING' | 'UNVERIFIED' | 'VERIFIED'; completed: number; total: number; error: string | null } | null
++  automation?: ShopifyLinkedAutomation
+ }
+ 
+ /** No inferred field names, colours or ordering. Removed members lose only this reviewed family's links. */

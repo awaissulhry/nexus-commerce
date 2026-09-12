@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Apex E.1 — Brand Analytics Search Query Performance (SQP) ingest + probe.
  *
@@ -165,7 +166,7 @@ function warnIfOurCountsNeverParsed(rows: SqpRow[], raw: unknown[]): void {
 }
 
 async function resolveMarketplaceId(code: string): Promise<string | null> {
-  const row = await prisma.marketplace.findUnique({ where: { channel_code: { channel: 'AMAZON', code } } }).catch(() => null)
+  const row = await prisma.marketplace.findUnique({ where: { channel_code: workspaceKey({ channel: 'AMAZON', code }) } }).catch(() => null)
   return row?.marketplaceId ?? null
 }
 
@@ -427,7 +428,7 @@ export async function ingestSqp(args: { marketplaceCode: string; period?: SqpPer
     for (const row of rows) {
       const a = row.asin || asin // report is scoped to this asin; trust it if the row omits it
       await prisma.searchQueryPerformance.upsert({
-        where: { marketplace_reportPeriod_startDate_searchQuery_asin: { marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly, searchQuery: row.searchQuery, asin: a } },
+        where: { marketplace_reportPeriod_startDate_searchQuery_asin: workspaceKey({ marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly, searchQuery: row.searchQuery, asin: a }) },
         create: {
           marketplace: args.marketplaceCode, reportPeriod: period, startDate: startDateOnly,
           searchQuery: row.searchQuery, asin: a,

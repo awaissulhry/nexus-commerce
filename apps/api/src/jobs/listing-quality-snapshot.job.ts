@@ -166,8 +166,8 @@ export async function runListingQualitySnapshotCron(): Promise<void> {
 export function startListingQualitySnapshotCron(): void {
   if (scheduledTask) return
   const schedule = process.env.NEXUS_QUALITY_SNAPSHOT_SCHEDULE ?? '0 7 * * 1'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runListingQualitySnapshotCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runListingQualitySnapshotCron()
   })
   logger.info('listing-quality-snapshot cron: scheduled', { schedule })
 }

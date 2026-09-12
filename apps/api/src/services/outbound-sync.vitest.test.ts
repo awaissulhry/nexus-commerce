@@ -11,7 +11,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 // outbound-sync.service imports prisma + clients at module load; mock the DB so
 // importing the pure helpers under test never spins up a real PrismaClient.
-vi.mock('../db.js', () => ({ default: {} }))
+vi.mock('../db.js', () => ({ default: { marketplace: { findFirst: async ({ where }: any) => ({ languages: [where.code === 'DE' ? 'de' : 'it'] }) } } }))
 
 import {
   ebayCurrencyForMarket,
@@ -80,28 +80,28 @@ describe('Phase 0.2 — Amazon marketplace resolution (never US by default)', ()
 // in a bare {attributes} body. The Listings PATCH needs {productType, patches:[]}
 // with real schema names + value shapes.
 describe('A4.0 — buildAmazonListingPatch (correct Listings PATCH)', () => {
-  it('emits { productType, patches } — NOT a bare { attributes }', () => {
-    const body = buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR')
+  it('emits { productType, patches } — NOT a bare { attributes }', async () => {
+    const body = (await buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR'))
     expect(body.productType).toBe('OUTERWEAR')
     expect(Array.isArray(body.patches)).toBe(true)
     expect((body as any).attributes).toBeUndefined()
     expect(body.patches[0].op).toBe('replace')
   })
-  it('price → purchasable_offer (not "price") with our_price schedule + currency + marketplace', () => {
-    const body = buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR')
+  it('price → purchasable_offer (not "price") with our_price schedule + currency + marketplace', async () => {
+    const body = (await buildAmazonListingPatch({ price: 19.99 }, 'IT', 'OUTERWEAR'))
     const p = body.patches.find((x: any) => x.path === '/attributes/purchasable_offer')
     expect(p.value[0].our_price[0].schedule[0].value_with_tax).toBe(19.99)
     expect(p.value[0].currency).toBe('EUR')
     expect(p.value[0].marketplace_id).toBe('APJ6JRA9NG5V4')
     expect(body.patches.find((x: any) => x.path === '/attributes/price')).toBeUndefined()
   })
-  it('title → item_name with marketplace_id + language_tag', () => {
-    const p = buildAmazonListingPatch({ title: 'X' } as any, 'DE', 'OUTERWEAR').patches[0]
+  it('title → item_name with marketplace_id + language_tag', async () => {
+    const p = (await buildAmazonListingPatch({ title: 'X' } as any, 'DE', 'OUTERWEAR')).patches[0]
     expect(p.path).toBe('/attributes/item_name')
     expect(p.value[0]).toMatchObject({ value: 'X', marketplace_id: 'A1PA6795UKMFR9', language_tag: 'de_DE' })
   })
-  it('description → product_description; bulletPoints → bullet_point[]; quantity → fulfillment_availability', () => {
-    const body = buildAmazonListingPatch({ description: 'd', bulletPoints: ['a', 'b'], quantity: 5 } as any, 'IT', 'OUTERWEAR')
+  it('description → product_description; bulletPoints → bullet_point[]; quantity → fulfillment_availability', async () => {
+    const body = (await buildAmazonListingPatch({ description: 'd', bulletPoints: ['a', 'b'], quantity: 5 } as any, 'IT', 'OUTERWEAR'))
     const paths = body.patches.map((x: any) => x.path)
     expect(paths).toContain('/attributes/product_description')
     expect(paths).toContain('/attributes/fulfillment_availability')
@@ -110,33 +110,33 @@ describe('A4.0 — buildAmazonListingPatch (correct Listings PATCH)', () => {
     const fa = body.patches.find((x: any) => x.path === '/attributes/fulfillment_availability')
     expect(fa.value[0]).toMatchObject({ fulfillment_channel_code: 'DEFAULT', quantity: 5 })
   })
-  it('GB market → GBP currency', () => {
-    expect(buildAmazonListingPatch({ price: 10 }, 'UK', 'OUTERWEAR').patches[0].value[0].currency).toBe('GBP')
+  it('GB market → GBP currency', async () => {
+    expect((await buildAmazonListingPatch({ price: 10 }, 'UK', 'OUTERWEAR')).patches[0].value[0].currency).toBe('GBP')
   })
 })
 
 describe('B2 — FBM/FBA-aware quantity push', () => {
   const hasFa = (body: any) => body.patches.some((x: any) => x.path === '/attributes/fulfillment_availability')
 
-  it('FBM → emits fulfillment_availability with DEFAULT channel', () => {
-    const body = buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBM')
+  it('FBM → emits fulfillment_availability with DEFAULT channel', async () => {
+    const body = (await buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBM'))
     const fa = body.patches.find((x: any) => x.path === '/attributes/fulfillment_availability')
     expect(fa.value[0]).toMatchObject({ fulfillment_channel_code: 'DEFAULT', quantity: 5 })
   })
-  it('unknown method → still emits (safe FBM default; preserves prior behavior)', () => {
-    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR'))).toBe(true)
+  it('unknown method → still emits (safe FBM default; preserves prior behavior)', async () => {
+    expect(hasFa((await buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR')))).toBe(true)
   })
-  it('FBA → OMITS fulfillment_availability (Amazon owns the stock)', () => {
-    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA'))).toBe(false)
+  it('FBA → OMITS fulfillment_availability (Amazon owns the stock)', async () => {
+    expect(hasFa((await buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA')))).toBe(false)
   })
-  it('FBA is case-insensitive', () => {
-    expect(hasFa(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'fba'))).toBe(false)
+  it('FBA is case-insensitive', async () => {
+    expect(hasFa((await buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'fba')))).toBe(false)
   })
-  it('FBA + quantity-only → EMPTY patch set (caller skips the submit)', () => {
-    expect(buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA').patches.length).toBe(0)
+  it('FBA + quantity-only → EMPTY patch set (caller skips the submit)', async () => {
+    expect((await buildAmazonListingPatch({ quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA')).patches.length).toBe(0)
   })
-  it('FBA + price → still emits price; only the qty attribute is dropped', () => {
-    const body = buildAmazonListingPatch({ price: 19.99, quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA')
+  it('FBA + price → still emits price; only the qty attribute is dropped', async () => {
+    const body = (await buildAmazonListingPatch({ price: 19.99, quantity: 5 } as any, 'IT', 'OUTERWEAR', 'FBA'))
     const paths = body.patches.map((x: any) => x.path)
     expect(paths).toContain('/attributes/purchasable_offer')
     expect(paths).not.toContain('/attributes/fulfillment_availability')
@@ -274,5 +274,19 @@ describe('FB-E — live outbound push clamps by warehouse available − stockBuf
   it('a buffer larger than the pool clamps the push to 0', () => {
     expect(cap(2, 5)).toBe(0)
     expect(applyOversellClamp(2, cap(2, 5))).toEqual({ quantity: 0, clamped: true })
+  })
+})
+
+describe('mapping dispatch serializers', () => {
+  it('preserves typed Amazon compound patches produced by the category schema', async () => {
+    const patch = { op: 'replace', path: '/attributes/apparel_size', value: [{ size: 'x_l', size_system: 'as1' }] }
+    const payload = (await buildAmazonListingPatch({ source: 'FM_CATALOG_CASCADE', mappingAttributePatches: [patch] }, 'IT', 'COAT', 'FBA'))
+    expect(payload.patches).toEqual([patch])
+  })
+  it('changes only named eBay aspects and keeps existing media and unedited aspects', () => {
+    const original = { product: { title: 'Title', imageUrls: ['https://example.com/photo.jpg'], aspects: { Materiale: ['Old'], Colore: ['Nero'], Obsolete: ['Remove'] } } }
+    const updated = mergeEbayInventoryItem(original, { mappingAspects: { Materiale: ['Leather'], Obsolete: null } })
+    expect(updated.product).toEqual({ title: 'Title', imageUrls: original.product.imageUrls, aspects: { Materiale: ['Leather'], Colore: ['Nero'] } })
+    expect(original.product.aspects.Obsolete).toEqual(['Remove'])
   })
 })

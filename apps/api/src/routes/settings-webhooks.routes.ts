@@ -1,3 +1,4 @@
+import { currentProfileUser } from '../lib/auth/current-user.js'
 /**
  * Settings rebuild — Phase E.3
  *
@@ -58,7 +59,7 @@ function signPayload(secret: string, payload: string): string {
 }
 
 async function getSoloUser() {
-  return (await (prisma as any).userProfile.findFirst()) as
+  return (await currentProfileUser()) as
     | { id: string }
     | null
 }

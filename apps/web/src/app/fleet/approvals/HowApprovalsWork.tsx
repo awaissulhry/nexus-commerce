@@ -38,7 +38,7 @@
  */
 
 import { useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { HelpCircle } from 'lucide-react'
 import { Drawer } from '@/design-system/components/Drawer'
 

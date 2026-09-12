@@ -21,8 +21,9 @@
  */
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Button } from '@/design-system/primitives'
-import { Modal, DataGrid } from '@/design-system/components'
-import { useRouter } from 'next/navigation'
+import { Modal } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Plus, Search, Trash2, Users, CheckSquare, Share2, BarChart3, ChevronsUpDown, Info, Folder, Check, Settings, Minus, PackageOpen, Shield, AlertTriangle } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { IconAtom, IconEye, IconBars, IconLine } from '../../_shell/builder-icons'

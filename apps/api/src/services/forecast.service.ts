@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * F.4.4 — Forecast worker orchestrator.
  *
@@ -217,13 +218,13 @@ export async function generateForecastForSeries(
     const modelId = 'HOLT_WINTERS_V1'
     await prisma.replenishmentForecast.upsert({
       where: {
-        sku_channel_marketplace_horizonDay_model: {
+        sku_channel_marketplace_horizonDay_model: workspaceKey({
           sku: identity.sku,
           channel: identity.channel,
           marketplace: identity.marketplace,
           horizonDay,
           model: modelId,
-        },
+        }),
       },
       create: {
         sku: identity.sku,

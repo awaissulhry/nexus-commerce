@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase A — Diagnostic probe harness for Amazon Advertising endpoints.
  *
@@ -470,7 +471,7 @@ export async function probeAdvertisingEndpoints(args: {
 
   // 1. Load connection + credentials
   const conn = await prisma.amazonAdsConnection.findUnique({
-    where: { profileId: args.profileId },
+    where: { workspace_profileId: workspaceKey({ profileId: args.profileId }) },
     select: { profileId: true, marketplace: true, region: true, credentialsEncrypted: true },
   })
   if (!conn) throw new Error(`no AmazonAdsConnection for profileId=${args.profileId}`)

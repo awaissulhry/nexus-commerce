@@ -122,8 +122,8 @@ export function startFbaStorageAgeIngestCron(): void {
     logger.error('fba-storage-age-ingest cron: invalid schedule', { schedule })
     return
   }
-  fbaStorageAgeTask = cron.schedule(schedule, () => {
-    void runFbaStorageAgeIngestCron()
+  fbaStorageAgeTask = cron.schedule(schedule, async () => {
+    await runFbaStorageAgeIngestCron()
   })
   logger.info('fba-storage-age-ingest cron: scheduled', { schedule })
 }
@@ -158,8 +158,8 @@ export function startTrueProfitRollupCron(): void {
     logger.error('true-profit-rollup cron: invalid schedule', { schedule })
     return
   }
-  trueProfitRollupTask = cron.schedule(schedule, () => {
-    void runTrueProfitRollupCron()
+  trueProfitRollupTask = cron.schedule(schedule, async () => {
+    await runTrueProfitRollupCron()
   })
   logger.info('true-profit-rollup cron: scheduled', { schedule })
 }
@@ -196,8 +196,8 @@ export function startAdsReconcileCron(): void {
     logger.error('ads-metrics-reconcile cron: invalid schedule', { schedule })
     return
   }
-  adsReconcileTask = cron.schedule(schedule, () => {
-    void runAdsReconcileCron()
+  adsReconcileTask = cron.schedule(schedule, async () => {
+    await runAdsReconcileCron()
   })
   logger.info('ads-metrics-reconcile cron: scheduled', { schedule })
 }
@@ -232,8 +232,8 @@ export function startAdsMetricsIngestCron(): void {
     logger.error('ads-metrics-ingest cron: invalid schedule', { schedule })
     return
   }
-  adsMetricsIngestTask = cron.schedule(schedule, () => {
-    void runAdsMetricsIngestCron()
+  adsMetricsIngestTask = cron.schedule(schedule, async () => {
+    await runAdsMetricsIngestCron()
   })
   logger.info('ads-metrics-ingest cron: scheduled', { schedule })
 }
@@ -261,7 +261,7 @@ export function startCampaignSettingsSyncCron(): void {
   if (campaignSettingsSyncTask) { logger.warn('ads-campaign-settings-sync cron already started'); return }
   const schedule = process.env.NEXUS_ADS_SETTINGS_SYNC_SCHEDULE ?? '*/20 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-campaign-settings-sync cron: invalid schedule', { schedule }); return }
-  campaignSettingsSyncTask = cron.schedule(schedule, () => { void runCampaignSettingsSyncCron() })
+  campaignSettingsSyncTask = cron.schedule(schedule, async () => { await runCampaignSettingsSyncCron() })
   logger.info('ads-campaign-settings-sync cron: scheduled', { schedule })
 }
 
@@ -281,7 +281,7 @@ export function startFbaFeesIngestCron(): void {
   if (fbaFeesIngestTask) { logger.warn('fba-fees-ingest already started'); return }
   const schedule = process.env.NEXUS_FBA_FEES_SCHEDULE ?? '0 2 * * 0'
   if (!cron.validate(schedule)) { logger.error('fba-fees-ingest: invalid schedule', { schedule }); return }
-  fbaFeesIngestTask = cron.schedule(schedule, () => { void runFbaFeesIngestCron() })
+  fbaFeesIngestTask = cron.schedule(schedule, async () => { await runFbaFeesIngestCron() })
   logger.info('fba-fees-ingest cron: scheduled', { schedule })
 }
 
@@ -326,7 +326,7 @@ export function startReportGapFillCron(): void {
   if (reportGapFillTask) { logger.warn('ads-report-gapfill already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_GAPFILL_SCHEDULE ?? '5 2 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-gapfill: invalid schedule', { schedule }); return }
-  reportGapFillTask = cron.schedule(schedule, () => { void runReportGapFillCron() })
+  reportGapFillTask = cron.schedule(schedule, async () => { await runReportGapFillCron() })
   logger.info('ads-report-gapfill cron: scheduled', { schedule })
 }
 
@@ -334,7 +334,7 @@ export function startReportCreateCron(): void {
   if (reportCreateTask) { logger.warn('ads-report-create already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_SCHEDULE ?? '15 1 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-create: invalid schedule', { schedule }); return }
-  reportCreateTask = cron.schedule(schedule, () => { void runReportCreateCron() })
+  reportCreateTask = cron.schedule(schedule, async () => { await runReportCreateCron() })
   logger.info('ads-report-create cron: scheduled', { schedule })
 }
 
@@ -351,7 +351,7 @@ export function startReportCreateStCron(): void {
   if (reportCreateStTask) { logger.warn('ads-report-create-st already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_ST_SCHEDULE ?? '30 1 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-create-st: invalid schedule', { schedule }); return }
-  reportCreateStTask = cron.schedule(schedule, () => { void runReportCreateStCron() })
+  reportCreateStTask = cron.schedule(schedule, async () => { await runReportCreateStCron() })
   logger.info('ads-report-create-st cron: scheduled', { schedule })
 }
 
@@ -391,7 +391,7 @@ export function startBrandMetricsCron(): void {
   if (brandMetricsTask) { logger.warn('ads-brand-metrics already started'); return }
   const schedule = process.env.NEXUS_ADS_BRAND_METRICS_SCHEDULE ?? '10 2 * * 1'
   if (!cron.validate(schedule)) { logger.error('ads-brand-metrics: invalid schedule', { schedule }); return }
-  brandMetricsTask = cron.schedule(schedule, () => { void runBrandMetricsCron() })
+  brandMetricsTask = cron.schedule(schedule, async () => { await runBrandMetricsCron() })
   logger.info('ads-brand-metrics cron: scheduled', { schedule })
 }
 
@@ -399,7 +399,7 @@ export function startReportCreatePlCron(): void {
   if (reportCreatePlTask) { logger.warn('ads-report-create-pl already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_PL_SCHEDULE ?? '45 1 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-create-pl: invalid schedule', { schedule }); return }
-  reportCreatePlTask = cron.schedule(schedule, () => { void runReportCreatePlCron() })
+  reportCreatePlTask = cron.schedule(schedule, async () => { await runReportCreatePlCron() })
   logger.info('ads-report-create-pl cron: scheduled', { schedule })
 }
 
@@ -440,7 +440,7 @@ export function startReportCreateTgCron(): void {
   if (reportCreateTgTask) { logger.warn('ads-report-create-tg already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_TG_SCHEDULE ?? '0 2 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-create-tg: invalid schedule', { schedule }); return }
-  reportCreateTgTask = cron.schedule(schedule, () => { void runReportCreateTgCron() })
+  reportCreateTgTask = cron.schedule(schedule, async () => { await runReportCreateTgCron() })
   logger.info('ads-report-create-tg cron: scheduled', { schedule })
 }
 
@@ -448,7 +448,7 @@ export function startReportCreateApCron(): void {
   if (reportCreateApTask) { logger.warn('ads-report-create-ap already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_CREATE_AP_SCHEDULE ?? '50 1 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-create-ap: invalid schedule', { schedule }); return }
-  reportCreateApTask = cron.schedule(schedule, () => { void runReportCreateApCron() })
+  reportCreateApTask = cron.schedule(schedule, async () => { await runReportCreateApCron() })
   logger.info('ads-report-create-ap cron: scheduled', { schedule })
 }
 
@@ -464,7 +464,7 @@ export function startReportPollCron(): void {
   if (reportPollTask) { logger.warn('ads-report-poll already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_POLL_SCHEDULE ?? '*/10 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-poll: invalid schedule', { schedule }); return }
-  reportPollTask = cron.schedule(schedule, () => { void runReportPollCron() })
+  reportPollTask = cron.schedule(schedule, async () => { await runReportPollCron() })
   logger.info('ads-report-poll cron: scheduled', { schedule })
 }
 
@@ -531,7 +531,7 @@ export function startReportIngestCron(): void {
   if (reportIngestTask) { logger.warn('ads-report-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_REPORT_INGEST_SCHEDULE ?? '7,22,37,52 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-report-ingest: invalid schedule', { schedule }); return }
-  reportIngestTask = cron.schedule(schedule, () => { void runReportIngestCron() })
+  reportIngestTask = cron.schedule(schedule, async () => { await runReportIngestCron() })
   logger.info('ads-report-ingest cron: scheduled', { schedule })
 }
 
@@ -548,7 +548,7 @@ export function startSearchTermCleanupCron(): void {
   if (searchTermCleanupTask) { logger.warn('ads-search-term-cleanup already started'); return }
   const schedule = process.env.NEXUS_ADS_SEARCH_TERM_CLEANUP_SCHEDULE ?? '0 4 * * 0'
   if (!cron.validate(schedule)) { logger.error('ads-search-term-cleanup: invalid schedule', { schedule }); return }
-  searchTermCleanupTask = cron.schedule(schedule, () => { void runSearchTermCleanupCron() })
+  searchTermCleanupTask = cron.schedule(schedule, async () => { await runSearchTermCleanupCron() })
   logger.info('ads-search-term-cleanup cron: scheduled', { schedule })
 }
 
@@ -574,7 +574,7 @@ export function startV1ExportCreateCron(): void {
   // polling is the lever; the v3 keyword/negative resync above runs hourly for the higher-churn surface.)
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_CREATE_SCHEDULE ?? '0 */2 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-v1-export-create: invalid schedule', { schedule }); return }
-  v1ExportCreateTask = cron.schedule(schedule, () => { void runV1ExportCreateCron() })
+  v1ExportCreateTask = cron.schedule(schedule, async () => { await runV1ExportCreateCron() })
   logger.info('ads-v1-export-create cron: scheduled', { schedule })
 }
 
@@ -592,7 +592,7 @@ export function startV1ExportPollCron(): void {
   if (v1ExportPollTask) { logger.warn('ads-v1-export-poll already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_POLL_SCHEDULE ?? '*/5 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-v1-export-poll: invalid schedule', { schedule }); return }
-  v1ExportPollTask = cron.schedule(schedule, () => { void runV1ExportPollCron() })
+  v1ExportPollTask = cron.schedule(schedule, async () => { await runV1ExportPollCron() })
   logger.info('ads-v1-export-poll cron: scheduled', { schedule })
 }
 
@@ -661,7 +661,7 @@ export function startKeywordBidResyncCron(): void {
   // to keep the local platform close to Amazon. Env-overridable if the account ever hits rate limits.
   const schedule = process.env.NEXUS_ADS_KEYWORD_BID_RESYNC_SCHEDULE ?? '45 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-keyword-bid-resync: invalid schedule', { schedule }); return }
-  keywordBidResyncTask = cron.schedule(schedule, () => { void runKeywordBidResyncCron() })
+  keywordBidResyncTask = cron.schedule(schedule, async () => { await runKeywordBidResyncCron() })
   logger.info('ads-keyword-bid-resync cron: scheduled', { schedule })
 }
 
@@ -680,7 +680,7 @@ export function startAnomalyGuardCron(): void {
   if (anomalyGuardTask) { logger.warn('ads-anomaly-guard already started'); return }
   const schedule = process.env.NEXUS_ADS_ANOMALY_GUARD_SCHEDULE ?? '*/10 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-anomaly-guard: invalid schedule', { schedule }); return }
-  anomalyGuardTask = cron.schedule(schedule, () => { void runAnomalyGuardCron() })
+  anomalyGuardTask = cron.schedule(schedule, async () => { await runAnomalyGuardCron() })
   logger.info('ads-anomaly-guard cron: scheduled', { schedule })
 }
 
@@ -699,7 +699,7 @@ export function startAutoBidCron(): void {
   if (autoBidTask) { logger.warn('ads-auto-bid already started'); return }
   const schedule = process.env.NEXUS_ADS_AUTO_BID_SCHEDULE ?? '20 */6 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-auto-bid: invalid schedule', { schedule }); return }
-  autoBidTask = cron.schedule(schedule, () => { void runAutoBidCron() })
+  autoBidTask = cron.schedule(schedule, async () => { await runAutoBidCron() })
   logger.info('ads-auto-bid cron: scheduled', { schedule })
 }
 
@@ -719,7 +719,7 @@ export function startCoverageEngineCron(): void {
   if (coverageEngineTask) { logger.warn('ads-coverage-engine already started'); return }
   const schedule = process.env.NEXUS_COVERAGE_ENGINE_SCHEDULE ?? '10 7 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-coverage-engine: invalid schedule', { schedule }); return }
-  coverageEngineTask = cron.schedule(schedule, () => { void runCoverageEngineCron() })
+  coverageEngineTask = cron.schedule(schedule, async () => { await runCoverageEngineCron() })
   logger.info('ads-coverage-engine cron: scheduled', { schedule })
 }
 
@@ -727,7 +727,7 @@ export function startV1ExportIngestCron(): void {
   if (v1ExportIngestTask) { logger.warn('ads-v1-export-ingest already started'); return }
   const schedule = process.env.NEXUS_ADS_V1_EXPORT_INGEST_SCHEDULE ?? '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
   if (!cron.validate(schedule)) { logger.error('ads-v1-export-ingest: invalid schedule', { schedule }); return }
-  v1ExportIngestTask = cron.schedule(schedule, () => { void runV1ExportIngestCron() })
+  v1ExportIngestTask = cron.schedule(schedule, async () => { await runV1ExportIngestCron() })
   logger.info('ads-v1-export-ingest cron: scheduled', { schedule })
 }
 

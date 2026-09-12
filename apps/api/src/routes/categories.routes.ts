@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
@@ -15,6 +16,48 @@ const service = new CategorySchemaService(prisma as any, amazon)
 const productTypesService = new ProductTypesService(prisma as any, amazon, service)
 
 const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{ Querystring: { search?: string; ids?: string; accountId?: string; refresh?: string } }>('/categories/etsy-taxonomy', async (request, reply) => {
+    const { search = '', ids, accountId, refresh } = request.query
+    const selected = ids ? ids.split(',') : []
+    if (selected.length > 200 || selected.some(id => !/^[1-9]\d*$/.test(id)) || search.length > 200) return reply.code(400).send({ error: 'Provide valid seller category IDs or a shorter search.' })
+    if (!selected.length && search.trim().length < 2) return { items: [] }
+    try {
+      const { getEtsyTaxonomy } = await import('../services/etsy/taxonomy.js')
+      const taxonomy = await getEtsyTaxonomy(accountId, refresh === '1')
+      const terms = search.trim().toLowerCase().split(/\s+/)
+      const items = taxonomy.filter(item => selected.length ? selected.includes(item.productType)
+        : terms.every(term => `${item.displayName} ${item.productType}`.toLowerCase().includes(term)))
+      return { items: selected.length ? items : items.slice(0, 100), total: items.length }
+    } catch (error) {
+      request.log.warn({ err: error }, 'Etsy category search unavailable')
+      return reply.code(503).send({ error: 'Etsy categories are unavailable. Check the connection and try again.' })
+    }
+  })
+
+  // Independent from the sheet read so a seller-name lookup cannot delay editing.
+  fastify.get<{ Querystring: { channel?: string; marketplace?: string; productType?: string; accountId?: string; shipping?: string; browseNodeIds?: string } }>('/categories/reference-labels', async (request, reply) => {
+    const { marketplace, productType, accountId, shipping } = request.query
+    const channel = (request.query.channel ?? 'AMAZON').toUpperCase()
+    const browseNodeIds = [...new Set((request.query.browseNodeIds ?? '').split(',').filter(Boolean))]
+    if (browseNodeIds.length > 200 || browseNodeIds.some(id => !/^\d{1,30}$/.test(id))) return reply.code(400).send({ error: 'Provide up to 200 numeric browse-node IDs' })
+    if (channel !== 'AMAZON' && channel !== 'EBAY') return reply.code(400).send({ error: 'Unsupported channel' })
+    if (!marketplace || !productType || !/^[A-Z0-9_]{1,100}$/i.test(productType)) {
+      return reply.code(400).send({ error: 'marketplace and productType are required' })
+    }
+    const market = await prisma.marketplace.findFirst({ where: { channel, code: marketplace.toUpperCase() }, select: { code: true } })
+    if (!market) return reply.code(400).send({ error: 'Unknown marketplace' })
+    try {
+      const { amazonReferenceLabels, cachedCategoryLabels } = await import('../services/categories/reference-labels.service.js')
+      const labels = await cachedCategoryLabels(channel, market.code, productType.toUpperCase())
+      if (channel === 'EBAY') return { labels }
+      const result = await amazonReferenceLabels({ marketplace: market.code, productType: productType.toUpperCase(), accountId, shipping: shipping === '1', browseNodeIds })
+      return { ...result, labels: { ...labels, ...result.labels } }
+    } catch (error) {
+      const status = (error as { statusCode?: number }).statusCode
+      return reply.code(status && status >= 400 && status < 500 ? status : 503).send({ error: 'Reference names are unavailable' })
+    }
+  })
+
   // GET /api/categories/schema?channel=AMAZON&marketplace=IT&productType=OUTERWEAR&force=1
   //
   // Returns the cached or freshly-fetched CategorySchema row. `force=1`
@@ -26,6 +69,7 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       productType?: string
       force?: string
       lite?: string
+      accountId?: string
     }
     if (!q.channel || !q.productType) {
       return reply
@@ -33,7 +77,7 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'channel and productType are required' })
     }
     const channel = q.channel.toUpperCase() as SupportedChannel
-    if (channel !== 'AMAZON' && channel !== 'EBAY') {
+    if (channel !== 'AMAZON' && channel !== 'EBAY' && channel !== 'ETSY') {
       return reply
         .code(400)
         .send({ error: `unsupported channel: ${q.channel}` })
@@ -44,10 +88,16 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
           channel,
           marketplace: q.marketplace ?? null,
           productType: q.productType,
+          accountId: q.accountId,
         },
         { force: q.force === '1' || q.force === 'true' },
       )
       const isLite = q.lite === '1' || q.lite === 'true'
+      if (q.force === '1' || q.force === 'true') {
+        const { clearSheetColumnCache } = await import('../services/pim/sheet-columns.service.js')
+        const { clearStudioColumnCache } = await import('../services/pim/studio-columns.js')
+        clearSheetColumnCache(); clearStudioColumnCache()
+      }
       return {
         channel: schema.channel,
         marketplace: schema.marketplace,
@@ -76,11 +126,8 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
   // for a given (channel, marketplace, productType) combination.
   //
   // Strategy (in order):
-  //   1. Return a cached path if one was stored on an existing ChannelListing
-  //      that belongs to this (channel, marketplace) — fast, no SP-API call.
-  //   2. Find any ASIN already stored in a ChannelListing or ListingReconciliation
-  //      for this (channel, marketplace) and run searchCatalogItems on it to
-  //      get classifications → category path. Cache the result back on the row.
+  //   1. Return a cached path from the exact marketplace and product type.
+  //   2. Classify an ASIN from that same scope and confirm its live product type.
   //   3. If no ASIN is available return null (the UI will ask the user to detect).
   //
   // Response: { categoryPath: string | null, browseNodes: number[] | null }
@@ -101,12 +148,12 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     if (channel !== 'AMAZON') {
       return reply.send({ categoryPath: null, browseNodes: null })
     }
+    const listingScope = amazonCategoryListings(marketplace, productType)
 
     // 1 — Check ChannelListing for a cached detectedCategoryPath
     const listingWithPath = await prisma.channelListing.findFirst({
       where: {
-        channel,
-        marketplace,
+        ...listingScope,
         platformAttributes: { path: ['detectedCategoryPath'], not: null },
       },
       select: { platformAttributes: true },
@@ -123,23 +170,18 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    // 2 — Find any ASIN for this (channel, marketplace) to look up classifications
-    if (!amazon.isConfigured()) {
+    // 2 — Only a typed listing can provide an ASIN for this category.
+    if (!(await amazon.isConfigured())) {
       return reply.send({ categoryPath: null, browseNodes: null })
     }
 
     // First try ChannelListings with a stored externalListingId (ASIN)
     const listingWithAsin = await prisma.channelListing.findFirst({
-      where: { channel, marketplace, externalListingId: { not: null } },
+      where: { ...listingScope, externalListingId: { not: null } },
       select: { externalListingId: true },
     }).catch(() => null)
 
-    const asin = listingWithAsin?.externalListingId ??
-      // Fall back to reconciliation rows
-      (await prisma.listingReconciliation.findFirst({
-        where: { channel, marketplace, externalListingId: { not: null } },
-        select: { externalListingId: true },
-      }).catch(() => null))?.externalListingId
+    const asin = listingWithAsin?.externalListingId
 
     if (!asin) {
       return reply.send({ categoryPath: null, browseNodes: null })
@@ -149,6 +191,7 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       const { amazonMarketplaceId } = await import('../services/categories/marketplace-ids.js')
       const mpId = amazonMarketplaceId(marketplace)
       const result = await amazon.detectProductTypeFromAsin(asin, mpId)
+      if (result.productType !== productType) return reply.send({ categoryPath: null, browseNodes: null })
       return reply.send({
         categoryPath: result.categoryPath,
         browseNodes: result.browseNodes,
@@ -169,13 +212,11 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
   //   Step 1 — searchDefinitionsProductTypes(keyword) — allowed, powers the
   //            product type picker. Returns matching product type codes.
   //
-  //   Step 2 — For each product type (up to 6), find a real ASIN from the DB
-  //            (ChannelListing or ListingReconciliation) for a product of that
+  //   Step 2 — For each product type (up to 6), find a real ChannelListing ASIN for a product of that
   //            type, then call searchCatalogItems(ASIN, identifiersType=ASIN,
   //            classifications) — also allowed, used by competitor detection.
   //
-  //   Fallback — if no DB ASIN exists for a type, use any ASIN from the
-  //              marketplace to get at least one category tree path.
+  //   Types without a matching ASIN cannot supply a category breadcrumb.
   //
   // Result: each suggestion has { productType, pathParts[], browseNodes[] }.
   fastify.get('/categories/suggestions', async (request, reply) => {
@@ -214,15 +255,6 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
       // We look for a real ASIN from our catalog for products of that type,
       // then call detectProductTypeFromAsin (ASIN identifier lookup, allowed).
 
-      // Preload any ASIN from this marketplace as a last-resort fallback
-      const fallbackAsin = (await prisma.channelListing.findFirst({
-        where: { channel: 'AMAZON', marketplace, externalListingId: { not: null } },
-        select: { externalListingId: true },
-      }))?.externalListingId ?? (await prisma.listingReconciliation.findFirst({
-        where: { channel: 'AMAZON', marketplace, externalListingId: { not: null } },
-        select: { externalListingId: true },
-      }))?.externalListingId ?? null
-
       const suggestions: Array<{
         productType: string
         displayName: string
@@ -236,18 +268,17 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
           // Find an ASIN whose product has this product type
           const listing = await prisma.channelListing.findFirst({
             where: {
-              channel: 'AMAZON',
-              marketplace,
+              ...amazonCategoryListings(marketplace, pt.productType),
               externalListingId: { not: null },
-              product: { productType: pt.productType },
             },
             select: { externalListingId: true },
           })
 
-          const asin = listing?.externalListingId ?? fallbackAsin
-          if (!asin || !amazon.isConfigured()) return
+          const asin = listing?.externalListingId
+          if (!asin || !(await amazon.isConfigured())) return
 
           const result = await amazon.detectProductTypeFromAsin(asin, mpId)
+          if (result.productType !== pt.productType) return
           if (!result.categoryPath && (!result.browseNodes || result.browseNodes.length === 0)) return
 
           const pathParts = result.categoryPath
@@ -311,6 +342,21 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
 }
 
 export default categoriesRoutes
+
+/** A listing's channel-specific type wins over Master. Untyped reconciliation
+ * rows cannot establish which category a stored ASIN belongs to. */
+function amazonCategoryListings(marketplace: string, productType: string): Prisma.ChannelListingWhereInput {
+  return {
+    channel: 'AMAZON', marketplace, product: { deletedAt: null },
+    OR: [
+      { platformAttributes: { path: ['productType'], equals: productType } },
+      { AND: [
+        { platformAttributes: { path: ['productType'], equals: Prisma.AnyNull } },
+        { product: { productType } },
+      ] },
+    ],
+  }
+}
 
 /** Walk a classification node and its parent chain to produce an
  *  ordered path (root → leaf) and a list of browse node IDs. */

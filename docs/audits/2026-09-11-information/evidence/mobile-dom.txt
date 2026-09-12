@@ -1,0 +1,202 @@
+- iframe:
+  - generic: Disposable Information fixture
+  - button "Interrupt next save"
+  - button "Delay next read"
+  - button "Toggle theme"
+  - main:
+    - button "Expand product navigation":
+    - link "Products":
+      - /url: /products/next
+      - text: Products
+    - heading "Information jacket" [level=1]
+    - generic "INFO-JACKET"
+    - generic: Draft
+    - generic: Parent
+    - generic "Information edits save as Nexus drafts. Saving does not publish or deliver them to Etsy.": Nexus draft autosave
+    - button "Review listing information"
+    - generic: Editing
+    - radiogroup "Editing":
+      - radio "Shared product Blocked 33%":
+        - generic: Shared product
+        - generic: ·
+        - generic: Blocked
+        - generic: 33%
+      - radio "Amazon":
+        - generic: Amazon
+      - radio "eBay":
+        - generic: eBay
+      - radio "Shopify Not set up":
+        - generic: Shopify
+        - generic: ·
+        - generic: Not set up
+      - radio "Etsy Blocked 89%" [checked]:
+        - generic: Etsy
+        - generic: ·
+        - generic: Blocked
+        - generic: 89%
+    - button "Account":
+      - generic: ETSY store A · primary
+    - button "Market":
+      - generic: GLOBAL
+    - button "Content language":
+      - generic: English (en)
+    - region "Information":
+      - text: 9 rows
+      - generic: · 3 listings · 2 variations
+      - textbox "Find":
+        - /placeholder: Find a SKU or a name…
+      - button "Custom (1)":
+        - text: Custom (1)
+      - button "Required 9 columns":
+        - generic: Required
+        - generic: 9 columns
+      - button "Essentials 9 columns":
+        - generic: Essentials
+        - generic: 9 columns
+      - button "Localized content 4 columns":
+        - generic: Localized content
+        - generic: 4 columns
+      - 'button "Missing required: 9 affected cells across 1 column and 9 rows"':
+        - generic: Missing required
+        - generic: 1 column
+      - 'button "Mapping errors: 9 affected cells across 1 column and 9 rows. The mapping result has an error. Open Channel mapping to review the source rule and preview value."':
+        - text: Mapping errors
+        - generic: 1 column
+      - button "Requirements"
+      - button "Customise"
+      - button "Export"
+      - button "Import"
+      - button "More":
+      - treegrid:
+        - rowgroup:
+          - row "Column with Header Selection Product Shipping profile":
+            - columnheader "Column with Header Selection":
+              - checkbox "Column with Header Selection"
+            - columnheader "Product":
+              - generic: Product
+            - columnheader "Shipping profile":
+              - generic: Shipping profile
+          - 'row "Press Space to toggle row selection (unchecked) Collapse listing Parent · 2 children Primary listing INFO-JACKET Primary Primary · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked etsy-a Standard shipping Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: INFO-JACKET, Shipping profile" [expanded]':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - gridcell "Collapse listing Parent · 2 children Primary listing INFO-JACKET Primary Primary · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+              - button "Collapse listing" [expanded]:
+              - img "Parent · 2 children": P
+              - generic "Primary listing": ★
+              - generic: INFO-JACKET
+              - generic "Primary · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked": Primary
+              - img "Primary · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+                - generic: 89%
+            - 'gridcell "etsy-a Standard shipping Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: INFO-JACKET, Shipping profile"':
+              - generic: etsy-a Standard shipping
+              - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: INFO-JACKET, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-ONE
+              - 'generic "size: M · color: black"': M · black
+              - img "INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-ONE":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-TWO
+              - 'generic "size: L · color: red"': L · red
+              - img "INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-TWO":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Collapse listing Parent · 2 children Listing alias 1 INFO-JACKET Listing 1 Listing 1 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile" [expanded]':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - gridcell "Collapse listing Parent · 2 children Listing alias 1 INFO-JACKET Listing 1 Listing 1 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+              - button "Collapse listing" [expanded]:
+              - img "Parent · 2 children": P
+              - generic "Listing alias 1": ①
+              - generic: INFO-JACKET
+              - generic "Listing 1 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked": Listing 1
+              - img "Listing 1 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+                - generic: 89%
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-ONE
+              - 'generic "size: M · color: black"': M · black
+              - img "INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-ONE":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-TWO
+              - 'generic "size: L · color: red"': L · red
+              - img "INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-TWO":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Collapse listing Parent · 2 children Listing alias 2 INFO-JACKET Listing 2 Listing 2 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile" [expanded]':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - gridcell "Collapse listing Parent · 2 children Listing alias 2 INFO-JACKET Listing 2 Listing 2 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+              - button "Collapse listing" [expanded]:
+              - img "Parent · 2 children": P
+              - generic "Listing alias 2": ②
+              - generic: INFO-JACKET
+              - generic "Listing 2 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked": Listing 2
+              - img "Listing 2 · Listing draft · 2 variants · Errors — 89% of required fields filled · 3 rows missing required · 3 blocked":
+                - generic: 89%
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-JACKET, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-ONE M · black INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-ONE"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-ONE
+              - 'generic "size: M · color: black"': M · black
+              - img "INFO-ONE — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-ONE":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-ONE, Shipping profile"':
+          - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+            - gridcell "Press Space to toggle row selection (unchecked)":
+              - checkbox "Press Space to toggle row selection (unchecked)"
+            - 'gridcell "Child · Parent SKU: INFO-JACKET INFO-TWO L · red INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors Actions for INFO-TWO"':
+              - 'img "Child · Parent SKU: INFO-JACKET"': C
+              - generic: INFO-TWO
+              - 'generic "size: L · color: red"': L · red
+              - img "INFO-TWO — 10 of 57 channel fields filled (including optional fields) · errors":
+                - generic: 18%
+              - button "Actions for INFO-TWO":
+            - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+              - generic: —
+              - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: INFO-TWO, Shipping profile"':
+      - status:
+        - generic: 9 rows
+        - button "Show the keyboard shortcuts": "?"
+    - complementary "Record"

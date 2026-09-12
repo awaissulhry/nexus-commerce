@@ -60,6 +60,6 @@ export function startAdsSyncDrainCron(): void {
   }
   // Every minute — the 5-min grace window is the real delay; this picks up
   // rows promptly once their hold elapses, even with Redis/BullMQ down.
-  scheduledTask = cron.schedule('* * * * *', () => void runAdsSyncDrainCron())
+  scheduledTask = cron.schedule('* * * * *', async () => { await runAdsSyncDrainCron() })
   logger.info('drain-ads-sync cron scheduled (* * * * *)')
 }

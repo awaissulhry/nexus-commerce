@@ -1,0 +1,42 @@
+{
+  "checkedAt": "2026-09-09T10:15:10Z",
+  "status": "BLOCKED_AUTHENTICATED_ACCESS_UNAVAILABLE",
+  "storeWritesPerformed": false,
+  "executionScope": "Direct Shopify migration; merchant will connect Nexus later",
+  "nexusConnectionRequired": false,
+  "browser": {
+    "installedVersion": "26.901.51231",
+    "setupSucceeded": true,
+    "requestedBrowser": "iab",
+    "selectionError": "Browser is not available: iab",
+    "discoveredBrowsers": [],
+    "previousMissingServiceErrorRecurred": false,
+    "shopifyLoginVerified": false
+  },
+  "nexusAccessCheck": {
+    "script": "integrations/shopify/impact/verification/access-check.mts",
+    "workingDirectory": "apps/api",
+    "completedExitCode": 0,
+    "result": { "status": "ACCOUNTS", "accounts": [] }
+  },
+  "savedAuditIntegrity": {
+    "auditSha256": "1fe6bac476a2359870e071326241cd74ad873ad62872be1698ad5d8ba5ccd2c6",
+    "verifiedSnapshotChecks": 42,
+    "totalSnapshotChecks": 42,
+    "catalogueHashMethod": "SHA-256 of original file bytes",
+    "htmlHashMethod": "SHA-256 of read_text().encode(), matching the original audit and normalizing line endings",
+    "uniqueSourceProductIds": 29,
+    "uniqueSourceVariantIds": 221,
+    "nonNullDestinationIds": 0,
+    "isAuthenticatedBackup": false,
+    "liveDataRefreshed": false
+  },
+  "migration": {
+    "authenticatedBackupsCompleted": false,
+    "adminSkuAndFamilyIdentityVerified": false,
+    "judgeMeReviewsAndGroupsVerified": false,
+    "familiesRehearsed": 0,
+    "familiesMigrated": 0,
+    "preservationChecksPassed": false
+  }
+}

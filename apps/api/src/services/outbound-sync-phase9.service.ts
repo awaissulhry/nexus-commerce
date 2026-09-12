@@ -27,6 +27,18 @@ export class OutboundSyncServicePhase9 {
       where: {
         syncStatus: OutboundSyncStatus.PENDING,
         nextRetryAt: { lte: new Date() },
+        // PES.5 — a dead row must never be re-run. This was previously an
+        // INVARIANT rather than a filter: the drain relied on every `isDead`
+        // row also carrying `syncStatus: FAILED`, which is true today (verified
+        // 2026-09-01: 2,553 dead rows, all FAILED, zero PENDING) but is enforced
+        // by convention in the writers, not here. Any writer that ever sets
+        // isDead without moving the row off PENDING would have this re-running
+        // writes that were declared dead.
+        //
+        // Provably a no-op against current data — the drain selects 0 rows with
+        // or without it — so it changes nothing today and guards everything
+        // after. Do not remove as redundant: its redundancy is the point.
+        isDead: false,
         // Only process items that are not in grace period
         OR: [
           { holdUntil: null },

@@ -11,22 +11,23 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Button, Checkbox, Pill, Toggle, ToolbarButton } from '@/design-system/primitives'
 import './campaigns-ds.css'
 import { Listbox, Modal, Pagination } from '@/design-system/components'
-import Link from 'next/link'
-import { Settings2, Download, Wand2, Plus, ChevronDown, ChevronUp, ChevronsUpDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
+import Link from '@/lib/workspaces/Link'
+import { Settings2, Download, Wand2, Plus, ChevronDown, Library, Book, Search, Trash2, ListChecks, Pencil, Bot } from 'lucide-react'
 import { TargetAcosCell, MinMaxBidCell, MinMaxBudgetCell, BudgetUtilCell, UsageHoursCell, BidAutomationCell, BidRuleCell, BidAlgoMenu, BID_ALGOS, type BudgetUsageState } from '../_shared/RuleColumnCells'
 import { RangePopover, ValuePopover, anchorFromEvent, type PopAnchor } from '../_shared/RuleColumnEditors'
 import { CampaignNameCell, StatusCell, BiddingStrategyCell, StrategyModal, AutomationCell, AmazonDeliveryCell, STATUS_PILL, STRAT_LABEL } from '../_shared/CampaignRowCells'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { describeWindow } from '@nexus/shared/data-vintage'
 import { getBackendUrl } from '@/lib/backend-url'
-import { HoverCard } from './FilterDropdown'
 import { enabledRank } from './_grid/enabledRank'
+import { AdsDataGrid, type GridColumn, type GridPrefs } from './_grid/AdsDataGrid'
 import { AdManagerGraph } from './AdManagerGraph'
 import { InfoTip } from './InfoTip'
 
 import { ExportScopeModal } from '../bulk/ExportScopeModal'
 import { pillTone } from '../_shared/pillTone'
-import { PreferencesModal, type PreferencesColumnSpec } from '@/design-system/patterns'
+import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
+import { readColumnLayout, withVisibleColumnOrder, type ColumnLayoutPreferences } from '@/design-system/grid/preferencesLayout'
 
 interface Camp {
   id: string; name: string; marketplace: string | null; status: string
@@ -368,6 +369,12 @@ const COL_BY_KEY: Record<string, ColDef> = Object.fromEntries(ALL_COLS.map((c) =
 const ALL_KEYS = ALL_COLS.map((c) => c.key)
 // H10 ships with every column visible (Select All on).
 const DEFAULT_VISIBLE = ALL_KEYS
+const columnGroup = (key: string) => {
+  if (['delivery', 'amazonDelivery', 'status', 'startDate', 'endDate'].includes(key)) return 'Campaign'
+  if (['minMaxBudget', 'dailyBudget', 'curBudgetUtil', 'avgBudgetUtil', 'oobHours'].includes(key)) return 'Budget'
+  if (['automation', 'bidAlgorithm', 'rules', 'biddingStrategy', 'bidMultiplier', 'actBidHours'].includes(key)) return 'Automation'
+  return 'Performance'
+}
 // Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new
 // key would otherwise be invisible to everyone who has ever opened Customize Columns.
 // Bumped whenever a column is ADDED: the visible set is persisted per operator, so a new key
@@ -377,10 +384,26 @@ const DEFAULT_VISIBLE = ALL_KEYS
 // hidden or moved, so it says `locked` on screen rather than silently refusing.
 const CUSTOMIZE_COLUMNS: PreferencesColumnSpec[] = [
   { key: '__first', label: 'Campaign', locked: true },
-  ...ALL_COLS.map((c) => ({ key: c.key, label: c.label })),
+  ...ALL_COLS.map((c) => ({ key: c.key, label: c.label, group: columnGroup(c.key) })),
 ]
 const CUSTOMIZE_DEFAULT = ['__first', ...DEFAULT_VISIBLE]
 const COLS_KEY = 'h10-am-columns-v5' // v3: AX2.1 Amazon Delivery · v4: ACR.1.6 Automation · v5: ADM-H P4 Amazon Delivery split from Write Delivery
+// AGC (2026-09-06) — a header RESIZE. The grid reports it through `onPrefsChange` as `widths`
+// (`{ [colKey]: px }`); this page keeps column preferences in `{order, visible}` under COLS_KEY and
+// that shape has no room for a width, so the map lives under its own additive key. Measured before
+// this key existed: a resized column read 272 → 152 after a reload (the width lived in state only).
+const WIDTHS_KEY = 'h10-am-col-widths-v1'
+const readColWidths = (): Record<string, number> => {
+  try {
+    const raw = localStorage.getItem(WIDTHS_KEY)
+    if (!raw) return {}
+    const o = JSON.parse(raw) as unknown
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return {}
+    const out: Record<string, number> = {}
+    for (const [k, v] of Object.entries(o as Record<string, unknown>)) if (typeof v === 'number' && Number.isFinite(v) && v > 0) out[k] = v
+    return out
+  } catch { return {} }
+}
 
 // Physical grid columns. Most checklist items are one column; "Bid Algorithm"
 // expands to the Adtomic cluster. `metric` → numeric/sortable cell (renderCol);
@@ -414,9 +437,27 @@ function physCols(itemKey: string): PhysCol[] {
   return [{ key: itemKey, label: it.label, metric: !SETTINGS_KEYS.has(itemKey) }]
 }
 // physical column → its Customize checklist item. The Adtomic cluster's 4 columns
-// all map to one item ("bidAlgorithm"), so header drag-reorder moves whole items.
+// all map to one item ("bidAlgorithm"), so a header reorder reported by the grid
+// (`onPrefsChange`) moves whole items, exactly as the old pointer drag did.
 const CLUSTER_KEY_SET = new Set(CLUSTER.map((c) => c.key))
 const physToItem = (k: string): string => (CLUSTER_KEY_SET.has(k) ? 'bidAlgorithm' : k)
+// AGC — stable row accessors for the shared grid (its memos key on their identity).
+const campaignId = (c: Camp) => c.id
+const campaignName = (c: Camp) => c.name
+// The identity cell, unchanged: it needs nothing from the page's state, so it lives here and the
+// grid receives the same function on every render.
+function renderCampaignFirst(c: Camp): ReactNode {
+  return (
+    <CampaignNameCell
+      id={c.id} name={c.name} marketplace={c.marketplace} status={c.status}
+      dailyBudgetCents={c.dailyBudget != null && c.dailyBudget !== '' ? Math.round(num(c.dailyBudget) * 100) : null}
+      type={c.type} adProduct={c.adProduct}
+      extra={c.externalCampaignId ? (
+        <a className="h10-open" href={`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=${encodeURIComponent(c.externalCampaignId)}&targetLabel=${encodeURIComponent(c.name)}`} title={`Point a worker at ${c.name} — opens Assignments with this campaign already chosen`} onClick={(e) => e.stopPropagation()}><Bot size={11} /> Assign</a>
+      ) : null}
+    />
+  )
+}
 
 // Numeric/metric cell. Settings columns are rendered by settingsCell instead.
 // Columns without a Nexus data source render "—" (H10-parity placeholders, P4).
@@ -988,6 +1029,7 @@ export function CampaignsGrid() {
   const [presetMsg, setPresetMsg] = useState('')
   const [colOrder, setColOrder] = useState<string[]>(ALL_KEYS)
   const [colVisible, setColVisible] = useState<string[]>(DEFAULT_VISIBLE)
+  const [colLayout, setColLayout] = useState<ColumnLayoutPreferences>({})
   const [showCustomize, setShowCustomize] = useState(false)
   // CBN.2c.2 — Edit-mode inline batch (staged → diff → gated Apply)
   const [edits, setEdits] = useState<Record<string, { biddingStrategy?: string; dailyBudget?: string }>>({})
@@ -1011,24 +1053,17 @@ export function CampaignsGrid() {
   const [editPop, setEditPop] = useState<{ id: string; kind: 'targetAcos' | 'dailyBudget' | 'minMaxBid' | 'minMaxBudget'; anchor: PopAnchor } | null>(null)
   /** U13 — campaigns whose bid-automation PATCH is in flight. Transient, so the switch may go `disabled`. */
   const [busyAuto, setBusyAuto] = useState<Set<string>>(new Set())
-  // WG.2b — this page hand-rolls its grid, and every DOM interaction below used to reach it with
-  // `document.querySelector('.nds-wsgrid')`, which returns the FIRST match on the page and ties
-  // the behaviour to a class name the WorkspaceGrid extraction has to rename.
   // Two ⛔ placeholder filters: they were uncontrolled <FilterDropdown>s that remembered their own
   // selection and told nobody. Listbox is controlled, so the state is explicit now — the surfaces
   // stay on the roadmap and behave exactly as before.
   const [bidAutoFilter, setBidAutoFilter] = useState('')
   const [ruleFilter, setRuleFilter] = useState('')
-  const gridElRef = useRef<HTMLDivElement | null>(null)
-  const colHiRef = useRef<string | null>(null) // header hover → column highlight, toggled via direct DOM (no grid re-render)
-  // pointer-based column reorder — smooth chip + live drop-indicator driven by
-  // direct DOM (NO per-move grid re-renders); the reorder commits once on release.
-  // `drag` is set only once per drag (start) so the grid doesn't thrash.
-  const [drag, setDrag] = useState<{ item: string; label: string } | null>(null)
-  const dragRef = useRef<{ item: string; startX: number; startY: number; dragging: boolean; label: string; bounds: Array<{ item: string; left: number; right: number; center: number }>; drop: string | null; before: boolean; gridTop: number; gridH: number; lastX: number; lastY: number; scrollEl: HTMLElement | null; initScroll: number; frozenRight: number; rafId: number } | null>(null)
-  const chipRef = useRef<HTMLDivElement>(null)
-  const indRef = useRef<HTMLDivElement>(null)
-  const suppressClick = useRef(false) // a drag must not also fire the sort onClick
+  // AGC (2026-09-05) — the grid is the shared WorkspaceGrid contract (`AdsDataGrid`, see `columns`
+  // below), so the header choreography this page hand-rolled — pointer drag-to-reorder with its chip
+  // and drop line, the `colhi` column highlight, the `data-item`/`data-col` hit-testing — is gone:
+  // the header is the grid's. What the grid reports back about its columns is a reorder (folded into
+  // `colOrder`/`colVisible` below) and, on the AG runtime, a resize — the width map kept here.
+  const [colWidths, setColWidths] = useState<Record<string, number>>({})
   // CBN.2d — header controls
   const [market, setMarket] = useState('all')
   const [rangePreset, setRangePreset] = useState('last7')
@@ -1114,14 +1149,16 @@ export function CampaignsGrid() {
     try {
       const s = localStorage.getItem(COLS_KEY)
       if (s) {
-        const p = JSON.parse(s) as { order?: string[]; visible?: string[] }
+        const p = JSON.parse(s) as { order?: string[]; visible?: string[] } & ColumnLayoutPreferences
         // reconcile against catalog: keep stored order, append any new keys, drop unknown
         const stored = (p.order ?? []).filter((k) => COL_BY_KEY[k])
         const order = [...stored, ...ALL_KEYS.filter((k) => !stored.includes(k))]
         setColOrder(order)
         setColVisible((p.visible ?? DEFAULT_VISIBLE).filter((k) => COL_BY_KEY[k]))
+        setColLayout(readColumnLayout(p, new Set(ALL_KEYS)))
       }
     } catch { /* ignore */ }
+    setColWidths(readColWidths())
   }, [])
 
   const setRange = (key: string, side: 'min' | 'max', v: string) => setRanges((m) => ({ ...m, [key]: { ...(m[key] ?? { min: '', max: '' }), [side]: v } }))
@@ -1140,108 +1177,16 @@ export function CampaignsGrid() {
   const deletePreset = (i: number) => persistLibrary(library.filter((_, idx) => idx !== i))
   // The dialog returns ONE ordered list — order and visibility from a single source, so the drag
   // handle cannot disagree with the checkboxes. Hidden columns keep their relative order behind it.
-  const onCustomizeConfirm = (next: { visibleColumns: string[] }) => {
+  const onCustomizeConfirm = (next: PreferencesValue) => {
     const visible = next.visibleColumns.filter((k) => k !== '__first' && COL_BY_KEY[k])
     const order = [...visible, ...colOrder.filter((k) => !visible.includes(k))]
     setColVisible(visible)
     setColOrder(order)
+    const layout = readColumnLayout(next, new Set(ALL_KEYS))
+    setColLayout(layout)
     setShowCustomize(false)
-    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible })) } catch { /* ignore */ }
+    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible, ...layout })) } catch { /* ignore */ }
   }
-  // column hover highlight — toggle .colhi on the column's cells via DOM (NOT React
-  // state) so sweeping across headers never re-renders the 100-row grid.
-  const setColHi = (key: string | null) => {
-    if (document.body.classList.contains('col-dragging')) return
-    if (colHiRef.current === key) return
-    if (colHiRef.current) Array.from(gridElRef.current?.querySelectorAll(`[data-col="${CSS.escape(colHiRef.current)}"]`) ?? []).forEach((el) => el.classList.remove('colhi'))
-    if (key) Array.from(gridElRef.current?.querySelectorAll(`[data-col="${CSS.escape(key)}"]`) ?? []).forEach((el) => el.classList.add('colhi'))
-    colHiRef.current = key
-  }
-  // Pointer-driven LIVE reorder: as the cursor crosses a header, the dragged item
-  // moves next to it immediately (grid re-renders → columns shift in real time).
-  // Click vs drag is disambiguated by a 5px threshold; the new order persists on drop.
-  // Operates on Customize items so the Adtomic cluster moves as one unit.
-  const startColDrag = (pc: PhysCol, startX: number, startY: number, button: number) => {
-    if (button !== 0) return
-    const item = physToItem(pc.key)
-    dragRef.current = { item, startX, startY, dragging: false, label: pc.label, bounds: [], drop: null, before: true, gridTop: 0, gridH: 0, lastX: startX, lastY: startY, scrollEl: null, initScroll: 0, frozenRight: 0, rafId: 0 }
-    // One update tick: chip follows cursor, edge-auto-scroll, recompute the drop
-    // position. All direct DOM (no React render). Driven by rAF so it keeps going
-    // while the pointer is held at an edge (continuous auto-scroll).
-    const update = () => {
-      const d = dragRef.current; if (!d || !d.dragging) return
-      const x = d.lastX, y = d.lastY
-      if (chipRef.current) { chipRef.current.style.opacity = '1'; chipRef.current.style.transform = `translate(${x + 14}px, ${y + 12}px)` }
-      const g = d.scrollEl
-      if (g) {
-        const gr = g.getBoundingClientRect(); const EDGE = 72, MAX = 24
-        if (x < gr.left + EDGE) g.scrollLeft -= Math.ceil(MAX * Math.min(1, (gr.left + EDGE - x) / EDGE))
-        else if (x > gr.right - EDGE) g.scrollLeft += Math.ceil(MAX * Math.min(1, (x - (gr.right - EDGE)) / EDGE))
-      }
-      const delta = (g ? g.scrollLeft : 0) - d.initScroll
-      const others = d.bounds.filter((b) => b.item !== d.item)
-      if (!others.length) return
-      let idx = others.length
-      for (let i = 0; i < others.length; i++) { if (x < others[i].center - delta) { idx = i; break } }
-      if (idx < others.length) { d.drop = others[idx].item; d.before = true } else { d.drop = others[others.length - 1].item; d.before = false }
-      let lineX = (idx < others.length ? others[idx].left : others[others.length - 1].right) - delta
-      if (g) { const gr = g.getBoundingClientRect(); lineX = Math.max(d.frozenRight, Math.min(lineX, gr.right - 2)) }
-      if (indRef.current) { indRef.current.style.opacity = '1'; indRef.current.style.top = `${d.gridTop}px`; indRef.current.style.height = `${d.gridH}px`; indRef.current.style.transform = `translateX(${lineX}px)` }
-    }
-    const rafLoop = () => { const d = dragRef.current; if (!d || !d.dragging) return; update(); d.rafId = requestAnimationFrame(rafLoop) }
-    const onMove = (ev: PointerEvent) => {
-      const d = dragRef.current; if (!d) return
-      d.lastX = ev.clientX; d.lastY = ev.clientY
-      if (!d.dragging) {
-        if (Math.hypot(ev.clientX - d.startX, ev.clientY - d.startY) < 5) return
-        d.dragging = true
-        setColHi(null) // clear any hover highlight before the drag takes over
-        document.body.style.userSelect = 'none'
-        document.body.classList.add('col-dragging') // suppresses header tooltips while dragging
-        const g = gridElRef.current
-        d.scrollEl = g; d.initScroll = g?.scrollLeft ?? 0
-        // freeze each visible column's bounds ONCE (incl. off-screen ones) → stable
-        // hit-testing; we account for auto-scroll via the scrollLeft delta.
-        const byItem = new Map<string, { item: string; left: number; right: number }>()
-        Array.from(gridElRef.current?.querySelectorAll('thead th[data-item]') ?? []).forEach((el) => {
-          const r = el.getBoundingClientRect(); const it = el.getAttribute('data-item') as string
-          const cur = byItem.get(it)
-          if (cur) { cur.left = Math.min(cur.left, r.left); cur.right = Math.max(cur.right, r.right) }
-          else byItem.set(it, { item: it, left: r.left, right: r.right })
-        })
-        d.bounds = Array.from(byItem.values()).map((b) => ({ ...b, center: (b.left + b.right) / 2 })).sort((a, b) => a.left - b.left)
-        const fz = (gridElRef.current?.querySelector('thead th.nm.fz') ?? null) as HTMLElement | null
-        const gr = g?.getBoundingClientRect()
-        const head = (g?.querySelector('thead') as HTMLElement | null)?.getBoundingClientRect()
-        d.frozenRight = fz ? fz.getBoundingClientRect().right : (gr?.left ?? 0)
-        d.gridTop = head?.top ?? gr?.top ?? 0; d.gridH = head?.height ?? 0 // drop-line spans only the header row
-        setDrag({ item: d.item, label: d.label }) // one re-render: mount chip + indicator + dim source
-        d.rafId = requestAnimationFrame(rafLoop)
-      }
-      update()
-    }
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); window.removeEventListener('pointercancel', onUp)
-      const d = dragRef.current
-      if (d?.rafId) cancelAnimationFrame(d.rafId)
-      document.body.style.userSelect = ''; document.body.classList.remove('col-dragging')
-      dragRef.current = null; setDrag(null)
-      if (d?.dragging && d.drop && d.drop !== d.item) {
-        suppressClick.current = true
-        const from = d.item, drop = d.drop, before = d.before
-        setColOrder((order) => {
-          const arr = order.filter((k) => k !== from)
-          let i = arr.indexOf(drop); if (i < 0) return order
-          if (!before) i += 1
-          arr.splice(i, 0, from)
-          try { localStorage.setItem(COLS_KEY, JSON.stringify({ order: arr, visible: colVisible })) } catch { /* ignore */ }
-          return arr
-        })
-      }
-    }
-    window.addEventListener('pointermove', onMove); window.addEventListener('pointerup', onUp); window.addEventListener('pointercancel', onUp)
-  }
-
   const setEdit = (id: string, patch: { biddingStrategy?: string; dailyBudget?: string }) =>
     setEdits((m) => ({ ...m, [id]: { ...m[id], ...patch } }))
   // CBN.2h.6 — apply the Bulk Actions modal's staged changes. Per campaign, up to
@@ -1565,10 +1510,9 @@ export function CampaignsGrid() {
       return true
     })
   }, [rows, campaignSel, statuses, types, portfolio, ranges, market])
-
-  const allSel = filtered.length > 0 && filtered.every((c) => sel.has(c.id))
-  const toggleAll = () => setSel(allSel ? new Set() : new Set(filtered.map((c) => c.id)))
-  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  // The header checkbox selects EVERY filtered campaign, across pages — the legacy `toggleAll` — while the
+  // grid holds only the current page (`chromeless`); the contract's `selectAllIds` carries the whole set.
+  const filteredIds = useMemo(() => filtered.map((c) => c.id), [filtered])
 
   // edit-mode cells (label-keyed). Bidding Strategy + Daily Budget are inline-
   // editable; edits stage into `edits` and surface in the Discard/Apply footer.
@@ -1581,7 +1525,7 @@ export function CampaignsGrid() {
     )
     switch (key) {
       // C1 — the shared cell: <algorithm> · <owner>, identical to Apply Rules' by construction.
-      case 'bidRule': return <span className="h10-edcell"><BidRuleCell algorithm={c.bidAlgorithm} bidder={bidOwners?.get(c.id)?.bidder} bidderName={bidOwners?.get(c.id)?.bidderName} known={!!bidOwners?.has(c.id)} /><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
+      case 'bidRule': return <span className="h10-edcell"><BidRuleCell algorithm={c.bidAlgorithm} bidder={bidOwners?.get(c.id)?.bidder} bidderName={bidOwners?.get(c.id)?.bidderName} known={!!bidOwners?.has(c.id)} /><button type="button" className="h10-editpen" aria-label="Edit bid rule" onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td, .nds-ws-td'); const r = (td ?? (ev.currentTarget as HTMLElement)).getBoundingClientRect(); setBidRuleMenu({ id: c.id, x: r.left, y: r.bottom + 4 }) }}><Pencil size={11} /></button></span>
       // U11 — the DISPLAY halves now come from `_shared/RuleColumnCells.tsx`, the same cells Apply
       // Rules renders, so the two grids cannot drift apart visually. The edit pencils and their
       // popovers stay exactly as they were; only what the cell paints is shared.
@@ -1783,6 +1727,48 @@ export function CampaignsGrid() {
   // Min/Max Bid · Bid Automation).
   const physical = useMemo(() => metricCols.flatMap(physCols), [metricCols])
 
+  // AGC — `physical` on the contract. Identity is stable across renders (the AG runtime rebuilds its
+  // column model whenever this array changes), so the cells reach the page's LIVE state — staged
+  // edits, delivery, authority, bid owners, the busy toggles — through a ref to the latest
+  // `settingsCell` rather than by closing over a render's copy of it.
+  const settingsCellRef = useRef(settingsCell)
+  settingsCellRef.current = settingsCell
+  const columns = useMemo<GridColumn<Camp>[]>(() => physical.map((pc) => ({
+    key: pc.key,
+    label: pc.label,
+    tip: COL_TIPS[pc.key],
+    align: pc.metric ? 'right' : 'left',
+    metric: pc.metric,
+    // Every header sorted before (metrics numerically, `status` as text, anything else through
+    // metricVal's 0 — a stable no-op), so every column stays sortable. The grid's comparator is
+    // inert in chromeless mode — `sorted` below IS the order — but the value is the one it sorts by.
+    sortValue: (c) => (pc.key === 'status' ? c.status : metricVal(c, pc.key)),
+    render: (c) => (pc.metric ? renderCol(c, pc.key) : settingsCellRef.current(c, pc.key)),
+  })), [physical])
+  // Controlled preferences: the visible PHYSICAL keys in order (the cluster already expanded),
+  // both stickies on — this grid always froze its identity column and has no right-frozen set —
+  // and the resized widths, so a resize survives a reload exactly as a `storageKey` view's does.
+  const gridPrefs = useMemo<GridPrefs>(
+    () => ({ visible: physical.map((pc) => pc.key), lockedColumns: (colLayout.lockedColumns ?? []).flatMap((key) => physCols(key).map((c) => c.key)), stickyFirst: true, stickyLast: true, ...(Object.keys(colWidths).length ? { widths: colWidths } : {}) }),
+    [physical, colWidths, colLayout.lockedColumns],
+  )
+  // A header reorder arrives as the physical order; fold the cluster back into its one Customize
+  // item and persist `{order, visible}` under the same key, exactly as `onCustomizeConfirm` does.
+  // A resize arrives as `widths` (the order unchanged) and persists under WIDTHS_KEY.
+  const onGridPrefsChange = (p: GridPrefs) => {
+    const widths = p.widths ?? {}
+    setColWidths(widths)
+    try { if (Object.keys(widths).length) localStorage.setItem(WIDTHS_KEY, JSON.stringify(widths)); else localStorage.removeItem(WIDTHS_KEY) } catch { /* ignore */ }
+    const items: string[] = []
+    for (const k of p.visible) { const it = physToItem(k); if (COL_BY_KEY[it] && !items.includes(it)) items.push(it) }
+    const order = [...items, ...colOrder.filter((k) => !items.includes(k))]
+    setColVisible(items)
+    setColOrder(order)
+    const layout = withVisibleColumnOrder(colLayout, items)
+    setColLayout(layout)
+    try { localStorage.setItem(COLS_KEY, JSON.stringify({ order, visible: items, ...layout })) } catch { /* ignore */ }
+  }
+
   // sortable columns (click a header; metrics keys sort numerically, name/status text)
   // SF.1 — with no explicit sort the Ad Manager now leads with the campaigns that are actually
   // running (enabled → paused → archived), because that is what you opened the page to look at.
@@ -1797,8 +1783,12 @@ export function CampaignsGrid() {
       return (metricVal(a, sort.key) - metricVal(b, sort.key)) * dir
     })
   }, [filtered, sort])
-  const onSort = (key: string) => setSort((s) => (s?.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' }))
-  const sortIcon = (key: string) => (sort?.key === key ? (sort.dir === 'asc' ? <ChevronUp size={13} className="sa on" /> : <ChevronDown size={13} className="sa on" />) : <ChevronsUpDown size={13} className="sa" />)
+  // The header is the grid's: a click arrives through `onSortChange` (asc → desc → clear, the
+  // contract's cycle; a cleared sort is the enabled-first default above) and `defaultSort` seeds the
+  // indicator. The identity column is `__first` to the grid and `name` to this page's sorter.
+  const gridSort = sort ? { key: sort.key === 'name' ? '__first' : sort.key, dir: sort.dir } : undefined
+  const onGridSortChange = (s: { key: string; dir: 'asc' | 'desc' } | null) =>
+    setSort(s ? { key: s.key === '__first' ? 'name' : s.key, dir: s.dir } : null)
 
   // client-side pagination (H10 "Rows per page") + the Latest Report stamp
   const pageCount = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
@@ -1982,12 +1972,17 @@ export function CampaignsGrid() {
         <div className="h10-custwrap">
           <Button active={showCustomize} onClick={() => setShowCustomize((v) => !v)} aria-haspopup="dialog" aria-expanded={showCustomize}><Settings2 size={13} /> Customize</Button>
           <PreferencesModal
+            attributeGroups
+            groupToggles
+            inViewCount
             open={showCustomize}
             onClose={() => setShowCustomize(false)}
-            title="Table Customization"
+            title="Customise columns"
             allColumns={CUSTOMIZE_COLUMNS}
             defaultVisible={CUSTOMIZE_DEFAULT}
             value={{
+              ...colLayout,
+              lockedColumns: colLayout.lockedColumns ?? [],
               visibleColumns: ['__first', ...colOrder.filter((k) => colVisible.includes(k))],
               stickyFirstColumn: true, stickyLastColumn: true, pageSize: 100, sortBy: 'name', sortDir: 'asc',
             }}
@@ -2009,60 +2004,29 @@ export function CampaignsGrid() {
         <Link href="/marketing/ads/campaign-builder" className="nds-btn primary"><Plus size={13} /> Campaign</Link>
       </div>
 
-      {/* grid */}
-      <div className="nds-wsgrid" ref={gridElRef}>
-        <table>
-          <thead>
-            <tr>
-              <th className="ck"><Checkbox checked={allSel} onChange={toggleAll} aria-label="Select all" /></th>
-              <th className="nm fz"><button type="button" className="sortable" onClick={() => onSort('name')}>Campaign {sortIcon('name')}</button></th>
-              {physical.map((pc) => (
-                <th key={pc.key}
-                    data-item={physToItem(pc.key)} data-col={pc.key}
-                    className={`${pc.metric ? 'num' : 'ed'} ${drag?.item === physToItem(pc.key) ? 'dragging' : ''}`}
-                    onPointerDown={(e) => startColDrag(pc, e.clientX, e.clientY, e.button)}
-                    onMouseEnter={() => setColHi(pc.key)} onMouseLeave={() => { if (colHiRef.current === pc.key) setColHi(null) }}>
-                  <button type="button" className="sortable" onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } onSort(pc.key) }}>
-                    {COL_TIPS[pc.key]
-                      ? <HoverCard text={COL_TIPS[pc.key]} placement="above" delay={800}><span className="hl">{pc.label} {sortIcon(pc.key)}</span></HoverCard>
-                      : <span className="hl">{pc.label} {sortIcon(pc.key)}</span>}
-                  </button>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={`sk${i}`} className="sk">
-                  <td className="ck"><span className="skb" style={{ width: 15 }} /></td>
-                  <td className="nm fz"><span className="skb" style={{ width: 160 }} /></td>
-                  {physical.map((pc) => <td key={pc.key} className={pc.metric ? 'num' : 'ed'}><span className="skb" style={{ width: 52 }} /></td>)}
-                </tr>
-              ))
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={physical.length + 2} className="empty">No campaigns.</td></tr>
-            ) : paged.map((c) => {
-              return (
-                <tr key={c.id} className={sel.has(c.id) ? 'on' : ''}>
-                  <td className="ck"><Checkbox checked={sel.has(c.id)} onChange={() => toggle(c.id)} aria-label={`Select ${c.name}`} /></td>
-                  <td className="nm fz">
-                    <CampaignNameCell
-                      id={c.id} name={c.name} marketplace={c.marketplace} status={c.status}
-                      dailyBudgetCents={c.dailyBudget != null && c.dailyBudget !== '' ? Math.round(num(c.dailyBudget) * 100) : null}
-                      type={c.type} adProduct={c.adProduct}
-                      extra={c.externalCampaignId ? (
-                        <a className="h10-open" href={`/fleet/assignments?new=1&targetKind=CAMPAIGN&targetId=${encodeURIComponent(c.externalCampaignId)}&targetLabel=${encodeURIComponent(c.name)}`} title={`Point a worker at ${c.name} — opens Assignments with this campaign already chosen`} onClick={(e) => e.stopPropagation()}><Bot size={11} /> Assign</a>
-                      ) : null}
-                    />
-                  </td>
-                  {physical.map((pc) => <td key={pc.key} data-col={pc.key} className={`${pc.metric ? 'num' : 'ed'} ${drag?.item === physToItem(pc.key) ? 'dragging' : ''}`}>{pc.metric ? renderCol(c, pc.key) : settingsCell(c, pc.key)}</td>)}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* grid — the shared WorkspaceGrid contract, chromeless: this page keeps the toolbar above and
+          the pager below, and hands the grid the rows it already filtered, sorted and paged. */}
+      <AdsDataGrid
+        chromeless
+        rows={paged}
+        rowId={campaignId}
+        noun="Campaign"
+        firstColLabel="Campaign"
+        renderFirst={renderCampaignFirst}
+        firstSortValue={campaignName}
+        columns={columns}
+        selectable
+        selected={sel}
+        onSelectedChange={setSel}
+        selectAllIds={filteredIds}
+        prefs={gridPrefs}
+        onPrefsChange={onGridPrefsChange}
+        defaultSort={gridSort}
+        onSortChange={onGridSortChange}
+        loading={loading}
+        emptyLabel="No campaigns."
+        rowHeight={50}
+      />
 
       {/* pagination + latest report (H10 footer) */}
       <div className="h10-am-pager">
@@ -2135,10 +2099,6 @@ export function CampaignsGrid() {
       )}
 
       {showBulk && <BulkActionsModal onSubmit={(c) => void applyBulkChanges(c)} onClose={() => setShowBulk(false)} />}
-      {drag && (<>
-        <div ref={chipRef} className="h10-dragchip">{drag.label}</div>
-        <div ref={indRef} className="h10-dropline" />
-      </>)}
 
       {/* P3 — per-row Bidding Strategy / Bid Multiplier modals + Status menu */}
       {strategyModal && <StrategyModal strategy={strategyModal.biddingStrategy} onConfirm={(v) => void setCampaignStrategy(strategyModal, v)} onClose={() => setStrategyModal(null)} />}

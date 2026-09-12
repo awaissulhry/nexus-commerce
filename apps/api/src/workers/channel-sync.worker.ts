@@ -6,7 +6,8 @@
  * Updates ChannelListing sync status throughout the process.
  */
 
-import { Worker, Job } from 'bullmq'
+import { Job } from 'bullmq'
+import { WorkspaceWorker as Worker } from '../lib/workspace-jobs.js'
 import prisma from '../db.js'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'

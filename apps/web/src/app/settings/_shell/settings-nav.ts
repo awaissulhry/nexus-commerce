@@ -114,7 +114,7 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
         href: '/settings/team',
         label: 'Team & Access',
         icon: Users,
-        description: 'Manage members, assign roles, edit permissions, and send invitations.',
+        description: 'Invite members and manage their access to this business.',
         keywords: ['team', 'users', 'members', 'roles', 'permissions', 'rbac', 'access', 'invite', 'invitation', 'staff'],
         status: 'live',
       },
@@ -125,6 +125,11 @@ export const SETTINGS_NAV: SettingsNavGroup[] = [
     description:
       'Business identity, fiscal info, branding, and terminology.',
     items: [
+      {
+        href: '/settings/profiles', label: 'Business profiles', icon: Building2,
+        description: 'Switch businesses, create profiles, and manage ownership.',
+        keywords: ['profiles', 'workspace', 'businesses', 'accounts', 'switch'], status: 'live',
+      },
       {
         href: '/settings/account',
         label: 'Business',

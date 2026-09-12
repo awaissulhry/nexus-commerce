@@ -60,6 +60,6 @@ export function startMarketingAmazonShadowBackfillCron(): void {
   // 03:20 UTC nightly — after the Amazon sales/ads ingest crons have landed the
   // day's canonical rows, so the shadow copies a settled source rather than a
   // half-written one.
-  scheduledTask = cron.schedule('20 3 * * *', () => void runMarketingAmazonShadowBackfillCron())
+  scheduledTask = cron.schedule('20 3 * * *', async () => { await runMarketingAmazonShadowBackfillCron() })
   logger.info('marketing-amazon-shadow-backfill cron scheduled (20 3 * * *)')
 }

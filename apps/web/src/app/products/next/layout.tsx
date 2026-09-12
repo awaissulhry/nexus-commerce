@@ -1,12 +1,11 @@
 /**
- * /products/next — standalone shell layout.
+ * Product list shell, shared by the canonical /products page and its legacy entry.
  *
- * AppShell suppresses global chrome for this route (STANDALONE_PREFIXES).
+ * AppShell supplies the top bar and suppresses its rail for the product list.
  * This layout provides:
  *   • The shared h10-shell + h10-main structure (from ads.css).
  *   • The AppRail with the full app nav (hover-expand, pure-CSS).
- *   • A light-pin wrapper class so the page renders white/light regardless
- *     of the user's dark-mode preference or any ancestor .dark class.
+ *   • A semantic theme wrapper that follows the operator’s light/dark preference.
  *
  * The shell CSS is `_shared/shared-shell.css` — the neutral rail/brand/nav/user/main
  * rules, split verbatim out of ads.css so this route no longer imports the entire
@@ -16,17 +15,17 @@
 
 // Shared rail + layout CSS (the same rules the ads console loads, minus its cockpit).
 import '@/app/_shared/shared-shell.css'
-// Light pin — re-scopes DS semantic tokens to :root light values under .productsNextLight.
-import './products-next-shell.css'
+
+
 
 import type { ReactNode } from 'react'
 import { ProductsRail } from './_shell/ProductsRail'
 
 export default function ProductsNextLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="h10-shell productsNextLight">
+    <div className="h10-shell nds-theme-responsive">
       <ProductsRail />
-      <main className="h10-main">{children}</main>
+      <div className="h10-main">{children}</div>
     </div>
   )
 }

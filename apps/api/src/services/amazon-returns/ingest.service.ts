@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R4.3 — Amazon FBM returns report ingest + FBA mirror.
  *
@@ -123,7 +124,7 @@ export async function ingestAmazonReturnRow(
 
   // Resolve local Product by SKU.
   const product = await prisma.product.findUnique({
-    where: { sku },
+    where: { workspace_sku: workspaceKey({ sku: sku }) },
     select: { id: true },
   })
 

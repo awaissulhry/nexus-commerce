@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
 /**
  * FNSKU Label PDF — pdfkit renderer.
  *
@@ -219,7 +220,7 @@ function fitTextSize(
 }
 
 // Cache successful fetches for 5 min; never cache failures so retries work
-const imageCache = new Map<string, { buf: Buffer; expiresAt: number }>()
+const imageCache = new WorkspaceCache<string, { buf: Buffer; expiresAt: number }>()
 async function fetchImageBuffer(url: string): Promise<Buffer | null> {
   const cached = imageCache.get(url)
   if (cached && cached.expiresAt > Date.now()) return cached.buf

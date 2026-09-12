@@ -14,7 +14,7 @@
 // sync + bulk publish flows) without crowding the main grid.
 
 import { useMemo } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
   CheckCircle2,

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * ACP.1 — tool policy resolution: code default ⊕ operator DB override.
  *
@@ -115,7 +116,7 @@ export async function seedToolPolicies(): Promise<{ created: number }> {
   let created = 0
   for (const t of listTools()) {
     const existing = await prisma.agentTool.findUnique({
-      where: { name: t.name },
+      where: { workspace_name: workspaceKey({ name: t.name }) },
     })
     if (!existing) {
       await prisma.agentTool.create({
@@ -175,7 +176,7 @@ export async function setToolPolicy(
     data.dailyBudgetUSD = patch.dailyBudgetUSD
   if (patch.updatedBy !== undefined) data.updatedBy = patch.updatedBy
   await prisma.agentTool.upsert({
-    where: { name },
+    where: { workspace_name: workspaceKey({ name: name }) },
     create: {
       name,
       riskTier: tool.alwaysAsk ? 'high' : tool.riskTier,

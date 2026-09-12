@@ -132,6 +132,15 @@ export const accountIdentity = [
  * changing a hex changes nothing already saved (a tag stores its own value) but does change a
  * palette operators recognise — a call to make deliberately, not a silent edit. Identity no
  * longer rests on colour alone regardless: every tag can carry a glyph (`Tag.icon`).
+ *
+ * 🔴 THESE NUMBERS ARE THE **PAGE** GROUNDS, AND A GRID ROW IS NOT ONE (hub #737 / P15). A swatch
+ * drawn inside the sheet sits on `--nds-grid-child-bg` (#eef1f5, the variation rows), a hover, a
+ * selection wash, or a state tint composited onto one of those — and on the first of those Lime
+ * falls to 2.73 and Green to 2.91, both certified as passing HERE. The list above is right about a
+ * ground that is not always the one being drawn on. `scripts/check-grid-swatch-contrast.mjs`
+ * derives the grid certification from these swatches and the generated tokens (nothing hand-kept);
+ * run it before putting any swatch on a grid surface, and read its REPORTED tier as well as its
+ * enforced one.
  */
 export const tagSwatches = [
   { name: 'Blue', hex: palette.blue[600] },

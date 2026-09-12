@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Membership reconcile — adopt a live eBay listing AS IT IS (GALE root cause,
  * 2026-07-17).
@@ -273,7 +274,7 @@ export async function reconcileMembershipsFromEbay(
       continue
     }
     await prisma.sharedListingMembership.upsert({
-      where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: e.liveSku } },
+      where: { marketplace_itemId_sku: workspaceKey({ marketplace: market, itemId, sku: e.liveSku }) },
       update: {
         // Incident #42b — an UNMATCHED re-run must never destroy an existing
         // pool link: a colour that collides across families (ambiguity refusal)

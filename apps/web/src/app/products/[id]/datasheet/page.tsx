@@ -35,7 +35,7 @@
 
 import { prisma } from '@nexus/database'
 import { notFound } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Suspense } from 'react'
 import { ArrowLeft, Download, FileText, Pencil } from 'lucide-react'
 import { getServerLocale, getServerT } from '@/lib/i18n/server'

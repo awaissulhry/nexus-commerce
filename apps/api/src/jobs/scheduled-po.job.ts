@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * PO-Plus.6 — Recurring PO cron.
  *
@@ -183,8 +184,8 @@ export function startScheduledPoCron(): void {
     )
     return
   }
-  cronTimer = setInterval(() => {
-    void (async () => {
+  cronTimer = setInterval(() => { void runProfileTimer('scheduled-po', async () => {
+    await (async () => {
       try {
         const summary = await runScheduledPoOnce()
         if (summary !== 'no schedules due') {
@@ -197,7 +198,7 @@ export function startScheduledPoCron(): void {
         )
       }
     })()
-  }, TICK_INTERVAL_MS)
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
   logger.info(`scheduled-po: cron started (interval ${TICK_INTERVAL_MS}ms)`)
 }
 

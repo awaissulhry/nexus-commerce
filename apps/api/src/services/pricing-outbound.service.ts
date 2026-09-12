@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * G.5.1 — Outbound price dispatcher.
  *
@@ -103,7 +105,7 @@ async function pushAmazonPrice(
   snapshot: any,
   startedAt: number,
 ): Promise<PushPriceResult> {
-  const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  const sellerId = (await getAmazonSellerId())
   if (!sellerId) {
     return {
       ok: false,
@@ -118,7 +120,7 @@ async function pushAmazonPrice(
   }
 
   const marketplace = await prisma.marketplace.findUnique({
-    where: { channel_code: { channel: 'AMAZON', code: marketplaceCode } },
+    where: { channel_code: workspaceKey({ channel: 'AMAZON', code: marketplaceCode }) },
   })
   if (!marketplace?.marketplaceId) {
     return {

@@ -1,0 +1,942 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+    - generic: "N"
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - generic: ⌘
+  - generic: K
+  - button "awaissulhry":
+    - text: awaissulhry
+  - button "Switch to system theme":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+        - generic: Home
+      - link "Products 37 pending":
+        - /url: /products
+        - generic: Products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic: Listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+        - generic: Stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+        - generic: Inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic: Outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+        - generic: Replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+        - generic: Purchase Orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+        - generic: Suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+        - generic: Carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+        - generic: Returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic: Orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+        - generic: Pricing
+      - link "Insights":
+        - /url: /insights
+        - generic: Insights
+      - link "Advertising":
+        - /url: /marketing/ads
+        - generic: Advertising
+      - link "Calendar":
+        - /url: /marketing/calendar
+        - generic: Calendar
+      - link "Content":
+        - /url: /marketing/content
+        - generic: Content
+      - link "Reviews":
+        - /url: /marketing/reviews
+        - generic: Reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+        - generic: Agent Fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic: Inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+        - generic: Sync Logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic: Connections
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+        - generic: Mappings
+      - link "Settings":
+        - /url: /settings
+        - generic: Settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+        - generic: Recycle Bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic: Active
+  - generic: Parent
+  - generic "Information edits save in Nexus. Provider delivery is confirmed through the existing synchronization workflow.": Nexus draft autosave
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Warnings 100%":
+      - generic: Shared product
+      - generic: ·
+      - generic: Warnings
+      - generic: 100%
+    - radio "Amazon Not set up":
+      - generic: Amazon
+      - generic: ·
+      - generic: Not set up
+    - radio "eBay Blocked 100%" [checked] [active]:
+      - generic: eBay
+      - generic: ·
+      - generic: Blocked
+      - generic: 100%
+    - radio "Shopify":
+      - generic: Shopify
+    - radio "Etsy":
+      - generic: Etsy
+  - button "Account":
+    - generic: xaviaracing · primary
+  - button "Market":
+    - generic: IT · Italy
+  - region "Information":
+    - text: 21 rows
+    - generic: · 1 listing · 20 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (51)":
+      - text: All attributes (51)
+    - button "Required 6 columns":
+      - generic: Required
+      - generic: 6 columns
+    - button "Essentials 9 columns":
+      - generic: Essentials
+      - generic: 9 columns
+    - button "Localized content 3 columns":
+      - generic: Localized content
+      - generic: 3 columns
+    - 'button "Invalid values: 20 affected cells across 1 column and 20 rows"':
+      - text: Invalid values
+      - generic: 1 column
+    - button "Requirements"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Product role Parent SKU Category Title Description Product media Subtitle Description theme":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Product role":
+            - generic: Product role
+          - columnheader "Parent SKU":
+            - generic: Parent SKU
+          - columnheader "Category":
+            - generic: Category
+          - columnheader "Title":
+            - generic: Title
+          - columnheader "Description":
+            - generic: Description
+          - columnheader "Product media":
+            - generic: Product media
+          - columnheader "Subtitle":
+            - generic: Subtitle
+          - columnheader "Description theme":
+            - generic: Description theme
+        - row [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 20 children GALE-JACKET Primary · Listing active · Listing 257584954808 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 20 children": P
+            - generic: GALE-JACKET
+            - img "Primary · Listing active · Listing 257584954808 · 20 variants · Errors — 100% of required fields filled · 20 rows missing required · 20 blocked":
+              - generic: 100%
+          - gridcell "Parent"
+          - gridcell "Not measured":
+            - generic "Not measured": —
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Category assignments. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Description"':
+          - 'gridcell "GALE-JACKET, 24 media items Edit product media: GALE-JACKET"':
+            - group "GALE-JACKET, 24 media items":
+              - button "MAIN, position 1 of 24"
+              - button "Image, position 2 of 24"
+              - button "Image, position 3 of 24"
+              - button "Image, position 4 of 24"
+              - button "Image, position 5 of 24"
+              - generic: "+19"
+            - 'button "Edit product media: GALE-JACKET"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Subtitle"':
+          - 'gridcell "Xavia Modernist Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Description theme"':
+            - generic: Xavia Modernist
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-3XL GALE-JACKET-BLACK-MEN-3XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-3XL
+            - img "GALE-JACKET-BLACK-MEN-3XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-3XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+            - group "GALE-JACKET-BLACK-MEN-3XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+          - 'gridcell "Not measured Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Subtitle"':
+            - generic: —
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-4XL GALE-JACKET-BLACK-MEN-4XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-4XL
+            - img "GALE-JACKET-BLACK-MEN-4XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-4XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+            - group "GALE-JACKET-BLACK-MEN-4XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-5XL GALE-JACKET-BLACK-MEN-5XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-5XL
+            - img "GALE-JACKET-BLACK-MEN-5XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-5XL, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+            - group "GALE-JACKET-BLACK-MEN-5XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-L GALE-JACKET-BLACK-MEN-L — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-L
+            - img "GALE-JACKET-BLACK-MEN-L — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-L, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-L"':
+            - group "GALE-JACKET-BLACK-MEN-L, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-L"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-L, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-M GALE-JACKET-BLACK-MEN-M — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-M
+            - img "GALE-JACKET-BLACK-MEN-M — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-M, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-M"':
+            - group "GALE-JACKET-BLACK-MEN-M, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-M"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-M, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-S GALE-JACKET-BLACK-MEN-S — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-S
+            - img "GALE-JACKET-BLACK-MEN-S — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-S, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-S"':
+            - group "GALE-JACKET-BLACK-MEN-S, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-S"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-S, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XL GALE-JACKET-BLACK-MEN-XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XL
+            - img "GALE-JACKET-BLACK-MEN-XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+            - group "GALE-JACKET-BLACK-MEN-XL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT02, position 2 of 7"
+              - button "PT01, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XS GALE-JACKET-BLACK-MEN-XS — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XS
+            - img "GALE-JACKET-BLACK-MEN-XS — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XS, 8 media items Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+            - group "GALE-JACKET-BLACK-MEN-XS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXL GALE-JACKET-BLACK-MEN-XXL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXL
+            - img "GALE-JACKET-BLACK-MEN-XXL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXL, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+            - group "GALE-JACKET-BLACK-MEN-XXL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-BLACK-MEN-XXS GALE-JACKET-BLACK-MEN-XXS — 36 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-BLACK-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-BLACK-MEN-XXS
+            - img "GALE-JACKET-BLACK-MEN-XXS — 36 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 73%
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-BLACK-MEN-XXS, 7 media items Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+            - group "GALE-JACKET-BLACK-MEN-XXS, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+              - generic: "+2"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-3XL GALE-JACKET-YELLOW-MEN-3XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-3XL
+            - img "GALE-JACKET-YELLOW-MEN-3XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-3XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+            - group "GALE-JACKET-YELLOW-MEN-3XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-4XL GALE-JACKET-YELLOW-MEN-4XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-4XL
+            - img "GALE-JACKET-YELLOW-MEN-4XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-4XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+            - group "GALE-JACKET-YELLOW-MEN-4XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-5XL GALE-JACKET-YELLOW-MEN-5XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-5XL
+            - img "GALE-JACKET-YELLOW-MEN-5XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-5XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+            - group "GALE-JACKET-YELLOW-MEN-5XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-L GALE-JACKET-YELLOW-MEN-L — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-L"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-L
+            - img "GALE-JACKET-YELLOW-MEN-L — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-L, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+            - group "GALE-JACKET-YELLOW-MEN-L, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-M GALE-JACKET-YELLOW-MEN-M — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-M"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-M
+            - img "GALE-JACKET-YELLOW-MEN-M — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-M, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+            - group "GALE-JACKET-YELLOW-MEN-M, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-S GALE-JACKET-YELLOW-MEN-S — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-S"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-S
+            - img "GALE-JACKET-YELLOW-MEN-S — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-S, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+            - group "GALE-JACKET-YELLOW-MEN-S, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XL GALE-JACKET-YELLOW-MEN-XL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XL
+            - img "GALE-JACKET-YELLOW-MEN-XL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+            - group "GALE-JACKET-YELLOW-MEN-XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XS GALE-JACKET-YELLOW-MEN-XS — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XS
+            - img "GALE-JACKET-YELLOW-MEN-XS — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XS, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+            - group "GALE-JACKET-YELLOW-MEN-XS, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXL GALE-JACKET-YELLOW-MEN-XXL — 37 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXL
+            - img "GALE-JACKET-YELLOW-MEN-XXL — 37 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 76%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXL, 10 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+            - group "GALE-JACKET-YELLOW-MEN-XXL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+              - generic: "+5"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description theme"':
+        - row:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: GALE-JACKET GALE-JACKET-YELLOW-MEN-XXS GALE-JACKET-YELLOW-MEN-XXS — 36 of 49 channel fields filled (including optional fields) · errors Actions for GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'img "Child · Parent SKU: GALE-JACKET"': C
+            - generic: GALE-JACKET-YELLOW-MEN-XXS
+            - img "GALE-JACKET-YELLOW-MEN-XXS — 36 of 49 channel fields filled (including optional fields) · errors":
+              - generic: 73%
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+          - gridcell "Child"
+          - gridcell "GALE-JACKET"
+          - 'gridcell "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Category"':
+            - generic: "Auto e moto: ricambi e accessori › Abbigliamento, caschi e protezioni › Abbigliamento per moto › Giacche e giubbotti"
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Category"':
+          - 'gridcell "test Within the cap Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+            - generic: test
+            - img "Within the cap": ●
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+          - 'gridcell "test Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+            - generic: test
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+          - 'gridcell "GALE-JACKET-YELLOW-MEN-XXS, 8 media items Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+            - group "GALE-JACKET-YELLOW-MEN-XXS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "MAIN, position 2 of 8"
+              - button "PT01, position 3 of 8"
+              - button "PT02, position 4 of 8"
+              - button "PT03, position 5 of 8"
+              - generic: "+3"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Subtitle"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Subtitle"':
+          - 'gridcell "Not measured Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description theme"':
+            - generic: —
+            - 'button "Listing override. Stored for this SKU and listing on this channel and market; changes to Master do not replace it. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description theme"':
+    - status:
+      - generic: 21 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

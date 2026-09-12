@@ -97,7 +97,7 @@ export function startLotExpiryAlertCron(): void {
     logger.error('lot-expiry-alert cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runLotExpiryAlertOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runLotExpiryAlertOnce() })
   logger.info('lot-expiry-alert cron: scheduled', { schedule })
 }
 

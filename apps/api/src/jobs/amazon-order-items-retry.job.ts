@@ -41,7 +41,7 @@ interface RetryResult {
 }
 
 export async function runAmazonOrderItemsRetry(): Promise<void> {
-  if (!amazonOrdersService.isConfigured()) {
+  if (!(await amazonOrdersService.isConfigured())) {
     logger.warn('amazon-order-items-retry: SP-API not configured — skipping')
     return
   }
@@ -202,8 +202,8 @@ export function startAmazonOrderItemsRetryCron(): void {
     logger.error('amazon-order-items-retry cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runAmazonOrderItemsRetry()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runAmazonOrderItemsRetry()
   })
   logger.info('amazon-order-items-retry cron: started', { schedule })
 }

@@ -1,4 +1,5 @@
 'use server'
+import { requireWebPermission } from '@/lib/workspaces/server'
 
 /**
  * VR.9 — Server actions for bulk variant operations.
@@ -46,6 +47,7 @@ export async function bulkSetVariantStatus(
   variantIds: string[],
   newStatus: BulkStatus,
 ): Promise<BulkStatusResult> {
+  await requireWebPermission('products.edit')
   if (variantIds.length === 0) {
     return { ok: false, affected: 0, error: 'No variants selected' }
   }

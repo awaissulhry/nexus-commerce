@@ -1,0 +1,7 @@
+.pages {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-12);
+}

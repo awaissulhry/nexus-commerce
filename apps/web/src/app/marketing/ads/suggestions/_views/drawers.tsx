@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Check, X, ExternalLink, RotateCcw, Pause } from 'lucide-react'
 import { Button } from '@/design-system/primitives/Button'
 import { Tag } from '@/design-system/primitives/Tag'

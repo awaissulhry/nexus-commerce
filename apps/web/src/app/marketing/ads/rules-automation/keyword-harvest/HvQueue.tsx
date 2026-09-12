@@ -31,7 +31,7 @@
  * only automated harvest path, so the queue shows every automated proposal there is.
  */
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, Inbox } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'

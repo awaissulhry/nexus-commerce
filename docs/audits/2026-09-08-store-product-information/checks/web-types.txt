@@ -1,0 +1,4 @@
+
+> @nexus/web@1.0.2 typecheck
+> tsc --noEmit -p tsconfig.json
+

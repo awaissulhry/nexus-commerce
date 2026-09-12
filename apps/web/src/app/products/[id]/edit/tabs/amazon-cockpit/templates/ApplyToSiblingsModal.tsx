@@ -9,7 +9,7 @@
 // /api/amazon/cockpit/template-apply.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Loader2, Layers, Tag, ShieldCheck, Check, AlertTriangle, ArrowRight } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

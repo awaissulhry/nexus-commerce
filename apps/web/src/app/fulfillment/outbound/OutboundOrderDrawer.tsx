@@ -11,7 +11,7 @@
 // and the create-shipment CTA when there's no active shipment.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   X, Package, ExternalLink, Truck, Crown, AlertTriangle, Clock,
   MapPin, User, CreditCard, Plus, Printer, CheckCircle2, Undo2,

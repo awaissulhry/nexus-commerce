@@ -8,7 +8,7 @@
 // → action config → save.
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Zap,
   Plus,
@@ -24,7 +24,7 @@ import {
 } from 'lucide-react'
 // Power is used by the editor's trigger Section icon — keep it imported
 // even though the eslint linter won't see usage in the parent component.
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import PageHeader from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Modal, ModalBody, ModalFooter } from '@/components/ui/Modal'

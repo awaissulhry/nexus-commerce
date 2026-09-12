@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronRight } from 'lucide-react'
 
 interface Breadcrumb {

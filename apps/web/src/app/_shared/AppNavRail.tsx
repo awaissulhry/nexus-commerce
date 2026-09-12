@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useAuth } from '@/lib/auth/AuthProvider'
 import { filterNavByPermission } from '@/lib/auth/nav-permissions'
 import { useProfileScope } from './ProfileScope'
@@ -63,16 +63,41 @@ export function AppNavRail() {
 
   // Counts — initial fetch + 60s poll + refetch on tab focus.
   const cancelledRef = useRef(false)
+  /*
+   * Never stack a poll on top of one still in flight.
+   *
+   * Measured 2026-09-01: against a local API this poll had FIVE copies of itself pending at once —
+   * the 60s interval plus the focus and mutation paths all firing while the first had not returned.
+   * Each one holds a connection, and the browser allows about six per origin, so the rail alone
+   * could starve every other request the page needed (lib/sync/dev-stream-gate.ts has the full
+   * measurement). Skipping a tick is free: the next one is 60s away and the data is a badge count.
+   *
+   * The flag is only safe because the fetch below carries a timeout: it clears in `finally`, and a
+   * `finally` on a promise that never settles never runs.
+   */
+  const inFlightRef = useRef(false)
   const fetchCounts = useCallback(async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     try {
       const res = await fetch(`${getBackendUrl()}/api/sidebar/counts`, {
         cache: 'no-store',
+        /*
+         * The request must SETTLE, always. `fetch` has no default timeout, and a hung connection is
+         * exactly the condition the guard above exists for — so without this, the first hung poll
+         * leaves `inFlightRef` true forever and the counts never update again for the life of the
+         * page. That is a worse failure than the stacking it prevents, and a silent one. Well under
+         * the 60s tick, so a timed-out poll never shadows the next.
+         */
+        signal: AbortSignal.timeout(20_000),
       })
       if (!res.ok) return
       const data = (await res.json()) as SidebarCounts
       if (!cancelledRef.current) setCounts(data)
     } catch {
       /* sidebar should never crash the shell */
+    } finally {
+      inFlightRef.current = false
     }
   }, [])
 
@@ -163,6 +188,14 @@ export function AppNavRail() {
   // both server and client, then hydrated from localStorage after mount, so
   // there's no hydration mismatch.
   const [pinned, setPinned] = useState(false)
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 719px)')
+    const update = () => setCompact(query.matches)
+    update()
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
   useEffect(() => {
     try {
       setPinned(localStorage.getItem('nexus.rail.pinned') === '1')
@@ -183,12 +216,13 @@ export function AppNavRail() {
   }, [])
   useEffect(() => {
     const el = document.documentElement
-    if (pinned) el.style.setProperty('--rail-reserve', '344px')
+    // Keep the desktop preference without consuming nearly the entire phone workspace.
+    if (pinned && !compact) el.style.setProperty('--rail-reserve', '344px')
     else el.style.removeProperty('--rail-reserve')
     return () => {
       el.style.removeProperty('--rail-reserve')
     }
-  }, [pinned])
+  }, [pinned, compact])
 
   // ── "See all markets" modal ──────────────────────────────────────
   const [marketsChannel, setMarketsChannel] = useState<RailSubItem | null>(null)
@@ -208,7 +242,7 @@ export function AppNavRail() {
 
   const header = (
     <>
-      <div className="h10-railctl">
+      {!compact && <div className="h10-railctl">
         {/* TB.3/TB.4 — the search trigger and the theme cycler now live in the top bar, which
             reaches every route the rail does and several it does not. The rail keeps the pin,
             which is about the rail itself and belongs nowhere else. */}
@@ -222,7 +256,7 @@ export function AppNavRail() {
         >
           {pinned ? <PinOff size={16} /> : <Pin size={16} />}
         </button>
-      </div>
+      </div>}
       <button type="button" className="h10-ws">
         <span className="h10-ws-txt">
           <span className="nm">Xavia Racing</span>
@@ -298,7 +332,7 @@ export function AppNavRail() {
            here would render the "N" twice, once in the bar and once right below it. */
         header={header}
         footer={footer}
-        pinned={pinned}
+        pinned={pinned && !compact}
         onSeeAllMarkets={setMarketsChannel}
       />
       <MarketsModal

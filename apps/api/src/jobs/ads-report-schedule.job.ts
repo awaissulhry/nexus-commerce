@@ -72,11 +72,11 @@ export function startAdsReportScheduleCron(): void {
   if (task) return
   // Five past the hour: the ads ingest crons run on the hour, so this gives the
   // day's data a moment to land before a report is built from it.
-  task = cron.schedule('5 * * * *', () => {
-    void runAdsReportSchedulesOnce().catch((err) => {
+  task = cron.schedule('5 * * * *', async () => {
+    await runAdsReportSchedulesOnce().catch((err) => {
       logger.error('[ads-report-schedule] tick failed', { err: (err as Error).message })
     })
-    void runWeeklyDigestTick()
+    await runWeeklyDigestTick()
   })
   logger.info('[ads-report-schedule] cron started (hourly at :05, incl. weekly digest)')
 }

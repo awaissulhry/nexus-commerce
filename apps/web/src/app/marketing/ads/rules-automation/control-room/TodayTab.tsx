@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, AlertOctagon, Info, ArrowRight, CheckCircle2, RefreshCw, Gauge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

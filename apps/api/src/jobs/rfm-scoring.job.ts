@@ -39,8 +39,8 @@ export async function runRFMScoringCron(): Promise<void> {
 export function startRFMScoringCron(): void {
   if (scheduledTask) return
   const schedule = process.env.NEXUS_RFM_SCHEDULE ?? '0 2 * * *'
-  scheduledTask = cron.schedule(schedule, () => {
-    void runRFMScoringCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runRFMScoringCron()
   })
   logger.info('rfm-scoring cron: scheduled', { schedule })
 }

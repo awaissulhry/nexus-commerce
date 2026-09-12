@@ -1,3 +1,6 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
+import { getAmazonAccessToken, getAmazonRegion, amazonCredsConfigured } from '../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.8a (Inbound) — real Amazon SP-API createInboundShipmentPlan.
  *
@@ -40,47 +43,9 @@ const SP_REGION = (process.env.AMAZON_SP_REGION ?? 'eu') as keyof typeof REGION_
 
 let cachedToken: { value: string; expiresAt: number } | null = null
 
-async function getLwaAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60_000) {
-    return cachedToken.value
-  }
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('SP-API not configured (AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET / AMAZON_REFRESH_TOKEN)')
-  }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  })
-  const res = await fetch(LWA_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`LWA token exchange failed: ${res.status} ${text.slice(0, 200)}`)
-  }
-  const json = (await res.json()) as { access_token: string; expires_in: number }
-  cachedToken = {
-    value: json.access_token,
-    expiresAt: Date.now() + json.expires_in * 1000,
-  }
-  return json.access_token
-}
+async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
-export function isFbaInboundConfigured(): boolean {
-  return !!(
-    process.env.AMAZON_LWA_CLIENT_ID &&
-    process.env.AMAZON_LWA_CLIENT_SECRET &&
-    process.env.AMAZON_REFRESH_TOKEN &&
-    process.env.AMAZON_MARKETPLACE_ID
-  )
-}
+export async function isFbaInboundConfigured(): Promise<boolean> { return amazonCredsConfigured() }
 
 // ─── Types mirror the v0 createInboundShipmentPlan request/response ─
 
@@ -165,7 +130,7 @@ export async function createInboundShipmentPlan(args: {
   shipFrom?: ShipFromAddress
   labelPrepPreference?: 'SELLER_LABEL' | 'AMAZON_LABEL_ONLY' | 'AMAZON_LABEL_PREFERRED'
 }): Promise<CreatePlanResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (!args.items || args.items.length === 0) {
@@ -190,7 +155,7 @@ export async function createInboundShipmentPlan(args: {
     })),
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
+  const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/plans?MarketplaceId=${encodeURIComponent(marketplaceId)}`
 
   const res = await fetch(url, {
     method: 'POST',
@@ -262,7 +227,7 @@ export interface GetLabelsResult {
  * error handling uniform across the FBA inbound surface.
  */
 export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<GetLabelsResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (!args.shipmentId) throw new Error('shipmentId required')
@@ -280,7 +245,7 @@ export async function getInboundShipmentLabels(args: GetLabelsArgs): Promise<Get
     qs.set('PackageLabelsToPrint', args.packageLabelsToPrint.join(','))
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
+  const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/shipments/${encodeURIComponent(args.shipmentId)}/labels?${qs.toString()}`
 
   const res = await fetch(url, {
     method: 'GET',
@@ -360,7 +325,7 @@ export async function getInboundShipmentsBatch(args: {
   lastUpdatedBefore?: string
   nextToken?: string
 }): Promise<GetShipmentsResult> {
-  if (!isFbaInboundConfigured()) {
+  if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
@@ -397,7 +362,7 @@ export async function getInboundShipmentsBatch(args: {
     }
   }
 
-  const url = `${REGION_ENDPOINTS[SP_REGION]}/fba/inbound/v0/shipments?${qs.toString()}`
+  const url = `${REGION_ENDPOINTS[await getAmazonRegion()]}/fba/inbound/v0/shipments?${qs.toString()}`
 
   const res = await fetch(url, {
     method: 'GET',
@@ -454,7 +419,7 @@ export function mapAmazonShipmentStatusToLocal(
 }
 
 // In-memory cache: full sellerSku→fnSku map, refreshed every 30 minutes.
-let fnskuInventoryCache: { map: Record<string, string>; fetchedAt: number } | null = null
+const fnskuInventories = new WorkspaceCache<string, { map: Record<string, string>; fetchedAt: number }>()
 const FNSKU_CACHE_TTL_MS = 30 * 60_000
 
 /**
@@ -466,15 +431,16 @@ const FNSKU_CACHE_TTL_MS = 30 * 60_000
  * absent as null — user enters FNSKU manually).
  */
 export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<string, string>> {
-  if (!isFbaInboundConfigured()) {
+  if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
   if (sellerSkus.length === 0) return {}
 
+  let fnskuInventoryCache = fnskuInventories.get('inventory')
   // Refresh cache if stale
   if (!fnskuInventoryCache || Date.now() - fnskuInventoryCache.fetchedAt > FNSKU_CACHE_TTL_MS) {
     const token = await getLwaAccessToken()
-    const base = REGION_ENDPOINTS[SP_REGION] ?? REGION_ENDPOINTS.eu
+    const base = REGION_ENDPOINTS[await getAmazonRegion()] ?? REGION_ENDPOINTS.eu
     const marketplaceId = process.env.AMAZON_MARKETPLACE_ID!
     const allMap: Record<string, string> = {}
 
@@ -507,6 +473,7 @@ export async function getInventoryFnskus(sellerSkus: string[]): Promise<Record<s
     } while (nextToken)
 
     fnskuInventoryCache = { map: allMap, fetchedAt: Date.now() }
+    fnskuInventories.set('inventory', fnskuInventoryCache)
   }
 
   // Return only the entries matching the requested SKUs
@@ -555,7 +522,7 @@ export async function backfillFbaInboundShipments(args: {
   const daysBack = args.daysBack ?? 730
   const errors: string[] = []
 
-  if (!isFbaInboundConfigured()) {
+  if (!(await isFbaInboundConfigured())) {
     throw new Error('SP-API FBA inbound not configured (set AMAZON_LWA_* + AMAZON_MARKETPLACE_ID)')
   }
 
@@ -612,7 +579,7 @@ export async function backfillFbaInboundShipments(args: {
         try {
           const mappedStatus = mapAmazonShipmentStatusToLocal(row.ShipmentStatus)
           const existing = await prisma.fBAShipment.findUnique({
-            where: { shipmentId: row.ShipmentId },
+            where: { workspace_shipmentId: workspaceKey({ shipmentId: row.ShipmentId }) },
             select: { id: true },
           })
           if (existing) {

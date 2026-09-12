@@ -1,17 +1,18 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
+import { currentFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
+import { inDatabaseTransaction } from '../lib/database-context.js'
 /**
  * PIM B.1 — Global tab endpoints for /products/[id]/edit.
  *
  * Surfaces the "core truth" of a product as it appears on the new
- * Global tab: per-locale content (en + it), identifiers, physical
+ * Global tab: table-backed per-language content, identifiers, physical
  * dimensions, and technical attributes (categoryAttributes JSONB).
  *
- * Reads via the A.1-A.4 attribute-resolver so synthesis from legacy
- * columns happens automatically — operators see real data even on
- * products whose localizedContent JSONB hasn't been populated yet.
+ * Reads ProductTranslation with native-column fallback through the existing
+ * resolver. Product.localizedContent is legacy, read-only and excluded here.
  *
- * Writes target the new JSONB columns (localizedContent +
- * categoryAttributes) for content, and the existing direct columns
- * for identifiers/physical (until Phase B+ migrates those too).
+ * Writes retain technical attributes and identifiers/physical fields.
+ * Legacy localized writes are refused; LX.8 supplies the language writer.
  *
  * Routes (all mounted under /api):
  *   GET    /products/:id/global
@@ -20,7 +21,9 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { isContentLocale, validateLocalizedPatch } from '../services/pim/localized-content.js'
 import prisma from '../db.js'
+import { globalContentLocales, type GlobalLocaleSlot as LocaleSlot } from '../services/pim/global-content.js'
 import { resolveAttributes } from '../services/pim/attribute-resolver.js'
 import { applyCatalogCascade } from '../services/pim/apply-mapping.service.js'
 import { getMasterAttributeSchema } from '../services/pim/master-schema.service.js'
@@ -32,22 +35,12 @@ import { suggestMasterAttributes } from '../services/pim/master-ai-fill.service.
 // Types
 // ────────────────────────────────────────────────────────────────────
 
-interface LocaleSlot {
-  title: string | null
-  description: string | null
-  bulletPoints: string[]
-  keywords: string[]
-}
-
 interface GlobalView {
   productId: string
   isVariant: boolean
   /** Per-locale resolved content. The shape mirrors what the Global
    *  tab renders directly — no extra parsing on the client. */
-  locales: {
-    en: LocaleSlot
-    it: LocaleSlot
-  }
+  locales: Record<string, LocaleSlot>
   identifiers: {
     brand: string | null
     manufacturer: string | null
@@ -69,7 +62,11 @@ interface GlobalView {
 }
 
 interface PatchBody {
+  dryRun?: boolean
+  reset?: Record<string, string[]>
+  expectedVersion?: number
   patch?: {
+    [key: string]: any
     en?: Partial<LocaleSlot>
     it?: Partial<LocaleSlot>
     identifiers?: Partial<GlobalView['identifiers']>
@@ -82,23 +79,6 @@ interface PatchBody {
 // Helpers
 // ────────────────────────────────────────────────────────────────────
 
-/** Pull one locale slot out of the resolver result. Each key is
- *  resolved independently so synthesis fills gaps without us having
- *  to read individual columns. */
-function pickLocaleSlot(
-  product: Parameters<typeof resolveAttributes>[0]['product'],
-  parent: Parameters<typeof resolveAttributes>[0]['parent'],
-  locale: string,
-): LocaleSlot {
-  const r = resolveAttributes({ product, parent, locale })
-  return {
-    title: (r.title?.value as string) ?? null,
-    description: (r.description?.value as string) ?? null,
-    bulletPoints: (r.bulletPoints?.value as string[]) ?? [],
-    keywords: (r.keywords?.value as string[]) ?? [],
-  }
-}
-
 /** Validate inbound patch shape. Returns array of human-readable
  *  errors (empty = valid). */
 function validatePatch(body: unknown): string[] {
@@ -109,58 +89,11 @@ function validatePatch(body: unknown): string[] {
   if (typeof b.patch !== 'object' || b.patch === null) return ['patch must be an object']
 
   const p = b.patch as Record<string, unknown>
-  for (const locale of ['en', 'it']) {
-    const slot = p[locale]
-    if (slot === undefined) continue
-    if (typeof slot !== 'object' || slot === null) {
-      errors.push(`patch.${locale} must be an object`)
-      continue
-    }
-    const s = slot as Record<string, unknown>
-    if (s.title !== undefined && s.title !== null && typeof s.title !== 'string') {
-      errors.push(`patch.${locale}.title must be string|null`)
-    }
-    if (s.description !== undefined && s.description !== null && typeof s.description !== 'string') {
-      errors.push(`patch.${locale}.description must be string|null`)
-    }
-    if (s.bulletPoints !== undefined && !Array.isArray(s.bulletPoints)) {
-      errors.push(`patch.${locale}.bulletPoints must be an array`)
-    }
-    if (s.keywords !== undefined && !Array.isArray(s.keywords)) {
-      errors.push(`patch.${locale}.keywords must be an array`)
-    }
-  }
 
   if (p.technical !== undefined && (typeof p.technical !== 'object' || p.technical === null || Array.isArray(p.technical))) {
     errors.push('patch.technical must be an object')
   }
   return errors
-}
-
-/** Merge incoming locale-slot patches into existing localizedContent
- *  preserving other locale keys. Strips undefined; passes null
- *  through (explicit clear). */
-function mergeLocalizedContent(
-  current: unknown,
-  patch: PatchBody['patch'] | undefined,
-): Record<string, Record<string, unknown>> {
-  const base = (typeof current === 'object' && current !== null && !Array.isArray(current))
-    ? (current as Record<string, Record<string, unknown>>)
-    : {}
-  const merged: Record<string, Record<string, unknown>> = { ...base }
-
-  for (const locale of ['en', 'it'] as const) {
-    const slotPatch = patch?.[locale]
-    if (!slotPatch) continue
-    const existing = merged[locale] ?? {}
-    const next: Record<string, unknown> = { ...existing }
-    if (slotPatch.title !== undefined) next.title = slotPatch.title
-    if (slotPatch.description !== undefined) next.description = slotPatch.description
-    if (slotPatch.bulletPoints !== undefined) next.bulletPoints = slotPatch.bulletPoints
-    if (slotPatch.keywords !== undefined) next.keywords = slotPatch.keywords
-    merged[locale] = next
-  }
-  return merged
 }
 
 /** Merge incoming technical-attrs patch into existing categoryAttributes.
@@ -182,28 +115,28 @@ function mergeTechnical(
 // ────────────────────────────────────────────────────────────────────
 
 const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
+  await registerFormulaRequestContext(fastify, {})
   // ── GET /products/:id/global ────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
     '/products/:id/global',
     async (request, reply) => {
       const { id } = request.params
 
-      const product = await prisma.product.findUnique({ where: { id } })
+      const product = await prisma.product.findUnique({ where: { id }, include: { translations: true } })
       if (!product) {
         return reply.status(404).send({ error: 'Product not found' })
       }
 
       const parent = product.parentId
-        ? await prisma.product.findUnique({ where: { id: product.parentId } })
+        ? await prisma.product.findUnique({ where: { id: product.parentId }, include: { translations: true } })
         : null
 
+      const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
+      const languages = [...new Set(markets.flatMap(row => marketLanguages(row.channel, row.code, [row])))]
       const view: GlobalView = {
         productId: product.id,
         isVariant: product.parentId !== null,
-        locales: {
-          en: pickLocaleSlot(product as any, parent as any, 'en'),
-          it: pickLocaleSlot(product as any, parent as any, 'it'),
-        },
+        locales: globalContentLocales(product as any, parent as any, languages),
         identifiers: {
           brand: product.brand ?? null,
           manufacturer: product.manufacturer ?? null,
@@ -316,10 +249,8 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
   )
 
   // ── PATCH /products/:id/global ──────────────────────────────────
-  // Atomic: reads current JSONB columns, merges patch in app code,
-  // writes back in a single update. Prisma's nullable Json field
-  // doesn't expose deep-merge so we do it explicitly + preserve other
-  // locale slots / unrelated keys.
+  // Technical/identifier/physical edits retain the existing atomic writer.
+  // Localized JSON is frozen; its former write/reset/cascade path is retired.
   fastify.patch<{ Params: { id: string }; Body: PatchBody }>(
     '/products/:id/global',
     async (request, reply) => {
@@ -330,6 +261,10 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       if (errors.length > 0) {
         return reply.status(400).send({ error: 'invalid_patch', details: errors })
       }
+      const language = Object.keys(body.patch!).find(isContentLocale)
+      if (language || body.reset !== undefined) {
+        return reply.code(409).send({ error: `Localized content${language ? ` (${language})` : ''} is legacy and read-only.`, field: 'localizedContent' })
+      }
       const patch = body.patch!
 
       // Read current — needed for the merge. We could go straight to
@@ -338,18 +273,18 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       const current = await prisma.product.findUnique({
         where: { id },
         select: {
-          localizedContent: true,
           categoryAttributes: true,
+          version: true,
         },
       })
       if (!current) return reply.status(404).send({ error: 'Product not found' })
 
-      const data: Record<string, unknown> = {}
-
-      // Locale content
-      if (patch.en || patch.it) {
-        data.localizedContent = mergeLocalizedContent(current.localizedContent, patch)
+      const localeErrors = validateLocalizedPatch(patch)
+      if (localeErrors.length) return reply.code(400).send({ error: 'invalid_patch', details: localeErrors })
+      if (body.expectedVersion !== undefined && (!Number.isSafeInteger(body.expectedVersion) || body.expectedVersion !== current.version)) {
+        return reply.code(409).send({ error: 'This product changed. Reload and try again.', currentVersion: current.version })
       }
+      const data: Record<string, unknown> = {}
 
       // Technical attributes (categoryAttributes JSONB)
       if (patch.technical) {
@@ -381,7 +316,17 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({ ok: true, changed: false })
       }
 
-      await prisma.product.update({ where: { id }, data })
+      if (body.dryRun) return reply.send({ ok: true, changed: false })
+      const formula = currentFormulaWrite(request.headers['x-nexus-formula-write'])
+      if (formula && formula.productId !== id) return reply.code(400).send({ error: 'Formula destination does not match this product.' })
+      const saved = await inDatabaseTransaction(prisma, async () => {
+        const tx = prisma
+        const updated = await tx.product.updateMany({ where: { id, version: current.version }, data: { ...data, version: { increment: 1 } } })
+        if (!updated.count) return false
+        if (formula) formula.results = await Promise.all(formula.operations?.() ?? [])
+        return true
+      })
+      if (!saved) return reply.code(409).send({ error: 'This product changed. Reload and try again.' })
 
       // FM.8 — flag-gated auto-cascade: when master content/attributes
       // change, fan out to mapped channel coordinates via the catalog
@@ -389,12 +334,10 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       // (FM_CASCADE_ON_SAVE !== 'on') → no behaviour change. Fire-and-
       // forget: the PATCH returns immediately; applyCatalogCascade enqueues
       // durably (OutboundSyncQueue) on its own.
-      if (process.env.FM_CASCADE_ON_SAVE === 'on') {
+      if (!formula && process.env.FM_CASCADE_ON_SAVE === 'on') {
         const changes: Record<string, unknown> = {}
         if (patch.technical) Object.assign(changes, patch.technical)
-        const loc = (patch.en ?? patch.it) as { title?: string; description?: string } | undefined
-        if (loc?.title != null) changes.title = loc.title
-        if (loc?.description != null) changes.description = loc.description
+        // Localized content is refused above; only technical attributes reach this cascade.
         if (Object.keys(changes).length > 0) {
           void applyCatalogCascade({ productId: id, changes }, { reason: 'global-tab-save' }).catch(
             (err: unknown) => {
@@ -407,7 +350,17 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      return reply.send({ ok: true, changed: true })
+      let recalcError: string | undefined
+      if (!formula) {
+        try {
+          const { reevaluateDependents } = await import('../services/pim/mapping/cell-formula.service.js')
+          const changedFields = [...new Set([...Object.entries(patch).flatMap(([locale, slot]) => isContentLocale(locale) ? Object.keys(slot ?? {}).map(key => key.replace(/\[\d+\]$/, '')) : []), ...Object.values(body.reset ?? {}).flat()])]
+          if (changedFields.includes('title')) changedFields.push('name')
+          changedFields.push(...changedFields.filter(key => !['title', 'name', 'description', 'bulletPoints', 'keywords'].includes(key)).map(key => `attr_${key}`))
+          await reevaluateDependents({ productId: id, changedFields, updatedBy: (request as any).authUser?.id, ip: request.ip })
+        } catch (error) { recalcError = error instanceof Error ? error.message : String(error) }
+      }
+      return reply.send({ ok: true, changed: true, ...(recalcError ? { recalcError } : {}), currentVersion: current.version + 1, versionOf: 'product' })
     },
   )
 

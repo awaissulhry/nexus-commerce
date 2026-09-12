@@ -1,0 +1,320 @@
+/* Sticky Product Image - Desktop Only for Impact Theme */
+@media screen and (min-width: 1000px) {
+  .product {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    align-items: start !important;
+  }
+  
+  .product-gallery {
+    position: sticky;
+    top: 100px; /* Only header height (80.5px) + padding = 100px */
+    align-self: flex-start;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px); /* Adjusted for header only */
+  }
+  
+  /* Main carousel container - takes most space but leaves room for thumbnails */
+  .product-gallery__media-list-wrapper {
+    flex: 1;
+    min-height: 0; /* Allow flex shrinking */
+    margin-bottom: 1rem;
+  }
+  
+  /* Main image carousel */
+  .product-gallery__media-list {
+    height: 100%;
+  }
+  
+  /* Individual media items */
+  .product-gallery__media {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .product-gallery__media img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+  
+  /* Thumbnails container - fixed height with bottom margin */
+  .product-gallery__thumbnail-list-wrapper {
+    flex-shrink: 0;
+    height: 80px; /* Fixed height for thumbnails */
+    margin-bottom: 1rem; /* Bottom margin so thumbnails don't touch the edge */
+    padding-bottom: 0.5rem; /* Additional bottom padding */
+  }
+  
+  .product-gallery__thumbnail-list {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    height: calc(100% - 0.5rem); /* Account for padding */
+    align-items: center;
+  }
+  
+  .product-gallery__thumbnail {
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+  }
+  
+  .product-gallery__thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+  
+  .product-info {
+    padding-left: 0;
+  }
+  
+  /* Smooth scrolling for thumbnails only */
+  .product-gallery__thumbnail-list {
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom scrollbar for thumbnails */
+  .product-gallery__thumbnail-list::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 2px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 2px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}
+
+/* Mobile responsiveness */
+@media screen and (max-width: 999px) {
+  .product-gallery {
+    position: static !important;
+    height: auto !important;
+  }
+  
+  .product-gallery__media-list-wrapper {
+    margin-bottom: 0 !important;
+  }
+  
+  .product-gallery__thumbnail-list-wrapper {
+    height: auto !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+/* LINKED PRODUCTS SWATCHES — desktop only, disabled on mobile */
+
+/* Hidden by default */
+.linked-products-swatches {
+  display: flex !important;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+}
+
+/* Desktop hover only (fine pointer + real hover) */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover .linked-products-swatches {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    max-height: 100px;
+    margin-top: var(--spacing-1);
+  }
+}
+
+/* Explicitly disable on touch devices (no reveal on tap/hold) */
+@media (hover: none), (pointer: coarse) {
+  .product-card:hover .linked-products-swatches,
+  .product-card:active .linked-products-swatches,
+  .product-card__info:active .linked-products-swatches,
+  .product-card__info:focus-within .linked-products-swatches {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translateY(-10px) !important;
+    max-height: 0 !important;
+    margin-top: 0 !important;
+  }
+}
+
+/* Swatch styling (unchanged) */
+.linked-variant-thumb {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: min(4px, var(--rounded-input)) !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+  position: relative !important;
+  border: 2px solid transparent !important;
+  box-sizing: border-box !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  overflow: hidden !important;
+  background: none !important;
+  padding: 0 !important;
+}
+
+.linked-variant-thumb img {
+  border-radius: min(2px, calc(var(--rounded-input) - 2px)) !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transition: all 0.2s ease !important;
+}
+
+.linked-variant-thumb:hover,
+.linked-variant-thumb:focus {
+  border: 2px solid rgb(var(--text-color) / 0.3) !important;
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb:hover img {
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb.is-selected {
+  border: 2px solid rgb(var(--text-color)) !important;
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb.is-selected img {
+  opacity: 1;
+}
+/* Force single row - add this property */
+.linked-products-swatches {
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+}
+
+/* Desktop hover - update overflow */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover .linked-products-swatches {
+    overflow: hidden !important; /* Clip items that don't fit */
+  }
+}
+
+/* +X more indicator styling - add this new class */
+.linked-products-more {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  border-radius: min(4px, var(--rounded-input)) !important;
+  background: rgb(var(--text-color) / 0.05) !important;
+  border: 2px solid rgb(var(--text-color) / 0.1) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: rgb(var(--text-color)) !important;
+  flex-shrink: 0 !important;
+  margin-left: var(--spacing-2) !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  padding: 0 6px !important;
+}
+
+.linked-products-more:hover {
+  background: rgb(var(--text-color) / 0.1) !important;
+  border-color: rgb(var(--text-color) / 0.3) !important;
+  transform: scale(1.05);
+}
+/* Hide floating app surfaces for the menu's complete open lifecycle. */
+/* Klaviyo resets child visibility to visible, so hiding only its host's
+   visibility leaves the banner painted. Remove these fixed hosts from layout. */
+html.nexus-menu-open :is(shopify-chat, .loloyal-launcher-wrapper, #loloyal-core-popup-root, [class*="kl-teaser-"], [data-nexus-floating-promotion]) { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+/* The mobile teaser sits between the observed loyalty/chat launchers. Keep
+   its dismissal inside the banner instead of hanging behind the chat button. */
+@media (max-width: 699px) {
+  [class*="kl-teaser-"] { left: 88px !important; right: 88px !important; bottom: max(16px, env(safe-area-inset-bottom)) !important; margin: 0 !important; width: auto !important; max-width: 320px !important; }
+  [class*="kl-teaser-"] [role="button"] { min-height: 56px !important; padding: 12px 48px 12px 12px !important; border-radius: 10px !important; }
+  [class*="kl-teaser-"] [role="button"] :is(div, span) { font-size: 14px !important; line-height: 1.3 !important; }
+  [class*="kl-teaser-"] .klaviyo-close-form { display: grid !important; place-items: center !important; top: 6px !important; right: 2px !important; width: 44px !important; height: 44px !important; }
+}
+.linked-products-swatches { width: 100%; }
+/* The managed shell participates in the same grid as the original gallery. */
+@media (min-width: 1000px) { .product > [data-nexus-gallery-shell] { display: contents; } }
+/* Reserve a real grid row for thumbnails. The previous flex layout allowed
+   the main carousel's intrinsic height to push them below the sticky box. */
+@media (min-width: 1000px) {
+  .product .product-gallery { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 16px; height: calc(100svh - 120px); min-height: 0; }
+  .product .product-gallery__media-list-wrapper { min-height: 0; height: 100%; margin-bottom: 0; }
+  .product .product-gallery__media-list { min-height: 0; height: 100%; grid-auto-rows: 100%; }
+  .product .product-gallery__media { min-height: 0; max-height: 100%; }
+  .product .product-gallery__thumbnail-list-wrapper { height: 80px; margin: 0; padding: 0; min-height: 0; }
+  /* The observed loyalty launcher occupies x=20..80 at the viewport bottom. */
+  .product .product-gallery__thumbnail-list { height: 80px; padding-block: 8px; padding-inline-start: max(var(--spacing-6), calc(96px - var(--container-gutter))); align-items: center; }
+}
+.product .product-gallery__thumbnail img { object-fit: contain; }
+.linked-variant-thumb[hidden], .linked-products-more[hidden] { display: none !important; }
+.product-card:focus-within .linked-products-swatches { opacity: 1; visibility: visible; transform: translateY(0); max-height: 100px; margin-top: var(--spacing-1); }
+.linked-variant-thumb:focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .linked-products-swatches, .linked-variant-thumb, .linked-variant-thumb img { transition: none !important; } .product-gallery__thumbnail-list { scroll-behavior: auto; } }
+/* Preserve Xavia's two-column image cards and dark titles. Scope every rule
+   to this adapter so merchant content and Impact components keep their styles. */
+nexus-impact-features { display: block; }
+/* The Liquid feature block adjoins Impact's native Description/Shipping
+   group. Features owns their shared border, containing its content margin. */
+.product-info > .product-info__block-item:has(nexus-impact-features) { margin-block-end: 0; }
+.product-info > .product-info__block-item:has(nexus-impact-features) + :is(.accordion-group, .product-info__block-item:has(.product-info__accordion)) { margin-block-start: 0; }
+.product-info > .product-info__block-item:has(nexus-impact-features) + .accordion-group > .product-info__block-item:first-child > .accordion,
+.product-info > .product-info__block-item:has(nexus-impact-features) + .product-info__block-item > .product-info__accordion { border-block-start-width: 0; }
+nexus-impact-features .accordion__content { padding-inline-end: 0; }
+nexus-impact-features .features-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--grid-gutter); }
+nexus-impact-features .features-card { display: flex; flex-direction: column; min-width: 0; overflow: hidden; border: 1px solid rgb(var(--text-color) / .12); border-radius: 12px; background: rgb(var(--background)); box-shadow: var(--shadow-sm); text-align: center; cursor: pointer; }
+nexus-impact-features [hidden] { display: none !important; }
+nexus-impact-features .features-card__visual { display: grid; position: relative; height: 200px; place-items: center; width: 100%; }
+nexus-impact-features .features-card__image { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
+nexus-impact-features .features-card__overlay { display: grid; position: absolute; inset: 0; place-items: center; padding: var(--spacing-3); background: #000c; color: #ff8300; opacity: 0; transition: opacity 150ms ease; font-size: var(--text-sm); }
+nexus-impact-features .features-card__title { display: flex; position: relative; justify-content: center; align-items: center; flex: 1; min-height: 44px; padding: var(--spacing-2) var(--spacing-8); background: #191919; color: #fff; font-size: var(--text-sm); font-weight: 600; line-height: 1.35; }
+nexus-impact-features .features-card__action { position: absolute; inset-inline-end: var(--spacing-3); font-size: 20px; font-weight: 400; }
+nexus-impact-features :is(button, summary):focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 4px; }
+nexus-impact-features .features-card:focus-visible .features-card__overlay { opacity: 1; }
+/* A stable, full-width disclosure with a separate remaining-count badge. */
+nexus-impact-features .features-show-more { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: var(--spacing-2); width: 100%; min-height: 48px; margin-block-start: var(--spacing-4); padding: var(--spacing-3) var(--spacing-4); border: 1px solid rgb(var(--text-color) / .35); border-radius: 8px; color: rgb(var(--text-color)); background: rgb(var(--background)); font: inherit; font-weight: 500; line-height: 1.4; cursor: pointer; transition: background-color 150ms ease; }
+nexus-impact-features .features-show-more__count { min-width: 24px; padding: 1px 6px; border-radius: 100px; background: rgb(var(--text-color) / .08); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+nexus-impact-features .features-show-more__chevron { display: grid; place-items: center; width: 20px; height: 20px; transition: transform 150ms ease; }
+nexus-impact-features .features-show-more[aria-expanded="true"] .features-show-more__chevron { transform: rotate(180deg); }
+/* Native modal dialogs provide the top layer, focus containment and Escape.
+   Their large images are requested only when a shopper opens the card. */
+html:has(nexus-impact-features dialog[open]) { overflow: hidden; scrollbar-gutter: stable; }
+nexus-impact-features .features-modal { position: fixed; inset: 0; margin: auto; padding: 0; width: min(700px, calc(100% - 32px)); max-width: none; max-height: min(90dvh, 900px); overflow-y: auto; overscroll-behavior: contain; border: 0; border-radius: 12px; background: rgb(var(--background)); color: rgb(var(--text-color)); box-shadow: var(--shadow-lg); }
+nexus-impact-features .features-modal::backdrop { background: #000c; }
+nexus-impact-features .features-modal__header { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-4); position: sticky; top: 0; z-index: 1; padding: var(--spacing-4) var(--spacing-6); border-block-end: 1px solid rgb(var(--text-color) / .15); background: rgb(var(--background)); }
+nexus-impact-features .features-modal__header h2 { overflow-wrap: anywhere; }
+nexus-impact-features .features-modal__close { display: grid; flex: 0 0 44px; width: 44px; height: 44px; place-items: center; border: 1px solid rgb(var(--text-color) / .35); border-radius: 50%; cursor: pointer; }
+nexus-impact-features .features-modal__body { padding: var(--spacing-6); }
+nexus-impact-features .features-modal__image { display: block; width: 100%; height: auto; max-height: 45dvh; object-fit: contain; margin-block-end: var(--spacing-6); }
+@media (hover: hover) { nexus-impact-features .features-card:hover .features-card__overlay { opacity: 1; } nexus-impact-features :is(.features-show-more, .features-modal__close):hover { background: rgb(var(--text-color) / .06); } }
+@media (max-width: 699px) { nexus-impact-features .features-card__visual { height: 180px; } nexus-impact-features .features-card__title { font-size: var(--text-xs); padding-inline: var(--spacing-6); } nexus-impact-features .features-card__action { inset-inline-end: var(--spacing-2); } nexus-impact-features .features-modal__header { padding: var(--spacing-3) var(--spacing-4); } nexus-impact-features .features-modal__body { padding: var(--spacing-4); } }
+@media (prefers-reduced-motion: reduce) { nexus-impact-features * { transition: none !important; scroll-behavior: auto; } }

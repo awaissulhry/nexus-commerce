@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * IS.2 — Amazon SP-API Notifications via SQS.
  *
@@ -325,7 +326,7 @@ export async function pollSqsMessages(maxMessages = 10, waitSeconds = 1): Promis
 
         const buyBoxOfferRaw = offers.find((o: any) => o.IsBuyBoxWinner === true)
         const ourSellerId =
-          process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+          root.SellerId ?? root.sellerId ?? (process.env.NEXUS_WORKSPACES_ENABLED !== '1' ? await getAmazonSellerId() : undefined)
         const ourOfferRaw = ourSellerId
           ? offers.find((o: any) => o.SellerId === ourSellerId)
           : null

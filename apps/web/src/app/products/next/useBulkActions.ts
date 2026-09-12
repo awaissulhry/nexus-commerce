@@ -88,46 +88,6 @@ export function useBulkActions({ toast, onConsumed }: UseBulkActionsOptions) {
     [busy, toast, onConsumed],
   )
 
-  // Publish: resolve the selected products to their listings on the target channel/marketplace,
-  // then enqueue a publish bulk-action (2-step, like the live page).
-  const publishBulk = useCallback(
-    async (ids: string[], channel: string, marketplace: string, label: string) => {
-      if (!ids.length || busy) return
-      setBusy(true)
-      try {
-        const params = new URLSearchParams({ channel, marketplace, includeCoverage: 'false', pageSize: '500' })
-        const foundRes = await fetch(`${getBackendUrl()}/api/listings?${params.toString()}`)
-        if (!foundRes.ok) {
-          const b = await foundRes.json().catch(() => ({}))
-          throw new Error((b as { error?: string }).error ?? `Failed to load listings (${foundRes.status})`)
-        }
-        const found = (await foundRes.json()) as { listings?: Array<{ id: string; productId: string }> }
-        const listingIds = (found.listings ?? []).filter((l) => ids.includes(l.productId)).map((l) => l.id)
-        if (listingIds.length === 0) {
-          throw new Error(`No existing listings on ${label} — create them in the listing wizard first`)
-        }
-        const res = await fetch(`${getBackendUrl()}/api/listings/bulk-action`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'publish', listingIds }),
-        })
-        if (!res.ok) {
-          const b = await res.json().catch(() => ({}))
-          throw new Error((b as { error?: string }).error ?? `HTTP ${res.status}`)
-        }
-        emitInvalidation({ type: 'listing.updated', meta: { listingIds, source: 'products-publish', channel, marketplace } })
-        emitInvalidation({ type: 'bulk-job.completed', meta: { action: 'publish', listingIds } })
-        toast(`Queued publish of ${listingIds.length} to ${label}`, 'success')
-        onConsumed()
-      } catch (e) {
-        toast(e instanceof Error ? e.message : 'Publish failed', 'danger')
-      } finally {
-        setBusy(false)
-      }
-    },
-    [busy, toast, onConsumed],
-  )
-
   const setStatusBulk = useCallback(
     (ids: string[], status: 'ACTIVE' | 'DRAFT' | 'INACTIVE', includeChildren = true) =>
       runBulk((n) => `Marked ${n} ${status.toLowerCase()}`, '/api/products/bulk-status', { productIds: ids, status, includeChildren }, ids, 'bulk-status'),
@@ -146,5 +106,5 @@ export function useBulkActions({ toast, onConsumed }: UseBulkActionsOptions) {
     [runBulk],
   )
 
-  return { busy, publishBulk, setStatusBulk, duplicateBulk, softDeleteBulk }
+  return { busy, setStatusBulk, duplicateBulk, softDeleteBulk }
 }

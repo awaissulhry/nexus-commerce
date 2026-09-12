@@ -5,7 +5,7 @@
  * flex row into three labelled segments: Posture · Monthly ceilings · Kill
  * switch, plus the digest cross-link the critique flagged as missing.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Button, Input, Pill } from '@/design-system/primitives'
 import { useEffect, useState } from 'react'
 import { postEbayAds, eurC } from '../_lib'

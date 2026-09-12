@@ -1,0 +1,289 @@
+/* Sticky Product Image - Desktop Only for Impact Theme */
+@media screen and (min-width: 1000px) {
+  .product {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 2rem !important;
+    align-items: start !important;
+  }
+  
+  .product-gallery {
+    position: sticky;
+    top: 100px; /* Only header height (80.5px) + padding = 100px */
+    align-self: flex-start;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 120px); /* Adjusted for header only */
+  }
+  
+  /* Main carousel container - takes most space but leaves room for thumbnails */
+  .product-gallery__media-list-wrapper {
+    flex: 1;
+    min-height: 0; /* Allow flex shrinking */
+    margin-bottom: 1rem;
+  }
+  
+  /* Main image carousel */
+  .product-gallery__media-list {
+    height: 100%;
+  }
+  
+  /* Individual media items */
+  .product-gallery__media {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  
+  .product-gallery__media img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+  
+  /* Thumbnails container - fixed height with bottom margin */
+  .product-gallery__thumbnail-list-wrapper {
+    flex-shrink: 0;
+    height: 80px; /* Fixed height for thumbnails */
+    margin-bottom: 1rem; /* Bottom margin so thumbnails don't touch the edge */
+    padding-bottom: 0.5rem; /* Additional bottom padding */
+  }
+  
+  .product-gallery__thumbnail-list {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    height: calc(100% - 0.5rem); /* Account for padding */
+    align-items: center;
+  }
+  
+  .product-gallery__thumbnail {
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+  }
+  
+  .product-gallery__thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 4px;
+  }
+  
+  .product-info {
+    padding-left: 0;
+  }
+  
+  /* Smooth scrolling for thumbnails only */
+  .product-gallery__thumbnail-list {
+    scroll-behavior: smooth;
+  }
+  
+  /* Custom scrollbar for thumbnails */
+  .product-gallery__thumbnail-list::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 2px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 2px;
+  }
+  
+  .product-gallery__thumbnail-list::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+}
+
+/* Mobile responsiveness */
+@media screen and (max-width: 999px) {
+  .product-gallery {
+    position: static !important;
+    height: auto !important;
+  }
+  
+  .product-gallery__media-list-wrapper {
+    margin-bottom: 0 !important;
+  }
+  
+  .product-gallery__thumbnail-list-wrapper {
+    height: auto !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+/* LINKED PRODUCTS SWATCHES — desktop only, disabled on mobile */
+
+/* Hidden by default */
+.linked-products-swatches {
+  display: flex !important;
+  gap: var(--spacing-2);
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 10px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  max-height: 0;
+  overflow: hidden;
+  margin-top: 0;
+}
+
+/* Desktop hover only (fine pointer + real hover) */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover .linked-products-swatches {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    max-height: 100px;
+    margin-top: var(--spacing-1);
+  }
+}
+
+/* Explicitly disable on touch devices (no reveal on tap/hold) */
+@media (hover: none), (pointer: coarse) {
+  .product-card:hover .linked-products-swatches,
+  .product-card:active .linked-products-swatches,
+  .product-card__info:active .linked-products-swatches,
+  .product-card__info:focus-within .linked-products-swatches {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    transform: translateY(-10px) !important;
+    max-height: 0 !important;
+    margin-top: 0 !important;
+  }
+}
+
+/* Swatch styling (unchanged) */
+.linked-variant-thumb {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: min(4px, var(--rounded-input)) !important;
+  flex-shrink: 0 !important;
+  display: block !important;
+  position: relative !important;
+  border: 2px solid transparent !important;
+  box-sizing: border-box !important;
+  -webkit-tap-highlight-color: transparent !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  overflow: hidden !important;
+  background: none !important;
+  padding: 0 !important;
+}
+
+.linked-variant-thumb img {
+  border-radius: min(2px, calc(var(--rounded-input) - 2px)) !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  transition: all 0.2s ease !important;
+}
+
+.linked-variant-thumb:hover,
+.linked-variant-thumb:focus {
+  border: 2px solid rgb(var(--text-color) / 0.3) !important;
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb:hover img {
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb.is-selected {
+  border: 2px solid rgb(var(--text-color)) !important;
+  transform: scale(1.05);
+}
+
+.linked-variant-thumb.is-selected img {
+  opacity: 1;
+}
+/* Force single row - add this property */
+.linked-products-swatches {
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+}
+
+/* Desktop hover - update overflow */
+@media (hover: hover) and (pointer: fine) {
+  .product-card:hover .linked-products-swatches {
+    overflow: hidden !important; /* Clip items that don't fit */
+  }
+}
+
+/* +X more indicator styling - add this new class */
+.linked-products-more {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  border-radius: min(4px, var(--rounded-input)) !important;
+  background: rgb(var(--text-color) / 0.05) !important;
+  border: 2px solid rgb(var(--text-color) / 0.1) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: rgb(var(--text-color)) !important;
+  flex-shrink: 0 !important;
+  margin-left: var(--spacing-2) !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
+  white-space: nowrap !important;
+  padding: 0 6px !important;
+}
+
+.linked-products-more:hover {
+  background: rgb(var(--text-color) / 0.1) !important;
+  border-color: rgb(var(--text-color) / 0.3) !important;
+  transform: scale(1.05);
+}
+/* Hide floating app surfaces for the menu's complete open lifecycle. */
+/* Klaviyo resets child visibility to visible, so hiding only its host's
+   visibility leaves the banner painted. Remove these fixed hosts from layout. */
+html.nexus-menu-open :is(shopify-chat, .loloyal-launcher-wrapper, #loloyal-core-popup-root, [class*="kl-teaser-"], [data-nexus-floating-promotion]) { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+/* The mobile teaser sits between the observed loyalty/chat launchers. Keep
+   its dismissal inside the banner instead of hanging behind the chat button. */
+@media (max-width: 699px) {
+  [class*="kl-teaser-"] { left: 88px !important; right: 88px !important; bottom: max(16px, env(safe-area-inset-bottom)) !important; margin: 0 !important; width: auto !important; max-width: 320px !important; }
+  [class*="kl-teaser-"] [role="button"] { min-height: 56px !important; padding: 12px 48px 12px 12px !important; border-radius: 10px !important; }
+  [class*="kl-teaser-"] [role="button"] :is(div, span) { font-size: 14px !important; line-height: 1.3 !important; }
+  [class*="kl-teaser-"] .klaviyo-close-form { display: grid !important; place-items: center !important; top: 6px !important; right: 2px !important; width: 44px !important; height: 44px !important; }
+}
+.linked-products-swatches { width: 100%; }
+/* The managed shell participates in the same grid as the original gallery. */
+@media (min-width: 1000px) { .product > [data-nexus-gallery-shell] { display: contents; } }
+/* Reserve a real grid row for thumbnails. The previous flex layout allowed
+   the main carousel's intrinsic height to push them below the sticky box. */
+@media (min-width: 1000px) {
+  .product .product-gallery { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 16px; height: calc(100svh - 120px); min-height: 0; }
+  .product .product-gallery__media-list-wrapper { min-height: 0; height: 100%; margin-bottom: 0; }
+  .product .product-gallery__media-list { min-height: 0; height: 100%; grid-auto-rows: 100%; }
+  .product .product-gallery__media { min-height: 0; max-height: 100%; }
+  .product .product-gallery__thumbnail-list-wrapper { height: 80px; margin: 0; padding: 0; min-height: 0; }
+  /* The observed loyalty launcher occupies x=20..80 at the viewport bottom. */
+  .product .product-gallery__thumbnail-list { height: 80px; padding-block: 8px; padding-inline-start: max(var(--spacing-6), calc(96px - var(--container-gutter))); align-items: center; }
+}
+.product .product-gallery__thumbnail img { object-fit: contain; }
+.linked-variant-thumb[hidden], .linked-products-more[hidden] { display: none !important; }
+.product-card:focus-within .linked-products-swatches { opacity: 1; visibility: visible; transform: translateY(0); max-height: 100px; margin-top: var(--spacing-1); }
+.linked-variant-thumb:focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .linked-products-swatches, .linked-variant-thumb, .linked-variant-thumb img { transition: none !important; } .product-gallery__thumbnail-list { scroll-behavior: auto; } }
+
+/* Retained styling for the currently published inline Features revision. */
+.nexus-product-features > .h6 { margin-block-end: var(--spacing-3); }
+.nexus-feature-row .text-with-icon { min-width: 0; align-items: center; }
+.nexus-feature-row .text-with-icon img { width: 48px; height: 48px; flex: 0 0 48px; object-fit: contain; }
+.nexus-feature-row .accordion__content { padding-inline-start: 0; }
+.nexus-feature-row summary:focus-visible { outline: 2px solid rgb(var(--text-color)); outline-offset: 3px; }

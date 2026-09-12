@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "historicalIndexes": true,
+  "baselineSha256": "957d0dddae6540f1a333ab32f6329423ceffb90a0282e28100ea56515dad2ca7",
+  "migrations": [
+    "20260908a_business_workspaces",
+    "20260908b_workspace_data_isolation",
+    "20260908c_sync_log_result_columns"
+  ],
+  "protectedTables": 409,
+  "preservedProducts": 2,
+  "preservedAccounts": 2,
+  "legacyOwnership": "nexus_legacy_workspace",
+  "nullUniquenessPreserved": true,
+  "separateBusinessSku": true
+}

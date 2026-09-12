@@ -1,3 +1,4 @@
+import { amazonSpClient } from '../lib/amazon-sp-client.js'
 /**
  * Phase 6.B — Amazon SP-API settlement reports ingester.
  *
@@ -27,42 +28,7 @@ const SETTLEMENT_REPORT_TYPE = 'GET_V2_SETTLEMENT_REPORT_DATA_FLAT_FILE_V2'
 
 let cachedClient: SellingPartner | null = null
 
-function getClient(): SellingPartner {
-  if (cachedClient) return cachedClient
-
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      'amazon-settlements: missing required LWA env vars ' +
-        '(AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN)',
-    )
-  }
-
-  const region = (process.env.AMAZON_REGION ?? 'eu') as 'eu' | 'na' | 'fe'
-
-  cachedClient = new SellingPartner({
-    region,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: clientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-    },
-    options: {
-      auto_request_tokens: true,
-      auto_request_throttled: true,
-    },
-  } as any)
-
-  instrumentSellingPartner(cachedClient as never, {
-    channel: 'AMAZON',
-    triggeredBy: 'cron',
-  })
-
-  return cachedClient
-}
+function getClient(): SellingPartner { return amazonSpClient() }
 
 export interface ReportListItem {
   reportId: string

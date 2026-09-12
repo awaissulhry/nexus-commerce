@@ -8,8 +8,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
-import { useRouter, useSearchParams, usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import {
   Boxes, AlertTriangle, LayoutGrid, Sparkles,
   Settings2, X,
@@ -2750,4 +2751,3 @@ function PreferencesTrigger({
     </Button>
   )
 }
-

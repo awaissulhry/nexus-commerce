@@ -12,7 +12,7 @@
 
 import { Fragment, useState } from 'react'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { classifyFailure } from '../_shared/run-health'
 import { agoTs, fmtDuration, type RunGroup, type RunRow } from './lib'

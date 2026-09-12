@@ -25,7 +25,7 @@
  */
 
 import { prisma } from '@nexus/database'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, CheckCircle2, ExternalLink } from 'lucide-react'
 import { prettyChannelMarketplace } from '@/lib/marketplace-code'
 import type { getServerT } from '@/lib/i18n/server'

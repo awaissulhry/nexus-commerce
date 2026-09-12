@@ -9,7 +9,7 @@
  */
 
 import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { useToast } from '@/components/ui/Toast'
 import {
   useReviewEventsRefresh,

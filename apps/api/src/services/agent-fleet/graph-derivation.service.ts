@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.H — H1: derive the entity graph from what the substrate already
  * knows (spec Part 11: "the graph makes them one"). Four derivations:
@@ -57,13 +58,13 @@ async function reconcileEdges(
   for (const d of desired) {
     await prisma.graphEdge.upsert({
       where: {
-        fromType_fromId_toType_toId_relation: {
+        fromType_fromId_toType_toId_relation: workspaceKey({
           fromType: d.fromType,
           fromId: d.fromId,
           toType: d.toType,
           toId: d.toId,
           relation,
-        },
+        }),
       },
       create: {
         fromType: d.fromType,

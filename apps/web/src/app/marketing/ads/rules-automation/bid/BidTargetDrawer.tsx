@@ -57,8 +57,8 @@
  * prevent.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
-import Link from 'next/link'
+import { DataGrid } from '@/design-system/grid/datagrid'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, ExternalLink, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { BidSpark, type SparkPoint } from './BidSpark'

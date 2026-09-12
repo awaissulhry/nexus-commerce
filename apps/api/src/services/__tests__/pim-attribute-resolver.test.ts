@@ -435,6 +435,9 @@ describe('resolveAttributes — synthesis from legacy columns', () => {
       value: 'Racing Suit',
       source: 'masterColumn',
       inheritedFrom: 'p1:name',
+      requestedLocale: 'en',
+      effectiveLocale: 'it',
+      translationState: 'fallback',
     })
     expect(result.description.value).toBe('A premium racing suit.')
     expect(result.description.source).toBe('masterColumn')
@@ -463,12 +466,15 @@ describe('resolveAttributes — synthesis from legacy columns', () => {
     expect(result.title).toBeUndefined()
   })
 
-  it('does NOT synthesize for non-en locales (avoids mislabeling English as Italian)', () => {
+  it('marks native Italian content current in Italian and identifies fallback elsewhere', () => {
     const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
 
     const result = resolveAttributes({ product, parent: null, locale: 'it' })
 
-    expect(result.title).toBeUndefined()
+    expect(result.title).toMatchObject({ value: 'Racing Suit', requestedLocale: 'it', effectiveLocale: 'it', translationState: 'current' })
+    expect(resolveAttributes({ product, parent: null, locale: 'de' }).title).toMatchObject({
+      value: 'Racing Suit', requestedLocale: 'de', effectiveLocale: 'it', translationState: 'fallback',
+    })
   })
 
   it('variant column synthesis overrides parent column synthesis', () => {

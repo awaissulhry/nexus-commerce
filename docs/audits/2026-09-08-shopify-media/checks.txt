@@ -1,0 +1,91 @@
+nexus-shopify-api-tests.log
+
+> @nexus/api@1.0.0 test
+> vitest run src/routes/product-shopify-upload.vitest.test.ts src/routes/shopify-media.vitest.test.ts src/services/shopify/media-library.vitest.test.ts
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api
+
+
+ Test Files  3 passed (3)
+      Tests  48 passed (48)
+   Start at  21:15:15
+   Duration  563ms (transform 368ms, setup 0ms, import 954ms, tests 95ms, environment 0ms)
+
+
+
+nexus-shopify-web-tests.log
+
+> @nexus/web@1.0.2 test
+> vitest run src/design-system/lib/cdn-image.vitest.test.ts
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/web
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  21:09:33
+   Duration  124ms (transform 15ms, setup 0ms, import 21ms, tests 3ms, environment 0ms)
+
+
+
+nexus-shopify-factory-tests.log
+
+> @nexus/factory@1.0.0 test
+> vitest run src/design-system/lib/__tests__/cdn-image.test.ts
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/factory
+
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  21:16:07
+   Duration  100ms (transform 10ms, setup 0ms, import 16ms, tests 2ms, environment 0ms)
+
+
+
+nexus-shopify-media-types.log
+✓ apps/api: 5 file(s) given + 0 ambient + transitive imports — clean in 2.9s
+✓ apps/web: 6 file(s) given + 1 ambient + transitive imports — clean in 2.2s
+✓ apps/factory: 2 file(s) given + 1 ambient + transitive imports — clean in 0.7s
+
+  scope: the files given and everything they IMPORT — not their consumers.
+  An exported-signature change can be green here and break a caller; for that, run the
+  workspace's own `npm run typecheck`.
+
+
+nexus-shopify-final-ui-types.log
+✓ apps/web: 1 file(s) given + 1 ambient + transitive imports — clean in 1.6s
+
+  scope: the files given and everything they IMPORT — not their consumers.
+  An exported-signature change can be green here and break a caller; for that, run the
+  workspace's own `npm run typecheck`.
+
+
+nexus-shopify-conformance.log
+✓ DS-conformance ratchet clean (no section above baseline)
+
+
+nexus-shopify-primitives.log
+✓ raw-primitive ratchet: 4340 raw control(s) (baseline 4692) — no file rose
+
+
+nexus-shopify-css.log
+  comments: NOT stripped — they are what this gate checks
+✓ css-parse: 14 DS stylesheets parse (comments balanced, braces balanced, no NUL bytes)
+
+
+nexus-shopify-token-guard.log
+✓ token-guard [web]: 165 files — no raw hex, no numbered ramps in component CSS,
+    no Tailwind palette in DS .tsx, no platform aliases in DS stylesheets
+
+
+Additional checks observed in tool output:
+- Shared package build passed.
+- Web and Factory generated token checks passed after approved rerun outside the IPC-restricted sandbox.
+- Factory semantic token guard passed (105 files).
+- Changed MediaCard, CDN helper and catalog specimen match across Web and Factory.
+- No undefined semantic tokens in the feature CSS.
+- Targeted git diff --check passed.

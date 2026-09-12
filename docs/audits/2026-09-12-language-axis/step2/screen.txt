@@ -1,0 +1,7 @@
+2026-09-12T00:25:05.500Z
+Both localhost and 127.0.0.1 API metadata navigation refused: net::ERR_BLOCKED_BY_CLIENT
+- heading "localhost is blocked" [level=1]:
+  - generic: localhost is blocked
+- paragraph: This page has been blocked by Chrome
+- generic: ERR_BLOCKED_BY_CLIENT
+- button "Reload"

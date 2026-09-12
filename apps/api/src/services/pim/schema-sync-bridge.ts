@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * PIM D.1 — Bridge from live SP-API schema → ChannelSchema rows.
  *
@@ -119,11 +120,11 @@ export async function syncSchemaToChannelSchema(input: {
 
     await prisma.channelSchema.upsert({
       where: {
-        channel_marketplace_fieldKey: {
+        channel_marketplace_fieldKey: workspaceKey({
           channel,
           marketplace,
           fieldKey: propName,
-        },
+        }),
       },
       create: {
         channel,

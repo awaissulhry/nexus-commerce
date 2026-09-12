@@ -1,6 +1,6 @@
 {
-  "note": "DS-conformance ratchet — waves lower these, pushes may never raise them",
-  "updatedAt": "2026-08-25",
+  "note": "DS-conformance ratchet — waves lower these, pushes may never raise them. tailwindType added 2026-09-02 at current counts (hub #623): legacy sits at baseline, nothing new may adopt the Tailwind type scale. RE-CAPTURED 2026-09-02 (hub #684, DS.1-b): comments are now stripped before any metric runs, so prose no longer counts as code. Every metric here is a text match, and a comment reading `<select` — including one written to explain why the native control was replaced — scored against the section that had just fixed it. Measured with the guard's own control switch (NDS_CONFORMANCE_NO_STRIP=1): 35282 -> 35262 across 38 sections, a fall of 20, and NOTHING rose. The 20 were all genuine prose: products select 15->12 rawColor 7759->7758 tailwindType 3757->3746, marketing/ads select 1->0 date 3->2, bulk-operations date 2->1 rawColor 957->956, _shared date 2->1. A ratchet re-captured after a strip may only FALL; if a later re-capture raises one of these, the strip has regressed and that is the defect, not the count.",
+  "updatedAt": "2026-09-02",
   "sections": {
     "403": {
       "select": 0,
@@ -8,7 +8,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 2
+      "rawColor": 2,
+      "tailwindType": 2
     },
     "_auth": {
       "select": 0,
@@ -16,15 +17,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 4
+      "rawColor": 4,
+      "tailwindType": 4
     },
     "_shared": {
       "select": 2,
-      "date": 2,
+      "date": 1,
       "fontSize": 0,
       "hex": 0,
-      "legacyKit": 10,
-      "rawColor": 398
+      "legacyKit": 8,
+      "rawColor": 376,
+      "tailwindType": 136
     },
     "accept-invite": {
       "select": 0,
@@ -32,7 +35,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 7
+      "rawColor": 7,
+      "tailwindType": 7
     },
     "admin": {
       "select": 0,
@@ -40,7 +44,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 1,
-      "rawColor": 78
+      "rawColor": 78,
+      "tailwindType": 52
     },
     "analytics": {
       "select": 0,
@@ -48,7 +53,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 58
+      "rawColor": 58,
+      "tailwindType": 29
     },
     "audit-log": {
       "select": 0,
@@ -56,15 +62,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 3,
-      "rawColor": 52
+      "rawColor": 52,
+      "tailwindType": 29
     },
     "bulk-operations": {
       "select": 1,
-      "date": 2,
+      "date": 1,
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 38,
-      "rawColor": 957
+      "rawColor": 956,
+      "tailwindType": 485
     },
     "catalog": {
       "select": 1,
@@ -72,7 +80,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 16,
-      "rawColor": 1052
+      "rawColor": 1052,
+      "tailwindType": 525
+    },
+    "channels": {
+      "select": 0,
+      "date": 0,
+      "fontSize": 0,
+      "hex": 0,
+      "legacyKit": 0,
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "command-matrix": {
       "select": 0,
@@ -80,7 +98,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 1,
-      "rawColor": 51
+      "rawColor": 51,
+      "tailwindType": 15
     },
     "customers": {
       "select": 0,
@@ -88,7 +107,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 16,
-      "rawColor": 244
+      "rawColor": 244,
+      "tailwindType": 150
     },
     "dashboard": {
       "select": 0,
@@ -96,7 +116,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 30,
-      "rawColor": 726
+      "rawColor": 726,
+      "tailwindType": 401
     },
     "design": {
       "select": 0,
@@ -104,7 +125,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 16,
-      "rawColor": 13
+      "rawColor": 13,
+      "tailwindType": 127
     },
     "design-system": {
       "select": 0,
@@ -112,7 +134,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "error.tsx": {
       "select": 0,
@@ -120,7 +143,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 1,
-      "rawColor": 4
+      "rawColor": 4,
+      "tailwindType": 3
     },
     "fleet": {
       "select": 0,
@@ -128,7 +152,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "forgot-password": {
       "select": 0,
@@ -136,7 +161,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 5
+      "rawColor": 5,
+      "tailwindType": 5
     },
     "fulfillment": {
       "select": 0,
@@ -144,7 +170,8 @@
       "fontSize": 2,
       "hex": 2,
       "legacyKit": 215,
-      "rawColor": 4840
+      "rawColor": 4840,
+      "tailwindType": 2892
     },
     "inbox": {
       "select": 0,
@@ -152,7 +179,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 2,
-      "rawColor": 26
+      "rawColor": 26,
+      "tailwindType": 6
     },
     "insights": {
       "select": 0,
@@ -160,7 +188,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 21,
-      "rawColor": 306
+      "rawColor": 306,
+      "tailwindType": 181
     },
     "inventory": {
       "select": 0,
@@ -168,7 +197,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 1,
-      "rawColor": 13
+      "rawColor": 13,
+      "tailwindType": 8
     },
     "layout.tsx": {
       "select": 0,
@@ -176,7 +206,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 2,
-      "rawColor": 1
+      "rawColor": 1,
+      "tailwindType": 0
     },
     "listings": {
       "select": 0,
@@ -184,7 +215,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 45,
-      "rawColor": 707
+      "rawColor": 707,
+      "tailwindType": 460
     },
     "loading.tsx": {
       "select": 0,
@@ -192,7 +224,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 1
+      "rawColor": 1,
+      "tailwindType": 1
     },
     "login": {
       "select": 0,
@@ -200,7 +233,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 10
+      "rawColor": 10,
+      "tailwindType": 10
     },
     "marketing": {
       "select": 0,
@@ -208,15 +242,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 68,
-      "rawColor": 1807
+      "rawColor": 1807,
+      "tailwindType": 881
     },
     "marketing/ads": {
-      "select": 33,
-      "date": 3,
-      "fontSize": 9,
-      "hex": 39,
+      "select": 0,
+      "date": 2,
+      "fontSize": 4,
+      "hex": 30,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "marketing/ads/ebay": {
       "select": 0,
@@ -224,7 +260,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "not-found.tsx": {
       "select": 0,
@@ -232,7 +269,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 1,
-      "rawColor": 4
+      "rawColor": 4,
+      "tailwindType": 2
     },
     "orders": {
       "select": 0,
@@ -240,7 +278,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 44,
-      "rawColor": 630
+      "rawColor": 630,
+      "tailwindType": 426
     },
     "outbound": {
       "select": 0,
@@ -248,7 +287,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "page.tsx": {
       "select": 0,
@@ -256,7 +296,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "performance": {
       "select": 0,
@@ -264,7 +305,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 66
+      "rawColor": 66,
+      "tailwindType": 53
     },
     "po": {
       "select": 0,
@@ -272,7 +314,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 53
+      "rawColor": 53,
+      "tailwindType": 49
     },
     "pricing": {
       "select": 0,
@@ -280,15 +323,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 32,
-      "rawColor": 328
+      "rawColor": 328,
+      "tailwindType": 221
     },
     "products": {
-      "select": 15,
+      "select": 12,
       "date": 0,
       "fontSize": 0,
       "hex": 1,
       "legacyKit": 304,
-      "rawColor": 7759
+      "rawColor": 7758,
+      "tailwindType": 3746
     },
     "reconciliation": {
       "select": 0,
@@ -296,7 +341,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 133
+      "rawColor": 133,
+      "tailwindType": 76
     },
     "reports": {
       "select": 0,
@@ -304,7 +350,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 33
+      "rawColor": 33,
+      "tailwindType": 23
     },
     "reset-password": {
       "select": 0,
@@ -312,15 +359,17 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 5
+      "rawColor": 5,
+      "tailwindType": 5
     },
     "settings": {
       "select": 3,
       "date": 0,
       "fontSize": 0,
       "hex": 0,
-      "legacyKit": 50,
-      "rawColor": 1370
+      "legacyKit": 48,
+      "rawColor": 1258,
+      "tailwindType": 787
     },
     "shared": {
       "select": 0,
@@ -328,7 +377,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 0
+      "rawColor": 0,
+      "tailwindType": 0
     },
     "sync-logs": {
       "select": 0,
@@ -336,7 +386,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 23,
-      "rawColor": 554
+      "rawColor": 554,
+      "tailwindType": 238
     },
     "track": {
       "select": 0,
@@ -344,7 +395,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 40
+      "rawColor": 40,
+      "tailwindType": 19
     },
     "unsubscribed": {
       "select": 0,
@@ -352,7 +404,8 @@
       "fontSize": 0,
       "hex": 0,
       "legacyKit": 0,
-      "rawColor": 6
+      "rawColor": 6,
+      "tailwindType": 3
     }
   }
 }

@@ -170,7 +170,7 @@ export async function refreshSalesAggregates(
       NOW() AS "updatedAt"
     FROM "items_with_share"
     GROUP BY sku, channel, marketplace, day
-    ON CONFLICT (sku, channel, marketplace, day) DO UPDATE SET
+    ON CONFLICT ("workspaceId", sku, channel, marketplace, day) DO UPDATE SET
       "unitsSold"    = EXCLUDED."unitsSold",
       "grossRevenue" = EXCLUDED."grossRevenue",
       "ordersCount"  = EXCLUDED."ordersCount",

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * HV.3 — where a graduated keyword would go, and what that decides.
  *
@@ -456,7 +457,7 @@ export async function saveHarvestDestination(args: {
   if (!updatedBy) throw new HarvestDestinationError('updatedBy is required — a destination decides where money goes', 'actor_required')
 
   const row = await prisma.adsHarvestDestination.upsert({
-    where: { scopeGrain_scopeId_matchType: { scopeGrain: args.scopeGrain, scopeId, matchType: args.matchType } },
+    where: { scopeGrain_scopeId_matchType: workspaceKey({ scopeGrain: args.scopeGrain, scopeId, matchType: args.matchType }) },
     create: { scopeGrain: args.scopeGrain, scopeId, matchType: args.matchType, adGroupId: args.adGroupId, negateAtSource: args.negateAtSource !== false, updatedBy },
     update: { adGroupId: args.adGroupId, negateAtSource: args.negateAtSource !== false, updatedBy },
   })
@@ -470,7 +471,7 @@ export async function saveHarvestDestination(args: {
 export async function deleteHarvestDestination(scopeGrain: HvDestGrain, scopeId: string | null, matchType: HvCreateType) {
   const id = scopeGrain === 'account' ? HV_DEST_ACCOUNT : (scopeId ?? '').trim()
   if (scopeGrain !== 'account' && !id) throw new HarvestDestinationError(`a ${scopeGrain} destination needs a scope id`, 'scope_id_required')
-  const existing = await prisma.adsHarvestDestination.findUnique({ where: { scopeGrain_scopeId_matchType: { scopeGrain, scopeId: id, matchType } } })
+  const existing = await prisma.adsHarvestDestination.findUnique({ where: { scopeGrain_scopeId_matchType: workspaceKey({ scopeGrain, scopeId: id, matchType }) } })
   if (!existing) throw new HarvestDestinationError('there is no destination at that scope to remove', 'not_found')
   await prisma.adsHarvestDestination.delete({ where: { id: existing.id } })
   return { removed: { scopeGrain, scopeId: scopeGrain === 'account' ? null : id, matchType } }

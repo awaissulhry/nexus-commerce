@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E2 (eBay Ads) — margin math (pure, unit-tested) + the EbayListingEconomics
  * materializer. THE guardrail source: break-even ad rate per listing.
@@ -166,7 +167,7 @@ export async function rebuildEbayListingEconomics(): Promise<EconomicsRebuildRep
     }
 
     await prisma.ebayListingEconomics.upsert({
-      where: { marketplace_itemId: { marketplace: l.marketplace, itemId: l.itemId } },
+      where: { marketplace_itemId: workspaceKey({ marketplace: l.marketplace, itemId: l.itemId }) },
       create: {
         marketplace: l.marketplace,
         itemId: l.itemId,

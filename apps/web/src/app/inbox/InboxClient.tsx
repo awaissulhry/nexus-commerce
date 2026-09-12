@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle, AlertTriangle, Bell, CheckCircle2, ExternalLink,
   Inbox, Info, Loader2, RotateCcw, X, Zap,

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import CanvasClient from './CanvasClient'
+import { redirect } from 'next/navigation'
 
 export const metadata: Metadata = {
   title: 'Mapping Canvas · Settings · Nexus',
@@ -11,5 +11,5 @@ interface PageProps {
 
 export default async function MappingCanvasPage({ params }: PageProps) {
   const { channel, code } = await params
-  return <CanvasClient channel={channel} code={code} />
+  redirect(`/channels/mapping?${new URLSearchParams({ channel, market: code })}`)
 }

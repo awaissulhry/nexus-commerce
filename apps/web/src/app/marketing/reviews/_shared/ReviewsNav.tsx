@@ -10,8 +10,8 @@
  *   Spike      — open + acknowledged spikes (covered in right rail of /)
  */
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { usePathname } from '@/lib/workspaces/navigation'
 import { Star, Inbox, Mail, SlidersHorizontal } from 'lucide-react'
 import { GlobalFilterBar } from './GlobalFilterBar'
 

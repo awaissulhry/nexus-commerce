@@ -39,16 +39,18 @@ export type { ProductGroupRow }
 
 import styles from './styles.module.css'
 import { InventoryCell } from './InventoryCell'
+import { TRAIL_COLUMN } from './columnLocks'
 
 export const SALES_WINDOW_DAYS = 7
 
-export const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY'] as const
+export const CHANNELS = ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'] as const
 export type Channel = (typeof CHANNELS)[number]
 
 export const CHANNEL_OPTS = [
   { value: 'AMAZON', label: 'Amazon' },
   { value: 'EBAY', label: 'eBay' },
   { value: 'SHOPIFY', label: 'Shopify' },
+  { value: 'ETSY', label: 'Etsy' },
 ]
 
 export const STATUS_OPTS = [
@@ -68,6 +70,8 @@ export interface PageColumn {
   label: ReactNode
   prefsLabel?: string
   group?: string
+  /** Stable presentation group ID, independent of the displayed label. */
+  groupKey?: string
   width?: number
   sortable?: boolean
   defaultHidden?: boolean
@@ -95,6 +99,8 @@ export interface PageColumn {
 
 export const isGroupRow = (d: unknown): d is ProductGroupRow =>
   !!d && typeof d === 'object' && (d as { __group?: boolean }).__group === true
+
+export { STRUCTURAL_COLUMNS, isStructuralColumn, composeLocks, structuralPinState, withStructuralLocks } from './columnLocks'
 
 /** The server's aggregate field per column — the `valueCols` AG sends under a grouping. */
 const GROUP_FIELD: Record<string, string> = { available: 'totalStock', price: 'basePrice', sales: 'sales.revenueCents', units: 'sales.units' }
@@ -152,8 +158,8 @@ export function variationCount(row: ProductRow): number {
   return row.childCount ?? 0
 }
 
-export const familyHref = (parentId: string) => `/products/next?parent=${encodeURIComponent(parentId)}`
-const editHref = (row: ProductRow) => `/products/${row.id}/edit`
+export const familyHref = (parentId: string) => `/products?parent=${encodeURIComponent(parentId)}`
+const editHref = (row: ProductRow) => `/products/${row.id}/edit/studio`
 
 /**
  * What you can do to one product — the ONE list.
@@ -235,17 +241,17 @@ export interface ColumnDeps {
 export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory, navigate }: ColumnDeps): PageColumn[] {
   const productCol: PageColumn = {
     key: 'product',
-    group: 'Identity',
+    groupKey: 'products-next:identity', group: 'Identity',
     label: 'Product',
     sortable: true,
     render: (row) => <ProductCell row={row} isChild={row.parentId !== null} />,
     exportValue: (row) => row.name,
   }
-  const brandCol: PageColumn = { key: 'brand', group: 'Identity', label: 'Brand', width: 140, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('brand') }
-  const productTypeCol: PageColumn = { key: 'productType', group: 'Identity', label: 'Product type', width: 150, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('productType') }
+  const brandCol: PageColumn = { key: 'brand', groupKey: 'products-next:identity', group: 'Identity', label: 'Brand', width: 140, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('brand') }
+  const productTypeCol: PageColumn = { key: 'productType', groupKey: 'products-next:identity', group: 'Identity', label: 'Product type', width: 150, sortable: true, defaultHidden: true, groupable: true, preset: textColumn('productType') }
   const actionsCol: PageColumn = {
     key: 'actions',
-    group: 'Meta',
+    groupKey: 'products-next:meta', group: 'Meta',
     label: '',
     prefsLabel: 'Actions',
     width: 120,
@@ -260,19 +266,19 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
   const movable: PageColumn[] = [
     {
       key: 'channels',
-      group: 'Identity',
+      groupKey: 'products-next:identity', group: 'Identity',
       label: 'Channels',
       width: 130,
       value: (row) => channelsOf(row, activeChannels),
       exportValue: (row) => coverageText(channelsOf(row, activeChannels)),
       preset: { cellClass: 'nds-ag-cell', cellRenderer: CoverageCell },
     },
-    { key: 'status', groupable: true, group: 'Identity', label: 'Status', width: 96, sortable: true, preset: statusColumn('status', { tones: STATUS_TONES }) },
-    { key: 'tags', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], exportValue: (row) => (row.tags ?? []).map((t) => t.name).join(', '), preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
+    { key: 'status', groupable: true, groupKey: 'products-next:identity', group: 'Identity', label: 'Status', width: 96, sortable: true, preset: statusColumn('status', { tones: STATUS_TONES }) },
+    { key: 'tags', groupKey: 'products-next:identity', group: 'Identity', label: 'Tags', width: 150, value: (row) => row.tags ?? [], exportValue: (row) => (row.tags ?? []).map((t) => t.name).join(', '), preset: { cellClass: 'nds-ag-cell', cellRenderer: TagsCell } },
     {
       key: 'available',
       aggregate: ['sum', 'avg', 'min', 'max'],
-      group: 'Inventory',
+      groupKey: 'products-next:inventory', group: 'Inventory',
       label: 'Available',
       width: 120,
       sortable: true,
@@ -294,7 +300,7 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     {
       key: 'sales',
       aggregate: ['sum', 'avg', 'min', 'max'],
-      group: 'Commerce',
+      groupKey: 'products-next:commerce', group: 'Commerce',
       label: `Sales (${SALES_WINDOW_DAYS}d)`,
       prefsLabel: 'Sales',
       width: 110,
@@ -309,7 +315,7 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     {
       key: 'units',
       aggregate: ['sum', 'avg', 'min', 'max'],
-      group: 'Commerce',
+      groupKey: 'products-next:commerce', group: 'Commerce',
       label: `Units (${SALES_WINDOW_DAYS}d)`,
       prefsLabel: 'Units',
       width: 92,
@@ -321,14 +327,14 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
     {
       key: 'price',
       aggregate: ['avg', 'min', 'max', 'sum'],
-      group: 'Commerce',
+      groupKey: 'products-next:commerce', group: 'Commerce',
       label: 'Price',
       width: 96,
       sortable: true,
       groupValue: (g) => g.basePrice ?? null,
       preset: euroColumn<ProductRow>('basePrice'),
     },
-    { key: 'updated', group: 'Meta', label: 'Last updated', width: 132, sortable: true, preset: dateColumn<ProductRow>('updatedAt') },
+    { key: 'updated', groupKey: 'products-next:meta', group: 'Meta', label: 'Last updated', width: 132, sortable: true, preset: dateColumn<ProductRow>('updatedAt') },
   ]
   return [productCol, ...movable, brandCol, productTypeCol, actionsCol]
 }
@@ -357,11 +363,51 @@ export function projectColDefs(
         headerName: columnLabel(c),
         width: c.width,
         sortable: !!c.sortable,
-        // The operator's padlock, not the preset's: a locked end column cannot move or hide.
-        lockPosition: c.key === 'actions' && locked('actions') ? ('right' as const) : undefined,
+        // The operator's padlock, not the preset's: a locked column cannot move or hide.
         lockVisible: locked(c.key),
         suppressMovable: locked(c.key),
-        hide: c.defaultHidden || undefined,
+        /**
+         * 🔴 The PIN is the ENGINE's, with ONE exception: this column.
+         *
+         * `prefsToColumnState` states `pinned` for every togglable column, so nothing here may
+         * state a pin that would contradict it — a colDef `pinned` is re-applied out of the
+         * definition on every `columnDefs` update (AG `reapplyColDef` → `updateSomeColumnState`),
+         * which beats any column state applied before it. `actions` is the exception because its
+         * `pinned: 'right'` and `lockPinned: true` come from the DS `actionsColumn` preset as
+         * CONSTANTS: left alone they re-pin and re-freeze the column the operator has just
+         * unlocked. Stated from the lock instead, the definition and the engine say the same thing.
+         *
+         * `lockPinned` follows the lock and only on the structural pair: it is what removes "Pin
+         * column" from a structural column's header menu (AG hides the item when every column in
+         * it is `lockPinned`), and leaving it on an unlocked column would refuse the operator a pin
+         * the dialog had just released. It does NOT protect a pin from `applyColumnState` — AG
+         * checks it for drags and the menu only — which is why the page re-asserts the structural
+         * pins itself (`structuralPinState`).
+         */
+        ...(c.key === TRAIL_COLUMN
+          ? {
+              pinned: locked(c.key) ? ('right' as const) : null,
+              lockPinned: locked(c.key),
+              lockPosition: locked(c.key) ? ('right' as const) : undefined,
+            }
+          : {}),
+        /**
+         * 🔴 `initialHide`, not `hide` — measured 2026-09-05, and it is a defect on its own.
+         *
+         * `hide` is a STATE property, and AG re-applies the state properties of a definition on
+         * every `columnDefs` update (`reapplyColDef` → `updateSomeColumnState`, whenever the array
+         * came from the caller). This page re-derives `columnDefs` whenever the lock set, the
+         * channel roster or the filter facets move — the facets land one to three seconds after
+         * load — so `hide: true` re-hid Brand and Product type behind the operator's back: ticking
+         * either in Customise put its row in "In view", applied a column state that showed it, and
+         * the very next definition sweep hid it again. Measured on the live page: after Save the
+         * header held 11 columns and neither was among them.
+         *
+         * `initialHide` says the same thing at column CREATION and never again, which is what
+         * "hidden by default" means. Nothing else depended on the re-application: "Reset columns"
+         * hides them explicitly through the engine (`prefsToColumnState`).
+         */
+        initialHide: c.defaultHidden || undefined,
         field: field as ColDef<ProductRow>['field'],
         enableRowGroup: !!c.groupable,
         enableValue: !!c.aggregate,

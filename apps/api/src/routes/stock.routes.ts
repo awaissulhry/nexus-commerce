@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { applyStockMovement, listStockMovements } from '../services/stock-movement.service.js'
@@ -164,7 +165,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Location filters: include parent rows always; filter leaf rows by location.
       if (q.locationCode) {
-        const loc = await prisma.stockLocation.findUnique({ where: { code: q.locationCode }, select: { id: true } })
+        const loc = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: q.locationCode }) }, select: { id: true } })
         if (!loc) return { items: [], total: 0, page, pageSize, totalPages: 0 }
         where.AND = [
           ...(where.AND ?? []),
@@ -415,7 +416,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       if (q.locationCode) {
         const loc = await prisma.stockLocation.findUnique({
-          where: { code: q.locationCode },
+          where: { workspace_code: workspaceKey({ code: q.locationCode }) },
           select: { id: true },
         })
         if (!loc) {
@@ -581,7 +582,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
 
       return {
         amazonFbaCron: {
-          configured: amazonInventoryService.isConfigured(),
+          configured: (await amazonInventoryService.isConfigured()),
           enabled: process.env.NEXUS_ENABLE_AMAZON_INVENTORY_CRON === '1',
           lastReconciliationAt: lastFbaReconciliation?.createdAt ?? null,
           lastReconciliationDelta: lastFbaReconciliation?.change ?? null,
@@ -985,7 +986,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       if (!/^[A-Z0-9][A-Z0-9-]{0,29}$/.test(normalised)) {
         return reply.code(400).send({ error: 'code must be uppercase alphanumeric with hyphens, 1–30 chars' })
       }
-      const existing = await prisma.stockLocation.findUnique({ where: { code: normalised } })
+      const existing = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: normalised }) } })
       if (existing) return reply.code(409).send({ error: `Location code ${normalised} already exists` })
 
       const loc = await prisma.stockLocation.create({
@@ -1022,6 +1023,10 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       const loc = await prisma.stockLocation.findUnique({ where: { id } })
       if (!loc) return reply.code(404).send({ error: 'Location not found' })
 
+      if (isActive === false && (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code) || (loc.warehouseId && await prisma.warehouse.findFirst({ where: { id: loc.warehouseId, isDefault: true } })))) {
+        return reply.code(409).send({ error: 'Choose another default warehouse before deactivating this location.' })
+      }
+
       const updated = await prisma.stockLocation.update({
         where: { id },
         data: {
@@ -1048,7 +1053,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         const { id } = request.params
         const loc = await prisma.stockLocation.findUnique({ where: { id } })
         if (!loc) return reply.code(404).send({ error: 'Location not found' })
-        if (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code)) {
+        if (['AMAZON-EU-FBA', 'IT-MAIN'].includes(loc.code) || (loc.warehouseId && await prisma.warehouse.findFirst({ where: { id: loc.warehouseId, isDefault: true } }))) {
           return reply.code(409).send({ error: `Built-in location ${loc.code} cannot be deactivated here` })
         }
         await prisma.stockLocation.update({ where: { id }, data: { isActive: false } })
@@ -3087,7 +3092,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
         items?: Array<{ sku: string; change: number; notes?: string }>
       }
       const dryRun = !!body.dryRun
-      const locationCode = body.locationCode ?? 'IT-MAIN'
+      const locationCode = body.locationCode ?? (await (await import('../services/default-stock-location.js')).defaultStockLocation())?.code ?? 'IT-MAIN'
       const items = Array.isArray(body.items) ? body.items : []
       if (items.length === 0) {
         return reply.code(400).send({ error: 'items[] required (non-empty)' })
@@ -3097,7 +3102,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const location = await prisma.stockLocation.findUnique({
-        where: { code: locationCode },
+        where: { workspace_code: workspaceKey({ code: locationCode }) },
         select: { id: true, code: true, type: true },
       })
       if (!location) return reply.code(404).send({ error: `Location ${locationCode} not found` })
@@ -3549,7 +3554,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
     '/stock/export',
     async (request, reply) => {
       try {
-        const locationCode = request.query.locationCode ?? 'IT-MAIN'
+        const locationCode = request.query.locationCode ?? (await (await import('../services/default-stock-location.js')).defaultStockLocation())?.code ?? 'IT-MAIN'
         const format = request.query.format === 'xlsx' ? 'xlsx' : 'csv'
         const data = await buildStockExport(locationCode)
         if (!data) return reply.code(404).send({ error: `Location ${locationCode} not found` })
@@ -3763,7 +3768,7 @@ const stockRoutes: FastifyPluginAsync = async (fastify) => {
   // updated immediately without waiting for the 15-min cron.
   fastify.post('/stock/sync', async (_request, reply) => {
     try {
-      if (!amazonInventoryService.isConfigured()) {
+      if (!(await amazonInventoryService.isConfigured())) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
       const summary = await amazonInventoryService.syncFBAInventory()

@@ -23,6 +23,7 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { invalidateAttributeSchemasAfterWrites } from '../services/pim/attribute-schema-invalidation.js'
 import prisma from '../db.js'
 import { familyHierarchyService } from '../services/family-hierarchy.service.js'
 import { familyCompletenessService } from '../services/family-completeness.service.js'
@@ -34,6 +35,7 @@ const CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/
 const MAX_DEPTH = 8
 
 const familiesRoutes: FastifyPluginAsync = async (fastify) => {
+  invalidateAttributeSchemasAfterWrites(fastify)
   // GET /api/families — list with attribute counts.
   fastify.get('/families', async (request, reply) => {
     const q = request.query as { includeAttributes?: string }

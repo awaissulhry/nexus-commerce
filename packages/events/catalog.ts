@@ -128,6 +128,13 @@ export const EVENTS = {
     schema: z.strictObject({ listingId: z.string().min(1), reason: z.string().optional() }),
     subject: (p) => p.listingId,
   }),
+  'shopify.schema.changed': defineEvent({
+    type: 'shopify.schema.changed',
+    context: 'catalog',
+    description: 'The connected Shopify store changed a metafield definition.',
+    schema: z.strictObject({ accountId: z.string().min(1) }),
+    subject: (p) => p.accountId,
+  }),
   'listing.deleted': defineEvent({
     type: 'listing.deleted',
     context: 'catalog',

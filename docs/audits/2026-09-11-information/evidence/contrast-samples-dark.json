@@ -1,0 +1,26 @@
+[
+  {
+    "background": "rgb(24, 38, 59)",
+    "color": "rgb(231, 235, 241)",
+    "fontSize": "15px",
+    "text": "Information jacket"
+  },
+  {
+    "background": "rgb(109, 158, 232)",
+    "color": "rgb(20, 34, 58)",
+    "fontSize": "12.5px",
+    "text": "Review listing information"
+  },
+  {
+    "background": "rgb(24, 38, 59)",
+    "color": "rgb(138, 182, 240)",
+    "fontSize": "11.5px",
+    "text": "Requirements"
+  },
+  {
+    "background": "color(srgb 0.427451 0.619608 0.909804 / 0.2)",
+    "color": "rgb(231, 235, 241)",
+    "fontSize": "13px",
+    "text": "Verified Shopify alias draft"
+  }
+]

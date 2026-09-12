@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AD.1 — Trading Desk read-only API.
  *
@@ -4596,7 +4597,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (!job.externalReportId) return reply.code(400).send({ error: 'no_external_report_id' })
 
     const conn = await prisma.amazonAdsConnection.findUnique({
-      where: { profileId: job.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: job.profileId }) },
       select: { region: true },
     })
     const region = (conn?.region === 'NA' || conn?.region === 'FE') ? conn.region : 'EU'
@@ -4657,7 +4658,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const acceptMime = MIME_BY_RESOURCE[q.resourceType ?? 'campaigns']
       ?? MIME_BY_RESOURCE.campaigns
     const conn = await prisma.amazonAdsConnection.findUnique({
-      where: { profileId: q.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: q.profileId }) },
       select: { region: true, credentialsEncrypted: true },
     })
     if (!conn?.credentialsEncrypted) return reply.code(404).send({ error: 'connection_not_found' })
@@ -9702,7 +9703,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     reply.header('Cache-Control', 'private, max-age=15')
     // Lazy-seed the built-ins (idempotent; never overwrites operator tuning incl. renames).
     for (const t of BUILTIN_RANK_TARGETS) {
-      try { await prisma.rankTarget.upsert({ where: { key: t.key }, update: { builtIn: true }, create: t as never }) } catch { /* race-safe */ }
+      try { await prisma.rankTarget.upsert({ where: { workspace_key: workspaceKey({ key: t.key }) }, update: { builtIn: true }, create: t as never }) } catch { /* race-safe */ }
     }
     // RTC — global library (scope null) ∪ custom swatches scoped to this product/campaign.
     const scopeOr: Record<string, unknown>[] = [{ scopeProductId: null, scopeCampaignId: null }]
@@ -11055,7 +11056,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
     const { applyTopOfSearch } = await import('../services/advertising/ads-top-of-search.service.js')
     const fam = await resolveProductFamily({ parentProductId: plan.productId, marketplace: plan.marketplace })
-    const baseline = plan.defaultTargetKey ? await prisma.rankTarget.findUnique({ where: { key: plan.defaultTargetKey } }) : null
+    const baseline = plan.defaultTargetKey ? await prisma.rankTarget.findUnique({ where: { workspace_key: workspaceKey({ key: plan.defaultTargetKey }) } }) : null
     const pct = baseline?.biasPct ?? 0
     // Only revert the campaigns this plan actually controls (excluded ones were never touched).
     const exRevert = new Set<string>(Array.isArray(plan.excludeCampaignIds) ? (plan.excludeCampaignIds as string[]) : [])
@@ -11070,7 +11071,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const plan = await prisma.productRankPlan.findUnique({ where: { id } })
     if (!plan) { reply.status(404); return { error: 'not found' } }
     let pct = typeof b.percentage === 'number' ? b.percentage : undefined
-    if (pct == null && b.targetKey) { const t = await prisma.rankTarget.findUnique({ where: { key: b.targetKey } }); pct = t?.biasPct ?? undefined }
+    if (pct == null && b.targetKey) { const t = await prisma.rankTarget.findUnique({ where: { workspace_key: workspaceKey({ key: b.targetKey }) } }); pct = t?.biasPct ?? undefined }
     if (pct == null) { reply.status(400); return { error: 'targetKey or percentage required' } }
     const clamped = Math.max(0, Math.min(900, Math.round(pct)))
     const { resolveProductFamily } = await import('../services/advertising/ads-dayparting-refresh.service.js')
@@ -11105,9 +11106,9 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     const asinOf = new Map(prods.map((p) => [p.id, p.amazonAsin]))
     const results: { productId: string; planId: string; created: boolean }[] = []
     for (const productId of toProductIds) {
-      const existing = await prisma.productRankPlan.findUnique({ where: { productId_marketplace: { productId, marketplace } } }).catch(() => null)
+      const existing = await prisma.productRankPlan.findUnique({ where: { productId_marketplace: workspaceKey({ productId, marketplace }) } }).catch(() => null)
       const plan = await prisma.productRankPlan.upsert({
-        where: { productId_marketplace: { productId, marketplace } },
+        where: { productId_marketplace: workspaceKey({ productId, marketplace }) },
         create: { productId, marketplace, parentAsin: asinOf.get(productId) ?? null, windows: windows as never, defaultTargetKey: baseline, enabled: false },
         update: { windows: windows as never, defaultTargetKey: baseline },
       })
@@ -11292,7 +11293,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (!externalId) externalId = `local-pf-${profileId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24)}`
       const pf = await prisma.amazonAdsPortfolio.upsert({
-        where: { profileId_externalPortfolioId: { profileId, externalPortfolioId: externalId } },
+        where: { profileId_externalPortfolioId: workspaceKey({ profileId, externalPortfolioId: externalId }) },
         update: { name }, create: { profileId, externalPortfolioId: externalId, name, state: 'ENABLED' },
       })
       logger.warn('[ADS-PORTFOLIOS] created portfolio', { externalId, name, mode })
@@ -11876,7 +11877,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'profileId required' }
     }
     const conn = await prisma.amazonAdsConnection.findUnique({
-      where: { profileId: body.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: body.profileId }) },
       select: {
         profileId: true,
         marketplace: true,
@@ -11939,7 +11940,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     ENABLE_WRITES_TOKENS.delete(tokenHash)
     const conn = await prisma.amazonAdsConnection.update({
-      where: { profileId: stored.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: stored.profileId }) },
       data: { writesEnabledAt: new Date() },
       select: { profileId: true, marketplace: true, writesEnabledAt: true, mode: true },
     })
@@ -11957,7 +11958,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'profileId required' }
     }
     const conn = await prisma.amazonAdsConnection.update({
-      where: { profileId: body.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: body.profileId }) },
       data: { writesEnabledAt: null },
       select: { profileId: true, writesEnabledAt: true },
     })
@@ -11981,12 +11982,12 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
       return { error: 'profileId + mode (sandbox|production) required' }
     }
     const existing = await prisma.amazonAdsConnection.findUnique({
-      where: { profileId: body.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: body.profileId }) },
       select: { profileId: true, marketplace: true, accountLabel: true, mode: true },
     })
     if (!existing) { reply.code(404); return { error: 'connection_not_found' } }
     const conn = await prisma.amazonAdsConnection.update({
-      where: { profileId: body.profileId },
+      where: { workspace_profileId: workspaceKey({ profileId: body.profileId }) },
       data: {
         mode: body.mode,
         // Demoting to sandbox revokes any standing write enablement.
@@ -12076,7 +12077,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // Upsert on the natural key so re-saving a name updates it rather than
     // failing with a constraint error the operator cannot act on.
     const saved = await prisma.adProductSet.upsert({
-      where: { channel_marketplace_name: { channel, marketplace, name } },
+      where: { channel_marketplace_name: workspaceKey({ channel, marketplace, name }) },
       create: { name, channel, marketplace, productIds, createdBy: actorFromHeaders(request.headers as Record<string, unknown>) },
       update: { productIds },
     })
@@ -12231,7 +12232,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete('/advertising/connections/:profileId', async (request, reply) => {
     const { profileId } = request.params as { profileId: string }
     try {
-      await prisma.amazonAdsConnection.delete({ where: { profileId } })
+      await prisma.amazonAdsConnection.delete({ where: { workspace_profileId: workspaceKey({ profileId: profileId }) } })
       return { ok: true }
     } catch {
       return reply.code(404).send({ error: 'not_found' })

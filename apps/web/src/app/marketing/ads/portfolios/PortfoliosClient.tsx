@@ -8,7 +8,7 @@
  * container, no direct spend). Assign / rename / archive / budgets land in P2–P3.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { RefreshCw, Plus, Pencil, Archive, Wallet, Search, X } from 'lucide-react'
 import { AdsPageHeader } from '../_shell/AdsPageHeader'
 import { Button } from '@/design-system/primitives/Button'
@@ -16,7 +16,7 @@ import { ToolbarButton } from '@/design-system/primitives/ToolbarButton'
 import { SegmentedControl } from '@/design-system/primitives/SegmentedControl'
 import { Select } from '@/design-system/primitives/Select'
 import { Input } from '@/design-system/primitives/Input'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Modal } from '@/design-system/components/Modal'
 import { ToastProvider, useToast } from '@/design-system/components/Toast'
 import { getBackendUrl } from '@/lib/backend-url'

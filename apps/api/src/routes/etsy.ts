@@ -33,6 +33,13 @@ interface AddFulfillmentNoteBody {
 }
 
 export async function estyRoutes(app: FastifyInstance) {
+  app.get<{ Querystring: { accountId?: string; field?: string } }>('/etsy/information/references', async (request, reply) => {
+    const { etsyReferenceChoices, isEtsyReference } = await import('../services/etsy/information-references.js')
+    const { accountId, field } = request.query
+    if (!accountId || !field || !isEtsyReference(field)) return reply.code(400).send({ error: 'Choose an Etsy account and supported resource.' })
+    try { return { choices: await etsyReferenceChoices(accountId, field) } }
+    catch (error) { return reply.code(502).send({ error: error instanceof Error ? error.message : 'Etsy resources could not be loaded.' }) }
+  })
   /**
    * POST /etsy/sync/listings
    * Sync all listings from Etsy to Nexus

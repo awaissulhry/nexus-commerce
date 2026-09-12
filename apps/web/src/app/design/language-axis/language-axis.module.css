@@ -1,0 +1,237 @@
+/**
+ * /design/language-axis — page-local classes that READ THE DS TOKENS. 2026-09-11.
+ *
+ * Same reasoning as `chrome.module.css` and `formula-lab.module.css`: `ds-conformance-guard`
+ * forbids inline `fontSize`, and the DS ships no type-scale utility, so a page's only conforming
+ * place for a size is a module class that resolves to a published `--nds-font-size-*` step.
+ * Every colour is a semantic token; nothing here is a literal.
+ */
+
+.page {
+  font-family: var(--nds-font-sans);
+  color: var(--nds-text);
+  background: var(--nds-bg);
+  min-height: 100dvh;
+  padding: 24px 24px 96px;
+  display: grid;
+  gap: 40px;
+}
+
+.head {
+  display: grid;
+  gap: 8px;
+  max-width: 960px;
+}
+
+.eyebrow {
+  font-size: var(--nds-font-size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+  font-weight: var(--nds-font-weight-semibold, 600);
+}
+
+.title {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold, 700);
+  line-height: 1.2;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: var(--nds-font-size-md);
+  color: var(--nds-text-2);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.scenario {
+  display: grid;
+  gap: 10px;
+}
+
+.scenarioTitle {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold, 600);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.scenarioId {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  font-weight: 500;
+}
+
+.hint {
+  font-size: var(--nds-font-size-base-plus);
+  color: var(--nds-text-2);
+  margin: 0;
+  max-width: 960px;
+  line-height: 1.5;
+}
+
+/* A framed stage: the studio's surface, its border, no gutter — the sheet is the page. */
+.stage {
+  border: 1px solid var(--nds-border);
+  border-radius: 8px;
+  background: var(--nds-surface);
+  overflow: hidden;
+  display: grid;
+}
+
+.stageLabel {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-3);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface-sunken);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* The language chips beside the scope bar's market control. */
+.langChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.langChips .primaryMark {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+}
+
+.sheetHost {
+  display: grid;
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--nds-border);
+  border-radius: 8px;
+  background: var(--nds-surface);
+}
+
+.legendMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+}
+
+.legendName {
+  font-weight: var(--nds-font-weight-semibold, 600);
+  font-size: var(--nds-font-size-base-plus);
+}
+
+.legendNew {
+  margin-left: 6px;
+}
+
+.legendText {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  line-height: 1.45;
+}
+
+.legendNext {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-3);
+  margin-top: 2px;
+}
+
+.matrixHead {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.mono {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.muted {
+  color: var(--nds-text-3);
+}
+
+.chain {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  font-size: var(--nds-font-size-base-plus);
+}
+
+.chain b {
+  font-weight: var(--nds-font-weight-semibold, 600);
+}
+
+.value {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 420px;
+  display: inline-block;
+  vertical-align: bottom;
+}
+
+.previewGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.previewStat {
+  display: grid;
+  gap: 2px;
+}
+
+.previewNum {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold, 600);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.previewLabel {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+}
+
+.footnote {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-3);
+  border-top: 1px solid var(--nds-border);
+  padding-top: 12px;
+  max-width: 960px;
+}

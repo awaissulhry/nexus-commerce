@@ -1,0 +1,4204 @@
+{
+  "observedAt": "2026-09-10T07:00:45.146Z",
+  "products": 338,
+  "stores": [
+    {
+      "accountId": "cmtugfpaa0006njhq8m2nvnxx",
+      "domain": "xaviaracing.myshopify.com",
+      "schemaRevision": "134fa47b685a214fc3d726186570560df38858302e09ac03e0ff826954968b10",
+      "counts": {
+        "total": 70,
+        "mapped": 10,
+        "unmapped": 0,
+        "owned": 60,
+        "required": 1,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "fields": [
+        {
+          "key": "descriptionHtml",
+          "label": "Description",
+          "source": "description",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "description"
+          },
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "category",
+          "label": "Product category",
+          "source": "listing.platformAttributes.category",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "media",
+          "label": "Product media",
+          "source": "listing.platformAttributes.media",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "productType",
+          "label": "Product type",
+          "source": "shopify_product_type",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "shopify_product_type"
+          },
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "source": "listing.platformAttributes.status",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "tags",
+          "label": "Tags",
+          "source": "listing.platformAttributes.tags",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "templateSuffix",
+          "label": "Theme template",
+          "source": "listing.platformAttributes.templateSuffix",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "title",
+          "label": "Title",
+          "source": "title",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "title",
+            "fallback": "name"
+          },
+          "populated": 338,
+          "empty": 0,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "vendor",
+          "label": "Vendor",
+          "source": "brand",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "brand"
+          },
+          "populated": 315,
+          "empty": 23,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "scheduled",
+          "label": "Online store schedule",
+          "source": "listing.platformAttributes.scheduled",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "publishDate",
+          "label": "Publish date",
+          "source": "listing.platformAttributes.publishDate",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "salesChannels",
+          "label": "Sales channels",
+          "source": "listing.platformAttributes.salesChannels",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "price",
+          "label": "Base price",
+          "source": "basePrice",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "basePrice"
+          },
+          "populated": 338,
+          "empty": 0,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "taxable",
+          "label": "Charge taxes",
+          "source": "listing.platformAttributes.taxable",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "compareAtPrice",
+          "label": "Compare-at price",
+          "source": "listing.platformAttributes.compareAtPrice",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "cost",
+          "label": "Cost",
+          "source": "costPrice",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "costPrice"
+          },
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "unitPriceMeasurement",
+          "label": "Unit price",
+          "source": "listing.platformAttributes.unitPriceMeasurement",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "availableQuantity",
+          "label": "Available quantity",
+          "source": "listing.platformAttributes.availableQuantity",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "barcode",
+          "label": "Barcodes",
+          "source": "listing.platformAttributes.barcode",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "inventoryPolicy",
+          "label": "Continue selling when out of stock",
+          "source": "listing.platformAttributes.inventoryPolicy",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "onHandQuantity",
+          "label": "On hand quantity",
+          "source": "listing.platformAttributes.onHandQuantity",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "source": "sku",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "sku"
+          },
+          "populated": 338,
+          "empty": 0,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "tracked",
+          "label": "Track quantity",
+          "source": "listing.platformAttributes.tracked",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "countryCodeOfOrigin",
+          "label": "Country of origin",
+          "source": "countryOfOrigin",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "countryOfOrigin"
+          },
+          "populated": 21,
+          "empty": 317,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "harmonizedSystemCode",
+          "label": "Harmonized system code",
+          "source": "hsCode",
+          "status": "mapped",
+          "rule": {
+            "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it.",
+            "source": "hsCode"
+          },
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "package",
+          "label": "Package",
+          "source": "listing.platformAttributes.package",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "requiresShipping",
+          "label": "Physical product",
+          "source": "listing.platformAttributes.requiresShipping",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "weight",
+          "label": "Weight",
+          "source": "weightValue",
+          "status": "mapped",
+          "rule": {
+            "source": "weightValue",
+            "transforms": [
+              {
+                "expr": "measure($weightValue, $weightUnit, \"g|kg|oz|lb\")",
+                "type": "expr"
+              }
+            ]
+          },
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "seo_description",
+          "label": "SEO description",
+          "source": "listing.platformAttributes.seo.description",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "seo_title",
+          "label": "SEO title",
+          "source": "listing.platformAttributes.seo.title",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "handle",
+          "label": "URL handle",
+          "source": "listing.platformAttributes.handle",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:collapsible_text:list.metaobject_reference",
+          "label": "Collapsible text",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.collapsible_text.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:complementary_products:list.product_reference",
+          "label": "Complementary products",
+          "source": "listing.platformAttributes.metafields.PRODUCT.shopify--discovery--product_recommendation.complementary_products.list.product_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:complementary_products_heading:metaobject_reference",
+          "label": "Complementary products heading",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.complementary_products_heading.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:concise_description:metaobject_reference",
+          "label": "Concise description",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.concise_description.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:custom_button_product_page:metaobject_reference",
+          "label": "Custom Button product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.custom_button_product_page.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:features:list.metaobject_reference",
+          "label": "Features",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.features.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:age_group:single_line_text_field",
+          "label": "Google: Age Group",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.age_group.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:condition:single_line_text_field",
+          "label": "Google: Condition",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.condition.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_0:single_line_text_field",
+          "label": "Google: Custom Label 0",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.custom_label_0.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_1:single_line_text_field",
+          "label": "Google: Custom Label 1",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.custom_label_1.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_2:single_line_text_field",
+          "label": "Google: Custom Label 2",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.custom_label_2.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_3:single_line_text_field",
+          "label": "Google: Custom Label 3",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.custom_label_3.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_4:single_line_text_field",
+          "label": "Google: Custom Label 4",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.custom_label_4.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:mm-google-shopping:custom_product:boolean",
+          "label": "Google: Custom Product",
+          "source": "listing.platformAttributes.metafields.PRODUCT.mm-google-shopping.custom_product.boolean",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:gender:single_line_text_field",
+          "label": "Google: Gender",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.gender.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:mpn:single_line_text_field",
+          "label": "Google: MPN",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.mpn.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:size_system:single_line_text_field",
+          "label": "Google: Size System",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.size_system.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:size_type:single_line_text_field",
+          "label": "Google: Size Type",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.mm-google-shopping.size_type.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:media_grid_product_page:list.metaobject_reference",
+          "label": "Media grid product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.media_grid_product_page.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:media_with_text_product_page:list.metaobject_reference",
+          "label": "Media with text product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.media_with_text_product_page.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:multiple_images_with_text_product_page:list.metaobject_reference",
+          "label": "Multiple images with text product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.multiple_images_with_text_product_page.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:press_product_page:list.metaobject_reference",
+          "label": "Press product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.press_product_page.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:reviews:rating:rating",
+          "label": "Product rating",
+          "source": "listing.platformAttributes.metafields.PRODUCT.reviews.rating.rating",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:reviews:rating_count:number_integer",
+          "label": "Product rating count",
+          "source": "listing.platformAttributes.metafields.PRODUCT.reviews.rating_count.number_integer",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:related_products:list.product_reference",
+          "label": "Related products",
+          "source": "listing.platformAttributes.metafields.PRODUCT.shopify--discovery--product_recommendation.related_products.list.product_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:related_products_display:single_line_text_field",
+          "label": "Related products settings",
+          "source": "listing.platformAttributes.metafields.PRODUCT.shopify--discovery--product_recommendation.related_products_display.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:craftshift:rubik_configuration:single_line_text_field",
+          "label": "Rubik Configuration",
+          "source": "listing.platformAttributes.metafields.PRODUCT.craftshift.rubik_configuration.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:craftshift:swatch_color:color",
+          "label": "Rubik swatch color",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.craftshift.swatch_color.color",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:craftshift:swatch_image:file_reference",
+          "label": "Rubik swatch image",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.craftshift.swatch_image.file_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:scrolling_text_product_page:metaobject_reference",
+          "label": "Scrolling text product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.scrolling_text_product_page.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_search_boost:queries:list.single_line_text_field",
+          "label": "Search product boosts",
+          "source": "listing.platformAttributes.metafields.PRODUCT.shopify--discovery--product_search_boost.queries.list.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:size_chart:page_reference",
+          "label": "Size Chart",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.size_chart.page_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:slideshow_product_page:list.metaobject_reference",
+          "label": "Slideshow product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.slideshow_product_page.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:text_with_icon:list.metaobject_reference",
+          "label": "Text with icon",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.text_with_icon.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:custom:variant_sort_order:number_integer",
+          "label": "Variant Sort Order",
+          "source": "listing.platformAttributes.metafields.PRODUCTVARIANT.custom.variant_sort_order.number_integer",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:variation_products:list.product_reference",
+          "label": "Variation products",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.variation_products.list.product_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:variation_value:single_line_text_field",
+          "label": "Variation value",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.variation_value.single_line_text_field",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:video_product_page:metaobject_reference",
+          "label": "Video product page",
+          "source": "listing.platformAttributes.metafields.PRODUCT.custom.video_product_page.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        },
+        {
+          "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify:color-pattern:list.metaobject_reference",
+          "label": "Color",
+          "source": "listing.platformAttributes.metafields.PRODUCT.shopify.color-pattern.list.metaobject_reference",
+          "status": "owned",
+          "rule": null,
+          "populated": 0,
+          "empty": 338,
+          "invalid": 0,
+          "examples": []
+        }
+      ],
+      "sheet": {
+        "columns": [
+          {
+            "key": "__productRole",
+            "label": "Product role",
+            "editable": false
+          },
+          {
+            "key": "__parentSku",
+            "label": "Parent SKU",
+            "editable": false
+          },
+          {
+            "key": "name",
+            "label": "Title",
+            "editable": true
+          },
+          {
+            "key": "description",
+            "label": "Description",
+            "editable": true
+          },
+          {
+            "key": "category",
+            "label": "Product category",
+            "editable": false
+          },
+          {
+            "key": "media",
+            "label": "Product media",
+            "editable": false
+          },
+          {
+            "key": "shopify_product_type",
+            "label": "Product type",
+            "editable": true
+          },
+          {
+            "key": "status",
+            "label": "Status",
+            "editable": false
+          },
+          {
+            "key": "tags",
+            "label": "Tags",
+            "editable": true
+          },
+          {
+            "key": "templateSuffix",
+            "label": "Theme template",
+            "editable": false
+          },
+          {
+            "key": "brand",
+            "label": "Vendor",
+            "editable": true
+          },
+          {
+            "key": "scheduled",
+            "label": "Online store schedule",
+            "editable": false
+          },
+          {
+            "key": "publishDate",
+            "label": "Publish date",
+            "editable": false
+          },
+          {
+            "key": "salesChannels",
+            "label": "Sales channels",
+            "editable": false
+          },
+          {
+            "key": "basePrice",
+            "label": "Base price",
+            "editable": true
+          },
+          {
+            "key": "taxable",
+            "label": "Charge taxes",
+            "editable": true
+          },
+          {
+            "key": "compareAtPrice",
+            "label": "Compare-at price",
+            "editable": true
+          },
+          {
+            "key": "costPrice",
+            "label": "Cost",
+            "editable": false
+          },
+          {
+            "key": "unitPriceMeasurement",
+            "label": "Unit price",
+            "editable": false
+          },
+          {
+            "key": "availableQuantity",
+            "label": "Available quantity",
+            "editable": false
+          },
+          {
+            "key": "barcode",
+            "label": "Barcodes",
+            "editable": false
+          },
+          {
+            "key": "inventoryPolicy",
+            "label": "Continue selling when out of stock",
+            "editable": true
+          },
+          {
+            "key": "onHandQuantity",
+            "label": "On hand quantity",
+            "editable": false
+          },
+          {
+            "key": "sku",
+            "label": "SKU",
+            "editable": false
+          },
+          {
+            "key": "tracked",
+            "label": "Track quantity",
+            "editable": false
+          },
+          {
+            "key": "countryOfOrigin",
+            "label": "Country of origin",
+            "editable": false
+          },
+          {
+            "key": "hsCode",
+            "label": "Harmonized system code",
+            "editable": true
+          },
+          {
+            "key": "package",
+            "label": "Package",
+            "editable": false
+          },
+          {
+            "key": "requiresShipping",
+            "label": "Physical product",
+            "editable": true
+          },
+          {
+            "key": "weight",
+            "label": "Weight",
+            "editable": false
+          },
+          {
+            "key": "seo_description",
+            "label": "SEO description",
+            "editable": true
+          },
+          {
+            "key": "seo_title",
+            "label": "SEO title",
+            "editable": true
+          },
+          {
+            "key": "handle",
+            "label": "URL handle",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:collapsible_text:list.metaobject_reference",
+            "label": "Collapsible text",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:complementary_products:list.product_reference",
+            "label": "Complementary products",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:complementary_products_heading:metaobject_reference",
+            "label": "Complementary products heading",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:concise_description:metaobject_reference",
+            "label": "Concise description",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:custom_button_product_page:metaobject_reference",
+            "label": "Custom Button product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:features:list.metaobject_reference",
+            "label": "Features",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:age_group:single_line_text_field",
+            "label": "Google: Age Group",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:condition:single_line_text_field",
+            "label": "Google: Condition",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_0:single_line_text_field",
+            "label": "Google: Custom Label 0",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_1:single_line_text_field",
+            "label": "Google: Custom Label 1",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_2:single_line_text_field",
+            "label": "Google: Custom Label 2",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_3:single_line_text_field",
+            "label": "Google: Custom Label 3",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:custom_label_4:single_line_text_field",
+            "label": "Google: Custom Label 4",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:mm-google-shopping:custom_product:boolean",
+            "label": "Google: Custom Product",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:gender:single_line_text_field",
+            "label": "Google: Gender",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:mpn:single_line_text_field",
+            "label": "Google: MPN",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:size_system:single_line_text_field",
+            "label": "Google: Size System",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:mm-google-shopping:size_type:single_line_text_field",
+            "label": "Google: Size Type",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:media_grid_product_page:list.metaobject_reference",
+            "label": "Media grid product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:media_with_text_product_page:list.metaobject_reference",
+            "label": "Media with text product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:multiple_images_with_text_product_page:list.metaobject_reference",
+            "label": "Multiple images with text product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:press_product_page:list.metaobject_reference",
+            "label": "Press product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:reviews:rating:rating",
+            "label": "Product rating",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:reviews:rating_count:number_integer",
+            "label": "Product rating count",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:related_products:list.product_reference",
+            "label": "Related products",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_recommendation:related_products_display:single_line_text_field",
+            "label": "Related products settings",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:craftshift:rubik_configuration:single_line_text_field",
+            "label": "Rubik Configuration",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:craftshift:swatch_color:color",
+            "label": "Rubik swatch color",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:craftshift:swatch_image:file_reference",
+            "label": "Rubik swatch image",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:scrolling_text_product_page:metaobject_reference",
+            "label": "Scrolling text product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify--discovery--product_search_boost:queries:list.single_line_text_field",
+            "label": "Search product boosts",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:size_chart:page_reference",
+            "label": "Size Chart",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:slideshow_product_page:list.metaobject_reference",
+            "label": "Slideshow product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:text_with_icon:list.metaobject_reference",
+            "label": "Text with icon",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCTVARIANT:custom:variant_sort_order:number_integer",
+            "label": "Variant Sort Order",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:variation_products:list.product_reference",
+            "label": "Variation products",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:variation_value:single_line_text_field",
+            "label": "Variation value",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:custom:video_product_page:metaobject_reference",
+            "label": "Video product page",
+            "editable": false
+          },
+          {
+            "key": "shopify_metafield:cmtugfpaa0006njhq8m2nvnxx:PRODUCT:shopify:color-pattern:list.metaobject_reference",
+            "label": "Color",
+            "editable": false
+          }
+        ],
+        "mapping": {
+          "categoryByProduct": {
+            "cmokmy0ot000gpm0p4z5vwnoo": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0qp000lpm0p2yxw35ku": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0o1000epm0pca79fbbf": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0qb000kpm0p06pmx2vt": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0m9000apm0pm52rd77m": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0jt0004pm0p0gaufo1b": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy3a40078pm0p1fvnu523": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0jf0003pm0ppnu1b2yy": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0pk000ipm0pi8nl7pbn": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0mm000bpm0pm7k7eke4": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0ni000dpm0p2xvcpkma": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0p6000hpm0ptee51htd": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0og000fpm0pdwckcnq0": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0ky0007pm0p3vj7q0mh": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0py000jpm0pc2jcd5ul": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0kl0006pm0p9auaundx": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0k70005pm0puvz2ucxu": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0lc0008pm0p2thzmlqq": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy2ir005bpm0p0sm1rxx8": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0lr0009pm0p9yxk7ho0": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            },
+            "cmokmy0n4000cpm0ptkjitr0f": {
+              "channelCategoryId": null,
+              "channelCategoryPath": null,
+              "browseNodeId": null,
+              "source": "none",
+              "categoryId": null,
+              "categoryName": null,
+              "reviewed": false
+            }
+          },
+          "missingProductIds": [],
+          "productLevelOnly": false,
+          "skippedReason": null
+        },
+        "rows": [
+          {
+            "id": "cmokmy3a40078pm0p1fvnu523",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 0,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0jf0003pm0ppnu1b2yy",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-3XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0jt0004pm0p0gaufo1b",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-4XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy2ir005bpm0p0sm1rxx8",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-5XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0k70005pm0puvz2ucxu",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-L",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0kl0006pm0p9auaundx",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-M",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0ky0007pm0p3vj7q0mh",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-S",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0lc0008pm0p2thzmlqq",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0lr0009pm0p9yxk7ho0",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-XS",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0m9000apm0pm52rd77m",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-XXL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0mm000bpm0pm7k7eke4",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 99.75,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-BLACK-MEN-XXS",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0n4000cpm0ptkjitr0f",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-3XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0ni000dpm0p2xvcpkma",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-4XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0o1000epm0pca79fbbf",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-5XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0og000fpm0pdwckcnq0",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-L",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0ot000gpm0p4z5vwnoo",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-M",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0p6000hpm0ptee51htd",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-S",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0pk000ipm0pi8nl7pbn",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-XL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0py000jpm0pc2jcd5ul",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-XS",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0qb000kpm0p06pmx2vt",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 105,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-XXL",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          },
+          {
+            "id": "cmokmy0qp000lpm0p2yxw35ku",
+            "values": {
+              "name": {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "title",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "description": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "description",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "shopify_product_type": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "shopify_product_type",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "status": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.status"
+                  },
+                  "errors": []
+                }
+              },
+              "brand": {
+                "value": "Xavia",
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "brand",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "basePrice": {
+                "value": 99.75,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "basePrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "costPrice": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "costPrice",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "availableQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.availableQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "onHandQuantity": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": null,
+                  "sourceOwner": {
+                    "kind": "listing",
+                    "label": "Listing settings",
+                    "path": "listing.platformAttributes.onHandQuantity"
+                  },
+                  "errors": []
+                }
+              },
+              "sku": {
+                "value": "GALE-JACKET-YELLOW-MEN-XXS",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "sku",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "countryOfOrigin": {
+                "value": "PK",
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "countryOfOrigin",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "hsCode": {
+                "value": null,
+                "writable": true,
+                "mapped": {
+                  "sourcePath": "hsCode",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              },
+              "weight": {
+                "value": null,
+                "writable": false,
+                "mapped": {
+                  "sourcePath": "weightValue",
+                  "sourceOwner": null,
+                  "errors": []
+                }
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

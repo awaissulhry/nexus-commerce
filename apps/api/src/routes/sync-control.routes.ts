@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SC.2 — Sync Control read surface (owner-approved program, read-only phase).
  *
@@ -1045,7 +1046,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     const problems = validateServesTokens(tokens)
     if (problems.length > 0) return reply.code(400).send({ error: 'invalid tokens', problems })
 
-    const loc = await prisma.stockLocation.findUnique({ where: { code: body.code }, select: { id: true, code: true, type: true, syncRoutes: true } })
+    const loc = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: body.code }) }, select: { id: true, code: true, type: true, syncRoutes: true } })
     if (!loc) return reply.code(404).send({ error: `location ${body.code} not found` })
 
     await prisma.stockLocation.update({ where: { id: loc.id }, data: { syncRoutes: tokens } })
@@ -1106,7 +1107,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     // not pause them all. The primary reproduces today's single-account rows.
     const policyConn = (await primaryConnectionIds([channel])).get(channel) ?? null
     const existing = await prisma.syncChannelPolicy.findUnique({
-      where: { channel_marketplace: { channel, marketplace, channelConnectionId: policyConn } },
+      where: { channel_marketplace: workspaceKey({ channel, marketplace, channelConnectionId: policyConn }) },
     })
 
     const nextPaused = body.pushesPaused ?? existing?.pushesPaused ?? false
@@ -1127,7 +1128,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       }
     } else {
       const saved = await prisma.syncChannelPolicy.upsert({
-        where: { channel_marketplace: { channel, marketplace, channelConnectionId: policyConn } },
+        where: { channel_marketplace: workspaceKey({ channel, marketplace, channelConnectionId: policyConn }) },
         create: {
           channel, marketplace, pushesPaused: nextPaused, newListingDefaultMode: nextMode,
           newListingModeSetAt: nextMode === 'PAUSED' ? new Date() : null,
@@ -1370,7 +1371,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       for (const c of changes) {
         try {
           if (c.lane === 'ROUTE' && c.locationCode && c.feeds) {
-            const loc = await prisma.stockLocation.findUnique({ where: { code: c.locationCode }, select: { id: true, syncRoutes: true } })
+            const loc = await prisma.stockLocation.findUnique({ where: { workspace_code: workspaceKey({ code: c.locationCode }) }, select: { id: true, syncRoutes: true } })
             if (!loc) continue
             await prisma.stockLocation.update({ where: { id: loc.id }, data: { syncRoutes: c.feeds } })
             await audit([{ scopeType: 'LOCATION', scopeId: loc.id, scopeName: c.locationCode, field: 'syncRoutes', before: { syncRoutes: loc.syncRoutes }, after: { syncRoutes: c.feeds } }], actor)

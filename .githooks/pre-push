@@ -155,6 +155,17 @@ node scripts/check-css-radius-ratchet.mjs --check || {
   exit 1
 }
 
+# 2026-09-02 (hub #575) — DS stylesheets must PARSE. A `*` immediately before a `/` inside a
+# comment ends that comment early, the rest of the block becomes declarations, and the whole route
+# comes back as a Turbopack error page (#262). No other gate reads CSS structure: tsc does not read
+# CSS, and the token/ratchet guards scan for names inside text that already parses. Comments are NOT
+# stripped here, deliberately — an unbalanced one is the defect.
+echo "→ Checking DS stylesheets parse (GDS §8.7)..."
+node scripts/check-css-parse.mjs || {
+  echo "❌ CSS parse FAILED — a stylesheet that does not parse takes the route DOWN rather than degrading it"
+  exit 1
+}
+
 # 2026-08-25 — DS-shadow ratchet. A page rule ending in a bare input/select/button/textarea
 # inside a descendant chain BEATS the design-system primitive (.h10-aig-field input is (0,2,1)
 # against .nds-field > input's (0,1,1)), so a converted control renders as design-system markup
@@ -221,6 +232,40 @@ npm run tokens:check --silent || {
   exit 1
 }
 
+# 2026-09-02 (hub #684/#708, DS.1-b) — the SAME check for the factory fork, which had none.
+# `npm run tokens:check` is web-only: root package.json pointed both token scripts at
+# apps/web, and neither app had one of its own, so factory's generated tokens.css has never had a
+# drift gate. `check-ds-fork-drift` is blind to stylesheets, so nothing else covered it either.
+echo "→ Checking factory tokens.css is in sync with its css-vars.ts..."
+npm run tokens:check:factory --silent || {
+  echo "❌ factory tokens.css drift — edit apps/factory/.../tokens/css-vars.ts and run 'npm run tokens:gen:factory'"
+  exit 1
+}
+
+# 2026-09-02 (hub #708, DS.1-b) — every var(--nds-…) without a fallback must name a token DEFINED
+# IN THE APP THAT CONSUMES IT. An undefined custom property is invalid at computed-value time: the
+# property silently takes its inherited or initial value, so the surface renders WRONG rather than
+# broken and nothing else in this file can see it. Replaces the unwired, fork-blind
+# `check-css-token-definitions.mjs`, whose repo-wide definition set called a web-only token
+# "defined" for factory and whose repo-wide walk reported guards' own self-test fixtures as defects.
+echo "→ Checking every consumed --nds-* token resolves in its own app..."
+node scripts/check-token-resolution.mjs --check || {
+  echo "❌ token-resolution FAILED — see above (rule + why: scripts/check-token-resolution.mjs header)"
+  exit 1
+}
+
+# 2026-09-02 (hub #583) — the light pin must cover every token `.dark` actually CHANGES.
+# `shared-shell.css` pins ~95 tokens back to light on `body:has(.h10-shell)` so a console page
+# ignores the OS theme, and that list was maintained by hand: its own header says "adding a `.dark`
+# override means adding its pin HERE too". An instruction in a comment is not a mechanism — a dark
+# value minted for `--nds-chrome-bg` escaped it, and the diff found four more, three of them the
+# provenance inks. Runs AFTER tokens:check so parity is measured against freshly generated CSS.
+echo "→ Checking dark/pin parity (GDS §8.8)..."
+node scripts/check-dark-pin-parity.mjs || {
+  echo "❌ dark-pin parity FAILED — a light-pinned page would render these tokens with their dark values"
+  exit 1
+}
+
 # 2026-08-24 — the DS's OWN two guards. Both shipped with the system (Phase 7 /
 # the API-consistency pass) and both sat unwired, so the design system's internal
 # conformance was the one thing every push did NOT measure while the app-level
@@ -260,6 +305,15 @@ node scripts/check-grid-option-identity.mjs || {
 echo "→ Checking grid-kit ratchet (GDS §8.7)..."
 node scripts/check-grid-kit-ratchet.mjs --check || {
   echo "❌ grid-kit ratchet FAILED — see message above"
+  exit 1
+}
+# AG module gate — a feature whose module is not registered in design-system/grid/modules.ts does
+# not work and says NOTHING in production (AG reports it through ValidationModule, which is
+# dev-only). Two shipped this way before this gate existed: every text cell silently uneditable,
+# and api.getCellValue silently returning undefined. `--self-test` proves it catches both.
+echo "→ Checking AG module gate (GDS §8)..."
+node scripts/check-grid-modules.mjs || {
+  echo "❌ AG module gate FAILED — see message above"
   exit 1
 }
 # EV.1 — the event contract. Every published event type is declared in
@@ -305,12 +359,62 @@ node scripts/check-cron-clustered.mjs || {
   echo "❌ clustered cron FAILED — see message above"
   exit 1
 }
-# GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000. When no
-# dev server answers it says so and skips (never a silent pass) — run `npm run grid:conformance`
-# by hand before showing grid work. `--strict` turns a missing server into a failure.
+# 2026-09-02 (hub #507/#575) — nothing may put a `__`-prefixed object on window/globalThis in a
+# CLIENT bundle without a decision. The grid lab shipped a live AG `GridApi` on `window.__gdsSheet`
+# to anyone who opened /design/grid-lab on a deployed build (#500), and the factory's SSE manager
+# shipped a live EventSource the same way. Ratcheted at 0: both are now behind NODE_ENV.
+echo "→ Checking client-bundle global exposure..."
+node scripts/check-global-exposure.mjs || {
+  echo "❌ global-exposure FAILED — a __-prefixed global in a production bundle ships a live handle to any visitor"
+  exit 1
+}
+
+# GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000.
+# 🔴 `--strict` since hub #525: a missing server is a FAILURE here, not a skip. It used to skip with
+# `exit 0`, and on 2026-09-02 the machine sat at load 23 for hours with :3000 listening but the route
+# not answering — so the gate printed `SKIPPED — NOT MEASURED` and passed, during the exact window
+# grid work was landing. PES.2's case: a gate that exists to stop unmeasured grid work shipping must
+# not itself pass unmeasured, and a lane grepping for `^✓|^✗` sees SILENCE from a skip, which is
+# indistinguishable from success. The push happens once, on the Owner's word, with the hub's servers
+# up; a server genuinely down at that moment SHOULD fail it. Run `npm run grid:conformance` by hand
+# (no flag, skip allowed) while developing.
 echo "→ Checking grid chrome conformance (GDS §8.2, needs :3000)..."
-node scripts/check-grid-chrome.mjs || {
+node scripts/check-grid-chrome.mjs --strict || {
   echo "❌ grid chrome conformance FAILED — see message above"
+  exit 1
+}
+# 2026-09-03 (Owner P0, ruling 3) — THE OPEN-GESTURE GATE. Needs :3000.
+# Reported as "I double-click a cell and sometimes no editor opens". Measured: AG parents a 6×6px
+# `.ag-fill-handle` INSIDE the selected cell's bottom-right corner and binds its own dblclick that
+# begins `_stopPropagationForAgGrid(e)` — the cell never sees the gesture — and whose remaining body
+# fills the value down to the LAST ROW of the grid, unconfirmed. One corner double-click on
+# `basePrice` armed 20 `PATCH /api/products/bulk` calls carrying "0" onto twenty other rows of the
+# family. Nothing else in this file can see either half: tsc does not click, and no static guard
+# knows where AG puts a handle.
+#
+# It asserts two things per gesture — an editor's DOM within 250ms, and ZERO writes armed — over
+# every column kind × every gesture (double-click, Enter, F2, a character, `=`) × both hit-points ×
+# three timings, and it carries its own controls: a per-gesture positive control (the pointer must
+# be over the target cell, or the reading ABSTAINS and the run fails), a negative control (a header
+# double-click must open nothing, or the detector is broken and every green above it is vacuous),
+# and a wire control (the page must dial the expected API, not the deployed one).
+#
+# 🔴 `--strict` for the same reason `check-grid-chrome.mjs` carries it: a gate that exists to stop
+# unmeasured editing work shipping must not itself pass unmeasured. Run it by hand without the flag
+# (or with EDITOR_ONLY=settled) while developing.
+echo "→ Checking open-gesture editing (P0 2026-09-03, needs :3000)..."
+node scripts/check-editor-open.mjs --strict || {
+  echo "❌ open-gesture gate FAILED — see message above (rule + why: scripts/check-editor-open.mjs header)"
+  exit 1
+}
+# CT.1 (2026-09-04): the studio's CONTROL VOCABULARY, read off the rendered DOM — every control in
+# the product header, scope row, sheet toolbar and drawer strip is a DS control on the 28px tier
+# (tabs at strip height), every panel control is a DS control on a DS tier, and the "Ask AI" FAB is
+# absent. It runs AFTER the open-gesture gate because gate runs against :3000 are serialised, and it
+# exits 2 (refused) rather than green when another gate is mid-run or the server is down.
+echo "→ Checking the studio control census (CT.1, needs :3000)..."
+node scripts/check-control-census.mjs || {
+  echo "❌ control census FAILED — see message above (rule + why: scripts/check-control-census.mjs header)"
   exit 1
 }
 echo "→ Checking DS-GAPS append-only (GDS §8.6)..."

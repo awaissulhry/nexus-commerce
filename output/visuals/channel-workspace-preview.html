@@ -1,0 +1,1608 @@
+<!doctype html>
+<html lang="en" data-visualize-standalone>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Channel Workspace Proposal</title>
+<style>:root{color-scheme:light dark;background:light-dark(rgb(255 255 255), rgb(24 24 24))}html,body{margin:0}body{box-sizing:border-box;padding:1rem;background:inherit}iframe{display:block;width:100%;height:calc(100vh - 2rem);margin:0 auto;border:0}</style>
+</head>
+<body>
+<iframe sandbox="allow-scripts" referrerpolicy="no-referrer" title="Channel Workspace Proposal" srcdoc="&lt;!doctype html&gt;
+&lt;html lang=&quot;en&quot; data-visualize-standalone&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+&lt;meta name=&quot;referrer&quot; content=&quot;no-referrer&quot;&gt;
+&lt;meta http-equiv=&quot;Content-Security-Policy&quot; content=&quot;default-src &#x27;none&#x27;; script-src &#x27;unsafe-inline&#x27; &#x27;unsafe-eval&#x27; &#x27;wasm-unsafe-eval&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src &#x27;unsafe-inline&#x27; blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src &#x27;none&#x27;; object-src &#x27;none&#x27;; base-uri &#x27;none&#x27;; form-action &#x27;none&#x27;&quot;&gt;
+&lt;title&gt;Channel Workspace Proposal&lt;/title&gt;
+&lt;style&gt;:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, &quot;Segoe UI&quot;, sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, &quot;SF Mono&quot;, Menlo, Consolas, &quot;Liberation Mono&quot;,
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --icon-size: 16px;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --corner-shape: round;
+  --radius: var(--border-radius-lg, 10px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url(&quot;data:image/svg+xml,%3Csvg xmlns=&#x27;http://www.w3.org/2000/svg&#x27; viewBox=&#x27;0 0 17 17&#x27;%3E%3Cpath d=&#x27;M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z&#x27;/%3E%3C/svg%3E&quot;);
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme=&quot;light&quot;] {
+  color-scheme: light;
+}
+
+:root[data-theme=&quot;dark&quot;] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html &gt; body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: var(--visualize-paint-gutter, 0px);
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive &gt; .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align=&quot;right&quot;]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align=&quot;center&quot;]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: var(--corner-shape);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget &gt; :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+hr {
+  width: 100%;
+  height: 1px;
+  margin-block: 6px;
+  border: 0;
+  background: var(--border);
+}
+
+.nav {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.progress {
+  display: flex;
+  height: 8px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 8px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar:only-child {
+  border-radius: var(--radius-full);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls &gt; .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls &gt; .form-label &gt; :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.nav-link,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn,
+.nav-link {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover,
+.nav-link:not(:disabled):not([aria-disabled=&quot;true&quot;]):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.nav-pills .nav-link {
+  min-width: 0;
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.nav-justified .nav-link {
+  flex: 1 1 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.nav-pills .nav-link.active {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.btn:disabled,
+.nav-link:disabled,
+.nav-link[aria-disabled=&quot;true&quot;] {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type=&quot;file&quot;] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type=&quot;file&quot;]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type=&quot;file&quot;]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type=&quot;color&quot;] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type=&quot;color&quot;]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: var(--corner-shape);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: var(--corner-shape);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: var(--corner-shape);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type=&quot;checkbox&quot;]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type=&quot;checkbox&quot;]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: &quot;&quot;;
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type=&quot;radio&quot;] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type=&quot;radio&quot;]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: &quot;&quot;;
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed=&quot;true&quot;],
+  [aria-selected=&quot;true&quot;],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed=&quot;true&quot;], [aria-selected=&quot;true&quot;], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible,
+.nav-link:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .nav-link,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* Keep small-screen WebKit from zooming when a text field receives focus. */
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type=&quot;file&quot;]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type=&quot;color&quot;] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type=&quot;date&quot;],
+    [type=&quot;datetime-local&quot;],
+    [type=&quot;month&quot;],
+    [type=&quot;time&quot;],
+    [type=&quot;week&quot;]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: &quot;&quot;;
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget &gt; svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: var(--icon-size) !important;
+  height: var(--icon-size) !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html&gt;body{padding:0}&lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;div id=&quot;nexus-channel-proposal&quot; aria-label=&quot;Nexus product and channel workspace proposal&quot;&gt;
+  &lt;style&gt;
+    #nexus-channel-proposal{--nds-surface:light-dark(#ffffff,#18263b);--nds-bg:light-dark(#f4f6f9,#14223a);--nds-text:light-dark(#1c2530,#e7ebf1);--nds-text-2:light-dark(#515d6c,#b7c3d3);--nds-border:light-dark(#dce2e9,#344359);--nds-subtle:light-dark(#edf0f4,#27364b);--nds-hover:light-dark(#f0f3f7,#24364f);--nds-primary:light-dark(#2466c4,#8ab6f0);--nds-primary-soft:light-dark(#e7f0fd,#1c2f4d);--nds-success:light-dark(#236440,#97dbb5);--nds-success-bg:light-dark(#edf7f0,#173b2c);--nds-warning:light-dark(#84531b,#f2c88b);--nds-warning-bg:light-dark(#fff5e4,#44351e);--nds-chrome:light-dark(#1c293d,#152237);--nds-chrome-fg:#e7ebf1;--nds-nav-row:34px;font:13px/1.5 Inter,ui-sans-serif,system-ui,sans-serif;color:var(--nds-text);width:100%;position:relative}
+    #nexus-channel-proposal *{box-sizing:border-box}
+    #nexus-channel-proposal [hidden]{display:none!important}
+    #nexus-channel-proposal button,#nexus-channel-proposal input,#nexus-channel-proposal select{font:inherit}
+    #nexus-channel-proposal button{cursor:pointer}
+    #nexus-channel-proposal button:disabled{cursor:default;opacity:.4}
+    #nexus-channel-proposal h1,#nexus-channel-proposal h2,#nexus-channel-proposal h3,#nexus-channel-proposal h4,#nexus-channel-proposal p{margin:0}
+    #nexus-channel-proposal svg{flex:none;width:16px;height:16px}
+    #nexus-channel-proposal .nc-window{position:relative;min-height:740px;background:var(--nds-bg);border:1px solid var(--nds-border);border-radius:10px;overflow:clip}
+    #nexus-channel-proposal .nc-top{height:56px;display:flex;align-items:center;gap:14px;padding:0 16px 0 18px;background:var(--nds-chrome);color:var(--nds-chrome-fg)}
+    #nexus-channel-proposal .nc-logo{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;background:#3579dc;color:#fff;font-weight:500;flex:none}
+    #nexus-channel-proposal .nc-top-context{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #nexus-channel-proposal .nc-top select{background:var(--nds-chrome);color:var(--nds-chrome-fg);border:1px solid #536077;border-radius:6px;padding:5px 9px;max-width:210px;min-width:0}
+    #nexus-channel-proposal .nc-avatar{width:27px;height:27px;display:grid;place-items:center;border-radius:50%;background:#365781;color:#fff;font-size:11px;flex:none}
+    #nexus-channel-proposal .nc-proposal{color:#bbc9dc;font-size:11px;white-space:nowrap}
+    #nexus-channel-proposal .nc-rail{position:absolute;top:56px;bottom:0;left:0;width:66px;background:var(--nds-chrome);display:flex;align-items:center;flex-direction:column;padding-top:12px;gap:9px}
+    #nexus-channel-proposal .nc-rail button,#nexus-channel-proposal .nc-rail-icon{border:0;background:transparent;color:#bac7d9;width:42px;height:42px;border-radius:9px;display:grid;place-items:center;text-decoration:none}
+    #nexus-channel-proposal .nc-rail button[aria-pressed=true]{background:#356dc8;color:#fff}
+    #nexus-channel-proposal .nc-rail svg{width:19px;height:19px}
+    #nexus-channel-proposal .nc-workspace{margin-left:66px;min-width:0}
+    #nexus-channel-proposal .nc-subheader{display:flex;min-height:88px;background:var(--nds-surface);border-bottom:1px solid var(--nds-border)}
+    #nexus-channel-proposal .nc-toggle-cell{flex:0 0 48px;display:grid;place-items:center;border-right:1px solid var(--nds-border)}
+    #nexus-channel-proposal .nc-title-area{flex:1;min-width:0}
+    #nexus-channel-proposal .nc-title-row{min-height:47px;display:flex;align-items:center;gap:12px;padding:8px 18px}
+    #nexus-channel-proposal h1{font-size:16px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #nexus-channel-proposal .nc-context-row{min-height:40px;display:flex;align-items:center;gap:10px;padding:4px 18px;font-size:12px;color:var(--nds-text-2);flex-wrap:wrap}
+    #nexus-channel-proposal .nc-context-row label{display:flex;align-items:center;gap:7px;margin-left:auto}
+    #nexus-channel-proposal .nc-context-row select{padding:3px 7px}
+    #nexus-channel-proposal .nc-button,#nexus-channel-proposal .nc-icon{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1px solid var(--nds-border);border-radius:6px;background:var(--nds-surface);color:var(--nds-text);padding:5px 10px;text-decoration:none;white-space:nowrap}
+    #nexus-channel-proposal .nc-button:hover,#nexus-channel-proposal .nc-icon:hover{background:var(--nds-hover)}
+    #nexus-channel-proposal .nc-icon{border:0;background:transparent;padding:6px;width:30px;height:30px;flex:none}
+    #nexus-channel-proposal .nc-primary{background:var(--nds-primary);color:var(--nds-surface);border-color:var(--nds-primary)}
+    #nexus-channel-proposal .nc-primary:hover{background:var(--nds-primary)}
+    #nexus-channel-proposal .nc-text-button{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;color:var(--nds-primary);padding:2px 0;text-decoration:underline;text-underline-offset:3px;text-align:left}
+    #nexus-channel-proposal .nc-badge{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 8px;font-size:11px;white-space:nowrap;background:var(--nds-primary-soft);color:var(--nds-text)}
+    #nexus-channel-proposal .nc-badge.good{background:var(--nds-success-bg);color:var(--nds-success)}
+    #nexus-channel-proposal .nc-badge.warn{background:var(--nds-warning-bg);color:var(--nds-warning)}
+    #nexus-channel-proposal .nc-muted{color:var(--nds-text-2)}
+    #nexus-channel-proposal .nc-main{padding:22px 22px 28px;min-height:594px}
+    #nexus-channel-proposal .nc-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+    #nexus-channel-proposal h2{font-size:20px;font-weight:500;letter-spacing:-.02em}
+    #nexus-channel-proposal h3{font-size:14px;font-weight:500}
+    #nexus-channel-proposal h4{font-size:14px;font-weight:500}
+    #nexus-channel-proposal .nc-demo-short{display:none}
+    #nexus-channel-proposal .nc-section-head p{font-size:12px;color:var(--nds-text-2);margin-top:3px}
+    #nexus-channel-proposal .nc-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:20px;align-items:start}
+    #nexus-channel-proposal .nc-form-card,#nexus-channel-proposal .nc-preview,#nexus-channel-proposal .nc-table-wrap{background:var(--nds-surface);border:1px solid var(--nds-border);border-radius:8px;min-width:0}
+    #nexus-channel-proposal .nc-form-section{padding:18px;border-bottom:1px solid var(--nds-subtle)}
+    #nexus-channel-proposal .nc-form-section:last-child{border-bottom:0}
+    #nexus-channel-proposal .nc-label-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+    #nexus-channel-proposal .nc-field{display:flex;flex-direction:column;gap:6px;margin:14px 0 0}
+    #nexus-channel-proposal input,#nexus-channel-proposal select{border:1px solid var(--nds-border);border-radius:6px;background:var(--nds-surface);color:var(--nds-text);min-width:0;padding:7px 9px;width:auto;max-width:100%}
+    #nexus-channel-proposal .nc-field input,#nexus-channel-proposal .nc-field select{width:100%}
+    #nexus-channel-proposal .nc-source{display:flex;align-items:center;gap:5px;color:var(--nds-text-2);font-size:11px}
+    #nexus-channel-proposal .nc-axes{display:grid;gap:7px;margin-top:12px}
+    #nexus-channel-proposal .nc-axis{display:flex;align-items:center;gap:10px;padding:6px 8px;border:1px solid var(--nds-border);border-radius:6px}
+    #nexus-channel-proposal .nc-axis-name{flex:1}
+    #nexus-channel-proposal .nc-axis-number{font-size:11px;color:var(--nds-text-2);width:16px}
+    #nexus-channel-proposal .nc-preview-head{padding:10px 14px;border-bottom:1px solid var(--nds-border);display:flex;align-items:center;justify-content:space-between;font-size:12px}
+    #nexus-channel-proposal .nc-preview-head&gt;span{display:inline-flex;align-items:center;gap:6px}
+    #nexus-channel-proposal .nc-preview-body{padding:18px}
+    #nexus-channel-proposal .nc-price{font-size:22px;font-weight:500;margin:10px 0 14px;letter-spacing:-.03em}
+    #nexus-channel-proposal .nc-options{display:flex;gap:6px;flex-wrap:wrap;margin:5px 0 12px}
+    #nexus-channel-proposal .nc-option{min-width:34px;border:1px solid var(--nds-border);border-radius:5px;padding:5px 8px;text-align:center;background:var(--nds-surface)}
+    #nexus-channel-proposal .nc-theme{border-top:1px solid var(--nds-border);margin-top:20px;padding-top:14px}
+    #nexus-channel-proposal .nc-theme-brand{background:var(--nds-chrome);color:var(--nds-chrome-fg);padding:12px;font-size:13px;letter-spacing:.12em;margin-bottom:14px}
+    #nexus-channel-proposal .nc-theme.minimal .nc-theme-brand{background:transparent;color:var(--nds-text);padding:0 0 8px;border-bottom:1px solid var(--nds-border)}
+    #nexus-channel-proposal .nc-theme p{font-size:12px;color:var(--nds-text-2);margin-top:5px}
+    #nexus-channel-proposal .nc-bottomline{margin-top:16px;font-size:12px;color:var(--nds-text-2);display:flex;align-items:center;gap:7px}
+    #nexus-channel-proposal .nc-scrim{position:absolute;left:66px;right:0;top:56px;bottom:0;background:transparent;z-index:20}
+    #nexus-channel-proposal .nc-nav{position:absolute;top:56px;left:66px;bottom:0;width:224px;background:var(--nds-surface);border-right:1px solid var(--nds-border);box-shadow:8px 0 24px light-dark(#172c471a,#00000035);z-index:21;display:flex;flex-direction:column}
+    #nexus-channel-proposal .nc-nav-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:11px 12px;border-bottom:1px solid var(--nds-border);font-weight:500;min-height:52px}
+    #nexus-channel-proposal .nc-nav-groups{padding:8px;flex:1}
+    #nexus-channel-proposal .nc-group+.nc-group{margin-top:10px;padding-top:9px;border-top:1px solid var(--nds-subtle)}
+    #nexus-channel-proposal .nc-group-label{display:flex;align-items:center;gap:7px;padding:6px 8px;color:var(--nds-text-2);font-size:11px;font-weight:500;letter-spacing:.03em}
+    #nexus-channel-proposal .nc-dot{width:5px;height:5px;border-radius:50%;background:var(--nds-success)}
+    #nexus-channel-proposal .nc-nav-link{display:flex;align-items:center;gap:9px;width:100%;min-height:var(--nds-nav-row);padding:6px 8px;border-radius:5px;color:var(--nds-text-2);text-decoration:none}
+    #nexus-channel-proposal .nc-nav-link:hover{background:var(--nds-hover)}
+    #nexus-channel-proposal .nc-nav-link[aria-current=page]{background:var(--nds-primary-soft);color:var(--nds-text);font-weight:500}
+    #nexus-channel-proposal .nc-nav-link span:first-of-type{flex:1}
+    #nexus-channel-proposal .nc-nav-foot{padding:12px;border-top:1px solid var(--nds-border)}
+    #nexus-channel-proposal .nc-nav-foot button{white-space:normal;text-align:left}
+    #nexus-channel-proposal .nc-table-scroll{overflow:auto}
+    #nexus-channel-proposal table{border-collapse:collapse;width:100%;font-size:12px;text-align:left}
+    #nexus-channel-proposal th{color:var(--nds-text-2);background:var(--nds-bg);font-weight:500;white-space:nowrap}
+    #nexus-channel-proposal th,#nexus-channel-proposal td{padding:11px 14px;border-bottom:1px solid var(--nds-subtle)}
+    #nexus-channel-proposal tr:last-child td{border-bottom:0}
+    #nexus-channel-proposal .nc-product-id{display:block;color:var(--nds-text-2);font-size:11px;margin-top:3px}
+    #nexus-channel-proposal .nc-library{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+    #nexus-channel-proposal .nc-theme-tile{border:1px solid var(--nds-border);border-radius:8px;background:var(--nds-surface);overflow:hidden}
+    #nexus-channel-proposal .nc-tile-art{padding:22px 18px;min-height:126px;background:var(--nds-bg)}
+    #nexus-channel-proposal .nc-tile-art .nc-theme-brand{margin:0 0 12px}
+    #nexus-channel-proposal .nc-tile-caption{padding:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    #nexus-channel-proposal .nc-list-row{padding:16px 18px;border-bottom:1px solid var(--nds-subtle);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    #nexus-channel-proposal .nc-list-row:last-child{border:0}
+    #nexus-channel-proposal .nc-list-row&gt;div:first-child{flex:1;min-width:160px}
+    #nexus-channel-proposal .nc-list-row p{color:var(--nds-text-2);font-size:12px;margin-top:3px}
+    #nexus-channel-proposal .nc-modal-scrim{position:absolute;inset:56px 0 0 66px;background:light-dark(#172c4740,#00000066);z-index:30;display:flex;justify-content:center;align-items:flex-start;padding:56px 24px}
+    #nexus-channel-proposal .nc-modal{width:480px;max-width:100%;background:var(--nds-surface);border:1px solid var(--nds-border);border-radius:10px;box-shadow:0 16px 60px #00000030}
+    #nexus-channel-proposal .nc-modal-head{padding:16px 20px;border-bottom:1px solid var(--nds-border);display:flex;align-items:center;justify-content:space-between}
+    #nexus-channel-proposal .nc-modal-body{padding:20px}
+    #nexus-channel-proposal .nc-diff{padding:12px 0;border-bottom:1px solid var(--nds-subtle)}
+    #nexus-channel-proposal .nc-diff span{display:block;color:var(--nds-text-2);font-size:12px;margin-bottom:4px}
+    #nexus-channel-proposal .nc-modal-footer{padding:14px 20px;display:flex;justify-content:flex-end;border-top:1px solid var(--nds-border)}
+    #nexus-channel-proposal .nc-notice{padding:12px 14px;background:var(--nds-primary-soft);border-radius:6px;font-size:12px;margin-bottom:18px}
+    #nexus-channel-proposal .nc-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:760px){#nexus-channel-proposal .nc-columns{grid-template-columns:1fr}#nexus-channel-proposal .nc-top-context{display:none}#nexus-channel-proposal .nc-top{gap:10px}#nexus-channel-proposal .nc-top select{margin-left:auto}#nexus-channel-proposal .nc-main{padding:18px}#nexus-channel-proposal .nc-title-row{flex-wrap:wrap}#nexus-channel-proposal h1{flex-basis:100%;white-space:normal}#nexus-channel-proposal .nc-title-row&gt;.nc-button{margin-left:auto}#nexus-channel-proposal .nc-context-row{gap:6px}#nexus-channel-proposal .nc-context-row label{width:100%;margin:0}#nexus-channel-proposal .nc-context-row select{flex:1}}
+    @media(max-width:480px){#nexus-channel-proposal .nc-proposal{display:inline}#nexus-channel-proposal .nc-demo-full{display:none}#nexus-channel-proposal .nc-demo-short{display:inline}#nexus-channel-proposal .nc-library{grid-template-columns:1fr}#nexus-channel-proposal .nc-top select{max-width:175px}#nexus-channel-proposal .nc-avatar{display:none}#nexus-channel-proposal .nc-title-row{padding:10px}#nexus-channel-proposal .nc-context-row{padding:5px 10px}#nexus-channel-proposal .nc-main{padding:14px}#nexus-channel-proposal .nc-nav{width:calc(100% - 66px);max-width:290px}#nexus-channel-proposal .nc-form-section,#nexus-channel-proposal .nc-preview-body{padding:13px}#nexus-channel-proposal .nc-modal-scrim{padding:20px 10px}#nexus-channel-proposal .nc-section-head h2{font-size:18px}}
+    @media(pointer:coarse){#nexus-channel-proposal .nc-nav-link,#nexus-channel-proposal .nc-button,#nexus-channel-proposal .nc-icon{min-height:44px}#nexus-channel-proposal input,#nexus-channel-proposal select{font-size:16px}}
+  &lt;/style&gt;
+  &lt;div class=&quot;nc-window&quot;&gt;
+    &lt;header class=&quot;nc-top&quot;&gt;
+      &lt;span class=&quot;nc-logo&quot;&gt;N&lt;/span&gt;&lt;span class=&quot;nc-top-context&quot;&gt;Products / GALE-JACKET&lt;/span&gt;
+      &lt;span class=&quot;nc-proposal&quot;&gt;&lt;span class=&quot;nc-demo-full&quot;&gt;Layout proposal · sample data&lt;/span&gt;&lt;span class=&quot;nc-demo-short&quot;&gt;Demo&lt;/span&gt;&lt;/span&gt;
+      &lt;select aria-label=&quot;Workspace&quot; data-workspace&gt;&lt;option value=&quot;product&quot;&gt;Product workspace&lt;/option&gt;&lt;option value=&quot;management&quot;&gt;Channel management&lt;/option&gt;&lt;/select&gt;
+      &lt;span class=&quot;nc-avatar&quot;&gt;AW&lt;/span&gt;
+    &lt;/header&gt;
+    &lt;nav class=&quot;nc-rail&quot; aria-label=&quot;Primary navigation&quot;&gt;
+      &lt;span class=&quot;nc-rail-icon&quot; role=&quot;img&quot; aria-label=&quot;Home&quot;&gt;&lt;i data-lucide=&quot;house&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+      &lt;button type=&quot;button&quot; data-mode=&quot;product&quot; aria-label=&quot;Product workspace&quot; aria-pressed=&quot;true&quot;&gt;&lt;i data-lucide=&quot;package&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;button type=&quot;button&quot; data-mode=&quot;management&quot; aria-label=&quot;Channel management&quot; aria-pressed=&quot;false&quot;&gt;&lt;i data-lucide=&quot;store&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;
+      &lt;span class=&quot;nc-rail-icon&quot; role=&quot;img&quot; aria-label=&quot;Orders&quot;&gt;&lt;i data-lucide=&quot;shopping-cart&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+      &lt;span class=&quot;nc-rail-icon&quot; role=&quot;img&quot; aria-label=&quot;Stock&quot;&gt;&lt;i data-lucide=&quot;warehouse&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+      &lt;span class=&quot;nc-rail-icon&quot; role=&quot;img&quot; aria-label=&quot;Insights&quot;&gt;&lt;i data-lucide=&quot;chart-no-axes-combined&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/span&gt;
+    &lt;/nav&gt;
+    &lt;div class=&quot;nc-workspace&quot;&gt;
+      &lt;div class=&quot;nc-subheader&quot;&gt;
+        &lt;div class=&quot;nc-toggle-cell&quot;&gt;&lt;button class=&quot;nc-icon&quot; type=&quot;button&quot; data-toggle-nav aria-label=&quot;Open secondary navigation&quot; aria-expanded=&quot;true&quot; aria-controls=&quot;nc-secondary-nav&quot;&gt;&lt;i data-lucide=&quot;panel-left-open&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+        &lt;div class=&quot;nc-title-area&quot;&gt;&lt;div class=&quot;nc-title-row&quot;&gt;&lt;h1 data-page-title&gt;GALE-JACKET · eBay presentation&lt;/h1&gt;&lt;button class=&quot;nc-button nc-primary&quot; type=&quot;button&quot; data-review&gt;&lt;i data-lucide=&quot;check-check&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;Review changes&lt;/button&gt;&lt;/div&gt;&lt;div class=&quot;nc-context-row&quot; data-context&gt;&lt;/div&gt;&lt;/div&gt;
+      &lt;/div&gt;
+      &lt;main class=&quot;nc-main&quot; data-content&gt;&lt;/main&gt;
+    &lt;/div&gt;
+    &lt;div class=&quot;nc-scrim&quot; data-nav-scrim aria-hidden=&quot;true&quot;&gt;&lt;/div&gt;
+    &lt;nav class=&quot;nc-nav&quot; id=&quot;nc-secondary-nav&quot; aria-label=&quot;Secondary navigation&quot;&gt;
+      &lt;div class=&quot;nc-nav-head&quot;&gt;&lt;span data-nav-title&gt;This product&lt;/span&gt;&lt;button class=&quot;nc-icon&quot; type=&quot;button&quot; data-close-nav aria-label=&quot;Close secondary navigation&quot;&gt;&lt;i data-lucide=&quot;panel-left-close&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;
+      &lt;div class=&quot;nc-nav-groups&quot; data-nav-groups&gt;&lt;/div&gt;&lt;div class=&quot;nc-nav-foot&quot; data-nav-foot&gt;&lt;/div&gt;
+    &lt;/nav&gt;
+    &lt;div class=&quot;nc-modal-scrim&quot; data-review-scrim hidden&gt;&lt;section class=&quot;nc-modal&quot; role=&quot;dialog&quot; aria-modal=&quot;true&quot; aria-labelledby=&quot;nc-review-title&quot;&gt;&lt;div class=&quot;nc-modal-head&quot;&gt;&lt;h3 id=&quot;nc-review-title&quot;&gt;Review changes&lt;/h3&gt;&lt;button class=&quot;nc-icon&quot; type=&quot;button&quot; data-close-review aria-label=&quot;Close review&quot;&gt;&lt;i data-lucide=&quot;x&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&lt;/button&gt;&lt;/div&gt;&lt;div class=&quot;nc-modal-body&quot; data-review-body&gt;&lt;/div&gt;&lt;div class=&quot;nc-modal-footer&quot;&gt;&lt;button type=&quot;button&quot; class=&quot;nc-button&quot; data-close-review&gt;Return to editing&lt;/button&gt;&lt;/div&gt;&lt;/section&gt;&lt;/div&gt;
+  &lt;/div&gt;
+  &lt;span class=&quot;nc-sr&quot; aria-live=&quot;polite&quot; data-announcement&gt;&lt;/span&gt;
+  &lt;script&gt;
+    (function(){
+      const root=document.getElementById(&#x27;nexus-channel-proposal&#x27;);
+      const q=s=&gt;root.querySelector(s);
+      const state={workspace:&#x27;product&#x27;,page:&#x27;ebay-presentation&#x27;,navOpen:true,market:&#x27;IT&#x27;,theme:&#x27;standard&#x27;,libraryTheme:&#x27;standard&#x27;,axes:[&#x27;Color&#x27;,&#x27;Size&#x27;],sizeOrder:&#x27;ascending&#x27;,density:&#x27;Compact&#x27;,libraryEdit:false,productName:&#x27;XAVIA GALE Motorcycle Jacket&#x27;,review:false};
+      const markets={IT:&#x27;Italy&#x27;,DE:&#x27;Germany&#x27;,FR:&#x27;France&#x27;};
+      const titles={&#x27;data&#x27;:&#x27;Product data&#x27;,&#x27;media&#x27;:&#x27;Media&#x27;,&#x27;amazon-listing&#x27;:&#x27;Amazon listing&#x27;,&#x27;ebay-listing&#x27;:&#x27;eBay listing&#x27;,&#x27;ebay-presentation&#x27;:&#x27;eBay presentation&#x27;,&#x27;issues&#x27;:&#x27;Needs attention&#x27;,&#x27;performance&#x27;:&#x27;Performance&#x27;,&#x27;themes&#x27;:&#x27;Description themes&#x27;,&#x27;ordering&#x27;:&#x27;Variation order rules&#x27;,&#x27;presets-amazon&#x27;:&#x27;Amazon listing presets&#x27;,&#x27;presets-ebay&#x27;:&#x27;eBay listing presets&#x27;,&#x27;mapping&#x27;:&#x27;Amazon category mappings&#x27;,&#x27;accounts&#x27;:&#x27;Accounts &amp; markets&#x27;};
+      const productGroups=[{name:&#x27;PRODUCT&#x27;,items:[[&#x27;data&#x27;,&#x27;Product data&#x27;,&#x27;table-2&#x27;],[&#x27;media&#x27;,&#x27;Media&#x27;,&#x27;images&#x27;]]},{name:&#x27;AMAZON&#x27;,connected:true,items:[[&#x27;amazon-listing&#x27;,&#x27;Listing&#x27;,&#x27;file-text&#x27;]]},{name:&#x27;EBAY&#x27;,connected:true,items:[[&#x27;ebay-listing&#x27;,&#x27;Listing&#x27;,&#x27;file-text&#x27;],[&#x27;ebay-presentation&#x27;,&#x27;Presentation&#x27;,&#x27;panels-top-left&#x27;]]},{name:&#x27;MONITORING&#x27;,items:[[&#x27;issues&#x27;,&#x27;Needs attention&#x27;,&#x27;circle-alert&#x27;,&#x27;2&#x27;],[&#x27;performance&#x27;,&#x27;Performance&#x27;,&#x27;chart-no-axes-combined&#x27;]]}];
+      const manageGroups=[{name:&#x27;AMAZON&#x27;,connected:true,items:[[&#x27;presets-amazon&#x27;,&#x27;Listing presets&#x27;,&#x27;sliders-horizontal&#x27;],[&#x27;mapping&#x27;,&#x27;Category mappings&#x27;,&#x27;git-branch&#x27;]]},{name:&#x27;EBAY&#x27;,connected:true,items:[[&#x27;themes&#x27;,&#x27;Description themes&#x27;,&#x27;panels-top-left&#x27;],[&#x27;ordering&#x27;,&#x27;Variation order rules&#x27;,&#x27;list-ordered&#x27;],[&#x27;presets-ebay&#x27;,&#x27;Listing presets&#x27;,&#x27;sliders-horizontal&#x27;]]},{name:&#x27;CONNECTIONS&#x27;,items:[[&#x27;accounts&#x27;,&#x27;Accounts &amp; markets&#x27;,&#x27;plug&#x27;]]}];
+      const icon=n=&gt;&#x27;&lt;i data-lucide=&quot;&#x27;+n+&#x27;&quot; aria-hidden=&quot;true&quot;&gt;&lt;/i&gt;&#x27;;
+      const esc=s=&gt;String(s).replace(/[&amp;&lt;&gt;&quot;&#x27;]/g,c=&gt;({&#x27;&amp;&#x27;:&#x27;&amp;amp;&#x27;,&#x27;&lt;&#x27;:&#x27;&amp;lt;&#x27;,&#x27;&gt;&#x27;:&#x27;&amp;gt;&#x27;,&#x27;&quot;&#x27;:&#x27;&amp;quot;&#x27;,&quot;&#x27;&quot;:&#x27;&amp;#39;&#x27;}[c]));
+      const badge=(s,t=&#x27;&#x27;)=&gt;&#x27;&lt;span class=&quot;nc-badge &#x27;+t+&#x27;&quot;&gt;&#x27;+s+&#x27;&lt;/span&gt;&#x27;;
+      const source=s=&gt;&#x27;&lt;span class=&quot;nc-source&quot;&gt;&#x27;+icon(s.startsWith(&#x27;Customized&#x27;)?&#x27;pin&#x27;:&#x27;link-2&#x27;)+s+&#x27;&lt;/span&gt;&#x27;;
+      const label=state=&gt;state.theme===&#x27;standard&#x27;?&#x27;Xavia · Standard&#x27;:&#x27;Xavia · Minimal&#x27;;
+      const sizes=()=&gt;state.sizeOrder===&#x27;ascending&#x27;?[&#x27;XS&#x27;,&#x27;S&#x27;,&#x27;M&#x27;,&#x27;L&#x27;,&#x27;XL&#x27;]:[&#x27;XL&#x27;,&#x27;L&#x27;,&#x27;M&#x27;,&#x27;S&#x27;,&#x27;XS&#x27;];
+      function preview(theme=state.theme){return &#x27;&lt;section class=&quot;nc-preview&quot; aria-label=&quot;eBay buyer preview&quot;&gt;&lt;div class=&quot;nc-preview-head&quot;&gt;&lt;span&gt;&#x27;+icon(&#x27;eye&#x27;)+&#x27; Buyer preview&lt;/span&gt;&lt;span class=&quot;nc-muted&quot;&gt;eBay · &#x27;+markets[state.market]+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;div class=&quot;nc-preview-body&quot;&gt;&lt;h3&gt;&#x27;+esc(state.productName)+&#x27;&lt;/h3&gt;&lt;div class=&quot;nc-price&quot;&gt;€149.90&lt;/div&gt;&#x27;+state.axes.map(axis=&gt;&#x27;&lt;div&gt;&lt;span class=&quot;nc-muted&quot;&gt;&#x27;+axis+&#x27;&lt;/span&gt;&lt;div class=&quot;nc-options&quot;&gt;&#x27;+(axis===&#x27;Size&#x27;?sizes():[&#x27;Black&#x27;,&#x27;Yellow&#x27;]).map(v=&gt;&#x27;&lt;span class=&quot;nc-option&quot;&gt;&#x27;+v+&#x27;&lt;/span&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;div class=&quot;nc-theme &#x27;+(theme===&#x27;minimal&#x27;?&#x27;minimal&#x27;:&#x27;&#x27;)+&#x27;&quot;&gt;&lt;div class=&quot;nc-theme-brand&quot;&gt;XAVIA RACING&lt;/div&gt;&lt;h4&gt;Built for the ride.&lt;/h4&gt;&lt;p&gt;Waterproof motorcycle jacket with adjustable ventilation and protective inserts.&lt;/p&gt;&lt;p&gt;Product description · from shared product information&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;&lt;/section&gt;&#x27;;}
+      function axesEditor(){return &#x27;&lt;div class=&quot;nc-axes&quot;&gt;&#x27;+state.axes.map((axis,i)=&gt;&#x27;&lt;div class=&quot;nc-axis&quot;&gt;&lt;span class=&quot;nc-axis-number&quot;&gt;&#x27;+(i+1)+&#x27;&lt;/span&gt;&lt;span class=&quot;nc-axis-name&quot;&gt;&#x27;+axis+&#x27;&lt;/span&gt;&lt;button class=&quot;nc-icon&quot; type=&quot;button&quot; data-axis=&quot;&#x27;+axis+&#x27;&quot; aria-label=&quot;Move &#x27;+axis+&#x27; &#x27;+(i?&#x27;up&#x27;:&#x27;down&#x27;)+&#x27;&quot;&gt;&#x27;+icon(i?&#x27;arrow-up&#x27;:&#x27;arrow-down&#x27;)+&#x27;&lt;/button&gt;&lt;/div&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;label class=&quot;nc-field&quot;&gt;Size values&lt;select data-size-order&gt;&lt;option value=&quot;ascending&quot; &#x27;+(state.sizeOrder===&#x27;ascending&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;XS → XL&lt;/option&gt;&lt;option value=&quot;descending&quot; &#x27;+(state.sizeOrder===&#x27;descending&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;XL → XS&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&#x27;;}
+      function presentation(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Listing presentation&lt;/h2&gt;&lt;p&gt;This product’s appearance on eBay.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Product setting&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-columns&quot;&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;section class=&quot;nc-form-section&quot;&gt;&lt;div class=&quot;nc-label-row&quot;&gt;&lt;h3&gt;Description theme&lt;/h3&gt;&lt;button class=&quot;nc-text-button&quot; type=&quot;button&quot; data-manage-themes&gt;Manage themes &#x27;+icon(&#x27;arrow-up-right&#x27;)+&#x27;&lt;/button&gt;&lt;/div&gt;&lt;label class=&quot;nc-field&quot;&gt;Assigned theme&lt;select data-theme&gt;&lt;option value=&quot;standard&quot; &#x27;+(state.theme===&#x27;standard&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;Xavia · Standard&lt;/option&gt;&lt;option value=&quot;minimal&quot; &#x27;+(state.theme===&#x27;minimal&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;Xavia · Minimal&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;div style=&quot;margin-top:8px&quot;&gt;&#x27;+source(state.theme===&#x27;standard&#x27;?&#x27;From eBay listing preset&#x27;:&#x27;Customized for this listing&#x27;)+&#x27;&lt;/div&gt;&lt;/section&gt;&lt;section class=&quot;nc-form-section&quot;&gt;&lt;div class=&quot;nc-label-row&quot;&gt;&lt;h3&gt;Variation order&lt;/h3&gt;&#x27;+badge(&#x27;eBay only&#x27;)+&#x27;&lt;/div&gt;&lt;span class=&quot;nc-muted&quot;&gt;Buyer selector order&lt;/span&gt;&#x27;+axesEditor()+&#x27;&lt;/section&gt;&lt;/div&gt;&#x27;+preview()+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-bottomline&quot;&gt;&#x27;+icon(&#x27;pin&#x27;)+&#x27;Applies to GALE-JACKET · eBay · &#x27;+markets[state.market]+&#x27;&lt;/div&gt;&#x27;;}
+      function productData(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Shared product information&lt;/h2&gt;&lt;p&gt;One product family. Shared across connected channels.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Master data&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;label class=&quot;nc-field&quot; style=&quot;margin-top:0&quot;&gt;Product name&lt;input data-product-name value=&quot;&#x27;+esc(state.productName)+&#x27;&quot;&gt;&lt;/label&gt;&lt;div style=&quot;margin-top:9px&quot;&gt;&#x27;+source(&#x27;Used by Amazon and eBay&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-table-wrap&quot; style=&quot;margin-top:18px&quot;&gt;&lt;div class=&quot;nc-table-scroll&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Product / SKU&lt;/th&gt;&lt;th&gt;Color&lt;/th&gt;&lt;th&gt;Size&lt;/th&gt;&lt;th&gt;Amazon&lt;/th&gt;&lt;th&gt;eBay&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&#x27;+[[&#x27;GALE-JACKET&#x27;,&#x27;—&#x27;,&#x27;—&#x27;,&#x27;Parent&#x27;],[&#x27;GALE-BLACK-S&#x27;,&#x27;Black&#x27;,&#x27;S&#x27;,&#x27;Variation&#x27;],[&#x27;GALE-BLACK-M&#x27;,&#x27;Black&#x27;,&#x27;M&#x27;,&#x27;Variation&#x27;],[&#x27;GALE-YELLOW-M&#x27;,&#x27;Yellow&#x27;,&#x27;M&#x27;,&#x27;Variation&#x27;]].map(r=&gt;&#x27;&lt;tr&gt;&lt;td&gt;&#x27;+r[0]+&#x27;&lt;span class=&quot;nc-product-id&quot;&gt;&#x27;+r[3]+&#x27;&lt;/span&gt;&lt;/td&gt;&lt;td&gt;&#x27;+r[1]+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+r[2]+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+badge(&#x27;Linked&#x27;,&#x27;good&#x27;)+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+badge(&#x27;Linked&#x27;,&#x27;good&#x27;)+&#x27;&lt;/td&gt;&lt;/tr&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;}
+      function listing(){const channel=state.page.startsWith(&#x27;amazon&#x27;)?&#x27;Amazon&#x27;:&#x27;eBay&#x27;;return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;&#x27;+channel+&#x27; listing&lt;/h2&gt;&lt;p&gt;&#x27;+markets[state.market]+&#x27; · Xavia Racing account&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Draft changes&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-columns&quot;&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;div class=&quot;nc-label-row&quot;&gt;&lt;h3&gt;Title&lt;/h3&gt;&#x27;+source(&#x27;From product&#x27;)+&#x27;&lt;/div&gt;&lt;p&gt;&#x27;+esc(state.productName)+&#x27;&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;div class=&quot;nc-label-row&quot;&gt;&lt;h3&gt;Category&lt;/h3&gt;&#x27;+source(&#x27;From mapping&#x27;)+&#x27;&lt;/div&gt;&lt;p&gt;Motorcycle jackets&lt;/p&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;div class=&quot;nc-label-row&quot;&gt;&lt;h3&gt;Listing preset&lt;/h3&gt;&#x27;+badge(&#x27;Inherited&#x27;)+&#x27;&lt;/div&gt;&lt;p&gt;Xavia · Apparel · &#x27;+markets[state.market]+&#x27;&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;h3&gt;Listing requirements&lt;/h3&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;Title and product information&lt;/div&gt;&#x27;+badge(&#x27;Ready&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;Category and variations&lt;/div&gt;&#x27;+badge(&#x27;Ready&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;Product images&lt;/div&gt;&#x27;+badge(&#x27;Ready&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&#x27;+(channel===&#x27;eBay&#x27;?&#x27;&lt;button type=&quot;button&quot; class=&quot;nc-button&quot; data-go=&quot;ebay-presentation&quot;&gt;&#x27;+icon(&#x27;panels-top-left&#x27;)+&#x27; Edit presentation&lt;/button&gt;&#x27;:&#x27;&lt;span class=&quot;nc-muted&quot;&gt;Shared information follows the product; listing presets supply channel defaults.&lt;/span&gt;&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;}
+      function themes(){if(state.libraryEdit)return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;&#x27;+label({theme:state.libraryTheme})+&#x27;&lt;/h2&gt;&lt;p&gt;Reusable description theme&lt;/p&gt;&lt;/div&gt;&lt;button type=&quot;button&quot; class=&quot;nc-button&quot; data-library-back&gt;&#x27;+icon(&#x27;arrow-left&#x27;)+&#x27; Theme library&lt;/button&gt;&lt;/div&gt;&lt;div class=&quot;nc-notice&quot;&gt;Library setting · changes can affect every listing assigned to this theme.&lt;/div&gt;&lt;div class=&quot;nc-columns&quot;&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;h3&gt;Theme design&lt;/h3&gt;&lt;label class=&quot;nc-field&quot;&gt;Header treatment&lt;select data-library-theme&gt;&lt;option value=&quot;standard&quot; &#x27;+(state.libraryTheme===&#x27;standard&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;Branded header&lt;/option&gt;&lt;option value=&quot;minimal&quot; &#x27;+(state.libraryTheme===&#x27;minimal&#x27;?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;Minimal header&lt;/option&gt;&lt;/select&gt;&lt;/label&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-section&quot;&gt;&lt;h3&gt;Preview product&lt;/h3&gt;&lt;p style=&quot;margin-top:8px&quot;&gt;GALE-JACKET&lt;/p&gt;&lt;div style=&quot;margin-top:8px&quot;&gt;&#x27;+source(&#x27;Product text stays connected&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&#x27;+preview(state.libraryTheme)+&#x27;&lt;/div&gt;&#x27;;return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Description themes&lt;/h2&gt;&lt;p&gt;Reusable eBay designs, managed in one place.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Channel library&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-library&quot;&gt;&#x27;+[&#x27;standard&#x27;,&#x27;minimal&#x27;].map(t=&gt;&#x27;&lt;article class=&quot;nc-theme-tile&quot;&gt;&lt;div class=&quot;nc-tile-art nc-theme &#x27;+(t===&#x27;minimal&#x27;?&#x27;minimal&#x27;:&#x27;&#x27;)+&#x27;&quot; style=&quot;margin:0;border:0&quot;&gt;&lt;div class=&quot;nc-theme-brand&quot;&gt;XAVIA RACING&lt;/div&gt;&lt;h3&gt;Product description&lt;/h3&gt;&lt;div class=&quot;nc-muted&quot;&gt;Connected product content&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-tile-caption&quot;&gt;&lt;div&gt;&lt;h3&gt;Xavia · &#x27;+(t===&#x27;standard&#x27;?&#x27;Standard&#x27;:&#x27;Minimal&#x27;)+&#x27;&lt;/h3&gt;&lt;span class=&quot;nc-muted&quot;&gt;&#x27;+(t===&#x27;standard&#x27;?&#x27;Default for apparel&#x27;:&#x27;Optional listing theme&#x27;)+&#x27;&lt;/span&gt;&lt;/div&gt;&lt;button type=&quot;button&quot; class=&quot;nc-button&quot; data-edit-theme=&quot;&#x27;+t+&#x27;&quot;&gt;Open theme&lt;/button&gt;&lt;/div&gt;&lt;/article&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-bottomline&quot;&gt;&#x27;+icon(&#x27;layers&#x27;)+&#x27;Scope: eBay theme library · all assigned products&lt;/div&gt;&#x27;;}
+      function ordering(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Variation order rules&lt;/h2&gt;&lt;p&gt;Reusable defaults for compatible product families.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Channel setting&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;Motorcycle apparel&lt;/h3&gt;&lt;p&gt;Color → Size · sizes XS → XL&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Default&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;Footwear&lt;/h3&gt;&lt;p&gt;Size → Color · numeric sizes ascending&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Category rule&#x27;)+&#x27;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-bottomline&quot;&gt;&#x27;+icon(&#x27;pin&#x27;)+&#x27;A product can override its presentation without changing the shared rule.&lt;/div&gt;&#x27;;}
+      function presets(){const amazon=state.page===&#x27;presets-amazon&#x27;;return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Listing presets&lt;/h2&gt;&lt;p&gt;&#x27;+ (amazon?&#x27;Amazon&#x27;:&#x27;eBay&#x27;)+&#x27; defaults by market and product type.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Channel setting&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&#x27;+Object.entries(markets).map(([k,v])=&gt;&#x27;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;Xavia · Apparel · &#x27;+v+&#x27;&lt;/h3&gt;&lt;p&gt;&#x27;+(amazon?&#x27;Category mapping · attribute defaults&#x27;:&#x27;Description theme · business policies · variation order&#x27;)+&#x27;&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Assigned&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;;}
+      function mapping(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Category mappings&lt;/h2&gt;&lt;p&gt;Shared product information translated into Amazon fields.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Channel setting&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-table-wrap&quot;&gt;&lt;div class=&quot;nc-table-scroll&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Product information&lt;/th&gt;&lt;th&gt;Amazon field&lt;/th&gt;&lt;th&gt;Rule&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;Product name&lt;/td&gt;&lt;td&gt;Item name&lt;/td&gt;&lt;td&gt;Use selected language&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Brand&lt;/td&gt;&lt;td&gt;Brand&lt;/td&gt;&lt;td&gt;Use product value&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Color&lt;/td&gt;&lt;td&gt;Color name&lt;/td&gt;&lt;td&gt;Use variation value&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Size&lt;/td&gt;&lt;td&gt;Size name&lt;/td&gt;&lt;td&gt;Use variation value&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;}
+      function accounts(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Connected accounts&lt;/h2&gt;&lt;p&gt;Available destinations for listing and publishing.&lt;/p&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&#x27;+[&#x27;Amazon&#x27;,&#x27;eBay&#x27;].map(c=&gt;&#x27;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;&#x27;+c+&#x27; · Xavia Racing&lt;/h3&gt;&lt;p&gt;Italy · Germany · France&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Connected&#x27;,&#x27;good&#x27;)+&#x27;&lt;/div&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/div&gt;&#x27;;}
+      function issues(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Needs attention&lt;/h2&gt;&lt;p&gt;GALE-JACKET · all connected channels and markets&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;2 issues&#x27;,&#x27;warn&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-form-card&quot;&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;German title missing&lt;/h3&gt;&lt;p&gt;Amazon · Germany · fix once in shared product information&lt;/p&gt;&lt;/div&gt;&lt;button class=&quot;nc-button&quot; type=&quot;button&quot; data-go=&quot;data&quot;&gt;Open product&lt;/button&gt;&lt;/div&gt;&lt;div class=&quot;nc-list-row&quot;&gt;&lt;div&gt;&lt;h3&gt;Review description theme&lt;/h3&gt;&lt;p&gt;eBay · Italy · appearance changed since the last publication&lt;/p&gt;&lt;/div&gt;&lt;button class=&quot;nc-button&quot; type=&quot;button&quot; data-go=&quot;ebay-presentation&quot;&gt;Review presentation&lt;/button&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;}
+      function performance(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Performance&lt;/h2&gt;&lt;p&gt;GALE-JACKET · last 30 days · sample report&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Reporting currency: EUR&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-table-wrap&quot;&gt;&lt;div class=&quot;nc-table-scroll&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Destination&lt;/th&gt;&lt;th&gt;Units sold&lt;/th&gt;&lt;th&gt;Sales&lt;/th&gt;&lt;th&gt;Returns&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td&gt;Amazon · Italy&lt;/td&gt;&lt;td&gt;24&lt;/td&gt;&lt;td&gt;€3,597.60&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;Amazon · Germany&lt;/td&gt;&lt;td&gt;16&lt;/td&gt;&lt;td&gt;€2,398.40&lt;/td&gt;&lt;td&gt;0&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td&gt;eBay · Italy&lt;/td&gt;&lt;td&gt;12&lt;/td&gt;&lt;td&gt;€1,798.80&lt;/td&gt;&lt;td&gt;1&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;&lt;/div&gt;&lt;div class=&quot;nc-bottomline&quot;&gt;&#x27;+icon(&#x27;clock&#x27;)+&#x27;Illustrative values · reporting period and data freshness stay visible.&lt;/div&gt;&#x27;;}
+      function media(){return &#x27;&lt;div class=&quot;nc-section-head&quot;&gt;&lt;div&gt;&lt;h2&gt;Product media&lt;/h2&gt;&lt;p&gt;Shared assets with channel-specific assignments.&lt;/p&gt;&lt;/div&gt;&#x27;+badge(&#x27;Master library&#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-table-wrap&quot;&gt;&lt;div class=&quot;nc-table-scroll&quot;&gt;&lt;table&gt;&lt;thead&gt;&lt;tr&gt;&lt;th&gt;Asset&lt;/th&gt;&lt;th&gt;Product&lt;/th&gt;&lt;th&gt;Amazon&lt;/th&gt;&lt;th&gt;eBay&lt;/th&gt;&lt;/tr&gt;&lt;/thead&gt;&lt;tbody&gt;&#x27;+[&#x27;Front view&#x27;,&#x27;Back view&#x27;,&#x27;Ventilation detail&#x27;,&#x27;Protection detail&#x27;].map((s,i)=&gt;&#x27;&lt;tr&gt;&lt;td&gt;&#x27;+icon(&#x27;image&#x27;)+&#x27; &#x27;+s+&#x27;&lt;/td&gt;&lt;td&gt;GALE-JACKET&lt;/td&gt;&lt;td&gt;&#x27;+badge(i?&#x27;Gallery&#x27;:&#x27;Main&#x27;)+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+badge(i?&#x27;Gallery&#x27;:&#x27;Main&#x27;)+&#x27;&lt;/td&gt;&lt;/tr&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/tbody&gt;&lt;/table&gt;&lt;/div&gt;&lt;/div&gt;&#x27;;}
+      function renderContent(){const pages={data:productData,media, &#x27;amazon-listing&#x27;:listing,&#x27;ebay-listing&#x27;:listing,&#x27;ebay-presentation&#x27;:presentation,issues,performance,themes,ordering,&#x27;presets-amazon&#x27;:presets,&#x27;presets-ebay&#x27;:presets,mapping,accounts};q(&#x27;[data-content]&#x27;).innerHTML=pages[state.page]();}
+      function render(){
+        root.style.setProperty(&#x27;--nds-nav-row&#x27;,state.density===&#x27;Compact&#x27;?&#x27;34px&#x27;:&#x27;40px&#x27;);
+        const management=state.workspace===&#x27;management&#x27;;
+        q(&#x27;[data-workspace]&#x27;).value=state.workspace;
+        q(&#x27;.nc-top-context&#x27;).textContent=management?&#x27;Channels / Configuration&#x27;:&#x27;Products / GALE-JACKET&#x27;;
+        root.querySelectorAll(&#x27;[data-mode]&#x27;).forEach(b=&gt;b.setAttribute(&#x27;aria-pressed&#x27;,String(b.dataset.mode===state.workspace)));
+        q(&#x27;[data-page-title]&#x27;).textContent=(management?&#x27;&#x27;: &#x27;GALE-JACKET · &#x27;)+titles[state.page];
+        q(&#x27;[data-review]&#x27;).hidden=management||state.page!==&#x27;ebay-presentation&#x27;;
+        const channel=state.page.startsWith(&#x27;amazon&#x27;)||[&#x27;mapping&#x27;,&#x27;presets-amazon&#x27;].includes(state.page)?&#x27;Amazon&#x27;:state.page.startsWith(&#x27;ebay&#x27;)||[&#x27;themes&#x27;,&#x27;ordering&#x27;,&#x27;presets-ebay&#x27;].includes(state.page)?&#x27;eBay&#x27;:null;
+        const local=!management&amp;&amp;channel;
+        q(&#x27;[data-context]&#x27;).innerHTML=(channel?badge(channel):badge(management?&#x27;Connected channels&#x27;:&#x27;Shared product&#x27;))+&#x27;&lt;span&gt;&#x27;+ (management?&#x27;Reusable settings&#x27;:channel?&#x27;Listing settings&#x27;:&#x27;Product information&#x27;)+&#x27;&lt;/span&gt;&#x27;+(local?&#x27;&lt;label&gt;Market&lt;select data-market aria-label=&quot;Market&quot;&gt;&#x27;+Object.entries(markets).map(([k,v])=&gt;&#x27;&lt;option value=&quot;&#x27;+k+&#x27;&quot; &#x27;+(k===state.market?&#x27;selected&#x27;:&#x27;&#x27;)+&#x27;&gt;&#x27;+v+&#x27;&lt;/option&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/select&gt;&lt;/label&gt;&#x27;:management?&#x27;&lt;span style=&quot;margin-left:auto&quot;&gt;All connected markets&lt;/span&gt;&#x27;:&#x27;&lt;span style=&quot;margin-left:auto&quot;&gt;All connected channels&lt;/span&gt;&#x27;);
+        q(&#x27;[data-nav-title]&#x27;).textContent=management?&#x27;Channel management&#x27;:&#x27;This product&#x27;;
+        q(&#x27;[data-nav-groups]&#x27;).innerHTML=(management?manageGroups:productGroups).map(g=&gt;&#x27;&lt;section class=&quot;nc-group&quot;&gt;&lt;h3 class=&quot;nc-group-label&quot;&gt;&#x27;+(g.connected?&#x27;&lt;span class=&quot;nc-dot&quot; aria-label=&quot;Connected&quot;&gt;&lt;/span&gt;&#x27;:&#x27;&#x27;)+g.name+&#x27;&lt;/h3&gt;&#x27;+g.items.map(([id,text,ico,count])=&gt;&#x27;&lt;a class=&quot;nc-nav-link&quot; href=&quot;#&#x27;+id+&#x27;&quot; data-go=&quot;&#x27;+id+&#x27;&quot; &#x27;+(state.page===id?&#x27;aria-current=&quot;page&quot;&#x27;:&#x27;&#x27;)+&#x27;&gt;&#x27;+icon(ico)+&#x27;&lt;span&gt;&#x27;+text+&#x27;&lt;/span&gt;&#x27;+(count?badge(count,&#x27;warn&#x27;):&#x27;&#x27;)+&#x27;&lt;/a&gt;&#x27;).join(&#x27;&#x27;)+&#x27;&lt;/section&gt;&#x27;).join(&#x27;&#x27;);
+        q(&#x27;[data-nav-foot]&#x27;).innerHTML=&#x27;&lt;button type=&quot;button&quot; class=&quot;nc-text-button&quot; data-switch-workspace&gt;&#x27;+icon(management?&#x27;arrow-left&#x27;:&#x27;settings-2&#x27;)+&#x27; &#x27;+(management?&#x27;Back to GALE-JACKET&#x27;:&#x27;Channel management&#x27;)+&#x27;&lt;/button&gt;&#x27;;
+        q(&#x27;[data-toggle-nav]&#x27;).setAttribute(&#x27;aria-expanded&#x27;,String(state.navOpen));
+        q(&#x27;[data-nav-scrim]&#x27;).hidden=!state.navOpen;q(&#x27;.nc-nav&#x27;).hidden=!state.navOpen;
+        renderContent();icons();
+      }
+      function icons(){if(typeof lucide!==&#x27;undefined&#x27;)lucide.createIcons({attrs:{width:16,height:16}});}
+      function closeNav(){state.navOpen=false;q(&#x27;[data-nav-scrim]&#x27;).hidden=true;q(&#x27;.nc-nav&#x27;).hidden=true;q(&#x27;[data-toggle-nav]&#x27;).setAttribute(&#x27;aria-expanded&#x27;,&#x27;false&#x27;);q(&#x27;[data-toggle-nav]&#x27;).focus({preventScroll:true});}
+      function changeWorkspace(workspace){state.workspace=workspace;state.page=workspace===&#x27;product&#x27;?&#x27;ebay-presentation&#x27;:&#x27;themes&#x27;;state.libraryEdit=false;render();q(&#x27;[data-announcement]&#x27;).textContent=workspace===&#x27;product&#x27;?&#x27;Product workspace&#x27;:&#x27;Channel management&#x27;;}
+      function openReview(){state.review=true;closeNav();q(&#x27;[data-review-scrim]&#x27;).hidden=false;q(&#x27;[data-review-body]&#x27;).innerHTML=&#x27;&lt;div&gt;&#x27;+badge(&#x27;Preview only&#x27;)+&#x27;&lt;/div&gt;&lt;p style=&quot;margin-top:12px&quot;&gt;GALE-JACKET · &#x27;+(state.page.startsWith(&#x27;amazon&#x27;)?&#x27;Amazon&#x27;:&#x27;eBay&#x27;)+&#x27; · &#x27;+markets[state.market]+&#x27;&lt;/p&gt;&lt;div class=&quot;nc-diff&quot;&gt;&lt;span&gt;Description theme&lt;/span&gt;&#x27;+label(state)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-diff&quot;&gt;&lt;span&gt;Buyer selector order&lt;/span&gt;&#x27;+state.axes.join(&#x27; → &#x27;)+&#x27;&lt;/div&gt;&lt;div class=&quot;nc-diff&quot;&gt;&lt;span&gt;Size order&lt;/span&gt;&#x27;+sizes().join(&#x27; → &#x27;)+&#x27;&lt;/div&gt;&lt;p class=&quot;nc-muted&quot; style=&quot;margin-top:16px&quot;&gt;This proposal does not publish changes.&lt;/p&gt;&#x27;;q(&#x27;[data-close-review]&#x27;).focus({preventScroll:true});}
+      function closeReview(){state.review=false;q(&#x27;[data-review-scrim]&#x27;).hidden=true;q(&#x27;[data-review]&#x27;).focus({preventScroll:true});}
+      root.addEventListener(&#x27;click&#x27;,e=&gt;{
+        const el=e.target.closest(&#x27;button,a,[data-nav-scrim]&#x27;);if(!el)return;
+        if(el.matches(&#x27;[data-go]&#x27;)){e.preventDefault();state.page=el.dataset.go;state.libraryEdit=false;state.navOpen=false;render();q(&#x27;[data-announcement]&#x27;).textContent=titles[state.page];q(&#x27;[data-toggle-nav]&#x27;).focus({preventScroll:true});}
+        else if(el.matches(&#x27;[data-toggle-nav]&#x27;)){state.navOpen=!state.navOpen;render();if(state.navOpen)q(&#x27;[data-close-nav]&#x27;).focus({preventScroll:true});}
+        else if(el.matches(&#x27;[data-close-nav],[data-nav-scrim]&#x27;)){e.preventDefault();e.stopPropagation();closeNav();}
+        else if(el.matches(&#x27;[data-mode]&#x27;))changeWorkspace(el.dataset.mode);
+        else if(el.matches(&#x27;[data-switch-workspace]&#x27;))changeWorkspace(state.workspace===&#x27;product&#x27;?&#x27;management&#x27;:&#x27;product&#x27;);
+        else if(el.matches(&#x27;[data-manage-themes]&#x27;)){state.navOpen=false;changeWorkspace(&#x27;management&#x27;);}
+        else if(el.matches(&#x27;[data-edit-theme]&#x27;)){state.libraryTheme=el.dataset.editTheme;state.libraryEdit=true;renderContent();icons();}
+        else if(el.matches(&#x27;[data-library-back]&#x27;)){state.libraryEdit=false;renderContent();icons();}
+        else if(el.matches(&#x27;[data-axis]&#x27;)){const axis=el.dataset.axis;state.axes.reverse();renderContent();icons();q(&#x27;[data-axis=&quot;&#x27;+axis+&#x27;&quot;]&#x27;).focus({preventScroll:true});q(&#x27;[data-announcement]&#x27;).textContent=&#x27;Selector order: &#x27;+state.axes.join(&#x27;, &#x27;);}
+        else if(el.matches(&#x27;[data-review]&#x27;))openReview();
+        else if(el.matches(&#x27;[data-close-review]&#x27;))closeReview();
+      });
+      root.addEventListener(&#x27;change&#x27;,e=&gt;{const el=e.target;if(el.matches(&#x27;[data-workspace]&#x27;))changeWorkspace(el.value);else if(el.matches(&#x27;[data-market]&#x27;)){state.market=el.value;renderContent();icons();}else if(el.matches(&#x27;[data-library-theme]&#x27;)){state.libraryTheme=el.value;renderContent();icons();q(&#x27;[data-library-theme]&#x27;)?.focus({preventScroll:true});}else if(el.matches(&#x27;[data-theme]&#x27;)){state.theme=el.value;renderContent();icons();q(&#x27;[data-theme]&#x27;)?.focus({preventScroll:true});}else if(el.matches(&#x27;[data-size-order]&#x27;)){state.sizeOrder=el.value;renderContent();icons();q(&#x27;[data-size-order]&#x27;)?.focus({preventScroll:true});}else if(el.matches(&#x27;[data-product-name]&#x27;))state.productName=el.value;});
+      root.addEventListener(&#x27;keydown&#x27;,e=&gt;{if(e.key===&#x27;Escape&#x27;){if(state.review){e.preventDefault();closeReview();}else if(state.navOpen){e.preventDefault();closeNav();}}if(e.key===&#x27;Tab&#x27;&amp;&amp;(state.review||state.navOpen)){const pane=state.review?q(&#x27;.nc-modal&#x27;):q(&#x27;.nc-nav&#x27;);const items=[...pane.querySelectorAll(&#x27;button:not(:disabled),a[href],select,input&#x27;)].filter(el=&gt;!el.closest(&#x27;[hidden]&#x27;));const first=items[0],last=items[items.length-1];if(e.shiftKey&amp;&amp;(document.activeElement===first||!pane.contains(document.activeElement))){e.preventDefault();last.focus();}else if(!e.shiftKey&amp;&amp;(document.activeElement===last||!pane.contains(document.activeElement))){e.preventDefault();first.focus();}}});
+      render();
+      if(typeof Tweak!==&#x27;undefined&#x27;){const tweak=new Tweak({container:root,onChange:render});tweak.addSelect(state,&#x27;density&#x27;,{label:&#x27;Navigation density&#x27;,options:[&#x27;Compact&#x27;,&#x27;Comfortable&#x27;]});tweak.addToggle(state,&#x27;navOpen&#x27;,{label:&#x27;Show secondary navigation&#x27;});}
+    })();
+  &lt;/script&gt;
+&lt;/div&gt;
+
+&lt;script src=&quot;https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script src=&quot;https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set([&quot;top&quot;, &quot;right&quot;, &quot;bottom&quot;, &quot;left&quot;]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =&gt;
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest(&quot;[data-tooltip]&quot;)
+      : null;
+  const containsTarget = (trigger, target) =&gt;
+    target?.nodeType != null &amp;&amp; trigger.contains(target);
+  const getContent = (trigger) =&gt;
+    trigger.getAttribute(&quot;data-tooltip&quot;)?.trim() ?? &quot;&quot;;
+  const getPlacement = (trigger) =&gt; {
+    const placement = trigger.getAttribute(&quot;data-tooltip-placement&quot;);
+    return tooltipPlacements.has(placement) ? placement : &quot;top&quot;;
+  };
+  const getTooltip = () =&gt; {
+    if (tooltip == null) {
+      tooltip = document.createElement(&quot;div&quot;);
+      tooltip.id = tooltipId;
+      tooltip.className = &quot;tooltip&quot;;
+      tooltip.setAttribute(&quot;role&quot;, &quot;tooltip&quot;);
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) =&gt; {
+    const ids = new Set(
+      (trigger.getAttribute(&quot;aria-describedby&quot;) ?? &quot;&quot;)
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute(&quot;aria-describedby&quot;);
+    } else {
+      trigger.setAttribute(&quot;aria-describedby&quot;, [...ids].join(&quot; &quot;));
+    }
+  };
+  const clearOpenTimeout = () =&gt; {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) =&gt; {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) =&gt; {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-width&quot;,
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              &quot;--tooltip-available-height&quot;,
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: &quot;fixed&quot;,
+    })
+      .then(({ x, y }) =&gt; {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = &quot;visible&quot;;
+      })
+      .catch(() =&gt; {
+        if (activeTrigger === trigger &amp;&amp; request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) =&gt; {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = &quot;hidden&quot;;
+    floating.style.transform = &quot;translate(0, 0)&quot;;
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () =&gt; {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) =&gt; {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() &lt; skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() =&gt; {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) =&gt; {
+    if (event.pointerType === &quot;touch&quot;) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) =&gt; {
+    lastPointerWasTouch =
+      event.type === &quot;pointerdown&quot; &amp;&amp; event.pointerType === &quot;touch&quot;;
+  };
+  const handleTouchClick = (event) =&gt; {
+    const isTouch = event.pointerType === &quot;touch&quot; || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch &amp;&amp; activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() =&gt; {
+      if (activeTrigger === trigger &amp;&amp; !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) =&gt; {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) =&gt; {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(&quot;:focus-visible&quot;)) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) =&gt; {
+    if (event.key === &quot;Escape&quot;) {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) =&gt; {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () =&gt; {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener(&quot;pointerover&quot;, handlePointerOpen);
+    document.removeEventListener(&quot;pointerdown&quot;, handlePointer);
+    document.removeEventListener(&quot;pointercancel&quot;, handlePointer);
+    document.removeEventListener(&quot;click&quot;, handleTouchClick);
+    document.removeEventListener(&quot;pointerout&quot;, handleLeave);
+    document.removeEventListener(&quot;focusin&quot;, handleFocusIn);
+    document.removeEventListener(&quot;focusout&quot;, handleLeave);
+    document.removeEventListener(&quot;keydown&quot;, handleKeyDown);
+    document.removeEventListener(&quot;contextmenu&quot;, handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener(&quot;pointerover&quot;, handlePointerOpen);
+  document.addEventListener(&quot;pointerdown&quot;, handlePointer);
+  document.addEventListener(&quot;pointercancel&quot;, handlePointer);
+  document.addEventListener(&quot;click&quot;, handleTouchClick);
+  document.addEventListener(&quot;pointerout&quot;, handleLeave);
+  document.addEventListener(&quot;focusin&quot;, handleFocusIn);
+  document.addEventListener(&quot;focusout&quot;, handleLeave);
+  document.addEventListener(&quot;keydown&quot;, handleKeyDown);
+  document.addEventListener(&quot;contextmenu&quot;, handleContextMenu);
+  window.addEventListener(&quot;pagehide&quot;, destroy, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-tabs&quot;&gt;
+(() =&gt; {
+  const selector = &#x27;.nav[role=&quot;tablist&quot;] [role=&quot;tab&quot;]&#x27;;
+  const disabled = &#x27;:disabled,[aria-disabled=&quot;true&quot;]&#x27;;
+  const selectTab = (selected) =&gt; {
+    const panelId = selected.getAttribute(&quot;aria-controls&quot;);
+    for (const tab of selected.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;)) {
+      const active = tab === selected;
+      tab.classList.toggle(&quot;active&quot;, active);
+      tab.setAttribute(&quot;aria-selected&quot;, String(active));
+      const id = tab.getAttribute(&quot;aria-controls&quot;);
+      const panel = id &amp;&amp; document.getElementById(id);
+      if (panel != null) {
+        panel.hidden = id !== panelId;
+        if (!panel.hidden &amp;&amp; selected.id) {
+          panel.setAttribute(&quot;aria-labelledby&quot;, selected.id);
+        }
+      }
+    }
+  };
+  const interact = (event) =&gt; {
+    const tab = event.target?.closest?.(selector);
+    if (event.defaultPrevented || tab == null || tab.matches(disabled)) {
+      return;
+    }
+    if (event.type === &quot;click&quot;) {
+      selectTab(tab);
+      return;
+    }
+    const tabs = Array.from(
+      tab.closest(&#x27;[role=&quot;tablist&quot;]&#x27;).querySelectorAll(&#x27;[role=&quot;tab&quot;]&#x27;),
+    ).filter((candidate) =&gt; !candidate.matches(disabled));
+    const current = tabs.indexOf(tab);
+    let next;
+    if (event.key === &quot;ArrowRight&quot; || event.key === &quot;ArrowDown&quot;) {
+      next = (current + 1) % tabs.length;
+    } else if (event.key === &quot;ArrowLeft&quot; || event.key === &quot;ArrowUp&quot;) {
+      next = (current + tabs.length - 1) % tabs.length;
+    } else if (event.key === &quot;Home&quot;) {
+      next = 0;
+    } else if (event.key === &quot;End&quot;) {
+      next = tabs.length - 1;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    tabs[next].focus();
+    selectTab(tabs[next]);
+  };
+
+  for (const list of document.querySelectorAll(&#x27;.nav[role=&quot;tablist&quot;]&#x27;)) {
+    const selected =
+      list.querySelector(&#x27;[role=&quot;tab&quot;][aria-selected=&quot;true&quot;]&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;].active&#x27;) ??
+      list.querySelector(&#x27;[role=&quot;tab&quot;]&#x27;);
+    if (selected != null) {
+      selectTab(selected);
+    }
+  }
+  document.addEventListener(&quot;click&quot;, interact);
+  document.addEventListener(&quot;keydown&quot;, interact);
+  window.addEventListener(&quot;pagehide&quot;, () =&gt; {
+    document.removeEventListener(&quot;click&quot;, interact);
+    document.removeEventListener(&quot;keydown&quot;, interact);
+  }, { once: true });
+})();
+&lt;/script&gt;
+&lt;script id=&quot;codex-visualization-lucide&quot; async src=&quot;https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js&quot;&gt;&lt;/script&gt;
+&lt;script&gt;
+(() =&gt; {
+  const initialize = () =&gt; {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById(&quot;codex-visualization-lucide&quot;)
+    ?.addEventListener(&quot;load&quot;, initialize, { once: true });
+})();
+&lt;/script&gt;
+
+&lt;/body&gt;
+&lt;/html&gt;
+"></iframe>
+</body>
+</html>

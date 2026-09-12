@@ -15,7 +15,8 @@
  */
 
 import { useTransition } from 'react'
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { LayoutGrid, Rows } from 'lucide-react'
 import { useTranslations } from '@/lib/i18n/use-translations'
 

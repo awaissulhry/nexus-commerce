@@ -32,8 +32,8 @@ export function startEbayReadbackCron(): void {
     logger.error('ebay-readback cron: invalid schedule, not starting', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun(JOB, async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun(JOB, async () => {
       const r = await readBackEbayInventory()
       const inv = `inv checked=${r.checked} recorded=${r.recorded} errors=${r.errors}${r.capped ? ' (capped)' : ''}`
       // AS.4a — Trading-lane pass (shared listings). Same master gate; its own

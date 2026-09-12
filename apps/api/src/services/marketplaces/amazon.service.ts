@@ -1,3 +1,6 @@
+import { amazonCredsConfigured } from '../../lib/amazon-sp-client.js'
+import { getAmazonSellerId } from '../../lib/amazon-sp-client.js'
+import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 import { SellingPartner } from "amazon-sp-api";
 import { parse } from "csv-parse/sync";
 import { instrumentSellingPartner } from "../outbound-api-call-log.service.js";
@@ -279,73 +282,13 @@ export class AmazonService {
    * Validates env vars only when actually needed (first API call).
    * Throws if credentials are missing.
    */
-  private async getClient(): Promise<SellingPartner> {
-    if (this.sp) {
-      return this.sp;
-    }
-
-    const clientId = process.env.AMAZON_LWA_CLIENT_ID;
-    const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET;
-    const refreshToken = process.env.AMAZON_REFRESH_TOKEN;
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-    const roleArn = process.env.AWS_ROLE_ARN;
-
-    if (
-      !clientId ||
-      !clientSecret ||
-      !refreshToken ||
-      !accessKeyId ||
-      !secretAccessKey ||
-      !roleArn
-    ) {
-      throw new Error(
-        "Missing one or more required Amazon SP-API environment variables: " +
-          "AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN, " +
-          "AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_ROLE_ARN"
-      );
-    }
-
-    // The library accepts AWS credentials in the config at runtime,
-    // but the bundled typings only declare the LWA client fields.
-    // We cast to `any` to pass the full credential set.
-    this.sp = new SellingPartner({
-      region: "eu",
-      refresh_token: refreshToken,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: clientId,
-        SELLING_PARTNER_APP_CLIENT_SECRET: clientSecret,
-      },
-      options: {
-        auto_request_tokens: true,
-        auto_request_throttled: true,
-      },
-    } as any);
-
-    // L.3.2 — every sp.callAPI(...) call now writes an
-    // OutboundApiCallLog row via the patched callAPI. Idempotent.
-    instrumentSellingPartner(this.sp as never, {
-      channel: 'AMAZON',
-      marketplace: process.env.AMAZON_MARKETPLACE_ID ?? undefined,
-    });
-
-    return this.sp;
-  }
+  private async getClient(): Promise<SellingPartner> { return amazonSpClient() }
 
   /**
    * Check if Amazon credentials are configured.
    * Returns true if all required env vars are present.
    */
-  isConfigured(): boolean {
-    return !!(
-      process.env.AMAZON_LWA_CLIENT_ID &&
-      process.env.AMAZON_LWA_CLIENT_SECRET &&
-      process.env.AMAZON_REFRESH_TOKEN &&
-      process.env.AWS_ACCESS_KEY_ID &&
-      process.env.AWS_SECRET_ACCESS_KEY &&
-      process.env.AWS_ROLE_ARN
-    );
-  }
+  async isConfigured(): Promise<boolean> { return amazonCredsConfigured() }
 
   /* ────────────────────────────────────────────────────────────── */
   /*  fetchActiveCatalog                                            */
@@ -538,7 +481,7 @@ export class AmazonService {
    */
   async fetchProductDetails(sku: string, marketplaceId?: string): Promise<ProductDetails> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? "";
+      (await getAmazonSellerId());
     const mpId = marketplaceId ?? process.env.AMAZON_MARKETPLACE_ID ?? "APJ6JRA9NG5V4";
 
     let title: string = "";
@@ -1257,7 +1200,7 @@ export class AmazonService {
     asin: string | null
   }> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      (await getAmazonSellerId())
     if (!sellerId) {
       throw new Error(
         'AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set; cannot call getListingsItem.',
@@ -1334,7 +1277,7 @@ export class AmazonService {
     marketplaceId: string,
   ): Promise<ReturnType<typeof this._emptyDetectResult>> {
     const sellerId =
-      process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+      (await getAmazonSellerId())
     if (!sellerId) {
       throw new Error('AMAZON_SELLER_ID (or AMAZON_MERCHANT_ID) env var not set.')
     }
@@ -1396,22 +1339,21 @@ export class AmazonService {
         marketplaceIds: [marketplaceId],
         identifiers: [asin],
         identifiersType: 'ASIN',
-        includedData: ['summaries', 'classifications'],
+        includedData: ['summaries', 'classifications', 'productTypes'],
       },
     })
 
-    const item = Array.isArray(res?.items) && res.items.length > 0 ? res.items[0] : null
-    const summary = Array.isArray(item?.summaries) && item.summaries.length > 0
-      ? item.summaries[0] : null
+    const item = Array.isArray(res?.items) ? res.items.find((item: any) => item?.asin === asin) : null
+    const summary = Array.isArray(item?.summaries)
+      ? item.summaries.find((summary: any) => summary?.marketplaceId === marketplaceId) : null
 
-    // productType from summaries[0].productTypes[0]
-    const pts = summary?.productTypes
-    const rawPt = Array.isArray(pts) && pts.length > 0
-      ? (pts[0].productTypeId ?? pts[0].productType ?? null) : null
+    // Catalog Items 2022-04-01 returns productTypes beside summaries, grouped by market.
+    const rawPt = Array.isArray(item?.productTypes)
+      ? item.productTypes.find((type: any) => type?.marketplaceId === marketplaceId)?.productType : null
     const productType = typeof rawPt === 'string' ? rawPt : null
 
     // browse nodes + category path from classifications
-    const { browseNodes, categoryPath } = extractClassifications(item?.classifications)
+    const { browseNodes, categoryPath } = extractClassifications(item?.classifications, marketplaceId)
 
     return {
       productType,
@@ -1441,8 +1383,8 @@ export class AmazonService {
         includedData: ['classifications'],
       },
     })
-    const item = Array.isArray(res?.items) && res.items.length > 0 ? res.items[0] : null
-    return extractClassifications(item?.classifications)
+    const item = Array.isArray(res?.items) ? res.items.find((item: any) => item?.asin === asin) : null
+    return extractClassifications(item?.classifications, marketplaceId)
   }
 
   /**
@@ -1462,7 +1404,7 @@ export class AmazonService {
     skus: string[],
     marketplaceId: string,
   ): Promise<CatalogItem[]> {
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const sellerId = (await getAmazonSellerId())
     if (!sellerId) throw new Error('AMAZON_SELLER_ID not set')
 
     const sp = await this.getClient()
@@ -1563,7 +1505,7 @@ export class AmazonService {
     if (!trimmedBrand || !cc) {
       return { inferred: 'unknown', reason: 'brand and country required' }
     }
-    if (!this.isConfigured()) {
+    if (!(await this.isConfigured())) {
       return { inferred: 'unknown', reason: 'SP-API not configured' }
     }
     const cacheKey = `${trimmedBrand}|${cc}`
@@ -1613,7 +1555,7 @@ export class AmazonService {
       res = await sp.callAPI({
         operation: 'getListingsItem',
         endpoint: 'listingsItems',
-        path: { sellerId: process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? '', sku: evidenceSku },
+        path: { sellerId: (await getAmazonSellerId()), sku: evidenceSku },
         query: {
           marketplaceIds: [marketplaceId],
           includedData: ['summaries', 'attributes', 'identifiers'],
@@ -1790,7 +1732,7 @@ export class AmazonService {
     productType: string | null
     relationships: Array<{ type: string; parentAsin?: string; childAsins?: string[] }>
   } | null> {
-    const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+    const sellerId = (await getAmazonSellerId())
     if (!sellerId) throw new Error('AMAZON_SELLER_ID not configured')
 
     const sp = await this.getClient()
@@ -1846,42 +1788,43 @@ export class AmazonService {
  * Extract browse node IDs and a human-readable category path from the
  * `classifications` array returned by searchCatalogItems.
  *
- * Amazon classifications shape (2022-04-01):
- *   [{ classificationId: "12345678", displayName: "Clothing", parent: {...} }]
- *
- * We walk the parent chain to build the full path (leaf → root) and collect
- * all classificationId values as browse nodes.
+ * Catalog Items 2022-04-01 groups classifications by marketplaceId.
+ * Only assigned leaf IDs are browse nodes; ancestors provide the display path.
+ * The singular categoryPath describes the first valid classification. Separate
+ * branches must never be concatenated into a made-up breadcrumb.
  */
-function extractClassifications(
+export function extractClassifications(
   classifications: any[] | null | undefined,
+  marketplaceId: string,
 ): { browseNodes: number[] | null; categoryPath: string | null } {
   if (!Array.isArray(classifications) || classifications.length === 0) {
     return { browseNodes: null, categoryPath: null }
   }
 
   const nodes: number[] = []
-  const pathParts: string[] = []
-
-  // Walk each top-level classification and its parent chain
-  function walk(node: any, depth = 0) {
-    if (!node || depth > 10) return
-    const id = node.classificationId ?? node.id
-    if (id) {
-      const numId = typeof id === 'number' ? id : parseInt(String(id), 10)
-      if (!isNaN(numId) && !nodes.includes(numId)) nodes.push(numId)
+  let categoryPath: string | null = null
+  for (const group of classifications) {
+    if (group?.marketplaceId !== marketplaceId || !Array.isArray(group.classifications)) continue
+    for (const leaf of group.classifications) {
+      const id = leaf?.classificationId
+      if (!/^\d+$/.test(String(id)) || !Number.isSafeInteger(Number(id)) || Number(id) <= 0) continue
+      if (!nodes.includes(Number(id))) nodes.push(Number(id))
+      if (categoryPath) continue
+      const parts: string[] = []
+      const seen = new Set<unknown>()
+      let node = leaf
+      while (node && !seen.has(node) && seen.size < 64) {
+        seen.add(node)
+        if (typeof node.displayName === 'string' && node.displayName.trim()) parts.unshift(node.displayName.trim())
+        node = node.parent
+      }
+      // A cyclic/truncated tree cannot supply a trustworthy full breadcrumb.
+      if (!node && parts.length) categoryPath = parts.join(' › ')
     }
-    if (typeof node.displayName === 'string' && node.displayName) {
-      pathParts.unshift(node.displayName) // parent first
-    }
-    if (node.parent) walk(node.parent, depth + 1)
-  }
-
-  for (const cls of classifications) {
-    walk(cls)
   }
 
   return {
     browseNodes: nodes.length > 0 ? nodes : null,
-    categoryPath: pathParts.length > 0 ? pathParts.join(' › ') : null,
+    categoryPath,
   }
 }

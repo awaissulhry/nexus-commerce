@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Bookmark,
   ChevronLeft,

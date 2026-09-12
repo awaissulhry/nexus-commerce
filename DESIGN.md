@@ -132,6 +132,14 @@ alone carry 1,790 declarations. The scale is **descriptive** — it holds the va
 actually uses (90.8% of every measured padding/margin/gap). Above 48px is page layout, not spacing;
 leave it literal.
 
+## Control sizes and quality requests
+
+Keep the documented Nexus control sizes when composing a page. “AAA quality” is not a request
+to enlarge every control or change the platform density. Select sizes through component props;
+page wrappers must not override shared button, input, select or tab dimensions. Readability
+modes may change contrast and focus, but must preserve the chosen control size and typography.
+Align controls through the surrounding layout. Verify against the same primitives in the catalog.
+
 ## Type
 
 ```

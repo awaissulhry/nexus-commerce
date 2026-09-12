@@ -1,5 +1,5 @@
 import { prisma } from "@nexus/database";
-import Link from "next/link";
+import Link from '@/lib/workspaces/Link';
 import PageHeader from "@/components/layout/PageHeader";
 
 export const dynamic = "force-dynamic";

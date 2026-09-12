@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * S.25 — Pan-EU FBA distribution service.
  *
@@ -128,12 +129,12 @@ export async function syncFbaPanEuInventory(adapter: PanEuAdapter): Promise<Sync
       // an idiomatic "preserve column on update" — explicit branch.
       const existing = await prisma.fbaInventoryDetail.findUnique({
         where: {
-          sku_marketplaceId_fulfillmentCenterId_condition: {
+          sku_marketplaceId_fulfillmentCenterId_condition: workspaceKey({
             sku: r.sku,
             marketplaceId: r.marketplaceId,
             fulfillmentCenterId: r.fulfillmentCenterId,
             condition: r.condition,
-          },
+          }),
         },
         select: { id: true, firstReceivedAt: true },
       })

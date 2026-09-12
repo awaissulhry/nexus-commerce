@@ -16,7 +16,7 @@
  *      standing budgets; an accidental enable here is a four-figure daily spend.
  */
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useSearchParams } from 'next/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, Radio, RadioCard, Select, Textarea, TokenChip } from '@/design-system/primitives'

@@ -65,8 +65,8 @@ export function startCronOrphanSweeperCron(): void {
     logger.error('cron-orphan-sweeper: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runCronOrphanSweepOnce().catch((err) => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runCronOrphanSweepOnce().catch((err) => {
       logger.warn('[cron-orphan-sweeper] tick failed', {
         error: err instanceof Error ? err.message : String(err),
       })

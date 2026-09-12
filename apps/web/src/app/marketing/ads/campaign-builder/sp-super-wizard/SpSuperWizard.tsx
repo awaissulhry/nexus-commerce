@@ -12,7 +12,7 @@
  * SPW.6/7 (automation + launch).
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Info } from 'lucide-react'
 import { Field, Modal } from '@/design-system/components'
 import { Button, Input } from '@/design-system/primitives'

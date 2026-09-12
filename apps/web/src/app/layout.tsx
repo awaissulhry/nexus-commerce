@@ -67,9 +67,11 @@ import { ToastProvider } from "@/components/ui/Toast";
 import { ConfirmProvider } from "@/components/ui/ConfirmProvider";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 import { ProfileScopeProvider } from "@/app/_shared/ProfileScope";
+import { ProfileNavigationGuard } from '@/app/_shared/ProfileNavigationGuard';
 import { PageGuard } from "@/lib/auth/PageGuard";
 import CopilotMount from "@/components/CopilotMount";
 import { getServerLocale, getServerT } from "@/lib/i18n/server";
+import { requireWebPage } from '@/lib/workspaces/server';
 
 export const metadata: Metadata = {
   title: "Nexus Commerce",
@@ -88,6 +90,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  await requireWebPage();
   // W5.13 — Read locale from the cookie that use-translations.ts
   // mirrors on every setLocale() call. Used for the html `lang`
   // attribute (screen readers use it for pronunciation + voice
@@ -110,6 +113,7 @@ export default async function RootLayout({
         </a>
         <AuthProvider>
         <ProfileScopeProvider>
+        <ProfileNavigationGuard />
         <ToastProvider>
           <ConfirmProvider>
             {/* AppShell renders the full Nexus chrome for normal routes and a

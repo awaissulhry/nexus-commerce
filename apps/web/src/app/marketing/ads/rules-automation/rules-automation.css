@@ -341,14 +341,14 @@
 .h10-nt-freq span { font-size: 11px; color: var(--nds-grey-600); }
 .h10-nt-namew { display: inline-flex; align-items: center; gap: 12px; }
 .h10-nt-open { opacity: 0; display: inline-flex; align-items: center; gap: 5px; background: var(--nds-blue-600); color: var(--nds-white); font-size: 11.5px; font-weight: 700; border-radius: var(--nds-radius-md); padding: 4px 9px; text-decoration: none; transition: opacity .1s; white-space: nowrap; }
-.nds-wsgrid tbody tr:hover .h10-nt-open, .h10-nt-open:focus-visible { opacity: 1; }
+.nds-wsgrid .nds-ws-tr:hover .h10-nt-open, .h10-nt-open:focus-visible { opacity: 1; }
 .h10-nt-edit { height: 30px; border: 1px solid var(--nds-blue-600); border-radius: var(--nds-radius-md); padding: 0 9px; font: inherit; font-size: 12.5px; color: var(--nds-grey-900); outline: 0; box-shadow: 0 0 0 3px rgba(31,111,222,.15); }
 .h10-nt-freqedit { display: inline-flex; gap: 8px; }
 /* F3 — Open + History affordances + execution-history drawer */
 .h10-nt-acts { display: inline-flex; align-items: center; gap: 7px; }
 /* DS-ALIGN — the history opener is the DS `Button` at `xs`; the class stays only to carry the
    row-hover reveal above, which is a GRID behaviour, not a button one. */
-.nds-wsgrid tbody tr:hover .h10-nt-open.hist, .h10-nt-open.hist:focus-visible { opacity: 1; }
+.nds-wsgrid .nds-ws-tr:hover .h10-nt-open.hist, .h10-nt-open.hist:focus-visible { opacity: 1; }
 .h10-hist-back { position: fixed; inset: 0; background: rgba(20,28,38,.42); z-index: 200; display: flex; justify-content: flex-end; }
 .h10-hist { width: 460px; max-width: calc(100vw - 32px); height: 100%; background: var(--nds-white); box-shadow: -16px 0 48px rgba(20,28,38,.22); display: flex; flex-direction: column; }
 .h10-hist-h { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--nds-grey-100); }
@@ -847,7 +847,6 @@
 .h10-mnote { font-size: 10.5px; color: var(--nds-grey-600); margin-top: 8px; line-height: 1.5; }
 /* Blend lanes */
 .h10-blend-lane { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--nds-grey-100); flex-wrap: wrap; }
-.h10-blend-lane.on { }
 .h10-blend-en { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; min-width: 150px; }
 .h10-blend-sig { font-size: 10.5px; color: var(--nds-grey-600); }
 .h10-blend-fields { display: inline-flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
@@ -873,12 +872,12 @@
    name wrapper caps the column so a long name truncates (ellipsis) and the hover Manage button
    stays inside the column instead of spilling into the next one. (Table is table-layout:auto, so
    the cap must live on the content, not the cell's ignored max-width.) */
-.nds-wsgrid td.nm .rg-namecell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 340px; }
-.nds-wsgrid td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
-.nds-wsgrid td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nds-wsgrid td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
+.nds-wsgrid .nds-ws-td.nm .rg-namecell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; max-width: 340px; }
+.nds-wsgrid .nds-ws-td.nm .rg-namew { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.nds-wsgrid .nds-ws-td.nm .rg-namew .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid .nds-ws-td.nm .rg-namew .h10-nt-open { flex-shrink: 0; }
 /* Phase 5 — portfolio-scoped schedules get a sublabel under the name. */
-.nds-wsgrid td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid .nds-ws-td.nm .rg-pfbadge { max-width: 100%; font-size: 11px; font-weight: 600; color: var(--nds-blue-700); background: var(--nds-blue-50); border: 1px solid #d4e4fb; border-radius: 5px; padding: 1px 7px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Baseline chip — compact, read-only version of the builder's target chip (h10-rp-chip). */
 .h10-rg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; font-size: 12px; font-weight: 600; color: var(--nds-grey-800); background: var(--nds-white); border: 1px solid var(--nds-grey-200); border-radius: var(--nds-radius-full); padding: 3px 9px; }
 .h10-rg-chip .sw { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
@@ -953,7 +952,7 @@
    open, so a grid of 200 rows is not 200 kebabs. Chrome, hover and focus ring come from the DS. */
 .h10-rowmenu-btn { opacity: 0; padding: 3px 5px; transition: opacity .1s; flex-shrink: 0; }
 .h10-rowmenu-wrap { display: inline-flex; }
-.nds-wsgrid tbody tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
+.nds-wsgrid .nds-ws-tr:hover .h10-rowmenu-btn, .h10-rowmenu-btn:focus-visible, .h10-rowmenu-btn[aria-expanded='true'] { opacity: 1; }
 /* Fixed, not absolute: the grid card clips overflow, which would cut the last item off. */
 /* Portalled to document.body, so these z-indexes finally compete at the top level instead of
    inside the sticky name column's stacking context. Above the app sidebar and the console's own
@@ -1167,34 +1166,33 @@
    position where these name a column, so hiding or reordering one would have painted the wrong
    cells. */
 .h10-n24-t { font-size: 12px; }
-.h10-n24-t table { table-layout: fixed; }
 
-.h10-n24-t th:first-child, .h10-n24-t td:first-child { padding-left: 20px; }
-.h10-n24-t th:last-child, .h10-n24-t td:last-child { padding-right: 20px; }
+.h10-n24-t .nds-dg-td.first { padding-left: 20px; }
+.h10-n24-t .nds-dg-td.last { padding-right: 20px; }
 
 /* A change of governing target is a bid write — the rule marks where each one falls. */
-.h10-n24-t tr.chg td { border-top: 1px solid var(--nds-grey-150); }
-.h10-n24-t td.hr { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
-.h10-n24-t td.hr b { color: var(--nds-grey-900); font-weight: 800; }
-.h10-n24-t td.hr em { display: block; font-style: normal; font-size: 10.5px; color: var(--nds-grey-600); }
-.h10-n24-t td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-grey-300); margin-right: 6px; vertical-align: 1px; }
-.h10-n24-t td.tg em { font-style: normal; font-size: 10.5px; color: var(--nds-grey-600); margin-left: 6px; }
-.h10-n24-t td.tg em.evt { color: #2f5da8; background: var(--nds-blue-50); border-radius: 4px; padding: 1px 5px; }
-.h10-n24-t td.tg .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
+.h10-n24-t .nds-dg-tr.chg .nds-dg-td { border-top: 1px solid var(--nds-border); }
+.h10-n24-t .nds-dg-td.hr { color: var(--nds-pill-neutral-fg); white-space: nowrap; }
+.h10-n24-t .nds-dg-td.hr b { color: var(--nds-text-strong); font-weight: 800; }
+.h10-n24-t .nds-dg-td.hr em { display: block; font-style: normal; font-size: 10.5px; color: var(--nds-text-2); }
+.h10-n24-t .nds-dg-td.tg i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: var(--nds-text-disabled); margin-right: 6px; }
+.h10-n24-t .nds-dg-td.tg em { font-style: normal; font-size: 10.5px; color: var(--nds-text-2); margin-left: 6px; }
+.h10-n24-t .nds-dg-td.tg em.evt { color: var(--nds-info); background: var(--nds-info-soft); border-radius: 4px; padding: 1px 5px; }
+.h10-n24-t .nds-dg-td.tg .miss { color: var(--nds-note-error-fg); display: inline-flex; align-items: center; gap: 4px; }
 .h10-n24-t .none { color: var(--nds-grey-600); }
-.h10-n24-t td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: #4a5462; }
-.h10-n24-t td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: #1c7a4a; white-space: nowrap; }
-.h10-n24-t td.bd .hold, .h10-n24-t td.bd .sup { white-space: nowrap; }
-.h10-n24-t td.bd .chase b { font-weight: 700; }
-.h10-n24-t td.bd .chase.risk { color: var(--nds-note-error-fg); }
+.h10-n24-t .nds-dg-td.bd .hold { display: inline-flex; align-items: center; gap: 4px; color: var(--nds-text-2); }
+.h10-n24-t .nds-dg-td.bd .chase { display: inline-flex; align-items: center; gap: 4px; color: var(--nds-success); white-space: nowrap; }
+.h10-n24-t .nds-dg-td.bd .hold, .h10-n24-t .nds-dg-td.bd .sup { white-space: nowrap; }
+.h10-n24-t .nds-dg-td.bd .chase b { font-weight: 700; }
+.h10-n24-t .nds-dg-td.bd .chase.risk { color: var(--nds-note-error-fg); }
 /* MB.6 — this hour's climb stops at the CPC ceiling, not at the target's own Ceiling. Its own
    line: inside the nowrap .chase span it pushed the cell over its column. */
-.h10-n24-t td.bd .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-amber-700); line-height: 1.4; }
-.h10-n24-t td.bd .sup { color: var(--nds-grey-600); }
-.h10-n24-t td.gd { color: var(--nds-pill-neutral-fg); }
-.h10-n24-t td.gd span { display: block; font-size: 11px; white-space: nowrap; }
-.h10-n24-t td.gd .ao { color: var(--nds-note-error-fg); font-weight: 700; }
-.h10-n24-t td.gd .bad { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t .nds-dg-td.bd .capd { display: block; font-size: 9.5px; font-weight: 700; color: var(--nds-warning); line-height: 1.4; }
+.h10-n24-t .nds-dg-td.bd .sup { color: var(--nds-text-2); }
+.h10-n24-t .nds-dg-td.gd { color: var(--nds-pill-neutral-fg); }
+.h10-n24-t .nds-dg-td.gd span { display: block; font-size: 11px; white-space: nowrap; }
+.h10-n24-t .nds-dg-td.gd .ao { color: var(--nds-note-error-fg); font-weight: 700; }
+.h10-n24-t .nds-dg-td.gd .bad { color: var(--nds-note-error-fg); font-weight: 700; }
 
 /* RDX/E2 — the fit block when there is not enough evidence to state a share. No big number,
    because the whole point is that there is no number worth showing. */
@@ -1390,7 +1388,7 @@
 /* DS-ALIGN — the DS `Button` at `xs`. What is left is the reveal-on-row-hover, which belongs
    to the GRID, not the button. */
 .h10-au-open { flex-shrink: 0; margin-left: auto; opacity: 0; transition: opacity .12s; }
-tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
+.nds-ws-tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-open:hover { border-color: var(--nds-blue-600); color: var(--nds-blue-700); }
 
 /* ── The mode dial ───────────────────────────────────────────────────────────────────── */
@@ -1429,7 +1427,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-week i.bad { color: var(--nds-red-700); }
 .h10-au-week i.cap { color: var(--nds-warning-text); }
 .h10-au-never { color: var(--nds-grey-600); }
-.h10-au-rowconf td { background: #fffaf8; }
+.nds-ws-tr.h10-au-rowconf .nds-ws-td { background: #fffaf8; }
 
 /* ── Selection bar ───────────────────────────────────────────────────────────────────── */
 .h10-au-bulkrow { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -1579,7 +1577,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    grid in this console makes that column a LINK; a keyword here is not one until KT.4 adds the
    history drawer, and blue text that does nothing when clicked is a promise the page cannot keep.
    Matched on specificity rather than !important so KT.4 can simply delete this rule. */
-.nds-wsgrid td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
+.nds-wsgrid .nds-ws-td.nm .h10-kt-kw .t { color: var(--nds-grey-900); }
 .h10-kt-kw .bd, .h10-kt-kw .ac { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
 .h10-kt-kw .bd { background: var(--nds-grey-75); color: var(--nds-grey-600); }
 .h10-kt-kw .ac { background: #fff6e8; color: var(--nds-warning-text); }
@@ -1653,7 +1651,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    the first column a link. This one is not a link until NEG.2 opens the term drawer from it, and
    blue non-interactive text promises a click that does nothing. Matched at (0,4,1) — no
    !important, which would only make the override harder to delete later. */
-.nds-wsgrid td.nm .h10-ng-term .t { color: var(--nds-grey-900); font-weight: 700; }
+.nds-wsgrid .nds-ws-td.nm .h10-ng-term .t { color: var(--nds-grey-900); font-weight: 700; }
 .h10-ng-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-ng-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-ng-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
@@ -1710,8 +1708,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    the pointer arrives before you click and the underline confirms the promise. Same selector
    shape, same specificity (0-4-1 beats 0-3-1), so KT.4 deletes these two rules when the keyword
    becomes a real link into the history drawer. */
-.nds-wsgrid td.nm .h10-kt-kw .t { cursor: default; }
-.nds-wsgrid td.nm .h10-kt-kw .t:hover { text-decoration: none; }
+.nds-wsgrid .nds-ws-td.nm .h10-kt-kw .t { cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-kt-kw .t:hover { text-decoration: none; }
 
 /* The view's single period, in the toolbar. Amber when the gate could not find a whole week —
    the same amber the truncated-week sentence above the grid uses, so the two read as one fact. */
@@ -1934,8 +1932,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    and underlines on hover, so a term with the colour fixed still BEHAVES like a link — the pointer
    arrives before the click and the underline confirms the promise. KT.1 shipped the colour alone
    and KT.1b had to come back for the other two. */
-.nds-wsgrid td.nm .h10-hv-term .t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.nds-wsgrid td.nm .h10-hv-term .t:hover { text-decoration: none; }
+.nds-wsgrid .nds-ws-td.nm .h10-hv-term .t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-hv-term .t:hover { text-decoration: none; }
 .h10-hv-term { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .h10-hv-term .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h10-hv-term .fl { flex: none; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 800; letter-spacing: .02em; }
@@ -2109,8 +2107,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    underlines on hover — because every other consumer of this grid makes that column a link. Here
    it is not one (P1 gives the row an inspector), so all three halves of that promise are undone at
    (0,3,2). `!important` is not needed and would make this harder to delete when P1 lands. */
-.nds-wsgrid td.nm .h10-plc-camp span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.nds-wsgrid td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
+.nds-wsgrid .nds-ws-td.nm .h10-plc-camp span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-plc-camp span.t:hover { text-decoration: none; }
 
 @media (max-width: 1200px) {
   .h10-plc-search { width: 186px; }
@@ -2130,7 +2128,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    (a string Amazon stores). Italic + a lighter weight, never a different colour: colour in this
    column already means "is a link". */
 /* S3 — `.t` is an <a> now; derived keeps its italic marker but inherits the link colour. */
-.nds-wsgrid td.nm .h10-bd-target .t.derived { font-style: italic; font-weight: 600; }
+.nds-wsgrid .nds-ws-td.nm .h10-bd-target .t.derived { font-style: italic; font-weight: 600; }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════════
    BSP.0 — Budget Pacing & Schedules
@@ -2277,8 +2275,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    because the cell promised a click it could not honour; the promise is real now, so the
    affordance comes back as an underline on hover rather than as a colour that reads as a link at
    rest. Matched at (0,4,1) to beat `.nds-wsgrid td.nm .t` at (0,3,1). */
-.nds-wsgrid td.nm .h10-ng-term .t.as-btn { color: var(--nds-grey-900); font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
-.nds-wsgrid td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-blue-700); text-decoration: underline; }
+.nds-wsgrid .nds-ws-td.nm .h10-ng-term .t.as-btn { color: var(--nds-grey-900); font-weight: 700; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; }
+.nds-wsgrid .nds-ws-td.nm .h10-ng-term .t.as-btn:hover { color: var(--nds-blue-700); text-decoration: underline; }
 
 /* ── the shell ──────────────────────────────────────────────────────────────────────────────── */
 .h10-ngd-back { position: fixed; inset: 0; z-index: 1200; background: rgba(28, 37, 48, .34); border: 0; padding: 0; cursor: pointer; }
@@ -2665,8 +2663,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    yet — BUD.3 makes it open the rule record — so all three halves of the promise are undone here
    at (0,3,2), scoped to `.h10-bud-rule span.t` so the campaign view is untouched. A blue name that
    does nothing when clicked is a promise the page cannot keep. */
-.nds-wsgrid td.nm .h10-bud-rule span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
-.nds-wsgrid td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
+.nds-wsgrid .nds-ws-td.nm .h10-bud-rule span.t { color: var(--nds-grey-900); font-weight: 700; cursor: default; }
+.nds-wsgrid .nds-ws-td.nm .h10-bud-rule span.t:hover { text-decoration: none; }
 
 /* 🔴 1180, not 1400. Measured on prod: at 1280 the content box is 1154px, so six cells are 186px
    each and every label fits on one line — the 1400 breakpoint I first wrote sent them to two rows
@@ -3329,11 +3327,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-kt-drempty { margin: 0; font-size: 12px; color: var(--nds-grey-600); }
 
 /* the ASIN table — dense and quiet, it is read-only */
-.h10-kt-drtable { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.h10-kt-drtable { width: 100%; font-size: 11.5px; }
 
-.h10-kt-drtable th.n, .h10-kt-drtable td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.h10-kt-drtable .nds-dg-td.n { text-align: right; font-variant-numeric: tabular-nums; }
 
-.h10-kt-drtable td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-grey-600); }
+.h10-kt-drtable .nds-dg-td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--nds-text-2); }
 .h10-kt-drok { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-green-700); background: #e7f5ed; padding: 1px 6px; border-radius: 5px; }
 .h10-kt-drno { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .03em; color: var(--nds-amber-700); background: #fff6e8; padding: 1px 6px; border-radius: 5px; }
 
@@ -3661,8 +3659,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-hv-bid2 i { font-style: normal; font-size: 10.5px; color: var(--nds-grey-600); }
 
 /* the comparison table — dense, and the harvested rows are the ones being asked about */
-.h10-hv-cmp { width: 100%; border-collapse: collapse; margin: 10px 0 0; font-size: 11.5px; }
-.h10-hv-cmp tr.me td { background: var(--nds-blue-100); color: var(--nds-info-text); font-weight: 700; }
+.h10-hv-cmp { width: 100%; margin: 10px 0 0; font-size: 11.5px; }
+.h10-hv-cmp .nds-dg-tr.me .nds-dg-td { background: var(--nds-info-soft); color: var(--nds-info-text); font-weight: 700; }
 .h10-hv-conf { margin: 9px 0 0; padding-left: 18px; font-size: 11.5px; line-height: 1.6; color: var(--nds-grey-600); }
 .h10-hv-conf li + li { margin-top: 3px; }
 
@@ -4148,10 +4146,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 
 .h10-kt6-det { margin: 0 0 10px; }
 .h10-kt6-det summary { font-size: 11px; font-weight: 700; color: #1a5fbe; cursor: pointer; }
-.h10-kt6-tbl { width: 100%; border-collapse: collapse; margin-top: 7px; font-size: 10.5px; }
+.h10-kt6-tbl { width: 100%; margin-top: 7px; font-size: 10.5px; }
 
-.h10-kt6-tbl td { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
-.h10-kt6-tbl th.n, .h10-kt6-tbl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+.h10-kt6-tbl .nds-dg-td { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+.h10-kt6-tbl .nds-dg-td.n { text-align: right; font-variant-numeric: tabular-nums; }
 .h10-kt6-trunc { margin: 6px 0 0; font-size: 10.5px; color: var(--nds-grey-600); }
 
 .h10-kt6-go {
@@ -4551,7 +4549,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-nocap { font-style: normal; font-size: 11.5px; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; }  /* 7.31:1 on #fffbeb */
 
 .h10-au-obsdash { color: var(--nds-grey-600); }
-.h10-au-rowactor td { background: var(--nds-grey-25); }
+.nds-ws-tr.h10-au-rowactor .nds-ws-td { background: var(--nds-grey-25); }
 .h10-au-name.asname { cursor: default; }
 
 /* engine drawer additions (EngineDetail rides RuleDetail's shell classes) */
@@ -4582,11 +4580,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-posture.muted, .h10-au-refusals.muted { color: var(--nds-grey-600); }
 .h10-au-limiterr { display: flex; align-items: center; gap: 6px; color: #b42318; font-size: 12.5px; }
 .h10-au-limitempty { margin: 0 0 10px; font-size: 12.5px; color: var(--nds-grey-600); }
-.h10-au-limittbl { width: 100%; border-collapse: collapse; margin: 0 0 12px; font-size: 13px; }
+.h10-au-limittbl { width: 100%; margin: 0 0 12px; font-size: 13px; }
 
 
-.h10-au-limittbl tr.off td { color: var(--nds-grey-600); }
-.h10-au-limittbl td i { font-style: normal; color: #92400e; background: #fffbeb; border: 1px solid #fde68a; border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
+.h10-au-limittbl .nds-dg-tr.off .nds-dg-td { color: var(--nds-text-2); }
+.h10-au-limittbl .nds-dg-td i { font-style: normal; color: var(--nds-note-warn-fg); background: var(--nds-note-warn-bg); border: 1px solid var(--nds-note-warn-border); border-radius: 5px; padding: 1px 6px; font-size: 11.5px; }
 /* DS-ALIGN — `ToolbarButton tone="danger"`, whose red hover is the cue. */
 .h10-au-limitadd { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 /* DS-ALIGN — the daily cap is the DS `Input`; € and /day are its `prefix` and `suffix`, which
@@ -4603,11 +4601,11 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-au-evchip { font-size: 11.5px; color: var(--nds-grey-700); background: var(--nds-grey-100); border-radius: var(--nds-radius-sm); padding: 3px 8px; }
 .h10-au-evchip em { font-style: normal; color: var(--nds-grey-600); }
 .h10-au-evchip em.bad { color: #b42318; font-weight: 700; }
-.h10-au-ledgertbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.h10-au-ledgertbl { width: 100%; font-size: 12.5px; }
 
 
-.h10-au-ledgertbl tr.undone td { color: var(--nds-grey-600); }
-.h10-au-ledgertbl td.noactor { color: #b42318; font-weight: 600; }
+.h10-au-ledgertbl .nds-dg-tr.undone .nds-dg-td { color: var(--nds-text-2); }
+.h10-au-ledgertbl .nds-dg-td.noactor { color: var(--nds-danger); font-weight: 600; }
 .h10-au-ledgertbl .undonetag { font-style: normal; color: var(--nds-grey-600); }
 .h10-au-ledgertbl .noev { font-style: normal; color: #92400e; }
 .h10-au-ledgerfoot { margin: 10px 0 0; font-size: 12px; color: var(--nds-grey-600); }
@@ -4669,10 +4667,10 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 .h10-bd3-curve h4 { margin: 14px 0 8px; font-size: 12.5px; color: var(--nds-grey-900); }
 .h10-bd3-spark { margin: 0 0 10px; transform-origin: left top; }
 .h10-bd3-spark svg { width: 100%; height: 44px; }
-.h10-bd3-writes { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.h10-bd3-writes { width: 100%; font-size: 12.5px; }
 
-.h10-bd3-writes td { font-variant-numeric: tabular-nums; }
-.h10-bd3-writes tr.failed td { color: #b42318; }
+.h10-bd3-writes .nds-dg-td { font-variant-numeric: tabular-nums; }
+.h10-bd3-writes .nds-dg-tr.failed .nds-dg-td { color: var(--nds-danger); }
 
 /* BID.S1 — the bidder band */
 .h10-bd1 { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 10px; font-size: 12.5px; color: var(--nds-grey-700); }
@@ -4699,12 +4697,12 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    ring all from the primitive. Five rules gone; only the row that lays them out is left. */
 .h10-bd8-cap { font-size: 11.5px; color: var(--nds-grey-600); margin-left: auto; }
 .h10-bd8-scroll { overflow-x: auto; }
-.h10-bd8-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.h10-bd8-tbl { width: 100%; font-size: 12.5px; }
 
 
-.h10-bd8-tbl td.nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.h10-bd8-tbl .nds-dg-td.nw { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .h10-bd8-tbl .t { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
-.h10-bd8-tbl tr.failed td { color: #b42318; }
+.h10-bd8-tbl .nds-dg-tr.failed .nds-dg-td { color: var(--nds-danger); }
 .h10-bd8-ref { margin-top: 14px; border-top: 1px solid var(--nds-grey-100); padding-top: 10px; }
 .h10-bd8-ref h4 { margin: 0 0 6px; font-size: 12.5px; color: var(--nds-grey-900); display: flex; align-items: center; gap: 6px; }
 .h10-bd8-refline { margin: 0 0 6px; font-size: 12.5px; color: var(--nds-grey-700); max-width: 860px; }
@@ -4904,8 +4902,8 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
    itself rather than widening the drawer. */
 /* (was `.h10-bd3-writes th, td { vertical-align: top }` — the DS sets it on BOTH `tbody td` and
    `thead th` now, so nothing is left to override.) */
-.h10-bd3-writes td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.h10-bd3-writes td b.bad { color: #9a3412; font-weight: 800; }
+.h10-bd3-writes .nds-dg-td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-bd3-writes .nds-dg-td b.bad { color: var(--nds-warning-strong); font-weight: 800; }
 
 /* ══ RA.SPINE S4b — the tab bar's three AA failures ════════════════════════════════════════════
    Measured on prod 2026-08-16 at innerWidth 1380, composited against the REAL ground: the bar has
@@ -4965,7 +4963,7 @@ tr:hover .h10-au-open, .h10-au-open:focus-visible { opacity: 1; }
 /* The affordance on a cell that is NOT being edited. Invisible until the row is hovered, so 660
    rows do not each shout a pencil at you. */
 .h10-plc3-pencil { margin-left: 6px; border: 0; background: none; padding: 0; color: var(--nds-grey-600); cursor: pointer; opacity: 0; transition: opacity .12s; }
-tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
+.nds-ws-tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 .h10-plc3-pencil:hover { color: var(--nds-blue-700); }
 
 /* ── the bulk panel ────────────────────────────────────────────────────────────────────────── */
@@ -5007,11 +5005,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 
 /* the per-campaign preview table */
 .h10-plc3-rows { max-height: 320px; overflow: auto; border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); }
-.h10-plc3-rows table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
 
 
-.h10-plc3-rows tr:last-child td { border-bottom: 0; }
-.h10-plc3-rows td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.h10-plc3-rows .nds-dg-tr.last .nds-dg-td { border-bottom: 0; }
+.h10-plc3-rows .nds-dg-td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .h10-plc3-rows .skip { padding: 1px 6px; border-radius: 5px; background: var(--nds-grey-75); color: var(--nds-grey-600); font-size: 10px; font-weight: 800; white-space: nowrap; }
 .h10-plc3-rows .rev { padding: 1px 6px; border-radius: 5px; background: #fff6e8; color: #7a4812; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .h10-plc3-rows .go { padding: 1px 6px; border-radius: 5px; background: #e7f5ed; color: var(--nds-success-text); font-size: 10px; font-weight: 800; white-space: nowrap; }
@@ -5197,17 +5194,17 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    Verified on prod, all 18 rows, idle and hovered: the wrapper's right edge sits 14px INSIDE the
    cell's (that is the cell's padding) — worst spill −14px, was +134px — and the History button
    hit-tests to itself via `elementFromPoint`, not to the Automation column behind it. */
-.nds-wsgrid td.nm .h10-nt-namew,
-.nds-wsgrid td.nm .h10-nt-namew.h10-rg-namew,
-.nds-wsgrid td.nm .rg-namecell { min-width: 0; max-width: 100%; }
-.nds-wsgrid td.nm .h10-nt-namew .h10-nt-name,
-.nds-wsgrid td.nm .rg-namecell .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-namew,
+.nds-wsgrid .nds-ws-td.nm .h10-nt-namew.h10-rg-namew,
+.nds-wsgrid .nds-ws-td.nm .rg-namecell { min-width: 0; max-width: 100%; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-namew .h10-nt-name,
+.nds-wsgrid .nds-ws-td.nm .rg-namecell .rg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Only the name gives way. The "off" chip and the actions keep their size. */
-.nds-wsgrid td.nm .h10-nt-namew .h10-bd7-posture,
-.nds-wsgrid td.nm .h10-nt-namew .h10-nt-acts { flex-shrink: 0; }
-.nds-wsgrid td.nm .h10-nt-acts { width: 0; overflow: hidden; }
-.nds-wsgrid tbody tr:hover td.nm .h10-nt-acts,
-.nds-wsgrid td.nm .h10-nt-acts:focus-within { width: auto; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-namew .h10-bd7-posture,
+.nds-wsgrid .nds-ws-td.nm .h10-nt-namew .h10-nt-acts { flex-shrink: 0; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-acts { width: 0; overflow: hidden; }
+.nds-wsgrid .nds-ws-tr:hover .nds-ws-td.nm .h10-nt-acts,
+.nds-wsgrid .nds-ws-td.nm .h10-nt-acts:focus-within { width: auto; }
 
 /* ── U7 — the Ad Group View's match-type badges ────────────────────────────────────────────────
    The mapping table says what a harvest rule CREATES in a destination ad group (Phrase · Exact ·
@@ -5236,10 +5233,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    data cell, wrong for a paragraph), and the empty state is rendered INSIDE a td — so the box was
    capped and the text simply painted outside it. `.sub` already had the max-width; it needed the
    wrap. Scoped to the empty state so real cells keep their nowrap. */
-.nds-wsgrid td .h10-rr-empty,
-.nds-wsgrid td .h10-rr-empty .sub,
-.nds-wsgrid td .h10-rr-empty b { white-space: normal; }
-.nds-wsgrid td .h10-rr-empty .sub { text-wrap: pretty; }
+.nds-wsgrid .nds-ws-td .h10-rr-empty,
+.nds-wsgrid .nds-ws-td .h10-rr-empty .sub,
+.nds-wsgrid .nds-ws-td .h10-rr-empty b { white-space: normal; }
+.nds-wsgrid .nds-ws-td .h10-rr-empty .sub { text-wrap: pretty; }
 
 /* ── U8 — the hourly-performance chart, replacing a hard-coded "not available" sentence ────────
    24 hourly buckets: Metric 1 as bars (navy, the H10 dot colour), Metric 2 as a line (blue). Drawn
@@ -5446,7 +5443,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
    out of flow. The buttons stay in the tab order (`display: none` would remove them), and the
    gradient keeps them readable where they overlay the end of a long rule name — matched to the
    ground they actually sit on: the row-hover blue when hovered, white when reached by keyboard. */
-.nds-wsgrid td.nm .h10-nt-acts {
+.nds-wsgrid .nds-ws-td.nm .h10-nt-acts {
   position: absolute;
   right: 14px; /* the cell's own padding-right — measured, not guessed */
   top: 50%;
@@ -5461,10 +5458,10 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 }
 /* The container decides visibility now, so the children stop hiding themselves — otherwise a
    keyboard focus reveals the box and only the focused button inside it. */
-.nds-wsgrid td.nm .h10-nt-acts .h10-nt-open { opacity: 1; }
-.nds-wsgrid td.nm .h10-nt-acts:focus-within { opacity: 1; pointer-events: auto; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-acts .h10-nt-open { opacity: 1; }
+.nds-wsgrid .nds-ws-td.nm .h10-nt-acts:focus-within { opacity: 1; pointer-events: auto; }
 /* Hover last: when a row is both hovered and focused, the ground is the hover blue. */
-.nds-wsgrid tbody tr:hover td.nm .h10-nt-acts {
+.nds-wsgrid .nds-ws-tr:hover .nds-ws-td.nm .h10-nt-acts {
   opacity: 1;
   pointer-events: auto;
   background: linear-gradient(to right, rgba(247, 250, 255, 0) 0, var(--nds-imgup-surface) 26px);
@@ -5522,7 +5519,7 @@ tr:hover .h10-plc3-pencil, .h10-plc3-pencil:focus-visible { opacity: 1; }
 /* SG.6 — the Queue segment's link-out (one inbox: deciding lives on the Suggestions page).
    The count stays here because "how much is waiting" belongs on the section's front page. */
 .h10-au-queueout { padding: 26px 22px; border: 1px solid var(--nds-border); border-radius: 11px; background: var(--nds-surface); }
-.h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--nds-text-1); }
+.h10-au-queueout .q { margin: 0 0 6px; font-size: 14px; color: var(--nds-text); }
 .h10-au-queueout .q b { font-weight: 800; }
 .h10-au-queueout .s { margin: 0 0 16px; max-width: 62ch; font-size: 12.5px; line-height: 1.6; color: var(--nds-grey-600); }
 

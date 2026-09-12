@@ -25,8 +25,8 @@ export function startReservationReconcileCron(): void {
     logger.error('reservation-reconcile cron: invalid schedule, not starting', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun(JOB, async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun(JOB, async () => {
       const r = await reconcileOpenOrderReservations()
       return `scanned=${r.scanned} released=${r.released} consumed=${r.consumed} alerted=${r.alerted} negAvail=${r.negativeAvailable}${r.capped ? ' (capped)' : ''}`
     }).catch((err) => {

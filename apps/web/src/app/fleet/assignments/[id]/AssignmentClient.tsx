@@ -14,8 +14,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ArrowLeft, Play, Check, X, RotateCcw, Trash2, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'

@@ -30,7 +30,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
   ArrowRight,

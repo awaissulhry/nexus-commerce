@@ -1,3 +1,4 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
 import type { FastifyInstance } from "fastify";
 import prisma from "../db.js";
 import {
@@ -7,14 +8,6 @@ import {
 import { guardCurrency } from "../services/field-resolution/propagation-fill.js";
 import { translateProductCopy } from "../services/ai/translate.service.js";
 import { auditLogService } from "../services/audit-log.service.js";
-
-// Marketplace → ISO 639-1 language. Used to decide which linked members
-// need translation. EU + a few global markets cover Xavia's footprint.
-const MARKET_LANG: Record<string, string> = {
-  IT: "it", DE: "de", FR: "fr", ES: "es", UK: "en", GB: "en", US: "en",
-  NL: "nl", SE: "sv", PL: "pl", BE: "nl", IE: "en", AT: "de", CH: "de",
-  PT: "pt", JP: "ja",
-};
 
 // fieldKey → the translateProductCopy field it maps to (only text copy is
 // translatable; everything else propagates verbatim).
@@ -292,13 +285,13 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         });
         const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]));
 
-        const planMembers: PropagationMember[] = groupMembers.map((m) => ({
+        const planMembers: PropagationMember[] = await Promise.all(groupMembers.map(async (m) => ({
           channel: m.channel,
           marketplace: m.marketplace,
           variantId: m.variantId,
           currentValue: currentValueFor(byCoord.get(`${m.channel}:${m.marketplace}`), fieldKey),
-          language: MARKET_LANG[m.marketplace?.toUpperCase()] ?? null,
-        }));
+          language: (await marketLanguages(m.channel, m.marketplace))[0],
+        })));
 
         const entries = planPropagation({
           editedValue,
@@ -368,13 +361,13 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
           currentValueFor(byCoord.get(`${body.sourceChannel}:${body.sourceMarketplace}`), fieldKey) ??
           "";
 
-        const planMembers: PropagationMember[] = targets.map((m) => ({
+        const planMembers: PropagationMember[] = await Promise.all(targets.map(async (m) => ({
           channel: m.channel,
           marketplace: m.marketplace,
           variantId: m.variantId,
           currentValue: currentValueFor(byCoord.get(`${m.channel}:${m.marketplace}`), fieldKey),
-          language: MARKET_LANG[m.marketplace?.toUpperCase()] ?? null,
-        }));
+          language: (await marketLanguages(m.channel, m.marketplace))[0],
+        })));
 
         // Default the source language from its marketplace so the planner
         // correctly marks cross-language targets as "translate" (not
@@ -382,8 +375,7 @@ export async function fieldLinksRoutes(app: FastifyInstance) {
         // Italian source text verbatim — wrong copy on the listing.
         const sourceLanguage =
           body.sourceLanguage ??
-          MARKET_LANG[(body.sourceMarketplace ?? "").toUpperCase()] ??
-          null;
+          (body.sourceChannel && body.sourceMarketplace ? (await marketLanguages(body.sourceChannel, body.sourceMarketplace))[0] : null);
 
         const entries = planPropagation({
           editedValue,

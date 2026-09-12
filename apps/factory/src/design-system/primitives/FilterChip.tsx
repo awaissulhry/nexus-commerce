@@ -9,6 +9,13 @@ export interface FilterChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   count?: ReactNode
   /** small trailing badge for an exceptional state, e.g. "3 failed" */
   badge?: ReactNode
+  /**
+   * `md` sizes the chip to a 40px bar beside `sm` buttons (28px, `--nds-control-h-sm`) — the same
+   * `md` the Pill uses for that seat. Default is the 24px filter-row chip.
+   */
+  size?: 'md'
+  /** Short visible label in a constrained sheet toolbar; keep the full accessible name. */
+  compactLabel?: ReactNode
   children: ReactNode
 }
 
@@ -30,15 +37,15 @@ export interface FilterChipProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
  *
  * The failure badge rises too: #a3211a on #fbdedb (5.94:1) → the DS note-error pair at 9.23:1.
  */
-export function FilterChip({ pressed, count, badge, children, className, ...rest }: FilterChipProps) {
+export function FilterChip({ pressed, count, badge, size, compactLabel, children, className, ...rest }: FilterChipProps) {
   return (
     <button
       type="button"
-      className={['nds-fchip', className].filter(Boolean).join(' ')}
+      className={['nds-fchip', size === 'md' ? 'md' : '', className].filter(Boolean).join(' ')}
       aria-pressed={pressed}
       {...rest}
     >
-      <span className="t">{children}</span>
+      <span className="t">{compactLabel != null ? <><span className="nds-fchip-full">{children}</span><span className="nds-fchip-compact">{compactLabel}</span></> : children}</span>
       {count != null && <span className="c">{count}</span>}
       {badge != null && <span className="b">{badge}</span>}
     </button>

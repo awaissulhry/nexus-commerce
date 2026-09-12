@@ -1,4 +1,4 @@
-import { Queue } from 'bullmq'
+import { WorkspaceQueue as Queue } from '../lib/workspace-jobs.js'
 import { redis } from '../lib/queue.js'
 
 /**

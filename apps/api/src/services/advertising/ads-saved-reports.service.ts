@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * RPT.5 — saved report definitions.
  *
@@ -264,7 +265,7 @@ export async function listVersions(id: string): Promise<SavedVersionDto[]> {
 /** Restore by APPENDING the old content as a new version — never by deleting. */
 export async function restoreVersion(id: string, version: number): Promise<SavedReportDto> {
   const old = await prisma.savedReportVersion.findUnique({
-    where: { savedReportId_version: { savedReportId: id, version } },
+    where: { savedReportId_version: workspaceKey({ savedReportId: id, version }) },
   })
   if (!old) throw new SavedReportError('Version not found', 404)
   const existing = await prisma.savedReport.findUnique({ where: { id } })

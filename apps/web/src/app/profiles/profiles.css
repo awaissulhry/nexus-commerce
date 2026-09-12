@@ -1,0 +1,10 @@
+.business-profiles { max-width: 1100px; margin: 0 auto; padding: var(--nds-space-24); display: grid; gap: var(--nds-space-20); color: var(--nds-text); overflow: auto; max-height: 100dvh; }
+.business-profiles-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-16); flex-wrap: wrap; }
+.business-profiles h1 { font-size: var(--nds-font-size-2xl); font-weight: var(--nds-font-weight-semibold); margin: 0 0 var(--nds-space-8); }
+.business-profiles p, .business-profile-form p { color: var(--nds-text-2); margin: 0; line-height: 1.6; }
+.business-profiles-eyebrow { font-size: var(--nds-font-size-sm); margin-bottom: var(--nds-space-12) !important; overflow-wrap: anywhere; }
+.business-profiles-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--nds-space-16); }
+.business-profile-actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-8); }
+.business-profile-form { display: grid; gap: var(--nds-space-16); }
+@media (max-width: 600px) { .business-profiles { padding: var(--nds-space-16); } }
+.business-profiles-surface { min-height: 100dvh; background: var(--nds-bg); }

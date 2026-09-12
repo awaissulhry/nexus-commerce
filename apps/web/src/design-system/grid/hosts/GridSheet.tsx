@@ -18,10 +18,12 @@
  * The default density is COMPACT — a sheet is read like a spreadsheet, and the inventory editor's
  * per-cell states (`.nds-cell-is-pending` / `-saving` / `-saved` / `-refused`) are its states.
  */
-import { memo, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useRef, type CSSProperties, type ReactNode } from 'react'
 
 import type { GridDensityName } from '../../tokens/grid'
 import { GridDensityProvider } from '../hooks/useGridDensity'
+import { GridToastBoundary } from './GridToastBoundary'
+import { useGridHostTop } from '../hooks/useGridHostTop'
 
 export interface GridSheetProps {
   toolbar?: ReactNode
@@ -29,7 +31,18 @@ export interface GridSheetProps {
   footer?: ReactNode
   /** Spreadsheet rows read best compact; a page may choose otherwise. */
   density?: GridDensityName
-  /** Space to leave below the sheet (the page's bottom gutter). Default 24. */
+  /**
+   * Space to leave below the sheet (the page's bottom gutter). Default 8.
+   *
+   * 🔴 This prop is the DEFAULT, not `grid.css`'s `var(…, 8px)` fallback — the host always writes
+   * the variable, so that fallback only ever applies to markup that does not use this component.
+   * Changing the CSS alone moved nothing on screen, which is the invented-default shape again: a
+   * fix to a default is not done until you have grepped for the default rather than the call site.
+   *
+   * 8, not 24: §2.2 wants 74.8% of the viewport in rows, and 16px of the last 20 in the whole §2
+   * budget was sitting under a full-bleed sheet that has no bottom gutter to spend. A host inside a
+   * padded shell can pass its own back.
+   */
   gutter?: number
   /**
    * A fixed height instead of "the viewport below me" — for a sheet EMBEDDED in a page that keeps
@@ -39,25 +52,9 @@ export interface GridSheetProps {
   className?: string
 }
 
-export const GridSheet = memo(function GridSheet({ toolbar, children, footer, density = 'compact', gutter = 24, height, className }: GridSheetProps) {
+export const GridSheet = memo(function GridSheet({ toolbar, children, footer, density = 'compact', gutter = 8, height, className }: GridSheetProps) {
   const ref = useRef<HTMLDivElement>(null)
-  const [top, setTop] = useState(0)
-
-  // The sheet's height is "the viewport below me". Its top edge moves when the page above it
-  // reflows (a KPI strip collapses, a banner appears), so it is measured, not assumed.
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el || height !== undefined) return
-    const measure = () => setTop(Math.round(el.getBoundingClientRect().top + window.scrollY))
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(document.body)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [height])
+  const top = useGridHostTop(ref, height === undefined)
 
   const style = {
     ['--nds-grid-sheet-top' as string]: `${top}px`,
@@ -66,11 +63,15 @@ export const GridSheet = memo(function GridSheet({ toolbar, children, footer, de
   } as CSSProperties
   return (
     <GridDensityProvider value={density}>
-      <div ref={ref} className={['nds-gridcard', 'nds-grid-sheet', className].filter(Boolean).join(' ')} style={style}>
-        {toolbar}
-        {children}
-        {footer}
-      </div>
+      {/* Ruling #22: a host provides the toast context, so adopting the grid never requires the
+          page to remember one. See GridToastBoundary for why nesting is harmless. */}
+      <GridToastBoundary>
+        <div ref={ref} className={['nds-gridcard', 'nds-grid-sheet', className].filter(Boolean).join(' ')} style={style}>
+          {toolbar}
+          {children}
+          {footer}
+        </div>
+      </GridToastBoundary>
     </GridDensityProvider>
   )
 })
@@ -83,7 +84,26 @@ export const GridSheet = memo(function GridSheet({ toolbar, children, footer, de
  */
 export const SHEET_GRID_OPTIONS = {
   suppressCellFocus: false,
-  enterNavigatesVertically: true,
+  /**
+   * 🔴 AG.1 (hub ruling #185, layout spec §7.3) — `false`, and the pair is deliberate.
+   *
+   * AG treats these two as one Excel-style setting, but its source reads them in different places
+   * (`main.esm.mjs:29500` and `:43528`), so they are independent in practice — measured, not
+   * assumed. With `enterNavigatesVertically: true` a focused cell's Enter navigates DOWN and
+   * **never opens the editor**: editing could then start only by TYPING (which replaces the value
+   * with the typed character), by F2 (which nobody guesses), or by double-click (which also opened
+   * the record drawer until §7.3 retired that). So the sheet had no discoverable, non-destructive
+   * way to edit a cell — the Owner's "editing is really complicated", measured on GALE-JACKET.
+   *
+   * `false` gives the spreadsheet contract the footer already advertises: **Enter on a focused cell
+   * starts editing with the value intact**, and `enterNavigatesVerticallyAfterEdit` (which AG
+   * checks on its own, after an edit stops) still commits and moves down. ↓/↑ remain the pure
+   * navigation keys.
+   *
+   * Enter on a NON-editable cell is then free to mean something else, which is what lets the
+   * identity cell open the record (`sku.editable === false`, so there is no competing owner).
+   */
+  enterNavigatesVertically: false,
   enterNavigatesVerticallyAfterEdit: true,
   stopEditingWhenCellsLoseFocus: true,
   undoRedoCellEditing: true,
@@ -123,9 +143,22 @@ export const GridSheetStatus = memo(function GridSheetStatus({ rows, selected = 
           {saving ? 'Saving…' : `${pending} unsaved ${pending === 1 ? 'cell' : 'cells'}`}
         </span>
       )}
+      {/* 🔴 The hover-only refusal string is GONE (§6.2 rule 1, DS.2's filing). It read
+          "{refused} refused — hover a red cell for why": a count of failed work whose REASON was
+          reachable only by hovering individual cells, one at a time, with no way to see which ones.
+          That is the honesty rule's exact prohibition, and it sat in the grid host — so every sheet
+          inherited it, not just the studio.
+
+          The count still shows below, next to the other tallies. The REASON and the way to act on it
+          now live in the footer's note slot (`GridSheetNote kind="refusal"`), where the host's
+          consumer mounts it with a required `onShow` that narrows the sheet to the affected rows.
+
+          The COUNT stays here beside the other tallies — a bare number was never the problem, the
+          instruction attached to it was. (I nearly shipped this comment claiming the count still
+          rendered while having deleted it; `refused` going unused is what gave that away.) */}
       {refused > 0 && (
         <span className="nds-grid-sheet-status-refused">
-          {refused} refused — hover a red cell for why
+          <b>{refused}</b> refused
         </span>
       )}
       <span className="nds-grid-footstrip-grow" />

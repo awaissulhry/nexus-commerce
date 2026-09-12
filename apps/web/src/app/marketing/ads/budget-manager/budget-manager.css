@@ -5,8 +5,15 @@
    frozen first column isn't needed here — and its opaque sticky background +
    z-index would paint over the next column (Auto Pacing) in our narrow layout.
    Scope it to .bm-page so other ads grids keep their freeze. */
-.bm-page .nds-wsgrid th.nm.fz, .bm-page .nds-wsgrid td.nm.fz { position: static; box-shadow: none; border-right: none; }
-.bm-page .nds-wsgrid td.nm { max-width: 260px; }
+.bm-page .nds-wsgrid .nds-ws-td.nm.fz { box-shadow: none; border-right: none; }
+/* AGS (AG Grid, 2026-09-05) — the legacy rule was `th.nm.fz, td.nm.fz { position: static; box-shadow: none; border-right: none }`:
+   it UN-FROZE the identity column on this page. Under AG a cell is positioned by the engine, so `position: static`
+   cannot be restated here (it would take the cell out of the row); the header half is the engine's. The
+   "not pinned on this page" intent needs the engine (stickyFirst=false for this grid) — flagged to the lane owner. */
+/* AGS (AG Grid, 2026-09-05) — NOT restated: the legacy `.bm-page .nds-wsgrid td.nm { max-width: 260px; }` was inert (a td's max-width is
+   ignored under `table-layout: auto`; the baseline measured the cell at 300px), but an AG cell honours it — measured 260px in a
+   300px column, a 40px gap the legacy never painted. Kept here verbatim so the intent is not lost:
+   .bm-page .nds-wsgrid .nds-ws-td.nm { max-width: 260px; } */
 
 /* month bar between header and grid */
 .bm-monthbar { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; padding: 8px 12px; background: var(--nds-white); border: 1px solid var(--nds-grey-150); border-radius: var(--nds-radius-xl); }

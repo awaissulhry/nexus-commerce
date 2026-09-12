@@ -1,0 +1,151 @@
+/*
+ * PES.7 — the Analytics · Ads tab.
+ *
+ * Plain px on the studio's rhythm (16/24 page padding, 8/12 gaps, 40px empty states). The
+ * `--nds-space-*` tokens are LITERAL PIXELS (space-5 is 5px), not a t-shirt scale, so using them
+ * as sizes yields a uniformly cramped page — measured the hard way on the images tab.
+ */
+
+.page {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px 24px;
+}
+
+.head {
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.title {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 700;
+  color: var(--nds-text);
+}
+.spacer { flex: 1; }
+
+.card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  padding: 12px 14px;
+  background: var(--nds-surface-raised);
+}
+.cardTitle {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text);
+}
+
+/* A sentence that replaces a number we refuse to invent. */
+.absence {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+  color: var(--nds-text);
+}
+
+.row { display: flex; flex-wrap: wrap; gap: 12px; }
+.row > .card {
+  min-width: 0; flex: 1 1 260px; }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.stats dt {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+  margin-bottom: 2px;
+}
+.stats dd {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: 700;
+  color: var(--nds-text);
+  font-variant-numeric: tabular-nums;
+}
+/* A value nobody measured must not look like a measurement. */
+.unknown { color: var(--nds-text); font-weight: 500; font-size: var(--nds-font-size-sm); }
+
+.spark { display: block; width: 100%; height: 48px; overflow: visible; }
+.sparkLine { fill: none; stroke: var(--nds-primary); stroke-width: 1.5; }
+
+/*
+ * Sized to its content, not to the card.
+ *
+ * At `width: 100%` a five-column table on a 1400px card scatters "Channel … Market … Units" across
+ * the full width with nothing between them — the columns stop reading as a row. A trailing spacer
+ * cell absorbs the slack instead, so the data stays together on the left.
+ */
+/*
+ * The DS `DataGrid` sizes to its container, and the container is a flex column — so without this
+ * a four-row table stretched to 1584px inside a 1614px card and its columns stopped reading as a
+ * row. `align-self` matters as much as width; measured before and after.
+ */
+/* Width comes from the host (`tableWidth()` — the sum of the table's own columns), so the table is
+   never narrower than its columns nor wider than the card. The old `min-width: 380px` floor was
+   the width the pricing table clipped at (CT.1). */
+.tableWrap {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.state {
+  margin: 0;
+  padding: 40px 0;
+  text-align: center;
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+.error {
+  margin: 0;
+  /* `--nds-danger-border` does not exist — it resolved to rgba(0,0,0,0) and drew no border at
+     all, silently. The DS pattern is strong-line + soft-fill + text, as `.warning` does with amber. */
+  border: 1px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  border-radius: var(--nds-radius-md);
+  padding: 8px 12px;
+  font-size: var(--nds-font-size-xs);
+}
+.links { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--nds-font-size-xs); }
+
+/* ── activity ─────────────────────────────────────────────────────── */
+
+.eventRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--nds-border);
+}
+.eventRow:last-child { border-bottom: none; }
+.eventMain {
+  flex-wrap: wrap;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--nds-font-size-xs);
+}
+.eventDetail { color: var(--nds-text); }
+.eventWhen { color: var(--nds-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The per-field delta on an expanded activity row: a property list, not a table. */
+.delta { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 0 0 4px 0; }
+.delta dt { font-size: var(--nds-font-size-xs); color: var(--nds-text); margin-bottom: 2px; }
+.delta dd { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text); }

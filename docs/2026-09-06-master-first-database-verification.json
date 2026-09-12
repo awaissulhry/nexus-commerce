@@ -1,0 +1,31 @@
+{
+  "passed": true,
+  "checks": [
+    "text: SET \u2192 database read",
+    "text: CLEAR \u2192 database read",
+    "text: INHERIT \u2192 database read",
+    "false boolean: SET \u2192 database read",
+    "false boolean: CLEAR \u2192 database read",
+    "false boolean: INHERIT \u2192 database read",
+    "zero price: SET \u2192 database read",
+    "zero price: CLEAR \u2192 database read",
+    "zero price: INHERIT \u2192 database read",
+    "title: SET \u2192 database read",
+    "title: CLEAR \u2192 database read",
+    "title: INHERIT \u2192 database read",
+    "list positions: SET \u2192 database read",
+    "list positions: CLEAR \u2192 database read",
+    "list positions: INHERIT \u2192 database read",
+    "zero measure: SET \u2192 database read",
+    "zero measure: CLEAR \u2192 database read",
+    "zero measure: INHERIT \u2192 database read",
+    "platform path: SET \u2192 database read",
+    "platform path: CLEAR \u2192 database read",
+    "platform path: INHERIT \u2192 database read",
+    "other market unchanged",
+    "stale version refused",
+    "fixture rolled back"
+  ],
+  "persistedTestProducts": 0,
+  "marketplaceWrites": 0
+}

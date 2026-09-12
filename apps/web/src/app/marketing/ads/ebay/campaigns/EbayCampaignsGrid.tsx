@@ -10,7 +10,8 @@
  * in the Ads tooltip · live Data Sync header button.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ExternalLink, ChevronDown, Plus, Upload, Cog } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { DateRangePicker } from '../../_shell/DateRangePicker'

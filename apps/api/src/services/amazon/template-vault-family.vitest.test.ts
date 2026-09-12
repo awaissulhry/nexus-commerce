@@ -42,7 +42,7 @@ describe('FFT.5a family workbook base', () => {
     const templateEntry = { templateIdentifier: 'tpl-blank', filename: 'blank.xlsm', bytes: Buffer.from('t'), marketplace: 'IT' }
     const prisma = {
       amazonTemplateVault: {
-        findUnique: vi.fn(async ({ where }: any) => (where.templateIdentifier === 'tpl-blank' ? templateEntry : null)),
+        findUnique: vi.fn(async ({ where }: any) => (where.workspace_templateIdentifier?.templateIdentifier === 'tpl-blank' ? templateEntry : null)),
         findFirst: vi.fn(async () => templateEntry),
       },
       amazonFamilyWorkbook: {

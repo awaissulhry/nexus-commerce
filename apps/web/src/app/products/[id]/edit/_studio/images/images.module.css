@@ -1,0 +1,390 @@
+/**
+ * PES.7 — the images tab's layout.
+ *
+ * Every value is a `--nds-*` token. The platform aliases (`--text-*`, `--border-*`) are RGB
+ * CHANNELS inside `.h10-shell`, where `var(--border-default)` is invalid and silently dropped
+ * (reference_ds_channel_tokens_used_raw) — so they are never used here.
+ *
+ * 🔴 `--nds-text-3` is NOT a text colour. It measures below the 4.5:1 floor
+ * (reference_grey_500_is_not_a_text_token); anything readable uses `--nds-text`, `--nds-text-2`
+ * or `--nds-text-muted`. `--nds-text-3` appears only on non-text chrome.
+ *
+ * ⚠ `--nds-space-N` is literally N PIXELS (`--nds-space-2: 2px`), not a t-shirt step — reaching for
+ * `space-5` as "medium" yields 5px and a cramped layout. Spacing here is plain px on the frame's
+ * own rhythm (16/24 page padding, 8/12 gaps), which is what `studio.module.css` and the sibling
+ * lanes' stylesheets use. Colour and radius stay on tokens.
+ *
+ * 🔴 The tab scrolls INSIDE itself. The studio frame is a fixed flex column on purpose (its own
+ * CSS explains why: `GridSheet` measures "the viewport below me" and a scrolling ancestor makes
+ * that measurement lie), so `.tab` is the scroll container and the frame stays still.
+ */
+
+.tab {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 24px 40px;
+}
+
+/* ── section ─────────────────────────────────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-height: 32px;
+}
+
+.sectionTitle {
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.sectionCount {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.spacer { flex: 1; }
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── the gallery ─────────────────────────────────────────────────── */
+
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* The whole gallery is a drop target for desktop files, so the dashed state is on the container
+   rather than on a separate "drop here" box that would take space when nothing is being dragged. */
+.galleryDropping {
+  outline: 2px dashed var(--nds-primary, var(--nds-blue-600));
+  outline-offset: 8px;
+  border-radius: var(--nds-radius-lg);
+}
+
+/* ── a tile ──────────────────────────────────────────────────────── */
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tile:hover {
+  border-color: var(--nds-border-strong);
+  box-shadow: var(--nds-shadow-card);
+}
+
+.tileSelected {
+  border-color: var(--nds-primary, var(--nds-blue-600));
+  box-shadow: 0 0 0 1px var(--nds-primary, var(--nds-blue-600));
+}
+
+/* The row being dragged stays visible but reads as "in flight". */
+.tileDragging { opacity: 0.4; }
+
+/* Where the dragged tile would land. A line, not a gap: the grid must not reflow mid-drag or the
+   drop target moves out from under the pointer. */
+.tileDropBefore { box-shadow: inset 3px 0 0 0 var(--nds-primary, var(--nds-blue-600)); }
+.tileDropAfter  { box-shadow: inset -3px 0 0 0 var(--nds-primary, var(--nds-blue-600)); }
+
+/* 🔴 `aspect-ratio` is a PREFERRED size, not a cap: a portrait image (360×517) pushed this box to
+   234px against its 163px square, and the gallery's rows came out ragged again. `overflow: hidden`
+   + `min-height: 0` make the square actually hold, and `.thumbImg`'s `max-height` then has a
+   definite height to resolve against. */
+.thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  min-height: 0;
+  background: var(--nds-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-in;
+  border: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.thumbImg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.thumbEmpty {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  padding: 12px;
+  text-align: center;
+}
+
+/* ── tile chrome ─────────────────────────────────────────────────── */
+
+.tileTop {
+  position: absolute;
+  inset: 8px 8px auto 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* Children re-enable pointer events; the bar itself must not eat clicks meant for the thumb. */
+.tileTop > * { pointer-events: auto; }
+
+/*
+ * The reorder grip — the tile's only affordance for a drag that has always worked.
+ *
+ * `grab`/`grabbing` and never `help`: a help cursor is banned in this product, and it would be the
+ * wrong claim anyway — this is a thing you pull, not a thing that explains itself.
+ */
+.tileGrip {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--nds-radius-sm);
+  background: color-mix(in srgb, var(--nds-surface-raised) 82%, transparent);
+  color: var(--nds-text-2);
+  font-size: 12px;
+  line-height: 1;
+  cursor: grab;
+  /* Visible without competing with the picture; full strength once the tile is under the pointer. */
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.tile:hover .tileGrip,
+.tile:focus-within .tileGrip { opacity: 1; }
+.tileGrip:active { cursor: grabbing; }
+
+/* The DS checkbox is 15px — correct for a form row, too small for a picture tile an operator
+   picks at speed. The CONTROL keeps its DS size; the padding around it makes the hit area 29px,
+   so nothing is forked and the target is still comfortable. */
+.tileSelect {
+  display: inline-flex;
+  padding: 7px;
+  margin: -7px;
+  border-radius: var(--nds-radius-sm);
+  background: color-mix(in srgb, var(--nds-surface-raised) 82%, transparent);
+  cursor: pointer;
+}
+.tileSelect:hover { background: var(--nds-surface-raised); }
+
+.tileMarks {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.mark {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--nds-radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  line-height: 1;
+  background: var(--nds-surface-raised);
+  border: 1px solid var(--nds-border);
+  color: var(--nds-text-2);
+}
+
+.markOn {
+  background: var(--nds-amber-soft);
+  border-color: var(--nds-amber-600);
+  color: var(--nds-amber-text);
+}
+
+.markDrift {
+  background: var(--nds-danger-soft);
+  border-color: var(--nds-danger);
+  color: var(--nds-danger-text);
+}
+
+.tileBody {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+/* ONE line, always. Wrapping made the meta two lines on some tiles and one on others, so the
+   grid's rows came out ragged — every tile must be the same height for the gallery to read as a
+   grid rather than a pile. The size clips before the line breaks. */
+.tileMeta {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tileMeta > * { flex: none; }
+.tileMeta > .metaDims { overflow: hidden; text-overflow: ellipsis; }
+
+/* An unknown dimension is stated, not printed as 0 — a backfill gap is not a measurement. */
+.metaUnknown {
+  color: var(--nds-text-2);
+  font-style: italic;
+}
+
+.altText {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.altMissing {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-amber-text);
+}
+
+/* ── states ──────────────────────────────────────────────────────── */
+
+.state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.stateTitle {
+  font-size: var(--nds-font-size-base);
+  font-weight: 600;
+  color: var(--nds-text);
+}
+
+.error {
+  border: 1px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  border-radius: var(--nds-radius-lg);
+  padding: 10px 14px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.notice {
+  border: 1px solid var(--nds-border);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text);
+  border-radius: var(--nds-radius-lg);
+  padding: 10px 14px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.hiddenInput { display: none; }
+
+/* ── video ───────────────────────────────────────────────────────── */
+
+.playButton {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* A play glyph on its own scrim, so it stays legible over a bright or a dark poster frame. */
+.playGlyph {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nds-radius-full);
+  background: rgb(var(--nds-shadow-rgb) / 0.55);
+  /* Over an always-dark scrim, so white in both themes — not the flipping `text-inverse`. */
+  color: var(--nds-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  padding-left: 3px;
+  pointer-events: none;
+}
+
+.checkMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--nds-radius-pill);
+  border: 1px solid var(--nds-border);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.check_pass { background: var(--nds-success-soft, transparent); color: var(--nds-text-2); }
+.check_warn { background: var(--nds-amber-soft); border-color: var(--nds-amber-600); color: var(--nds-amber-text); }
+.check_fail { background: var(--nds-danger-soft); border-color: var(--nds-danger); color: var(--nds-danger-text); }
+/* Unverified is NOT a warning — it is an absence, and it must not read as a problem the operator
+   caused. Neutral chrome, and the word says exactly what it means. */
+.check_unknown { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
+
+.hint {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+/* "Locate" from duplicate review lands here: a brief ring so the eye finds the tile the operator
+   asked for, then it fades rather than leaving a selection-looking state behind. */
+.tileFlash {
+  animation: tileFlash 2.2s ease-out;
+}
+
+@keyframes tileFlash {
+  0%, 60% { box-shadow: 0 0 0 3px var(--nds-amber-600); }
+  100% { box-shadow: 0 0 0 3px transparent; }
+}

@@ -1,5 +1,5 @@
 /**
- * GDS — editors. AG's own number editor, configured once; a DS Listbox as a select editor; and
+ * GDS — editors. AG's own number editor, configured once; AG's rich select as the select editor; and
  * the per-cell server round-trip state the ads bid/budget cells need.
  */
 import type { ColDef } from 'ag-grid-community'
@@ -24,6 +24,34 @@ export const numericEditor = (opts: NumericEditorOptions = {}): Pick<ColDef, 'ed
 
 export const textEditor = (): Pick<ColDef, 'editable' | 'cellEditor'> => ({ editable: true, cellEditor: 'agTextCellEditor' })
 
-export { SelectCellEditor, selectEditor, type SelectEditorParams } from './SelectCellEditor'
+export { selectEditor, SelectChevron, SELECT_CELL_CLASS, type SelectEditorParams } from './SelectCellEditor'
+/* Exported so a host can name it as the FALLBACK editor beside `formulaSelector` — `=` opens the
+   formula editor on a closed list, anything else opens this one (#775). */
+export { SelectPanelEditor, type SelectPanelEditorParams } from './SelectPanelEditor'
 export { CellSaveTracker, roundTripClassRules, saveCell, SAVED_FADE_MS, type CellSaveState, type CellSaveEntry, type SaveOutcome } from './roundTrip'
-export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type SheetValidation } from './sheet'
+export { longTextEditor, sheetClassRules, selectValidation, lengthValidation, lengthCapOf, evaluateLengthCaps, matchPasteToHeaders, sheetPasteProcessor, type CellValidity, type LengthCaps, type LengthReading, type SheetValidation } from './sheet'
+// PES.2 — the ONE decision about whether a grid change should be written (rulings #53, #63).
+export { writeGate, NON_EDIT_SOURCES, type WriteGateInput, type WriteGateVerdict } from './writeGate'
+// PES.2 — the sheet's ONE write path: per-row version, per-row batching, per-cell outcomes.
+export { SheetWriter, DEFAULT_SHEET_FLUSH_MS, type SheetWriteCell, type SheetWriteRequest, type SheetWriteResult, type SheetWriterOptions } from './sheetWriter'
+
+// PES.2 — D16 formula editing (#730). The RULES are pure and tested; the editor is wiring over them.
+export { FormulaCellEditor, FormulaGlyph, formulaCellEditorSelector, suppressFormulaKeys, type FormulaEditorParams, type FormulaWiring } from './FormulaCellEditor'
+export { isFormulaDraft, commitValue, coerceTyped, completionToAccept, formulaAvailability, formulaEditorChoice, formulaSaveOutcome, FORMULA_BLOCKED_REASON, FORMULA_STORED_NOT_EVALUATED, type FormulaSaveResponse, type FormulaSaveOutcome, type FormulaAvailability, type FormulaEditorChoice, type CommitKind, exprOf, inStringLiteral, refTokenAt, completionsFor, applyCompletion, unknownRefs, type FormulaCandidate, type RefToken } from './formulaEditing'
+export { tokenizeForDisplay, refsOf, matchBrackets, callAt, type Token, type TokenKind, type CallContext } from './formulaTokens'
+export { assignRefColours, refColoursWrap, colourFor, REF_CYCLE, CYCLE_MEASURED_CONTRAST, type RefColour } from './formulaPalette'
+export { previewLine, errorMarkAt, functionHint, signatureArgs, unknownRefNames, type PreviewLine, type PreviewState, type FormulaPreviewResponse, type FormulaFunctionDoc, type FunctionHint } from './formulaPreview'
+// PES — the P0 of 2026-09-03: what an OPEN GESTURE must do. The fill-handle interception lives
+// in `NexusGrid.tsx`; the rule and the per-kind editor-mode declaration are here, and tested.
+export { fillHandleHit, EDITOR_MODE_BY_KIND, FORMULA_EDITOR_MODE, type FillHandleHit } from './openGesture'
+// 2026-09-04 — what every sheet column carries, defined ONCE so master and the channel scopes cannot drift.
+export { sheetValidationFor, composeSheetCellClassRules, SHEET_SHORTCUT_HINT, type SheetColumnLike } from './sheetColumn'
+// AM.1 (2026-09-05) — the list and measure shapes on the grid: editors + the ColDef both builders spread.
+export { ListPanelEditor, type ListPanelEditorParams } from './ListPanelEditor'
+export { MeasureEditor, type MeasureEditorParams } from './MeasureEditor'
+export { shapeColumnDef, shapeEditorSpec, parseShape, type ShapedColumnLike } from './shapeColumn'
+
+export { formulaTransfer, formulaFillSourceIndex } from './formulaTransfer'
+
+export { FormulaComposer } from './FormulaComposer'
+export { FormulaGuidance, formulaSuggestions, useFormulaPreview } from './formulaAssistance'

@@ -62,6 +62,9 @@ export function SectionControls({
       </span>
 
       <PreferencesModal
+        attributeGroups
+        groupToggles
+        inViewCount
         open={open}
         onClose={() => setOpen(false)}
         title="Sections on this tab"

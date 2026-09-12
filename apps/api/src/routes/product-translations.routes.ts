@@ -1,3 +1,7 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
+import { contentSlots, CONTENT_COLUMNS, contentReviewState } from '../services/pim/content-locale.js'
+import { writeTranslation } from '../services/pim/translation-write.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.10 — per-language master content CRUD.
  *
@@ -62,16 +66,28 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
       const { id } = request.params
       const product = await prisma.product.findUnique({
         where: { id },
-        select: { id: true },
+        include: { translations: true, parent: { include: { translations: true } } },
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
       const rows = await prisma.productTranslation.findMany({
         where: { productId: id },
         orderBy: { language: 'asc' },
       })
+      const slots = contentSlots(product)
+      const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
       return {
+        availableLanguages: [...new Set(markets.flatMap(row => marketLanguages(row.channel, row.code, [row])))],
         primaryLanguage: getPrimaryLanguage(),
-        translations: rows,
+        translations: Object.keys(slots).filter(language => !language.startsWith('_') && language === language.toLowerCase()).sort().map(language => {
+          const legacy = rows.find(row => row.language.toLowerCase() === language)
+          const values = slots[language]
+          const states = Object.fromEntries(Object.keys(CONTENT_COLUMNS).filter(key => key in values).map(key => [key, contentReviewState(product, key, language)]))
+          return { ...legacy, productId: id, language,
+            ...Object.fromEntries(Object.entries(CONTENT_COLUMNS).filter(([key]) => key in values).map(([key, column]) => [column, values[key]])),
+            reviewedAt: Object.values(states).every(state => state === 'reviewed' || state === 'current') ? legacy?.reviewedAt ?? values._meta?.title?.authoredAt ?? null : null,
+            translationStates: states,
+          }
+        }),
       }
     },
   )
@@ -130,8 +146,8 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
       setData.reviewedAt = null
     }
 
-    const row = await prisma.productTranslation.upsert({
-      where: { productId_language: { productId: id, language: lang } },
+    const row = await writeTranslation({ productId: id, locale: lang, values: setData, state: setData.reviewedAt === null ? 'draft' : 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.upsert({
+      where: { productId_language: workspaceKey({ productId: id, language: lang }) },
       create: {
         productId: id,
         language: lang,
@@ -151,7 +167,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
             : new Date(),
       },
       update: setData,
-    })
+    }))
     return row
   })
 
@@ -160,15 +176,9 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { id, language } = request.params
       const lang = language.toLowerCase()
-      const result = await prisma.productTranslation.updateMany({
-        where: { productId: id, language: lang },
-        data: { reviewedAt: new Date() },
-      })
-      if (result.count === 0) {
-        return reply
-          .code(404)
-          .send({ error: `no translation for ${lang}` })
-      }
+      const result = await writeTranslation({ productId: id, locale: lang, values: {}, state: 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.updateMany({
+        where: { productId: id, language: lang }, data: { reviewedAt: new Date() },
+      }))
       return { ok: true, reviewedAt: new Date().toISOString() }
     },
   )
@@ -183,9 +193,9 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
           error: 'cannot delete primary-language master',
         })
       }
-      const result = await prisma.productTranslation.deleteMany({
+      const result = await writeTranslation({ productId: id, locale: lang, values: {}, state: 'draft', remove: true, userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.deleteMany({
         where: { productId: id, language: lang },
-      })
+      }))
       return { ok: true, deleted: result.count }
     },
   )
@@ -277,7 +287,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: `Product ${id} not found` })
       }
 
-      const marketplace = marketplaceForLanguage(lang)
+      const marketplace = await marketplaceForLanguage(lang)
       const terminology = await prisma.terminologyPreference.findMany({
         where: {
           marketplace,
@@ -385,8 +395,8 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Upsert. On create we still want any non-touched fields to land
       // sensibly (empty arrays for bulletPoints/keywords).
-      const row = await prisma.productTranslation.upsert({
-        where: { productId_language: { productId: id, language: lang } },
+      const row = await writeTranslation({ productId: id, locale: lang, values: updates, state: updates.reviewedAt === null ? 'draft' : 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.upsert({
+        where: { productId_language: workspaceKey({ productId: id, language: lang }) },
         create: {
           productId: id,
           language: lang,
@@ -406,7 +416,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
           reviewedAt: null,
         },
         update: updates,
-      })
+      }))
 
       return {
         row,

@@ -59,7 +59,7 @@ export function startAmazonReviewInsightsCron(): void {
   if (insightsTask) { logger.warn('amazon-review-insights cron already started'); return }
   const schedule = process.env.NEXUS_AMAZON_REVIEW_INSIGHTS_SCHEDULE ?? '0 6 * * 1' // Mon 06:00 UTC
   if (!cron.validate(schedule)) { logger.error('amazon-review-insights cron: invalid schedule', { schedule }); return }
-  insightsTask = cron.schedule(schedule, () => { void runAmazonReviewInsightsCron() })
+  insightsTask = cron.schedule(schedule, async () => { await runAmazonReviewInsightsCron() })
   logger.info('amazon-review-insights cron: scheduled', { schedule })
 }
 
@@ -103,8 +103,8 @@ export function startReviewIngestCron(): void {
     logger.error('review-ingest cron: invalid schedule', { schedule })
     return
   }
-  ingestTask = cron.schedule(schedule, () => {
-    void runReviewIngestCron()
+  ingestTask = cron.schedule(schedule, async () => {
+    await runReviewIngestCron()
   })
   logger.info('review-ingest cron: scheduled', { schedule })
 }
@@ -121,8 +121,8 @@ export function startReviewSpikeDetectorCron(): void {
     logger.error('review-spike-detector cron: invalid schedule', { schedule })
     return
   }
-  spikeTask = cron.schedule(schedule, () => {
-    void runReviewSpikeDetectorCron()
+  spikeTask = cron.schedule(schedule, async () => {
+    await runReviewSpikeDetectorCron()
   })
   logger.info('review-spike-detector cron: scheduled', { schedule })
 }
@@ -153,8 +153,8 @@ export function startReviewDigestCron(): void {
     logger.error('review-digest cron: invalid schedule', { schedule })
     return
   }
-  digestTask = cron.schedule(schedule, () => {
-    void runReviewDigestCron()
+  digestTask = cron.schedule(schedule, async () => {
+    await runReviewDigestCron()
   })
   logger.info('review-digest cron: scheduled', { schedule })
 }

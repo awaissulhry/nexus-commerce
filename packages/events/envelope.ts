@@ -43,6 +43,9 @@ export const eventEnvelopeSchema = z.strictObject({
   version: z.number().int().positive(),
   occurredAt: z.iso.datetime(),
   accountId: z.string().min(1).nullable(),
+  // Separate business ownership from the optional marketplace account selector.
+  // Optional only for broker messages written before the business-profile migration.
+  workspaceId: z.string().min(1).optional(),
   subject: z.string().min(1),
   correlationId: z.string().min(1),
   causationId: z.uuid().nullable(),

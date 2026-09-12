@@ -15,7 +15,7 @@ import { money, pct } from '../../../../../campaigns/_grid/format'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 import { effRate, includedListings, SUGGEST_MARKETS, type CampaignPlan, type PlanListing } from '../plan'
 import { Input, Pill, Toggle } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 
 export function RatesStep({ plan, set, listings }: {
   plan: CampaignPlan

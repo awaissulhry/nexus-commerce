@@ -1,0 +1,20 @@
+[
+  {
+    "filename": "scale.csv",
+    "bytes": 75019,
+    "rows": 2500,
+    "mappedActions": 4500,
+    "parseAndMapMs": 8,
+    "heapDeltaMiB": 14,
+    "rssMiB": 306
+  },
+  {
+    "filename": "scale.xlsx",
+    "bytes": 61274,
+    "rows": 2500,
+    "mappedActions": 4500,
+    "parseAndMapMs": 39,
+    "heapDeltaMiB": -53,
+    "rssMiB": 302
+  }
+]

@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * SCT.6 — per-market Amazon offer CLOSE / REOPEN.
  *
@@ -53,7 +54,7 @@ export interface MarketOfferResult {
   remaining?: number
 }
 
-const sellerId = () => process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+const sellerId = async () => (await getAmazonSellerId())
 
 function isFbaRow(cl: { fulfillmentMethod: string | null; product: { fulfillmentMethod: string | null } | null }): boolean {
   // Fail-closed: ANY FBA signal refuses the close/reopen. Amazon owns FBA
@@ -86,7 +87,7 @@ export async function closeMarketOffers(opts: {
   reason?: string
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
-  const seller = sellerId()
+  const seller = await sellerId()
   if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
 
   let processed = 0
@@ -216,7 +217,7 @@ export async function reopenMarketOffers(opts: {
   actor: string
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
-  const seller = sellerId()
+  const seller = await sellerId()
   if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
 
   let processed = 0

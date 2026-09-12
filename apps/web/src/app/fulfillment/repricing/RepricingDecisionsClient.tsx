@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { CheckCircle2, Clock, Minus, ChevronUp, ChevronDown } from 'lucide-react'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'

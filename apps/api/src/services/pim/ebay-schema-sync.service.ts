@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay GetCategorySpecifics → ChannelSchema.
  *
@@ -76,7 +77,7 @@ export async function syncEbayCategoryAspects(marketplace: string): Promise<{
   let upserted = 0
   for (const f of byKey.values()) {
     await prisma.channelSchema.upsert({
-      where: { channel_marketplace_fieldKey: { channel: 'EBAY', marketplace, fieldKey: f.fieldKey } },
+      where: { channel_marketplace_fieldKey: workspaceKey({ channel: 'EBAY', marketplace, fieldKey: f.fieldKey }) },
       create: {
         channel: 'EBAY',
         marketplace,

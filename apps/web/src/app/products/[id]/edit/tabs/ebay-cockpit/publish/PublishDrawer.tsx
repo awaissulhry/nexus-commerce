@@ -21,7 +21,7 @@
 // snapshot" escape hatch.
 
 import { useCallback, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   X, Send, CheckCircle2, XCircle, Loader2, Ban, ExternalLink, ShieldAlert, RotateCcw,
 } from 'lucide-react'

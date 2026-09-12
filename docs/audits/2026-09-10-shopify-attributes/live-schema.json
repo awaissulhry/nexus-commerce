@@ -1,0 +1,495 @@
+[
+  {
+    "store": "xaviaracing.myshopify.com",
+    "accountId": "cmtugfpaa0006njhq8m2nvnxx",
+    "observedAt": "2026-09-10T06:09:11.219Z",
+    "definitionCount": 39,
+    "columnCount": 69,
+    "fields": [
+      {
+        "id": "title",
+        "label": "Product title",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "descriptionHtml",
+        "label": "Description",
+        "owner": "PRODUCT",
+        "type": "multi_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "media",
+        "label": "Product media",
+        "owner": "PRODUCT",
+        "type": "media",
+        "group": "General"
+      },
+      {
+        "id": "tags",
+        "label": "Tags",
+        "owner": "PRODUCT",
+        "type": "list.single_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "status",
+        "label": "Status",
+        "owner": "PRODUCT",
+        "type": "status",
+        "group": "General"
+      },
+      {
+        "id": "category",
+        "label": "Product category",
+        "owner": "PRODUCT",
+        "type": "category",
+        "group": "General"
+      },
+      {
+        "id": "productType",
+        "label": "Product type",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "vendor",
+        "label": "Vendor",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "templateSuffix",
+        "label": "Template",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "General"
+      },
+      {
+        "id": "salesChannels",
+        "label": "Sales channels",
+        "owner": "PRODUCT",
+        "type": "publication",
+        "group": "Publishing"
+      },
+      {
+        "id": "scheduled",
+        "label": "Online store schedule",
+        "owner": "PRODUCT",
+        "type": "boolean",
+        "group": "Publishing"
+      },
+      {
+        "id": "publishDate",
+        "label": "Publish date",
+        "owner": "PRODUCT",
+        "type": "date_time",
+        "group": "Publishing"
+      },
+      {
+        "id": "price",
+        "label": "Base price",
+        "owner": "PRODUCTVARIANT",
+        "type": "money",
+        "group": "Pricing"
+      },
+      {
+        "id": "unitPriceMeasurement",
+        "label": "Unit price",
+        "owner": "PRODUCTVARIANT",
+        "type": "measurement",
+        "group": "Pricing"
+      },
+      {
+        "id": "compareAtPrice",
+        "label": "Compare-at price",
+        "owner": "PRODUCTVARIANT",
+        "type": "money",
+        "group": "Pricing"
+      },
+      {
+        "id": "cost",
+        "label": "Cost per item",
+        "owner": "PRODUCTVARIANT",
+        "type": "money",
+        "group": "Pricing"
+      },
+      {
+        "id": "taxable",
+        "label": "Charge taxes",
+        "owner": "PRODUCTVARIANT",
+        "type": "boolean",
+        "group": "Pricing"
+      },
+      {
+        "id": "sku",
+        "label": "SKU",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Inventory"
+      },
+      {
+        "id": "barcode",
+        "label": "Barcodes",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Inventory"
+      },
+      {
+        "id": "inventory",
+        "label": "Inventory quantity",
+        "owner": "PRODUCTVARIANT",
+        "type": "inventory",
+        "group": "Inventory"
+      },
+      {
+        "id": "inventoryPolicy",
+        "label": "Continue selling when out of stock",
+        "owner": "PRODUCTVARIANT",
+        "type": "inventory_policy",
+        "group": "Inventory"
+      },
+      {
+        "id": "tracked",
+        "label": "Track quantity",
+        "owner": "PRODUCTVARIANT",
+        "type": "boolean",
+        "group": "Inventory"
+      },
+      {
+        "id": "package",
+        "label": "Package",
+        "owner": "PRODUCTVARIANT",
+        "type": "package",
+        "group": "Shipping"
+      },
+      {
+        "id": "weight",
+        "label": "Weight",
+        "owner": "PRODUCTVARIANT",
+        "type": "weight",
+        "group": "Shipping"
+      },
+      {
+        "id": "requiresShipping",
+        "label": "Physical product",
+        "owner": "PRODUCTVARIANT",
+        "type": "boolean",
+        "group": "Shipping"
+      },
+      {
+        "id": "harmonizedSystemCode",
+        "label": "Harmonized system code",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Shipping"
+      },
+      {
+        "id": "countryCodeOfOrigin",
+        "label": "Country of origin",
+        "owner": "PRODUCTVARIANT",
+        "type": "country",
+        "group": "Shipping"
+      },
+      {
+        "id": "seo.title",
+        "label": "Page title (SEO)",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "SEO"
+      },
+      {
+        "id": "seo.description",
+        "label": "Meta description (SEO)",
+        "owner": "PRODUCT",
+        "type": "multi_line_text_field",
+        "group": "SEO"
+      },
+      {
+        "id": "handle",
+        "label": "URL handle (SEO)",
+        "owner": "PRODUCT",
+        "type": "handle",
+        "group": "SEO"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.collapsible_text",
+        "label": "Collapsible text",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.complementary_products",
+        "label": "Complementary products",
+        "owner": "PRODUCT",
+        "type": "list.product_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.complementary_products_heading",
+        "label": "Complementary products heading",
+        "owner": "PRODUCT",
+        "type": "metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.concise_description",
+        "label": "Concise description",
+        "owner": "PRODUCT",
+        "type": "metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.custom_button_product_page",
+        "label": "Custom Button product page",
+        "owner": "PRODUCT",
+        "type": "metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.features",
+        "label": "Features",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.age_group",
+        "label": "Google: Age Group",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.condition",
+        "label": "Google: Condition",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_0",
+        "label": "Google: Custom Label 0",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_1",
+        "label": "Google: Custom Label 1",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_2",
+        "label": "Google: Custom Label 2",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_3",
+        "label": "Google: Custom Label 3",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.custom_label_4",
+        "label": "Google: Custom Label 4",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:mm-google-shopping.custom_product",
+        "label": "Google: Custom Product",
+        "owner": "PRODUCT",
+        "type": "boolean",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.gender",
+        "label": "Google: Gender",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.mpn",
+        "label": "Google: MPN",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.size_system",
+        "label": "Google: Size System",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:mm-google-shopping.size_type",
+        "label": "Google: Size Type",
+        "owner": "PRODUCTVARIANT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.media_grid_product_page",
+        "label": "Media grid product page",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.media_with_text_product_page",
+        "label": "Media with text product page",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.multiple_images_with_text_product_page",
+        "label": "Multiple images with text product page",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.press_product_page",
+        "label": "Press product page",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:reviews.rating",
+        "label": "Product rating",
+        "owner": "PRODUCT",
+        "type": "rating",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:reviews.rating_count",
+        "label": "Product rating count",
+        "owner": "PRODUCT",
+        "type": "number_integer",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.related_products",
+        "label": "Related products",
+        "owner": "PRODUCT",
+        "type": "list.product_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:shopify--discovery--product_recommendation.related_products_display",
+        "label": "Related products settings",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:craftshift.rubik_configuration",
+        "label": "Rubik Configuration",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:craftshift.swatch_color",
+        "label": "Rubik swatch color",
+        "owner": "PRODUCTVARIANT",
+        "type": "color",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:craftshift.swatch_image",
+        "label": "Rubik swatch image",
+        "owner": "PRODUCTVARIANT",
+        "type": "file_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.scrolling_text_product_page",
+        "label": "Scrolling text product page",
+        "owner": "PRODUCT",
+        "type": "metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:shopify--discovery--product_search_boost.queries",
+        "label": "Search product boosts",
+        "owner": "PRODUCT",
+        "type": "list.single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.size_chart",
+        "label": "Size Chart",
+        "owner": "PRODUCT",
+        "type": "page_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.slideshow_product_page",
+        "label": "Slideshow product page",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.text_with_icon",
+        "label": "Text with icon",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCTVARIANT:custom.variant_sort_order",
+        "label": "Variant Sort Order",
+        "owner": "PRODUCTVARIANT",
+        "type": "number_integer",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.variation_products",
+        "label": "Variation products",
+        "owner": "PRODUCT",
+        "type": "list.product_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.variation_value",
+        "label": "Variation value",
+        "owner": "PRODUCT",
+        "type": "single_line_text_field",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:custom.video_product_page",
+        "label": "Video product page",
+        "owner": "PRODUCT",
+        "type": "metaobject_reference",
+        "group": "Metafields"
+      },
+      {
+        "id": "metafield:PRODUCT:shopify.color-pattern",
+        "label": "Color",
+        "owner": "PRODUCT",
+        "type": "list.metaobject_reference",
+        "group": "Category Metafields"
+      }
+    ],
+    "revision": "134fa47b685a214fc3d726186570560df38858302e09ac03e0ff826954968b10"
+  }
+]

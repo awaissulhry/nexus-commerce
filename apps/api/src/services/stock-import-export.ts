@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * IM.3.5 — import/export file builders for the stock wizard.
  *
@@ -82,7 +83,7 @@ export function summarizeControlState(
 
 export async function buildStockExport(locationCode: string) {
   const location = await prisma.stockLocation.findUnique({
-    where: { code: locationCode },
+    where: { workspace_code: workspaceKey({ code: locationCode }) },
     select: { id: true, type: true },
   })
   if (!location) return null

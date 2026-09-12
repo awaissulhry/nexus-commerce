@@ -65,7 +65,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input, SegmentedControl } from '@/design-system/primitives'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AlertTriangle, Info, Pencil, RefreshCw } from 'lucide-react'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { AdsDataGrid, type GridColumn, type GridFilter } from '../../campaigns/_grid/AdsDataGrid'
@@ -872,7 +873,7 @@ export function ApplyRulesClient() {
           🔴 Reported separately: that shared glyph is #b6bdc8, which measures 1.89:1 on white
           where a non-text control needs 3:1. The fix belongs in ads.css, for all ten at once. */}
       <button type="button" className="h10-editpen" title={`Set the bid algorithm for ${r.name}`} aria-label={`Set the bid algorithm for ${r.name}`}
-              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAlgoMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
+              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('.nds-ws-td, .nds-dg-td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAlgoMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
               <Pencil size={11} aria-hidden />
             </button>
           </span>
@@ -947,7 +948,7 @@ export function ApplyRulesClient() {
               ruleHref={(id) => `/marketing/ads/rules-automation/builder/budget?ruleId=${id}`}
             />
             <button type="button" className="h10-editpen" title={`Assign budget rules to ${r.name}`} aria-label={`Assign budget rules to ${r.name}`}
-              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAssignMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
+              onClick={(ev) => { const td = (ev.currentTarget as HTMLElement).closest('.nds-ws-td, .nds-dg-td'); const b = (td ?? ev.currentTarget).getBoundingClientRect(); setAssignMenu({ row: r, x: b.left, y: b.bottom + 4 }) }}>
               <Pencil size={11} aria-hidden />
             </button>
           </span>

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Self-healing for the ads report pipeline.
  *
@@ -233,7 +234,7 @@ export async function runGapFillCycle(args: {
     if (out.jobsCreated >= maxJobs) break
     const region: AdsRegion = (gap.region === 'NA' || gap.region === 'FE') ? (gap.region as AdsRegion) : 'EU'
     const meta = await prisma.amazonAdsProfile.findUnique({
-      where: { profileId: gap.profileId }, select: { currencyCode: true },
+      where: { workspace_profileId: workspaceKey({ profileId: gap.profileId }) }, select: { currencyCode: true },
     })
     const currencyCode = meta?.currencyCode ?? 'EUR'
 

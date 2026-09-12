@@ -19,7 +19,8 @@
  * every neighbouring tab keeps it; removing it on one tab only would make the section inconsistent
  * for no gain. It writes `?market=` and nothing on this page reads it yet.
  */
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'

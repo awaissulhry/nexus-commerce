@@ -1634,7 +1634,7 @@ function FamilySection({ product, backend }: { product: any; backend: string }) 
     try {
       const res = await fetch(`${backend}/api/pim/demote-parent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: product.id, force }),
+        body: JSON.stringify({ productId: product.id, force, ...(force ? { expectedChildIds: (data?.children ?? []).map((child: { id: string }) => child.id) } : {}) }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `HTTP ${res.status}`)
       reload()

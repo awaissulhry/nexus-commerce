@@ -53,8 +53,8 @@ export function startAmazonAplusCron(): void {
     logger.error('amazon-aplus cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runAplusSync()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runAplusSync()
   })
   logger.info('amazon-aplus cron: scheduled', { schedule })
 }

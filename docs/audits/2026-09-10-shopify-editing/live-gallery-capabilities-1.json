@@ -1,0 +1,305 @@
+{
+  "observedAt": "2026-09-10T18:32:17.120Z",
+  "apiVersion": "2026-07",
+  "boundary": "Read-only introspection; no mutations.",
+  "operations": [
+    "fileCreate",
+    "fileUpdate",
+    "productReorderMedia",
+    "productVariantAppendMedia",
+    "productVariantDetachMedia",
+    "translationsRegister"
+  ],
+  "append": {
+    "inputFields": [
+      {
+        "name": "variantId"
+      },
+      {
+        "name": "mediaIds"
+      }
+    ]
+  },
+  "detach": {
+    "inputFields": [
+      {
+        "name": "variantId"
+      },
+      {
+        "name": "mediaIds"
+      }
+    ]
+  },
+  "file": {
+    "inputFields": [
+      {
+        "name": "id"
+      },
+      {
+        "name": "alt"
+      },
+      {
+        "name": "originalSource"
+      },
+      {
+        "name": "previewImageSource"
+      },
+      {
+        "name": "filename"
+      },
+      {
+        "name": "referencesToAdd"
+      },
+      {
+        "name": "referencesToRemove"
+      }
+    ]
+  },
+  "create": {
+    "inputFields": [
+      {
+        "name": "filename"
+      },
+      {
+        "name": "contentType"
+      },
+      {
+        "name": "alt"
+      },
+      {
+        "name": "duplicateResolutionMode"
+      },
+      {
+        "name": "originalSource"
+      }
+    ]
+  },
+  "inventoryPolicy": {
+    "enumValues": [
+      {
+        "name": "DENY",
+        "description": "Customers can't buy this product variant after it's out of stock."
+      },
+      {
+        "name": "CONTINUE",
+        "description": "Customers can buy this product variant after it's out of stock."
+      }
+    ]
+  },
+  "translation": {
+    "enumValues": [
+      {
+        "name": "ARTICLE",
+        "description": "A blog post. Translatable fields: `title`, `body_html`, `summary_html`, `handle`, `meta_title`, `meta_description`."
+      },
+      {
+        "name": "ARTICLE_IMAGE",
+        "description": "An article image. Translatable fields: `alt`."
+      },
+      {
+        "name": "BLOG",
+        "description": "A blog. Translatable fields: `title`, `handle`, `meta_title`, `meta_description`."
+      },
+      {
+        "name": "COLLECTION",
+        "description": "A product collection. Translatable fields: `title`, `body_html`, `handle`, `meta_title`, `meta_description`."
+      },
+      {
+        "name": "COLLECTION_IMAGE",
+        "description": "A collection image. Translatable fields: `alt`."
+      },
+      {
+        "name": "DELIVERY_METHOD_DEFINITION",
+        "description": "The delivery method definition. For example, \"Standard\", or \"Expedited\". Translatable fields: `name`, `description`."
+      },
+      {
+        "name": "EMAIL_TEMPLATE",
+        "description": "An email template. Translatable fields: `title`, `body_html`."
+      },
+      {
+        "name": "FILTER",
+        "description": "A filter. Translatable fields: `label`."
+      },
+      {
+        "name": "LINK",
+        "description": "A link to direct users. Translatable fields: `title`."
+      },
+      {
+        "name": "MEDIA_IMAGE",
+        "description": "An image. Translatable fields: `alt`."
+      },
+      {
+        "name": "MENU",
+        "description": "A category of links. Translatable fields: `title`."
+      },
+      {
+        "name": "METAFIELD",
+        "description": "A Metafield. Translatable fields: `value`."
+      },
+      {
+        "name": "METAOBJECT",
+        "description": "A Metaobject. Translatable fields are determined by the Metaobject type."
+      },
+      {
+        "name": "ONLINE_STORE_THEME",
+        "description": "An online store theme. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_APP_EMBED",
+        "description": "A theme app embed. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_JSON_TEMPLATE",
+        "description": "A theme json template. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_LOCALE_CONTENT",
+        "description": "Locale file content of an online store theme. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_SECTION_GROUP",
+        "description": "A theme json section group. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_SETTINGS_CATEGORY",
+        "description": "A theme setting category. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "ONLINE_STORE_THEME_SETTINGS_DATA_SECTIONS",
+        "description": "Shared static sections of an online store theme. Translatable fields: `dynamic keys based on theme data`."
+      },
+      {
+        "name": "PACKING_SLIP_TEMPLATE",
+        "description": "A packing slip template. Translatable fields: `body`."
+      },
+      {
+        "name": "PAGE",
+        "description": "A page. Translatable fields: `title`, `body_html`, `handle`, `meta_title`, `meta_description`."
+      },
+      {
+        "name": "PAYMENT_GATEWAY",
+        "description": "A payment gateway. Translatable fields: `name`, `message`, `before_payment_instructions`."
+      },
+      {
+        "name": "PRODUCT",
+        "description": "An online store product. Translatable fields: `title`, `body_html`, `handle`, `product_type`, `meta_title`, `meta_description`."
+      },
+      {
+        "name": "PRODUCT_OPTION",
+        "description": "An online store custom product property name. For example, \"Size\", \"Color\", or \"Material\".\n        Translatable fields: `name`."
+      },
+      {
+        "name": "PRODUCT_OPTION_VALUE",
+        "description": "The product option value names. For example, \"Red\", \"Blue\", and \"Green\" for a \"Color\" option. Translatable fields: `name`."
+      },
+      {
+        "name": "SELLING_PLAN",
+        "description": "A selling plan. Translatable fields:`name`, `option1`, `option2`, `option3`, `description`."
+      },
+      {
+        "name": "SELLING_PLAN_GROUP",
+        "description": "A selling plan group. Translatable fields: `name`, `option1`, `option2`, `option3`."
+      },
+      {
+        "name": "SHOP",
+        "description": "A shop. Translatable fields: `meta_title`, `meta_description`."
+      },
+      {
+        "name": "SHOP_POLICY",
+        "description": "A shop policy. Translatable fields: `body`."
+      }
+    ]
+  },
+  "mediaErrors": {
+    "enumValues": [
+      {
+        "name": "INVALID",
+        "description": "The input value is invalid."
+      },
+      {
+        "name": "BLANK",
+        "description": "The input value is blank."
+      },
+      {
+        "name": "VIDEO_VALIDATION_ERROR",
+        "description": "Video validation failed."
+      },
+      {
+        "name": "MODEL3D_VALIDATION_ERROR",
+        "description": "Model validation failed."
+      },
+      {
+        "name": "VIDEO_THROTTLE_EXCEEDED",
+        "description": "Video creation throttle was exceeded."
+      },
+      {
+        "name": "MODEL3D_THROTTLE_EXCEEDED",
+        "description": "Model3d creation throttle was exceeded."
+      },
+      {
+        "name": "PRODUCT_MEDIA_LIMIT_EXCEEDED",
+        "description": "Exceeded the limit of media per product."
+      },
+      {
+        "name": "SHOP_MEDIA_LIMIT_EXCEEDED",
+        "description": "Exceeded the limit of media per shop."
+      },
+      {
+        "name": "PRODUCT_DOES_NOT_EXIST",
+        "description": "Product does not exist."
+      },
+      {
+        "name": "MEDIA_DOES_NOT_EXIST",
+        "description": "Media does not exist."
+      },
+      {
+        "name": "MEDIA_DOES_NOT_EXIST_ON_PRODUCT",
+        "description": "Media does not exist on the given product."
+      },
+      {
+        "name": "TOO_MANY_MEDIA_PER_INPUT_PAIR",
+        "description": "Only one mediaId is allowed per variant-media input pair."
+      },
+      {
+        "name": "MAXIMUM_VARIANT_MEDIA_PAIRS_EXCEEDED",
+        "description": "Exceeded the maximum number of 100 variant-media pairs per mutation call."
+      },
+      {
+        "name": "INVALID_MEDIA_TYPE",
+        "description": "Invalid media type."
+      },
+      {
+        "name": "PRODUCT_VARIANT_SPECIFIED_MULTIPLE_TIMES",
+        "description": "Variant specified in more than one pair."
+      },
+      {
+        "name": "PRODUCT_VARIANT_DOES_NOT_EXIST_ON_PRODUCT",
+        "description": "Variant does not exist on the given product."
+      },
+      {
+        "name": "NON_READY_MEDIA",
+        "description": "Non-ready media are not supported."
+      },
+      {
+        "name": "PRODUCT_VARIANT_ALREADY_HAS_MEDIA",
+        "description": "Product variant already has attached media."
+      },
+      {
+        "name": "MEDIA_IS_NOT_ATTACHED_TO_VARIANT",
+        "description": "The specified media is not attached to the specified variant."
+      },
+      {
+        "name": "MEDIA_CANNOT_BE_MODIFIED",
+        "description": "Media cannot be modified. It is currently being modified by another operation."
+      },
+      {
+        "name": "PRODUCT_SUSPENDED",
+        "description": "Product is suspended."
+      },
+      {
+        "name": "MISSING_ARGUMENTS",
+        "description": "Missing arguments."
+      }
+    ]
+  }
+}

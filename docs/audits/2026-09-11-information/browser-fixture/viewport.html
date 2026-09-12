@@ -1,0 +1,6 @@
+<!doctype html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Information responsive fixture</title>
+<style>html,body{margin:0} iframe{display:block;border:0;height:844px;max-width:100vw}</style></head>
+<body><iframe title="Information responsive test" src="/products/store-demo/edit/studio?market=IT"></iframe>
+<script>const params=new URLSearchParams(location.search),size=Number(params.get('width')),frame=document.querySelector('iframe');frame.style.width=(size===768?768:390)+'px';const scope=['AMAZON','EBAY','ETSY','SHOPIFY'].includes(params.get('scope'))?params.get('scope'):'master';frame.src='/products/store-demo/edit/studio?'+new URLSearchParams({scope,market:['ETSY','SHOPIFY'].includes(scope)?'GLOBAL':'IT',theme:params.get('theme')==='dark'?'dark':'light'})</script>
+</body></html>

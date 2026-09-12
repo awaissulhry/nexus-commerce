@@ -1,3 +1,4 @@
+import { workspaceIdForQuery } from '../../lib/workspace-context.js'
 /**
  * Phase 4 — two-tier read cache for the hot advertising aggregations.
  *
@@ -20,7 +21,7 @@
 import { redis } from '../../lib/queue.js'
 import { logger } from '../../utils/logger.js'
 
-const PREFIX = 'adscache:'
+const cachePrefix = () => `adscache:workspace:${workspaceIdForQuery()}:`
 
 // ── L1 in-memory cache ────────────────────────────────────────────────────
 interface MemEntry { val: unknown; exp: number }
@@ -57,7 +58,7 @@ function noteRedisResult(ok: boolean): void {
 }
 
 export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T>): Promise<T> {
-  const k = PREFIX + key
+  const k = cachePrefix() + key
   // L1 — instant, always available.
   const m = memGet(k)
   if (m !== undefined) return m as T
@@ -97,7 +98,7 @@ export async function cached<T>(key: string, ttlSec: number, fn: () => Promise<T
  * `undefined` means miss. A cached `null` is a real value and is returned.
  */
 export async function peekCached<T>(key: string): Promise<T | undefined> {
-  const k = PREFIX + key
+  const k = cachePrefix() + key
   const m = memGet(k)
   if (m !== undefined) return m as T
   if (redisDisabled()) return undefined
@@ -116,7 +117,7 @@ export async function peekCached<T>(key: string): Promise<T | undefined> {
 }
 
 export function putCached(key: string, val: unknown, ttlSec: number): void {
-  const k = PREFIX + key
+  const k = cachePrefix() + key
   memSet(k, val, ttlSec)
   if (redisDisabled()) return
   withTimeout(redis.connection.set(k, JSON.stringify(val), 'EX', ttlSec), REDIS_OP_TIMEOUT_MS)
@@ -126,14 +127,14 @@ export function putCached(key: string, val: unknown, ttlSec: number): void {
 
 let flushing = false
 export async function flushAdsCache(): Promise<void> {
-  mem.clear() // L1 always cleared, synchronously.
+  for (const key of mem.keys()) if (key.startsWith(cachePrefix())) mem.delete(key)
   if (flushing || redisDisabled()) return
   flushing = true
   try {
     let cursor = '0'
     let guard = 0
     do {
-      const [next, keys] = await withTimeout(redis.connection.scan(cursor, 'MATCH', `${PREFIX}*`, 'COUNT', 200), REDIS_OP_TIMEOUT_MS)
+      const [next, keys] = await withTimeout(redis.connection.scan(cursor, 'MATCH', `${cachePrefix()}*`, 'COUNT', 200), REDIS_OP_TIMEOUT_MS)
       cursor = next
       if (keys.length) await withTimeout(redis.connection.del(...keys), REDIS_OP_TIMEOUT_MS)
     } while (cursor !== '0' && ++guard < 100)

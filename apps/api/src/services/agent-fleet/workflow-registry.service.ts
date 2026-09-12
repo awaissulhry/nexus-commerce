@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.WF.2 — the workflow registry: code truth ⊕ DB rows, the same shape the
  * charter registry taught the fleet (session-locks doc §4, REVIEWED).
@@ -51,7 +52,7 @@ export type {
 export async function seedWorkflows(): Promise<{ created: number }> {
   let created = 0
   for (const b of BUILTIN_WORKFLOWS) {
-    const existing = await prisma.agentWorkflow.findUnique({ where: { key: b.key } })
+    const existing = await prisma.agentWorkflow.findUnique({ where: { workspace_key: workspaceKey({ key: b.key }) } })
     if (!existing) {
       await prisma.agentWorkflow.create({
         data: { key: b.key, name: b.name, description: b.description, kind: 'builtin' },
@@ -200,7 +201,7 @@ export async function getEffectiveWiring(): Promise<EffectiveWiringRow[]> {
 export async function isWorkflowEnabled(key: string): Promise<boolean> {
   try {
     const row = await prisma.agentWorkflow.findUnique({
-      where: { key },
+      where: { workspace_key: workspaceKey({ key: key }) },
       select: { enabled: true },
     })
     return row?.enabled ?? true

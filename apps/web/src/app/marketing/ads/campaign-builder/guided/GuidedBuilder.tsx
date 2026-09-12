@@ -23,7 +23,7 @@
  * arrive in the follow-up.
  */
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Layers, BarChart3, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button, Checkbox, Input } from '@/design-system/primitives'
 import { Field } from '@/design-system/components'

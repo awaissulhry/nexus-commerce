@@ -31,6 +31,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, X, ExternalLink, Bell } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import {
   fireBrowserNotification,
   requestBrowserNotificationPermission as requestPerm,
@@ -108,6 +109,12 @@ export function GlobalDlqBanner() {
   // SSE fast path — listen for sync.dlq.threshold from the cron.
   useEffect(() => {
     if (typeof window === 'undefined') return
+      // Held open for the life of the page. This is GLOBAL chrome — it mounts on essentially every
+      // route — so against a local backend it permanently occupies one of the ~6 connections the
+      // browser allows per origin, and starves the page it is watching over. `streamsEnabled()`
+      // disables it for a LOCAL backend only; deployed behaviour is unchanged
+      // (`enableDevStreams(true)` re-opens it). See lib/sync/dev-stream-gate.ts.
+      if (!streamsEnabled()) return
     const url = `${getBackendUrl()}/api/orders/events`
     const es = new EventSource(url, { withCredentials: true } as any)
     sseRef.current = es

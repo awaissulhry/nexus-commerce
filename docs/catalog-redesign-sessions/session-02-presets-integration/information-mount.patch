@@ -1,0 +1,57 @@
+--- a/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
++++ b/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
+@@ -134,6 +134,7 @@
+ import './channel-sheet.css'
+ import { columnApplies } from '@nexus/shared/master-sheet'
+ import { SheetFooterNote } from '../SheetFooterNote'
++import { ProductListingPresets } from '../../presets/ProductListingPresets'
+ 
+ /**
+  * The validation a channel column carries — master's definition (`sheetValidationFor`), gated on
+@@ -1834,6 +1835,9 @@
+    */
+   const [adding, setAdding] = useState(false)
+   const [preflightAlias, setPreflightAlias] = useState<PreflightAlias | null>(null)
++  const [presetOpen, setPresetOpen] = useState(false)
++  const presetTarget = selected.length === 1 ? selected[0] : rows.find(row => row.id === productId && row.aliasId === null)
++  useEffect(() => { setPresetOpen(false) }, [productId, channel, marketplace, accountId])
+   const [addError, setAddError] = useState<string | null>(null)
+   const onAddAlias = useCallback(async () => {
+     setAdding(true)
+@@ -1865,6 +1869,13 @@
+       }
+     })
+     items.push({
++      id: 'product-listing-presets',
++      label: presetTarget ? `Listing presets · ${presetTarget.sku}` : 'Listing presets',
++      description: 'Review defaults for this product and listing; save once to a listing draft',
++      disabled: !presetTarget || !data?.scope.connectionId || !['AMAZON', 'EBAY'].includes(channel),
++      onSelect: () => setPresetOpen(true),
++    })
++    items.push({
+       id: 'add-alias',
+       label: adding ? 'Adding…' : '+ Add listing alias',
+       disabled: adding,
+@@ -1872,7 +1883,7 @@
+       onSelect: () => void onAddAlias(),
+     })
+     return items
+-  }, [data?.aliases, rows, adding, addError, onAddAlias, alternateAccount])
++  }, [data?.aliases, data?.scope.connectionId, rows, adding, addError, onAddAlias, alternateAccount, presetTarget, channel])
+ 
+   // ── States that are not a grid ───────────────────────────────────────────────────────────────
+   if (loading) {
+@@ -1981,6 +1992,13 @@
+           overflow={overflowItems}
+           trailing={
+             <>
++              {presetOpen && presetTarget && data.scope.connectionId && (channel === 'AMAZON' || channel === 'EBAY') && <ProductListingPresets
++                open onClose={() => setPresetOpen(false)}
++                scope={{ productId: presetTarget.id, channel, accountId: data.scope.connectionId, market: marketplace, listingId: presetTarget.listing?.id ?? null, aliasKey: presetTarget.aliasId ?? '' }}
++                productLabel={`${presetTarget.sku} · ${presetTarget.name ?? ''}`}
++                accountLabel={accounts.find(account => account.id === data.scope.connectionId)?.label ?? data.scope.connectionId}
++                listingLabel={presetTarget.aliasId ? `Alias ${presetTarget.aliasId}` : 'Primary listing'}
++              />}
+               <SchemaStatus channel={channel} market={marketplace} categories={[...new Set(rows.map(row => row.productType).filter((v): v is string => !!v))]} missing={data.meta.schemaMissing} ages={data.meta.schemaAge} onRefreshed={reload} />
+               {sheetColumns.loadError && (
+                 <span role="alert">

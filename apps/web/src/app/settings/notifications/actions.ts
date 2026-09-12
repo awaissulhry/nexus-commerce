@@ -1,5 +1,7 @@
 'use server'
 
+import { currentWebProfile } from '@/lib/workspaces/server'
+
 import { prisma } from '@nexus/database'
 import { revalidatePath } from 'next/cache'
 import { writeSettingsAudit } from '@/lib/settings-audit'
@@ -58,7 +60,7 @@ export async function saveNotificationPreferences(input: {
   // becomes session.userId; until then we attach prefs to the
   // singleton UserProfile if one exists, otherwise fall back to
   // userId=null (workspace-global, existing behaviour).
-  const user = await (prisma as any).userProfile.findFirst()
+  const user = await currentWebProfile()
   const userId: string | null = user?.id ?? null
 
   // Snapshot before-state for the audit diff.

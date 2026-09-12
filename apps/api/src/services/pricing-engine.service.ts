@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * G.1.2 — Pricing engine.
  *
@@ -149,7 +150,7 @@ export async function resolvePrice(
 
   // ── Resolve marketplace metadata + currency ─────────────────────
   const marketplace = await prisma.marketplace.findUnique({
-    where: { channel_code: { channel: input.channel, code: input.marketplace } },
+    where: { channel_code: workspaceKey({ channel: input.channel, code: input.marketplace }) },
   })
   const currency = marketplace?.currency ?? 'EUR'
   const vatRate = marketplace?.vatRate ? Number(marketplace.vatRate) : 0
@@ -159,7 +160,7 @@ export async function resolvePrice(
   // SKUs can live as ProductVariation OR Product (hub-and-spoke). Try
   // variant first (canonical for new data), fall back to Product.
   const variant = await prisma.productVariation.findUnique({
-    where: { sku: input.sku },
+    where: { workspace_sku: workspaceKey({ sku: input.sku }) },
     select: {
       id: true,
       sku: true,
@@ -238,12 +239,14 @@ export async function resolvePrice(
   const channelListing = productId
     ? await prisma.channelListing.findUnique({
         where: {
-          productId_channel_marketplace: {
+          productId_channel_marketplace: workspaceKey({
             productId,
             channel: input.channel,
             marketplace: input.marketplace,
             channelConnectionId: pricingConn,
-          },
+            // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+            aliasKey: '',
+          }),
         },
       })
     : null
@@ -331,10 +334,10 @@ export async function resolvePrice(
   if (!resolved && input.fulfillmentMethod && channelListing) {
     const offer = await prisma.offer.findUnique({
       where: {
-        channelListingId_fulfillmentMethod: {
+        channelListingId_fulfillmentMethod: workspaceKey({
           channelListingId: channelListing.id,
           fulfillmentMethod: input.fulfillmentMethod,
-        },
+        }),
       },
     })
     if (offer?.price != null) {

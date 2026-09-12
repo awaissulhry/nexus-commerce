@@ -1,0 +1,135 @@
+/**
+ * PES.7 — duplicate review layout. Plain px (the `--nds-space-*` scale is literal pixels);
+ * colour and radius on tokens; `--nds-text-3` never used for text.
+ */
+
+.note {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+.error {
+  margin: 0 0 12px;
+  border: 1px solid var(--nds-danger);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  border-radius: var(--nds-radius-md);
+  padding: 8px 12px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.group {
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  padding: 12px 14px 14px;
+  margin-bottom: 12px;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.groupCount {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The rule that clustered these, in words. A cluster without its reason is just an accusation. */
+.groupWhy {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.members {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.member {
+  margin: 0;
+  width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  padding: 8px;
+  background: var(--nds-surface-raised);
+}
+
+.memberImg {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  overflow: hidden;
+  min-height: 0;
+  background: var(--nds-surface-sunken);
+  border-radius: var(--nds-radius-sm);
+}
+
+.memberMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Deleting the hero re-points the catalog thumbnail — worth saying before, not after. */
+.memberHero {
+  color: var(--nds-amber-text);
+  font-weight: 600;
+}
+
+.memberActions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* ── apply-to-children ───────────────────────────────────────────── */
+
+.modes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mode {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+}
+
+.mode:hover { background: var(--nds-surface-hover); }
+
+.mode > span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* What the mode DOES to what is already there — the fact the choice turns on. */
+.modeWhy {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  line-height: 1.45;
+}

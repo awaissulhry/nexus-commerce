@@ -131,8 +131,8 @@ export function startSalesDriftDetectorCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runSalesDriftDetector()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runSalesDriftDetector()
   })
 
   logger.info('sales-drift-detector cron: started', { schedule })

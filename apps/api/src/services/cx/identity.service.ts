@@ -41,6 +41,16 @@ export async function placeGrant(input: {
 }): Promise<GrantPlacement> {
   const { channelType, channelLabel, identity, targetConnectionId } = input
 
+  if (targetConnectionId) {
+    const target = await prisma.channelConnection.findUnique({ where: { id: targetConnectionId } })
+    if (!target || target.managedBy === 'transferred' || target.channelType !== channelType || (target.externalAccountId && target.externalAccountId !== identity?.userId)) {
+      throw new IdentityRefusal('ADOPT_TARGET_INVALID', `Reconnect using the same verified ${channelLabel} account. The returned seller identity does not match this connection.`)
+    }
+    const existing = identity?.userId ? await findAccountByExternalId(channelType, identity.userId) : null
+    if (existing && existing.id !== target.id) throw new IdentityRefusal('ADOPT_TARGET_INVALID', 'This seller is already connected as another account. Reconnect that account instead.')
+    return { kind: 'adopt', connectionId: target.id }
+  }
+
   if (identity?.userId) {
     const already = await findAccountByExternalId(channelType, identity.userId)
     if (already) return { kind: 'reconsent', connectionId: already.id }

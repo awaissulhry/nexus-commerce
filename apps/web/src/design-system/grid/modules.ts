@@ -37,18 +37,23 @@
 import { ModuleRegistry } from 'ag-grid-community'
 import {
   AggregationModule,
+  CellApiModule,
   CellSelectionModule,
   CellStyleModule,
   ClientSideRowModelApiModule,
   ClientSideRowModelModule,
   ClipboardModule,
   ColumnApiModule,
+  ColumnAutoSizeModule,
   ColumnMenuModule,
   ContextMenuModule,
+  TooltipModule,
   CsvExportModule,
+  CustomEditorModule,
   CustomFilterModule,
   EventApiModule,
   GridStateModule,
+  LargeTextEditorModule,
   LicenseManager,
   LocaleModule,
   MasterDetailModule,
@@ -57,12 +62,16 @@ import {
   PinnedRowModule,
   QuickFilterModule,
   RenderApiModule,
+  RichSelectModule,
   RowApiModule,
+  RowAutoHeightModule,
   RowGroupingModule,
   RowSelectionModule,
   RowStyleModule,
+  ScrollApiModule,
   ServerSideRowModelApiModule,
   ServerSideRowModelModule,
+  TextEditorModule,
   TreeDataModule,
   UndoRedoEditModule,
   ValidationModule,
@@ -86,12 +95,45 @@ const PRODUCTION_MODULES = [
   // Right-click on a row. NOT `MenuModule`, which bundles the column menu we already register —
   // this is the context menu alone, so the list above keeps naming exactly what is bundled.
   ContextMenuModule,
+  /* 🔴 Without this, `tooltipValueGetter`, `headerTooltip` and `headerTooltipValueGetter` do
+     NOTHING — on every grid in the app. Found by PES.3 (#548): `ChannelSheet`'s header tooltips
+     have never rendered, and this engine leans on tooltips heavily by design — the action adapters
+     put a verb's refusal REASON in a tooltip rather than in its label (a 900px menu, #141), the
+     provenance mark explains itself only on hover, and `absent` controls carry their reason there.
+     So an unregistered module quietly deleted the explanation channel three separate rulings chose.
+     The dev-only `ValidationModule` names the missing module in the console; nothing in production
+     says a word, which is the silent-omission trap this file exists to prevent. */
+  TooltipModule,
   CustomFilterModule,
   RowSelectionModule,
   PaginationModule,
   CsvExportModule,
-  // editing (inventory editor): a number editor, Excel-style range + fill handle, paste, undo
+  // editing. The inventory editor needed only numbers; the Product Edit Studio's master sheet is
+  // the first production surface that edits TEXT, and AG's editors are per-type modules:
+  //   TextEditorModule       `agTextCellEditor`      — every text and identifier column
+  //   LargeTextEditorModule  `agLargeTextCellEditor` — the popup for descriptions and bullets
+  //   CustomEditorModule     any React component used as a cell editor
+  // ⚠ `CustomEditorModule` no longer has a caller in this repo: the DS `SelectCellEditor` was its
+  // only one and AG.1 (#184) replaced it with `agRichSelectCellEditor`. Kept deliberately — the
+  // module gate's detector for it does not fire, and "no detector hit" is not proof of no caller
+  // (`reference_a_scanner_passing_for_the_wrong_reason`), while dropping it would silently disable
+  // the next React editor anyone writes. It is bundle weight with a known reason, not an oversight.
+  // 🔴 Without them AG raises error #200 and the cell simply does not open an editor — measured in
+  // the browser on the studio sheet, where every text column was silently uneditable while the
+  // number columns worked. The lab never caught it because `grid-lab` registers the wildcard.
   NumberEditorModule,
+  TextEditorModule,
+  LargeTextEditorModule,
+  CustomEditorModule,
+  //   RichSelectModule       `agRichSelectCellEditor` — every `select` column on a studio sheet
+  // 🔴 AG.1 (#184): this replaced a DS `Listbox` mounted as a React editor, which could not be
+  // opened at all — its popover portalled to `document.body`, AG saw focus leave the cell and tore
+  // the editor down in 2ms. The rich select lives inside AG's focus model and brings the type-ahead
+  // search 268 options need. Registered HERE, not merely named in a comment, because the module
+  // gate reads the registration — and an unregistered module fails SILENTLY in production, which
+  // for an editor means a cell that simply never opens (measured twice before: the text editors,
+  // then `CellApiModule`).
+  RichSelectModule,
   CellSelectionModule,
   ClipboardModule,
   UndoRedoEditModule,
@@ -99,9 +141,35 @@ const PRODUCTION_MODULES = [
   // state + APIs
   GridStateModule,
   ColumnApiModule,
+  /* AGW (2026-09-05, additive, disclosed in docs/pes-claims.md): `api.autoSizeColumns` /
+     `sizeColumnsToFit` for the ads console's workspace grid — the hand-rolled `<table>` sized its
+     columns to their content, and the AG-backed grid does the same by measuring. 🔴 Without this
+     module the call raises AG #200 in development and does NOTHING in production: every column
+     would sit at AG's 200px default, silently. Measured on /marketing/ads/ebay/campaigns before
+     the registration (2,746px of columns in a 1,600px card). */
+  ColumnAutoSizeModule,
+  /* AGW (2026-09-05 23:50, additive, disclosed in docs/pes-claims.md): `colDef.autoHeight` for the ads
+     console's workspace grid — the legacy `<td>` grew with its content (measured: 44.5 · 46 · 47.5 · 51.3 ·
+     62 · 82.3px rows, four heights inside one library grid), so every cell measures itself. 🔴 Without this
+     module `autoHeight` raises AG #200 in development and is IGNORED in production: every row would sit at
+     the 45px default and multi-line cells would clip, silently. */
+  RowAutoHeightModule,
+  // `api.getCellValue` — used by the sheet's paste processor to leave a column the pasted block did
+  // not name exactly as it was. 🔴 Without it that call returns `undefined` SILENTLY in production
+  // (the error text is ValidationModule's, and that is dev-only), so the paste would have blanked
+  // those columns while the code read as if it protected them. Second time an unregistered module
+  // disabled DS behaviour with no runtime signal; the first was the text editors.
+  CellApiModule,
   RowApiModule,
   EventApiModule,
   RenderApiModule,
+  // 🔴 AG.1 (#184, AG.1-e): `api.ensureColumnVisible` / `ensureIndexVisible`. Without it the call
+  // raises AG #200 and there is NO supported way to scroll a cell into view — which blocks two
+  // stated behaviours: the "Missing required" chip's job is to take the operator TO those cells
+  // (today it only filters), and PES.4's drawer must scroll the originating cell clear of the
+  // slide-over (layout spec §5.4). Registered before either is built, so neither builds against a
+  // throwing call.
+  ScrollApiModule,
   // presentation
   CellStyleModule,
   RowStyleModule,

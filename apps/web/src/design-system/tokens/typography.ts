@@ -17,13 +17,16 @@ export const fontSmoothing = 'auto' as const
 
 /** px sizes seen across the ads stylesheets, named by role. */
 export const fontSize = {
+  nano: '9px', //     grid micro-badges (.nds-wsgrid td.nm .badge/.pb) — hub #617
   micro: '10px', //   tiny labels, badges, group headers
+  microPlus: '10.5px', // grid name-cell marks/tags + .nds-scopebar-label — hub #617
   xs: '11px', //      kbd, sub-labels
   xsPlus: '11.5px', // sub-text, modal hints
   sm: '12px', //      dense secondary
   smPlus: '12.5px', // secondary text, legends
   base: '13px', //    body, table cells, controls (the workhorse)
   basePlus: '13.5px', // subtitles
+  mdMinus: '14px', //  .nds-btn.lg, .nds-nstep button, empty-state + accordion titles — hub #617
   md: '15px', //      nav items, modal titles
   lg: '18px', //      section headings (h3)
   xl: '22px', //      page stub h1
@@ -31,6 +34,9 @@ export const fontSize = {
 } as const
 
 export const fontWeight = {
+  normal: 400, //     ordinary running text — the step below `medium`. The scale started at 500, so
+  //                  any surface wrapping normal-weight content in a DS control had no way to say
+  //                  "not emphasised" without a literal (hub #633).
   medium: 500, // body
   semibold: 600, // labels, controls
   bold: 700, // headings

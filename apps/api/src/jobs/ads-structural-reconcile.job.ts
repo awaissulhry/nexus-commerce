@@ -52,6 +52,6 @@ export function startStructuralReconcileCron(): void {
   }
   const schedule = process.env.NEXUS_ADS_STRUCTURAL_RECONCILE_SCHEDULE ?? '35 */6 * * *'
   if (!cron.validate(schedule)) { logger.error('ads-structural-reconcile: invalid schedule', { schedule }); return }
-  scheduledTask = cron.schedule(schedule, () => { void runStructuralReconcileCron() })
+  scheduledTask = cron.schedule(schedule, async () => { await runStructuralReconcileCron() })
   logger.info('ads-structural-reconcile cron: scheduled', { schedule })
 }

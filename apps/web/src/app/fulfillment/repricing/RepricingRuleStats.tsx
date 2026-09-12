@@ -11,7 +11,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { BarChart3, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 

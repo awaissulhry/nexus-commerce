@@ -115,7 +115,7 @@ items are "Customise columns…" / "Reset columns" when the page passes `columnD
 | tags | `TagsCell` | one named chip, or ≤6 glyph chips + "+N", `InfoTip` |
 | coverage | `CoverageCell` | `CoverageSummary` from a `CoverageChannel[]` value |
 | group row | `GroupCell` | label + count |
-| long text | `LongTextCell` `{maxLength, countBytes, required}` | one line + a counter against the tightest channel cap (ok / near / over); `⚠ required` when empty and required |
+| long text | `LongTextCell` `{maxLength, maxBytes, capFrom, required}` — the RAW caps, never a cap plus a unit flag | one line + a MARK, not a counter: `empty · unchecked · filled · near · over` (`longTextState.ts`); figures and the capping channel go in the tooltip. 🔴 `unchecked` (no cap supplied) is not `filled` — 60 of 96 columns on GALE-JACKET carry no cap, and absence of a cap is not compliance with one |
 | readiness | `ReadinessCell` (`ReadinessValue`) | `Ready` · `Missing · n` · `Errors · n` · `Live · <channel id>` · `Unlisted`, the issues on hover — computed by the validator, never by the grid |
 | follows | `FollowsCell` | `Follows master` / `Pinned` — the market's follows-master control beside the market value |
 
@@ -152,7 +152,10 @@ results, a refused cell stays `.nds-cell-is-refused` with its reason on hover; *
 inherited)` → `.nds-cell-is-invalid` (a channel WILL refuse — red tint + corner triangle) · `.nds-cell-is-warned`
 (accepted, a channel MAY reject — amber) · `.nds-cell-is-inherited` (the value is the parent's; edit to pin);
 `selectValidation(options, 'strict' | 'open', required)` — an off-list value on a strict list WARNS, never blocks;
-`lengthValidation(max, required, countBytes)`; `sheetPasteProcessor(columns)` — a pasted block whose first row
+`lengthValidation(caps: LengthCaps, required)` — `LengthCaps` carries BOTH units (`characters`, `bytes`), because
+Amazon declares them independently: 1,061 fields declare both with 14 distinct ratios, so no rule that picks a unit
+up front is right on every field; `evaluateLengthCaps` decides which one binds and both the cell mark and this
+validator call it, so a warning and a refusal cannot disagree; `sheetPasteProcessor(columns)` — a pasted block whose first row
 matches ≥2 header names is reordered by name, so the spreadsheet's column order does not matter.
 **A value setter is synchronous and mutates `params.data`**: AG computes `cellValueChanged.newValue` by re-running
 the getter on that object right after the setter returns — a setter that only schedules React state hands the
@@ -164,11 +167,29 @@ SSRM: the verbatim `IServerSideGetRowsRequest` goes to the page's endpoint; the 
 maps and reports `unsupported`; block size 100; `maxBlocksInCache` only with a fixed row height. CSRM for small
 data and modals. State: `useGridState(surface)` — a server default view wins; else the last-used
 `{gridState, page}` from `nds-grid:<surface>:v1`; else the page's default; named views on `SavedView`.
+**Views, two payloads (2026-09-04):** schema 1 is an AG state blob (`/products/next`, a fixed column set);
+schema 2 is a COLUMN-KEY LIST (`views/viewPayload.ts`) for a sheet whose column set is a union over product
+types — resolved against the live columns with `resolvePreset`, missing columns REPORTED. A sheet passes
+`persistKeys` (`columnSizing`/`columnPinning`/`sort`) so visibility and order never persist implicitly, and
+lands through `views/landing.ts`: EVERY column unless an explicit default view exists (`resolveLanding`),
+widths/pins/sort re-applied once the columns exist (`arrangementColumnState`). `ALL_VIEW_ID` is the ground-state
+preset every sheet lists first. The Customise dialog is the VIEW BUILDER when a caller passes `quickPicks` /
+`groupToggles` / `inViewCount` / `viewSave` (all opt-in — other callers unchanged). Export: `exportGridCsv`
+takes `keyOf` (D15.2's key row), `leading`/`trailing` data-derived columns and `columns: 'all' | keys[]`.
 Hosts: `GridCard` (page, autoHeight, a size container for the toolbar's container queries), `GridPanel`
 (modal/drawer, bounded), **`GridSheet`** (the one bounded, virtualised PAGE host — a sheet is pasted into and
 tabbed across, nobody pastes into page 3 of 4; fills the viewport below its own measured top, or `height` when
 embedded; default density compact; `<NexusGrid fill {...SHEET_GRID_OPTIONS}>` inside; `GridSheetStatus` below:
-rows · selected · unsaved · refused · last saved). Popups parent to `document.body`; `data-ag-theme-mode` is
+rows · selected · unsaved · refused · last saved). ⚠ And when you MEASURE an AG popup, measure the right node: the rich select's visual surface is
+**`.ag-virtual-list-viewport`**, not `.ag-popup`. `.ag-popup` is a positioning container and measures
+**1728×0** — reading it reports "no border, no shadow, no radius", which is confidently wrong in the
+direction that makes the component look worse than it is (DS.1, 2026-09-02).
+
+Popups parent to `document.body` — **DS-built ones only.** ⚠ AG's OWN popups do not:
+`.ag-menu.ag-column-menu` is `position: absolute; z-index: 5`, parented to `.ag-popup` inside the
+grid (measured by DS.1). It clamps correctly at a viewport edge, so there is no defect today — but
+do not write a spec that assumes the portal rule covers AG's column menu, and do not reach for
+`document.body` z-index reasoning when debugging one. `data-ag-theme-mode` is
 stamped on `<html>`.
 
 ## 11. Themes · accessibility · locale · performance
@@ -180,7 +201,7 @@ renderers; a 500-row page is the most a page grid draws. RTL and mobile widths a
 
 ## 12. Empty · loading · error
 
-`GridNoRowsOverlay` (title, message, an action) · `GridLoadingOverlay` (skeleton rows, `media` for thumbnails) ·
+`GridNoRowsOverlay` (title, message, an action) · `GridLoadingOverlay` (skeleton rows; `rowKind: 'text' | 'media' | 'media-line'` matches host geometry, with legacy `media` still supported) ·
 a failed SSRM block reports to the page (`onError`) and the page shows the DS `Callout` with a retry.
 
 ## 13. Guards
@@ -188,3 +209,8 @@ a failed SSRM block reports to the page (`onError`) and the page shows the DS `C
 `check-ag-grid-import-boundary` (imports + stylesheets) · `check-grid-option-identity` (AST) · `check-grid-kit-ratchet`
 (the rebuild backlog only shrinks) · `check-ds-gaps-append-only` · `theme.vitest.test.ts` (every param a grid token,
 no ramp) · `check-grid-chrome` (Playwright, measured; `npm run grid:conformance`, `--strict` in CI).
+
+A parameter picker may return `ActionImpact.cancelled: true`. The action runner returns its existing cancelled outcome before confirmation or execution; cancellation must not become a refusal message. The `/design/grid-lab` action-confirm specimen covers this path and a typed Parent demotion.
+
+
+Save recovery: `SheetWriter.readBack` reads the exact write coordinate without replacing the grid. It returns current values, the Product version, optional row metadata and per-cell `matches` for domain-specific checks (for example, reset means inherited rather than literal null). A null match remains unconfirmed. `onReconciled` lets the host settle its pending acknowledgement and refresh quietly after newer edits finish. Read-back versions seed the next queued edit; `discard()` invalidates late responses. `unknownCount` participates in Reload review. The existing `readRow` values-only callback remains supported for other hosts. This adapter is Web-only.

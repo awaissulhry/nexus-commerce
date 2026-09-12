@@ -17,7 +17,7 @@
  */
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertCircle, Bot, History, ChevronRight } from 'lucide-react'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { getBackendUrl } from '@/lib/backend-url'

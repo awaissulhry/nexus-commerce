@@ -88,8 +88,8 @@ export function startSalesReportIngestCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runYesterdayIngest()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runYesterdayIngest()
   })
 
   logger.info('sales-report-ingest cron: scheduled', { schedule })

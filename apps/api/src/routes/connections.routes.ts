@@ -144,7 +144,7 @@ function pendingRow(channel: Channel): ConnectionRow {
 }
 
 const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
-  fastify.get("/connections", async (_request, reply) => {
+  fastify.get("/connections", async (request, reply) => {
     try {
       // Pull every real row (oauth + env). Order: active first, then
       // most recently updated — handles the rare case where a channel
@@ -156,6 +156,9 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: [{ isActive: "desc" }, { updatedAt: "desc" }],
       });
 
+      if ((request.query as { all?: string }).all === 'true') {
+        return reply.send({ success: true, connections: rows.map(r => ({ ...toConnectionRow(r), isPrimary: r.isPrimary, accountLabel: r.accountLabel })) })
+      }
       // Keep one row per channel — first wins given the orderBy above.
       const byChannel = new Map<Channel, ConnectionRow>();
       for (const r of rows) {
@@ -224,6 +227,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
             ? meta.scopes.filter((s): s is string => typeof s === "string")
             : [];
         const scopeDrift = connection.scopeDrift;
+        const permissionModel = tryGetChannelSpec(channelKeyOf(channel))?.auth.permissionModel ?? "oauth_scopes";
         const connectionScopes = row
           ? await prisma.connectionScope.findMany({
               where: { connectionId: row.id },
@@ -270,6 +274,7 @@ const connectionsRoutes: FastifyPluginAsync = async (fastify) => {
           connection,
           scopes,
           scopeDrift,
+          permissionModel,
           connectionScopes,
           activeMarketplaces,
           // Per-channel diagnostics namespaced under `meta` so the

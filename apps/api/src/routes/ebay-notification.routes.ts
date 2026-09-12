@@ -1,3 +1,5 @@
+import { verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace-ingress.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * IS.2 — eBay Notification Platform push webhook + Trading API subscription setup.
  *
@@ -361,7 +363,7 @@ ${eventXml}
       // notification that never arrived were indistinguishable afterwards. Record it.
       const rejected = req.body as any
       const claimedId = rejected?.metadata?.notificationId ?? null
-      await recordInbound({
+      if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') await recordInbound({
         channel: 'EBAY',
         eventType: rejected?.metadata?.topic ?? 'unverified',
         // NOT the notificationId the payload claims. Nothing about an unverified
@@ -385,6 +387,7 @@ ${eventXml}
       return reply.status(412).send({ error: 'signature verification failed' })
     }
 
+    const processVerified = async () => {
     const payload = req.body as any
     const topic: string = payload?.metadata?.topic ?? ''
     const notifData = payload?.notification?.data ?? payload?.notification ?? {}
@@ -583,10 +586,10 @@ ${eventXml}
         try {
           const order = await prisma.order.findUnique({
             where: {
-              channel_channelOrderId: {
+              channel_channelOrderId: workspaceKey({
                 channel: 'EBAY',
                 channelOrderId: ebayOrderId,
-              },
+              }),
             },
             select: { id: true, status: true },
           })
@@ -621,5 +624,18 @@ ${eventXml}
 
     // eBay expects 204 for successful receipt — always return quickly.
     return reply.status(204).send()
+    }
+    if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return processVerified()
+    const event = req.body as any
+    const data = event?.notification?.data
+    const seller = data?.seller?.userId ?? data?.sellerUser?.userId ?? data?.user?.userId ?? data?.sellerId
+    try {
+      const route = await verifiedChannelWorkspace('EBAY', typeof seller === 'string' ? seller : undefined)
+      return await withIngressWorkspace(route.workspaceId, processVerified)
+    } catch (error) {
+      logger.error('[eBay notification] verified event needs account routing', { error: error instanceof Error ? error.message : String(error) })
+      return reply.code(503).send({ error: 'Notification account could not be resolved.' })
+    }
+
   })
 }

@@ -20,8 +20,8 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ArrowLeft, AlertTriangle, CheckCircle2, History, Loader2, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useTranslations } from '@/lib/i18n/use-translations'

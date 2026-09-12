@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * UM-series (P9 live) — eBay Promoted Listings (Marketing API) client.
  *
@@ -83,7 +84,7 @@ export async function syncEbayCampaigns(): Promise<EbaySyncReport> {
       const advanced = c.fundingStrategy?.fundingModel === 'COST_PER_CLICK'
       const dailyVal = c.budget?.daily?.amount?.value
       await prisma.ebayCampaign.upsert({
-        where: { channelConnectionId_externalCampaignId: { channelConnectionId: conn.id, externalCampaignId: c.campaignId } },
+        where: { channelConnectionId_externalCampaignId: workspaceKey({ channelConnectionId: conn.id, externalCampaignId: c.campaignId }) },
         create: {
           channelConnectionId: conn.id,
           externalCampaignId: c.campaignId,

@@ -26,7 +26,7 @@ import { Listbox } from '@/design-system/components/Listbox'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { useTranslations } from '@/lib/i18n/use-translations'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   APLUS_STATUSES,
   COMMON_MARKETPLACES,

@@ -6,7 +6,7 @@
  * a row menu (Edit · Duplicate · Run now · Delete). Rule click = edit route.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { MoreHorizontal } from 'lucide-react'
 import { postEbayAds, getEbayAds } from '../../_lib'
 import { type AutomationRule, conditionSentence, actionSentence, scopeLabel } from '../_lib/rules'

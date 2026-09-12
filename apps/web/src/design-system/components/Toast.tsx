@@ -56,9 +56,68 @@ export function ToastProvider({ children, duration = 4000 }: { children: ReactNo
   )
 }
 
-/** `const { toast } = useToast()` — must be under a `<ToastProvider>`. */
+/* ── B1: what happens when there is no DS provider ──────────────────────────────────────────── */
+
+/**
+ * 🔴 `useToast()` used to THROW here, and that made it a landmine for every surface.
+ *
+ * Two toast providers exist in this app and they are unrelated contexts: the root layout mounts the
+ * legacy `@/components/ui/Toast`, while this hook reads the DS's own. A route was fine until some
+ * sibling lane dropped in the first DS component that reports an outcome — a `GridViewsMenu`, say —
+ * and then the whole surface was replaced by *"Something went wrong"* inside otherwise-correct
+ * chrome. **The failure fired on code nobody had written that day**, and the symptom sent people
+ * looking for a blank page rather than an error boundary.
+ *
+ * It no longer throws. But it must not go quiet either: an outcome an operator never sees is the
+ * silent-failure class this design system spends most of its rules on. So the fallback **renders
+ * the toast anyway**, through the same markup and the same classes as the provider, and tells the
+ * developer once, loudly, where the provider belongs.
+ */
+const FALLBACK_HOST_CLASS = 'nds-toasts nds-toasts-fallback'
+let warned = false
+
+function emitFallbackToast(message: ReactNode, tone: Tone, duration: number): void {
+  if (!warned) {
+    warned = true
+    // Named once per page, not per toast: a message repeated on every outcome trains people to
+    // filter it, and this one needs to be read.
+    console.error(
+      '[nds] useToast() was called with no <ToastProvider> above it. The toast still rendered, ' +
+        "but through a fallback that no one owns. Mount the DS ToastProvider at this surface's " +
+        'composition root (see ProductsNextClient.tsx / _studio/StudioClient.tsx) — the root ' +
+        "layout's provider is the old library's and does not satisfy this hook.",
+    )
+  }
+  if (typeof document === 'undefined') return
+  let host = document.querySelector<HTMLDivElement>('.nds-toasts-fallback')
+  if (!host) {
+    host = document.createElement('div')
+    host.className = FALLBACK_HOST_CLASS
+    document.body.appendChild(host)
+  }
+  const el = document.createElement('div')
+  el.className = `nds-toast ${tone}`
+  el.setAttribute('role', 'status')
+  // Only a string can be rendered without React. A node is described rather than dropped, because
+  // "an outcome happened and we cannot show it" is still worth more than nothing.
+  el.textContent = typeof message === 'string' || typeof message === 'number' ? String(message) : 'Done'
+  host.appendChild(el)
+  setTimeout(() => el.remove(), duration)
+}
+
+/**
+ * `const { toast } = useToast()`.
+ *
+ * Works with or without a `<ToastProvider>` — but mount one. See the note above for why the
+ * fallback exists and why it complains.
+ */
 export function useToast(): ToastApi {
   const ctx = useContext(ToastCtx)
-  if (!ctx) throw new Error('useToast must be used within <ToastProvider>')
-  return ctx
+  const fallback = useCallback<ToastApi['toast']>(
+    (message, tone = 'info', opts) => emitFallbackToast(message, tone, opts?.duration ?? 4000),
+    [],
+  )
+  // 🔴 The hook is called unconditionally above, before this branch — a `useCallback` after an early
+  // return would break the rules of hooks the first time a provider appeared mid-tree.
+  return ctx ?? { toast: fallback }
 }

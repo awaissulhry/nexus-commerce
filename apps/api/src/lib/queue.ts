@@ -30,7 +30,8 @@
  * graceful retries when it's not (maxRetriesPerRequest: null).
  */
 
-import { Queue, QueueEvents } from 'bullmq'
+import { QueueEvents } from 'bullmq'
+import { WorkspaceQueue as Queue } from './workspace-jobs.js'
 import Redis from 'ioredis'
 import { logger } from '../utils/logger.js'
 
@@ -357,6 +358,8 @@ export async function closeQueue() {
     await channelSyncQueue.close()
     await readCacheQueue.close()
     await searchIndexQueue.close()
+    await bulkJobQueue.close()
+    await adsSyncQueue.close()
     await queueEvents.close()
     await channelSyncQueueEvents.close()
     if (_redis) await _redis.quit()

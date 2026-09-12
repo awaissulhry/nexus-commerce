@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AD.2 — Pulls Amazon Ads performance reports and hydrates per-entity
  * metrics on Campaign / AdGroup / AdTarget / AdProductAd.
@@ -239,11 +240,11 @@ async function backfillAdSpendToProfit(
       // Pull existing row to recompute trueProfit with ad spend included.
       const existing = await prisma.productProfitDaily.findUnique({
         where: {
-          productId_marketplace_date: {
+          productId_marketplace_date: workspaceKey({
             productId: pa.productId,
             marketplace,
             date,
-          },
+          }),
         },
         select: {
           grossRevenueCents: true,
@@ -278,11 +279,11 @@ async function backfillAdSpendToProfit(
 
       await prisma.productProfitDaily.update({
         where: {
-          productId_marketplace_date: {
+          productId_marketplace_date: workspaceKey({
             productId: pa.productId,
             marketplace,
             date,
-          },
+          }),
         },
         data: {
           advertisingSpendCents: spendCents,

@@ -355,8 +355,8 @@ export function startAutomationRuleEvaluatorCron(): void {
     logger.error('automation-rule-evaluator cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runAutomationRuleCronOnce()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runAutomationRuleCronOnce()
   })
   logger.info('automation-rule-evaluator cron: scheduled', { schedule })
 }

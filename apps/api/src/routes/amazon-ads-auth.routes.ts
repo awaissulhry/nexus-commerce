@@ -1,3 +1,5 @@
+import { start as startWorkspaceOAuth } from '../services/cx/oauth.service.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Amazon Advertising API — LWA OAuth flow.
  *
@@ -198,7 +200,7 @@ async function dualWriteGrantToCore(input: {
       metadata: scope.metadata as Prisma.InputJsonValue,
     }
     await prisma.connectionScope.upsert({
-      where: { connectionId_kind_externalId: { connectionId, kind: 'profile', externalId: scope.externalId } },
+      where: { connectionId_kind_externalId: workspaceKey({ connectionId, kind: 'profile', externalId: scope.externalId }) },
       create: { connectionId, kind: 'profile', externalId: scope.externalId, ...data },
       update: data,
     })
@@ -210,6 +212,11 @@ async function dualWriteGrantToCore(input: {
 const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
   // ── Step 1: redirect operator to Amazon consent page ──────────────────
   fastify.get('/amazon-ads/auth/connect', async (_request, reply) => {
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+      const flow = await startWorkspaceOAuth({ channelKey: 'AMAZON_ADS', intent: 'connect', actor: { kind: 'operator', userId: _request.authUser?.id } })
+      reply.setCookie(flow.cookie.name, flow.cookie.value, { path: '/api/cx/callback', httpOnly: true, secure: process.env.COOKIE_SECURE !== 'false', sameSite: process.env.COOKIE_SECURE === 'false' ? 'lax' : 'none', maxAge: flow.cookie.maxAgeSec })
+      return reply.redirect(flow.authorizeUrl)
+    }
     if (!CLIENT_ID) {
       return reply.code(500).send({
         error: 'AMAZON_ADS_CLIENT_ID env var not set',
@@ -245,6 +252,7 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── Step 2: exchange code for tokens, discover + save profiles ─────────
   fastify.get('/amazon-ads/auth/callback', async (request, reply) => {
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1') return reply.redirect(`/api/cx/callback/amazon_ads?${new URLSearchParams(request.query as Record<string, string>)}`)
     const { code, error, error_description, state } = request.query as Record<string, string>
 
     if (error) {
@@ -351,7 +359,7 @@ const amazonAdsAuthRoutes: FastifyPluginAsync = async (fastify) => {
       const accountLabel = profile.accountInfo?.name ?? `Account ${profileId}`
 
       const row = await prisma.amazonAdsConnection.upsert({
-        where: { profileId },
+        where: { workspace_profileId: workspaceKey({ profileId: profileId }) },
         create: {
           profileId,
           marketplace: marketplaceStringId,

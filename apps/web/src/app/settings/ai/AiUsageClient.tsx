@@ -24,7 +24,7 @@ import {
   Wallet,
   TrendingUp,
 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { cn } from '@/lib/utils'
 import { getBackendUrl } from '@/lib/backend-url'
 

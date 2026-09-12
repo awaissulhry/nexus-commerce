@@ -11,8 +11,8 @@
 // every item has at least one scan recorded.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { ArrowLeft, Package, CheckCircle2, AlertTriangle, Loader2, Scale, Globe, Boxes, Split, FileText } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'

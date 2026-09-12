@@ -44,7 +44,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Info, ShieldAlert } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { HvSlotProps } from './slot-contract'
 

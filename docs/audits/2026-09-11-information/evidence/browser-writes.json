@@ -1,0 +1,325 @@
+{
+  "fixture": true,
+  "writes": [
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 404,
+      "response": {
+        "message": "Route POST:/api/products/store-demo/shopify-linked/schema-subscriptions?accountId=shopify-b&market=GLOBAL&locale=en not found",
+        "error": "Not Found",
+        "statusCode": 404
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 404,
+      "response": {
+        "message": "Route POST:/api/products/store-demo/shopify-linked/schema-subscriptions?accountId=shopify-b&market=GLOBAL&locale=en not found",
+        "error": "Not Found",
+        "statusCode": 404
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 404,
+      "response": {
+        "message": "Route POST:/api/products/store-demo/shopify-linked/schema-subscriptions?accountId=shopify-b&market=GLOBAL&locale=en not found",
+        "error": "Not Found",
+        "statusCode": 404
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/cells",
+      "body": {
+        "cells": [
+          {
+            "ownerId": "gid://shopify/Product/202",
+            "fieldId": "title",
+            "token": "4cf22fe8c028d8e24e3477fe168b6dc8a9d41451e2ec2a238d81a7b37b75b5a8",
+            "baseline": "Fixture Shopify 202",
+            "colId": "name",
+            "intent": "set",
+            "value": "Shopify browser alias draft"
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "cells": {
+          "name": {
+            "ok": true,
+            "shopifyWrite": {
+              "ownerId": "gid://shopify/Product/202",
+              "fieldId": "title",
+              "token": "a5429f4565538bff2ce9db179e016c61ab17a411c13e43d4ba860f58d7dd77db",
+              "baseline": "Fixture Shopify 202"
+            }
+          }
+        },
+        "listing": {
+          "id": "shopify-b-2-store-demo",
+          "version": 2
+        }
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/bulk",
+      "body": {
+        "changes": [
+          {
+            "id": "store-demo",
+            "field": "attr_material_composition",
+            "value": [
+              {
+                "material": "cotton",
+                "percentage": 75
+              },
+              {
+                "material": "polyester",
+                "percentage": 20
+              }
+            ]
+          }
+        ],
+        "marketplaceContexts": [
+          {
+            "marketplace": "IT",
+            "locale": "it"
+          }
+        ],
+        "expectedVersion": 2
+      },
+      "status": 400,
+      "response": {
+        "errors": [
+          {
+            "id": "store-demo",
+            "field": "attr_material_composition",
+            "error": "Material composition percentage values must total 100"
+          }
+        ]
+      }
+    },
+    {
+      "url": "/api/products/bulk",
+      "body": {
+        "changes": [
+          {
+            "id": "store-demo",
+            "field": "attr_material_composition",
+            "value": [
+              {
+                "material": "cotton",
+                "percentage": 75
+              },
+              {
+                "material": "polyester",
+                "percentage": 20
+              }
+            ]
+          }
+        ],
+        "marketplaceContexts": [
+          {
+            "marketplace": "IT",
+            "locale": "it"
+          }
+        ],
+        "expectedVersion": 2
+      },
+      "status": 400,
+      "response": {
+        "errors": [
+          {
+            "id": "store-demo",
+            "field": "attr_material_composition",
+            "error": "Material composition percentage values must total 100"
+          }
+        ]
+      }
+    },
+    {
+      "url": "/api/products/bulk",
+      "body": {
+        "changes": [
+          {
+            "id": "store-demo",
+            "field": "attr_material_composition",
+            "value": [
+              {
+                "material": "cotton",
+                "percentage": 75
+              },
+              {
+                "material": "polyester",
+                "percentage": 25
+              }
+            ]
+          }
+        ],
+        "marketplaceContexts": [
+          {
+            "marketplace": "IT",
+            "locale": "it"
+          }
+        ],
+        "expectedVersion": 2
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "operationId": "cmtwdg91p009hnjmpx7kqbboo",
+        "updated": 1,
+        "cascadeCount": 0,
+        "affectedChildren": 0,
+        "elapsedMs": 18,
+        "currentVersion": 3,
+        "versionOf": "product"
+      }
+    },
+    {
+      "url": "/api/products/bulk",
+      "body": {
+        "changes": [
+          {
+            "id": "store-demo",
+            "field": "attr_shipping_profile_id",
+            "value": "101",
+            "target": "channel",
+            "intent": "set"
+          }
+        ],
+        "marketplaceContexts": [
+          {
+            "channel": "ETSY",
+            "marketplace": "GLOBAL",
+            "accountId": "etsy-a",
+            "locale": "en",
+            "aliasKey": ""
+          }
+        ],
+        "expectedVersion": 1
+      },
+      "status": 200,
+      "response": {
+        "success": true,
+        "operationId": "cmtwdj93o009knjmpf3jfxlc1",
+        "updated": 1,
+        "normalizedChanges": [
+          {
+            "id": "store-demo",
+            "field": "attr_shipping_profile_id",
+            "value": 101
+          }
+        ],
+        "cascadeCount": 0,
+        "affectedChildren": 0,
+        "elapsedMs": 16,
+        "currentVersion": 2,
+        "versionOf": "channelListing"
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/cells",
+      "body": {
+        "cells": [
+          {
+            "ownerId": "gid://shopify/Product/202",
+            "fieldId": "title",
+            "token": "4cf22fe8c028d8e24e3477fe168b6dc8a9d41451e2ec2a238d81a7b37b75b5a8",
+            "baseline": "Fixture Shopify 202",
+            "colId": "name",
+            "intent": "set",
+            "value": "Verified Shopify alias draft"
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "ok": true,
+        "cells": {
+          "name": {
+            "ok": true,
+            "shopifyWrite": {
+              "ownerId": "gid://shopify/Product/202",
+              "fieldId": "title",
+              "token": "3e572849857052374e98923456d750a926025dee181e0165588fbb028d0485d1",
+              "baseline": "Fixture Shopify 202"
+            }
+          }
+        },
+        "listing": {
+          "id": "shopify-b-2-store-demo",
+          "version": 2
+        }
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    },
+    {
+      "url": "/api/products/store-demo/shopify-linked/schema-subscriptions",
+      "body": {},
+      "status": 200,
+      "response": {
+        "live": false,
+        "reason": "Shopify live notifications require a public HTTPS API address."
+      }
+    }
+  ]
+}

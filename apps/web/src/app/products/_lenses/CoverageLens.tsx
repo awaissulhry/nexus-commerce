@@ -15,7 +15,7 @@
  * P.10 was the original feature; this is a pure file extract.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { GitBranch, Network } from 'lucide-react'
 import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'

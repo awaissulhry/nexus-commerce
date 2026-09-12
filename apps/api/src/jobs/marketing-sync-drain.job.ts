@@ -38,6 +38,6 @@ export function startMarketingSyncDrainCron(): void {
   }
   // Every minute — the grace window (5 min) is the real delay; this just
   // picks up rows promptly once their hold elapses.
-  scheduledTask = cron.schedule('* * * * *', () => void runMarketingSyncDrainCron())
+  scheduledTask = cron.schedule('* * * * *', async () => { await runMarketingSyncDrainCron() })
   logger.info('marketing-sync-drain cron scheduled (* * * * *)')
 }

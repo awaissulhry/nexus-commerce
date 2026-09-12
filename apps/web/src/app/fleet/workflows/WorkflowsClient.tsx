@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { RefreshCw, ShieldAlert, AlertTriangle, Plus } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'

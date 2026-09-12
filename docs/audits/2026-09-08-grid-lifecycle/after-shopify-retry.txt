@@ -1,0 +1,98 @@
+- generic: Grid lifecycle QA
+- button "Toggle theme"
+- button "Fail next sheet read"
+- generic: Next read armed; use More → Reload, then Try again.
+- main:
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+    - text: Products
+  - heading "Canvas travel bag" [level=1]
+  - generic "TRAVEL-BAG"
+  - generic: Draft
+  - generic: Parent
+  - generic "Every cell saves on its own. There is no page Save.": Autosave on
+  - button "Review listing information"
+  - generic: Editing
+  - radiogroup "Editing":
+    - radio "Shared product Not set up":
+      - generic: Shared product
+      - generic: ·
+      - generic: Not set up
+    - radio "Shopify Not set up" [checked]:
+      - generic: Shopify
+      - generic: ·
+      - generic: Not set up
+    - radio "Etsy Not set up":
+      - generic: Etsy
+      - generic: ·
+      - generic: Not set up
+  - button "Market":
+    - generic: GLOBAL
+  - region "Information":
+    - text: 3 rows
+    - generic: · Not listed · 1 listing · 2 variations
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "Required (1)":
+      - text: Required (1)
+    - button "Required 1 column" [pressed]:
+      - generic: Required
+      - generic: 1 column
+    - 'button "Mapping errors: Mapping has not been checked for this scope yet"':
+      - text: Mapping errors
+    - button "Requirements"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+        - row "Column with Header Selection Product Title":
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+            - generic: Product
+          - columnheader "Title":
+            - generic: Title
+        - row "Press Space to toggle row selection (unchecked) Collapse listing Parent · 2 children TRAVEL-BAG Primary · Listing draft · 2 variants · Not listed — 100% of required fields filled Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG · Primary on this channel and market" [expanded]:
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - gridcell "Collapse listing Parent · 2 children TRAVEL-BAG Primary · Listing draft · 2 variants · Not listed — 100% of required fields filled":
+            - button "Collapse listing" [expanded]:
+            - img "Parent · 2 children": P
+            - generic: TRAVEL-BAG
+            - img "Primary · Listing draft · 2 variants · Not listed — 100% of required fields filled":
+              - generic: 100%
+          - gridcell "Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG · Primary on this channel and market":
+            - generic: Canvas travel bag
+            - button "Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG · Primary on this channel and market":
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-1 TRAVEL-BAG-1 — 2 of 11 channel fields filled (including optional fields) · unlisted Actions for TRAVEL-BAG-1 Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-1 · Primary on this channel and market"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-1 TRAVEL-BAG-1 — 2 of 11 channel fields filled (including optional fields) · unlisted Actions for TRAVEL-BAG-1"':
+            - 'img "Child · Parent SKU: TRAVEL-BAG"': C
+            - generic: TRAVEL-BAG-1
+            - img "TRAVEL-BAG-1 — 2 of 11 channel fields filled (including optional fields) · unlisted":
+              - generic: 18%
+            - button "Actions for TRAVEL-BAG-1":
+          - gridcell "Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-1 · Primary on this channel and market":
+            - generic: Canvas travel bag
+            - button "Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-1 · Primary on this channel and market":
+        - 'row "Press Space to toggle row selection (unchecked) Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-2 TRAVEL-BAG-2 — 2 of 11 channel fields filled (including optional fields) · unlisted Actions for TRAVEL-BAG-2 Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-2 · Primary on this channel and market"':
+          - gridcell "Press Space to toggle row selection (unchecked)":
+            - checkbox "Press Space to toggle row selection (unchecked)"
+          - 'gridcell "Child · Parent SKU: TRAVEL-BAG TRAVEL-BAG-2 TRAVEL-BAG-2 — 2 of 11 channel fields filled (including optional fields) · unlisted Actions for TRAVEL-BAG-2"':
+            - 'img "Child · Parent SKU: TRAVEL-BAG"': C
+            - generic: TRAVEL-BAG-2
+            - img "TRAVEL-BAG-2 — 2 of 11 channel fields filled (including optional fields) · unlisted":
+              - generic: 18%
+            - button "Actions for TRAVEL-BAG-2":
+          - gridcell "Canvas travel bag Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-2 · Primary on this channel and market":
+            - generic: Canvas travel bag
+            - button "Follows Master. Uses the resolved Master value for this product and content language. Click to keep the current value as an override for TRAVEL-BAG-2 · Primary on this channel and market":
+    - status:
+      - generic: 3 rows
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- generic "Browser warnings and errors"

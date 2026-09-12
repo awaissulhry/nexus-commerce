@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * H.5 — eBay feed-mode push poller.
  *
@@ -264,7 +265,7 @@ export function startEbayFeedPollCron(): void {
 
   async function tick() {
     try {
-      await runEbayFeedPollTickOnce()
+      await runProfileTimer('ebay-feed-poll', runEbayFeedPollTickOnce, TICK_INTERVAL_MS)
     } catch (err) {
       logger.error('[ebay-feed-poll] cron tick failed', {
         error: err instanceof Error ? err.message : String(err),

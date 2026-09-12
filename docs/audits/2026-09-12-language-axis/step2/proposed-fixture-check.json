@@ -1,0 +1,8 @@
+{
+  "at": "2026-09-12T00:27:16.128201+00:00",
+  "original": "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+  "unchangedSHA256": "23e50ddc035920eed37c021c4a07c673c2502af62f97487bcabb6472e89ecabc",
+  "proposalSHA256": "1c8264c4c1e6b518f9fe53e977e4a03979d69a7ffaa42c3d5b0cc15e35845e4b",
+  "patchAppliedToProtectedFile": false,
+  "exitCode": 0
+}

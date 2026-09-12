@@ -14,7 +14,7 @@
 
 import { useEffect, useState } from 'react'
 import { Mail, AlertCircle, TrendingUp } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { getBackendUrl } from '@/lib/backend-url'
 import { ReviewsNav } from '../_shared/ReviewsNav'
 import { RequestsActionsClient } from './RequestsActionsClient'

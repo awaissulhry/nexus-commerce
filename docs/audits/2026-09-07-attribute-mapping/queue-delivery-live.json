@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-07T15:37:44.410Z",
+  "listingWrites": 0,
+  "isolatedRedis": true,
+  "ok": true,
+  "runtime": {
+    "configured": true,
+    "status": "ready"
+  },
+  "deduplicated": true,
+  "retryRecovered": true,
+  "executions": 2,
+  "result": {
+    "resolved": 42
+  }
+}

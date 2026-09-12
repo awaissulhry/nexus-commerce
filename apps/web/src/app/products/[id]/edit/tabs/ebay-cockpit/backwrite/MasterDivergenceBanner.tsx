@@ -24,7 +24,7 @@
 // component remounts will resurface it if divergence persists.
 
 import { useCallback, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Loader2, ArrowUp, X, GitMerge } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { cn } from '@/lib/utils'

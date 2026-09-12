@@ -1,13 +1,14 @@
 'use client'
 
+import { usePresentationNavigationGuard } from '../Presentation/usePresentationNavigationGuard'
+
 /**
  * DS-1 — Description Studio: the rebuilt eBay description-theme UI. One DS
  * Drawer (full height, min(1440px, 96vw)) replacing the tabbed modal with a
  * single always-visible surface:
  *
- *  - top context bar: ONE product chip set that is BOTH the preview seed and
- *    the push selection (star = currently previewing; cap mirrors the push
- *    route), ONE market select (preview & push), Desktop/Mobile width toggle;
+ *  - top context bar: a product chip set with a preview star and separate explicit
+ *    push checkboxes (cap mirrors the push route), ONE market select (preview & push), Desktop/Mobile width toggle;
  *  - 3-pane body: theme rail (240px) | editor | always-mounted live preview
  *    with the status strip (the truth surface) docked under it;
  *  - collapsible push dock at the bottom (draft-copy escalation, verbatim
@@ -30,6 +31,7 @@ import { ChevronDown, ChevronUp, Copy, Loader2, Monitor, Plus, RefreshCw, Send, 
 import { cn } from '@/lib/utils'
 import { Drawer } from '@/design-system/components/Drawer'
 import { Banner } from '@/design-system/components/Banner'
+import { Field } from '@/design-system/components/Field'
 import { EmptyState } from '@/design-system/components/EmptyState'
 import { Button } from '@/design-system/primitives/Button'
 import { Checkbox } from '@/design-system/primitives/Checkbox'
@@ -49,6 +51,7 @@ import { StatusStrip, type RenderStatus } from './StatusStrip'
 import { useStudioConfirm } from './StudioConfirm'
 import { noteIsFlagged, splitThemeNote, ThemeNote } from './ThemeNote'
 import { THEME_TOKEN_INFO, THEME_TOKENS } from './tokens'
+import styles from './description-studio.module.css'
 import {
   MAX_PUSH_PRODUCTS,
   type PreviewProduct,
@@ -64,6 +67,14 @@ const MOBILE_W = 375
 
 export interface EbayDescriptionStudioProps {
   open: boolean
+  accountId?: string
+  aliasKey?: string
+  allowPublish?: boolean
+  /** Full workspace host; shares the editor and its preview with the drawer. */
+  embedded?: boolean
+  /** Lets a workspace protect scope changes while an explicit-save editor has pending work. */
+  onPendingChange?: (pending: boolean) => void
+  lockMarketplace?: boolean
   onClose: () => void
   marketplace: string
   /** DS-5 — auto-discovered families from the open flat file (grid row order,
@@ -82,7 +93,7 @@ export interface EbayDescriptionStudioProps {
   onPushed?: () => void
 }
 
-export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts, sampleProductId, sampleProductSku, onChanged, onPushed }: EbayDescriptionStudioProps) {
+export function EbayDescriptionStudio({ open, accountId, aliasKey = '', allowPublish = true, embedded = false, lockMarketplace = false, onPendingChange, onClose, marketplace, seedProducts, sampleProductId, sampleProductSku, onChanged, onPushed }: EbayDescriptionStudioProps) {
   // DS-6 — every confirmation renders INSIDE this drawer (see StudioConfirm):
   // the app-wide confirm portals a z-50 Modal, which the z-61 drawer panel
   // covered, so discard / delete / reload / push gates were all invisible.
@@ -100,6 +111,8 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
   const [conflict, setConflict] = useState<{ currentVersion: number | null } | null>(null)
   // ── unified product chip set (preview AND push selection) ──
   const [products, setProducts] = useState<PreviewProduct[]>([])
+  const [pushSelection, setPushSelection] = useState<Set<string>>(() => new Set())
+  const pushProducts = useMemo(() => products.filter(p => pushSelection.has(p.id)), [products, pushSelection])
   const [starredId, setStarredId] = useState<string | null>(null)
   const [addFeedback, setAddFeedback] = useState<{ text: string; tone: 'info' | 'warn' } | null>(null)
   /** DS-5 — persistent honest-truncation note when seedProducts exceeds the cap. */
@@ -122,6 +135,8 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
   const [pushBusy, setPushBusy] = useState(false)
   const [pushError, setPushError] = useState<string | null>(null)
   const [pushResult, setPushResult] = useState<{ res: PushResult; themeName: string; at: string } | null>(null)
+  useEffect(() => { onPendingChange?.(dirty || busy || pushBusy) }, [onPendingChange, dirty, busy, pushBusy])
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange])
 
   const editorBoxRef = useRef<HTMLDivElement>(null)
   const previewBoxRef = useRef<HTMLDivElement>(null)
@@ -187,15 +202,16 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     const ctrl = new AbortController()
     void (async () => {
       const r = await fetchJson<ThemeUsage>(
-        `${getBackendUrl()}/api/ebay/description-themes/usage?marketplace=${encodeURIComponent(market)}`,
+        `${getBackendUrl()}/api/ebay/description-themes/usage?marketplace=${encodeURIComponent(market)}&aliasKey=${encodeURIComponent(aliasKey)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ''}${embedded && sampleProductId ? `&productId=${encodeURIComponent(sampleProductId)}` : ''}`,
         { signal: ctrl.signal },
       )
       if (!r.ok) { if (!r.aborted) { setUsage(null); setUsageError(r.error) } return }
+      if (ctrl.signal.aborted) return
       setUsageError(null)
       setUsage(r.data)
     })()
     return () => ctrl.abort()
-  }, [open, market, usageTick])
+  }, [open, market, accountId, aliasKey, embedded, sampleProductId, usageTick])
 
   // Staleness — the whole chip set at once. Failure = gray "unknown" pill.
   useEffect(() => {
@@ -206,10 +222,11 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     const t = setTimeout(() => {
       void (async () => {
         const r = await fetchJson<{ products: StalenessEntry[] }>(
-          `${getBackendUrl()}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(ids.join(','))}&marketplace=${encodeURIComponent(market)}`,
+          `${getBackendUrl()}/api/ebay/description-themes/staleness?productIds=${encodeURIComponent(ids.join(','))}&marketplace=${encodeURIComponent(market)}&aliasKey=${encodeURIComponent(aliasKey)}${accountId ? `&accountId=${encodeURIComponent(accountId)}` : ''}`,
           { signal: ctrl.signal },
         )
         if (!r.ok) { if (!r.aborted) setStalenessError(r.error); return }
+        if (ctrl.signal.aborted) return
         setStalenessError(null)
         const next: Record<string, StalenessEntry> = {}
         for (const p of r.data.products) next[p.productId] = p
@@ -217,7 +234,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       })()
     }, 300)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [open, products, market, stalenessTick])
+  }, [open, products, market, accountId, aliasKey, stalenessTick])
 
   // ── ONE real-time funnel: what changed decides what refreshes ──────────────
   //  mutation (save/delete/setDefault/push) → themes + usage + staleness + preview
@@ -295,6 +312,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       // DS-5 — the WHOLE flat file's eligible families seed the chip set.
       const { chips, total } = deriveSeed()
       setProducts(chips)
+      setPushSelection(new Set())
       setStarredId(starFor(chips))
       setSeedCapNote(capNoteFor(total))
       setAddFeedback(null)
@@ -350,6 +368,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       testId: 'studio-confirm-discard',
     })
   }, [dirty, draft.name, confirm])
+  usePresentationNavigationGuard(open && (dirty || busy || pushBusy), async () => !busy && !pushBusy && await guardDirty())
 
   // Esc, backdrop and the drawer's × all land here (Drawer calls onClose).
   const requestClose = useCallback(() => {
@@ -525,7 +544,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
   }, [products])
 
   // ── live preview — debounced render, aborting stale requests. Gated ONLY on
-  // [open, previewProduct, market, draftHtml, refreshTick] — NO tab gate; the
+  // [open, previewProduct, market, draftHtml, refreshTick, accountId, aliasKey] — NO tab gate; the
   // pane is always mounted. A failure keeps the last GOOD frame (dimmed). ────
   useEffect(() => {
     if (!open) return
@@ -542,7 +561,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
         // 'single'). Hardcoding 'group' made the preview of a standalone
         // product render gallery sections the push would never send.
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: previewProduct.id, marketplace: market, themeHtml: draftHtml }),
+        body: JSON.stringify({ productId: previewProduct.id, marketplace: market, themeHtml: draftHtml, accountId, aliasKey }),
         signal: ctrl.signal,
       })
       if (!r.ok) {
@@ -562,7 +581,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       })
     }, 500)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [open, previewProduct, market, draftHtml, refreshTick])
+  }, [open, previewProduct, market, draftHtml, refreshTick, accountId, aliasKey])
 
   // Measure the preview pane so the 920px desktop frame scales to fit (same
   // math as the modal, no tab gate — the pane exists whenever the drawer does).
@@ -622,25 +641,27 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
 
   // ── push — the SAVED theme only, danger-gated (verbatim from the modal) ────
   const pushDraftCopy = noteIsFlagged(selected?.notes)
-  const pushBlockReason = isNew
+  const pushBlockReason = !allowPublish
+    ? 'Save the library item here. Publication is a separate destination review in the listing workflow.'
+    : isNew
     ? 'Save the theme first — the push sends a SAVED theme, and this new theme has no saved version yet.'
     : dirty
       ? `Unsaved edits — the push would send the last SAVED version of "${selected?.name ?? draft.name}", not what the editor shows. Save (or discard) your edits first.`
       : selected && !selected.active
         ? 'This theme is inactive — inactive themes never render. Activate and save it before pushing.'
-        : products.length === 0
-          ? 'Add at least one product to enable the push.'
+        : pushProducts.length === 0
+          ? 'Check at least one product family for this listing update.'
           : null
 
   /** Staleness across the whole chip set — drives the dock pill AND the
    *  "already in sync" line in the confirmation. */
   const staleSummary = useMemo(() => {
-    const entries = products.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)
+    const entries = pushProducts.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)
     return { total: entries.length, stale: entries.filter((e) => e.stale).length }
-  }, [products, staleness])
+  }, [pushProducts, staleness])
 
   const runPush = async () => {
-    if (!selected || dirty || products.length === 0 || pushBusy) return
+    if (!allowPublish || !selected || dirty || pushProducts.length === 0 || pushBusy) return
     // The confirmation lives INSIDE the drawer (DS-6) and scrolls, so the full
     // family list is shown — no "… and N more" the operator can't inspect.
     const ok = await confirm({
@@ -658,11 +679,11 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
         <div className="flex flex-col gap-2.5">
           <p>
             This revises the description of <span className="font-semibold">EVERY live eBay listing</span> (primary
-            + adopted shared listings) of these {products.length} product famil
-            {products.length === 1 ? 'y' : 'ies'} on {market}:
+            + adopted shared listings) of these {pushProducts.length} product famil
+            {pushProducts.length === 1 ? 'y' : 'ies'} on {market}:
           </p>
           <div className="max-h-40 overflow-y-auto rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1.5 flex flex-wrap gap-1">
-            {products.map((p) => (
+            {pushProducts.map((p) => (
               <span key={p.id}
                 className="inline-flex items-center gap-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-1.5 py-0.5 text-[11px] font-medium">
                 {p.sku}
@@ -703,7 +724,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
     const r = await fetchJson<PushResult>(`${getBackendUrl()}/api/ebay/description-push`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ productIds: products.map((p) => p.id), marketplace: market, themeId: selected.id }),
+      body: JSON.stringify({ productIds: pushProducts.map((p) => p.id), marketplace: market, themeId: selected.id }),
     })
     setPushBusy(false)
     if (!r.ok || !Array.isArray(r.data?.listings)) {
@@ -752,22 +773,23 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
       }
       return { tone: 'success' as const, label: `last push clean — ${ls.length} listing${ls.length === 1 ? '' : 's'}` }
     }
-    if (products.length === 0) return null
+    if (pushProducts.length === 0) return null
     if (stalenessError) return { tone: 'neutral' as const, label: 'staleness unknown' }
     if (staleSummary.total === 0) return null
     return staleSummary.stale > 0
       ? { tone: 'warning' as const, label: `${staleSummary.stale}/${staleSummary.total} stale` }
       : { tone: 'success' as const, label: 'in sync' }
-  }, [pushResult, products.length, staleSummary, stalenessError])
+  }, [pushResult, pushProducts.length, staleSummary, stalenessError])
 
   if (!open) return null
   return (
     <Drawer
+      mode={embedded ? 'embedded' : 'modal'}
       open
       onClose={requestClose}
       title="Description Studio"
-      subtitle="Themes wrap each market's description body at push time — galleries, specs and policies fill in automatically."
-      width="min(1440px, 96vw)"
+      subtitle={embedded ? undefined : "Themes wrap each market's description body at push time — galleries, specs and policies fill in automatically."}
+      width={embedded ? '100%' : 'min(1440px, 96vw)'}
       // DS-6 — confirmations render inside the panel instead of behind it.
       overlay={confirmOverlay}
       footer={
@@ -784,8 +806,10 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
         </>
       }
     >
-      <div className="h-full min-h-0 flex flex-col gap-3">
-        {/* ── top context bar: ONE chip set = preview AND push selection ── */}
+      <div className={styles.workspace}>
+        <Banner tone="info" title={embedded ? 'Shared description-theme library' : undefined}>{allowPublish
+          ? 'The star selects a preview product. Checkboxes select families for a one-time listing update. Save changes updates the shared theme; publication is a separate step.'
+          : 'The selected product supplies preview content. Save changes edits this shared theme for every product that uses it. Return to Presentation to change only this listing’s assignment or review publication.'}</Banner>
         <div className="shrink-0 flex flex-wrap items-start gap-3">
           <div className="flex-1 min-w-[280px] flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
@@ -813,6 +837,13 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                         starred
                           ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 text-slate-800 dark:text-slate-100'
                           : 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-200')}>
+                      {allowPublish && <Checkbox checked={pushSelection.has(p.id)} disabled={pushBusy}
+                        aria-label={`Include ${p.sku} in the listing update`}
+                        onChange={event => setPushSelection(previous => {
+                          const next = new Set(previous)
+                          event.target.checked ? next.add(p.id) : next.delete(p.id)
+                          return next
+                        })} />}
                       <button type="button" onClick={() => starProduct(p.id)}
                         title={starred ? `Previewing ${p.sku}` : `Preview ${p.sku} instead (moves the star)`}
                         className="p-0.5 rounded hover:bg-amber-100 dark:hover:bg-amber-900/40">
@@ -835,7 +866,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                         </span>
                       )}
                       <button type="button" onClick={() => removeProduct(p.id)} disabled={pushBusy}
-                        title={`Remove ${p.sku} from preview AND push`}
+                        title={`Remove ${p.sku} from ${allowPublish ? 'preview AND push' : 'preview'}`}
                         className="p-0.5 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 disabled:opacity-50">
                         <X className="w-3 h-3" />
                       </button>
@@ -845,7 +876,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
               </div>
             ) : (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                No products selected — search above. The ★ chip drives the preview; ALL chips are pushed.
+                Search for a product to preview.{allowPublish && ' Check its box only when you want to include its listings in an explicit update.'}
               </p>
             )}
             {/* DS-5 — honest truncation: the cap note persists (no silent cut). */}
@@ -858,27 +889,25 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
               </p>
             )}
           </div>
-          <label className="shrink-0 flex flex-col gap-1 text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
-            Market — preview &amp; push
-            <Select value={market} onChange={(e) => { setMarket(e.target.value); refetchAll('selection') }}
-              aria-label="Market — preview & push">
+          <Field label={allowPublish ? "Market — preview & push" : "Preview market"}>
+            <Select disabled={lockMarketplace} value={market} onChange={(e) => { setMarket(e.target.value); setPushSelection(new Set()); refetchAll('selection') }}
+              aria-label={allowPublish ? "Market — preview & push" : "Preview market"}>
               {EBAY_MARKETPLACES.map((m) => <option key={m} value={m}>{m}</option>)}
             </Select>
-          </label>
-          <label className="shrink-0 flex flex-col gap-1 text-[10.5px] font-medium text-slate-500 dark:text-slate-400">
-            Preview width
-            <SegmentedControl size="sm" value={previewWidth} onChange={(v) => setPreviewWidth(v as 'desktop' | 'mobile')}
+          </Field>
+          <Field label="Preview width">
+            <SegmentedControl ariaLabel="Preview width" size="sm" value={previewWidth} onChange={(v) => setPreviewWidth(v as 'desktop' | 'mobile')}
               options={[
                 { value: 'desktop', label: `Desktop ${DESKTOP_W}px`, icon: <Monitor size={13} /> },
                 { value: 'mobile', label: `Mobile ${MOBILE_W}px`, icon: <Smartphone size={13} /> },
               ]} />
-          </label>
+          </Field>
         </div>
 
         {/* ── 3-pane body ── */}
-        <div className="flex-1 min-h-0 flex gap-3">
+        <div className={styles.panes}>
           {/* LEFT — theme rail (240px) */}
-          <div className="w-[240px] shrink-0 border-r border-slate-200 dark:border-slate-700 pr-3 flex flex-col gap-1 min-h-0">
+          <div className={cn(styles.library, 'shrink-0 border-r border-slate-200 dark:border-slate-700 pr-3 flex flex-col gap-1 min-h-0')}>
             <Button size="sm" onClick={() => void startNew()} className="justify-start">
               <Plus className="w-3.5 h-3.5" /> New theme
             </Button>
@@ -944,7 +973,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
             ) : usage ? (
               <p className="mt-1 pt-1.5 border-t border-slate-200 dark:border-slate-700 text-[10px] leading-4 text-slate-400 px-1"
                 title={`Counts read from each ${market} eBay listing family's theme assignment`}>
-                {usage.total} {market} families · {usage.default} on default · {usage.raw} raw (no theme)
+                {usage.total} {market} families in this selection · {usage.default} on default · {usage.raw} raw (no theme)
               </p>
             ) : null}
           </div>
@@ -957,7 +986,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
               other, neither readable. `overflow-y-auto` (not `hidden`) so that
               when the push dock expands and squeezes this column, the editor
               SCROLLS instead of losing its bottom half. */}
-          <div ref={editorBoxRef} className="flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div ref={editorBoxRef} className={cn(styles.editor, 'flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden')}>
             <div className="shrink-0 flex items-center gap-2">
               <Input value={draft.name} placeholder="Theme name…" aria-label="Theme name"
                 onChange={(e) => { setDraft((d) => ({ ...d, name: e.target.value })); setDirty(true) }}
@@ -1055,7 +1084,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
           {/* RIGHT — always-mounted preview + status strip. Same rule as the
               editor: contained, and scrolls rather than clipping the status
               strip away when the dock takes the height. */}
-          <div className="flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden">
+          <div className={cn(styles.preview, 'flex-1 min-w-0 flex flex-col gap-2 min-h-0 overflow-y-auto overflow-x-hidden')}>
             <div className="shrink-0 flex items-center justify-between gap-2">
               <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Preview (as pushed){previewProduct ? ` — ★ ${previewProduct.sku} · ${market}` : ''}
@@ -1111,13 +1140,13 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
             Opaque, and stacked above the panes: this is the surface that gets
             read while a live write is being decided, so nothing may ever show
             through it. */}
-        <div className="shrink-0 relative z-[1] bg-[var(--surface-card)] border-t border-slate-200 dark:border-slate-700 pt-1.5 flex flex-col">
+        {allowPublish && <div className="shrink-0 relative z-[1] bg-[var(--surface-card)] border-t border-slate-200 dark:border-slate-700 pt-1.5 flex flex-col">
           <button type="button" onClick={() => setDockOpen((v) => !v)}
             className="w-full flex items-center gap-2 px-1 py-1 text-left rounded hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors"
             aria-expanded={dockOpen}>
             {dockOpen ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronUp className="w-3.5 h-3.5 text-slate-400" />}
             <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
-              Push to eBay — {products.length} product{products.length === 1 ? '' : 's'} · {market}
+              Push to eBay — {pushProducts.length} product{pushProducts.length === 1 ? '' : 's'} · {market}
             </span>
             {dockPill && <Pill tone={dockPill.tone}>{dockPill.label}</Pill>}
             <span className="ml-auto text-[10px] text-slate-400">{dockOpen ? 'collapse' : 'expand'}</span>
@@ -1143,9 +1172,9 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                 quantity, title and variations never change. Max {MAX_PUSH_PRODUCTS} products per push.
               </p>
               <StalenessPill
-                entries={products.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)}
+                entries={pushProducts.map((p) => staleness[p.id]).filter((e): e is StalenessEntry => !!e)}
                 skuById={skuById}
-                checkError={products.length > 0 ? stalenessError : null}
+                checkError={pushProducts.length > 0 ? stalenessError : null}
               />
               <div className="rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3 flex flex-col gap-1.5">
                 {/* Always-present push button — blocked states DISABLE it with the reason underneath, never hide it.
@@ -1157,7 +1186,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
                   onClick={() => void runPush()}>
                   {pushBusy
                     ? <span className="flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Pushing…</span>
-                    : <><Send className="w-3.5 h-3.5" /><span className="truncate">{`Push descriptions — ${products.length} product${products.length === 1 ? '' : 's'} → all live listings · theme "${selected?.name ?? (draft.name || '—')}" · ${market}`}</span></>}
+                    : <><Send className="w-3.5 h-3.5" /><span className="truncate">{`Push descriptions — ${pushProducts.length} product${pushProducts.length === 1 ? '' : 's'} → all live listings · theme "${selected?.name ?? (draft.name || '—')}" · ${market}`}</span></>}
                 </Button>
                 {pushBlockReason ? (
                   <p className="text-xs text-amber-600 dark:text-amber-400">{pushBlockReason}</p>
@@ -1182,7 +1211,7 @@ export function EbayDescriptionStudio({ open, onClose, marketplace, seedProducts
               </div>
             </div>
           )}
-        </div>
+        </div>}
       </div>
     </Drawer>
   )

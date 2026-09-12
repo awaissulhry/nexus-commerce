@@ -6,6 +6,38 @@
   "main": "./dist/vault.js",
   "types": "./dist/vault.d.ts",
   "exports": {
+    "./shopify-information-editing": {
+      "types": "./dist/shopify-information-editing.d.ts",
+      "default": "./dist/shopify-information-editing.js"
+    },
+    "./shopify-information": {
+      "types": "./dist/shopify-information.d.ts",
+      "default": "./dist/shopify-information.js"
+    },
+    "./shopify-linked-products": {
+      "types": "./dist/shopify-linked-products.d.ts",
+      "default": "./dist/shopify-linked-products.js"
+    },
+    "./shopify-media": {
+      "types": "./dist/shopify-media.d.ts",
+      "default": "./dist/shopify-media.js"
+    },
+    "./listing-readiness": {
+      "types": "./dist/listing-readiness.d.ts",
+      "default": "./dist/listing-readiness.js"
+    },
+    "./reference-values": {
+      "types": "./dist/reference-values.d.ts",
+      "default": "./dist/reference-values.js"
+    },
+    "./ebay-media": {
+      "types": "./dist/ebay-media.d.ts",
+      "default": "./dist/ebay-media.js"
+    },
+    "./catalog-transfer": {
+      "types": "./dist/catalog-transfer.d.ts",
+      "default": "./dist/catalog-transfer.js"
+    },
     ".": {
       "types": "./dist/vault.d.ts",
       "default": "./dist/vault.js"
@@ -45,16 +77,36 @@
     "./master-sheet": {
       "types": "./dist/master-sheet.d.ts",
       "default": "./dist/master-sheet.js"
+    },
+    "./amazon-media": {
+      "types": "./dist/amazon-media.d.ts",
+      "default": "./dist/amazon-media.js"
+    },
+    "./business-profile": {
+      "types": "./dist/business-profile.d.ts",
+      "default": "./dist/business-profile.js"
+    },
+    "./shopify-content": {
+      "types": "./dist/shopify-content.d.ts",
+      "default": "./dist/shopify-content.js"
+    },
+    "./product-media": {
+      "types": "./dist/product-media.d.ts",
+      "default": "./dist/product-media.js"
     }
   },
   "scripts": {
     "dev": "tsc --watch",
     "build": "tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "clean": "rm -rf dist",
     "test": "vitest run"
   },
   "dependencies": {
-    "zod": "^4.3.6"
+    "json-bigint": "1.0.0",
+    "zod": "^4.3.6",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

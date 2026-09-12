@@ -18,45 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Search } from 'lucide-react'
 
 import { Button, Input, InfoTip, Pill, SegmentedControl } from '@/design-system/primitives'
-import {
-  CellSaveTracker,
-  EmptyValue,
-  ExpandButton,
-  ExpandSlot,
-  GridPager,
-  GridSearchSlot,
-  GridSelectionActions,
-  GridSheet,
-  GridSheetStatus,
-  GridToolbar,
-  FollowsCell,
-  IdentityChip,
-  LongTextCell,
-  NexusGrid,
-  ReadinessCell,
-  SHEET_GRID_OPTIONS,
-  SkuTag,
-  gridSelection,
-  lengthValidation,
-  longTextEditor,
-  numericColumn,
-  numericEditor,
-  roundTripClassRules,
-  saveCell,
-  selectEditor,
-  selectValidation,
-  sheetClassRules,
-  sheetPasteProcessor,
-  type ColDef,
-  type ColGroupDef,
-  type GridApi,
-  type GridReadyEvent,
-  type ICellRendererParams,
-  type IRowNode,
-  type ReadinessValue,
-  type ValueGetterParams,
-  type ValueSetterParams,
-} from '@/design-system/grid'
+import { composeCellTooltip, longTextTooltipLine, lengthCapOf, CellSaveTracker, EmptyValue, ExpandButton, ExpandSlot, GridPager, GridSearchSlot, GridSelectionActions, GridSheet, GridSheetStatus, GridToolbar, FollowsCell, IdentityChip, LongTextCell, NexusGrid, ReadinessCell, SHEET_GRID_OPTIONS, SkuTag, gridSelection, lengthValidation, longTextEditor, numericColumn, numericEditor, roundTripClassRules, saveCell, selectEditor, selectValidation, sheetClassRules, sheetPasteProcessor, type ColDef, type ColGroupDef, type GridApi, type GridReadyEvent, type ICellRendererParams, type IRowNode, type ReadinessValue, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
 
 import { columnApplies, columnRequiredByAny } from '@nexus/shared/master-sheet'
 
@@ -164,7 +126,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
     const build = (col: SheetColumn): ColDef<SheetRow> => {
       const base = col.kind === 'select'
         ? selectValidation<SheetRow>(col.options ?? [], col.mode ?? 'open', col.requiredBy.length > 0)
-        : lengthValidation<SheetRow>(col.maxLength ?? 4000, col.requiredBy.length > 0, !!col.maxBytes)
+        : lengthValidation<SheetRow>(lengthCapOf(col), col.requiredBy.length > 0)
       // Warn-never-block, and never flag a cell that does not apply to this row.
       const validation = { validate: (v: unknown, d: SheetRow, key: string) => (applies(d, col) ? base.validate(v, d, key) : { level: null as null }) }
 
@@ -191,15 +153,24 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
         },
         cellClass: (p) => (p.data && !applies(p.data, col) ? 'nds-ag-cell nds-cell-is-locked' : 'nds-ag-cell nds-cell-is-editable'),
         cellClassRules: { ...rules, ...rt },
+        // COMPOSED, reason first (#662) — see cellTooltip.ts. The long-text figures arrive here
+        // because the renderer no longer sets a rival `title` on its own span.
         tooltipValueGetter: (p) => {
           if (!p.data) return ''
-          const entry = tracker.get(p.data.id, col.key)
-          if (entry?.reason) return entry.reason
-          const v = validation.validate(p.value, p.data, col.key)
-          if (v.message) return v.message
-          if (p.data.values[col.key]?.inherited) return 'Inherited from the parent — edit to give this variation its own value'
-          if (!applies(p.data, col)) return p.data.isParent ? 'Belongs to each variation, not to the parent' : `Not part of ${p.data.productType ?? 'this product type'}`
-          return ''
+          const own = (): string => {
+            const v = validation.validate(p.value, p.data!, col.key)
+            if (v.message) return v.message
+            if (p.data!.values[col.key]?.inherited) return 'Inherited from the parent — edit to give this variation its own value'
+            if (!applies(p.data!, col)) return p.data!.isParent ? 'Belongs to each variation, not to the parent' : `Not part of ${p.data!.productType ?? 'this product type'}`
+            return ''
+          }
+          return composeCellTooltip(
+            tracker.get(p.data.id, col.key)?.reason,
+            own(),
+            col.kind === 'longtext'
+              ? longTextTooltipLine(p.value, { maxLength: col.maxLength, maxBytes: col.maxBytes, capFrom: col.capFrom })
+              : undefined,
+          )
         },
       }
 
@@ -219,10 +190,22 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
       if (col.kind === 'longtext') {
         return {
           ...def,
-          ...longTextEditor({ maxLength: Math.max(col.maxLength ?? 2000, 200) }),
+          /* 🔴 No `?? 2000`. This was the FOURTH invented cap for the same absent value (4000 twice,
+             2000 twice), and it is the one I walked past: I edited this file for `lengthValidation`'s
+             arity and did not grep it. My own rule says a fix to an invented default is not done
+             until you have grepped for the DEFAULT, not the call site — and the call site is exactly
+             what I fixed. The editor simply does not limit typing when the server declares no cap;
+             the server stays the authority on what it accepts. Matches `columns.tsx`. */
+          ...longTextEditor(col.maxLength ? { maxLength: Math.max(col.maxLength, 200) } : {}),
           editable,
           cellRenderer: LongTextCell,
-          cellRendererParams: { maxLength: col.maxLength, countBytes: !!col.maxBytes, required: col.requiredBy.length > 0 },
+          /* 🔴 The RAW caps, not a cap plus a unit flag (AG.1, §9.3a). `countBytes: !!col.maxBytes`
+             passed the byte cap's EXISTENCE while dropping its VALUE, so a column with a byte cap
+             and no character cap counted bytes against `undefined` and reported a capped field as
+             uncapped. Missed on the first sweep because this file shares a basename with the
+             studio's `MasterSheet.tsx`, and because every `LongTextCaps` field is optional — so
+             dropping `maxBytes` and passing a `countBytes` nothing reads is silently legal. */
+          cellRendererParams: { maxLength: col.maxLength, maxBytes: col.maxBytes, capFrom: col.capFrom, required: col.requiredBy.length > 0 },
         }
       }
       if (col.kind === 'number') {
@@ -480,7 +463,7 @@ export function MasterSheet({ market: marketProp, height, onMarketChange }: Mast
                       : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`
                   }
                 >
-                  <Pill tone="warning" size="sm"><AlertTriangle size={11} /> caps</Pill>
+                  <Pill tone="warning" size="md"><AlertTriangle size={11} /> caps</Pill>
                 </InfoTip>
               )}
               <Button size="sm" onClick={reload} disabled={loading}>{loading ? 'Loading…' : 'Reload'}</Button>

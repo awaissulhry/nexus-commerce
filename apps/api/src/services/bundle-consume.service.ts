@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * BD.2 — Bundle consume service.
  *
@@ -43,7 +44,7 @@ export interface BundleConsumeArgs {
 export async function consumeBundle(args: BundleConsumeArgs): Promise<{ componentMovementIds: string[]; componentsConsumed: number }> {
   if (args.quantity <= 0) throw new Error('consumeBundle: quantity must be > 0')
   const bundle = await prisma.bundle.findUnique({
-    where: { productId: args.productId },
+    where: { workspace_productId: workspaceKey({ productId: args.productId }) },
     include: { components: true },
   })
   if (!bundle) {
@@ -126,7 +127,7 @@ export async function bundleAtp(productId: string): Promise<{
   components: Array<{ productId: string; sku: string; required: number; onHand: number; canFulfill: number }>
 }> {
   const bundle = await prisma.bundle.findUnique({
-    where: { productId },
+    where: { workspace_productId: workspaceKey({ productId: productId }) },
     include: {
       components: {
         include: {

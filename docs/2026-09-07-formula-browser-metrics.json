@@ -1,0 +1,46 @@
+{
+  "768-light": {
+    "viewport": 768,
+    "theme": "light",
+    "dialogWidth": 728,
+    "dialogScrollWidth": 728,
+    "bodyWidth": 728,
+    "bodyScrollWidth": 728,
+    "minimumTextContrast": 9.87,
+    "lowContrast": [],
+    "smallTargets": []
+  },
+  "768-dark": {
+    "viewport": 768,
+    "theme": "dark",
+    "dialogWidth": 728,
+    "dialogScrollWidth": 728,
+    "bodyWidth": 728,
+    "bodyScrollWidth": 728,
+    "minimumTextContrast": 11.81,
+    "lowContrast": [],
+    "smallTargets": []
+  },
+  "320-dark": {
+    "viewport": 320,
+    "theme": "dark",
+    "dialogWidth": 280,
+    "dialogScrollWidth": 280,
+    "bodyWidth": 280,
+    "bodyScrollWidth": 280,
+    "minimumTextContrast": 11.81,
+    "lowContrast": [],
+    "smallTargets": []
+  },
+  "320-light": {
+    "viewport": 320,
+    "theme": "light",
+    "dialogWidth": 280,
+    "dialogScrollWidth": 280,
+    "bodyWidth": 280,
+    "bodyScrollWidth": 280,
+    "minimumTextContrast": 9.87,
+    "lowContrast": [],
+    "smallTargets": []
+  }
+}

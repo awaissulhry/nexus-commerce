@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * L.2 — Lot tracking service.
  *
@@ -114,7 +115,7 @@ export async function receiveIntoLotInTx(tx: Tx, args: {
   if (args.unitsAdded <= 0) throw new Error('receiveIntoLot: unitsAdded must be > 0')
 
   const existing = await tx.lot.findUnique({
-    where: { productId_lotNumber: { productId: args.productId, lotNumber: args.lotNumber.trim() } },
+    where: { productId_lotNumber: workspaceKey({ productId: args.productId, lotNumber: args.lotNumber.trim() }) },
   })
 
   if (existing) {

@@ -9,7 +9,7 @@
 // kit yet, with a subtle "create one" affordance.
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Palette,
   Copy,

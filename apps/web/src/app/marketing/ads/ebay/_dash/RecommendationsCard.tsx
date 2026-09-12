@@ -6,7 +6,7 @@
  * sentence, sample entities, and a prefilled CTA. Zero-count rows hide;
  * nothing is padded.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import type { RecommendationRow } from '../_lib'
 
 export function RecommendationsCard({ recs }: { recs: RecommendationRow[] | null }) {

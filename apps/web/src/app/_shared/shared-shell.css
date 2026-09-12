@@ -181,7 +181,7 @@
   overflow: hidden;
   transition: width .18s ease, box-shadow .18s ease;
 }
-.h10-rail:hover { width: 344px; overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
+.h10-rail:hover { width: min(344px, 100vw); overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
 /* Pinned: render expanded like hover, but docked (reserves space via
    --rail-reserve, no floating shadow). Mirrors the hover reveals so labels,
    chevrons and chrome stay visible without an actual :hover. */
@@ -249,7 +249,7 @@
    Kept as separate rules rather than comma-joined onto the :hover selectors above:
    a browser without :has() support drops the whole rule it appears in, and joining
    them would take the working mouse behaviour down with it. */
-.h10-rail:has(:focus-visible) { width: 344px; overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
+.h10-rail:has(:focus-visible) { width: min(344px, 100vw); overflow-y: auto; box-shadow: var(--nds-shadow-rail); }
 .h10-rail:has(:focus-visible) .h10-brand .word { opacity: 1; }
 .h10-rail:has(:focus-visible) .h10-brand-switch { opacity: 1; pointer-events: auto; }
 .h10-rail:has(:focus-visible) .h10-item .lbl { opacity: 1; }
@@ -310,17 +310,17 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
    chevron button is removed from flow so the icon keeps the full 50px zone. */
 .h10-parent-link { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; height: 100%; color: inherit; text-decoration: none; }
 .h10-parent-chev { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: flex-end; width: 44px; height: 100%; padding-right: 17px; border: 0; background: transparent; cursor: pointer; }
-.h10-rail:not(:hover):not(.pinned) .h10-parent-chev { display: none; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-parent-chev { display: none; }
 .h10-parent-chev .chev { margin: 0; }
 
 /* Collapsed: the indicator dot becomes a status dot on the icon's top-right
    corner instead of floating at the (empty) right edge. Hidden when a count
    badge is already shown there — the badge conveys the same signal. */
-.h10-rail:not(:hover):not(.pinned) .h10-item .h10-dot { position: absolute; left: 39px; top: 9px; margin: 0; }
-.h10-rail:not(:hover):not(.pinned) .h10-item .h10-nav-badge ~ .h10-dot { display: none; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-item .h10-dot { position: absolute; left: 39px; top: 9px; margin: 0; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-item .h10-nav-badge ~ .h10-dot { display: none; }
 
 .h10-sub { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 4px 60px; padding-right: 8px; }
-.h10-rail:not(:hover):not(.pinned) .h10-sub { display: none; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-sub { display: none; }
 .h10-subitem { display: flex; align-items: center; gap: 8px; white-space: nowrap; font-size: 12.5px; color: var(--nds-rail-text-2); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
 .h10-subitem:hover { background: var(--nds-rail-item-hover-2); color: var(--nds-rail-text-strong); }
 .h10-subitem.on { color: var(--nds-primary); font-weight: 600; }
@@ -376,7 +376,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 /* ── Rail chrome (header: controls + workspace; footer: recently-viewed + user).
    Text-heavy, so only shown when the rail is expanded (hover/pinned). ── */
 .h10-railhdr-wrap { display: flex; flex-direction: column; gap: 8px; padding: 0 10px 10px; flex-shrink: 0; }
-.h10-rail:not(:hover):not(.pinned) .h10-railhdr-wrap { display: none; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-railhdr-wrap { display: none; }
 .h10-railctl { display: flex; align-items: center; gap: 4px; }
 .h10-railbtn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 7px; border: 0; background: transparent; color: var(--nds-rail-text-2); cursor: pointer; transition: background .12s, color .12s; }
 .h10-railbtn:hover { background: var(--nds-rail-item-hover); color: var(--nds-rail-text-strong); }
@@ -388,7 +388,7 @@ button.h10-item { appearance: none; -webkit-appearance: none; border: 0; backgro
 .h10-ws-chev { color: var(--nds-rail-text-2); flex-shrink: 0; }
 
 .h10-railft-wrap { flex-shrink: 0; border-top: 1px solid var(--nds-rail-border); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
-.h10-rail:not(:hover):not(.pinned) .h10-railft-wrap { display: none; }
+.h10-rail:not(:hover):not(:has(:focus-visible)):not(.pinned) .h10-railft-wrap { display: none; }
 .h10-recent-hd { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; background: transparent; cursor: pointer; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--nds-rail-text-2); padding: 2px; }
 .h10-recent-hd:hover { color: var(--nds-rail-text-strong); }
 .h10-recent-chev { transition: transform .18s ease; flex-shrink: 0; }
@@ -453,6 +453,15 @@ body:has(.h10-shell),
   --nds-danger-text: #9c2f2a;
   --nds-imgup-drag: #e9f2ff;
   --nds-imgup-surface: #f7faff;
+  --nds-info-soft: var(--nds-blue-100);
+  --nds-info-strong: var(--nds-blue-700);
+  --nds-info-text: var(--nds-info-text-light);
+  --nds-tonal-bg: var(--nds-blue-50);
+  --nds-tonal-border: var(--nds-blue-200);
+  --nds-tonal-fg: var(--nds-blue-900);
+  --nds-fchip-on-bg: var(--nds-tonal-bg);
+  --nds-fchip-on-border: var(--nds-tonal-border);
+  --nds-fchip-on-fg: var(--nds-tonal-fg);
   --nds-pill-danger-bg: var(--nds-danger-soft);
   --nds-pill-danger-fg: var(--nds-danger-text);
   --nds-pill-neutral-bg: var(--nds-grey-100);
@@ -541,6 +550,39 @@ body:has(.h10-shell),
   --nds-grid-skeleton-shine: var(--nds-border-subtle);
   --nds-grid-loading-veil: color-mix(in srgb, var(--nds-surface) 60%, transparent);
   --nds-grid-pinned-shadow: 4px 0 6px -3px rgb(var(--nds-shadow-rgb) / 0.08);
+
+  /* 🔴 Found by `scripts/check-dark-pin-parity.mjs`, not by eye (hub #583). DS.2 minted a `.dark`
+     value for `--nds-chrome-bg` and this hand-kept list did not grow with it, so a light-pinned page
+     took the dark value. The diff found FOUR more in the same state, three of them the provenance
+     inks — the marks that explain where a cell's value came from, which is the one surface that must
+     stay legible when everything else is refusing. No contrast failure resulted; the shape is that
+     minting a dark value silently escapes a list maintained by hand.
+
+     `--nds-grid-ai-draft-bg` is deliberately ABSENT: its `.dark` value is identical to its `:root`
+     value, so a pin would be a no-op, and the guard only demands a pin where the two DIFFER. Noise
+     in this list is what made the misses invisible in the first place. */
+  /* 🔴 A LITERAL, and it has to be. The pin needs the light value of a token that `.dark`
+     redefines, so `var(--nds-chrome-bg)` would resolve to the dark value here and pin nothing. The
+     other three below use palette tokens (`--nds-purple-700`, `--nds-cyan-700`, `--nds-blue-700`)
+     because those are theme-independent; NO theme-independent token holds #18263b. Minting one is a
+     DS palette decision, not a page fix — raised rather than taken. This is the raw-hex ratchet's
+     +1 on this file. */
+  --nds-chrome-bg: #18263b;
+  --nds-prov-ai-fg: var(--nds-purple-700);
+  --nds-prov-formula-fg: var(--nds-cyan-700);
+  --nds-prov-inherited-fg: var(--nds-blue-700);
+
+  /* 🔴 The ALIAS case (hub #597). `--nds-topbar-bg` is `var(--nds-chrome-bg)` in `:root` with NO
+     `.dark` entry of its own, so no text comparison could ever see it — yet its RESOLVED value
+     changes with the theme, and on `/products/next` under `.dark` the topbar painted rgb(30,48,80)
+     beside a rail at rgb(24,38,59). An alias re-resolves only where its target is redefined on the
+     SAME element, so declaring it HERE (not in `:root`) is what fixes it.
+
+     `var(--nds-rail-bg)`, not a second `#18263b`: DS.2 measured both forms live and both work, but a
+     literal here is a second copy that can drift from the rail's own pin — and a drifted literal is
+     the miss this guard cannot catch, because both values would be present and neither would look
+     wrong alone. The alias tracks the rail instead. */
+  --nds-topbar-bg: var(--nds-rail-bg);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────────────────────

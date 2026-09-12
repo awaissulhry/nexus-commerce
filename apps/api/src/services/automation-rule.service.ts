@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W4.2 — AutomationRule evaluator service.
  *
@@ -304,7 +305,7 @@ export const ACTION_HANDLERS: Record<string, ActionHandler> = {
     }
 
     const rule = await prisma.replenishmentRule.findUnique({
-      where: { productId: rec.productId },
+      where: { workspace_productId: workspaceKey({ productId: rec.productId }) },
       select: { preferredSupplierId: true, isManufactured: true },
     })
     if (rule?.isManufactured) {

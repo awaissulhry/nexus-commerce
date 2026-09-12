@@ -107,12 +107,18 @@ function publicUser(u: {
 }
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && request.routeOptions.url?.startsWith('/api/auth/invitations')) return reply.code(410).send({ code: 'workspace_invitation_required', error: 'Use an invitation from the business profile’s team settings.' })
+  })
   const ua = (req: any): string | null =>
     (req.headers['user-agent'] as string | undefined)?.slice(0, 256) ?? null
 
   // ── CSRF token mint ────────────────────────────────────────────
-  fastify.get('/api/auth/csrf', async (_req, reply) => {
-    const token = issueCsrfToken()
+  fastify.get('/api/auth/csrf', async (req, reply) => {
+    // Opening another profile must not invalidate forms in existing tabs.
+    const existing = req.cookies[csrfCookieName()]
+    const token = existing && /^[a-zA-Z0-9_-]{32}$/.test(existing) ? existing : issueCsrfToken()
+    reply.header('Cache-Control', 'private, no-store')
     reply.setCookie(csrfCookieName(), token, csrfCookieOptions())
     return { csrfToken: token }
   })
@@ -250,6 +256,21 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
+  fastify.post<{ Body: { currentPassword?: unknown; newPassword?: unknown; confirmPassword?: unknown } }>('/api/auth/password/change', { preHandler: [requireAuth, requireCsrf], config: { rateLimit: { max: 8, timeWindow: '15 minutes' } } }, async (req, reply) => {
+    const { currentPassword, newPassword, confirmPassword } = req.body ?? {}
+    const user = await prisma.userProfile.findUnique({ where: { id: req.authUser!.id } })
+    if (!user?.passwordHash || typeof currentPassword !== 'string' || currentPassword.length > 512 || !(await verifyPassword(currentPassword, user.passwordHash)).ok) return reply.code(400).send({ error: 'Current password is incorrect.' })
+    if (typeof newPassword !== 'string' || newPassword !== confirmPassword) return reply.code(400).send({ error: 'Passwords do not match.' })
+    const strength = checkPasswordStrength(newPassword, [user.email, user.displayName])
+    if (!strength.ok) return reply.code(400).send({ error: strength.message })
+    if ((await verifyPassword(newPassword, user.passwordHash)).ok) return reply.code(400).send({ error: 'Choose a different password.' })
+    const changed = await prisma.userProfile.updateMany({ where: { id: user.id, passwordHash: user.passwordHash, status: 'active' }, data: { passwordHash: await hashPassword(newPassword) } })
+    if (changed.count !== 1) return reply.code(409).send({ error: 'Your login changed. Sign in again before changing the password.' })
+    await revokeAllSessions(user.id, req.authSessionId)
+    await writeAuthAudit({ actorUserId: user.id, ip: truncateIp(req.ip), userAgent: ua(req), entityType: 'User', entityId: user.id, action: 'password.changed' })
+    return { success: true }
+  })
+
   // ── Logout (current session) ───────────────────────────────────
   fastify.post('/api/auth/logout', { preHandler: requireCsrf }, async (req, reply) => {
     const token = (req.cookies as Record<string, string | undefined>)?.[sessionCookieName()]
@@ -278,7 +299,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   // effective set (financials.view already includes its finer grains).
   fastify.get('/api/auth/me', { preHandler: loadSession }, async (req, reply) => {
     if (!req.authUser) return reply.code(401).send({ error: 'Not authenticated', code: 'unauthenticated' })
-    const resolved = await resolvePermissions(req.authUser)
+    const resolved = req.__rbacResolved ?? await resolvePermissions(req.authUser)
     // S5 — does the user's role (or their per-user flag) require 2FA that
     // they haven't set up yet? Drives the "set up 2FA" nudge (never a block).
     const rolesRequireMfa = req.authUser.roleKeys.length

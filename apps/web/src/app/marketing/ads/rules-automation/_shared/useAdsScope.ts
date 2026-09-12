@@ -28,7 +28,8 @@
  */
 
 import { useCallback, useEffect, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   adsScopeNeedsNormalising, grainAvailability, parseAdsScope, patchAdsScope, resolveScopeReach,
   type AdsScope, type AdsScopePolicy, type GrainKey, type GrainState, type ScopeOptions, type ScopeReach,

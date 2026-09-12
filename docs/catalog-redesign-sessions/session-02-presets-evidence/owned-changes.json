@@ -1,0 +1,115 @@
+{
+  "changed": [
+    {
+      "path": "apps/api/src/routes/listing-wizard.routes.ts",
+      "status": "changed",
+      "before": "21db9ee74bb9af63b55284543ceb564fe12a144e0d48537a6523963f268ccc11",
+      "after": "68a34c15987f693b368120dc4354678dbcf119225c5f9c6a71b86e873bdc8a0a"
+    },
+    {
+      "path": "apps/api/src/routes/wizard-templates.routes.ts",
+      "status": "changed",
+      "before": "bb3bec719b34ebd16590b93d70d4c1b1f8243cf58f1f2aef21ff96cdcabee627",
+      "after": "ed2ef4416a02b6542c3708e980a9454d4a3a42cb13636076079df3a3361784d3"
+    },
+    {
+      "path": "apps/web/src/app/channels/listing-presets/ListingPresetsClient.tsx",
+      "status": "changed",
+      "before": "f8469acdca04d5e7380d56ce147d425c5930f02461a41026b4b83fb4c254afeb",
+      "after": "fc83c14586ee111d8f5705ce2e9b961f8aeae9d6255c5117b9e8635e01a45db4"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/ListWizardClient.tsx",
+      "status": "changed",
+      "before": "d41bd72d8324129730adb313f4c854a15f462a7ed0194a9d877176b2e3dce6b9",
+      "after": "4a74acd577f475f47a973ef608cd4225da3ea60871f1075c32394ff03c1a5acb"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/components/WizardHeader.tsx",
+      "status": "changed",
+      "before": "bf620f089785112b3afe4a2774ce8f581b7ee75a60b68badda3fa4ee86daccaa",
+      "after": "983d6bbaad1caf31b812c9a2fe52060f94d662aa58d764b45c381c8fd0c69b68"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/page.tsx",
+      "status": "changed",
+      "before": "90b6454427106d24575a0d8f7d7eba350f145ad9ad7a91b608342c85ff867a7f",
+      "after": "056619bdb2e03ab082b933fd17c0189c5edc87e74fc668d028ab4bb3ec858d18"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/steps/Step1Channels.tsx",
+      "status": "changed",
+      "before": "74a327eba45aee56d6f776d330ecc4658ffb3156aec00faa90b6d541ba89a199",
+      "after": "ca520afabfe7238504d64b7e1d5177f4c173e054d88b1a955852cd6d85f34ed1"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/steps/Step5Variations.tsx",
+      "status": "changed",
+      "before": "b61ccbb81f3e0c64533cf430502a038c7b60dbafd553ab6a9db2a0e1c5a4f7fa",
+      "after": "5a5c6a630544921d41da81de5b0f348ffca8deb241937bdb3a7d5074ab2acaa4"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/steps/Step9Submit.tsx",
+      "status": "changed",
+      "before": "a2f8d0ea14c58571b2b2d9c96f961ebeaef2d09f46fae88249dfae5b7741fe0e",
+      "after": "49d159768f2ff1a63a98faffdcbfd833bc563f690e3bc5846b88ed243d36ff1d"
+    }
+  ],
+  "new": [
+    {
+      "path": "apps/api/src/services/listing-wizard/product-presets-submission-patch.vitest.test.ts",
+      "status": "new",
+      "after": "1c00e81e099e7f4e4e103358cbf215a8eeb3ed20cc545707286481a3d34dc224"
+    },
+    {
+      "path": "apps/api/src/services/listing-wizard/product-presets-test-store.ts",
+      "status": "new",
+      "after": "ecabfec656f28ba1741da590bd41654afb5f5203763b80f94d80ea26378f5b2d"
+    },
+    {
+      "path": "apps/api/src/services/listing-wizard/product-presets.ts",
+      "status": "new",
+      "after": "196098f4ceb265a1af654ad9fddee9b913fbb5a23b53da4ff35ed2b45f10444e"
+    },
+    {
+      "path": "apps/api/src/services/listing-wizard/product-presets.vitest.test.ts",
+      "status": "new",
+      "after": "5f79071cebfc9a98db8e694e050df3813c0167b6602724f9f36c9d5ced063a87"
+    },
+    {
+      "path": "apps/api/src/routes/product-presets-http.vitest.test.ts",
+      "status": "new",
+      "after": "cda0baa00ce9a9d57807dc60168ac9e0aacb626c85c0bdcd87f947eedc4c1707"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/presets/BoundPresetDestination.tsx",
+      "status": "new",
+      "after": "428605d8058df06cbf32e7a4aee1bbdd620941d8e3c1b3371fcf7d114ff9141b"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/presets/ProductListingPresets.tsx",
+      "status": "new",
+      "after": "258b0c13ae5a897c9405413950b58d2e7a311e05f3af904f51ad4f96f8998616"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/presets/product-preset-contract.ts",
+      "status": "new",
+      "after": "5d9666819c938d5652fd5c78b75fb7c8ee015a0a32d9bad93fe8e3b9b800caec"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/presets/product-preset-contract.vitest.test.ts",
+      "status": "new",
+      "after": "7943b2fe54194c570ea5b5d29bdc96d35226fa46a27e7361957db16f39e93189"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/steps/variation-selection.ts",
+      "status": "new",
+      "after": "92442c00783db5562c4b00a7b4ee4925abbc6a322001c71b3a3b03abc6d997cc"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/list-wizard/steps/variation-selection.vitest.test.ts",
+      "status": "new",
+      "after": "238ff796f8c32536abad91e9d00e328d44d56fd1345ffaac70066f54767fabda"
+    }
+  ]
+}

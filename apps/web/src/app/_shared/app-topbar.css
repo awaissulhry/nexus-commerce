@@ -44,10 +44,14 @@
   background: var(--nds-topbar-bg);
   border-bottom: 1px solid var(--nds-topbar-border);
   color: var(--nds-topbar-fg);
-  /* Above the rail's z-index 50: the rail hover-expands to 344px and must slide UNDER the bar,
-     never over it. This is the whole reason the bar is full-width rather than inset. */
+  /* Above the rail (`--nds-z-rail`, 50): the rail hover-expands to 344px and must slide UNDER the
+     bar, never over it. This is the whole reason the bar is full-width rather than inset.
+     DS.1 2026-09-02 (ruling #240, unclaimed file, disclosed in the ledger): this was the literal
+     `60` and it was RIGHT — the reason above is why. Only the name was missing, so the layer is now
+     on the `--nds-z-*` scale as `--nds-z-topbar`. Same value, no visual change; a layer nobody
+     names is the next accident (AG's popups sat at 5, below this rail, for exactly that reason). */
   position: relative;
-  z-index: 60;
+  z-index: var(--nds-z-topbar);
 }
 
 /*
@@ -99,6 +103,16 @@
   display: flex;
   align-items: center;
   padding: 0 12px;
+}
+
+.nds-topbar-search-compact { display: none; }
+@media (max-width: 719px) {
+  .nds-topbar-context { display: none; }
+  .nds-topbar-search { flex: 1; min-width: 0; padding-inline: var(--nds-space-8); }
+  .nds-topbar-search > .nds-searchtrigger { display: none; }
+  .nds-topbar-search-compact { display: flex; }
+  .nds-topbar .nds-topbar-utility { gap: var(--nds-space-4); padding-inline: var(--nds-space-8); }
+  .nds-topbar .nds-topbar-profile-name { max-width: var(--nds-space-48); }
 }
 
 /* Right region: identity + utility. */

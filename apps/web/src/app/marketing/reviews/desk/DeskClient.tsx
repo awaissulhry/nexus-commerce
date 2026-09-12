@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import '@/design-system/styles/tokens.css'
 import '@/design-system/styles/components.css'
 import { useSearchParams } from 'next/navigation'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useReviewEventsRefresh } from '@/hooks/use-review-events-refresh'
 import { Listbox } from '@/design-system/components/Listbox'
 import {

@@ -1,0 +1,17 @@
+{
+  "submission-contract.patch": {
+    "exit": 0,
+    "output": ""
+  },
+  "information-mount.patch": {
+    "exit": 0,
+    "output": ""
+  },
+  "temporaryFixturePageRemoved": true,
+  "newSourceTrailingWhitespace": [],
+  "ownedTrackedDiff": {
+    "exit": 0,
+    "output": ""
+  },
+  "handoffHistoryPreserved": true
+}

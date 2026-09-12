@@ -1,0 +1,136 @@
+/**
+ * PES.7 — the image editor's layout. Plain px (the `--nds-space-*` scale is literal pixels);
+ * colour and radius on tokens; `--nds-text-3` never used for text.
+ */
+
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--nds-surface-sunken);
+  overflow: hidden;
+}
+
+/**
+ * The frame is the image's ELEMENT box. The picture inside it is letterboxed by `object-fit`, and
+ * the two are not the same rectangle — so the component computes the PAINTED rect from the
+ * image's natural size and positions the crop against that. See `paintedRect()` in the component.
+ *
+ * 🔴 Why it is done in JS rather than CSS: measured 2026-09-01, a 2250×2250 source rendered into a
+ * 1200×742 element box with the picture letterboxed inside, and a square drag on a square photo
+ * reported 866×1401 — a crop the operator did not draw. Trying to make the element box equal the
+ * picture with `width:auto/height:auto` then overflowed the frame instead (a percentage max-height
+ * against an auto-height parent does not constrain). `object-fit` fits reliably; the arithmetic to
+ * find what it painted is four lines and cannot be laid out wrong.
+ */
+.frame {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  touch-action: none;
+  transition: transform 140ms ease;
+}
+
+.img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* What the crop DISCARDS. Dimming the outside rather than outlining the inside makes the crop read
+   as a subtraction, which is what it is. */
+.shade {
+  position: absolute;
+  background: rgb(var(--nds-shadow-rgb) / 0.55);
+  pointer-events: none;
+}
+
+.cropBox {
+  position: absolute;
+  /* `--nds-white`, not `--nds-text-inverse`: this outline sits over a PHOTO, so it must stay white
+     in both themes. `text-inverse` flips to a dark navy under .dark and would vanish on a dark image. */
+  outline: 2px solid var(--nds-white);
+  outline-offset: -1px;
+  box-shadow: 0 0 0 1px rgb(var(--nds-shadow-rgb) / 0.6);
+  pointer-events: none;
+}
+
+/* ── controls ────────────────────────────────────────────────────── */
+
+.pane {
+  flex: none;
+  width: 300px;
+  border-left: 1px solid var(--nds-border);
+  background: var(--nds-surface);
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: var(--nds-font-size-xs);
+  font-weight: 600;
+  color: var(--nds-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.value {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  line-height: 1.45;
+}
+
+.warn {
+  margin: 0;
+  border: 1px solid var(--nds-amber-600);
+  background: var(--nds-amber-soft);
+  color: var(--nds-amber-text);
+  border-radius: var(--nds-radius-md);
+  padding: 8px 10px;
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.45;
+}

@@ -1,3 +1,4 @@
+import { requireLegacyCredentials } from '../../lib/workspace-legacy-credentials.js'
 /**
  * WooCommerce Service
  * Handles product listing, inventory, orders, and parent-child product hierarchy
@@ -215,6 +216,7 @@ export class WooCommerceService {
     endpoint: string,
     body?: unknown
   ): Promise<T> {
+    requireLegacyCredentials('WooCommerce')
     await rateLimiter.consumeToken("WOOCOMMERCE", endpoint);
 
     const url = `${this.baseUrl}/wp-json/wc/v3${endpoint}`;

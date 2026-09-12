@@ -1,4 +1,6 @@
 export interface ProgressBarProps {
+  /** Accessible name describing the operation being measured. */
+  ariaLabel?: string
   /** 0–100 (ignored when `indeterminate`) */
   value?: number
   indeterminate?: boolean
@@ -8,7 +10,7 @@ export interface ProgressBarProps {
 }
 
 /** Progress track + fill (H10 `.h10-util` look). */
-export function ProgressBar({ value = 0, indeterminate, height = 7, className }: ProgressBarProps) {
+export function ProgressBar({ ariaLabel, value = 0, indeterminate, height = 7, className }: ProgressBarProps) {
   const cls = ['nds-progress', indeterminate ? 'indet' : '', className ?? ''].filter(Boolean).join(' ')
   const pct = Math.max(0, Math.min(100, value))
   return (
@@ -16,6 +18,7 @@ export function ProgressBar({ value = 0, indeterminate, height = 7, className }:
       className={cls}
       style={{ height }}
       role="progressbar"
+      aria-label={ariaLabel}
       aria-valuenow={indeterminate ? undefined : pct}
       aria-valuemin={0}
       aria-valuemax={100}

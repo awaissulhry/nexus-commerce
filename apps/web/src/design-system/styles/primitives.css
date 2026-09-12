@@ -14,7 +14,7 @@
   justify-content: center;
   gap: 7px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   line-height: 1.1;
   color: var(--nds-text-strong);
@@ -146,8 +146,12 @@
 }
 
 .nds-btn.sm {
-  padding: 6px 11px;
-  font-size: 12.5px;
+  /* Pinned to the `sm` control tier rather than summed from padding: `6px 11px` + the line box
+     came to 28 with a label and 29 with a 15px icon, so icon buttons in a row of labelled ones sat
+     1px proud (measured 2026-09-04, CT.1). */
+  height: var(--nds-control-h-sm);
+  padding: 0 11px;
+  font-size: var(--nds-font-size-sm-plus);
 }
 
 /* ── ColorSwatchPicker (a closed palette, not the whole spectrum) ── */
@@ -180,14 +184,33 @@
   box-shadow: 0 0 0 2px var(--nds-surface), 0 0 0 4px var(--nds-primary);
 }
 .nds-swatch:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 
 /* ── Status pill (.h10-pill parity) ──────────────────────────────── */
+/* 🔴 `inline-flex`, not `inline-block`, and the reason is not alignment — it is that the icon was on
+   its OWN LINE. The app's reset declares `img, svg, video, canvas, audio, iframe, embed, object {
+   vertical-align: middle; display: block }`, so an icon inside an `inline-block` pill is a BLOCK and
+   takes a line of its own: measured 2026-09-02 on `<Pill tone="warning" size="sm"><AlertTriangle
+   size={11}/> caps</Pill>` — icon bottom 34.0, text top 35.5, stacked, and the pill 33.5px tall
+   against the 27.75px buttons beside it. The width is the tell: 43.75px WITH the icon and 43.75px
+   without, because a block on its own line adds height and no width.
+   ⚠ `vertical-align: middle` on the icon does nothing here — the reset already sets it, and it is
+   inert on a block-level box. Measured: still 33.5px. The container has to stop laying its children
+   out as lines, which is what `inline-flex` does; the icon then becomes a flex item and is centred.
+   `gap` is required rather than cosmetic: flex TRIMS the leading space in a `{icon} label` text
+   node, so without it the glyph and the word touch (measured 54.75px = 43.75 + 11 exactly, the
+   space contributing zero). `.has-dot` already discovered all of this and fixed it for one case
+   with its own `gap: 7px`, which still wins on specificity. */
 .nds-pill {
-  display: inline-block;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 600;
   border-radius: var(--nds-radius-pill);
   padding: 3px 9px;
@@ -210,7 +233,7 @@
   background: var(--nds-pill-danger-bg);
 }
 .nds-pill.info {
-  color: var(--nds-info-strong);
+  color: var(--nds-info-text);
   background: var(--nds-info-soft);
 }
 /* A pill reporting CONTINUOUS health — a feed that is live or stalled, a connection, a sync.
@@ -246,27 +269,27 @@
   white-space: nowrap;
 }
 .nds-badge.sp {
-  font-size: 9px;
+  font-size: var(--nds-font-size-nano);
   color: var(--nds-badge-sp-fg);
   background: var(--nds-badge-sp-bg);
 }
 .nds-badge.sd {
-  font-size: 9px;
+  font-size: var(--nds-font-size-nano);
   color: var(--nds-badge-sd-fg);
   background: var(--nds-badge-sd-bg);
 }
 .nds-badge.sb {
-  font-size: 9px;
+  font-size: var(--nds-font-size-nano);
   color: var(--nds-badge-sb-fg);
   background: var(--nds-badge-sb-bg);
 }
 .nds-badge.auto {
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   color: var(--nds-text-inverse);
   background: var(--nds-targeting-auto);
 }
 .nds-badge.manual {
-  font-size: 10px;
+  font-size: var(--nds-font-size-micro);
   color: var(--nds-text-inverse);
   background: var(--nds-targeting-manual);
 }
@@ -274,7 +297,7 @@
 /* ── Tag (neutral / semantic metadata chip) ──────────────────────── */
 .nds-tag {
   display: inline-block;
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 600;
   line-height: 1.35;
   border-radius: var(--nds-radius-pill);
@@ -282,7 +305,7 @@
   white-space: nowrap;
 }
 .nds-tag.neutral { color: var(--nds-text-strong); background: var(--nds-surface-sunken); }
-.nds-tag.info { color: var(--nds-info-strong); background: var(--nds-info-soft); }
+.nds-tag.info { color: var(--nds-info-text); background: var(--nds-info-soft); }
 .nds-tag.success { color: var(--nds-success-strong); background: var(--nds-success-soft); }
 .nds-tag.warning { color: var(--nds-warning-text); background: var(--nds-warning-soft); }
 .nds-tag.danger { color: var(--nds-danger-strong); background: var(--nds-danger-soft); }
@@ -300,14 +323,14 @@
 .nds-taginput.disabled .nds-taginput-field { opacity: .6; pointer-events: none; }
 .nds-taginput-chip {
   display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px;
-  font-size: 12px; font-weight: 550; border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm); font-weight: 550; border-radius: var(--nds-radius-md);
   color: var(--nds-text-link); background: var(--nds-primary-soft);
 }
 .nds-taginput-chip button { color: var(--nds-text-link); display: inline-flex; border: none; background: none; padding: 0; cursor: pointer; }
 .nds-taginput-chip button:hover { color: var(--nds-primary-hover); }
 .nds-taginput-field > input {
   flex: 1; min-width: 80px; border: 0; outline: none; background: transparent;
-  font: inherit; font-size: 12px; color: var(--nds-text);
+  font: inherit; font-size: var(--nds-font-size-sm); color: var(--nds-text);
 }
 .nds-taginput-field > input::placeholder { color: var(--nds-text-3); }
 .nds-taginput-menu {
@@ -318,7 +341,7 @@
 }
 .nds-taginput-menu button {
   display: block; width: 100%; text-align: left; padding: 6px 12px; border: none;
-  font: inherit; font-size: 12px; color: var(--nds-text-2); background: transparent; cursor: pointer;
+  font: inherit; font-size: var(--nds-font-size-sm); color: var(--nds-text-2); background: transparent; cursor: pointer;
 }
 .nds-taginput-menu button:hover { background: var(--nds-surface-sunken); }
 
@@ -349,7 +372,7 @@
   outline: none;
   background: transparent;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text);
   padding: 7px 11px;
 }
@@ -368,7 +391,7 @@
   background: var(--nds-surface);
   padding: 10px 12px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text);
   outline: none;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -402,7 +425,7 @@
   padding: 0 9px;
   background: var(--nds-surface-sunken);
   color: var(--nds-text-2);
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 500;
 }
 .nds-field .ad.pre {
@@ -425,7 +448,7 @@
   border-radius: var(--nds-radius-lg);
   padding: 7px 30px 7px 11px;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text);
   background: var(--nds-surface);
   cursor: pointer;
@@ -454,7 +477,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   cursor: pointer;
 }
@@ -503,8 +526,11 @@
   transform: translateX(13px);
 }
 .nds-toggle:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 .nds-toggle:disabled {
   opacity: 0.5;
@@ -516,7 +542,7 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   color: var(--nds-text-strong);
   cursor: pointer;
 }
@@ -561,12 +587,12 @@
   gap: 2px;
 }
 .nds-radiocard .rc-title {
-  font-size: 13px;
+  font-size: var(--nds-font-size-base);
   font-weight: 600;
   color: var(--nds-text);
 }
 .nds-radiocard .rc-desc {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-text-muted);
 }
 
@@ -576,6 +602,7 @@
   display: inline-flex;
 }
 .nds-tooltip > .tip {
+  overflow-wrap: anywhere;
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
@@ -585,7 +612,7 @@
   max-width: 260px;
   background: var(--nds-text);
   color: var(--nds-text-inverse);
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   font-weight: 500;
   line-height: 1.45;
   padding: 8px 11px;
@@ -638,6 +665,39 @@
   border-top-color: var(--nds-tooltip-light-border);
 }
 
+/* Portal tooltips share the tooltip layer above grid headers and scrolling panes. */
+.nds-tooltip.nds-tooltip--portal {
+  position: fixed;
+  z-index: var(--nds-z-tooltip);
+  pointer-events: auto;
+}
+/* Bridge the measured 8px gap so a hovered hint can be read under the pointer. Escape dismisses it. */
+.nds-tooltip--portal::before { content: ''; position: absolute; inset-inline: 0; top: 100%; height: 8px; }
+.nds-tooltip--portal[data-placement='bottom']::before { top: auto; bottom: 100%; }
+.nds-tooltip--portal > .tip {
+  pointer-events: auto;
+  position: relative;
+  inset: auto;
+  transform: none;
+  opacity: 1;
+  max-width: min(260px, calc(100vw - 16px));
+  white-space: normal;
+}
+.nds-tooltip--portal > .tip::after {
+  left: var(--nds-tooltip-arrow-x);
+  right: auto;
+  transform: translateX(-50%);
+}
+.nds-tooltip--portal[data-placement='bottom'] > .tip::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--nds-text);
+}
+.nds-tooltip--portal.nds-tooltip--light[data-placement='bottom'] > .tip::after {
+  border-bottom-color: var(--nds-tooltip-light-border);
+}
+
 /* ── Spinner ─────────────────────────────────────────────────────── */
 .nds-spinner {
   display: inline-block;
@@ -677,8 +737,8 @@
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
+  font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--nds-font-size-xs);
   font-weight: 600;
   color: var(--nds-text-2);
   background: var(--nds-surface-sunken);
@@ -719,7 +779,7 @@
   justify-content: center;
   gap: 6px;
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 600;
   line-height: 1.1;
   color: var(--nds-text-2);
@@ -740,8 +800,11 @@
   box-shadow: 0 1px 2px rgb(var(--nds-shadow-rgb) / 0.14);
 }
 .nds-seg-opt:focus-visible {
-  outline: none;
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 .nds-seg-opt:disabled {
   cursor: not-allowed;
@@ -751,7 +814,7 @@
   align-items: center;
 }
 .nds-seg.sm .nds-seg-opt {
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   padding: 4px 10px;
 }
 
@@ -763,7 +826,7 @@
    page stylesheets reference them, and a rename would be churn with no behaviour change. */
 .h10-tip {
   position: fixed; z-index: var(--nds-z-tooltip); width: max-content; max-width: 290px; text-align: left;
-  background: var(--nds-tip-bg); color: var(--nds-tip-fg); font-size: 11.5px; font-weight: 500; line-height: 1.45;
+  background: var(--nds-tip-bg); color: var(--nds-tip-fg); font-size: var(--nds-font-size-xs-plus); font-weight: 500; line-height: 1.45;
   padding: 8px 11px; border-radius: 8px; box-shadow: 0 10px 26px rgba(20, 28, 38, 0.3);
   pointer-events: none; white-space: normal;
 }
@@ -799,7 +862,7 @@
   min-width: 14px; height: 14px; padding: 0 3px;
   border-radius: var(--nds-radius-round);
   background: var(--nds-primary); color: var(--nds-text-inverse);
-  font-size: 9px; font-weight: 700; line-height: 1;
+  font-size: var(--nds-font-size-nano); font-weight: 700; line-height: 1;
   pointer-events: none;
 }
 
@@ -807,9 +870,9 @@
    text takes the invariant tooltip inks, never --text-*, which flip with the canvas. */
 .nds-tbtn-tip { display: flex; flex-direction: column; gap: 2px; max-width: 200px; }
 .nds-tbtn-tip-head { display: flex; align-items: center; gap: 8px; }
-.nds-tbtn-tip-label { font-size: 12px; font-weight: 600; color: var(--nds-tooltip-light-fg); }
-.nds-tbtn-tip-desc { font-size: 11px; line-height: 1.35; color: var(--nds-tooltip-light-fg-2); }
-.nds-tbtn-kbd { font-size: 9px; }
+.nds-tbtn-tip-label { font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-tooltip-light-fg); }
+.nds-tbtn-tip-desc { font-size: var(--nds-font-size-xs); line-height: 1.35; color: var(--nds-tooltip-light-fg-2); }
+.nds-tbtn-kbd { font-size: var(--nds-font-size-nano); }
 
 .nds-tdivider {
   width: 1px; height: 16px; flex: none; margin: 0 4px;
@@ -870,6 +933,9 @@
 /* Inline — for a button inside running text. MUST stay last: it unsets the box that every
    variant above sets, and at equal specificity source order is what decides. */
 .nds-btn.inline {
+  /* A sentence-level button never takes a control tier — `.nds-btn.sm` pins one, and this rule is
+     later in the sheet on purpose so `sm inline` stays in the line of text. */
+  height: auto;
   padding: 0;
   border: none;
   border-radius: 0;
@@ -894,7 +960,7 @@
    primitives/size.ts for the counts and why there is no step at 12px. */
 .nds-btn.xs {
   padding: 4px 9px;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   gap: 5px;
 }
 
@@ -920,16 +986,23 @@
 
 /* Input also gains `sm`, which it never had: the console's dense number boxes are 12.5px and
    were reaching for a size the primitive did not offer. */
-.nds-field.sm > input { padding: 5px 9px; font-size: 12.5px; }
+/* `sm` sits on the `sm` control tier (28px) with Button, Listbox and Select `sm` — the "dense tiers
+   matching Button/Input/Select exactly" the Listbox note promises. `5px 9px` + a normal line box
+   measured 31px beside 28px buttons (CT.1, 2026-09-04). The wrapper carries the height; the input
+   fills it. `xs` (26) stays the grid-cell tier. */
+.nds-field.sm { height: var(--nds-control-h-sm); }
+.nds-field.sm > input { padding: 0 9px; line-height: 1.1; font-size: var(--nds-font-size-sm-plus); }
 .nds-field.sm .lead   { padding-left: 9px; }
 .nds-field.sm .ad     { padding: 0 8px; }
-.nds-field.xs > input { padding: 4px 9px; font-size: 11.5px; }
+.nds-field.xs > input { padding: 4px 9px; font-size: var(--nds-font-size-xs-plus); }
 .nds-field.xs .lead   { padding-left: 8px; }
 .nds-field.xs .ad     { padding: 0 7px; }
 
-.nds-select.sm select { padding: 5px 26px 5px 9px; font-size: 12.5px; }
+/* `sm` sits on the `sm` control tier (28px) like Listbox and Button `sm`: `5px` + the line box
+   measured 31px beside 28px buttons (CT.1, 2026-09-04). */
+.nds-select.sm select { height: var(--nds-control-h-sm); padding: 0 26px 0 9px; line-height: 1.1; font-size: var(--nds-font-size-sm-plus); }
 .nds-select.sm .chev  { right: 8px; }
-.nds-select.xs select { padding: 4px 24px 4px 9px; font-size: 11.5px; }
+.nds-select.xs select { padding: 4px 24px 4px 9px; font-size: var(--nds-font-size-xs-plus); }
 .nds-select.xs .chev  { right: 7px; }
 
 /* Track and knob scale together: knob + 2px inset either side = track height, and the travel is
@@ -955,12 +1028,26 @@
   background: var(--nds-surface);
   color: var(--nds-text-strong);
   font-family: inherit;
-  font-size: 11.5px;
+  font-size: var(--nds-font-size-xs-plus);
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+/* Toolbar-height, for a chip standing in a 40px bar beside `sm` buttons — the same `md` the Pill
+   uses for the same seat. The base chip stays 24px for filter rows and card headers. */
+.nds-fchip.md {
+  height: var(--nds-control-h-sm);
+  padding: 0 11px;
+}
+/* The label is a flex row, so a glyph inside it sits BESIDE the text. Tailwind's preflight makes
+   every `svg` `display: block`, which stacked a chip's ⚠ above its label (measured on the sheet
+   toolbar, 2026-09-04, CT.1). `.nds-btn` already carries the same guard for its own icons. */
+.nds-fchip .t {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .nds-fchip:hover:not(:disabled):not([aria-pressed='true']) {
   background: var(--nds-surface-hover);
@@ -989,7 +1076,7 @@
   border-radius: var(--nds-radius-pill);
   background: var(--nds-note-error-bg);
   color: var(--nds-note-error-fg);
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 700;
 }
 .nds-fchip:disabled {
@@ -1037,7 +1124,7 @@
 
 /* lg — a wizard's footer CTA. One step up from md (13px / 7px 13px). */
 .nds-btn.lg {
-  font-size: 14px;
+  font-size: var(--nds-font-size-md-minus);
   padding: 9px 18px;
   gap: 8px;
 }
@@ -1092,7 +1179,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   color: var(--nds-text-strong);
   white-space: nowrap;
   overflow: hidden;
@@ -1193,9 +1280,13 @@ button.nds-token > .t,
    button chrome and inherits type, so a clickable pill is visually identical to a static one;
    only the cursor and the hover say it is interactive. */
 .nds-pill.btn {
-  font: inherit;
-  font-size: inherit;
-  font-weight: inherit;
+  /* Reset the UA button chrome WITHOUT `font: inherit`. The shorthand also reset size and weight,
+     and at (0,2,0) it beat `.nds-pill`'s own 11px / 600, so a clickable pill took the PAGE's type
+     — measured 16px / 400 and 30px tall on the studio's Errors & Sync facets (2026-09-04, CT.1;
+     filed in DS-GAPS 2026-08-26). Family and line-height are all a button needs given back; size
+     and weight stay with `.nds-pill` and `.nds-pill.md`. */
+  font-family: inherit;
+  line-height: inherit;
   border-width: 0;
   cursor: pointer;
 }
@@ -1232,7 +1323,7 @@ button.nds-token > .t,
   background: var(--nds-surface-hover);
   color: var(--nds-text-2);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--nds-font-size-md-minus);
   line-height: 1;
   cursor: pointer;
   flex: none;
@@ -1259,14 +1350,18 @@ button.nds-token > .t,
   border-right: 1px solid var(--nds-border-subtle);
   background: var(--nds-surface);
   font: inherit;
-  font-size: 12.5px;
+  font-size: var(--nds-font-size-sm-plus);
   font-weight: 700;
   text-align: center;
   color: var(--nds-text);
   outline: none;
 }
 .nds-nstep > input:focus-visible {
-  box-shadow: var(--nds-focus-ring);
+  /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
+     composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
+     already draw focus this way (measured 4.54:1 on the DS surfaces). */
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
 }
 /* The native spinner is ~13px, hover-only and unusable on touch — the ± buttons replace it. */
 .nds-nstep > input::-webkit-outer-spin-button,
@@ -1285,7 +1380,7 @@ button.nds-token > .t,
   border-right: 1px solid var(--nds-border-subtle);
   background: var(--nds-surface);
   font-style: normal;
-  font-size: 11px;
+  font-size: var(--nds-font-size-xs);
   font-weight: 700;
   color: var(--nds-text-muted);
 }
@@ -1293,8 +1388,8 @@ button.nds-token > .t,
   color: var(--nds-text-3);
 }
 .nds-nstep.sm { min-height: 24px; }
-.nds-nstep.sm > button { width: 22px; font-size: 13px; }
-.nds-nstep.sm > input  { width: 42px; font-size: 11.5px; }
+.nds-nstep.sm > button { width: 22px; font-size: var(--nds-font-size-base); }
+.nds-nstep.sm > input  { width: 42px; font-size: var(--nds-font-size-xs-plus); }
 
 /* A secondary action held at the secondary tier. `quiet` inherits by design, which is right for
    the 25 sites that needed it and wrong inside a container computing near-black: a muted action
@@ -1332,7 +1427,7 @@ button.nds-token > .t,
 }
 .nds-field-row > .af {
   flex: none;
-  font-size: 12px;
+  font-size: var(--nds-font-size-sm);
   font-weight: 600;
   color: var(--nds-text-2);
 }
@@ -1384,5 +1479,134 @@ button.nds-token > .t,
   transition: background 0.1s ease, color 0.1s ease;
 }
 .nds-expand:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
-.nds-expand:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); }
+.nds-expand:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
 .nds-expand:disabled { cursor: default; opacity: 0.4; }
+
+/* ── Type utilities ─────────────────────────────────────────────────────────────────────────
+ * One class per --nds-font-size-* step, so a page can state a size without a literal. These are
+ * the classes `ds-conformance-guard` tells an inline-fontSize offender to use; before hub #617 it
+ * named them while none existed, which left the operator with no next step.
+ * Generated from the same token table, in scale order — add a token, add its class.
+ * ─────────────────────────────────────────────────────────────────────────────────────────── */
+.nds-type-nano { font-size: var(--nds-font-size-nano); } /* 9px */
+.nds-type-micro { font-size: var(--nds-font-size-micro); } /* 10px */
+.nds-type-micro-plus { font-size: var(--nds-font-size-micro-plus); } /* 10.5px */
+.nds-type-xs { font-size: var(--nds-font-size-xs); } /* 11px */
+.nds-type-xs-plus { font-size: var(--nds-font-size-xs-plus); } /* 11.5px */
+.nds-type-sm { font-size: var(--nds-font-size-sm); } /* 12px */
+.nds-type-sm-plus { font-size: var(--nds-font-size-sm-plus); } /* 12.5px */
+.nds-type-base { font-size: var(--nds-font-size-base); } /* 13px */
+.nds-type-base-plus { font-size: var(--nds-font-size-base-plus); } /* 13.5px */
+.nds-type-md-minus { font-size: var(--nds-font-size-md-minus); } /* 14px */
+.nds-type-md { font-size: var(--nds-font-size-md); } /* 15px */
+.nds-type-lg { font-size: var(--nds-font-size-lg); } /* 18px */
+.nds-type-xl { font-size: var(--nds-font-size-xl); } /* 22px */
+.nds-type-2xl { font-size: var(--nds-font-size-2xl); } /* 27px */
+
+/* Wrapped choices preserve readable labels on narrow forms. */
+.nds-seg.wrap { flex-wrap: wrap; }
+.nds-seg.wrap .nds-seg-opt { flex: 1 1 auto; min-width: 0; white-space: normal; color: var(--nds-text); }
+
+/* ── AxisChip · MappingChip (VP.5, Variants page §3.1 / §4.1) ───────────────────────────────
+   Two 28px chips for the two 40px page bands. Every number below was read off the approved
+   canvas (artboards 1 and 2) and resolves to a token the canvas was drawn on: #d8dde4 is
+   `--nds-border`, #3a4452 `--nds-text-strong`, #5b6573 `--nds-text-2`, #7e8796 `--nds-text-3`,
+   #eef1f5 the `Tag neutral` ground. Measured light / dark: label 9.87 / 12.73, the FROM side
+   5.91 / 7.38, the grip and arrow glyphs 3.62 / 4.98 — AA text and AA non-text in both themes.
+   They carry no colour of their own, so `.dark` needs no entry here. */
+.nds-axischip,
+.nds-mapchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  box-sizing: border-box;
+  height: var(--nds-control-h-sm);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text-strong);
+  font-family: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+/* Tailwind's preflight makes every `svg` `display: block`, which stacks a glyph ABOVE its label
+   inside a non-flex box — the defect that put a ⚠ on its own line in the sheet toolbar (CT.1).
+   Both chips are flex rows, and this keeps their glyphs from shrinking in a crowded band. */
+.nds-axischip svg,
+.nds-mapchip svg {
+  flex: none;
+  display: block;
+}
+
+/* Asymmetric by design: the grip needs less room on its side than the count tag does on the
+   other, so 6px leading / 9px trailing rather than a compromise that leaves the grip adrift. */
+.nds-axischip {
+  padding: 0 9px 0 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.nds-axischip:hover:not(:disabled) {
+  background: var(--nds-surface-hover);
+  border-color: var(--nds-border-strong);
+}
+/* The same focus and pressed treatment as `.nds-btn`, deliberately: this chip stands in a row of
+   buttons, and a second focus idiom one control along is how a bar stops reading as one bar. */
+.nds-axischip:focus-visible {
+  outline: none;
+  border-color: var(--nds-primary);
+  box-shadow: var(--nds-focus-ring);
+}
+.nds-axischip[aria-pressed='true'] {
+  background: var(--nds-surface-sunken);
+  border-color: var(--nds-border-strong);
+}
+.nds-axischip:disabled {
+  color: var(--nds-text-disabled);
+  border-color: var(--nds-border-subtle);
+  cursor: default;
+}
+.nds-axischip-grip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--nds-text-3);
+}
+/* A handle that can be dragged says so under the pointer; one that cannot is an affordance the
+   row's own drag provides, and a grab cursor there would promise something nothing delivers. */
+.nds-axischip:not(:disabled) .nds-axischip-grip {
+  touch-action: none;
+  cursor: grab;
+}
+.nds-axischip:not(:disabled) .nds-axischip-grip:active {
+  cursor: grabbing;
+}
+.nds-axischip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Symmetric: the pair is the content, and neither side is a handle. */
+.nds-mapchip {
+  padding: 0 9px;
+}
+/* The weights ARE the meaning — the shared axis the operator already knows sits back at 500 and
+   `--nds-text-2`; the channel's answer, which is what the band exists to state, stands at 600. */
+.nds-mapchip-from {
+  color: var(--nds-text-2);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nds-mapchip-arrow {
+  color: var(--nds-text-3);
+}
+.nds-mapchip-to {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nds-fchip-full { display: inline-flex; align-items: center; gap: 6px; }
+.nds-fchip-compact { display: none; }

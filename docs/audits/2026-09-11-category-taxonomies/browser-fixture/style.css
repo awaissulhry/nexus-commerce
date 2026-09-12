@@ -1,0 +1,2 @@
+:root { --font-sans: Arial, sans-serif; }
+* { box-sizing: border-box; } body { margin: 0; font-family: var(--nds-font-sans); color: var(--nds-text); background: var(--nds-bg); } .qa-bar { display: flex; flex-wrap: wrap; gap: var(--nds-space-12); align-items: center; padding: var(--nds-space-12); border-bottom: 1px solid var(--nds-border); font-size: var(--nds-font-size-sm); }

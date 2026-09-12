@@ -1,7 +1,9 @@
 'use client'
 
+import { productPresetStudioHref, type ProductPresetScope } from '../edit/_studio/presets/product-preset-contract'
+
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import WizardStepper from './components/WizardStepper'
 import WizardHeader from './components/WizardHeader'
@@ -189,6 +191,8 @@ export default function ListWizardClient({
   const stepEnteredAtRef = useRef<number>(Date.now())
   const [timeOnStepSeconds, setTimeOnStepSeconds] = useState(0)
 
+  const savedUpdatedAt = useRef(initialWizard.updatedAt)
+
   // Keep the latest values on a ref so the save fn closure doesn't
   // capture stale state when called from event handlers.
   const stateRef = useRef({ wizardState, currentStep, channels })
@@ -202,6 +206,8 @@ export default function ListWizardClient({
       currentStep?: number
       state?: Record<string, unknown>
       channels?: ChannelTuple[]
+      expectedUpdatedAt?: string
+      channelStates?: Record<string, Record<string, unknown>>
     }): Promise<boolean> => {
       const target: Record<string, unknown> = {
         currentStep: overrides?.currentStep ?? stateRef.current.currentStep,
@@ -210,6 +216,9 @@ export default function ListWizardClient({
       if (overrides?.channels !== undefined) {
         target.channels = overrides.channels
       }
+      const expectedUpdatedAt = overrides?.expectedUpdatedAt ?? (stateRef.current.wizardState.productPresetScope ? savedUpdatedAt.current : undefined)
+      if (expectedUpdatedAt) target.expectedUpdatedAt = expectedUpdatedAt
+      if (overrides?.channelStates) target.channelStates = overrides.channelStates
       setSaveState('saving')
       try {
         const res = await fetch(
@@ -237,6 +246,8 @@ export default function ListWizardClient({
           }
           return false
         }
+        const result = await res.json()
+        if (result.wizard?.updatedAt) savedUpdatedAt.current = result.wizard.updatedAt
         setSaveState('saved')
         // Auto-revert the indicator back to idle after a moment so it
         // doesn't sit on "Saved" forever.
@@ -289,8 +300,9 @@ export default function ListWizardClient({
   )
 
   const handleClose = useCallback(async () => {
-    await persist()
-    router.push(`/products/${product.id}/edit`)
+    if (!await persist()) return
+    const scope = stateRef.current.wizardState.productPresetScope as ProductPresetScope | undefined
+    router.push(scope ? productPresetStudioHref(scope) : `/products/${product.id}/edit`)
   }, [persist, router, product.id])
 
   // C.0 / A5 — Discard wizard.
@@ -357,7 +369,8 @@ export default function ListWizardClient({
     if (
       prev &&
       prev.valid === next.valid &&
-      prev.blockers === next.blockers
+      prev.blockers === next.blockers &&
+      JSON.stringify(prev.reasons ?? []) === JSON.stringify(next.reasons ?? [])
     ) {
       return
     }
@@ -427,6 +440,7 @@ export default function ListWizardClient({
   // of trying to advance.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
       if (!(e.metaKey || e.ctrlKey)) return
       const ae = document.activeElement as HTMLElement | null
       const inText =
@@ -572,6 +586,7 @@ export default function ListWizardClient({
     <div className="flex flex-col h-[100dvh] bg-slate-50">
       <WizardHeader
         productId={product.id}
+        productHref={wizardState.productPresetScope ? productPresetStudioHref(wizardState.productPresetScope as ProductPresetScope) : undefined}
         productSku={product.sku}
         productName={product.name}
         channels={channels}
@@ -647,7 +662,13 @@ export default function ListWizardClient({
 
           // ── Phase B step routing ────────────────────────────────
           // Step 1: Channels & Markets (NEW)
-          if (currentStep === 1) return <Step1Channels {...stepProps} />
+          if (currentStep === 1) return <Step1Channels {...stepProps} saveCurrentChoices={async (patch, nextChannels) => {
+            const merged = { ...stateRef.current.wizardState, ...patch }
+            if (!savedUpdatedAt.current) return false
+            if (!await persist({ state: merged, channels: nextChannels, expectedUpdatedAt: savedUpdatedAt.current })) return false
+            setWizardState(merged); setChannels(nextChannels)
+            return true
+          }} />
 
           // After Step 1 the user must have at least one channel
           // selected. If they're on a later step but the array is
@@ -669,7 +690,13 @@ export default function ListWizardClient({
           // Step1Identifiers via the embedded Step2GtinExemption.
           if (currentStep === 3) return <Step1Identifiers {...stepProps} />
           // Step 4: Variations (was Step 5).
-          if (currentStep === 4) return <Step5Variations {...stepProps} />
+          if (currentStep === 4) return <Step5Variations {...stepProps} saveChoices={async (variations, channelStates) => {
+            const merged = { ...stateRef.current.wizardState, variations }
+            // Keep navigation/Save & exit on the same selection that the variation consumer reads.
+            stateRef.current = { ...stateRef.current, wizardState: merged }
+            setWizardState(merged)
+            return persist({ state: merged, channelStates, expectedUpdatedAt: savedUpdatedAt.current })
+          }} />
           // Step 5: Attributes (was Step 6).
           if (currentStep === 5) return <Step4Attributes {...stepProps} />
           // L.3 — Content step removed; the 4 content fields

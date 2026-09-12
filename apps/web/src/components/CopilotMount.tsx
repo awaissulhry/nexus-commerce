@@ -15,11 +15,20 @@
  * tool).
  */
 
-import { usePathname } from 'next/navigation'
+import { usePathname } from '@/lib/workspaces/navigation'
 import AiCopilot from './AiCopilot'
+import { WORKSPACES_ENABLED, isIdentityPath } from '@/lib/workspaces/paths'
 
 /** Public / customer-facing routes that must NOT show the operator copilot. */
-const EXCLUDED_PREFIXES = ['/track', '/unsubscribed']
+const EXCLUDED_PREFIXES = ['/track', '/unsubscribed', '/login', '/profiles', '/accept-invite', '/accept-workspace-invite', '/forgot-password', '/reset-password', '/po', '/r']
+/*
+ * Routes that own their whole viewport. The Product Edit Studio is a full-bleed sheet: it already
+ * drops the app top bar (AppShell `NO_TOPBAR_PATTERNS`), and the floating "Ask AI" button was
+ * measured sitting on the sheet's horizontal scrollbar and footer strip (y 834–882 over 845–897 at
+ * 1728×906, 2026-09-04, CT.1). A sheet has no spare corner, so the button is not shown there — the
+ * same pattern as the top bar, one line to reverse.
+ */
+const EXCLUDED_PATTERNS = [/^\/products\/[^/]+\/edit\/studio(\/|$)/]
 
 interface Profile {
   match: string[]
@@ -159,7 +168,11 @@ function profileFor(path: string): Omit<Profile, 'match'> {
 
 export default function CopilotMount() {
   const pathname = usePathname() || ''
-  if (EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)))
+  if (
+    (WORKSPACES_ENABLED && isIdentityPath(pathname)) ||
+    EXCLUDED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    EXCLUDED_PATTERNS.some((r) => r.test(pathname))
+  )
     return null
   const profile = profileFor(pathname)
   return (

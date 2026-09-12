@@ -22,7 +22,7 @@ import { amazonCredsConfigured } from '../lib/amazon-sp-client.js'
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runFlatFileFeedPoll(): Promise<{ polled: number; advanced: number }> {
-  if (!amazonCredsConfigured()) return { polled: 0, advanced: 0 }
+  if (!(await amazonCredsConfigured())) return { polled: 0, advanced: 0 }
 
   const due = await prisma.amazonFlatFileFeedJob.findMany({
     where: {
@@ -58,8 +58,8 @@ export function startFlatFileFeedPollCron(): void {
     logger.error('flat-file-feed-poll cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('flat-file-feed-poll', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('flat-file-feed-poll', async () => {
       const r = await runFlatFileFeedPoll()
       return `polled=${r.polled} advanced=${r.advanced}`
     })

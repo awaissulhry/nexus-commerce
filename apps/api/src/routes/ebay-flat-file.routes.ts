@@ -1,3 +1,5 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * eBay Flat-File Spreadsheet API
  *
@@ -83,7 +85,7 @@ interface CachedSchema {
   data: unknown;
   ts: number;
 }
-const schemaCache = new Map<string, CachedSchema>();
+const schemaCache = new WorkspaceCache<string, CachedSchema>();
 const SCHEMA_CACHE_TTL = 24 * 60 * 60 * 1000;
 
 
@@ -644,12 +646,12 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
         const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
         await prisma.categorySchema.upsert({
           where: {
-            channel_marketplace_productType_schemaVersion: {
+            channel_marketplace_productType_schemaVersion: workspaceKey({
               channel: 'EBAY',
               marketplace,
               productType: categoryId,
               schemaVersion: 'live',
-            },
+            }),
           },
           create: {
             channel: 'EBAY',
@@ -3586,17 +3588,19 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
   });
 
   // ── GET /api/ebay/flat-file/category-breadcrumbs ────────────────────
-  // B3 — full breadcrumb paths for a set of category ids: `en` from the UK
-  // tree (operators read English; ids are shared across EU sites for most
-  // categories) + `local` from the market's own tree. The cell keeps the
+  // Full breadcrumb paths from the selected market's tree. The cell keeps the
   // numeric ID as its VALUE (pushes unchanged) and only the DISPLAY changes.
   fastify.get<{
     Querystring: { ids?: string; marketplace?: string }
   }>('/ebay/flat-file/category-breadcrumbs', async (request, reply) => {
     const ids = String(request.query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean)
     if (ids.length === 0) return reply.send({ breadcrumbs: {} })
-    const breadcrumbs = await ebayCategoryService.getCategoryBreadcrumbs(ids, request.query.marketplace ?? 'IT')
-    return reply.send({ breadcrumbs })
+    try {
+      const breadcrumbs = await ebayCategoryService.getCategoryBreadcrumbs(ids, request.query.marketplace ?? 'IT', { throwOnError: true })
+      return reply.send({ breadcrumbs })
+    } catch {
+      return reply.code(503).send({ error: 'Category names are unavailable. Check the eBay connection and retry.' })
+    }
   })
 
   // ── GET /api/ebay/flat-file/policies ────────────────────────────────

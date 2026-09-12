@@ -19,7 +19,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   ShieldAlert, Plus, Check, AlertCircle,
 } from 'lucide-react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import PageHeader from '@/components/layout/PageHeader'
 import { StockSubNav } from '@/components/inventory/StockSubNav'
 import { Card } from '@/components/ui/Card'

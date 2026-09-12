@@ -1,0 +1,15 @@
+/** READ-ONLY. RPX — verify marketShare(). */
+import '../src/env.js'
+const { marketShare } = await import('../src/services/advertising/ads-market-share.service.js')
+const r = await marketShare({ marketplace: 'IT', weeks: 8, queryLimit: 9 })
+const pct = (v: number | null) => (v == null ? '   —  ' : `${(v * 100).toFixed(2)}%`)
+console.log(`MARKET ${r.marketplace} | week ${r.week} | lag ${r.lagDays}d | weeksHeld ${r.weeksHeld}`)
+console.log('COVERAGE', JSON.stringify(r.coverage))
+console.log('\nFUNNEL')
+for (const s of r.funnel) console.log(`  ${s.shareLabel.padEnd(18)} ours ${String(s.ours).padStart(8)}  market ${String(s.market).padStart(10)}  share ${pct(s.share)}`)
+console.log('\nSERIES')
+for (const w of r.series) console.log(`  ${w.week}  rows ${String(w.rows).padStart(5)}  imp ${pct(w.impressionShare)}  clk ${pct(w.clickShare)}  cart ${pct(w.cartAddShare)}  buy ${pct(w.purchaseShare)}  ${w.thin ? 'THIN' : ''}`)
+console.log('\nQUERIES')
+for (const q of r.queries) console.log(`  ${q.query.slice(0,26).padEnd(28)} mkt ${String(q.marketImpressions).padStart(7)}  ours ${String(q.ourImpressions).padStart(5)}  ${pct(q.impressionShare)}  clk ${String(q.ourClicks).padStart(3)}  buys ${String(q.ourPurchases)}/${String(q.marketPurchases).padStart(3)}  share ${pct(q.purchaseShare)}`)
+console.log('\nCAVEATS'); for (const c of r.caveats) console.log('  ·', c)
+const { default: prisma } = await import('../src/db.js'); await prisma.$disconnect()

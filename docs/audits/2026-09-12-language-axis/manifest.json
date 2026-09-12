@@ -1,0 +1,108 @@
+{
+  "recordedAt": "2026-09-11T22:17:58.104592+00:00",
+  "artifactConsistencyChecks": "passed",
+  "files": [
+    {
+      "path": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "bytes": 24488,
+      "mtimeUtc": "2026-09-11T22:15:16.714079+00:00",
+      "sha256": "80d33ef63de757fe9841eef291a91f47956979b49bc6aa42766d7b1ee38b3c3e"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/production-baseline.json",
+      "bytes": 13605,
+      "mtimeUtc": "2026-09-11T22:15:36.448735+00:00",
+      "sha256": "bdd47a82020c97e980d2dcfcc567c6c53c4cfebbaf9bf9db364d241120fd4b9c"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/production-details.json.gz",
+      "bytes": 1086144,
+      "mtimeUtc": "2026-09-11T22:15:36.447687+00:00",
+      "sha256": "c52f91158c28d5f921cfa05a0247c3047a91b98756cbd2b126e909f0ab35c6fe"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/README.md",
+      "bytes": 7574,
+      "mtimeUtc": "2026-09-11T22:17:18.249024+00:00",
+      "sha256": "5b6dfa65ac294e50e505e70428d162bb8bfcab0799f97f22944419d24312fb9d"
+    },
+    {
+      "path": "docs/pes-claims.md",
+      "bytes": 3480177,
+      "mtimeUtc": "2026-09-11T22:17:18.309540+00:00",
+      "sha256": "bf6492188cd3586aed2b4c5c223ee7f2a78127c03ba93c00f400b455f2051060"
+    }
+  ],
+  "anchors": [
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 27,
+      "content": "function compare("
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 43,
+      "content": "function scanTags("
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 56,
+      "content": "function selfTest("
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 105,
+      "content": "await db.query('BEGIN"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 129,
+      "content": "const products = await read"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 130,
+      "content": "const translations = await read"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 131,
+      "content": "const listings = await read"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 171,
+      "content": "report.overrides ="
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/measure.mjs",
+      "line": 220,
+      "content": "report.regionalTagCounts ="
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/README.md",
+      "line": 11,
+      "content": "## Baseline"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/README.md",
+      "line": 49,
+      "content": "## Every marketplace"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/README.md",
+      "line": 76,
+      "content": "## Locale stores"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/README.md",
+      "line": 105,
+      "content": "## Owner decisions"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/README.md",
+      "line": 123,
+      "content": "## Verification"
+    }
+  ]
+}

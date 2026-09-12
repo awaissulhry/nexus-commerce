@@ -1,3 +1,4 @@
+import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
 import { PrismaClient } from "@prisma/client";
 import { EbayService } from "./marketplaces/ebay.service.js";
 import prisma from "@nexus/database";
@@ -49,6 +50,7 @@ export class EbayPublishService {
   async publishDraft(draftId: string, options?: PublishOptions): Promise<PublishResult> {
     const draft = await this.fetchDraftWithRelations(draftId);
     this.validateDraftData(draft);
+    await assertLegacyPresentationPublishAllowed({ productId: draft.product.id, marketplace: options?.marketplaceId });
 
     const finalPrice = options?.overridePrice ?? Number(draft.product.basePrice);
 

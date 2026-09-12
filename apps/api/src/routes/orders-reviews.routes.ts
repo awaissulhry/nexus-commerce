@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * D.7 — Review request engine + Amazon Solicitations bridge.
  *
@@ -526,7 +527,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       for (const order of matches) {
         // Dedup: one ReviewRequest per (orderId, channel)
         const existing = await prisma.reviewRequest.findUnique({
-          where: { orderId_channel: { orderId: order.id, channel: order.channel } },
+          where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
         })
         if (existing) { skipped++; continue }
         await prisma.reviewRequest.create({
@@ -602,7 +603,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       // Dedup
       const existing = await prisma.reviewRequest.findUnique({
-        where: { orderId_channel: { orderId: order.id, channel: order.channel } },
+        where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
       })
       if (existing && (existing.status === 'SENT' || existing.status === 'SCHEDULED')) {
         return reply.status(409).send({ error: `Already ${existing.status}` })
@@ -676,7 +677,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
             skipped++; errors.push({ orderId, reason: 'has refund' }); continue
           }
           const existing = await prisma.reviewRequest.findUnique({
-            where: { orderId_channel: { orderId: order.id, channel: order.channel } },
+            where: { orderId_channel: workspaceKey({ orderId: order.id, channel: order.channel }) },
           })
           if (existing) { skipped++; errors.push({ orderId, reason: `already ${existing.status}` }); continue }
           if (order.channel === 'AMAZON') {
@@ -842,7 +843,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     await prisma.$transaction([
       patterns.length ? prisma.reviewTimingDefault.deleteMany({ where: { pattern: { notIn: patterns } } }) : prisma.reviewTimingDefault.deleteMany({}),
       ...final.map((f) => prisma.reviewTimingDefault.upsert({
-        where: { pattern: f.pattern },
+        where: { workspace_pattern: workspaceKey({ pattern: f.pattern }) },
         create: f,
         update: { label: f.label, delayDays: f.delayDays, sortOrder: f.sortOrder, isActive: f.isActive },
       })),
@@ -877,7 +878,7 @@ const ordersReviewsRoutes: FastifyPluginAsync = async (fastify) => {
     ]
     for (const s of SEED) {
       await prisma.reviewTimingDefault.upsert({
-        where: { pattern: s.pattern },
+        where: { workspace_pattern: workspaceKey({ pattern: s.pattern }) },
         create: s,
         update: reset ? { label: s.label, delayDays: s.delayDays, sortOrder: s.sortOrder, isActive: true } : {},
       })

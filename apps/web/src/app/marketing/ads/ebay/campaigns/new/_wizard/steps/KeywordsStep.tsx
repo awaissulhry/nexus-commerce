@@ -11,7 +11,8 @@
  */
 import { useState } from 'react'
 import { Button, Input, Pill, Textarea, Checkbox } from '@/design-system/primitives'
-import { Tabs, DataGrid } from '@/design-system/components'
+import { Tabs } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { InfoTip } from '../../../../../campaigns/InfoTip'
 
 import { postEbayAds } from '../../../../_lib'

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E5 (eBay Ads) — the automation engine + weekly digest.
  *
@@ -174,7 +175,7 @@ export function clampAutoRate(targetPct: number, breakEvenPct: number | null, mi
 // ── Global posture ───────────────────────────────────────────────────────────
 export async function getAutomationState() {
   return prisma.marketingAutomationState.upsert({
-    where: { channel: 'EBAY' },
+    where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) },
     create: { channel: 'EBAY', globalMode: 'OFF' },
     update: {},
   })
@@ -461,7 +462,7 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
         matched++
         const entityKey = cand.entityRef.listingId ?? cand.entityRef.keywordId ?? cand.entityRef.externalCampaignId
         const proposedKey = `${cand.kind}:${cand.entityRef.campaignId}:${entityKey}`
-        const existing = await prisma.ebayAdsProposal.findUnique({ where: { proposedKey } })
+        const existing = await prisma.ebayAdsProposal.findUnique({ where: { workspace_proposedKey: workspaceKey({ proposedKey: proposedKey }) } })
         if (existing && existing.status === 'PENDING') continue // one pending per kind+entity
         if (existing && existing.status === 'APPLIED' && existing.decidedAt && existing.decidedAt > new Date(Date.now() - rule.cooldownHours * 3600_000)) continue // per-entity cooldown
         // ER3.2 — snoozed/stopped: a REJECTED row with a future expiresAt is the
@@ -481,7 +482,7 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
         if (candMode === 'apply' && cand.kind !== 'alert') {
           const outcome = await cand.apply()
           await prisma.ebayAdsProposal.upsert({
-            where: { proposedKey },
+            where: { workspace_proposedKey: workspaceKey({ proposedKey: proposedKey }) },
             create: { ...data, proposedKey, status: outcome.ok ? 'APPLIED' : 'REJECTED', decidedBy: AUTOMATION_ACTOR, decidedAt: new Date(), appliedResult: { detail: outcome.detail } as object },
             update: { ...data, status: outcome.ok ? 'APPLIED' : 'REJECTED', decidedBy: AUTOMATION_ACTOR, decidedAt: new Date(), appliedResult: { detail: outcome.detail } as object },
           })
@@ -489,7 +490,7 @@ export async function evaluateEbayAdsRules(onlyRuleId?: string): Promise<Evaluat
           summary.push({ key: proposedKey, mode: 'applied', detail: outcome.detail })
         } else {
           await prisma.ebayAdsProposal.upsert({
-            where: { proposedKey },
+            where: { workspace_proposedKey: workspaceKey({ proposedKey: proposedKey }) },
             create: { ...data, proposedKey, status: 'PENDING' },
             update: { ...data, status: 'PENDING', decidedBy: null, decidedAt: null, appliedResult: undefined },
           })
@@ -666,7 +667,7 @@ export async function checkSpendCeilings(): Promise<Array<{ marketplace: string;
     let halted = false
     if (pct >= 100) {
       await prisma.marketingAutomationState.upsert({
-        where: { channel: 'EBAY' },
+        where: { workspace_channel: workspaceKey({ channel: 'EBAY' }) },
         create: { channel: 'EBAY', globalMode: 'OFF', halted: true, haltReason: `spend ceiling breached for ${c.marketplace} (${(mtd / 100).toFixed(2)}€ ≥ ${(c.monthlyCapCents / 100).toFixed(2)}€)`, haltedBy: 'auto:spend-ceiling' },
         update: { halted: true, haltReason: `spend ceiling breached for ${c.marketplace}`, haltedBy: 'auto:spend-ceiling' },
       })
@@ -859,7 +860,7 @@ export async function runCoverageGuard(): Promise<{ unpromoted: number; proposal
     orderBy: { createdAt: 'desc' },
   })
   await prisma.ebayAdsProposal.upsert({
-    where: { proposedKey },
+    where: { workspace_proposedKey: workspaceKey({ proposedKey: proposedKey }) },
     create: {
       kind: catchAll ? 'enroll_catch_all' : 'alert',
       entityRef: (catchAll
@@ -932,7 +933,7 @@ export async function evaluateRateDiscovery(): Promise<{ plans: number; proposed
       }, null)
       await prisma.ebayRateDiscoveryPlan.update({ where: { id: plan.id }, data: { status: 'COMPLETE', bestPct: best != null ? best.pct.toFixed(1) : null } })
       await prisma.ebayAdsProposal.upsert({
-        where: { proposedKey: `discovery:${plan.campaignId}` },
+        where: { workspace_proposedKey: workspaceKey({ proposedKey: `discovery:${plan.campaignId}` }) },
         create: {
           kind: 'alert', proposedKey: `discovery:${plan.campaignId}`, status: 'PENDING',
           entityRef: { campaignId: plan.campaign.id, externalCampaignId: plan.campaign.externalCampaignId, campaignName: plan.campaign.name, marketplace: plan.campaign.marketplace } as object,
@@ -954,10 +955,10 @@ export async function evaluateRateDiscovery(): Promise<{ plans: number; proposed
     const ads = await prisma.ebayAd.findMany({ where: { campaignId: plan.campaignId, listingId: { not: null }, status: { notIn: ['STALE'] } }, select: { listingId: true, bidPercentage: true } })
     if (!ads.length) continue
     const prevRates = Object.fromEntries(ads.map((a) => [a.listingId!, a.bidPercentage != null ? Number(a.bidPercentage.toString()) : null]))
-    const existing = await prisma.ebayAdsProposal.findUnique({ where: { proposedKey: `discovery:${plan.campaignId}` } })
+    const existing = await prisma.ebayAdsProposal.findUnique({ where: { workspace_proposedKey: workspaceKey({ proposedKey: `discovery:${plan.campaignId}` }) } })
     if (existing?.status === 'PENDING') continue // step already awaiting a decision
     await prisma.ebayAdsProposal.upsert({
-      where: { proposedKey: `discovery:${plan.campaignId}` },
+      where: { workspace_proposedKey: workspaceKey({ proposedKey: `discovery:${plan.campaignId}` }) },
       create: {
         kind: 'rate_discovery_step', proposedKey: `discovery:${plan.campaignId}`, status: 'PENDING',
         entityRef: { campaignId: plan.campaign.id, externalCampaignId: plan.campaign.externalCampaignId, campaignName: plan.campaign.name, marketplace: plan.campaign.marketplace } as object,
@@ -1055,8 +1056,8 @@ export async function generateWeeklyDigest(): Promise<{ weekStart: string; creat
     attribution: 'ebay-any-click',
     generatedAt: new Date().toISOString(),
   }
-  const existing = await prisma.ebayAdsDigest.findUnique({ where: { weekStart } })
-  await prisma.ebayAdsDigest.upsert({ where: { weekStart }, create: { weekStart, payload: payload as object }, update: { payload: payload as object } })
+  const existing = await prisma.ebayAdsDigest.findUnique({ where: { workspace_weekStart: workspaceKey({ weekStart: weekStart }) } })
+  await prisma.ebayAdsDigest.upsert({ where: { workspace_weekStart: workspaceKey({ weekStart: weekStart }) }, create: { weekStart, payload: payload as object }, update: { payload: payload as object } })
   try {
     const { notifyAutomation } = await import('../advertising/ads-automation-notify.service.js')
     await notifyAutomation({ type: 'ebay-ads-digest', severity: 'info', title: `eBay ads weekly digest ready (${payload.week.start})`, body: `€${(payload.totals.adFeesCents / 100).toFixed(2)} fees · €${(payload.totals.salesCents / 100).toFixed(2)} sales · ${pending.length} proposal(s) awaiting review`, href: '/marketing/ads/ebay/digest' })
@@ -1184,7 +1185,7 @@ export async function snapshotRuleVersion(ruleId: string, version: number, cfg: 
 export async function revertRuleToVersion(actorUserId: string | null, ruleId: string, toVersion: number): Promise<{ version: number }> {
   const [rule, target] = await Promise.all([
     prisma.ebayAdsRule.findUniqueOrThrow({ where: { id: ruleId } }),
-    prisma.ebayAdsRuleVersion.findUniqueOrThrow({ where: { ruleId_version: { ruleId, version: toVersion } } }),
+    prisma.ebayAdsRuleVersion.findUniqueOrThrow({ where: { ruleId_version: workspaceKey({ ruleId, version: toVersion }) } }),
   ])
   const cfg: RuleConfigSnapshot = ruleConfigOf(target)
   // old snapshots must still satisfy today's DSL — never resurrect an invalid config

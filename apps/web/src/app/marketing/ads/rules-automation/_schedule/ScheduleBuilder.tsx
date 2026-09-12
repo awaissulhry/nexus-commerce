@@ -9,7 +9,8 @@
  * Reuses the rule-builder shell CSS (h10-rb-*) + the campaign-picker styling (cp-*).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { X, Plus, Copy, Trash2, Calendar, BarChart3, LayoutGrid, Search, Sparkles, Eye, AlertTriangle, CopyPlus } from 'lucide-react'
 import { HoverCard } from '../../campaigns/FilterDropdown'
 import { CampaignSection, type SchedCampaign } from './CampaignSection'

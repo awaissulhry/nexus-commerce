@@ -1,0 +1,26 @@
+.shell {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--nds-bg);
+  color: var(--nds-text);
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--nds-z-sticky);
+}
+
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: var(--nds-space-24);
+}
+
+@media (max-width: 719px) {
+  .content {
+    padding-inline: var(--nds-space-16);
+  }
+}

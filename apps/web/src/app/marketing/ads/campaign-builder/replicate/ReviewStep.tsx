@@ -29,7 +29,7 @@ import {
 } from 'lucide-react'
 import { Button, FilterChip, Input, SegmentedControl, ToolbarButton } from '@/design-system/primitives'
 import '../builder-ds.css'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { InfoTip } from '../../campaigns/InfoTip'
 import {
   viewPlan, conflictGroups, dropConflicts, restoreConflicts, describeChanges,

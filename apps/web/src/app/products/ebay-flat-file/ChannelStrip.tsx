@@ -10,7 +10,7 @@
  */
 
 import { useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { ShoppingCart, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { channelSwitchMessage, getFlatFileDirtyCount } from '@/components/flat-file/unsaved-guard'

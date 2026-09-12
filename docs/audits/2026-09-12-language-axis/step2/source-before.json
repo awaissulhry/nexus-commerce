@@ -1,0 +1,440 @@
+[
+  {
+    "file": "apps/api/src/routes/field-links.routes.ts",
+    "mtime": "2026-06-04T10:35:25.036618+00:00",
+    "sha256": "1afdd3d57fd6db1baa4dab280768d5bad215b51f0147c8986da0abb4a7d9b128",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/listing-wizard.routes.ts",
+    "mtime": "2026-09-08T09:29:27.047570+00:00",
+    "sha256": "f16347eef01e5a75248eea7f65a920f04a5bedb1743bd5ca4d80529fd7bad5be",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/listings-syndication.routes.ts",
+    "mtime": "2026-09-09T22:28:32.602531+00:00",
+    "sha256": "e9d455cee270062bc9cde8a7879120bc7a90d07848db301c36ec08ad8a889617",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/marketing-automation.routes.ts",
+    "mtime": "2026-05-19T01:11:22.628573+00:00",
+    "sha256": "d6dfc1f9b35b4fdd19fb4d9bb0d351e9dc0f417ae134b7739917e65332d5fcaa",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/marketplaces.routes.ts",
+    "mtime": "2026-09-08T09:29:27.049884+00:00",
+    "sha256": "28f638a3322f0a2b54a6449895ea86278215096de55c59847befca3f5a0e82f2",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/pim-global.routes.ts",
+    "mtime": "2026-09-11T23:12:57.077396+00:00",
+    "sha256": "73b7fd63eb29204a04f873a018e84c982fedf1aafb75e8384ad0b28e82722857",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/product-translations.routes.ts",
+    "mtime": "2026-09-11T02:50:35.672548+00:00",
+    "sha256": "655f34e6b60bfe526becce454d59a4ec46a3d779acafb0cd3bc79d61fefd31bb",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/routes/products-ai.routes.ts",
+    "mtime": "2026-09-08T04:38:18.157457+00:00",
+    "sha256": "0ba4120f24b436eb281c5c3343c6958c015109a3dd1044a8c9b9ff6d6a2c2fd6",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/__tests__/pim-resolve-channel-field.test.ts",
+    "mtime": "2026-09-11T22:41:16.563858+00:00",
+    "sha256": "15c659adf4008a9679df86583522ec0c9ccc889c191678d921c7365e8b2fa3e4",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/ai/enrichment/generate.service.ts",
+    "mtime": "2026-09-02T00:23:10.576192+00:00",
+    "sha256": "c6e313dcdf1110985f6799db0b6a2eb058ce0f8550dc268b141e8a86fd22ee0a",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-coerce-ai.ts",
+    "mtime": "2026-06-17T04:55:40.292181+00:00",
+    "sha256": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-coerce.ts",
+    "mtime": "2026-06-17T04:55:12.960361+00:00",
+    "sha256": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-coerce.vitest.test.ts",
+    "mtime": "2026-06-17T04:56:34.820745+00:00",
+    "sha256": "8573a9860c4c579c9e746a6b8f4e47b2dfa742269f822c57d34b98258f370d80",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-create.vitest.test.ts",
+    "mtime": "2026-07-16T11:25:38.464247+00:00",
+    "sha256": "da0f42275661de6a2359fc0781a9f90da65f9022ccd2812656fed7b93e7f3bf2",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-export.vitest.test.ts",
+    "mtime": "2026-06-17T04:25:48.046899+00:00",
+    "sha256": "1398d0debc0be590e84d53da43c90079e122eee5efd7f70b7029a3b2cf3772c0",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-hydrate.service.ts",
+    "mtime": "2026-07-19T22:19:55.096270+00:00",
+    "sha256": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-mapping-ai.ts",
+    "mtime": "2026-06-17T05:43:54.038837+00:00",
+    "sha256": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-mapping.ts",
+    "mtime": "2026-07-16T02:07:56.380249+00:00",
+    "sha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-mapping.vitest.test.ts",
+    "mtime": "2026-07-16T02:08:14.773762+00:00",
+    "sha256": "9a0dd07ebaa5768592163b1d9f96826fd2708ed9974a9c097c03e253f85c0a5c",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-merge.ts",
+    "mtime": "2026-06-17T05:25:00.780183+00:00",
+    "sha256": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-merge.vitest.test.ts",
+    "mtime": "2026-06-17T05:30:19.680491+00:00",
+    "sha256": "f9e28d68820195ad624ec27a65211ab4ee233d8256013348e59b95cd20cb2f7b",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-propagate.service.ts",
+    "mtime": "2026-05-12T04:44:39.975984+00:00",
+    "sha256": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-pull-preview.service.ts",
+    "mtime": "2026-05-19T19:32:20.834995+00:00",
+    "sha256": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-pull.service.ts",
+    "mtime": "2026-07-20T00:59:41.493119+00:00",
+    "sha256": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-roundtrip.vitest.test.ts",
+    "mtime": "2026-07-20T00:58:40.917595+00:00",
+    "sha256": "81283819e665874d8429630c239ab002294c4088d820c91f112d24177601c7f5",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+    "mtime": "2026-07-16T05:23:32.512893+00:00",
+    "sha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-schema-walk.vitest.test.ts",
+    "mtime": "2026-07-16T05:23:45.727148+00:00",
+    "sha256": "58725803964641c9f7aa141552abd6bc0021780a0e9378af9c9c4c3c870150eb",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-ufx-schema.vitest.test.ts",
+    "mtime": "2026-07-10T18:25:02.967466+00:00",
+    "sha256": "dd989b3bf7b69ae3e7ac428802c3564d356f0480228454673d6653e3fdc0e14e",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-ufx6-feedops.vitest.test.ts",
+    "mtime": "2026-09-11T22:42:12.300866+00:00",
+    "sha256": "d61d5e70c7aa35c14bacc8bf14563c65ffce2cdcc1a084eb7817d69fa06e5c27",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-ufx6-format.vitest.test.ts",
+    "mtime": "2026-07-10T18:23:13.626735+00:00",
+    "sha256": "7c8e224edc2fc17c82372b0434255ccd24300fac27b5dfc3fae9ab38f0079ad2",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+    "mtime": "2026-07-11T00:13:53.427059+00:00",
+    "sha256": "23e50ddc035920eed37c021c4a07c673c2502af62f97487bcabb6472e89ecabc",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-union-manifest.vitest.test.ts",
+    "mtime": "2026-07-10T16:27:06.851972+00:00",
+    "sha256": "c874b0c1d47d0caac9ab8e9872b7743004b05f949de1cff39a337d84866f5de4",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-verify-live.service.ts",
+    "mtime": "2026-07-19T23:06:28.588011+00:00",
+    "sha256": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file-verify-live.vitest.test.ts",
+    "mtime": "2026-07-19T23:07:04.040666+00:00",
+    "sha256": "4833e19c092b72343f67430bee7c2b7a2c51a80266c7176cbb17a057b07617fd",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file.browse-nodes.vitest.test.ts",
+    "mtime": "2026-06-30T02:07:22.073996+00:00",
+    "sha256": "93db6d3a882232236ddabe57cb7bd9d819be93ad0ce38a5759ad36ebee66e0c7",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/flat-file.service.ts",
+    "mtime": "2026-07-20T00:56:44.669645+00:00",
+    "sha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/amazon/value-translate.service.ts",
+    "mtime": "2026-05-11T13:45:02.871588+00:00",
+    "sha256": "dc9da839717af13d87761a7594ec0609dcaef398fd587809f90b5f3d73940877",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/aplus-amazon.service.ts",
+    "mtime": "2026-05-10T02:47:53.545642+00:00",
+    "sha256": "be2ce85ca1823643c92be2bc712e07504d7b467643c73bc5371d9d356dff9f17",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/brand-story-amazon.service.ts",
+    "mtime": "2026-05-10T03:14:38.954942+00:00",
+    "sha256": "795fc54f8c7039da554c9035f482a3a0c1575882f8a60b1b26935ea4aa1a2dc4",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/categories/marketplace-ids.ts",
+    "mtime": "2026-05-11T00:08:52.496451+00:00",
+    "sha256": "e4fdfb06470f83797d57b80ec24da6ec3d617287e1102cc55fa92b344721a364",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/categories/schema-sync.service.ts",
+    "mtime": "2026-09-10T23:17:28.149199+00:00",
+    "sha256": "f9bbc387a72456a7a7f3550dcd7fa4a4532d28e51bcf064adc9a8d4b9a53b803",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/categories/seller-schema.service.ts",
+    "mtime": "2026-09-11T01:09:39.429964+00:00",
+    "sha256": "fd48ec0586d8f5168d734e8333f37a9c2f51556ab9fd65c14ffdeef7409434f2",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/channel-batch/amazon-batch-feed.service.ts",
+    "mtime": "2026-09-08T09:29:27.310004+00:00",
+    "sha256": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+    "protected": true
+  },
+  {
+    "file": "apps/api/src/services/compliance-resolver.service.ts",
+    "mtime": "2026-07-11T00:10:02.120386+00:00",
+    "sha256": "6773d2b6b2075529d6f438f66c7d44bfaa005d8bbaedd60bfc0879680b0e1c16",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/follow-master.service.ts",
+    "mtime": "2026-07-26T17:56:28.603379+00:00",
+    "sha256": "860a47e223087f0903484684d2c4658773828bb8eacbae511bcd3380f2acc928",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/images/amazon-media-client.ts",
+    "mtime": "2026-09-08T04:23:39.536150+00:00",
+    "sha256": "769c267156aeb7f9052bd1edb9ea18371e3a60c652c417f05407594eb21c2ead",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/listing-automation/action-handlers.ts",
+    "mtime": "2026-05-28T23:35:10.318197+00:00",
+    "sha256": "1a57984dfcdce1bb0defe400f3bda7a96416ee60148a6bed9bd6c4f6d63a4f40",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/listing-automation/triggers.ts",
+    "mtime": "2026-05-28T23:35:30.069523+00:00",
+    "sha256": "75f6f85eaa641052740958e085a465fea583e558d6784c0dd160f90e9621ac97",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/listing-automation/triggers.vitest.test.ts",
+    "mtime": "2026-05-28T23:38:00.879634+00:00",
+    "sha256": "698e98aac216111717f6b80a57d5d9803531644b8a8e6abff902d875f3601998",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/listing-preflight.service.ts",
+    "mtime": "2026-07-11T00:11:17.645430+00:00",
+    "sha256": "694fd3e2a2565896326d06a388f1a3a51cf0b446b355628c59cb44ee0c1137a2",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/listing-wizard/submission.service.ts",
+    "mtime": "2026-09-08T17:11:34.896523+00:00",
+    "sha256": "8978145bdee9cbcf9ea30ee7614fe5a46fe10e11e64617103e9020743632afd1",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/master-content.service.ts",
+    "mtime": "2026-09-11T00:55:12.891780+00:00",
+    "sha256": "b67995d0ca570f46ae44683ee02af151117a6ed8e8c1ffc00c9a3172d518a298",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/outbound-sync.service.ts",
+    "mtime": "2026-09-08T17:14:51.138273+00:00",
+    "sha256": "7f2269b6e28946a9e6a39f54504bdcb31f7f4aacf40e79699a4cb426a57b6feb",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/outbound-sync.vitest.test.ts",
+    "mtime": "2026-09-07T11:29:01.544814+00:00",
+    "sha256": "baf5036815e2bc45656a1775aece51d5eefdefdf0a5c5e8137d5fc017bf48b2d",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-product-transfer.ts",
+    "mtime": "2026-09-08T14:50:31.344667+00:00",
+    "sha256": "8be4bcd921601fcdb68d6ffb40eb5df22c92a9e9b4a2d530fd53423e9e50c116",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+    "mtime": "2026-09-08T05:10:26.233967+00:00",
+    "sha256": "32144fbb719c7fe49c9419a2e5868b17e946f0c397931abbc338f0163116c886",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-export.ts",
+    "mtime": "2026-09-11T21:56:19.404073+00:00",
+    "sha256": "cd8b9cb4ca3dfc5b4e89195f496a68e5b475abbba79580024088fad8cf143fdb",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+    "mtime": "2026-09-08T14:57:45.246403+00:00",
+    "sha256": "ee68941e4e94b3377626a689d82360cb9791592025df9262a7c8e23e994f4fdd",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/ebay-value-map.service.ts",
+    "mtime": "2026-06-16T20:45:27.452644+00:00",
+    "sha256": "a6ff0af2e07fda18f31bb6b85ae81c92be11cdb955385bb3acd4998332a9e967",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/global-content.ts",
+    "mtime": "2026-09-11T23:05:41.093854+00:00",
+    "sha256": "03fd845b7dae1918d22919983dd61c20eedfdaf40e67e23e5728d87fa9db1e49",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/information-locale.ts",
+    "mtime": "2026-09-11T01:34:38.823497+00:00",
+    "sha256": "c1a50216abd5c03ced756f90a103c005945427934559d88fe8335bbffe749895",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/listing-readiness.service.ts",
+    "mtime": "2026-09-08T14:32:57.538471+00:00",
+    "sha256": "ad5ab915456b5b1ee35043c16783cabd5cffa3aefa872a6e88806a9ab606a578",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/impact.service.ts",
+    "mtime": "2026-09-10T23:28:38.691910+00:00",
+    "sha256": "617c6d4fb9c0db6344f11d796fa68c6d99e2818925cb5de7b3db6adfe2dbd477",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+    "mtime": "2026-09-07T05:28:04.669338+00:00",
+    "sha256": "99fe14ea3f082dab54cf6e44ae0c2a8f6886c236e74536afbfc55eea7f38dbe5",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+    "mtime": "2026-09-11T03:48:59.746409+00:00",
+    "sha256": "e8ecbd82452947af6a1d03ccaf615d1521b391ae838d7bf6c2f5d68583666d01",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+    "mtime": "2026-09-11T03:21:44.128530+00:00",
+    "sha256": "7fe81b586f0be0ed419d98fa9b4ab86f0290f6d657b08dfaac360f4583ee99f8",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-columns.service.ts",
+    "mtime": "2026-09-11T13:50:48.648865+00:00",
+    "sha256": "b23eee14386094f6cd8be78c32a198301863598a8c96e153dc9da1f056e0bb16",
+    "protected": false
+  },
+  {
+    "file": "apps/api/src/services/products/translation-resolver.service.ts",
+    "mtime": "2026-09-11T01:34:38.803668+00:00",
+    "sha256": "17303311c83d259f670127b1dc2ac0a92f89f47ee5553b21dd8e74a04ab951ef",
+    "protected": false
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+    "mtime": "2026-09-11T20:21:30.052844+00:00",
+    "sha256": "c12644f307166438d60933b5f565bfc1bad4fb8b11135a4d84c7f0234da94e14",
+    "protected": false
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/scopes.ts",
+    "mtime": "2026-09-11T23:21:14.534362+00:00",
+    "sha256": "98823ed62ee0f026b6231a75a9c42694c16c6c0b57c717f301b4d78b20a64445",
+    "protected": false
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/scopes.vitest.test.ts",
+    "mtime": "2026-09-11T23:22:02.264912+00:00",
+    "sha256": "6c9bad008e9a46fbfe6608ac306eb329145ede1a91e3a5b592f61f28c071d10e",
+    "protected": false
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx",
+    "mtime": "2026-06-17T15:57:40.524589+00:00",
+    "sha256": "084872cb75c5a7b6cd075178d5740b615794a194f8b8f3ef606739c69b0f1a68",
+    "protected": false
+  },
+  {
+    "file": "packages/database/prisma/schema.prisma",
+    "mtime": "2026-09-11T23:39:06.554543+00:00",
+    "sha256": "1f1e4f9a80e51d381c54958ab831d4815312fd624a80e458a1b7ea02d77533b0",
+    "protected": false
+  }
+]

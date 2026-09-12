@@ -23,6 +23,7 @@
  */
 
 import { prisma } from '@nexus/database'
+import { currentWebUser } from './workspaces/server'
 
 /**
  * Canonical list of settings page keys. New pages MUST add their
@@ -144,7 +145,7 @@ export async function writeSettingsAudit(
 
     const row = await (prisma as any).auditLog.create({
       data: {
-        userId: null, // Single-tenant for now; will populate from session in Phase I.
+        userId: process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1' ? (await currentWebUser()).id : null,
         entityType: 'Settings',
         entityId: input.key,
         action: input.action,

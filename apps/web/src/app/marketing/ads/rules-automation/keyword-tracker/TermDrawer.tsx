@@ -31,7 +31,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { Button, ToolbarButton } from '@/design-system/primitives'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'

@@ -35,6 +35,7 @@
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { themeDefinitions } from './lib/theme-definitions.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const TOKENS = join(ROOT, 'apps/web/src/design-system/styles/tokens.css')
@@ -46,12 +47,11 @@ if (!existsSync(TOKENS) || !existsSync(SHELL)) {
 }
 
 const V = readFileSync(TOKENS, 'utf8')
-const at = V.indexOf('\n.dark {')
-const LIGHT = at < 0 ? V : V.slice(0, at)
-const DARK = at < 0 ? '' : V.slice(at)
-
-const lightDefs = new Map([...LIGHT.matchAll(/(--nds-[a-z0-9-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]))
-const flips = new Set([...DARK.matchAll(/(--nds-[a-z0-9-]+):/g)].map((m) => m[1]))
+const { light: lightDefs, dark: darkDefs } = themeDefinitions(V)
+const darkContext = new Map([...lightDefs, ...darkDefs])
+const flips = new Set([...darkDefs].filter(([name, value]) =>
+  resolve(value, 0, darkContext) !== resolve(lightDefs.get(name)),
+).map(([name]) => name))
 
 /**
  * Resolve a value expression through the LIGHT definitions only.
@@ -61,15 +61,15 @@ const flips = new Set([...DARK.matchAll(/(--nds-[a-z0-9-]+):/g)].map((m) => m[1]
  * DS says `rgb(var(--nds-shadow-rgb) / 0.13)` — identical values, different notation. A guard
  * that cries wolf on a correct pin gets ignored on a real one.
  */
-function resolve(expr, depth = 0) {
+function resolve(expr, depth = 0, definitions = lightDefs) {
   let e = String(expr).trim()
   if (depth > 8) return normalise(e)
   const before = e
   e = e.replace(/var\((--nds-[a-z0-9-]+)\)/g, (whole, name) => {
-    const next = lightDefs.get(name)
+    const next = definitions.get(name)
     return next == null ? whole : next.trim()
   })
-  return e === before ? normalise(e) : resolve(e, depth + 1)
+  return e === before ? normalise(e) : resolve(e, depth + 1, definitions)
 }
 
 /** Compare by VALUE, not by notation: rgb()/rgba() spacing and separators differ freely. */
@@ -143,6 +143,8 @@ const CHROME_PIN = new Map([
 ])
 
 const missing = [...flips].filter((t) => !pins.has(t)).sort()
+// A pin can reference another pin on the same element; resolve its effective cascade.
+const pinContext = new Map([...lightDefs, ...pins])
 const stale = []
 const chromeMissing = []
 for (const [tok, expr] of pins) {
@@ -155,7 +157,7 @@ for (const [tok, expr] of pins) {
       chromeMissing.push({ tok, chromeRef })
       continue
     }
-    const a = resolve(expr)
+    const a = resolve(expr, 0, pinContext)
     const b = resolve(chromeVal)
     if (a.toLowerCase() !== b.toLowerCase()) {
       stale.push({ tok, expr, got: a, want: b, ref: chromeRef })
@@ -164,7 +166,7 @@ for (const [tok, expr] of pins) {
   }
   const declared = lightDefs.get(tok)
   if (declared == null) continue
-  const a = resolve(expr)
+  const a = resolve(expr, 0, pinContext)
   const b = resolve(declared)
   if (a.toLowerCase() !== b.toLowerCase()) stale.push({ tok, expr, got: a, want: b })
 }

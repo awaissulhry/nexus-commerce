@@ -1,0 +1,16 @@
+--- a/apps/web/src/app/products/[id]/edit/_studio/images/channel/amazon/matrix.module.css
++++ b/apps/web/src/app/products/[id]/edit/_studio/images/channel/amazon/matrix.module.css
+@@ -90,11 +90,11 @@
+  *
+  * These are :global because the nodes are AG's, not this module's.
+  */
+-:global(.nds-media-drag-source) { opacity: 0.35; }
++.matrix :global(.nds-media-drag-source) { opacity: 0.35; }
+ 
+ /* An INSET ring, never an outline or a positioned overlay: an absolutely positioned child escapes
+    an AG cell entirely (ruling #12), and an outline would be clipped by the cell's own bounds. */
+-:global(.nds-media-drag-target) {
++.matrix :global(.nds-media-drag-target) {
+   box-shadow: inset 0 0 0 2px var(--nds-primary, var(--nds-blue-600));
+   border-radius: var(--nds-radius-sm);
+ }

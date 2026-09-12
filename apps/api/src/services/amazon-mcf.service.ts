@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * S.24 — Amazon Multi-Channel Fulfillment service.
  *
@@ -275,7 +276,7 @@ export async function syncMCFStatus(
   amazonFulfillmentOrderId: string,
 ): Promise<{ id: string; status: string; changed: boolean }> {
   const shipment = await prisma.mCFShipment.findUnique({
-    where: { amazonFulfillmentOrderId },
+    where: { workspace_amazonFulfillmentOrderId: workspaceKey({ amazonFulfillmentOrderId: amazonFulfillmentOrderId }) },
   })
   if (!shipment) {
     throw new Error(`syncMCFStatus: shipment ${amazonFulfillmentOrderId} not found`)
@@ -359,7 +360,7 @@ export async function cancelMCFShipment(
   reason?: string,
 ): Promise<{ id: string; status: string }> {
   const shipment = await prisma.mCFShipment.findUnique({
-    where: { amazonFulfillmentOrderId },
+    where: { workspace_amazonFulfillmentOrderId: workspaceKey({ amazonFulfillmentOrderId: amazonFulfillmentOrderId }) },
   })
   if (!shipment) {
     throw new Error(`cancelMCFShipment: shipment ${amazonFulfillmentOrderId} not found`)

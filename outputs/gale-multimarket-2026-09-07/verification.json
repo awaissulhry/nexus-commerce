@@ -1,0 +1,37 @@
+{
+  "generatedAt": "2026-09-07T18:26:41.181Z",
+  "workbook": "/Users/awais/nexus-commerce/outputs/gale-multimarket-2026-09-07/Gale-all-marketplaces.xlsx",
+  "skus": 21,
+  "bytes": 515419,
+  "native": {
+    "importedAttributes": 935,
+    "exclusions": 225,
+    "changes": 893,
+    "issues": []
+  },
+  "roundtrip": {
+    "attributes": 22397,
+    "parseIssues": [],
+    "issues": [],
+    "changes": [],
+    "unchanged": 22397,
+    "scopes": [
+      "[\"Products\",\"\",\"\",\"\",\"\"]",
+      "[\"Products\",\"\",\"\",\"\",\"en\"]",
+      "[\"Products\",\"\",\"\",\"\",\"it\"]",
+      "[\"Products\",\"\",\"\",\"\",\"de\"]",
+      "[\"Products\",\"\",\"\",\"\",\"es\"]",
+      "[\"Products\",\"\",\"\",\"\",\"fr\"]",
+      "[\"Listings\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"DE\",\"\"]",
+      "[\"Overrides\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"DE\",\"\"]",
+      "[\"Listings\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"ES\",\"\"]",
+      "[\"Overrides\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"ES\",\"\"]",
+      "[\"Listings\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"FR\",\"\"]",
+      "[\"Overrides\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"FR\",\"\"]",
+      "[\"Listings\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"IT\",\"\"]",
+      "[\"Overrides\",\"AMAZON\",\"cmothu9bo0000nz01asw6wx8j\",\"IT\",\"\"]",
+      "[\"Listings\",\"EBAY\",\"cmr4aaqb00025nz016k18rup9\",\"IT\",\"\"]",
+      "[\"Overrides\",\"EBAY\",\"cmr4aaqb00025nz016k18rup9\",\"IT\",\"\"]"
+    ]
+  }
+}

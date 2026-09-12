@@ -31,7 +31,7 @@
  *                                  field when override is null)
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ExternalLink } from 'lucide-react'
 import {
   amazonTld,

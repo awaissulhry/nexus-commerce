@@ -1,3 +1,4 @@
+import { currentWebProfile } from '@/lib/workspaces/server'
 import { prisma } from '@nexus/database'
 import NotificationsClient, { type LoadedPref } from './NotificationsClient'
 import { EVENT_TYPES } from './event-types'
@@ -8,7 +9,7 @@ export default async function NotificationsPage() {
   let user: any = null
   let saved: any[] = []
   try {
-    user = await (prisma as any).userProfile.findFirst()
+    user = await currentWebProfile()
     saved = await (prisma as any).notificationPreference.findMany({
       where: user ? { OR: [{ userId: user.id }, { userId: null }] } : { userId: null },
     })

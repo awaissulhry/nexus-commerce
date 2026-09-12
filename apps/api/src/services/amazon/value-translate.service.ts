@@ -1,3 +1,4 @@
+import { marketLanguages } from '../pim/market-languages.js'
 /**
  * Cross-market enum value translation for Amazon flat-file columns.
  *
@@ -53,16 +54,6 @@ export interface ValueTranslateResult {
 
 // ── Language labels ────────────────────────────────────────────────────────
 
-const MARKET_LANGUAGE: Record<string, string> = {
-  IT: 'Italian',
-  DE: 'German',
-  FR: 'French',
-  ES: 'Spanish',
-  UK: 'English (UK)',
-}
-
-const SOURCE_LANGUAGE: Record<string, string> = MARKET_LANGUAGE
-
 // ── Main service function ──────────────────────────────────────────────────
 
 export async function translateEnumValues(
@@ -70,7 +61,6 @@ export async function translateEnumValues(
   input: ValueTranslateInput,
 ): Promise<ValueTranslateResult> {
   const { sourceMarket, productType, colId, colLabelEn, values, targetMarkets } = input
-  const srcLang = SOURCE_LANGUAGE[sourceMarket.toUpperCase()] ?? sourceMarket
 
   const result: ValueTranslateResult = {
     colLabel: colLabelEn ?? colId,
@@ -80,6 +70,11 @@ export async function translateEnumValues(
   }
 
   if (!values.length || !targetMarkets.length) return result
+
+  const languageRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { channel: true, code: true, language: true, languages: true } })
+  const labels = new Intl.DisplayNames(['en'], { type: 'language' })
+  const sourceLanguage = marketLanguages('AMAZON', sourceMarket, languageRows)[0]
+  const srcLang = labels.of(sourceLanguage) ?? sourceLanguage
 
   // Load schemas for all target markets in parallel
   const schemaRows = await prisma.categorySchema.findMany({
@@ -141,7 +136,8 @@ export async function translateEnumValues(
         return
       }
 
-      const tgtLang = MARKET_LANGUAGE[mp] ?? mp
+      const targetLanguage = marketLanguages('AMAZON', mp, languageRows)[0]
+      const tgtLang = labels.of(targetLanguage) ?? targetLanguage
 
       const prompt = buildTranslationPrompt({
         srcLang,

@@ -58,12 +58,18 @@ export interface UseListingEventsResult {
   lastEvent: ListingEvent | null
 }
 
-export function useListingEvents(): UseListingEventsResult {
+/**
+ * @param enabled Open the stream? Defaults to `true`, so every existing caller is unchanged. Pass
+ *   `streamsEnabled()` (lib/sync/dev-stream-gate) on a page that must not spend one of the six
+ *   per-origin connections while pointed at a local backend — see that file for the measurement.
+ */
+export function useListingEvents(enabled = true): UseListingEventsResult {
   const [connected, setConnected] = useState(false)
   const [lastEvent, setLastEvent] = useState<ListingEvent | null>(null)
   const sourceRef = useRef<EventSource | null>(null)
 
   useEffect(() => {
+    if (!enabled) return
     if (typeof window === 'undefined') return
     if (typeof EventSource === 'undefined') return
 
@@ -78,7 +84,9 @@ export function useListingEvents(): UseListingEventsResult {
 
         // Dispatch to the invalidation channel so usePolledList et al.
         // refresh. Pages that don't care simply don't subscribe.
-        if (parsed.type === 'listing.synced' || parsed.type === 'listing.syncing' || parsed.type === 'listing.updated') {
+        if (parsed.type === 'shopify.schema.changed') {
+          emitInvalidation({ type: 'shopify.schema.changed', id: parsed.accountId, meta: { source: 'sse' } })
+        } else if (parsed.type === 'listing.synced' || parsed.type === 'listing.syncing' || parsed.type === 'listing.updated') {
           emitInvalidation({
             type: 'listing.updated',
             id: parsed.listingId,
@@ -138,6 +146,7 @@ export function useListingEvents(): UseListingEventsResult {
     // event types we publish from the backend (event: type prefix).
     source.addEventListener('message', handle)
     const namedTypes = [
+      'shopify.schema.changed',
       'listing.synced',
       'listing.syncing',
       'listing.updated',
@@ -169,7 +178,7 @@ export function useListingEvents(): UseListingEventsResult {
       sourceRef.current = null
       setConnected(false)
     }
-  }, [])
+  }, [enabled])
 
   return { connected, lastEvent }
 }

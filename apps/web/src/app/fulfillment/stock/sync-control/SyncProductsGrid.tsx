@@ -13,7 +13,7 @@
  */
 
 import { useEffect, useCallback, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Search, ChevronRight, ChevronDown, ExternalLink } from 'lucide-react'
 import { DataGrid, Pagination, type Column } from '@/design-system/components'
 import { Listbox } from '@/design-system/components/Listbox'

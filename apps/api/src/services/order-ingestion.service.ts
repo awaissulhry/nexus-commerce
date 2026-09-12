@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase 26: Order Ingestion Service
  * Ingests orders from multiple channels and triggers inventory sync
@@ -274,7 +275,7 @@ export async function ingestMockOrders(): Promise<IngestionStats> {
             logger.info(`[ORDER INGESTION] Processing sale for SKU: ${item.sku}, Qty: ${item.quantity}`)
 
             const product = await prisma.product.findUnique({
-              where: { sku: item.sku },
+              where: { workspace_sku: workspaceKey({ sku: item.sku }) },
               select: { id: true },
             })
             if (!product) {

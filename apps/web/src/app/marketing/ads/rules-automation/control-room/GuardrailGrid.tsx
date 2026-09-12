@@ -26,7 +26,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 import { AlertTriangle, Search, Pin, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, Select } from '@/design-system/primitives'

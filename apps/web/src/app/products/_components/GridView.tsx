@@ -33,7 +33,7 @@ import {
   useMemo,
   useState,
 } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertCircle,
   CheckCircle2,

@@ -1,3 +1,6 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { amazonSpClient } from '../lib/amazon-sp-client.js'
 /**
  * Amazon Flat-File Spreadsheet API
  *
@@ -111,29 +114,11 @@ function gpsrMediaAutoFill(
   return fill
 }
 
-function getSellerId(): string {
-  return process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+async function getSellerId(): Promise<string> {
+  return (await getAmazonSellerId())
 }
 
-function getSpClient() {
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID
-  const lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  if (!refreshToken || !lwaClientId || !lwaClientSecret) {
-    throw new Error('Amazon SP-API credentials not configured')
-  }
-  return import('amazon-sp-api').then(({ SellingPartner }) =>
-    new (SellingPartner as any)({
-      region: (process.env.AMAZON_REGION ?? 'eu') as any,
-      refresh_token: refreshToken,
-      credentials: {
-        SELLING_PARTNER_APP_CLIENT_ID: lwaClientId,
-        SELLING_PARTNER_APP_CLIENT_SECRET: lwaClientSecret,
-      },
-      options: { auto_request_tokens: true, auto_request_throttled: true },
-    }),
-  )
-}
+function getSpClient() { return amazonSpClient() }
 
 export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // ── GET /api/amazon/flat-file/product-types ─────────────────────────
@@ -368,7 +353,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     const { rows, marketplace = 'IT', expandedFields = {}, deepFields = {}, productType, overrideCompliance } = request.body
     const mp = marketplace.toUpperCase()
     const marketplaceId = MARKETPLACE_ID_MAP[mp] ?? MARKETPLACE_ID_MAP.IT
-    const sellerId = getSellerId()
+    const sellerId = await getSellerId()
 
     if (!sellerId) {
       return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
@@ -451,6 +436,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
         const snapshotsBySku = hasNonEditable
           ? await flatFileService.getFlatFileSnapshots(mp, rows.map((r: any) => String(r.item_sku ?? '')))
           : new Map<string, Record<string, unknown>>()
+        const gpsrLanguages = await marketLanguages('AMAZON', mp)
         preflight = rows
           .map((r: any) => {
             // Validate each row against its OWN product type's required columns +
@@ -466,7 +452,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
               // missing-contact warning is suppressed when the C1 auto-fill
               // will populate the contacts from Brand Settings at submit.
               gpsr: {
-                marketplace: mp,
+                marketplace: mp, languages: gpsrLanguages,
                 applicableColumns: appByType.get(t),
                 contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
                 contactAutoFill: Boolean(complianceBySku.get(String(r.item_sku ?? ''))?.responsiblePerson?.email?.trim()),
@@ -779,6 +765,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       // G.1 — batch parent/child orphan check (a child's parent_sku must point to a
       // parent present in this submission). eBay-parity with the orphan-variant check.
       const orphanFlags = validateParentChildBatch(rows)
+      const gpsrLanguages = await marketLanguages('AMAZON', mp)
       const preflight = rows
         .map((r: any) => {
           const sku = String(r?.item_sku ?? '')
@@ -790,7 +777,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
             conditional: schemaDef ? { schema: schemaDef, expandedFields: union.expandedFields, labelOf } : undefined,
             // UFX P6f — GPSR EU product-safety warnings (warn-only).
             gpsr: {
-              marketplace: mp,
+              marketplace: mp, languages: gpsrLanguages,
               applicableColumns: applicableByType.get(t),
               contentTypeValues: enumByType.get(t)?.find((c) => c.id === 'compliance_media__content_type')?.values,
               contactAutoFill: Boolean(complianceBySku.get(sku)?.responsiblePerson?.email?.trim()),
@@ -1247,7 +1234,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Max 100 SKUs per request' })
     }
 
-    const sellerId = getSellerId()
+    const sellerId = await getSellerId()
     if (!sellerId) {
       return reply.code(503).send({ error: 'AMAZON_SELLER_ID not configured' })
     }

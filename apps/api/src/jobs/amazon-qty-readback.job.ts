@@ -255,8 +255,8 @@ export function startAmazonQtyReadbackCron(): void {
     logger.error(`${JOB_NAME}: invalid schedule`, { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun(JOB_NAME, runAmazonQtyReadback).catch((err) =>
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun(JOB_NAME, runAmazonQtyReadback).catch((err) =>
       logger.error(`${JOB_NAME} run failed`, { error: err instanceof Error ? err.message : String(err) }),
     )
   })

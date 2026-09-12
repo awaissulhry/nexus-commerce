@@ -33,6 +33,10 @@
 // ────────────────────────────────────────────────────────────────────
 
 /** Origin of a resolved value. UI uses this to style inheritance. */
+import { ALLOWED_MASTER_FIELDS } from './master-field-gate.js'
+import { contentSlots, contentReviewState, PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { canonicalVariantAxis } from './variant-attribute-keys.js'
+
 export type ValueSource =
   | 'master'           // came from parent Product.categoryAttributes
   | 'masterLocale'     // came from parent Product.localizedContent
@@ -51,6 +55,10 @@ export interface ResolvedValue<T = unknown> {
    *  source is 'default'. Used by error→editor deep linking to route
    *  the operator to the right entity. */
   inheritedFrom: string | null
+  warnings?: string[]
+  requestedLocale?: string
+  effectiveLocale?: string
+  translationState?: 'current' | 'fallback' | 'draft' | 'reviewed' | 'outdated' | 'missing'
 }
 
 /** Minimal Product shape the resolver needs. Pulled from Prisma but
@@ -66,12 +74,14 @@ export interface ProductLike {
   // true` (default) AND the corresponding JSONB key is missing, the
   // resolver returns these with source='masterColumn'. Removable once
   // all writes populate localizedContent + categoryAttributes.
+  translations?: Array<Record<string, unknown>>
   name?: string | null
   description?: string | null
   bulletPoints?: string[]
   keywords?: string[]
   brand?: string | null
   manufacturer?: string | null
+  countryOfOrigin?: string | null
   basePrice?: number | string | null
 }
 
@@ -100,6 +110,7 @@ export interface ChannelListingLike {
 }
 
 export interface ResolveInput {
+  localizableKeys?: string[]
   /** The product (or variant child Product) being resolved. */
   product: ProductLike
   /** Optional parent — required when product.parentId is set, ignored
@@ -164,11 +175,32 @@ function applyLayer(
   layer: Record<string, unknown> | null | undefined,
   source: ValueSource,
   inheritedFrom: string | null,
+  locale?: string,
 ): void {
   if (!layer || typeof layer !== 'object') return
   for (const [key, value] of Object.entries(layer)) {
     if (value === undefined) continue
-    acc[key] = { value, source, inheritedFrom }
+    if (locale && key.startsWith('_')) continue
+    acc[key] = { value, source, inheritedFrom, ...(locale ? { requestedLocale: locale, effectiveLocale: locale, translationState: 'current' as const } : {}) }
+  }
+}
+
+/** Legacy variation labels remain addressable while supplying the canonical Master axes.
+ * An explicit canonical value wins. Conflicting aliases never choose a value by key order. */
+function applyVariantLayer(acc: ResolvedAttributes, product: ProductLike): void {
+  const variations = product.categoryAttributes?.variations
+  const bag = { ...(product.variantAttributes && typeof product.variantAttributes === 'object' ? product.variantAttributes : {}),
+    ...(variations && typeof variations === 'object' && !Array.isArray(variations) ? variations : {}) }
+  applyLayer(acc, bag, 'variant', product.id)
+  if (!bag || typeof bag !== 'object' || Array.isArray(bag)) return
+  // Legacy "Body Type" is not a stable identity: imports also use it for gender.
+  for (const axis of ['color', 'size', 'style']) {
+    if (Object.prototype.hasOwnProperty.call(bag, axis) && bag[axis] !== undefined) continue
+    const matches = Object.entries(bag).filter(([key, value]) => canonicalVariantAxis(key) === axis && value !== undefined)
+    if (!matches.length) continue
+    const conflict = new Set(matches.map(([, value]) => JSON.stringify(value))).size > 1
+    acc[axis] = { value: conflict ? null : matches[0][1], source: 'variant', inheritedFrom: product.id,
+      ...(conflict ? { warnings: [`Conflicting variant attributes supply ${axis}: ${matches.map(([key]) => key).join(', ')}. Set the canonical ${axis} attribute to resolve the conflict.`] } : {}) }
   }
 }
 
@@ -181,10 +213,11 @@ function applyLayer(
 function applySynthesisLayer(
   acc: ResolvedAttributes,
   source: ProductLike,
+  locale: string,
 ): void {
   for (const { resolverKey, column } of SYNTHESIS_MAP) {
     const value = (source as unknown as Record<string, unknown>)[column as string]
-    if (value === undefined || value === null) continue
+    if (value === undefined || value === null || value === '') continue
     // Empty arrays count as "no data" for synthesis — they'd otherwise
     // mask a real bulletPoints write further up the merge stack.
     if (Array.isArray(value) && value.length === 0) continue
@@ -192,7 +225,21 @@ function applySynthesisLayer(
       value,
       source: 'masterColumn',
       inheritedFrom: `${source.id}:${column as string}`,
+      ...(['title', 'description', 'bulletPoints', 'keywords'].includes(resolverKey)
+        ? { requestedLocale: locale, effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: locale === PRIMARY_CONTENT_LOCALE ? 'current' as const : 'fallback' as const } : {}),
     }
+  }
+}
+
+/** Shared native facts have no content locale. Their canonical column wins over legacy aliases. */
+function applyCanonicalFacts(acc: ResolvedAttributes, product: ProductLike): void {
+  for (const key of ALLOWED_MASTER_FIELDS) {
+    if (['description', 'bulletPoints', 'keywords'].includes(key)) continue
+    let value = (product as unknown as Record<string, unknown>)[key]
+    if (value === undefined || value === null || value === '' || Array.isArray(value) && value.length === 0) continue
+    // Prisma decimal columns must remain numeric in in-process validation, before JSON serialization.
+    if (typeof value === 'object' && typeof (value as { toNumber?: unknown }).toNumber === 'function') value = (value as { toNumber(): number }).toNumber()
+    acc[key] = { value, source: 'masterColumn', inheritedFrom: product.id }
   }
 }
 
@@ -213,31 +260,33 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
     product,
     parent,
     channelListing,
-    locale = DEFAULT_LOCALE,
+    locale: requestedLocale = DEFAULT_LOCALE,
     synthesize = true,
   } = input
+  const locale = requestedLocale.toLowerCase()
   const acc: ResolvedAttributes = {}
 
-  // A.4 — Synthesis fires only for the default locale ('en'). Non-en
-  // queries that lack their per-locale slot should surface as "missing
-  // translation" in the UI, not as English text mislabeled.
-  const doSynthesize = synthesize && locale === DEFAULT_LOCALE
+  // Legacy native content is explicitly attributed to the configured source
+  // language, including when it supplies fallback for another locale.
+  const doSynthesize = synthesize
 
   // Layers 1-3 only apply when there's a parent (i.e. resolving a
   // variant child). Top-level products skip straight to layer 4.
   if (parent) {
     // 0. Parent legacy-column synthesis (lowest precedence; any JSONB
     //    layer for the same key in parent or variant overrides it).
-    if (doSynthesize) applySynthesisLayer(acc, parent)
+    if (doSynthesize) applySynthesisLayer(acc, parent, locale)
     // 1. Parent categoryAttributes
     applyLayer(acc, parent.categoryAttributes, 'master', parent.id)
+    if (synthesize) applyCanonicalFacts(acc, parent)
+    if (parent.countryOfOrigin) applyLayer(acc, { countryOfOrigin: parent.countryOfOrigin, country_of_origin: parent.countryOfOrigin }, 'masterColumn', parent.id)
     // 2. Parent localizedContent[locale]
-    applyLayer(acc, parent.localizedContent?.[locale], 'masterLocale', parent.id)
+    applyLayer(acc, contentSlots(parent)[locale], 'masterLocale', parent.id, locale)
     // 3. Parent localizedContent['en'] (fallback when requested locale
     //    didn't supply this key — applyLayer only writes if key absent
     //    from layer, so we use a *missing-keys-only* merge here).
     if (locale !== DEFAULT_LOCALE) {
-      applyLayerFallback(acc, parent.localizedContent?.[DEFAULT_LOCALE], 'masterLocale', parent.id)
+      applyLayerFallback(acc, contentSlots(parent)[DEFAULT_LOCALE], 'masterLocale', parent.id, locale)
     }
   }
 
@@ -245,12 +294,44 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
   //    synthesis goes first as the lowest-precedence layer FOR THIS
   //    entity — but it still beats every parent layer above, matching
   //    "variant overrides master" semantics.
-  if (doSynthesize) applySynthesisLayer(acc, product)
-  applyLayer(acc, product.variantAttributes, 'variant', product.id)
+  if (doSynthesize) applySynthesisLayer(acc, product, locale)
+  applyVariantLayer(acc, product)
   applyLayer(acc, product.categoryAttributes, parent ? 'variant' : 'master', product.id)
-  applyLayer(acc, product.localizedContent?.[locale], parent ? 'variantLocale' : 'masterLocale', product.id)
+  if (synthesize) applyCanonicalFacts(acc, product)
+  if (product.countryOfOrigin) applyLayer(acc, { countryOfOrigin: product.countryOfOrigin, country_of_origin: product.countryOfOrigin }, 'masterColumn', product.id)
+  applyLayer(acc, contentSlots(product)[locale], parent ? 'variantLocale' : 'masterLocale', product.id, locale)
   if (locale !== DEFAULT_LOCALE) {
-    applyLayerFallback(acc, product.localizedContent?.[DEFAULT_LOCALE], parent ? 'variantLocale' : 'masterLocale', product.id)
+    applyLayerFallback(acc, contentSlots(product)[DEFAULT_LOCALE], parent ? 'variantLocale' : 'masterLocale', product.id, locale)
+  }
+
+  // The editor already uses shared default content when no localized value exists.
+  // Keep that same fallback in mapping/preview, with Master-column provenance.
+  if (synthesize) for (const key of ['description', 'bulletPoints', 'keywords'] as const) {
+    const present = (v: unknown) => v !== null && v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0)
+    if (acc[key] !== undefined) continue
+    const source = present(product[key]) ? product : parent && present(parent[key]) ? parent : null
+    if (source) acc[key] = { value: source[key]!, source: 'masterColumn', inheritedFrom: source.id,
+      requestedLocale: locale, effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: locale === PRIMARY_CONTENT_LOCALE ? 'current' : 'fallback' }
+  }
+
+  // One known historical alias: keep old origin facts usable until the native value is filled.
+  // A populated canonical origin always wins; provenance still identifies the original layer.
+  if (synthesize) {
+    const origin = acc.countryOfOrigin ?? acc.country_of_origin
+    if (origin) { acc.countryOfOrigin = origin; acc.country_of_origin = origin }
+  }
+
+  const localizedKeys = new Set(input.localizableKeys ?? [])
+  for (const owner of [parent, product]) if (owner) for (const slot of Object.values(contentSlots(owner))) {
+    for (const key of Object.keys(slot)) if (!key.startsWith('_')) localizedKeys.add(key)
+  }
+  for (const key of localizedKeys) {
+    if (acc[key]?.effectiveLocale) continue
+    const owner = Object.prototype.hasOwnProperty.call(contentSlots(product)[PRIMARY_CONTENT_LOCALE] ?? {}, key) ? product
+      : parent && Object.prototype.hasOwnProperty.call(contentSlots(parent)[PRIMARY_CONTENT_LOCALE] ?? {}, key) ? parent : null
+    if (owner) acc[key] = { value: contentSlots(owner)[PRIMARY_CONTENT_LOCALE][key], source: owner === parent ? 'masterLocale' : parent ? 'variantLocale' : 'masterLocale', inheritedFrom: owner.id }
+    const hit = acc[key]
+    if (hit) Object.assign(hit, { requestedLocale: locale, effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: locale === PRIMARY_CONTENT_LOCALE ? 'current' : 'fallback' })
   }
 
   // 5. Channel-level JSONB bag
@@ -282,6 +363,11 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
     }
   }
 
+  for (const [key, hit] of Object.entries(acc)) {
+    if (!hit.effectiveLocale || hit.translationState === 'fallback') continue
+    const owner = parent && hit.inheritedFrom === parent.id ? parent : product
+    hit.translationState = contentReviewState({ ...owner, parent: owner === product ? parent : null }, key, hit.effectiveLocale)
+  }
   return acc
 }
 
@@ -293,12 +379,14 @@ function applyLayerFallback(
   layer: Record<string, unknown> | null | undefined,
   source: ValueSource,
   inheritedFrom: string | null,
+  locale: string,
 ): void {
   if (!layer || typeof layer !== 'object') return
   for (const [key, value] of Object.entries(layer)) {
     if (value === undefined) continue
-    if (key in acc) continue
-    acc[key] = { value, source, inheritedFrom }
+    if (key in acc && acc[key].translationState !== 'fallback') continue
+    if (key.startsWith('_')) continue
+    acc[key] = { value, source, inheritedFrom, requestedLocale: locale, effectiveLocale: DEFAULT_LOCALE, translationState: 'fallback' }
   }
 }
 

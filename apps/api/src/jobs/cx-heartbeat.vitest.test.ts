@@ -42,7 +42,13 @@ const prismaMock = {
       updates.push({ id: where.id, data })
       return { ...r }
     }),
-    updateMany: vi.fn(async () => ({ count: 0 })),
+    updateMany: vi.fn(async ({ where, data }: { where: { id?: string } & Record<string, unknown>; data: Record<string, unknown> }) => {
+      const r = where.id ? rows.get(where.id) : undefined
+      if (!r || Object.entries(where).some(([key, value]) => value !== undefined && r[key] !== value)) return { count: 0 }
+      for (const [key, value] of Object.entries(data)) if (value !== undefined) r[key] = value
+      updates.push({ id: r.id, data })
+      return { count: 1 }
+    }),
   },
   connectionEvent: {
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
@@ -215,7 +221,7 @@ describe('runHeartbeatFor — ok', () => {
     await runHeartbeatFor(row)
     const handle = heartbeat.mock.calls[0][0] as Record<string, unknown>
     expect(handle).toMatchObject({ id: row.id, channelKey: 'EBAY', channelType: 'EBAY', region: 'GLOBAL', identity: { userId: 'U1' } })
-    expect(Object.keys(handle).sort()).toEqual(['channelKey', 'channelType', 'grantedScopes', 'id', 'identity', 'region', 'token'])
+    expect(Object.keys(handle).sort()).toEqual(['channelKey', 'channelType', 'environment', 'grantedScopes', 'id', 'identity', 'region', 'token'])
   })
 
   it('a connected row stays connected with no status_change and no alert', async () => {
@@ -237,15 +243,17 @@ describe('runHeartbeatFor — ok', () => {
   it('fills in identity only when the row has none, and adopts reported scopes', async () => {
     heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1, identity: { userId: 'U-new', username: 'n' }, scopes: ['s1', 's2'] })
     const bare = seedRow()
-    await runHeartbeatFor(bare)
+    const freshReport = await runHeartbeatFor(bare)
+    expect(freshReport.scopeDrift).toEqual(['s3'])
     expect(lastUpdate(bare.id)).toMatchObject({ identity: { userId: 'U-new', username: 'n' }, grantedScopes: ['s1', 's2'] })
 
-    heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1, identity: { userId: 'U-other' }, scopes: [] })
+    heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1, identity: { userId: 'U-kept' }, scopes: [] })
     const known = seedRow({ identity: { userId: 'U-kept' } })
-    await runHeartbeatFor(known)
+    const emptyReport = await runHeartbeatFor(known)
     const data = updates.filter((u) => u.id === known.id).find((u) => 'lastHeartbeatAt' in u.data)!.data
     expect('identity' in data).toBe(false)
-    expect('grantedScopes' in data).toBe(false) // an empty scopes list is not a report
+    expect(data.grantedScopes).toEqual([])
+    expect(emptyReport.scopeDrift).toEqual(['s1', 's2', 's3'])
   })
 
   it('reports scope drift from the row\'s granted scopes', async () => {
@@ -253,6 +261,19 @@ describe('runHeartbeatFor — ok', () => {
     const row = seedRow({ grantedScopes: ['s1'] })
     const report = await runHeartbeatFor(row)
     expect(report.scopeDrift).toEqual(['s2', 's3'])
+  })
+
+  it('rejects a different account identity without adopting its permissions or markets', async () => {
+    heartbeat.mockResolvedValueOnce({ ok: true, latencyMs: 1, identity: { userId: 'OTHER' }, scopes: ['s1', 's2', 's3'] })
+    fakeSpec.discoverScopes = discoverScopes
+    registerChannel(fakeSpec)
+    const row = seedRow({ identity: { userId: 'EXPECTED' }, grantedScopes: ['s1'] })
+    const report = await runHeartbeatFor(row)
+    expect(report).toMatchObject({ ok: false, authStatus: 'needs_reauth', errorClass: 'identity_mismatch', scopeDrift: ['s2', 's3'] })
+    expect(rows.get(row.id)).toMatchObject({ identity: { userId: 'EXPECTED' }, grantedScopes: ['s1'] })
+    expect(discoverScopes).not.toHaveBeenCalled()
+    expect(eventsOf('heartbeat_ok', row.id)).toHaveLength(0)
+    await expect(heartbeat.mock.calls[0][0].token()).rejects.toMatchObject({ code: 'CONNECTION_NEEDS_REAUTH' })
   })
 
   it('MERGES scope metadata — discovery must not delete what discovery cannot see', async () => {
@@ -353,14 +374,14 @@ describe('runHeartbeatFor — failures', () => {
     expect(createAlert).not.toHaveBeenCalled()
   })
 
-  it('failure 10 → needs_reauth with the "needs reconnecting" alert', async () => {
-    heartbeat.mockResolvedValueOnce(fail('unknown', 500))
+  it.each(['unknown', 'network', 'forbidden', 'signature', 'configuration', 'rate_limited', 'transient'] as const)('failure 10 for %s stays degraded without requesting reauthentication', async (errorClass) => {
+    heartbeat.mockResolvedValueOnce(fail(errorClass, 500))
     const row = seedRow({ consecutiveFailures: 9, authStatus: 'degraded' })
     const report = await runHeartbeatFor(row)
-    expect(report.authStatus).toBe('needs_reauth')
+    expect(report.authStatus).toBe('degraded')
     expect(rows.get(row.id)!.consecutiveFailures).toBe(10)
-    expect(eventsOf('status_change', row.id)[0].detail).toMatchObject({ from: 'degraded', to: 'needs_reauth' })
-    expect(alertTitles()).toEqual(['EBAY account "HB Shop" needs reconnecting'])
+    expect(eventsOf('status_change', row.id)).toHaveLength(0)
+    expect(alertTitles()).toEqual([])
   })
 
   it('auth_revoked → needs_reauth on the first failure', async () => {
@@ -423,6 +444,32 @@ describe('runHeartbeatFor — real eBay spec', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(String(fetchMock.mock.calls[0][0])).toBe('https://apiz.ebay.com/commerce/identity/v1/user/')
     expect((fetchMock.mock.calls[0][1]?.headers as Record<string, string>).Authorization).toBe('Bearer live-access')
+  })
+
+  it('an unreadable credential is a server configuration failure, not a sign-in request', async () => {
+    const row = seedRow({ credentialsEnc: 'v1:broken', credentialsKeyId: 'env' })
+    const report = await runHeartbeatFor(row)
+    expect(report).toMatchObject({ ok: false, errorClass: 'configuration', authStatus: 'degraded' })
+    expect(report.message).toContain('encryption key')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('an identity response without a user ID cannot pass the account test', async () => {
+    const exp = new Date(Date.now() + 3_600_000)
+    const { blob } = await encryptCredentials({ accessToken: 'live-access', refreshToken: 'r', accessTokenExpiresAt: exp.toISOString() })
+    const row = seedRow({ credentialsEnc: blob, credentialsKeyId: 'env', accessTokenExpiresAt: exp })
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 200 }))
+    expect(await runHeartbeatFor(row)).toMatchObject({ ok: false, errorClass: 'unknown' })
+    expect(eventsOf('heartbeat_ok', row.id)).toHaveLength(0)
+  })
+
+  it('tests sandbox credentials against the sandbox identity host', async () => {
+    const exp = new Date(Date.now() + 3_600_000)
+    const { blob } = await encryptCredentials({ accessToken: 'sandbox-access', refreshToken: 'r', accessTokenExpiresAt: exp.toISOString() })
+    const row = seedRow({ credentialsEnc: blob, credentialsKeyId: 'env', accessTokenExpiresAt: exp, connectionMetadata: { environment: 'sandbox' } })
+    fetchMock.mockResolvedValueOnce(new Response('{"userId":"sandbox-user"}', { status: 200 }))
+    expect(await runHeartbeatFor(row)).toMatchObject({ ok: true })
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://apiz.sandbox.ebay.com/commerce/identity/v1/user/')
   })
 
   it('a 200 from the identity endpoint is ok and back-fills the identity', async () => {

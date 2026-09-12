@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Unified Flat-File API
  *
@@ -628,8 +629,21 @@ const flatFileUnifiedRoutes: FastifyPluginAsync = async (fastify) => {
             if (Object.keys(shopifyData).length) {
               await prisma.channelListing.upsert({
                 where: {
-                  productId_channel_marketplace: { productId: rowId, channel: 'SHOPIFY', marketplace: 'GLOBAL' },
-                } as any,
+                  // PES.5 — this `where` used to be `as any`, which hid the fact that it
+                  // never gained MAP.2b's `channelConnectionId`. The cast is gone so the
+                  // compiler covers this site from now on. `null` on both discriminators is
+                  // the honest value here: an unattributed row (there is no connection
+                  // lookup in this scope) on the product's PRIMARY listing. Both indexes are
+                  // NULLS NOT DISTINCT, so null collides with null and the upsert targets the
+                  // one row it always meant to.
+                  productId_channel_marketplace: workspaceKey({
+                    productId: rowId,
+                    channel: 'SHOPIFY',
+                    marketplace: 'GLOBAL',
+                    channelConnectionId: null,
+                    aliasKey: '',
+                  }),
+                },
                 create: {
                   productId: rowId, channel: 'SHOPIFY', region: 'GLOBAL',
                   marketplace: 'GLOBAL', channelMarket: 'SHOPIFY',

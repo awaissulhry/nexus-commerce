@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/design-system/primitives'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { useSearchParams } from 'next/navigation'
 import { Zap, Eye, MessageSquare, Power, AlertTriangle, ShieldAlert, Play, Square, RefreshCw } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'

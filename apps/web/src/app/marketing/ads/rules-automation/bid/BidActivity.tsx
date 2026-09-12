@@ -35,8 +35,8 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { FilterChip } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
-import Link from 'next/link'
+import { DataGrid } from '@/design-system/grid/datagrid'
+import Link from '@/lib/workspaces/Link'
 import { Activity, AlertTriangle, ExternalLink, ShieldAlert } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import type { BidSlotProps } from './slot-contract'

@@ -57,8 +57,8 @@ const prismaMock = {
   amazonAdsConnection: {
     findFirst: vi.fn(async ({ where }: { where: { isActive: boolean } }) =>
       legacyRows.find((r) => r.isActive === where.isActive) ?? null),
-    findUnique: vi.fn(async ({ where }: { where: { profileId: string } }) =>
-      legacyRows.find((r) => r.profileId === where.profileId) ?? null),
+    findUnique: vi.fn(async ({ where }: { where: { workspace_profileId: { profileId: string } } }) =>
+      legacyRows.find((r) => r.profileId === where.workspace_profileId.profileId) ?? null),
   },
 }
 vi.mock('../../db.js', () => ({ default: prismaMock }))

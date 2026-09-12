@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SR.1 — Sentient Review Loop routes.
  *
@@ -1328,10 +1329,10 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       let resolvedEmail: string | null = null
       if (email) {
         // Validate token matches the email if both provided.
-        const { unsubscribeTokenFor } = await import(
+        const { verifyUnsubscribeToken } = await import(
           '../services/reviews/email-suppression.service.js'
         )
-        if (token && unsubscribeTokenFor(email) !== token) {
+        if (!token || !verifyUnsubscribeToken(email, token)) {
           return reply.code(400).send({ error: 'token / email mismatch' })
         }
         resolvedEmail = email.trim().toLowerCase()
@@ -1378,12 +1379,12 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       // RFC 8058 one-click — same logic as GET, returns JSON.
       const body = request.body ?? {}
       const channel = body.channel ?? null
-      const { emailFromUnsubscribeToken, addSuppression, unsubscribeTokenFor } = await import(
+      const { emailFromUnsubscribeToken, addSuppression, verifyUnsubscribeToken } = await import(
         '../services/reviews/email-suppression.service.js'
       )
       let resolvedEmail: string | null = null
       if (body.email) {
-        if (body.token && unsubscribeTokenFor(body.email) !== body.token) {
+        if (!body.token || !verifyUnsubscribeToken(body.email, body.token)) {
           return { ok: false, error: 'token / email mismatch' }
         }
         resolvedEmail = body.email.trim().toLowerCase()
@@ -1562,7 +1563,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
       const check = await prisma.reviewSentimentCheck.findUnique({
-        where: { token },
+        where: { workspace_token: workspaceKey({ token: token }) },
         include: {
           order: { select: { customerName: true, channelOrderId: true, marketplace: true } },
         },
@@ -1594,7 +1595,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const ua = (request.headers['user-agent'] ?? '').slice(0, 256)
 
       const check = await prisma.reviewSentimentCheck.findUnique({
-        where: { token },
+        where: { workspace_token: workspaceKey({ token: token }) },
         include: {
           order: { select: { id: true, channel: true, channelOrderId: true, marketplace: true, deliveredAt: true } },
           reviewRequest: true,
@@ -1644,7 +1645,7 @@ const reviewsRoutes: FastifyPluginAsync = async (fastify) => {
       const ua = (request.headers['user-agent'] ?? '').slice(0, 256)
 
       const check = await prisma.reviewSentimentCheck.findUnique({
-        where: { token },
+        where: { workspace_token: workspaceKey({ token: token }) },
         include: {
           order: { select: { id: true, channel: true, channelOrderId: true, marketplace: true, customerName: true, customerEmail: true } },
           reviewRequest: true,

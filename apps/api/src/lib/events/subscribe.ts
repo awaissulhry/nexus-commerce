@@ -22,6 +22,12 @@ import { logger } from '../../utils/logger.js'
 import { isEventType, type EventEnvelope, type EventType } from '@nexus/events'
 import type { BrokerMessage, EventBroker } from './broker.js'
 import { withCorrelation } from './correlation.js'
+import { LEGACY_WORKSPACE_ID, withWorkspace } from '../workspace-context.js'
+
+function inEventWorkspace<T>(envelope: EventEnvelope, work: () => T): T {
+  if (!envelope.workspaceId && process.env.NEXUS_WORKSPACES_ENABLED !== '1') return work()
+  return withWorkspace({ workspaceId: envelope.workspaceId ?? LEGACY_WORKSPACE_ID, actorUserId: null, membershipId: null, roleKeys: [] }, work)
+}
 
 export interface EventSubscription {
   /**
@@ -66,7 +72,7 @@ export async function subscribeEvents(
       const { envelope } = message
       if (wanted && !wanted.has(envelope.type)) return
       await withCorrelation({ correlationId: envelope.correlationId, causationId: envelope.id }, async () =>
-        subscription.handler(envelope, { shard: message.shard }),
+        inEventWorkspace(envelope, () => subscription.handler(envelope, { shard: message.shard })),
       )
     },
     onError: (error, message) => {
@@ -119,7 +125,7 @@ export async function subscribeBroadcastEvents(
       const { envelope } = message
       if (wanted && !wanted.has(envelope.type)) return
       await withCorrelation({ correlationId: envelope.correlationId, causationId: envelope.id }, async () =>
-        subscription.handler(envelope, { shard: message.shard }),
+        inEventWorkspace(envelope, () => subscription.handler(envelope, { shard: message.shard })),
       )
     },
     onError: (error, message) => subscription.onError?.(error, message.envelope),

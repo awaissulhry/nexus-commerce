@@ -41,7 +41,7 @@ export function startTosIsIngestCron(): void {
     logger.info('tos-is-ingest cron NOT scheduled (NEXUS_ENABLE_TOS_IS_INGEST_CRON off) — manual trigger available once topOfSearchImpressionShare data confirmed')
     return
   }
-  scheduledTask = cron.schedule('30 2 * * *', () => void runTosIsIngestCron())
+  scheduledTask = cron.schedule('30 2 * * *', async () => { await runTosIsIngestCron() })
   logger.info('tos-is-ingest cron scheduled (30 2 * * *)')
 }
 

@@ -1,3 +1,5 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * IS.2 — Real-time Amazon order detection via SP-API Notifications + SQS.
  *
@@ -12,7 +14,8 @@
  * For setup instructions see docs/IS-SETUP.md.
  */
 
-import cron from '../lib/cron/clustered.js'
+import cron, { schedulePlatform } from '../lib/cron/clustered.js'
+import { verifiedChannelWorkspace, withIngressWorkspace, amazonNotificationSeller } from '../lib/workspace-ingress.js'
 import { isSqsConfigured, pollSqsMessages, deleteSqsMessage } from '../services/amazon-sqs.service.js'
 import { amazonOrdersService } from '../services/amazon-orders.service.js'
 import { logger } from '../utils/logger.js'
@@ -26,7 +29,7 @@ let running = false
 async function runSqsPoll(): Promise<void> {
   if (running) return   // skip if previous tick is still in flight
   if (!isSqsConfigured()) return
-  if (!amazonOrdersService.isConfigured()) return
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1' && !(await amazonOrdersService.isConfigured())) return
 
   running = true
   try {
@@ -48,7 +51,8 @@ async function runSqsPoll(): Promise<void> {
       const messages = await pollSqsMessages(10, LONG_POLL_SECONDS)
       totalMessages += messages.length
 
-      for (const msg of messages) {
+      for (const message of messages) {
+        const processMessage = async () => { for (const msg of [message]) {
         // P3.4 — Persist to WebhookEvent so the message appears in
         // /sync-logs/webhooks and can be replayed. Upsert on (channel, externalId)
         // so polling the same message twice (before ack) is idempotent.
@@ -233,7 +237,7 @@ async function runSqsPoll(): Promise<void> {
         if (msg.anyOfferChangedNotification) {
           const note = msg.anyOfferChangedNotification
           const ourSellerId =
-            process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+            (await getAmazonSellerId())
           const winnerIsUs =
             note.buyBoxWinner !== null &&
             ourSellerId !== '' &&
@@ -444,10 +448,10 @@ async function runSqsPoll(): Promise<void> {
           if (amazonOrderId) {
             const row = await prisma.order.findUnique({
               where: {
-                channel_channelOrderId: {
+                channel_channelOrderId: workspaceKey({
                   channel: 'AMAZON',
                   channelOrderId: amazonOrderId,
-                },
+                }),
               },
               select: { id: true, totalPrice: true },
             })
@@ -506,6 +510,14 @@ async function runSqsPoll(): Promise<void> {
         }
 
         await deleteSqsMessage(msg.receiptHandle)
+      } };
+        if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') { await processMessage(); continue }
+        try {
+          const owner = await verifiedChannelWorkspace('AMAZON', amazonNotificationSeller(message.rawPayload));
+          await withIngressWorkspace(owner.workspaceId, processMessage);
+        } catch (error) {
+          logger.error('Amazon notification retained for retry: profile routing or processing failed', { messageId: message.messageId, error: String(error) });
+        }
       }
 
       // Stop when another full long-poll wouldn't fit in this tick's budget;
@@ -537,8 +549,8 @@ export function startAmazonSqsPollCron(): void {
   // (20s SQS waits), so coverage is effectively gapless and a delivered
   // notification is ingested within ~1s. The old double-fire setTimeout
   // (two 1s short-polls per minute) is gone.
-  scheduledTask = cron.schedule('* * * * *', () => {
-    void runSqsPoll()
+  scheduledTask = schedulePlatform('* * * * *', async () => {
+    await runSqsPoll()
   })
 
   logger.info('amazon-sqs-poll: started (continuous long-poll)')

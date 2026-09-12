@@ -1,31 +1,19 @@
 /**
- * W8.4 — Scheduled imports.
- *
- * Recurring URL / FTP pulls that hand the fetched payload to the
- * W8.1 import service. Mirrors ScheduledBulkActionService's shape
- * but for imports — same one-time / recurring / cron-with-start-gate
- * dispatch logic.
- *
- * v0 supports source='url' over plain HTTP(S). 'ftp' is in the
- * schema but rejected at create time so operators don't queue a
- * fetch path that doesn't exist yet — the FTP client itself is a
- * follow-up commit.
+ * Scheduled URL sources use the same immutable review and versioned writer
+ * as manual imports. FTP and legacy unversioned mappings are refused.
  */
 
 import type { PrismaClient, ScheduledImport } from '@prisma/client'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
-import {
-  ImportWizardService,
-  type FileKind,
-  type TargetEntity,
-  type OnErrorMode,
-} from './import-wizard.service.js'
-import {
-  detectFileKind,
-  parseFile,
-} from './import/parsers.js'
-import { applyMapping } from './import/column-mapping.js'
+import type { OnErrorMode } from './import-wizard.service.js'
+import { validateSourceMapping, mapSourceTable, type SourceMapping } from './pim/catalog-source-mapping.js'
+import { PRESET_KIND } from './pim/catalog-source.service.js'
+import { readSourceFile } from './pim/catalog-source-file.js'
+import { fetchCatalogSource } from './pim/catalog-source-fetch.js'
+import { stageTransferJob, readTransferJob, transferJobStatus } from './pim/catalog-transfer-jobs.js'
+import { fingerprint } from './pim/catalog-transfer-plan.js'
+import { TransferConflict } from './pim/catalog-transfer.service.js'
 
 async function parseCron(
   expression: string,
@@ -44,8 +32,8 @@ export interface CreateScheduledImportInput {
   description?: string | null
   source: 'url' | 'ftp'
   sourceUrl: string
-  targetEntity: TargetEntity
-  columnMapping: Record<string, string>
+  targetEntity: string
+  columnMapping: SourceMapping
   onError?: OnErrorMode
   scheduledFor?: string | Date | null
   cronExpression?: string | null
@@ -79,10 +67,7 @@ export async function computeNextRun(
 }
 
 export class ScheduledImportService {
-  private importService: ImportWizardService
-  constructor(private prisma: PrismaClient = prisma) {
-    this.importService = new ImportWizardService(prisma)
-  }
+  constructor(private prisma: PrismaClient = prisma) {}
 
   async create(input: CreateScheduledImportInput): Promise<ScheduledImport> {
     if (!input.name || !input.name.trim()) {
@@ -97,6 +82,8 @@ export class ScheduledImportService {
     if (!input.sourceUrl || !/^https?:\/\//i.test(input.sourceUrl)) {
       throw new Error('sourceUrl must be a http(s) URL')
     }
+    const mapping = validateSourceMapping(input.columnMapping)
+    if (input.targetEntity !== PRESET_KIND) throw new TransferConflict('Select a catalog source mapping with a declared ownership policy')
     const tz = input.timezone ?? 'Europe/Rome'
     if (input.cronExpression) {
       try {
@@ -111,6 +98,7 @@ export class ScheduledImportService {
       throw new Error('Schedule must carry either scheduledFor or cronExpression')
     }
     const scheduledFor = input.scheduledFor ? new Date(input.scheduledFor) : null
+    if (scheduledFor && !Number.isFinite(scheduledFor.getTime())) throw new Error('Invalid scheduled date')
     const nextRunAt = await computeNextRun({
       scheduledFor,
       cronExpression: input.cronExpression ?? null,
@@ -124,7 +112,7 @@ export class ScheduledImportService {
         source: input.source,
         sourceUrl: input.sourceUrl,
         targetEntity: input.targetEntity,
-        columnMapping: input.columnMapping as never,
+        columnMapping: mapping as never,
         onError: input.onError ?? 'skip',
         cronExpression: input.cronExpression ?? null,
         scheduledFor,
@@ -139,8 +127,9 @@ export class ScheduledImportService {
   async list(filters: {
     enabled?: boolean
     limit?: number
+    userId?: string | null
   } = {}): Promise<ScheduledImport[]> {
-    const where: any = {}
+    const where: any = { source: { not: 'upload' }, ...(filters.userId !== undefined ? { createdBy: filters.userId } : {}) }
     if (filters.enabled !== undefined) where.enabled = filters.enabled
     return this.prisma.scheduledImport.findMany({
       where,
@@ -153,17 +142,28 @@ export class ScheduledImportService {
     return this.prisma.scheduledImport.findUnique({ where: { id } })
   }
 
-  async setEnabled(id: string, enabled: boolean): Promise<ScheduledImport> {
+  async setEnabled(id: string, enabled: boolean, version?: string): Promise<ScheduledImport> {
     const existing = await this.prisma.scheduledImport.findUnique({
       where: { id },
     })
     if (!existing) throw new Error(`ScheduledImport not found: ${id}`)
-    let nextRunAt: Date | null = null
-    if (enabled) nextRunAt = await computeNextRun(existing, new Date())
-    return this.prisma.scheduledImport.update({
-      where: { id },
-      data: { enabled, nextRunAt },
-    })
+    if (!version || existing.updatedAt.toISOString() !== version) throw new TransferConflict('Schedule changed; reload before changing its state')
+    if (enabled) {
+      validateSourceMapping(existing.columnMapping)
+      if (existing.targetEntity !== PRESET_KIND || existing.source !== 'url') throw new TransferConflict('Reconfigure this legacy schedule with a catalog source ownership policy')
+    }
+    const nextRunAt = enabled ? await computeNextRun(existing, new Date()) : null
+    const changed = await this.prisma.scheduledImport.updateMany({ where: { id, updatedAt: existing.updatedAt }, data: { enabled, nextRunAt } })
+    if (!changed.count) throw new TransferConflict('Schedule changed; reload it')
+    return this.prisma.scheduledImport.findUniqueOrThrow({ where: { id } })
+  }
+
+  async deleteOwned(id: string, userId: string | null, version?: string): Promise<void> {
+    const row = await this.get(id)
+    if (!row || row.createdBy !== userId) throw new TransferConflict('Schedule not found')
+    if (row.enabled || !version || version !== row.updatedAt.toISOString()) throw new TransferConflict('Pause the schedule and reload its current version before deleting it')
+    const result = await this.prisma.scheduledImport.deleteMany({ where: { id, createdBy: userId, enabled: false, updatedAt: row.updatedAt } })
+    if (!result.count) throw new TransferConflict('Schedule changed; reload it')
   }
 
   async delete(id: string): Promise<void> {
@@ -183,65 +183,25 @@ export class ScheduledImportService {
     })
   }
 
-  /**
-   * Fetch the URL, parse it, persist + apply the resulting
-   * ImportJob. Returns the new ImportJob row's id so the schedule's
-   * lastJobId pointer can record what fired.
-   */
-  async fireOnce(row: ScheduledImport): Promise<{
-    jobId: string
-    status: string
-    successRows: number
-    failedRows: number
-  }> {
-    const fileKind: FileKind = detectFileKind(row.sourceUrl)
-    let text: string | undefined
-    let bytes: Uint8Array | undefined
-    const res = await fetch(row.sourceUrl)
-    if (!res.ok) {
-      throw new Error(`Fetch ${row.sourceUrl} failed: HTTP ${res.status}`)
+  /** Claim a source occurrence before fetching. Every run produces an immutable review. */
+  async fireOnce(row: ScheduledImport): Promise<{ jobId: string; status: string; successRows: number; failedRows: number }> {
+    const mapping = validateSourceMapping(row.columnMapping)
+    if (row.targetEntity !== PRESET_KIND || row.source !== 'url') throw new TransferConflict('Legacy schedule needs an explicit catalog source ownership policy')
+    const claimVersion = new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1))
+    const claim = await this.prisma.scheduledImport.updateMany({ where: { id: row.id, enabled: true, updatedAt: row.updatedAt }, data: { nextRunAt: new Date(Date.now() + 5 * 60_000), lastStatus: 'FETCHING', updatedAt: claimVersion, ...(row.lastStatus !== 'FETCHING' ? { lastJobId: null } : {}) } })
+    if (!claim.count) throw new TransferConflict('Schedule already claimed or changed')
+    // A crash after durable staging can reuse its job instead of fetching and writing again.
+    if (row.lastStatus === 'FETCHING' && row.lastJobId) {
+      const prior = await readTransferJob(row.lastJobId, row.createdBy)
+      if (prior) return { jobId: row.lastJobId, status: transferJobStatus(prior).state, successRows: 0, failedRows: 0 }
     }
-    if (fileKind === 'xlsx') {
-      const ab = await res.arrayBuffer()
-      bytes = new Uint8Array(ab)
-    } else {
-      text = await res.text()
-    }
-    const parsed = await parseFile(fileKind, { text, bytes })
-    const mapping = (row.columnMapping as Record<string, string>) ?? {}
-    const rows = parsed.rows.map((raw, i) => {
-      const values = applyMapping(raw, mapping)
-      let parseError: string | undefined
-      if (
-        row.targetEntity === 'product' &&
-        (!values.sku || String(values.sku).trim().length === 0)
-      ) {
-        parseError = 'row missing sku (no value mapped to the SKU field)'
-      }
-      return { rowIndex: i + 1, values, parseError }
-    })
-
-    const job = await this.importService.create({
-      jobName: `[scheduled] ${row.name}`,
-      description: row.description,
-      source: 'url',
-      sourceUrl: row.sourceUrl,
-      filename: row.sourceUrl.split('/').pop() ?? null,
-      fileKind,
-      targetEntity: row.targetEntity as TargetEntity,
-      columnMapping: mapping,
-      onError: row.onError as OnErrorMode,
-      rows,
-      scheduleId: row.id,
-      createdBy: 'scheduled-import',
-    })
-    const result = await this.importService.apply(job.id)
-    return {
-      jobId: job.id,
-      status: result.status,
-      successRows: result.successRows,
-      failedRows: result.failedRows,
-    }
+    const file = await fetchCatalogSource(row.sourceUrl)
+    const mapped = mapSourceTable(await readSourceFile(file.buffer, file.filename), mapping)
+    const current = await this.prisma.scheduledImport.findUnique({ where: { id: row.id } })
+    if (!current?.enabled || fingerprint([current.columnMapping, current.sourceUrl]) !== fingerprint([row.columnMapping, row.sourceUrl])) throw new TransferConflict('Source policy changed while fetching')
+    const job = await stageTransferJob({ ...mapped, mapping, mode: mapping.mode, market: mapping.market, filename: file.filename, userId: row.createdBy, scheduleClaimVersion: claimVersion,
+      source: { url: row.sourceUrl, scheduleId: row.id, presetId: row.id, presetVersion: fingerprint([row.columnMapping, row.sourceUrl]), autoApply: mapping.execution === 'automatic' } })
+    return { jobId: job.jobId, status: job.state, successRows: 0, failedRows: 0 }
   }
 
   async markFired(
@@ -254,13 +214,13 @@ export class ScheduledImportService {
     if (!existing) return
     const newRunCount = existing.runCount + 1
     const now = new Date()
-    const nextRunAt = await computeNextRun(
+    const nextRunAt = existing.enabled ? await computeNextRun(
       { ...existing, runCount: newRunCount },
       now,
-    )
+    ) : null
     await this.prisma.scheduledImport
-      .update({
-        where: { id },
+      .updateMany({
+        where: { id, updatedAt: existing.updatedAt },
         data: {
           lastRunAt: now,
           lastJobId: result.jobId,

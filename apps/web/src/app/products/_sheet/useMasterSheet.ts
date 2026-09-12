@@ -148,7 +148,22 @@ export async function saveSheetCell(input: {
     // A 200 can still carry per-cell refusals alongside partial success.
     const mine = Array.isArray(body?.errors) ? body.errors.find((e: { id?: string }) => e.id === row.id) : undefined
     if (mine) return { ok: false, reason: mine.error || 'Refused' }
-    if (body?.updated === 0) return { ok: false, reason: 'The server accepted the request but changed nothing' }
+    /*
+     * 🔴 `updated: 0` STOPPED MEANING FAILURE (#706). Since PES.5's #675 the route runs an equality
+     * pass before the CAS, so a token-carrying PATCH whose value is already correct answers
+     * `200 {success: true, updated: 0, unchanged: 1, currentVersion, versionOf}` — and this branch
+     * painted "the server accepted the request but changed nothing" over a cell showing exactly the
+     * right value. PES.3 measured that on the channel sheet: a refusal message above a correct cell.
+     * This surface sends a token at `:136`, so it is reachable here too.
+     *
+     * `unchanged` is what discriminates. Present, the server is telling us it compared and found
+     * nothing to do — a success. ABSENT, nothing explains the zero, and that is the genuinely
+     * silent-drop shape this branch was built for; an older API still answers that way, so it stays
+     * a failure. Keyed on the explanation, not on the count.
+     */
+    if (body?.updated === 0 && typeof body?.unchanged !== 'number') {
+      return { ok: false, reason: 'The server accepted the request but changed nothing' }
+    }
 
     return { ok: true, version: typeof body?.currentVersion === 'number' ? body.currentVersion : undefined }
   } catch (err) {

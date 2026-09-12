@@ -1,0 +1,55 @@
+--- a/snippets/product-info.liquid
++++ b/snippets/product-info.liquid
+@@ -269,18 +269,38 @@
+                           assign selected = false
+                         endif
+ 
++                        # Keep the same native size/options when selecting a sibling colour.
++                        # Existing product IDs, stock, reviews and all product content stay authoritative.
++                        assign linked_variant = product_variation.selected_or_first_available_variant
++                        assign current_variant = product.selected_or_first_available_variant
++                        assign current_axes = product.options | json
++                        assign linked_axes = product_variation.options | json
++                        if current_axes == linked_axes and current_variant != blank
++                          assign same_options = product_variation.variants | where: 'option1', current_variant.option1
++                          if product.options.size > 1
++                            assign same_options = same_options | where: 'option2', current_variant.option2
++                          endif
++                          if product.options.size > 2
++                            assign same_options = same_options | where: 'option3', current_variant.option3
++                          endif
++                          if same_options.size > 0
++                            assign linked_variant = same_options | first
++                          endif
++                        endif
++                        assign linked_url = linked_variant.url | default: product_variation.url
++
+                         case block.settings.selector_style
+                           when 'swatch'
+-                            render 'option-value', type: 'swatch', swatch: swatch, url: product_variation.url, label: label, selected: selected
++                            render 'option-value', type: 'swatch', swatch: swatch, url: linked_url, label: label, selected: selected
+ 
+                           when 'variant_image'
+-                            render 'option-value', type: 'thumbnail', url: product_variation.url, label: label, image: product_variation.featured_media, selected: selected, bordered: true
++                            render 'option-value', type: 'thumbnail', url: linked_url, label: label, image: product_variation.featured_media, selected: selected, bordered: true
+ 
+                           when 'block'
+-                            render 'option-value', type: 'block', url: product_variation.url, label: label, selected: selected
++                            render 'option-value', type: 'block', url: linked_url, label: label, selected: selected
+ 
+                           when 'block_swatch'
+-                            render 'option-value', type: 'block', swatch: swatch, url: product_variation.url, label: label, selected: selected, show_swatch: true
++                            render 'option-value', type: 'block', swatch: swatch, url: linked_url, label: label, selected: selected, show_swatch: true
+                         endcase
+                       endfor
+                     -%}
+--- a/assets/theme.js
++++ b/assets/theme.js
+@@ -3358,6 +3358,7 @@
+       "price",
+       "payment-terms",
+       "variant-picker",
++      "product-variations",
+       "quantity-selector",
+       "volume-pricing",
+       "inventory",

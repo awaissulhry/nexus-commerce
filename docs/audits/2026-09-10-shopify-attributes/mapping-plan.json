@@ -1,0 +1,92 @@
+{
+  "observedAt": "2026-09-10T06:54:36.146Z",
+  "beforeToken": "b0c630e760311b45f6f715e1ace699d088486d2bacff1439106f456e81d1cd3f",
+  "changes": [
+    {
+      "fieldKey": "title",
+      "rule": {
+        "source": "title",
+        "fallback": "name",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "descriptionHtml",
+      "rule": {
+        "source": "description",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "productType",
+      "rule": {
+        "source": "shopify_product_type",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "vendor",
+      "rule": {
+        "source": "brand",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "price",
+      "rule": {
+        "source": "basePrice",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "cost",
+      "rule": {
+        "source": "costPrice",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "sku",
+      "rule": {
+        "source": "sku",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "weight",
+      "rule": {
+        "source": "weightValue",
+        "transforms": [
+          {
+            "type": "expr",
+            "expr": "measure($weightValue, $weightUnit, \"g|kg|oz|lb\")"
+          }
+        ]
+      }
+    },
+    {
+      "fieldKey": "harmonizedSystemCode",
+      "rule": {
+        "source": "hsCode",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    },
+    {
+      "fieldKey": "countryCodeOfOrigin",
+      "rule": {
+        "source": "countryOfOrigin",
+        "notes": "Inherits the corresponding Master attribute. A channel mapping or listing override can replace it."
+      }
+    }
+  ],
+  "definitionToAdd": {
+    "code": "shopify_product_type",
+    "label": "Shopify product type",
+    "type": "text",
+    "scope": "global",
+    "localizable": false,
+    "description": "Custom Shopify product type. Independent of Amazon product type and channel taxonomy category assignments."
+  },
+  "retainedRules": [],
+  "publishesProducts": false
+}

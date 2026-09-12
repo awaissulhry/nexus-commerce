@@ -57,6 +57,7 @@ const walk = (dir, acc = []) => {
 }
 
 const stale = []
+let checked = 0
 const mode = process.argv[2]
 for (const fresh of walk(out)) {
   const rel = relative(out, fresh)
@@ -67,6 +68,7 @@ for (const fresh of walk(out)) {
   // run on the first never-generated file (measured 2026-08-31: BenchmarkBar.d.ts). So --write
   // could never CREATE a declaration, only refresh one that already existed — the exact case the
   // comment above claims to cover.
+  checked++
   const current = existsSync(committed) ? readFileSync(committed, 'utf8') : null
   if (current !== null && readFileSync(fresh, 'utf8') === current) continue
   stale.push(rel)
@@ -74,15 +76,16 @@ for (const fresh of walk(out)) {
 }
 
 if (mode === '--write') {
-  console.log(`✓ ds-dts: regenerated ${stale.length} declaration(s)`)
+  console.log(`✓ ds-dts: regenerated ${stale.length} of ${checked} declaration(s) under apps/web/src/design-system (apps/factory NOT touched)`)
   process.exit(0)
 }
 if (stale.length) {
-  console.error(`❌ ds-dts: ${stale.length} committed declaration(s) are stale:`)
+  console.error(`❌ ds-dts: ${stale.length} of ${checked} committed declaration(s) under apps/web/src/design-system are stale:`)
   for (const s of stale) console.error(`   ${s}`)
   console.error(`\n   A .d.ts that omits a prop is worse than none: the brief tells sessions to read\n` +
                 `   the component, and a stale declaration describes one that does not exist.\n` +
                 `   Run: node scripts/check-ds-dts-fresh.mjs --write`)
   process.exit(1)
 }
-console.log('✓ ds-dts: every committed declaration matches its source')
+console.log(`✓ ds-dts: all ${checked} declaration(s) under apps/web/src/design-system match their source`)
+console.log('   scope: apps/web ONLY — apps/factory carries its own .d.ts and is NOT scanned by this guard (DS1-20)')

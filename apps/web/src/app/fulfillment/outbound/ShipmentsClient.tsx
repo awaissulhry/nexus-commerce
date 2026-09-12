@@ -8,8 +8,9 @@
 // tab handles "what's mid-flight or done?".
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   Truck, Search, Printer, ExternalLink, X, CheckCircle2,
   AlertTriangle, Send, Download, RotateCcw, Trash, Pause, Play,

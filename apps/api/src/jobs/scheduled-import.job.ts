@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * W8.4 — Scheduled-import tick.
  *
@@ -11,6 +12,7 @@ import prisma from '../db.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { logger } from '../utils/logger.js'
 import { ScheduledImportService } from '../services/scheduled-import.service.js'
+import { TransferConflict } from '../services/pim/catalog-transfer.service.js'
 
 const TICK_INTERVAL_MS = 5 * 60 * 1000
 
@@ -52,6 +54,7 @@ export async function runScheduledImportTickOnce(): Promise<TickSummary> {
       })
       fired++
     } catch (err) {
+      if (err instanceof TransferConflict && err.message === 'Schedule already claimed or changed') { skipped++; continue }
       const message = err instanceof Error ? err.message : String(err)
       logger.error(
         `[scheduled-import] schedule ${row.id} fire failed: ${message}`,
@@ -83,9 +86,9 @@ export function startScheduledImportCron(): void {
   // Don't fire at boot — a backed-up queue triggering N HTTP fetches
   // simultaneously on restart is unfriendly to upstream sources.
   // Wait one interval.
-  tickTimer = setInterval(() => {
-    void runScheduledImportCronOnce()
-  }, TICK_INTERVAL_MS)
+  tickTimer = setInterval(() => { void runProfileTimer('scheduled-import', async () => {
+    await runScheduledImportCronOnce()
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
 }
 
 export function stopScheduledImportCron(): void {

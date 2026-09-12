@@ -16,9 +16,14 @@
  *   SEARCH_ENGINE_ENABLED=1   (also gates the indexer enqueue + worker)
  */
 
+import { workspaceIdForQuery, LEGACY_WORKSPACE_ID } from './workspace-context.js'
 import { logger } from '../utils/logger.js'
 
 export const PRODUCTS_COLLECTION = 'products'
+export function productsCollection(): string {
+  const id = workspaceIdForQuery()
+  return !id || id === LEGACY_WORKSPACE_ID ? PRODUCTS_COLLECTION : `${productsCollection()}_${id}`
+}
 
 /** True when SEARCH_ENGINE_ENABLED=1 AND all connection vars are present. */
 export function isSearchConfigured(): boolean {
@@ -120,7 +125,7 @@ const PRODUCTS_SCHEMA = {
 /** Create the products collection if it doesn't exist. Idempotent. */
 export async function ensureCollection(): Promise<void> {
   if (!isSearchConfigured()) return
-  const existing = await ts(`/collections/${PRODUCTS_COLLECTION}`, {
+  const existing = await ts(`/collections/${productsCollection()}`, {
     method: 'GET',
   })
   if (existing.ok) return
@@ -131,7 +136,7 @@ export async function ensureCollection(): Promise<void> {
   }
   const created = await ts('/collections', {
     method: 'POST',
-    body: JSON.stringify(PRODUCTS_SCHEMA),
+    body: JSON.stringify({ ...PRODUCTS_SCHEMA, name: productsCollection() }),
   })
   if (!created.ok && created.status !== 409) {
     throw new Error(
@@ -178,7 +183,7 @@ export type ProductSearchDoc = {
 /** Upsert a single document. */
 export async function upsertDocument(doc: ProductSearchDoc): Promise<void> {
   const res = await ts(
-    `/collections/${PRODUCTS_COLLECTION}/documents?action=upsert`,
+    `/collections/${productsCollection()}/documents?action=upsert`,
     { method: 'POST', body: JSON.stringify(doc) },
   )
   if (!res.ok) {
@@ -195,7 +200,7 @@ export async function importDocuments(
   if (docs.length === 0) return 0
   const jsonl = docs.map((d) => JSON.stringify(d)).join('\n')
   const res = await ts(
-    `/collections/${PRODUCTS_COLLECTION}/documents/import?action=upsert`,
+    `/collections/${productsCollection()}/documents/import?action=upsert`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
@@ -219,7 +224,7 @@ export async function importDocuments(
 /** Delete a single document. 404 is treated as success (already gone). */
 export async function deleteDocument(id: string): Promise<void> {
   const res = await ts(
-    `/collections/${PRODUCTS_COLLECTION}/documents/${encodeURIComponent(id)}`,
+    `/collections/${productsCollection()}/documents/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
   )
   if (!res.ok && res.status !== 404) {
@@ -246,7 +251,7 @@ export async function searchProducts(
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) qs.set(k, String(v))
   const res = await ts(
-    `/collections/${PRODUCTS_COLLECTION}/documents/search?${qs.toString()}`,
+    `/collections/${productsCollection()}/documents/search?${qs.toString()}`,
     { method: 'GET' },
   )
   if (!res.ok) {
@@ -259,7 +264,7 @@ export async function searchProducts(
 
 /** Count of indexed documents (for backfill verification). */
 export async function documentCount(): Promise<number> {
-  const res = await ts(`/collections/${PRODUCTS_COLLECTION}`, { method: 'GET' })
+  const res = await ts(`/collections/${productsCollection()}`, { method: 'GET' })
   if (!res.ok) return -1
   const body = (await res.json()) as { num_documents?: number }
   return body.num_documents ?? -1

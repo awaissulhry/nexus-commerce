@@ -1,43 +1,30 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
+import { applyProductBulkEdits, ProductBulkError, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
+import { runFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import type { FastifyPluginAsync } from 'fastify'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
 import { allowApiKeyScope } from '../lib/api-key-hook.js'
-import {
-  getAvailableFields,
-  getFieldDefinition,
-} from '../services/pim/field-registry.service.js'
-import {
-  buildUploadPlan,
-  parseUploadBuffer,
-  summarisePlan,
-  type PlanRow,
-} from '../services/products/bulk-upload.service.js'
+import { getAvailableFields } from '../services/pim/field-registry.service.js'
+import { RESTORABLE_MASTER_FIELDS } from '../services/pim/restorable-fields.js'
+import { buildUploadPlan, parseUploadBuffer, summarisePlan, type PlanRow } from '../services/products/bulk-upload.service.js'
 import { parseZipUpload } from '../services/products/bulk-zip-upload.service.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
-import { masterPriceService } from '../services/master-price.service.js'
-import { masterContentService } from '../services/master-content.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { countProductStats, listProducts, markCacheReady, type ProductListQuery } from '../services/products/list-products.service.js'
 import { gridRequestToListQuery, resolveGridLookups, type ProductsGridRequest, type ProductsGridResponse } from '../services/products/products-grid.contract.js'
 import { listProductGroups } from '../services/products/products-grid-groups.service.js'
 import { productEventService } from '../services/product-event.service.js'
-import {
-  productReadCacheService,
-  pickFaceImage,
-  FACE_IMAGE_ORDER_BY,
-  FACE_IMAGE_SELECT,
-} from '../services/product-read-cache.service.js'
-import { deriveFulfillmentMethod } from '../services/fulfillment-derivation.service.js'
+import { reconstructState } from '../services/pim/audit-state.js'
+import { productReadCacheService } from '../services/product-read-cache.service.js'
 import { computeAvailableToPublish } from '../services/available-to-publish.service.js'
 import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
-import {
-  shadowCompareProductRead,
-  isShadowEnabled,
-} from '../services/pim/resolver-shadow.js'
+import { shadowCompareProductRead, isShadowEnabled } from '../services/pim/resolver-shadow.js'
+
 
 // ES.3 — module-level cache-ready flag (re-checked every 60s).
 // Avoids a DB round-trip on every single request; a stale "false"
@@ -49,6 +36,7 @@ import {
  * and /api/products/bulk.
  */
 const productsRoutes: FastifyPluginAsync = async (fastify) => {
+  await registerFormulaRequestContext(fastify, {})
   // GET /api/pim/fields — return field definitions for the column
   // selector. Optional filters:
   //   ?channels=AMAZON,EBAY      — include those channels' fields
@@ -704,24 +692,13 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Walk audit entries oldest-first: the FIRST entry that touched a field
       // after `at` gives us the `before` value = state at `at`.
-      for (const entry of auditEntries) {
-        if (entry.before && typeof entry.before === 'object') {
-          for (const [field, beforeVal] of Object.entries(entry.before as Record<string, unknown>)) {
-            if (!(field in coverage)) {
-              state[field] = beforeVal
-              coverage[field] = 'reconstructed'
-            }
-          }
-        }
-        // Bulk PATCH records `after: { field, value }` with no `before`.
-        if (entry.after && typeof entry.after === 'object') {
-          const afterObj = entry.after as any
-          if (afterObj.field && 'value' in afterObj) {
-            const f = afterObj.field as string
-            if (!(f in coverage)) coverage[f] = 'uncertain'
-          }
-        }
-      }
+      // PES.5 — the fold lives in `services/pim/audit-state.ts` so it is
+      // testable without a database. Both `before` shapes (descriptor and map)
+      // coexist in the table; treating a descriptor as a map invented two junk
+      // keys and never rolled the real field back.
+      const rebuilt = reconstructState(state, auditEntries)
+      Object.assign(state, rebuilt.state)
+      Object.assign(coverage, rebuilt.coverage)
 
       // Check flat-file events after `at` for uncertainty signal
       const hasFlatFileAfter = events.some(
@@ -777,9 +754,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: '`at` and `fields` are required' })
       }
 
+      // PES.5 (#112.2) — this findUnique already runs; it now also carries the
+      // values the restore is about to replace, so the pre-restore capture
+      // costs no extra round-trip.
       const product = await prisma.product.findUnique({
         where: { id },
-        select: { id: true, version: true },
+        select: { id: true, version: true, categoryAttributes: true, localizedContent: true,
+                  name: true, description: true, brand: true, manufacturer: true, basePrice: true,
+                  bulletPoints: true, keywords: true, status: true },
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
 
@@ -792,13 +774,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Build the changes array for the bulk PATCH engine
-      const ALLOWED: Set<string> = new Set([
-        'name', 'description', 'status', 'basePrice', 'costPrice', 'minPrice', 'maxPrice',
-        'brand', 'manufacturer', 'ean', 'gtin', 'upc', 'productType',
-        'bulletPoints', 'keywords', 'weightValue', 'weightUnit',
-        'dimLength', 'dimWidth', 'dimHeight', 'dimUnit',
-        'hsCode', 'countryOfOrigin', 'totalStock', 'lowStockThreshold',
-      ])
+      // #364 — one definition, shared with the restore-points read so the drawer
+      // cannot offer a moment this filter then silently drops.
+      const ALLOWED = RESTORABLE_MASTER_FIELDS
       const changes = Object.entries(fields)
         .filter(([field]) => ALLOWED.has(field))
         .map(([field, value]) => ({ id, field, value, cascade: false }))
@@ -813,9 +791,52 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         data[field] = value
       }
 
-      await prisma.$transaction([
-        prisma.product.update({ where: { id }, data: data as any }),
+      // ── Pre-restore capture (PES.5 / #112.2) ────────────────────────
+      // A restore rewrites fields to an earlier state. Without recording what
+      // it REPLACED, the restore itself is not undoable — and this handler
+      // wrote no audit row of any kind, so "restore to 14:02" was a one-way
+      // door with no record of the 15:30 state it discarded.
+      //
+      // Captured through the SAME AuditLog mechanism the bulk PATCH uses, not a
+      // snapshot table: `ChannelListingSnapshot` is keyed to a channelListing
+      // and a master product is not one, and the per-cell history API already
+      // reads this trail — so the restore now appears in the drawer beside
+      // every other change instead of as an invisible jump.
+      const priorRow = product as unknown as Record<string, unknown>
+      const restoreAudit = changes.map(({ field, value }) => ({
+        userId: (request as { authUser?: { id?: string } }).authUser?.id ?? null,
+        ip: request.ip ?? null,
+        entityType: 'Product',
+        entityId: id,
+        action: 'update',
+        before: {
+          field,
+          value: (typeof field === 'string' && field.startsWith('attr_')
+            ? (priorRow.categoryAttributes as Record<string, unknown> | null)?.[field.slice(5)]
+            : priorRow[field]) ?? null,
+        },
+        after: { field, value },
+        metadata: { source: 'restore', restoredTo: at, layer: 'master', channel: null, marketplace: null, aliasId: null },
+      }))
+
+      // PES.5 (#220) — the restore MUST advance `Product.version`.
+      //
+      // It did not, and the consequence is the sharpest form of the bug this
+      // token exists to prevent: a sheet loaded BEFORE the restore still holds
+      // the old version, so its next cell write passes the CAS and silently
+      // overwrites the restored values with no 409. The one write most likely
+      // to be racing a stale view is exactly the one the guard could not see.
+      // The bulk PATCH CAS-bumps inside its transaction; this path did not.
+      const [restored] = await prisma.$transaction([
+        prisma.product.update({
+          where: { id },
+          data: { ...(data as Record<string, unknown>), version: { increment: 1 } } as any,
+          select: { version: true },
+        }),
       ])
+      // Fire-and-forget, matching the bulk PATCH: a logging failure must not
+      // fail a restore the operator already committed to.
+      void auditLogService.writeMany(restoreAudit)
 
       // Emit restoration event + refresh cache
       void productEventService.emit({
@@ -826,7 +847,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         metadata: { source: 'OPERATOR', ip: request.ip ?? undefined },
       })
 
-      return reply.send({ ok: true, restoredFields: Object.keys(data) })
+      // Read BACK, never computed (#201): an arithmetic restatement of "we
+      // bumped by one" is true only until something else also bumps.
+      return reply.send({
+        ok: true,
+        restoredFields: Object.keys(data),
+        currentVersion: restored?.version ?? null,
+        versionOf: 'product',
+      })
     } catch (err: any) {
       fastify.log.error({ err }, '[products/:id/restore] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -961,47 +989,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   // Audit row captures:
   //   cascadeCount       — how many cascade fan-outs ran
   //   affectedChildren   — every child id touched by a cascade
-  fastify.patch<{
-    Body: {
-      changes: Array<{
-        id: string
-        field: string
-        value: unknown
-        cascade?: boolean
-      }>
-      marketplaceContext?: {
-        channel: 'AMAZON' | 'EBAY'
-        marketplace: string
-      }
-      /** R.1 — multi-target fan-out. When set (and non-empty), every
-       *  channel-field upsert runs once per matching context, so a
-       *  single edit lands on AMAZON:IT + AMAZON:DE + AMAZON:FR in
-       *  one PATCH. Falls back to `marketplaceContext` (singular) for
-       *  backwards compat. */
-      marketplaceContexts?: Array<{
-        channel: 'AMAZON' | 'EBAY'
-        marketplace: string
-      }>
-      /** W1.2 — optimistic concurrency for single-product callers
-       *  (MasterDataTab on /products/[id]/edit). Caller passes the
-       *  Product.version it read with via the If-Match header
-       *  (preferred) or this body field (fallback). When supplied:
-       *
-       *    - all `changes` must target the same product id (else 400),
-       *    - the transaction CAS-bumps version inside the same tx as
-       *      the field updates, so concurrent writers see VERSION_
-       *      CONFLICT instead of silently overwriting,
-       *    - the response includes `currentVersion` (=expectedVersion
-       *      + 1) so the client can keep its local copy in sync
-       *      without a refetch.
-       *
-       *  Multi-product bulk-ops PATCHes (which may legitimately span
-       *  hundreds of products in a single call) still pass nothing
-       *  here and behave exactly as before — version still bumps but
-       *  with no conflict check. */
-      expectedVersion?: number
-    }
-  }>('/products/bulk', {
+  fastify.patch<{ Body: ProductBulkInput }>('/products/bulk', {
     // NN.16 — explicit body limit. Fastify's default is 1MB; bulk
     // pastes from large catalogs can legitimately reach a few MB,
     // but anything past 5MB is suspicious (a 5MB JSON body is ~50k
@@ -1017,1301 +1005,18 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     config: {
       rateLimit: { max: 300, timeWindow: '1 minute' },
     },
-  }, async (request, reply) => {
-    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
-    // request for every connected channel: the answer cannot change mid-request,
-    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
-    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
-    const { changes, marketplaceContext, marketplaceContexts } =
-      request.body ?? {}
-    // Effective context list: prefer the new array, fall back to the
-    // singular form, dedupe.
-    const rawContexts: Array<{ channel: 'AMAZON' | 'EBAY'; marketplace: string }> =
-      Array.isArray(marketplaceContexts) && marketplaceContexts.length > 0
-        ? marketplaceContexts
-        : marketplaceContext
-        ? [marketplaceContext]
-        : []
-    const effectiveContexts = (() => {
-      const seen = new Set<string>()
-      const out: typeof rawContexts = []
-      for (const c of rawContexts) {
-        if (!c?.channel || !c?.marketplace) continue
-        const k = `${c.channel}:${c.marketplace}`
-        if (seen.has(k)) continue
-        seen.add(k)
-        out.push(c)
-      }
-      return out
-    })()
-    // First context drives schema lookups (registry validation needs ONE
-    // marketplace; rule of thumb is the schema is consistent across the
-    // selected fan-out targets — selectors that mix incompatible
-    // schemas get rejected per change anyway).
-    const primaryContext = effectiveContexts[0] ?? null
-    if (!Array.isArray(changes) || changes.length === 0) {
-      return reply.code(400).send({ error: 'No changes provided' })
-    }
-    if (changes.length > 1000) {
-      return reply.code(400).send({ error: 'Max 1000 changes per request' })
-    }
-
-    // W1.2 — pick up the optimistic-concurrency hint. If-Match takes
-    // precedence over the body field; both must parse as a positive
-    // integer to be honoured.
-    const ifMatchHeader = request.headers['if-match']
-    const headerVersion =
-      typeof ifMatchHeader === 'string' && /^\d+$/.test(ifMatchHeader)
-        ? Number(ifMatchHeader)
-        : undefined
-    const bodyExpectedVersion =
-      typeof request.body?.expectedVersion === 'number' &&
-      Number.isFinite(request.body.expectedVersion) &&
-      request.body.expectedVersion >= 0
-        ? Math.floor(request.body.expectedVersion)
-        : undefined
-    const expectedVersion = headerVersion ?? bodyExpectedVersion
-    if (expectedVersion !== undefined) {
-      const ids = new Set(changes.map((c) => c?.id).filter(Boolean))
-      if (ids.size !== 1) {
-        return reply.code(400).send({
-          error:
-            'expectedVersion / If-Match requires every change to target the same product id',
-        })
-      }
-    }
-
-    const ALLOWED_FIELDS = new Set([
-      'sku',   // editable from master-data tab; uniqueness validated below
-      'name',
-      'description', // D.5: ZIP upload + grid editing
-      'basePrice',
-      'costPrice',
-      'minMargin',
-      'minPrice',
-      'maxPrice',
-      'totalStock',
-      'lowStockThreshold',
-      'brand',
-      'manufacturer',
-      'upc',
-      'ean',
-      'weightValue',
-      // D.3j: weight/dim units + dim values
-      'weightUnit',
-      'dimLength',
-      'dimWidth',
-      'dimHeight',
-      'dimUnit',
-      // D.3k: master-level GTIN
-      'gtin',
-      'status',
-      'fulfillmentChannel',
-      // CC.1 — master Amazon productType. Drives the schema-driven
-      // attribute set; per-listing override stays in
-      // platformAttributes.productType (Q.5).
-      'productType',
-      // W1.4 — master long-form content + keyword tags. bulletPoints
-      // and keywords are string[] columns on Product; the validator
-      // below accepts both an array of strings and a JSON-string
-      // payload (the bulk-ops grid pastes it as JSON, the master
-      // editor sends it as an array).
-      'bulletPoints',
-      'keywords',
-      // W1.4 — Italian fiscal / customs fields. hsCode is the
-      // tariff classification (digit string) used by customs
-      // declarations; countryOfOrigin is the ISO-2 alpha code used
-      // on commercial invoices and Amazon attributes. Both flow
-      // through PATCH /api/products/bulk so the master editor and
-      // bulk-ops paste workflows share the same validator.
-      'hsCode',
-      'countryOfOrigin',
-      // W7.1 — EU compliance: PPE directive category + ADR/IATA hazmat
-      'ppeCategory',
-      'hazmatClass',
-      'hazmatUnNumber',
-      // C4 — structured CE/PPE protective-gear data
-      'garmentClass',
-      'notifiedBodyNumber',
-      'notifiedBodyName',
-      'declarationOfConformityUrl',
-      'impactProtectors',
-      // GTIN.3 / Step 4 variant flow — the list-wizard's "promote to
-      // parent" action PATCHes isParent=true and "link variant to
-      // parent" PATCHes parentId. Both write into Product directly;
-      // the wizard owned this surface but hit "Field not editable"
-      // because the bulk allowlist didn't include them.
-      'isParent',
-      'parentId',
-    ])
-    // D.3d: prefixed channel fields write to ChannelListing instead of
-    // Product. Only the suffixes in this set are wired today; the rest
-    // of amazon_*/ebay_* are still read-only in the registry.
-    const CHANNEL_FIELD_MAP: Record<string, string> = {
-      amazon_title: 'title',
-      amazon_description: 'description',
-      ebay_title: 'title',
-      ebay_description: 'description',
-      // CC.1 — variationTheme on ChannelListing, surfaced per-channel
-      // in the registry. Same target column for both prefixes.
-      amazon_variationTheme: 'variationTheme',
-      ebay_variationTheme: 'variationTheme',
-    }
-    const isChannelField = (f: string) =>
-      Object.prototype.hasOwnProperty.call(CHANNEL_FIELD_MAP, f)
-    const channelOf = (f: string): 'AMAZON' | 'EBAY' | null =>
-      f.startsWith('amazon_') ? 'AMAZON' : f.startsWith('ebay_') ? 'EBAY' : null
-    const isCategoryAttrField = (f: string) => f.startsWith('attr_')
-    const NUMERIC_FIELDS = new Set([
-      'basePrice',
-      'costPrice',
-      'minMargin',
-      'minPrice',
-      'maxPrice',
-      'weightValue',
-      // D.3j
-      'dimLength',
-      'dimWidth',
-      'dimHeight',
-    ])
-    const INTEGER_FIELDS = new Set(['totalStock', 'lowStockThreshold'])
-    const STATUS_VALUES = new Set(['ACTIVE', 'DRAFT', 'INACTIVE'])
-    const CHANNEL_VALUES = new Set(['FBA', 'FBM'])
-    // D.3j: unit enums for the editable weightUnit / dimUnit fields.
-    const WEIGHT_UNIT_VALUES = new Set(['kg', 'g', 'lb', 'oz'])
-    const DIM_UNIT_VALUES = new Set(['cm', 'mm', 'in'])
-    // Locale-tolerant numeric coercion: accept Italian / European
-    // decimal commas ("5,5") alongside the canonical period.
-    const numericFromLocale = (raw: unknown): number => {
-      if (typeof raw === 'number') return raw
-      if (raw == null) return NaN
-      const s = String(raw).trim()
-      if (s === '') return NaN
-      // Only swap commas to periods when there's no period already
-      // (avoids "1,000.00" → "1.000.00"). For our domain, raw user
-      // inputs like "5,5" or "5.5" are the common cases.
-      if (s.includes('.') || !s.includes(',')) return Number(s)
-      return Number(s.replace(',', '.'))
-    }
-
-    interface Validated {
-      id: string
-      field: string
-      value: any
-      cascade: boolean
-    }
-    interface ChangeError {
-      id: string
-      field: string
-      error: string
-    }
-
-    const validated: Validated[] = []
-    const errors: ChangeError[] = []
-
-    for (const c of changes) {
-      if (!c?.id || typeof c.id !== 'string') {
-        errors.push({ id: c?.id ?? '', field: c?.field ?? '', error: 'Missing id' })
-        continue
-      }
-      const isCh = isChannelField(c.field ?? '')
-      const isAttr = isCategoryAttrField(c.field ?? '')
-      if (
-        !c.field ||
-        (!ALLOWED_FIELDS.has(c.field) && !isCh && !isAttr)
-      ) {
-        errors.push({ id: c.id, field: c.field ?? '', error: 'Field not editable' })
-        continue
-      }
-      // For attr_* fields, the registry must have it AND be editable.
-      // D.3g: getFieldDefinition is now async and falls back to the
-      // cached Amazon schemas when the id isn't in the static
-      // hardcoded list — so any field exposed by /api/pim/fields with
-      // a marketplace context is also acceptable here.
-      if (isAttr) {
-        const def = await getFieldDefinition(c.field, {
-          marketplace: primaryContext?.marketplace ?? null,
-        })
-        if (!def || !def.editable) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'Unknown or read-only category attribute',
-          })
-          continue
-        }
-        // Validate select options
-        if (def.type === 'select' && def.options && c.value !== null) {
-          if (!def.options.includes(String(c.value))) {
-            errors.push({
-              id: c.id,
-              field: c.field,
-              error: `Must be one of: ${def.options.join(', ')}`,
-            })
-            continue
-          }
-        }
-      }
-      // Channel fields require at least one marketplace context whose
-      // channel matches the field's prefix (amazon_* → AMAZON, ebay_*
-      // → EBAY). With R.1 multi-targets, a request that selects e.g.
-      // AMAZON:IT + EBAY:UK can carry both `amazon_title` and
-      // `ebay_title` changes — each routes to its matching contexts.
-      if (isCh) {
-        if (effectiveContexts.length === 0) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'marketplaceContexts required for channel fields',
-          })
-          continue
-        }
-        const expectedChannel = channelOf(c.field)
-        const matching = expectedChannel
-          ? effectiveContexts.filter((ctx) => ctx.channel === expectedChannel)
-          : effectiveContexts
-        if (matching.length === 0) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: `Field belongs to ${expectedChannel} but no ${expectedChannel} target was selected`,
-          })
-          continue
-        }
-      }
-
-      let value: any = c.value
-
-      // Category attributes (attr_*) — text + select fields. Trim text,
-      // pass select values through (validation already gated above).
-      if (isAttr) {
-        if (typeof value !== 'string' && value !== null && value !== undefined) {
-          value = String(value)
-        }
-        if (typeof value === 'string') {
-          const trimmed = value.trim()
-          value = trimmed === '' ? null : trimmed
-        }
-        validated.push({
-          id: c.id,
-          field: c.field,
-          value,
-          cascade: !!c.cascade,
-        })
-        continue
-      }
-
-      // Channel fields are all text in D.3d (title, description). Trim,
-      // null on empty.
-      if (isCh) {
-        if (typeof value !== 'string' && value !== null && value !== undefined) {
-          value = String(value)
-        }
-        if (typeof value === 'string') {
-          const trimmed = value.trim()
-          value = trimmed === '' ? null : trimmed
-        }
-        // Length validation (lightweight — frontend already enforces)
-        if (
-          typeof value === 'string' &&
-          c.field === 'amazon_title' &&
-          value.length > 200
-        ) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'Amazon title max 200 characters',
-          })
-          continue
-        }
-        if (
-          typeof value === 'string' &&
-          c.field === 'ebay_title' &&
-          value.length > 80
-        ) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'eBay title max 80 characters',
-          })
-          continue
-        }
-        validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade })
-        continue
-      }
-
-      if (NUMERIC_FIELDS.has(c.field)) {
-        if (value === '' || value === null || value === undefined) {
-          value = null
-        } else {
-          const n = numericFromLocale(value)
-          if (Number.isNaN(n)) {
-            errors.push({ id: c.id, field: c.field, error: 'Invalid number' })
-            continue
-          }
-          if (n < 0) {
-            errors.push({ id: c.id, field: c.field, error: 'Must be ≥ 0' })
-            continue
-          }
-          value = n
-        }
-      } else if (c.field === 'weightUnit') {
-        const v = String(value ?? '').toLowerCase()
-        if (!WEIGHT_UNIT_VALUES.has(v)) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: `Weight unit must be one of ${Array.from(WEIGHT_UNIT_VALUES).join(', ')}`,
-          })
-          continue
-        }
-        value = v
-      } else if (c.field === 'dimUnit') {
-        const v = String(value ?? '').toLowerCase()
-        if (!DIM_UNIT_VALUES.has(v)) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: `Dimension unit must be one of ${Array.from(DIM_UNIT_VALUES).join(', ')}`,
-          })
-          continue
-        }
-        value = v
-      } else if (c.field === 'gtin') {
-        // Empty / null clears it.
-        if (value === '' || value === null || value === undefined) {
-          value = null
-        } else {
-          const digits = String(value).replace(/\D/g, '')
-          if (digits.length < 8 || digits.length > 14) {
-            errors.push({
-              id: c.id,
-              field: c.field,
-              error: 'GTIN must be 8–14 digits',
-            })
-            continue
-          }
-          value = digits
-        }
-      } else if (INTEGER_FIELDS.has(c.field)) {
-        if (value === '' || value === null || value === undefined) {
-          value = 0
-        } else {
-          const n = parseInt(String(value), 10)
-          if (Number.isNaN(n)) {
-            errors.push({ id: c.id, field: c.field, error: 'Invalid integer' })
-            continue
-          }
-          if (n < 0) {
-            errors.push({ id: c.id, field: c.field, error: 'Must be ≥ 0' })
-            continue
-          }
-          value = n
-        }
-      } else if (c.field === 'status') {
-        const v = String(value ?? '').toUpperCase()
-        if (!STATUS_VALUES.has(v)) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: `Status must be one of ${Array.from(STATUS_VALUES).join(', ')}`,
-          })
-          continue
-        }
-        value = v
-      } else if (c.field === 'fulfillmentChannel') {
-        if (value === '' || value === null || value === undefined) {
-          value = null
-        } else {
-          const v = String(value).toUpperCase()
-          if (!CHANNEL_VALUES.has(v)) {
-            errors.push({
-              id: c.id,
-              field: c.field,
-              error: `Channel must be one of ${Array.from(CHANNEL_VALUES).join(', ')}`,
-            })
-            continue
-          }
-          value = v
-        }
-      } else if (c.field === 'bulletPoints' || c.field === 'keywords') {
-        // W1.4 — string[] master fields. Accept array literally or a
-        // JSON-string payload (the bulk-ops grid pastes JSON; the
-        // edit-page form sends a real array). Empty / null clears
-        // the column. Caps at 20 entries; trims each; drops blanks.
-        let arr: unknown[] | null = null
-        if (value === null || value === undefined || value === '') {
-          arr = []
-        } else if (Array.isArray(value)) {
-          arr = value as unknown[]
-        } else if (typeof value === 'string') {
-          try {
-            const parsed = JSON.parse(value)
-            arr = Array.isArray(parsed) ? parsed : null
-          } catch {
-            arr = null
-          }
-        }
-        if (arr === null) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: `${c.field} must be a string array or JSON array`,
-          })
-          continue
-        }
-        const cleaned = arr
-          .map((x) => (typeof x === 'string' ? x.trim() : ''))
-          .filter((x) => x.length > 0)
-          .slice(0, 20)
-        value = cleaned
-      } else if (c.field === 'hsCode') {
-        // W1.4 — HS tariff code, digit string (6, 8 or 10 digits in
-        // most jurisdictions; we accept dots/spaces and strip them).
-        // Empty / null clears.
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else {
-          const raw = String(value).replace(/[\s.]/g, '')
-          if (!/^\d{4,12}$/.test(raw)) {
-            errors.push({
-              id: c.id,
-              field: c.field,
-              error: 'hsCode must be 4–12 digits (dots and spaces ignored)',
-            })
-            continue
-          }
-          value = raw
-        }
-      } else if (c.field === 'countryOfOrigin') {
-        // W1.4 — ISO 3166-1 alpha-2, upper-case. Empty / null clears.
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else {
-          const raw = String(value).trim().toUpperCase()
-          if (!/^[A-Z]{2}$/.test(raw)) {
-            errors.push({
-              id: c.id,
-              field: c.field,
-              error: 'countryOfOrigin must be a 2-letter ISO country code',
-            })
-            continue
-          }
-          value = raw
-        }
-      } else if (c.field === 'ppeCategory') {
-        // W7.1 — PPE Directive 2016/425 category. Empty / null clears.
-        const VALID_PPE = new Set(['CAT_I', 'CAT_II', 'CAT_III'])
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else if (!VALID_PPE.has(String(value))) {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'ppeCategory must be CAT_I, CAT_II, or CAT_III',
-          })
-          continue
-        }
-      } else if (c.field === 'garmentClass') {
-        // C4 — EN 17092 garment class. Empty / null clears.
-        const VALID_CLASS = new Set(['AAA', 'AA', 'A', 'B', 'C'])
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else if (!VALID_CLASS.has(String(value).toUpperCase())) {
-          errors.push({ id: c.id, field: c.field, error: 'garmentClass must be AAA, AA, A, B, or C (EN 17092)' })
-          continue
-        } else {
-          value = String(value).toUpperCase()
-        }
-      } else if (c.field === 'impactProtectors') {
-        // C4 — JSON array of { zone, standard, level }. Empty / null clears.
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else if (!Array.isArray(value)) {
-          errors.push({ id: c.id, field: c.field, error: 'impactProtectors must be an array of { zone, standard, level }' })
-          continue
-        } else {
-          value = (value as any[])
-            .map((p) => ({
-              zone: p?.zone != null ? String(p.zone) : null,
-              standard: p?.standard != null ? String(p.standard) : null,
-              level: p?.level != null ? String(p.level) : null,
-            }))
-            .filter((p) => p.zone || p.standard || p.level)
-        }
-      } else if (c.field === 'isParent') {
-        // GTIN.3 / Step 4 — boolean coercion. Accept true/false +
-        // their string forms ("true"/"false", "1"/"0") since the
-        // bulk-ops grid sometimes pastes JSON-stringified payloads.
-        if (typeof value === 'boolean') {
-          // already correct
-        } else if (
-          value === 'true' ||
-          value === '1' ||
-          value === 1
-        ) {
-          value = true
-        } else if (
-          value === 'false' ||
-          value === '0' ||
-          value === 0 ||
-          value === '' ||
-          value === null ||
-          value === undefined
-        ) {
-          value = false
-        } else {
-          errors.push({
-            id: c.id,
-            field: c.field,
-            error: 'isParent must be a boolean',
-          })
-          continue
-        }
-      } else if (c.field === 'parentId') {
-        // GTIN.3 / Step 4 — FK to another Product.id. Empty / null
-        // unsets the parent link. A non-existent FK would be caught
-        // by Prisma; we don't pre-validate here to keep the bulk
-        // path narrow.
-        if (value === null || value === undefined || value === '') {
-          value = null
-        } else if (typeof value !== 'string') {
-          value = String(value).trim() || null
-        } else {
-          value = value.trim() || null
-        }
-      } else {
-        // text fields — trim, coerce empty string to null only for
-        // optional fields. name + sku are required, leave as-is.
-        if (typeof value !== 'string' && value !== null && value !== undefined) {
-          value = String(value)
-        }
-        if (c.field === 'sku') {
-          const trimmed = typeof value === 'string' ? value.trim() : ''
-          if (!trimmed) {
-            errors.push({ id: c.id, field: c.field, error: 'SKU cannot be empty' })
-            continue
-          }
-          value = trimmed
-        } else if (c.field === 'name') {
-          if (!value || (typeof value === 'string' && value.trim().length === 0)) {
-            errors.push({ id: c.id, field: c.field, error: 'Name cannot be empty' })
-            continue
-          }
-          value = (value as string).trim()
-        } else if (typeof value === 'string') {
-          const trimmed = value.trim()
-          value = trimmed === '' ? null : trimmed
-        }
-      }
-
-      validated.push({ id: c.id, field: c.field, value, cascade: !!c.cascade })
-    }
-
-    // Pre-validate SKU uniqueness — catches conflicts before the transaction
-    // so the user gets a clear "SKU already in use" error rather than a
-    // generic P2002 database exception.
-    const skuChanges = validated.filter((v) => v.field === 'sku' && typeof v.value === 'string')
-    if (skuChanges.length > 0) {
-      const conflicting = await prisma.product.findMany({
-        where: {
-          sku: { in: skuChanges.map((v) => String(v.value)) },
-          id: { notIn: skuChanges.map((v) => v.id) },
-          deletedAt: null,
-        },
-        select: { sku: true },
-      })
-      for (const conflict of conflicting) {
-        const idx = validated.findIndex((v) => v.field === 'sku' && v.value === conflict.sku)
-        if (idx !== -1) {
-          errors.push({ id: validated[idx].id, field: 'sku', error: `SKU "${conflict.sku}" is already used by another product` })
-          validated.splice(idx, 1)
-        }
-      }
-    }
-
-    // Phase 1 — SKU rename safety guard. Product.sku doubles as the
-    // channel seller-SKU, which Amazon/eBay treat as permanent: renaming
-    // a product that's live on a channel would silently desync the live
-    // listing (the channel keeps the old seller-SKU forever). Block only
-    // the sku change — other fields in the same PATCH still apply — until
-    // the channel-safe rename path ships. Drafts/unpublished products
-    // rename freely. "Live" matches the app's own definition:
-    // listingStatus ACTIVE && isPublished (see coverage rollup above).
-    const skuRenameIds = validated
-      .filter((v) => v.field === 'sku' && typeof v.value === 'string')
-      .map((v) => v.id)
-    if (skuRenameIds.length > 0) {
-      const liveListings = await prisma.channelListing.findMany({
-        where: {
-          listingStatus: 'ACTIVE',
-          isPublished: true,
-          OR: [
-            { productId: { in: skuRenameIds } },
-            { product: { parentId: { in: skuRenameIds } } },
-          ],
-        },
-        select: {
-          channel: true,
-          productId: true,
-          product: { select: { parentId: true } },
-        },
-      })
-      const renameIdSet = new Set(skuRenameIds)
-      const liveChannelsByOwner = new Map<string, Set<string>>()
-      for (const l of liveListings) {
-        // A listing blocks the rename of its own product (productId in the
-        // set) or, for a child listing, of the parent being renamed.
-        const owner = renameIdSet.has(l.productId)
-          ? l.productId
-          : l.product?.parentId
-        if (!owner || !renameIdSet.has(owner)) continue
-        const set = liveChannelsByOwner.get(owner) ?? new Set<string>()
-        set.add(l.channel)
-        liveChannelsByOwner.set(owner, set)
-      }
-      for (const [owner, channels] of liveChannelsByOwner) {
-        const idx = validated.findIndex(
-          (v) => v.field === 'sku' && v.id === owner,
-        )
-        if (idx !== -1) {
-          errors.push({
-            id: owner,
-            field: 'sku',
-            error: `Can't change the SKU while this product is live on ${Array.from(
-              channels,
-            ).join(
-              ', ',
-            )} — the channel seller-SKU can't be renamed in place. Unpublish it first, or use the channel-safe rename (coming soon).`,
-          })
-          validated.splice(idx, 1)
-        }
-      }
-    }
-
-    // Nothing survived validation — do not open a transaction
-    if (validated.length === 0) {
-      await prisma.bulkOperation.create({
-        data: {
-          changeCount: changes.length,
-          productCount: new Set(changes.map((c) => c.id)).size,
-          changes: changes as any,
-          status: 'FAILED',
-          errors: errors as any,
-        },
-      })
-      return reply.code(400).send({ errors })
-    }
-
-    // Apply survivors atomically. Per-row updates in a single
-    // transaction (array form). With serverless max:1 connection and
-    // sequential transactions, this is ~13ms per row.
-    //
-    // D.3c additions:
-    //   - cascade=true: pre-fetches children for each cascading parent,
-    //     adds extra updates for each child. cascadedFields gets the
-    //     field name appended (deduped on read; allowing dups is fine
-    //     and avoids an extra round-trip per child).
-    //   - cascade=false on a child: removes the field from the child's
-    //     cascadedFields array via raw SQL array_remove, so a direct
-    //     edit cleanly overrides any prior cascade.
+  }, async (request, reply) => runFormulaWrite(request.headers['x-nexus-formula-write'], async () => {
     try {
-      const startTs = Date.now()
-      const productIds = new Set(validated.map((v) => v.id))
-
-      // Pre-fetch which validated targets are children (parentId set).
-      // Used to decide whether to call array_remove on cascadedFields
-      // when applying a non-cascade change.
-      const targetIds = Array.from(productIds)
-      const targetProducts = await prisma.product.findMany({
-        where: { id: { in: targetIds } },
-        select: { id: true, parentId: true, isParent: true },
+      return await applyProductBulkEdits(request.body ?? { changes: [] }, {
+        ifMatch: request.headers['if-match'], formulaWriteToken: request.headers['x-nexus-formula-write'],
+        formulaCascade: request.headers['x-nexus-formula-cascade'] === '1',
+        userId: (request as { authUser?: { id?: string } }).authUser?.id, ip: request.ip, logger: request.log,
       })
-      const childIdSet = new Set(
-        targetProducts.filter((p) => p.parentId).map((p) => p.id)
-      )
-
-      // Pre-fetch children for cascading parents.
-      const cascadingParents = validated.filter((v) => v.cascade)
-      const childrenByParent = new Map<string, string[]>()
-      let totalAffectedChildren = 0
-      const allAffectedChildIds = new Set<string>()
-      if (cascadingParents.length > 0) {
-        const parentIds = Array.from(
-          new Set(cascadingParents.map((v) => v.id))
-        )
-        const kids = await prisma.product.findMany({
-          where: { parentId: { in: parentIds } },
-          select: { id: true, parentId: true },
-        })
-        for (const k of kids) {
-          if (!k.parentId) continue
-          let arr = childrenByParent.get(k.parentId)
-          if (!arr) {
-            arr = []
-            childrenByParent.set(k.parentId, arr)
-          }
-          arr.push(k.id)
-          allAffectedChildIds.add(k.id)
-        }
-        totalAffectedChildren = allAffectedChildIds.size
-      }
-
-      // Build the transaction's update list. One Prisma promise per
-      // statement; runs serially in array-form $transaction.
-      const updates: any[] = []
-
-      // Helper for ChannelListing upsert by (productId, channel,
-      // marketplace). R.1 — fans out to every effectiveContext whose
-      // channel matches the field's prefix, so one change targets all
-      // selected markets in a single transaction. Returns an array of
-      // Prisma promises (possibly empty) rather than a single one.
-      const upsertChannelListings = (
-        productId: string,
-        field: string,
-        value: any,
-      ) => {
-        if (effectiveContexts.length === 0) return []
-        const stripped = CHANNEL_FIELD_MAP[field]
-        if (!stripped) return []
-        const expected = channelOf(field)
-        const targets = expected
-          ? effectiveContexts.filter((ctx) => ctx.channel === expected)
-          : effectiveContexts
-        return targets.map((ctx) => {
-          const channelMarket = `${ctx.channel}_${ctx.marketplace}`
-          return prisma.channelListing.upsert({
-            where: {
-              productId_channel_marketplace: {
-                productId,
-                channel: ctx.channel,
-                marketplace: ctx.marketplace,
-                channelConnectionId: connFor.get(ctx.channel) ?? null,
-              },
-            },
-            create: {
-              productId,
-              channel: ctx.channel,
-              channelMarket,
-              region: ctx.marketplace,
-              marketplace: ctx.marketplace,
-              listingStatus: 'DRAFT',
-              [stripped]: value,
-            } as any,
-            update: { [stripped]: value } as any,
-          })
-        })
-      }
-
-      // ── D.3e: pre-group attr_* changes per product ────────────────
-      // We MERGE everything for one product into a single jsonb in
-      // one UPDATE rather than emitting one statement per attr.
-      // Map<productId, Record<strippedKey, value>> — separate maps
-      // for direct vs cascade so cascade fan-out can read its own group.
-      const attrDirectByProduct = new Map<string, Record<string, any>>()
-      const attrCascadeByProduct = new Map<string, Record<string, any>>()
-      const attrCascadeFieldNames = new Map<string, string[]>() // for cascadedFields tracking
-
-      // Phase 13d — basePrice and totalStock changes route through
-      // dedicated services (MasterPriceService / applyStockMovement)
-      // AFTER the bulk transaction commits, so the cascade to
-      // ChannelListing fires atomically per product. We collect them
-      // here, skip the direct prisma.product.update inside the bulk
-      // transaction, and process them post-commit. Cascade fan-out to
-      // children + cascadedFields markers stay inside the bulk
-      // transaction (same place as other field cascades).
-      type MasterDataDelta = { productId: string; newValue: number }
-      const priceDeltas: MasterDataDelta[] = []
-      const stockDeltas: MasterDataDelta[] = []
-      const isMasterDataField = (f: string) =>
-        f === 'basePrice' || f === 'totalStock'
-
-      for (const v of validated) {
-        if (!isCategoryAttrField(v.field)) continue
-        const stripped = v.field.replace(/^attr_/, '')
-        const target = v.cascade ? attrCascadeByProduct : attrDirectByProduct
-        let bag = target.get(v.id)
-        if (!bag) {
-          bag = {}
-          target.set(v.id, bag)
-        }
-        bag[stripped] = v.value
-        if (v.cascade) {
-          let names = attrCascadeFieldNames.get(v.id)
-          if (!names) {
-            names = []
-            attrCascadeFieldNames.set(v.id, names)
-          }
-          names.push(v.field)
-        }
-      }
-
-      // attr_* writers — use jsonb merge: COALESCE ensures null becomes
-      // empty object first; the || operator does shallow merge so
-      // existing keys not in the patch are preserved.
-      const writeAttrMerge = (productId: string, patch: Record<string, any>) =>
-        prisma.$executeRaw`
-          UPDATE "Product"
-          SET "categoryAttributes" = COALESCE("categoryAttributes", '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
-          WHERE id = ${productId}
-        `
-
-      for (const v of validated) {
-        const isCh = isChannelField(v.field)
-        const isAttr = isCategoryAttrField(v.field)
-
-        // Skip individual attr_* loop iterations — handled in batched
-        // writes below the main loop.
-        if (isAttr) continue
-
-        // Phase 13d — master-data fields (basePrice, totalStock) get
-        // collected for post-commit service dispatch instead of being
-        // pushed straight into the bulk transaction. The cascadedFields
-        // bookkeeping for children stays in the bulk transaction; only
-        // the actual master-data write is hoisted out so the service
-        // can run its cascade as a single atomic transaction per
-        // product.
-        if (isMasterDataField(v.field)) {
-          const collector = v.field === 'basePrice' ? priceDeltas : stockDeltas
-          const numericValue =
-            v.field === 'basePrice'
-              ? Number(v.value)
-              : Math.max(0, Math.floor(Number(v.value) || 0))
-          if (v.field === 'basePrice' && (!Number.isFinite(numericValue) || numericValue < 0)) {
-            errors.push({
-              id: v.id,
-              field: v.field,
-              error: 'basePrice must be a non-negative number',
-            })
-            continue
-          }
-          if (v.cascade) {
-            collector.push({ productId: v.id, newValue: numericValue })
-            const kids = childrenByParent.get(v.id) ?? []
-            for (const childId of kids) {
-              collector.push({ productId: childId, newValue: numericValue })
-              // cascadedFields marker for the child stays in the bulk
-              // transaction so the visual "inheriting" state lands
-              // atomically with the rest of the patch.
-              updates.push(
-                prisma.product.update({
-                  where: { id: childId },
-                  data: { cascadedFields: { push: v.field } } as any,
-                }),
-              )
-            }
-          } else if (childIdSet.has(v.id)) {
-            // Direct edit on a child — service handles the value
-            // write; cascadedFields removal stays here so the
-            // "inherited" badge clears atomically.
-            collector.push({ productId: v.id, newValue: numericValue })
-            updates.push(
-              prisma.$executeRaw`
-                UPDATE "Product"
-                SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
-                WHERE id = ${v.id}
-              `,
-            )
-          } else {
-            // Direct edit on a parent or standalone.
-            collector.push({ productId: v.id, newValue: numericValue })
-          }
-          continue
-        }
-
-        if (v.cascade) {
-          // Cascade applies to the parent itself + all its children.
-          // For channel fields, each "update" is a ChannelListing
-          // upsert in the active marketplace context. cascadedFields
-          // tracking still goes on the Product row so children can be
-          // visually distinguished as inheriting.
-          if (isCh) {
-            updates.push(...upsertChannelListings(v.id, v.field, v.value))
-            const kids = childrenByParent.get(v.id) ?? []
-            for (const childId of kids) {
-              updates.push(
-                ...upsertChannelListings(childId, v.field, v.value),
-              )
-              // Track on Product.cascadedFields with the prefixed name
-              updates.push(
-                prisma.product.update({
-                  where: { id: childId },
-                  data: { cascadedFields: { push: v.field } } as any,
-                })
-              )
-            }
-          } else {
-            updates.push(
-              prisma.product.update({
-                where: { id: v.id },
-                data: { [v.field]: v.value } as any,
-              })
-            )
-            const kids = childrenByParent.get(v.id) ?? []
-            for (const childId of kids) {
-              updates.push(
-                prisma.product.update({
-                  where: { id: childId },
-                  data: {
-                    [v.field]: v.value,
-                    cascadedFields: { push: v.field },
-                  } as any,
-                })
-              )
-            }
-          }
-        } else if (isCh) {
-          // Direct channel-field edit. With R.1 multi-targets this
-          // upserts one ChannelListing row per matching context. For
-          // children, also remove the prefixed field from
-          // cascadedFields so future renders don't show "inherited."
-          updates.push(...upsertChannelListings(v.id, v.field, v.value))
-          if (childIdSet.has(v.id)) {
-            updates.push(
-              prisma.$executeRaw`
-                UPDATE "Product"
-                SET "cascadedFields" = array_remove("cascadedFields", ${v.field})
-                WHERE id = ${v.id}
-              `
-            )
-          }
-        } else if (childIdSet.has(v.id)) {
-          // Direct edit on a child Product field — also remove the
-          // field from cascadedFields if it's there (override).
-          updates.push(
-            prisma.$executeRaw`
-              UPDATE "Product"
-              SET ${Prisma.raw(`"${v.field}"`)} = ${v.value as any},
-                  "cascadedFields" = array_remove("cascadedFields", ${v.field})
-              WHERE id = ${v.id}
-            `
-          )
-        } else {
-          // Direct edit on a parent or standalone Product field
-          updates.push(
-            prisma.product.update({
-              where: { id: v.id },
-              data: { [v.field]: v.value } as any,
-            })
-          )
-        }
-      }
-
-      // ── D.3e: emit batched attr_* writes ───────────────────────────
-      // Direct attr edits — one merged UPDATE per product. For children
-      // we also array_remove the attr_* field names from cascadedFields
-      // so a direct override clears the "inherited" marker (matching
-      // the non-attr child override semantics above).
-      for (const [productId, patch] of attrDirectByProduct) {
-        updates.push(writeAttrMerge(productId, patch))
-        if (childIdSet.has(productId)) {
-          for (const stripped of Object.keys(patch)) {
-            const fieldName = `attr_${stripped}`
-            updates.push(
-              prisma.$executeRaw`
-                UPDATE "Product"
-                SET "cascadedFields" = array_remove("cascadedFields", ${fieldName})
-                WHERE id = ${productId}
-              `
-            )
-          }
-        }
-      }
-
-      // Cascade attr edits — merge into parent + every child, then
-      // push the prefixed field names onto each child's cascadedFields.
-      for (const [parentId, patch] of attrCascadeByProduct) {
-        updates.push(writeAttrMerge(parentId, patch))
-        const kids = childrenByParent.get(parentId) ?? []
-        const fieldNames = attrCascadeFieldNames.get(parentId) ?? []
-        for (const childId of kids) {
-          updates.push(writeAttrMerge(childId, patch))
-          for (const fieldName of fieldNames) {
-            updates.push(
-              prisma.product.update({
-                where: { id: childId },
-                data: { cascadedFields: { push: fieldName } } as any,
-              })
-            )
-          }
-        }
-      }
-
-      // W1.2 — optimistic concurrency CAS. When the caller passed an
-      // expectedVersion, prepend a Product.update keyed by (id,
-      // version) so the database itself rejects the write when the
-      // row has moved on. Prisma throws P2025 on the not-found CAS;
-      // we catch it below and return 409 with the current version
-      // so the client can refresh and retry.
-      const targetId =
-        expectedVersion !== undefined
-          ? Array.from(productIds)[0]
-          : undefined
-      if (expectedVersion !== undefined && targetId) {
-        updates.unshift(
-          prisma.product.update({
-            where: { id: targetId, version: expectedVersion },
-            data: { version: { increment: 1 } },
-          }),
-        )
-      }
-
-      try {
-        await prisma.$transaction(updates, {
-          isolationLevel: 'ReadCommitted',
-        })
-      } catch (txErr: any) {
-        if (
-          expectedVersion !== undefined &&
-          targetId &&
-          txErr?.code === 'P2025'
-        ) {
-          const fresh = await prisma.product
-            .findUnique({
-              where: { id: targetId },
-              select: { version: true },
-            })
-            .catch(() => null)
-          return reply.code(409).send({
-            code: 'VERSION_CONFLICT',
-            error:
-              'Another change landed first — refresh the product to pick up the latest version.',
-            expectedVersion,
-            currentVersion: fresh?.version ?? null,
-          })
-        }
-        throw txErr
-      }
-
-      // Phase 13d — process master-data cascades after the bulk
-      // transaction commits. Each call is its own transaction
-      // (price service / stock movement) and runs the
-      // ChannelListing fan-out + outbound queue + audit log
-      // atomically per product. Failures here don't roll back the
-      // bulk transaction (which already committed); they're
-      // surfaced via the errors array so the client can highlight
-      // the affected cells. ChannelListing and listings cascade
-      // are still atomic per-product — the partial-failure window
-      // is per-row, not per-listing.
-      if (priceDeltas.length > 0) {
-        // Pre-deduplicate: a product appearing twice in the same PATCH
-        // (say cascade=true and a separate direct edit on the same
-        // child) collapses to the last value, since the master-data
-        // write is idempotent and we want the no-op short-circuit in
-        // the service to do its job rather than enqueueing the same
-        // sync twice.
-        const dedup = new Map<string, number>()
-        for (const d of priceDeltas) dedup.set(d.productId, d.newValue)
-        for (const [productId, newValue] of dedup) {
-          try {
-            await masterPriceService.update(productId, newValue, {
-              actor: null,
-              reason: 'bulk-grid-patch',
-              idempotencyKey: `bulk:${startTs}:${productId}:basePrice`,
-            })
-          } catch (err) {
-            errors.push({
-              id: productId,
-              field: 'basePrice',
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-        }
-      }
-      if (stockDeltas.length > 0) {
-        const dedup = new Map<string, number>()
-        for (const d of stockDeltas) dedup.set(d.productId, d.newValue)
-        // Read all current totals in one query so we can compute deltas
-        // without N round-trips. The values may have shifted between
-        // the bulk commit and now (concurrent stock movement), but
-        // applyStockMovement reads its own current value transactionally
-        // before applying the delta, so this is just a starting point.
-        const productIds = Array.from(dedup.keys())
-        const currentRows = await prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, totalStock: true },
-        })
-        const currentTotalById = new Map<string, number>(
-          currentRows.map((r) => [r.id, r.totalStock ?? 0]),
-        )
-        for (const [productId, newValue] of dedup) {
-          const current = currentTotalById.get(productId) ?? 0
-          const delta = newValue - current
-          if (delta === 0) continue
-          try {
-            await applyStockMovement({
-              productId,
-              change: delta,
-              reason: 'MANUAL_ADJUSTMENT',
-              notes: 'bulk grid edit',
-              actor: undefined,
-            })
-          } catch (err) {
-            errors.push({
-              id: productId,
-              field: 'totalStock',
-              error: err instanceof Error ? err.message : String(err),
-            })
-          }
-        }
-      }
-
-      // A4 — master CONTENT fan-out. The bulk transaction already wrote
-      // Product.name/description/bulletPoints; now cascade them to each product's
-      // ChannelListings (snapshot + queue a CONTENT_UPDATE for following listings)
-      // so master content edits actually reach the marketplaces — the headline
-      // "edit master → propagate" feature that was wired through dead code.
-      // masterAlreadyWritten skips the redundant master write; cascade=true also
-      // fans to children (whose Product content the bulk tx already updated).
-      const contentByProduct = new Map<string, { title?: string; description?: string; bulletPoints?: string[] }>()
-      const addContent = (pid: string, field: string, value: unknown) => {
-        const bag = contentByProduct.get(pid) ?? {}
-        if (field === 'name') bag.title = value == null ? '' : String(value)
-        else if (field === 'description') bag.description = value == null ? '' : String(value)
-        else if (field === 'bulletPoints') bag.bulletPoints = Array.isArray(value) ? value.map((x) => String(x)) : []
-        contentByProduct.set(pid, bag)
-      }
-      for (const v of validated) {
-        if (v.field !== 'name' && v.field !== 'description' && v.field !== 'bulletPoints') continue
-        addContent(v.id, v.field, v.value)
-        if (v.cascade) {
-          for (const childId of childrenByParent.get(v.id) ?? []) addContent(childId, v.field, v.value)
-        }
-      }
-      for (const [productId, contentChanges] of contentByProduct) {
-        try {
-          await masterContentService.update(productId, contentChanges, {
-            masterAlreadyWritten: true,
-            actor: null,
-            reason: 'bulk-grid-patch',
-            idempotencyKey: `bulk:${startTs}:${productId}:content`,
-          })
-        } catch (err) {
-          errors.push({ id: productId, field: 'content', error: err instanceof Error ? err.message : String(err) })
-        }
-      }
-
-      const elapsedMs = Date.now() - startTs
-
-      const overallStatus =
-        errors.length === 0 ? 'SUCCESS' : 'PARTIAL'
-
-      const bulkOp = await prisma.bulkOperation.create({
-        data: {
-          changeCount: changes.length,
-          productCount: productIds.size,
-          changes: validated as any,
-          status: overallStatus,
-          errors: errors.length ? (errors as any) : undefined,
-          cascadeCount: cascadingParents.length,
-          affectedChildren: Array.from(allAffectedChildIds),
-        },
-      })
-
-      // NN.4 — append-only audit log. One row per (productId, field)
-      // touched in this PATCH so future audits can answer "who
-      // changed price on SKU X last Tuesday." metadata pins the
-      // bulkOperation id so the two tables join cleanly.
-      const auditRows = validated.map((c: any) => ({
-        userId: null,
-        ip: request.ip ?? null,
-        entityType: 'Product',
-        entityId: c.id,
-        action: 'update',
-        after: { field: c.field, value: c.value },
-        metadata: {
-          bulkOperationId: bulkOp.id,
-          cascade: !!c.cascade,
-          source: 'bulk-patch',
-        },
-      }))
-      void auditLogService.writeMany(auditRows)
-
-      // ES.2 — one BULK_OP_APPLIED event per affected product.
-      void productEventService.emitMany(
-        Array.from(productIds).map((productId) => {
-          const productChanges = validated.filter((c: any) => c.id === productId)
-          return {
-            aggregateId: productId,
-            aggregateType: 'Product' as const,
-            eventType: 'BULK_OP_APPLIED' as const,
-            data: {
-              fields: productChanges.map((c: any) => ({ field: c.field, value: c.value })),
-              bulkOperationId: bulkOp.id,
-            },
-            metadata: {
-              source: 'OPERATOR' as const,
-              bulkOperationId: bulkOp.id,
-              ip: request.ip ?? undefined,
-            },
-          }
-        }),
-      )
-
-      // Phase 1 — refresh ProductReadCache synchronously for every product
-      // this PATCH touched, so the /products grid (which reads the cache)
-      // reflects the edit immediately. productEventService.emitMany above
-      // also enqueues a debounced cache:refresh, but that worker only runs
-      // when queue workers are enabled (ENABLE_QUEUE_WORKERS=1 + Redis) —
-      // awaiting the rebuild here makes the edit consistent regardless of
-      // worker health, matching how products-catalog.routes.ts already
-      // refreshes after its direct PATCH. Runs after all post-commit
-      // cascades (price/stock/content) so the cache captures their writes.
-      const cacheRefreshIds = Array.from(
-        new Set<string>([...productIds, ...allAffectedChildIds]),
-      )
-      await Promise.all(
-        cacheRefreshIds.map((id) =>
-          productReadCacheService.refresh(id).catch((err) => {
-            fastify.log.warn(
-              { err, productId: id },
-              '[products/bulk] cache refresh failed',
-            )
-          }),
-        ),
-      )
-
-      return {
-        success: true,
-        // NN.7 — surface the BulkOperation row id so the client can
-        // show "operation id: bulk_xxx" in the failure toast and a
-        // future "view audit log" panel can drill in. errors already
-        // carry per-(id, field) attribution; the client maps them
-        // into cell-level error highlights.
-        operationId: bulkOp.id,
-        updated: validated.length,
-        cascadeCount: cascadingParents.length,
-        affectedChildren: totalAffectedChildren,
-        errors: errors.length ? errors : undefined,
-        elapsedMs,
-        // W1.2 — when the caller participated in optimistic
-        // concurrency, surface the freshly-incremented version so
-        // the client can keep its local copy in sync without a
-        // round-trip back to GET /api/products/:id.
-        currentVersion:
-          expectedVersion !== undefined ? expectedVersion + 1 : undefined,
-      }
-    } catch (error: any) {
-      fastify.log.error({ err: error }, '[products/bulk] transaction failed')
-      await prisma.bulkOperation
-        .create({
-          data: {
-            changeCount: changes.length,
-            productCount: new Set(changes.map((c) => c.id)).size,
-            changes: changes as any,
-            status: 'FAILED',
-            errors: [{ error: error?.message ?? String(error) }] as any,
-          },
-        })
-        .catch(() => {
-          /* don't mask the real error with an audit-log failure */
-        })
-      return reply.code(500).send({
-        error: 'Bulk update failed',
-        message: error?.message ?? String(error),
-      })
+    } catch (error) {
+      if (error instanceof ProductBulkError) return reply.code(error.statusCode).send(error.details)
+      throw error
     }
-  })
+  }))
 
   // ── Performance-test seeding (admin-only — no auth gate but uses
   // ── importSource = 'PERFORMANCE_TEST' so cleanup can wipe them) ──
@@ -3248,10 +1953,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
   }>(
     '/products/bulk-schema-update',
     async (request, reply) => {
-    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
-    // request for every connected channel: the answer cannot change mid-request,
-    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
-    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
       const { productIds, marketplaceContexts, attributes, variantAttributes } =
         request.body ?? {}
       if (!Array.isArray(productIds) || productIds.length === 0) {
@@ -3271,6 +1972,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!attributes || typeof attributes !== 'object') {
         return reply.code(400).send({ error: 'attributes required' })
       }
+      if (marketplaceContexts.some(ctx => 'accountId' in ctx || ('aliasKey' in ctx && ctx.aliasKey))) {
+        return reply.code(400).send({ error: 'This bulk tool uses the primary account and listing. Use account-scoped cell edits or Catalog import for another destination.' })
+      }
+      const connFor = await primaryConnectionIds(marketplaceContexts.map(ctx => ctx.channel))
 
       // Pre-load existing listings for every (product × context) so the
       // shallow-merge into platformAttributes preserves keys we're not
@@ -3288,6 +1993,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             productId: { in: productIds },
             channel: ctx.channel,
             marketplace: ctx.marketplace,
+            channelConnectionId: connFor.get(ctx.channel) ?? null,
+            aliasKey: '',
           })),
         },
         select: {
@@ -3411,15 +2118,19 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           prisma.channelListing
             .upsert({
               where: {
-                productId_channel_marketplace: {
+                productId_channel_marketplace: workspaceKey({
                   productId: tk.productId,
                   channel: tk.channel,
                   marketplace: tk.marketplace,
                   channelConnectionId: connFor.get(tk.channel) ?? null,
-                },
+                  // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+                  aliasKey: '',
+                }),
               },
               create: {
                 productId: tk.productId,
+                channelConnectionId: connFor.get(tk.channel) ?? null,
+                aliasKey: '',
                 channel: tk.channel,
                 channelMarket,
                 region: tk.marketplace,
@@ -3482,10 +2193,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       columnsOnly?: boolean
     }
   }>('/products/bulk-replicate', async (request, reply) => {
-    // MAP.2b — the ChannelListing keys carry the account now. Resolved ONCE per
-    // request for every connected channel: the answer cannot change mid-request,
-    // and the primary reproduces exactly what MAP.2a backfilled onto all 977 rows.
-    const connFor = await primaryConnectionIds(['AMAZON', 'EBAY', 'SHOPIFY'])
     const { productIds, sourceContext, targetContexts, columnsOnly } =
       request.body ?? {}
 
@@ -3516,6 +2223,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         .code(400)
         .send({ error: 'Max 20 target contexts per request' })
     }
+    if ([sourceContext, ...targetContexts].some(ctx => 'accountId' in ctx || ('aliasKey' in ctx && ctx.aliasKey))) {
+      return reply.code(400).send({ error: 'This bulk tool uses the primary account and listing. Use account-scoped cell edits or Catalog import for another destination.' })
+    }
+    const connFor = await primaryConnectionIds([sourceContext.channel, ...targetContexts.map(ctx => ctx.channel)])
 
     // Fetch source listings in one query.
     const sourceListings = await prisma.channelListing.findMany({
@@ -3523,6 +2234,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         productId: { in: productIds },
         channel: sourceContext.channel,
         marketplace: sourceContext.marketplace,
+        channelConnectionId: connFor.get(sourceContext.channel) ?? null,
+        aliasKey: '',
       },
     })
     const sourceByProductId = new Map(
@@ -3537,6 +2250,8 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
         productId: { in: productIds },
         channel: tc.channel,
         marketplace: tc.marketplace,
+        channelConnectionId: connFor.get(tc.channel) ?? null,
+        aliasKey: '',
       })),
     }
     const existingTargets = await prisma.channelListing.findMany({
@@ -3584,12 +2299,14 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           // products didn't replicate cleanly.
           const fresh = await prisma.channelListing.findUnique({
             where: {
-              productId_channel_marketplace: {
+              productId_channel_marketplace: workspaceKey({
                 productId,
                 channel: sourceContext.channel,
                 marketplace: sourceContext.marketplace,
                 channelConnectionId: connFor.get(sourceContext.channel) ?? null,
-              },
+                // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+                aliasKey: '',
+              }),
             },
             select: { updatedAt: true },
           })
@@ -3671,16 +2388,20 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
           try {
             await prisma.channelListing.upsert({
               where: {
-                productId_channel_marketplace: {
+                productId_channel_marketplace: workspaceKey({
                   productId,
                   channel: tc.channel,
                   marketplace: tc.marketplace,
                   channelConnectionId: connFor.get(tc.channel) ?? null,
-                },
+                  // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+                  aliasKey: '',
+                }),
               },
               create: {
                 productId,
                 channel: tc.channel,
+                channelConnectionId: connFor.get(tc.channel) ?? null,
+                aliasKey: '',
                 marketplace: tc.marketplace,
                 channelMarket,
                 region: tc.marketplace,

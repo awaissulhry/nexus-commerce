@@ -1,0 +1,6127 @@
+{
+  "date": "2026-09-07",
+  "scope": "Cached active Amazon/eBay schema coordinates supported by active marketplace records, plus six live GALE-JACKET sheet responses",
+  "method": "Read-only local database/cache resolution through getSheetColumns; distinct labels manually reviewed for English. No provider taxonomy refresh or catalog writes.",
+  "activeSchemaRecordsInspected": 93,
+  "cachedScopeCount": 52,
+  "distinctCachedHeadingCount": 957,
+  "cachedScopes": [
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "AUTO_ACCESSORY",
+      "missing": [],
+      "columnCount": 189
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177104",
+      "missing": [],
+      "columnCount": 49
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "GLOVES",
+      "missing": [],
+      "columnCount": 163
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177101",
+      "missing": [],
+      "columnCount": 43
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "AUTO_ACCESSORY",
+      "missing": [],
+      "columnCount": 183
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "SUIT",
+      "missing": [],
+      "columnCount": 206
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 161
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 167
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177109",
+      "missing": [],
+      "columnCount": 51
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "JEWELRY",
+      "missing": [],
+      "columnCount": 255
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "SHIRT",
+      "missing": [],
+      "columnCount": 278
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "SHOES",
+      "missing": [],
+      "columnCount": 277
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "PANTS",
+      "missing": [],
+      "columnCount": 237
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "COAT",
+      "missing": [],
+      "columnCount": 268
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "GLOVES",
+      "missing": [],
+      "columnCount": 170
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "PANTS",
+      "missing": [],
+      "columnCount": 245
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "HELMET",
+      "missing": [],
+      "columnCount": 191
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "HELMET",
+      "missing": [],
+      "columnCount": 191
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "HELMET",
+      "missing": [],
+      "columnCount": 193
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "PRODUCT",
+      "missing": [],
+      "columnCount": 125
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "HELMET",
+      "missing": [],
+      "columnCount": 185
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "SUIT",
+      "missing": [],
+      "columnCount": 213
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "HELMET",
+      "missing": [],
+      "columnCount": 198
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "OFFICE_PRODUCTS",
+      "missing": [],
+      "columnCount": 199
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "3D_PRINTABLE_DESIGNS",
+      "missing": [],
+      "columnCount": 124
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "OFFICE_PRODUCTS",
+      "missing": [],
+      "columnCount": 206
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "OFFICE_PRODUCTS",
+      "missing": [],
+      "columnCount": 199
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "ABDOMINAL_EXERCISER",
+      "missing": [],
+      "columnCount": 166
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "3D_PRINTED_PRODUCT",
+      "missing": [],
+      "columnCount": 127
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "3D_PRINTED_PRODUCT",
+      "missing": [],
+      "columnCount": 127
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "ADULT_COSTUME",
+      "missing": [],
+      "columnCount": 166
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "POWERSPORTS_RIDING_SUIT",
+      "missing": [],
+      "columnCount": 151
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "COAT",
+      "missing": [],
+      "columnCount": 267
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "BLAZER",
+      "missing": [],
+      "columnCount": 209
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "MOTORCYCLE_ACCESSORY",
+      "missing": [],
+      "columnCount": 160
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "AUTO_ACCESSORY",
+      "missing": [],
+      "columnCount": 178
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "AUTO_ACCESSORY",
+      "missing": [],
+      "columnCount": 184
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "3D_PRINTABLE_DESIGNS",
+      "missing": [],
+      "columnCount": 131
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "AUTO_ACCESSORY",
+      "missing": [],
+      "columnCount": 184
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 166
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 164
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "COAT",
+      "missing": [],
+      "columnCount": 274
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "COAT",
+      "missing": [],
+      "columnCount": 267
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "COAT",
+      "missing": [],
+      "columnCount": 261
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 162
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "OUTERWEAR",
+      "missing": [],
+      "columnCount": 167
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "SUIT",
+      "missing": [],
+      "columnCount": 206
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "SUIT",
+      "missing": [],
+      "columnCount": 206
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "SUIT",
+      "missing": [],
+      "columnCount": 200
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "PANTS",
+      "missing": [],
+      "columnCount": 237
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "PANTS",
+      "missing": [],
+      "columnCount": 231
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "PANTS",
+      "missing": [],
+      "columnCount": 237
+    }
+  ],
+  "distinctCachedHeadings": [
+    "Accepted Voltage Frequency",
+    "Accepted voltage frequency",
+    "Accessories",
+    "Additional features",
+    "Age",
+    "Age Range Description",
+    "Age gender category",
+    "Age range description",
+    "Amazon listing role",
+    "Amazon parent SKU",
+    "Amazon relationship type",
+    "Animal theme",
+    "Apparel Closure Orientation",
+    "Apparel Fabric Stretch",
+    "Apparel Fabric Weight Class",
+    "Apparel Size Body Type",
+    "Apparel Size Class",
+    "Apparel Size Height Type",
+    "Apparel Size To Value",
+    "Apparel Size Value",
+    "Apparel fabric stretch",
+    "Apparel fabric weight class",
+    "Apparel size · Body type",
+    "Apparel size · Height type",
+    "Apparel size · Size",
+    "Apparel size · Size class",
+    "Apparel size · Size to",
+    "Arch type",
+    "Are batteries included?",
+    "Are batteries required?",
+    "Armor",
+    "Athlete",
+    "Auto Part Position 1",
+    "Auto Part Position 2",
+    "Automotive Fit Type",
+    "Automotive fit type",
+    "Available quantity",
+    "Back finding 1",
+    "Back finding 2",
+    "Band",
+    "Band Colour",
+    "Base type",
+    "Batteries included",
+    "Batteries required",
+    "Battery Cell Composition",
+    "Battery Cell Composition Other Than Listed",
+    "Battery Contains free Unabsorbed Liquid",
+    "Battery IEC Code",
+    "Battery Installation Device Type",
+    "Battery Life Percentage",
+    "Battery Weight",
+    "Battery contains free unabsorbed liquid",
+    "Battery installation device type",
+    "Battery · Cell composition",
+    "Battery · Cell composition other than listed",
+    "Battery · Iec code",
+    "Battery · Weight",
+    "Best offer",
+    "Best offer auto-accept",
+    "Best offer auto-decline",
+    "Bottoms Body Type",
+    "Bottoms Height Type",
+    "Bottoms Size Class",
+    "Bottoms Size Value",
+    "Brand",
+    "Bullet 1",
+    "Bullet 10",
+    "Bullet 2",
+    "Bullet 3",
+    "Bullet 4",
+    "Bullet 5",
+    "Bullet 6",
+    "Bullet 7",
+    "Bullet 8",
+    "Bullet 9",
+    "CE certification",
+    "Capacity",
+    "Care Instructions",
+    "Care instructions",
+    "Category",
+    "Chain length · Decimal value",
+    "Chain length · Unit",
+    "Chain type",
+    "Chest Size",
+    "Clasp type",
+    "Climate Suitability",
+    "Closure / Fastening",
+    "Closure 1",
+    "Closure 2",
+    "Closure Type 1",
+    "Closure Type 2",
+    "Closure Type 3",
+    "Closure Type 4",
+    "Closure Type 5",
+    "Closure Type 6",
+    "Coat Silhouette Type",
+    "Coat Weather Protection 1",
+    "Coat Weather Protection 2",
+    "Coat Weather Protection 3",
+    "Collar Style 1",
+    "Collar Style 2",
+    "Collar style 1",
+    "Collar style 2",
+    "Collection",
+    "Collection Item",
+    "Collection item",
+    "Color",
+    "Color · Standardized values",
+    "Colour",
+    "Colour Map",
+    "Compatibility Options 1",
+    "Compatibility Options 2",
+    "Compatibility Options 3",
+    "Compatibility options 1",
+    "Compatibility options 2",
+    "Compatibility options 3",
+    "Compliance - Age Range",
+    "Compliance - Down Plumage Weight",
+    "Compliance - Embellishment Feature",
+    "Compliance - Fastening Method",
+    "Compliance - Is Furskin Present",
+    "Compliance - Is Handmade",
+    "Compliance - Other Material Additions",
+    "Compliance - Outer Surface Material",
+    "Compliance - Printing method",
+    "Compliance - Suit Components",
+    "Compliance - Suit Yarn Diameter",
+    "Compliance - Wool Type",
+    "Compliance Media Source Location",
+    "Compliance Weave Type",
+    "Compliance age range",
+    "Compliance band application",
+    "Compliance blazer type",
+    "Compliance chest size",
+    "Compliance collar type",
+    "Compliance fiber diameter",
+    "Compliance footwear coating material",
+    "Compliance height map",
+    "Compliance inner sole material",
+    "Compliance is disposable",
+    "Compliance is furskin present",
+    "Compliance is handmade",
+    "Compliance media",
+    "Compliance printing method",
+    "Compliance shirt type",
+    "Compliance shoe special feature",
+    "Compliance shoe type",
+    "Compliance sole construction type",
+    "Compliance sole material",
+    "Compliance t shirt design",
+    "Compliance textile twill type",
+    "Compliance toe style",
+    "Compliance upper height",
+    "Compliance upper manufacturing process",
+    "Compliance upper material",
+    "Compliance upper textile coverage",
+    "Compliance upper textile grammage",
+    "Compliance upper textile material",
+    "Compliance upper weave design",
+    "Compliance warp or filling coloring",
+    "Compliance waterproof footwear type",
+    "Compliance weave type",
+    "Condition",
+    "Condition note",
+    "Condition type",
+    "Configuration",
+    "Contains Battery or Cell",
+    "Contains battery or cell",
+    "Cosmetic",
+    "Country as labeled",
+    "Country of Origin",
+    "Country of origin",
+    "Cup",
+    "Cup Size",
+    "Customer Package Type",
+    "Customer package type",
+    "Dangerous Goods Regulations",
+    "Denomination",
+    "Department",
+    "Department Name",
+    "Deprecated offering start date",
+    "Description",
+    "Description theme",
+    "Design file url",
+    "Design name",
+    "Dsa responsible party address",
+    "Duration",
+    "EPR Product Packaging Granular Material Weight Value",
+    "EU Spare Part Availability Duration",
+    "EU TSD Non Age Specific Warning",
+    "EU Toys Safety Directive Age Warning",
+    "Ec medical device sales channel",
+    "Edition",
+    "Embellishment Feature 1",
+    "Embellishment Feature 2",
+    "Embellishment Feature 3",
+    "Embellishment Feature 4",
+    "Embellishment Feature 5",
+    "Embellishment Feature 6",
+    "Embellishment Feature 7",
+    "Embellishment Feature 8",
+    "Embellishment feature 1",
+    "Embellishment feature 2",
+    "Embellishment feature 3",
+    "Embellishment feature 4",
+    "Embellishment feature 5",
+    "Embellishment feature 6",
+    "Embellishment feature 7",
+    "Embellishment feature 8",
+    "Epr eco fee eubr",
+    "Epr eco fee eubr · Currency",
+    "Epr product packaging · Recycled content percentage 1",
+    "Epr product packaging · Recycled content percentage 2",
+    "Epr product packaging · Recycled content percentage 3",
+    "Epr product packaging · Recycled content percentage 4",
+    "Epr product packaging · Weight",
+    "Eu spare part availability duration",
+    "Eu toys safety directive age warning",
+    "Eu toys safety directive warning",
+    "Exact color",
+    "Exact material",
+    "External Product ID",
+    "Externally assigned product identifier",
+    "Fabric Distressing 1",
+    "Fabric Distressing 2",
+    "Fabric Distressing 3",
+    "Fabric Stretchability",
+    "Fabric Type",
+    "Fabric Wash",
+    "Fabric stretchability",
+    "Fabric type",
+    "Fashion Decade",
+    "Fashion decade",
+    "Features",
+    "Features 1",
+    "Features 10",
+    "Features 2",
+    "Features 3",
+    "Features 4",
+    "Features 5",
+    "Features 6",
+    "Features 7",
+    "Features 8",
+    "Features 9",
+    "Finish type",
+    "Fit",
+    "Fit Type",
+    "Fit to Size Sentiment",
+    "Fit to size sentiment",
+    "Fit type",
+    "Flavor",
+    "Flavour",
+    "Footwear platform height",
+    "Footwear size · Size",
+    "Footwear size · Size class",
+    "Footwear size · To size",
+    "Footwear size · Width",
+    "Formality Level 1",
+    "Formality Level 2",
+    "Formality level 1",
+    "Formality level 2",
+    "Front Pocket Count",
+    "Front Style",
+    "Fulfillment Center Shelf Life",
+    "Fulfillment availability · Is inventory available",
+    "Fulfillment availability · Lead time to ship max days",
+    "Fulfillment availability · Quantity",
+    "Fulfillment availability · Restock date",
+    "Functional Condition",
+    "Fur",
+    "Fur Description",
+    "GHS Chemical H Code",
+    "GHS Class",
+    "Garment Size Country",
+    "Garment care",
+    "Garment size country",
+    "Gem birthstone month",
+    "Gem type 1",
+    "Gem type 2",
+    "Gem type 3",
+    "Gem type 4",
+    "Gem type 5",
+    "Gem type 6",
+    "Gem type 7",
+    "Gem type 8",
+    "Gem type 9",
+    "Ghs",
+    "Ghs chemical h code",
+    "Gift options · Can be messaged",
+    "Gift options · Can be wrapped",
+    "Glove type",
+    "Golf club flex",
+    "Golf club loft",
+    "Gpsr manufacturer reference",
+    "Gpsr safety attestation",
+    "Grip",
+    "Grip Size",
+    "Grip · Size",
+    "Grip · Type",
+    "Grit Type",
+    "Hand Orientation",
+    "Hand orientation",
+    "Handling Time",
+    "Handling time (days)",
+    "Handmade Classification",
+    "Handmade classification",
+    "Hard disk",
+    "Hardware platform",
+    "Has Coat Weather Resistance",
+    "Has GTIN exemption?",
+    "Has Less than 30 Percent State of Charge",
+    "Has Multiple Battery Powered Components",
+    "Has Pockets",
+    "Has Replaceable Battery",
+    "Has less than 30 percent state of charge",
+    "Has multiple battery powered components",
+    "Has replaceable battery",
+    "Hazmat",
+    "Hazmat Information",
+    "Heel · Decimal value",
+    "Heel · Type 1",
+    "Heel · Type 2",
+    "Heel · Type 3",
+    "Heel · Type 4",
+    "Heel · Unit",
+    "Height map",
+    "Hemline form 1",
+    "Hemline form 2",
+    "Hemline form 3",
+    "Hemline form 4",
+    "Hemline form 5",
+    "Holiday type 1",
+    "Holiday type 2",
+    "Holiday type 3",
+    "Image URLs",
+    "Image locator ps01",
+    "Image locator ps02",
+    "Image locator ps03",
+    "Image locator ps04",
+    "Image locator ps05",
+    "Image locator ps06",
+    "Import Designation",
+    "Import designation",
+    "Included Components",
+    "Included components",
+    "Initial character",
+    "Ink",
+    "Inner",
+    "Inner Material",
+    "Inseam",
+    "Inseam Length",
+    "Inseam Size Value",
+    "Insole 1",
+    "Insole 2",
+    "Insole 3",
+    "Insole 4",
+    "Insole 5",
+    "Insole 6",
+    "Inventory Always Available",
+    "Is Assembly Required?",
+    "Is Battery Non Spillable",
+    "Is Fragile?",
+    "Is Gift Wrap Available",
+    "Is Green Purchasing Law Compliant",
+    "Is OEM Sourced Product",
+    "Is Product Expirable",
+    "Is This Product Subject To Buyer Age Restrictions",
+    "Is assembly required",
+    "Is battery non spillable",
+    "Is customizable",
+    "Is fragile",
+    "Is green purchasing law compliant",
+    "Is oem sourced product",
+    "Is this product subject to buyer age restrictions",
+    "Item Condition",
+    "Item Display Depth",
+    "Item Display Diameter",
+    "Item Display Height",
+    "Item Display Length",
+    "Item Display Weight",
+    "Item Display Width",
+    "Item Height",
+    "Item Highlight",
+    "Item Length",
+    "Item Length Description",
+    "Item Package Height",
+    "Item Package Length",
+    "Item Package Quantity",
+    "Item Package Weight",
+    "Item Package Width",
+    "Item Shape",
+    "Item Type Name",
+    "Item Weight",
+    "Item Width",
+    "Item diameter · Decimal value",
+    "Item diameter · Unit",
+    "Item dimensions fraction · String value",
+    "Item dimensions fraction · Unit",
+    "Item dimensions · Height",
+    "Item dimensions · Length",
+    "Item dimensions · Width",
+    "Item display dimensions",
+    "Item display dimensions · Depth",
+    "Item display dimensions · Diameter",
+    "Item display dimensions · Height",
+    "Item display dimensions · Length",
+    "Item display dimensions · Width",
+    "Item display weight",
+    "Item form 1",
+    "Item form 2",
+    "Item form 3",
+    "Item form 4",
+    "Item length description",
+    "Item length width height · Height",
+    "Item length width height · Length",
+    "Item length width height · Width",
+    "Item package dimensions · Height",
+    "Item package dimensions · Length",
+    "Item package dimensions · Width",
+    "Item package quantity",
+    "Item package weight",
+    "Item shape",
+    "Item type name",
+    "Item weight",
+    "Item width",
+    "Jacket Length Decimal Value",
+    "Jacket Length String Value",
+    "Jacket Length Unit",
+    "Language",
+    "League Name",
+    "League Name 1",
+    "League Name 2",
+    "League Name 3",
+    "League Name 4",
+    "League Name 5",
+    "League Name 6",
+    "League name",
+    "League name 1",
+    "League name 2",
+    "League name 3",
+    "League name 4",
+    "League name 5",
+    "League name 6",
+    "Leather type",
+    "Leg Hem Opening Width",
+    "Leg Length Decimal Value",
+    "Leg Length Unit",
+    "Leg Style",
+    "Length",
+    "Length range",
+    "Lens",
+    "Lens Color",
+    "Lens Colour",
+    "Lens · Color",
+    "Lens · Width",
+    "Letter character",
+    "Life event 1",
+    "Life event 2",
+    "Life event 3",
+    "Lifestyle",
+    "Line size",
+    "Lining Description",
+    "Lining description",
+    "List Price with Tax",
+    "List price",
+    "Listing duration",
+    "Listing format",
+    "Listing price",
+    "Lithium Battery Energy Content",
+    "Lithium Battery Packaging",
+    "Lithium Battery Weight",
+    "Lithium battery · Energy content",
+    "Lithium battery · Packaging",
+    "Lithium battery · Weight",
+    "Magnification strength",
+    "Main Image Location",
+    "Main Image URL",
+    "Main offer image locator",
+    "Main product image locator",
+    "Manufacturer",
+    "Manufacturer warranty",
+    "Manufacturer’s Email or Electronic Address",
+    "Map policy",
+    "Master Pack Layers per Pallet Quantity",
+    "Master Packs Per Layer Quantity",
+    "Master pack layers per pallet quantity",
+    "Master packs per layer quantity",
+    "Material",
+    "Material 1",
+    "Material 2",
+    "Material 3",
+    "Material composition",
+    "Max order quantity",
+    "Maximum Order Quantity",
+    "Maximum Seller Allowed Price",
+    "Maximum size",
+    "Medical Device Sales Channel",
+    "Merchant Release Date",
+    "Merchant Shipping Group",
+    "Merchant Suggested ASIN",
+    "Merchant release date",
+    "Merchant shipping group",
+    "Merchant suggested asin",
+    "Metal Type 1",
+    "Metal Type 2",
+    "Metal Type 3",
+    "Metal Type 4",
+    "Metal Type 5",
+    "Metal stamp",
+    "Metal type 1",
+    "Metal type 2",
+    "Metal type 3",
+    "Metal type 4",
+    "Metal type 5",
+    "Metals · Metal stamp 1",
+    "Metals · Metal stamp 2",
+    "Metals · Metal stamp 3",
+    "Metals · Metal type 1",
+    "Metals · Metal type 2",
+    "Metals · Metal type 3",
+    "Metals · Metal weight",
+    "Minimum Advertised Price",
+    "Minimum Advertised Price Display",
+    "Minimum Seller Allowed Price",
+    "Model Name",
+    "Model Number",
+    "Model name",
+    "Model number",
+    "Model variant",
+    "Neck 1",
+    "Neck 2",
+    "Neck 3",
+    "Neck 4",
+    "Neck 5",
+    "Neckline",
+    "Non lithium battery energy content",
+    "Non lithium battery energy content · Unit",
+    "Non lithium battery packaging",
+    "Non-Lithium Battery Energy Content",
+    "Non-Lithium Battery Energy Content Unit",
+    "Non-Lithium Battery Packaging",
+    "Num batteries",
+    "Number of Batteries",
+    "Number of Boxes",
+    "Number of Items",
+    "Number of Lithium Metal Cells",
+    "Number of Lithium-ion Cells",
+    "Number of Packs",
+    "Number of Pieces",
+    "Number of Pockets",
+    "Number of boxes",
+    "Number of items",
+    "Number of lithium ion cells",
+    "Number of lithium metal cells",
+    "Number of packs",
+    "Number of pearls",
+    "Number of pockets",
+    "OEM Equivalent Part Number",
+    "Occasion",
+    "Occasion type",
+    "Oem equivalent part number",
+    "Offer Condition Note",
+    "Offering Can Be Gift Messaged",
+    "Offering Release Date",
+    "Orientation",
+    "Other Image Location 1",
+    "Other Image Location 2",
+    "Other Image Location 3",
+    "Other Image Location 4",
+    "Other Image Location 5",
+    "Other Image URL 1",
+    "Other Image URL 2",
+    "Other Image URL 3",
+    "Other Image URL 4",
+    "Other Image URL 5",
+    "Other Image URL 6",
+    "Other Image URL 7",
+    "Other Image URL 8",
+    "Other offer image locator 1",
+    "Other offer image locator 2",
+    "Other offer image locator 3",
+    "Other offer image locator 4",
+    "Other offer image locator 5",
+    "Other product image locator 1",
+    "Other product image locator 2",
+    "Other product image locator 3",
+    "Other product image locator 4",
+    "Other product image locator 5",
+    "Other product image locator 6",
+    "Other product image locator 7",
+    "Other product image locator 8",
+    "Outer 1",
+    "Outer 2",
+    "Outer 3",
+    "Outer 4",
+    "Outer 5",
+    "Outer Material 1",
+    "Outer Material 2",
+    "Outer Material 3",
+    "Outer Material 4",
+    "Outer Material 5",
+    "Package Contains SKU Quantity",
+    "Package Level",
+    "Package Weight",
+    "Package contains sku",
+    "Package dimension unit",
+    "Package height",
+    "Package length",
+    "Package level",
+    "Package type",
+    "Package weight",
+    "Package width",
+    "Packaging",
+    "Pants Form Type",
+    "Paper size",
+    "Part Number",
+    "Part number",
+    "Pattern",
+    "Pattern type",
+    "Pattern · Pattern",
+    "Pattern · Pattern type",
+    "Payment policy",
+    "Pearl · Lustre",
+    "Pearl · Minimum color",
+    "Pearl · Shape",
+    "Pearl · Stringing method",
+    "Pearl · Surface blemishes",
+    "Pearl · Type",
+    "Pearl · Uniformity",
+    "Pendant description",
+    "Percentage of Recycled Content of Granular Material of EPR Product Packaging 1",
+    "Percentage of Recycled Content of Granular Material of EPR Product Packaging 2",
+    "Percentage of Recycled Content of Granular Material of EPR Product Packaging 3",
+    "Percentage of Recycled Content of Granular Material of EPR Product Packaging 4",
+    "Platform for Display",
+    "Platform for display",
+    "Pocket Description",
+    "Pocket Description 1",
+    "Pocket Description 2",
+    "Pocket Description 3",
+    "Pocket Description 4",
+    "Pocket Description 5",
+    "Pocket Description 6",
+    "Pocket description",
+    "Pocket description 1",
+    "Pocket description 2",
+    "Pocket description 3",
+    "Pocket description 4",
+    "Pocket description 5",
+    "Pocket description 6",
+    "Power Plug 1",
+    "Power Plug 2",
+    "Power Plug 3",
+    "Power Plug 4",
+    "Power plug type 1",
+    "Power plug type 2",
+    "Power plug type 3",
+    "Power plug type 4",
+    "Pricing Rule",
+    "Product Description",
+    "Product Expiration Type",
+    "Product Site Launch Date",
+    "Product Tax Code",
+    "Product Warranty 1",
+    "Product Warranty 10",
+    "Product Warranty 2",
+    "Product Warranty 3",
+    "Product Warranty 4",
+    "Product Warranty 5",
+    "Product Warranty 6",
+    "Product Warranty 7",
+    "Product Warranty 8",
+    "Product Warranty 9",
+    "Product description",
+    "Product grade",
+    "Product site launch date",
+    "Product tax code",
+    "Product type",
+    "Protection",
+    "Purchasable offer · End at · Purchasable offer discounted price end at",
+    "Purchasable offer · End at · Purchasable offer end at",
+    "Purchasable offer · Rule id",
+    "Purchasable offer · Start at · Purchasable offer discounted price start at",
+    "Purchasable offer · Start at · Purchasable offer start at",
+    "Purchasable offer · Value with tax · Purchasable offer discounted price value with tax",
+    "Purchasable offer · Value with tax · Purchasable offer map price",
+    "Purchasable offer · Value with tax · Purchasable offer maximum seller allowed price",
+    "Purchasable offer · Value with tax · Purchasable offer minimum seller allowed price",
+    "Purchasable offer · Value with tax · Purchasable offer our price",
+    "Quantity",
+    "Recommended Browse Nodes",
+    "Recommended browse nodes",
+    "Regulatory compliance certification 1",
+    "Regulatory compliance certification 2",
+    "Regulatory compliance certification 3",
+    "Regulatory compliance certification 4",
+    "Regulatory compliance certification 5",
+    "Release Date",
+    "Renewed Grade",
+    "Responsible Person's Email or Electronic Address",
+    "Restock Date",
+    "Return policy",
+    "Ring",
+    "Ring Size",
+    "Rise Height",
+    "Rise Style",
+    "SKU",
+    "Safety Attestation",
+    "Safety Data Sheet (SDS or MSDS) URL",
+    "Safety data sheet url",
+    "Sale End Date",
+    "Sale Price",
+    "Sale Start Date",
+    "Scent",
+    "Scent 1",
+    "Scent 2",
+    "Scent 3",
+    "Scent 4",
+    "Scent 5",
+    "Search keywords",
+    "Season",
+    "Seasons 1",
+    "Seasons 2",
+    "Seasons 3",
+    "Seasons 4",
+    "Seasons 5",
+    "Set Name",
+    "Set name",
+    "Setting type",
+    "Shaft",
+    "Shared-SKU listing",
+    "Shipping Template",
+    "Shipping policy",
+    "Ships Globally",
+    "Ships globally",
+    "Shirt form type",
+    "Shirt size · Body type",
+    "Shirt size · Height type",
+    "Shirt size · Neck size",
+    "Shirt size · Neck size to",
+    "Shirt size · Size",
+    "Shirt size · Size class",
+    "Shirt size · Size to",
+    "Shirt size · Sleeve length",
+    "Shirt size · Sleeve length to",
+    "Shoe type",
+    "Shoe width",
+    "Shoulder to Bottom Hem Length",
+    "Shoulder to bottom hem length",
+    "Size",
+    "Size per pearl",
+    "Skip Offer",
+    "Skip offer",
+    "Sleeve Length Description",
+    "Sleeve Type",
+    "Sleeve · Cuff style 1",
+    "Sleeve · Cuff style 2",
+    "Sleeve · Length description",
+    "Sleeve · Type",
+    "Sole material",
+    "Source Type",
+    "Special Feature 1",
+    "Special Feature 2",
+    "Special Feature 3",
+    "Special Feature 4",
+    "Special Feature 5",
+    "Special Features 1",
+    "Special Features 2",
+    "Special Features 3",
+    "Special Features 4",
+    "Special Features 5",
+    "Special Size",
+    "Special feature 1",
+    "Special feature 2",
+    "Special feature 3",
+    "Special feature 4",
+    "Special feature 5",
+    "Special size type",
+    "Specific Uses for Product",
+    "Specific color",
+    "Specific material",
+    "Specific uses for product",
+    "Specification Met",
+    "Sport Type 1",
+    "Sport Type 2",
+    "Sport type 1",
+    "Sport type 2",
+    "Sport type 3",
+    "Stone · Clarity 1",
+    "Stone · Clarity 2",
+    "Stone · Clarity 3",
+    "Stone · Color 1",
+    "Stone · Color 2",
+    "Stone · Color 3",
+    "Stone · Color 4",
+    "Stone · Color 5",
+    "Stone · Color 6",
+    "Stone · Cut 1",
+    "Stone · Cut 2",
+    "Stone · Cut 3",
+    "Stone · Shape 1",
+    "Stone · Shape 2",
+    "Stone · Shape 3",
+    "Stone · Shape 4",
+    "Stone · Shape 5",
+    "Stone · Shape 6",
+    "Stone · Weight",
+    "Stones · Clarity 1",
+    "Stones · Clarity 2",
+    "Stones · Clarity 3",
+    "Stones · Color 1",
+    "Stones · Color 2",
+    "Stones · Color 3",
+    "Stones · Creation method 1",
+    "Stones · Creation method 2",
+    "Stones · Creation method 3",
+    "Stones · Cut 1",
+    "Stones · Cut 2",
+    "Stones · Cut 3",
+    "Stones · Number of stones 1",
+    "Stones · Number of stones 2",
+    "Stones · Number of stones 3",
+    "Stones · Shape 1",
+    "Stones · Shape 2",
+    "Stones · Shape 3",
+    "Stones · Treatment method 1",
+    "Stones · Treatment method 2",
+    "Stones · Treatment method 3",
+    "Stones · Type 1",
+    "Stones · Type 2",
+    "Stones · Type 3",
+    "Stop Selling Date",
+    "Strap type 1",
+    "Strap type 2",
+    "Strap type 3",
+    "Style",
+    "Subject Character",
+    "Subject character",
+    "Subtitle",
+    "Suit Type",
+    "Suitable for",
+    "Sunglasses Lens Width",
+    "Supplemental condition information · Accessories",
+    "Supplemental condition information · Battery life percentage",
+    "Supplemental condition information · Cosmetic",
+    "Supplemental condition information · Features 1",
+    "Supplemental condition information · Features 10",
+    "Supplemental condition information · Features 2",
+    "Supplemental condition information · Features 3",
+    "Supplemental condition information · Features 4",
+    "Supplemental condition information · Features 5",
+    "Supplemental condition information · Features 6",
+    "Supplemental condition information · Features 7",
+    "Supplemental condition information · Features 8",
+    "Supplemental condition information · Features 9",
+    "Supplemental condition information · Functional condition",
+    "Supplemental condition information · Packaging",
+    "Supplemental condition information · Renewed grade",
+    "Supplemental condition information · Source type",
+    "Supplier declared dg hz regulation",
+    "Supplier declared has product identifier exemption",
+    "Swatch Image URL",
+    "Swatch product image locator",
+    "Target Gender",
+    "Target audience keyword 1",
+    "Target audience keyword 2",
+    "Target audience keyword 3",
+    "Target audience keyword 4",
+    "Target gender",
+    "Team Name",
+    "Team Name 1",
+    "Team Name 2",
+    "Team name",
+    "Team name 1",
+    "Team name 2",
+    "Temperature Rating",
+    "Tension level",
+    "Theme",
+    "Theme 1",
+    "Theme 10",
+    "Theme 2",
+    "Theme 3",
+    "Theme 4",
+    "Theme 5",
+    "Theme 6",
+    "Theme 7",
+    "Theme 8",
+    "Theme 9",
+    "Title",
+    "Title differentiation",
+    "Toe style",
+    "Top style 1",
+    "Top style 10",
+    "Top style 2",
+    "Top style 3",
+    "Top style 4",
+    "Top style 5",
+    "Top style 6",
+    "Top style 7",
+    "Top style 8",
+    "Top style 9",
+    "Total diamond weight",
+    "Total gem weight",
+    "Type",
+    "Ultraviolet Protection Factor",
+    "Ultraviolet protection factor",
+    "Unit Count",
+    "Unit Count Type",
+    "Unit count",
+    "Unit count · Type",
+    "Unit of measure",
+    "Uvp list price",
+    "VAT rate (%)",
+    "Variation Theme Name",
+    "Variation theme",
+    "Vehicle Fitment Code",
+    "Vehicle Fitment Note",
+    "Vehicle Fitment Standard",
+    "Vehicle fitment · Code",
+    "Vehicle fitment · Note",
+    "Vehicle fitment · Standard",
+    "Version for Country",
+    "Video id",
+    "Voltage",
+    "Volume Capacity",
+    "Waist Size",
+    "Waist Size Value",
+    "Waist Style",
+    "Waist Width",
+    "Warranty Description 1",
+    "Warranty Description 10",
+    "Warranty Description 2",
+    "Warranty Description 3",
+    "Warranty Description 4",
+    "Warranty Description 5",
+    "Warranty Description 6",
+    "Warranty Description 7",
+    "Warranty Description 8",
+    "Warranty Description 9",
+    "Warranty description 1",
+    "Warranty description 10",
+    "Warranty description 2",
+    "Warranty description 3",
+    "Warranty description 4",
+    "Warranty description 5",
+    "Warranty description 6",
+    "Warranty description 7",
+    "Warranty description 8",
+    "Warranty description 9",
+    "Water Resistance Level",
+    "Water resistance level",
+    "Wattage",
+    "Weave Type",
+    "Weave type",
+    "Width",
+    "Width range",
+    "Your Price"
+  ],
+  "liveScopes": [
+    {
+      "channel": "MASTER",
+      "market": "IT",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "name",
+          "label": "Name",
+          "group": "Identity"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Identity"
+        },
+        {
+          "key": "manufacturer",
+          "label": "Manufacturer",
+          "group": "Identity"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "status",
+          "label": "Status",
+          "group": "Identity"
+        },
+        {
+          "key": "description",
+          "label": "Description",
+          "group": "Content"
+        },
+        {
+          "key": "bulletPoints",
+          "label": "Bullet points",
+          "group": "Content"
+        },
+        {
+          "key": "keywords",
+          "label": "Search keywords",
+          "group": "Content"
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "group": "Specifications"
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "group": "Specifications"
+        },
+        {
+          "key": "model_number",
+          "label": "Model number",
+          "group": "Specifications"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Specifications"
+        },
+        {
+          "key": "target_gender",
+          "label": "Target gender",
+          "group": "Specifications"
+        },
+        {
+          "key": "age_range_description",
+          "label": "Age range",
+          "group": "Specifications"
+        },
+        {
+          "key": "fabric_type",
+          "label": "Fabric composition",
+          "group": "Specifications"
+        },
+        {
+          "key": "fit_type",
+          "label": "Fit",
+          "group": "Specifications"
+        },
+        {
+          "key": "care_instructions",
+          "label": "Care instructions",
+          "group": "Specifications"
+        },
+        {
+          "key": "water_resistance_level",
+          "label": "Water resistance",
+          "group": "Specifications"
+        },
+        {
+          "key": "gtin",
+          "label": "GTIN",
+          "group": "Identifiers"
+        },
+        {
+          "key": "ean",
+          "label": "EAN",
+          "group": "Identifiers"
+        },
+        {
+          "key": "upc",
+          "label": "UPC",
+          "group": "Identifiers"
+        },
+        {
+          "key": "weightValue",
+          "label": "Weight",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "weightUnit",
+          "label": "Weight unit",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "dimLength",
+          "label": "Length · DimLength",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "dimWidth",
+          "label": "Width · DimWidth",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "dimHeight",
+          "label": "Height",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "dimUnit",
+          "label": "Dimension unit",
+          "group": "Dimensions and weight"
+        },
+        {
+          "key": "ppeCategory",
+          "label": "PPE category",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "garmentClass",
+          "label": "Protective garment class",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "impactProtectors",
+          "label": "Impact protectors",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "countryOfOrigin",
+          "label": "Country of origin",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "notifiedBodyNumber",
+          "label": "Notified body number",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "hsCode",
+          "label": "HS code",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "notifiedBodyName",
+          "label": "Notified body name",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "declarationOfConformityUrl",
+          "label": "Declaration of conformity URL",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "hazmatClass",
+          "label": "Hazardous material class",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "hazmatUnNumber",
+          "label": "UN number",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "batteries_included",
+          "label": "Batteries included",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "batteries_required",
+          "label": "Batteries required",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery__cell_composition",
+          "label": "Battery cell composition",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery__cell_composition_other_than_listed",
+          "label": "Battery cell composition other than listed",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery_contains_free_unabsorbed_liquid",
+          "label": "Battery contains free unabsorbed liquid",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery__iec_code",
+          "label": "Battery iec code",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery_installation_device_type",
+          "label": "Battery installation device type",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery__weightUnit",
+          "label": "Battery weight Unit",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "battery__weightValue",
+          "label": "Battery weight Value",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_age_range",
+          "label": "Compliance age range",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_down_plumage_weight",
+          "label": "Compliance down plumage weight",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_embellishment_feature",
+          "label": "Compliance embellishment feature",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_fastening_method",
+          "label": "Compliance fastening method",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_is_furskin_present",
+          "label": "Compliance is furskin present",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_is_handmade",
+          "label": "Compliance is handmade",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_other_material_additions",
+          "label": "Compliance other material additions",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_outer_surface_material",
+          "label": "Compliance outer surface material",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_printing_method",
+          "label": "Compliance printing method",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "compliance_weave_type",
+          "label": "Compliance weave type",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "contains_battery_or_cell",
+          "label": "Contains battery or cell",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "fur",
+          "label": "Fur",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "ghs",
+          "label": "Ghs",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "ghs_chemical_h_code",
+          "label": "Ghs chemical h code",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "gpsr_safety_attestation",
+          "label": "Gpsr safety attestation",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "has_less_than_30_percent_state_of_charge",
+          "label": "Has less than 30 percent state of charge",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "has_multiple_battery_powered_components",
+          "label": "Has multiple battery powered components",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "has_replaceable_battery",
+          "label": "Has replaceable battery",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "hazmat",
+          "label": "Hazmat",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "inner",
+          "label": "Inner",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "is_battery_non_spillable",
+          "label": "Is battery non spillable",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "is_oem_sourced_product",
+          "label": "Is oem sourced product",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "is_this_product_subject_to_buyer_age_restrictions",
+          "label": "Is this product subject to buyer age restrictions",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "lithium_battery__energy_contentUnit",
+          "label": "Lithium battery energy content Unit",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "lithium_battery__energy_contentValue",
+          "label": "Lithium battery energy content Value",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "lithium_battery__packaging",
+          "label": "Lithium battery packaging",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "lithium_battery__weightUnit",
+          "label": "Lithium battery weight Unit",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "lithium_battery__weightValue",
+          "label": "Lithium battery weight Value",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "non_lithium_battery_energy_content",
+          "label": "Non lithium battery energy content",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "non_lithium_battery_energy_content__unit",
+          "label": "Non lithium battery energy content unit",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "non_lithium_battery_packaging",
+          "label": "Non lithium battery packaging",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "num_batteries",
+          "label": "Num batteries",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "number_of_lithium_ion_cells",
+          "label": "Number of lithium ion cells",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "number_of_lithium_metal_cells",
+          "label": "Number of lithium metal cells",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "regulatory_compliance_certification",
+          "label": "Regulatory compliance certification",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "safety_data_sheet_url",
+          "label": "Safety data sheet url",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "supplier_declared_dg_hz_regulation",
+          "label": "Supplier declared dg hz regulation",
+          "group": "Compliance and traceability"
+        },
+        {
+          "key": "costPrice",
+          "label": "Cost",
+          "group": "Pricing"
+        },
+        {
+          "key": "basePrice",
+          "label": "Base Price",
+          "group": "Pricing"
+        },
+        {
+          "key": "minPrice",
+          "label": "Min Price",
+          "group": "Pricing"
+        },
+        {
+          "key": "maxPrice",
+          "label": "Max Price",
+          "group": "Pricing"
+        },
+        {
+          "key": "minMargin",
+          "label": "Min Margin %",
+          "group": "Pricing"
+        },
+        {
+          "key": "totalStock",
+          "label": "Stock",
+          "group": "Inventory"
+        },
+        {
+          "key": "lowStockThreshold",
+          "label": "Low Stock Alert",
+          "group": "Inventory"
+        },
+        {
+          "key": "armorType",
+          "label": "Armor Type",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "condition_type",
+          "label": "Condition type",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "item_name",
+          "label": "Item name",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "merchant_shipping_group",
+          "label": "Merchant shipping group",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "merchant_suggested_asin",
+          "label": "Merchant suggested asin",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "recommended_browse_nodes",
+          "label": "Recommended browse nodes",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "parentage_level",
+          "label": "Saved Amazon parentage level",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "skip_offer",
+          "label": "Skip offer",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "supplier_declared_has_product_identifier_exemption",
+          "label": "Supplier declared has product identifier exemption",
+          "group": "Additional saved attributes"
+        },
+        {
+          "key": "apparel_closure_orientation",
+          "label": "Apparel closure orientation",
+          "group": "Specifications"
+        },
+        {
+          "key": "apparel_fabric_stretch",
+          "label": "Apparel fabric stretch",
+          "group": "Specifications"
+        },
+        {
+          "key": "apparel_fabric_weight_class",
+          "label": "Apparel fabric weight class",
+          "group": "Specifications"
+        },
+        {
+          "key": "apparel_size__height_type",
+          "label": "Apparel size height type",
+          "group": "Specifications"
+        },
+        {
+          "key": "apparel_size__size_class",
+          "label": "Apparel size size class",
+          "group": "Specifications"
+        },
+        {
+          "key": "apparel_size__size_to",
+          "label": "Apparel size size to",
+          "group": "Specifications"
+        },
+        {
+          "key": "athlete",
+          "label": "Athlete",
+          "group": "Specifications"
+        },
+        {
+          "key": "band",
+          "label": "Band",
+          "group": "Specifications"
+        },
+        {
+          "key": "body_type",
+          "label": "Body type",
+          "group": "Specifications"
+        },
+        {
+          "key": "bottoms_size__height_type",
+          "label": "Bottoms size height type",
+          "group": "Specifications"
+        },
+        {
+          "key": "bottoms_size__inseam_size",
+          "label": "Bottoms size inseam size",
+          "group": "Specifications"
+        },
+        {
+          "key": "bottoms_size__size_class",
+          "label": "Bottoms size size class",
+          "group": "Specifications"
+        },
+        {
+          "key": "bottoms_size__size_to",
+          "label": "Bottoms size size to",
+          "group": "Specifications"
+        },
+        {
+          "key": "bottoms_size__waist_size",
+          "label": "Bottoms size waist size",
+          "group": "Specifications"
+        },
+        {
+          "key": "chestUnit",
+          "label": "Chest Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "chestValue",
+          "label": "Chest Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "climate_suitability",
+          "label": "Climate suitability",
+          "group": "Specifications"
+        },
+        {
+          "key": "closure",
+          "label": "Closure",
+          "group": "Specifications"
+        },
+        {
+          "key": "coat_silhouette_type",
+          "label": "Coat silhouette type",
+          "group": "Specifications"
+        },
+        {
+          "key": "coat_weather_protection",
+          "label": "Coat weather protection",
+          "group": "Specifications"
+        },
+        {
+          "key": "collar_style",
+          "label": "Collar style",
+          "group": "Specifications"
+        },
+        {
+          "key": "collection_item",
+          "label": "Collection item",
+          "group": "Specifications"
+        },
+        {
+          "key": "color__standardized_values",
+          "label": "Color standardized values",
+          "group": "Specifications"
+        },
+        {
+          "key": "configuration",
+          "label": "Configuration",
+          "group": "Specifications"
+        },
+        {
+          "key": "cup",
+          "label": "Cup",
+          "group": "Specifications"
+        },
+        {
+          "key": "customer_package_type",
+          "label": "Customer package type",
+          "group": "Specifications"
+        },
+        {
+          "key": "department",
+          "label": "Department",
+          "group": "Specifications"
+        },
+        {
+          "key": "edition",
+          "label": "Edition",
+          "group": "Specifications"
+        },
+        {
+          "key": "embellishment_feature",
+          "label": "Embellishment feature",
+          "group": "Specifications"
+        },
+        {
+          "key": "exact_color",
+          "label": "Exact color",
+          "group": "Specifications"
+        },
+        {
+          "key": "fabric_distressing",
+          "label": "Fabric distressing",
+          "group": "Specifications"
+        },
+        {
+          "key": "fabric_stretchability",
+          "label": "Fabric stretchability",
+          "group": "Specifications"
+        },
+        {
+          "key": "fabric_wash",
+          "label": "Fabric wash",
+          "group": "Specifications"
+        },
+        {
+          "key": "fashion_decade",
+          "label": "Fashion decade",
+          "group": "Specifications"
+        },
+        {
+          "key": "fc_shelf_lifeUnit",
+          "label": "Fc shelf life Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "fc_shelf_lifeValue",
+          "label": "Fc shelf life Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "fit_to_size_sentiment",
+          "label": "Fit to size sentiment",
+          "group": "Specifications"
+        },
+        {
+          "key": "flavor",
+          "label": "Flavor",
+          "group": "Specifications"
+        },
+        {
+          "key": "formality_level",
+          "label": "Formality level",
+          "group": "Specifications"
+        },
+        {
+          "key": "front_pocket_count",
+          "label": "Front pocket count",
+          "group": "Specifications"
+        },
+        {
+          "key": "front_style",
+          "label": "Front style",
+          "group": "Specifications"
+        },
+        {
+          "key": "garment_size_country",
+          "label": "Garment size country",
+          "group": "Specifications"
+        },
+        {
+          "key": "grip",
+          "label": "Grip",
+          "group": "Specifications"
+        },
+        {
+          "key": "hand_orientation",
+          "label": "Hand orientation",
+          "group": "Specifications"
+        },
+        {
+          "key": "handmade_classification",
+          "label": "Handmade classification",
+          "group": "Specifications"
+        },
+        {
+          "key": "has_coat_weather_resistance",
+          "label": "Has coat weather resistance",
+          "group": "Specifications"
+        },
+        {
+          "key": "has_pockets",
+          "label": "Has pockets",
+          "group": "Specifications"
+        },
+        {
+          "key": "inseamUnit",
+          "label": "Inseam Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "inseamValue",
+          "label": "Inseam Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "is_expiration_dated_product",
+          "label": "Is expiration dated product",
+          "group": "Specifications"
+        },
+        {
+          "key": "is_green_purchasing_law_compliant",
+          "label": "Is green purchasing law compliant",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_display_dimensions__depthUnit",
+          "label": "Item display dimensions depth Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_display_dimensions__depthValue",
+          "label": "Item display dimensions depth Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_display_dimensions__diameterUnit",
+          "label": "Item display dimensions diameter Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_display_dimensions__diameterValue",
+          "label": "Item display dimensions diameter Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_length_description",
+          "label": "Item length description",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_package_quantity",
+          "label": "Item package quantity",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_shape",
+          "label": "Item shape",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_specific_quantity",
+          "label": "Item specific quantity",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_specific_unit",
+          "label": "Item specific unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "item_type_name",
+          "label": "Item type name",
+          "group": "Specifications"
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "group": "Specifications"
+        },
+        {
+          "key": "league_name",
+          "label": "League name",
+          "group": "Specifications"
+        },
+        {
+          "key": "leg",
+          "label": "Leg",
+          "group": "Specifications"
+        },
+        {
+          "key": "leg__decimal_value",
+          "label": "Leg decimal value",
+          "group": "Specifications"
+        },
+        {
+          "key": "leg_hem_opening_widthUnit",
+          "label": "Leg hem opening width Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "leg_hem_opening_widthValue",
+          "label": "Leg hem opening width Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "leg__unit",
+          "label": "Leg unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "length",
+          "label": "Length · Length",
+          "group": "Specifications"
+        },
+        {
+          "key": "lens__color",
+          "label": "Lens color",
+          "group": "Specifications"
+        },
+        {
+          "key": "lens__widthUnit",
+          "label": "Lens width Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "lens__widthValue",
+          "label": "Lens width Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "lifestyle",
+          "label": "Lifestyle",
+          "group": "Specifications"
+        },
+        {
+          "key": "lining_description",
+          "label": "Lining description",
+          "group": "Specifications"
+        },
+        {
+          "key": "manufacturer_warranty",
+          "label": "Manufacturer warranty",
+          "group": "Specifications"
+        },
+        {
+          "key": "metal_type",
+          "label": "Metal type",
+          "group": "Specifications"
+        },
+        {
+          "key": "model_name",
+          "label": "Model name",
+          "group": "Specifications"
+        },
+        {
+          "key": "neckline",
+          "label": "Neckline",
+          "group": "Specifications"
+        },
+        {
+          "key": "number_of_items",
+          "label": "Number of items",
+          "group": "Specifications"
+        },
+        {
+          "key": "number_of_pockets",
+          "label": "Number of pockets",
+          "group": "Specifications"
+        },
+        {
+          "key": "outer",
+          "label": "Outer",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageDimensionUnit",
+          "label": "Package Dimension Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageHeight",
+          "label": "Package Height",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageLength",
+          "label": "Package Length",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageType",
+          "label": "Package Type",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageWeightUnit",
+          "label": "Package Weight Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageWeightValue",
+          "label": "Package Weight Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "packageWidth",
+          "label": "Package Width",
+          "group": "Specifications"
+        },
+        {
+          "key": "pants_form_type",
+          "label": "Pants form type",
+          "group": "Specifications"
+        },
+        {
+          "key": "part_number",
+          "label": "Part number",
+          "group": "Specifications"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "group": "Specifications"
+        },
+        {
+          "key": "pattern_type",
+          "label": "Pattern type",
+          "group": "Specifications"
+        },
+        {
+          "key": "platform_for_display",
+          "label": "Platform for display",
+          "group": "Specifications"
+        },
+        {
+          "key": "pocket_description",
+          "label": "Pocket description",
+          "group": "Specifications"
+        },
+        {
+          "key": "product_expiration_type",
+          "label": "Product expiration type",
+          "group": "Specifications"
+        },
+        {
+          "key": "protection",
+          "label": "Protection",
+          "group": "Specifications"
+        },
+        {
+          "key": "ring",
+          "label": "Ring",
+          "group": "Specifications"
+        },
+        {
+          "key": "rise__heightUnit",
+          "label": "Rise height Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "rise__heightValue",
+          "label": "Rise height Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "rise__style",
+          "label": "Rise style",
+          "group": "Specifications"
+        },
+        {
+          "key": "scent",
+          "label": "Scent",
+          "group": "Specifications"
+        },
+        {
+          "key": "seasons",
+          "label": "Seasons",
+          "group": "Specifications"
+        },
+        {
+          "key": "shoulder_to_bottom_hem_lengthUnit",
+          "label": "Shoulder to bottom hem length Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "shoulder_to_bottom_hem_lengthValue",
+          "label": "Shoulder to bottom hem length Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "sleeve__length_description",
+          "label": "Sleeve length description",
+          "group": "Specifications"
+        },
+        {
+          "key": "sleeve__type",
+          "label": "Sleeve type",
+          "group": "Specifications"
+        },
+        {
+          "key": "special_feature",
+          "label": "Special feature",
+          "group": "Specifications"
+        },
+        {
+          "key": "special_size_type",
+          "label": "Special size type",
+          "group": "Specifications"
+        },
+        {
+          "key": "specific_color",
+          "label": "Specific color",
+          "group": "Specifications"
+        },
+        {
+          "key": "specific_uses_for_product",
+          "label": "Specific uses for product",
+          "group": "Specifications"
+        },
+        {
+          "key": "sport_type",
+          "label": "Sport type",
+          "group": "Specifications"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Specifications"
+        },
+        {
+          "key": "subject_character",
+          "label": "Subject character",
+          "group": "Specifications"
+        },
+        {
+          "key": "suitable_for",
+          "label": "Suitable for",
+          "group": "Specifications"
+        },
+        {
+          "key": "team_name",
+          "label": "Team name",
+          "group": "Specifications"
+        },
+        {
+          "key": "temperature_rating",
+          "label": "Temperature rating",
+          "group": "Specifications"
+        },
+        {
+          "key": "theme",
+          "label": "Theme",
+          "group": "Specifications"
+        },
+        {
+          "key": "title_differentiation",
+          "label": "Title differentiation",
+          "group": "Specifications"
+        },
+        {
+          "key": "ultraviolet_protection_factor",
+          "label": "Ultraviolet protection factor",
+          "group": "Specifications"
+        },
+        {
+          "key": "unit_count",
+          "label": "Unit count",
+          "group": "Specifications"
+        },
+        {
+          "key": "unit_count__type",
+          "label": "Unit count type",
+          "group": "Specifications"
+        },
+        {
+          "key": "version_for_country",
+          "label": "Version for country",
+          "group": "Specifications"
+        },
+        {
+          "key": "waist__sizeUnit",
+          "label": "Waist size Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "waist__sizeValue",
+          "label": "Waist size Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "waist__style",
+          "label": "Waist style",
+          "group": "Specifications"
+        },
+        {
+          "key": "waist__widthUnit",
+          "label": "Waist width Unit",
+          "group": "Specifications"
+        },
+        {
+          "key": "waist__widthValue",
+          "label": "Waist width Value",
+          "group": "Specifications"
+        },
+        {
+          "key": "weave_type",
+          "label": "Weave type",
+          "group": "Specifications"
+        },
+        {
+          "key": "width",
+          "label": "Width · Width",
+          "group": "Specifications"
+        }
+      ]
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "categoryId",
+          "label": "Category",
+          "group": "Classification"
+        },
+        {
+          "key": "name",
+          "label": "Title",
+          "group": "Content"
+        },
+        {
+          "key": "description",
+          "label": "Description",
+          "group": "Content"
+        },
+        {
+          "key": "subtitle",
+          "label": "Subtitle",
+          "group": "Content"
+        },
+        {
+          "key": "descriptionThemeId",
+          "label": "Description theme",
+          "group": "Content"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Item specifics"
+        },
+        {
+          "key": "material",
+          "label": "Material",
+          "group": "Item specifics"
+        },
+        {
+          "key": "color",
+          "label": "Color",
+          "group": "Item specifics"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Item specifics"
+        },
+        {
+          "key": "closure_fastening",
+          "label": "Closure / Fastening",
+          "group": "Item specifics"
+        },
+        {
+          "key": "paese_di_origine",
+          "label": "Country of origin",
+          "group": "Item specifics"
+        },
+        {
+          "key": "colore_esatto",
+          "label": "Exact color",
+          "group": "Item specifics"
+        },
+        {
+          "key": "features",
+          "label": "Features",
+          "group": "Item specifics"
+        },
+        {
+          "key": "cura_dell_indumento",
+          "label": "Garment care",
+          "group": "Item specifics"
+        },
+        {
+          "key": "length",
+          "label": "Length",
+          "group": "Item specifics"
+        },
+        {
+          "key": "garanzia_produttore",
+          "label": "Manufacturer warranty",
+          "group": "Item specifics"
+        },
+        {
+          "key": "scollatura",
+          "label": "Neckline",
+          "group": "Item specifics"
+        },
+        {
+          "key": "protection",
+          "label": "Protection",
+          "group": "Item specifics"
+        },
+        {
+          "key": "quantita",
+          "label": "Quantity",
+          "group": "Item specifics"
+        },
+        {
+          "key": "season",
+          "label": "Season",
+          "group": "Item specifics"
+        },
+        {
+          "key": "colore_specifico",
+          "label": "Specific color",
+          "group": "Item specifics"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Item specifics"
+        },
+        {
+          "key": "adatto_a",
+          "label": "Suitable for",
+          "group": "Item specifics"
+        },
+        {
+          "key": "unita_di_misura",
+          "label": "Unit of measure",
+          "group": "Item specifics"
+        },
+        {
+          "key": "width",
+          "label": "Width",
+          "group": "Item specifics"
+        },
+        {
+          "key": "sharedSkuListing",
+          "label": "Shared-SKU listing",
+          "group": "Variations"
+        },
+        {
+          "key": "variationTheme",
+          "label": "Variation theme",
+          "group": "Variations"
+        },
+        {
+          "key": "imageUrls",
+          "label": "Image URLs",
+          "group": "Images and media"
+        },
+        {
+          "key": "videoId",
+          "label": "Video id",
+          "group": "Images and media"
+        },
+        {
+          "key": "conditionId",
+          "label": "Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "price",
+          "label": "Listing price",
+          "group": "Offer"
+        },
+        {
+          "key": "quantity",
+          "label": "Available quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "listingFormat",
+          "label": "Listing format",
+          "group": "Offer"
+        },
+        {
+          "key": "listingDuration",
+          "label": "Listing duration",
+          "group": "Offer"
+        },
+        {
+          "key": "vatRate",
+          "label": "VAT rate (%)",
+          "group": "Offer"
+        },
+        {
+          "key": "bestOffer",
+          "label": "Best offer",
+          "group": "Offer"
+        },
+        {
+          "key": "bestOfferFloor",
+          "label": "Best offer auto-accept",
+          "group": "Offer"
+        },
+        {
+          "key": "bestOfferCeiling",
+          "label": "Best offer auto-decline",
+          "group": "Offer"
+        },
+        {
+          "key": "handlingTime",
+          "label": "Handling time (days)",
+          "group": "Shipping"
+        },
+        {
+          "key": "packageType",
+          "label": "Package type",
+          "group": "Shipping"
+        },
+        {
+          "key": "packageWeight",
+          "label": "Package weight",
+          "group": "Shipping"
+        },
+        {
+          "key": "packageLength",
+          "label": "Package length",
+          "group": "Shipping"
+        },
+        {
+          "key": "packageWidth",
+          "label": "Package width",
+          "group": "Shipping"
+        },
+        {
+          "key": "packageHeight",
+          "label": "Package height",
+          "group": "Shipping"
+        },
+        {
+          "key": "dimensionUnit",
+          "label": "Package dimension unit",
+          "group": "Shipping"
+        },
+        {
+          "key": "fulfillmentPolicyId",
+          "label": "Shipping policy",
+          "group": "Policies"
+        },
+        {
+          "key": "returnPolicyId",
+          "label": "Return policy",
+          "group": "Policies"
+        },
+        {
+          "key": "paymentPolicyId",
+          "label": "Payment policy",
+          "group": "Policies"
+        }
+      ]
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "productType",
+          "label": "Product type",
+          "group": "Classification"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Product identity"
+        },
+        {
+          "key": "name",
+          "label": "Title",
+          "group": "Product identity"
+        },
+        {
+          "key": "externally_assigned_product_identifier",
+          "label": "External Product ID",
+          "group": "Product identity"
+        },
+        {
+          "key": "supplier_declared_has_product_identifier_exemption",
+          "label": "Has GTIN exemption?",
+          "group": "Product identity"
+        },
+        {
+          "key": "merchant_suggested_asin",
+          "label": "Merchant Suggested ASIN",
+          "group": "Product identity"
+        },
+        {
+          "key": "manufacturer",
+          "label": "Manufacturer",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_number",
+          "label": "Model Number",
+          "group": "Product identity"
+        },
+        {
+          "key": "recommended_browse_nodes",
+          "label": "Recommended Browse Nodes",
+          "group": "Product identity"
+        },
+        {
+          "key": "title_differentiation",
+          "label": "Item Highlight",
+          "group": "Product identity"
+        },
+        {
+          "key": "description",
+          "label": "Product Description",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_1",
+          "label": "Bullet 1",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_2",
+          "label": "Bullet 2",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_3",
+          "label": "Bullet 3",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_4",
+          "label": "Bullet 4",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_5",
+          "label": "Bullet 5",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_6",
+          "label": "Bullet 6",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_7",
+          "label": "Bullet 7",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_8",
+          "label": "Bullet 8",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_9",
+          "label": "Bullet 9",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_10",
+          "label": "Bullet 10",
+          "group": "Product details"
+        },
+        {
+          "key": "fabric_type",
+          "label": "Fabric Type",
+          "group": "Product details"
+        },
+        {
+          "key": "keywords",
+          "label": "Search keywords",
+          "group": "Product details"
+        },
+        {
+          "key": "material_1",
+          "label": "Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "material_2",
+          "label": "Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "material_3",
+          "label": "Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "color",
+          "label": "Colour",
+          "group": "Product details"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Product details"
+        },
+        {
+          "key": "target_gender",
+          "label": "Target Gender",
+          "group": "Product details"
+        },
+        {
+          "key": "age_range_description",
+          "label": "Age Range Description",
+          "group": "Product details"
+        },
+        {
+          "key": "fit_type",
+          "label": "Fit Type",
+          "group": "Product details"
+        },
+        {
+          "key": "care_instructions",
+          "label": "Care Instructions",
+          "group": "Product details"
+        },
+        {
+          "key": "water_resistance_level",
+          "label": "Water Resistance Level",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_1",
+          "label": "Closure Type 1",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_2",
+          "label": "Closure Type 2",
+          "group": "Product details"
+        },
+        {
+          "key": "color__standardized_values",
+          "label": "Colour Map",
+          "group": "Product details"
+        },
+        {
+          "key": "department",
+          "label": "Department Name",
+          "group": "Product details"
+        },
+        {
+          "key": "fc_shelf_life",
+          "label": "Fulfillment Center Shelf Life",
+          "group": "Product details"
+        },
+        {
+          "key": "handmade_classification",
+          "label": "Handmade Classification",
+          "group": "Product details"
+        },
+        {
+          "key": "is_expiration_dated_product",
+          "label": "Is Product Expirable",
+          "group": "Product details"
+        },
+        {
+          "key": "item_package_quantity",
+          "label": "Item Package Quantity",
+          "group": "Product details"
+        },
+        {
+          "key": "item_type_name",
+          "label": "Item Type Name",
+          "group": "Product details"
+        },
+        {
+          "key": "item_weight",
+          "label": "Item Weight",
+          "group": "Product details"
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "group": "Product details"
+        },
+        {
+          "key": "league_name",
+          "label": "League Name",
+          "group": "Product details"
+        },
+        {
+          "key": "lifestyle",
+          "label": "Lifestyle",
+          "group": "Product details"
+        },
+        {
+          "key": "number_of_items",
+          "label": "Number of Items",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_1",
+          "label": "Outer Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_2",
+          "label": "Outer Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_3",
+          "label": "Outer Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_4",
+          "label": "Outer Material 4",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_5",
+          "label": "Outer Material 5",
+          "group": "Product details"
+        },
+        {
+          "key": "part_number",
+          "label": "Part Number",
+          "group": "Product details"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "group": "Product details"
+        },
+        {
+          "key": "product_expiration_type",
+          "label": "Product Expiration Type",
+          "group": "Product details"
+        },
+        {
+          "key": "product_site_launch_date",
+          "label": "Product Site Launch Date",
+          "group": "Product details"
+        },
+        {
+          "key": "special_size_type",
+          "label": "Special Size",
+          "group": "Product details"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Product details"
+        },
+        {
+          "key": "subject_character",
+          "label": "Subject Character",
+          "group": "Product details"
+        },
+        {
+          "key": "team_name",
+          "label": "Team Name",
+          "group": "Product details"
+        },
+        {
+          "key": "temperature_rating",
+          "label": "Temperature Rating",
+          "group": "Product details"
+        },
+        {
+          "key": "theme",
+          "label": "Theme",
+          "group": "Product details"
+        },
+        {
+          "key": "weave_type",
+          "label": "Weave Type",
+          "group": "Product details"
+        },
+        {
+          "key": "parentage_level",
+          "label": "Amazon listing role",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__parent_sku",
+          "label": "Amazon parent SKU",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__child_relationship_type",
+          "label": "Amazon relationship type",
+          "group": "Variations"
+        },
+        {
+          "key": "variation_theme",
+          "label": "Variation Theme Name",
+          "group": "Variations"
+        },
+        {
+          "key": "image_locator_ps01",
+          "label": "Image locator ps01",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps02",
+          "label": "Image locator ps02",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps03",
+          "label": "Image locator ps03",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps04",
+          "label": "Image locator ps04",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps05",
+          "label": "Image locator ps05",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps06",
+          "label": "Image locator ps06",
+          "group": "Images"
+        },
+        {
+          "key": "main_product_image_locator",
+          "label": "Main Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_1",
+          "label": "Other Image URL 1",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_2",
+          "label": "Other Image URL 2",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_3",
+          "label": "Other Image URL 3",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_4",
+          "label": "Other Image URL 4",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_5",
+          "label": "Other Image URL 5",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_6",
+          "label": "Other Image URL 6",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_7",
+          "label": "Other Image URL 7",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_8",
+          "label": "Other Image URL 8",
+          "group": "Images"
+        },
+        {
+          "key": "swatch_product_image_locator",
+          "label": "Swatch Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "country_of_origin",
+          "label": "Country of Origin",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplier_declared_dg_hz_regulation",
+          "label": "Dangerous Goods Regulations",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_included",
+          "label": "Are batteries included?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_required",
+          "label": "Are batteries required?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition",
+          "label": "Battery Cell Composition",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition_other_than_listed",
+          "label": "Battery Cell Composition Other Than Listed",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__weight",
+          "label": "Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "compliance_media",
+          "label": "Compliance Media Source Location",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs_chemical_h_code",
+          "label": "GHS Chemical H Code",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs",
+          "label": "GHS Class",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "hazmat",
+          "label": "Hazmat Information",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "inner",
+          "label": "Inner Material",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "is_this_product_subject_to_buyer_age_restrictions",
+          "label": "Is This Product Subject To Buyer Age Restrictions",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__energy_content",
+          "label": "Lithium Battery Energy Content",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__packaging",
+          "label": "Lithium Battery Packaging",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__weight",
+          "label": "Lithium Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_manufacturer_reference",
+          "label": "Manufacturer’s Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ec_medical_device_sales_channel",
+          "label": "Medical Device Sales Channel",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "num_batteries",
+          "label": "Number of Batteries",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_metal_cells",
+          "label": "Number of Lithium Metal Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_ion_cells",
+          "label": "Number of Lithium-ion Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "dsa_responsible_party_address",
+          "label": "Responsible Person's Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_safety_attestation",
+          "label": "Safety Attestation",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "safety_data_sheet_url",
+          "label": "Safety Data Sheet (SDS or MSDS) URL",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ships_globally",
+          "label": "Ships Globally",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplemental_condition_information__accessories",
+          "label": "Accessories",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__battery_life_percentage",
+          "label": "Battery Life Percentage",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__cosmetic",
+          "label": "Cosmetic",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_1",
+          "label": "Features 1",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_2",
+          "label": "Features 2",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_3",
+          "label": "Features 3",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_4",
+          "label": "Features 4",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_5",
+          "label": "Features 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_6",
+          "label": "Features 6",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_7",
+          "label": "Features 7",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_8",
+          "label": "Features 8",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_9",
+          "label": "Features 9",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_10",
+          "label": "Features 10",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__functional_condition",
+          "label": "Functional Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__lead_time_to_ship_max_days",
+          "label": "Handling Time",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__is_inventory_available",
+          "label": "Inventory Always Available",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_wrapped",
+          "label": "Is Gift Wrap Available",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_type",
+          "label": "Item Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "list_price",
+          "label": "List Price with Tax",
+          "group": "Offer"
+        },
+        {
+          "key": "main_offer_image_locator",
+          "label": "Main Image Location",
+          "group": "Offer"
+        },
+        {
+          "key": "max_order_quantity",
+          "label": "Maximum Order Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__maximum_seller_allowed_price",
+          "label": "Maximum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_shipping_group",
+          "label": "Merchant Shipping Group",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__map_price",
+          "label": "Minimum Advertised Price",
+          "group": "Offer"
+        },
+        {
+          "key": "map_policy",
+          "label": "Minimum Advertised Price Display",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__minimum_seller_allowed_price",
+          "label": "Minimum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_note",
+          "label": "Offer Condition Note",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_messaged",
+          "label": "Offering Can Be Gift Messaged",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__start_at",
+          "label": "Offering Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_1",
+          "label": "Other Image Location 1",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_2",
+          "label": "Other Image Location 2",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_3",
+          "label": "Other Image Location 3",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_4",
+          "label": "Other Image Location 4",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_5",
+          "label": "Other Image Location 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__packaging",
+          "label": "Packaging",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__automated_pricing_merchandising_rule_plan",
+          "label": "Pricing Rule",
+          "group": "Offer"
+        },
+        {
+          "key": "product_tax_code",
+          "label": "Product Tax Code",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__quantity",
+          "label": "Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_release_date",
+          "label": "Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__renewed_grade",
+          "label": "Renewed Grade",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__restock_date",
+          "label": "Restock Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__end_at",
+          "label": "Sale End Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__value_with_tax",
+          "label": "Sale Price",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__start_at",
+          "label": "Sale Start Date",
+          "group": "Offer"
+        },
+        {
+          "key": "skip_offer",
+          "label": "Skip Offer",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__source_type",
+          "label": "Source Type",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__end_at",
+          "label": "Stop Selling Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__our_price",
+          "label": "Your Price",
+          "group": "Offer"
+        },
+        {
+          "key": "item_package_dimensions__height",
+          "label": "Item Package Height",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__length",
+          "label": "Item Package Length",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_weight",
+          "label": "Item Package Weight",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__width",
+          "label": "Item Package Width",
+          "group": "Shipping"
+        }
+      ]
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "productType",
+          "label": "Product type",
+          "group": "Classification"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Product identity"
+        },
+        {
+          "key": "name",
+          "label": "Title",
+          "group": "Product identity"
+        },
+        {
+          "key": "externally_assigned_product_identifier",
+          "label": "External Product ID",
+          "group": "Product identity"
+        },
+        {
+          "key": "supplier_declared_has_product_identifier_exemption",
+          "label": "Has GTIN exemption?",
+          "group": "Product identity"
+        },
+        {
+          "key": "merchant_suggested_asin",
+          "label": "Merchant Suggested ASIN",
+          "group": "Product identity"
+        },
+        {
+          "key": "manufacturer",
+          "label": "Manufacturer",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_number",
+          "label": "Model Number",
+          "group": "Product identity"
+        },
+        {
+          "key": "recommended_browse_nodes",
+          "label": "Recommended Browse Nodes",
+          "group": "Product identity"
+        },
+        {
+          "key": "title_differentiation",
+          "label": "Item Highlight",
+          "group": "Product identity"
+        },
+        {
+          "key": "description",
+          "label": "Product Description",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_1",
+          "label": "Bullet 1",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_2",
+          "label": "Bullet 2",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_3",
+          "label": "Bullet 3",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_4",
+          "label": "Bullet 4",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_5",
+          "label": "Bullet 5",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_6",
+          "label": "Bullet 6",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_7",
+          "label": "Bullet 7",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_8",
+          "label": "Bullet 8",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_9",
+          "label": "Bullet 9",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_10",
+          "label": "Bullet 10",
+          "group": "Product details"
+        },
+        {
+          "key": "fabric_type",
+          "label": "Fabric Type",
+          "group": "Product details"
+        },
+        {
+          "key": "keywords",
+          "label": "Search keywords",
+          "group": "Product details"
+        },
+        {
+          "key": "material_1",
+          "label": "Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "material_2",
+          "label": "Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "material_3",
+          "label": "Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "color",
+          "label": "Colour",
+          "group": "Product details"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Product details"
+        },
+        {
+          "key": "target_gender",
+          "label": "Target Gender",
+          "group": "Product details"
+        },
+        {
+          "key": "age_range_description",
+          "label": "Age Range Description",
+          "group": "Product details"
+        },
+        {
+          "key": "fit_type",
+          "label": "Fit Type",
+          "group": "Product details"
+        },
+        {
+          "key": "care_instructions",
+          "label": "Care Instructions",
+          "group": "Product details"
+        },
+        {
+          "key": "water_resistance_level",
+          "label": "Water Resistance Level",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_1",
+          "label": "Closure Type 1",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_2",
+          "label": "Closure Type 2",
+          "group": "Product details"
+        },
+        {
+          "key": "color__standardized_values",
+          "label": "Colour Map",
+          "group": "Product details"
+        },
+        {
+          "key": "department",
+          "label": "Department Name",
+          "group": "Product details"
+        },
+        {
+          "key": "fc_shelf_life",
+          "label": "Fulfillment Center Shelf Life",
+          "group": "Product details"
+        },
+        {
+          "key": "handmade_classification",
+          "label": "Handmade Classification",
+          "group": "Product details"
+        },
+        {
+          "key": "is_expiration_dated_product",
+          "label": "Is Product Expirable",
+          "group": "Product details"
+        },
+        {
+          "key": "item_package_quantity",
+          "label": "Item Package Quantity",
+          "group": "Product details"
+        },
+        {
+          "key": "item_type_name",
+          "label": "Item Type Name",
+          "group": "Product details"
+        },
+        {
+          "key": "item_weight",
+          "label": "Item Weight",
+          "group": "Product details"
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "group": "Product details"
+        },
+        {
+          "key": "league_name",
+          "label": "League Name",
+          "group": "Product details"
+        },
+        {
+          "key": "lifestyle",
+          "label": "Lifestyle",
+          "group": "Product details"
+        },
+        {
+          "key": "number_of_items",
+          "label": "Number of Items",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_1",
+          "label": "Outer Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_2",
+          "label": "Outer Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_3",
+          "label": "Outer Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_4",
+          "label": "Outer Material 4",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_5",
+          "label": "Outer Material 5",
+          "group": "Product details"
+        },
+        {
+          "key": "part_number",
+          "label": "Part Number",
+          "group": "Product details"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "group": "Product details"
+        },
+        {
+          "key": "product_expiration_type",
+          "label": "Product Expiration Type",
+          "group": "Product details"
+        },
+        {
+          "key": "product_site_launch_date",
+          "label": "Product Site Launch Date",
+          "group": "Product details"
+        },
+        {
+          "key": "special_size_type",
+          "label": "Special Size",
+          "group": "Product details"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Product details"
+        },
+        {
+          "key": "subject_character",
+          "label": "Subject Character",
+          "group": "Product details"
+        },
+        {
+          "key": "team_name",
+          "label": "Team Name",
+          "group": "Product details"
+        },
+        {
+          "key": "temperature_rating",
+          "label": "Temperature Rating",
+          "group": "Product details"
+        },
+        {
+          "key": "theme",
+          "label": "Theme",
+          "group": "Product details"
+        },
+        {
+          "key": "weave_type",
+          "label": "Weave Type",
+          "group": "Product details"
+        },
+        {
+          "key": "parentage_level",
+          "label": "Amazon listing role",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__parent_sku",
+          "label": "Amazon parent SKU",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__child_relationship_type",
+          "label": "Amazon relationship type",
+          "group": "Variations"
+        },
+        {
+          "key": "variation_theme",
+          "label": "Variation Theme Name",
+          "group": "Variations"
+        },
+        {
+          "key": "image_locator_ps01",
+          "label": "Image locator ps01",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps02",
+          "label": "Image locator ps02",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps03",
+          "label": "Image locator ps03",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps04",
+          "label": "Image locator ps04",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps05",
+          "label": "Image locator ps05",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps06",
+          "label": "Image locator ps06",
+          "group": "Images"
+        },
+        {
+          "key": "main_product_image_locator",
+          "label": "Main Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_1",
+          "label": "Other Image URL 1",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_2",
+          "label": "Other Image URL 2",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_3",
+          "label": "Other Image URL 3",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_4",
+          "label": "Other Image URL 4",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_5",
+          "label": "Other Image URL 5",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_6",
+          "label": "Other Image URL 6",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_7",
+          "label": "Other Image URL 7",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_8",
+          "label": "Other Image URL 8",
+          "group": "Images"
+        },
+        {
+          "key": "swatch_product_image_locator",
+          "label": "Swatch Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "country_of_origin",
+          "label": "Country of Origin",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplier_declared_dg_hz_regulation",
+          "label": "Dangerous Goods Regulations",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_included",
+          "label": "Are batteries included?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_required",
+          "label": "Are batteries required?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition",
+          "label": "Battery Cell Composition",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition_other_than_listed",
+          "label": "Battery Cell Composition Other Than Listed",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__weight",
+          "label": "Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "compliance_media",
+          "label": "Compliance Media Source Location",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "epr_eco_fee_eubr",
+          "label": "Epr eco fee eubr",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "epr_eco_fee_eubr__currency",
+          "label": "Epr eco fee eubr · Currency",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs_chemical_h_code",
+          "label": "GHS Chemical H Code",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "hazmat",
+          "label": "Hazmat Information",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "inner",
+          "label": "Inner Material",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "is_this_product_subject_to_buyer_age_restrictions",
+          "label": "Is This Product Subject To Buyer Age Restrictions",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__energy_content",
+          "label": "Lithium Battery Energy Content",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__packaging",
+          "label": "Lithium Battery Packaging",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__weight",
+          "label": "Lithium Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_manufacturer_reference",
+          "label": "Manufacturer’s Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ec_medical_device_sales_channel",
+          "label": "Medical Device Sales Channel",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "num_batteries",
+          "label": "Number of Batteries",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_metal_cells",
+          "label": "Number of Lithium Metal Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_ion_cells",
+          "label": "Number of Lithium-ion Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "dsa_responsible_party_address",
+          "label": "Responsible Person's Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_safety_attestation",
+          "label": "Safety Attestation",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "safety_data_sheet_url",
+          "label": "Safety Data Sheet (SDS or MSDS) URL",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ships_globally",
+          "label": "Ships Globally",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplemental_condition_information__accessories",
+          "label": "Accessories",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__battery_life_percentage",
+          "label": "Battery Life Percentage",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__cosmetic",
+          "label": "Cosmetic",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_1",
+          "label": "Features 1",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_2",
+          "label": "Features 2",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_3",
+          "label": "Features 3",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_4",
+          "label": "Features 4",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_5",
+          "label": "Features 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_6",
+          "label": "Features 6",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_7",
+          "label": "Features 7",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_8",
+          "label": "Features 8",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_9",
+          "label": "Features 9",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_10",
+          "label": "Features 10",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__functional_condition",
+          "label": "Functional Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__lead_time_to_ship_max_days",
+          "label": "Handling Time",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__is_inventory_available",
+          "label": "Inventory Always Available",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_wrapped",
+          "label": "Is Gift Wrap Available",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_type",
+          "label": "Item Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "list_price",
+          "label": "List Price with Tax",
+          "group": "Offer"
+        },
+        {
+          "key": "main_offer_image_locator",
+          "label": "Main Image Location",
+          "group": "Offer"
+        },
+        {
+          "key": "max_order_quantity",
+          "label": "Maximum Order Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__maximum_seller_allowed_price",
+          "label": "Maximum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_shipping_group",
+          "label": "Merchant Shipping Group",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__map_price",
+          "label": "Minimum Advertised Price",
+          "group": "Offer"
+        },
+        {
+          "key": "map_policy",
+          "label": "Minimum Advertised Price Display",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__minimum_seller_allowed_price",
+          "label": "Minimum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_note",
+          "label": "Offer Condition Note",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_messaged",
+          "label": "Offering Can Be Gift Messaged",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__start_at",
+          "label": "Offering Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_1",
+          "label": "Other Image Location 1",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_2",
+          "label": "Other Image Location 2",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_3",
+          "label": "Other Image Location 3",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_4",
+          "label": "Other Image Location 4",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_5",
+          "label": "Other Image Location 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__packaging",
+          "label": "Packaging",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__automated_pricing_merchandising_rule_plan",
+          "label": "Pricing Rule",
+          "group": "Offer"
+        },
+        {
+          "key": "product_tax_code",
+          "label": "Product Tax Code",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__quantity",
+          "label": "Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_release_date",
+          "label": "Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__renewed_grade",
+          "label": "Renewed Grade",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__restock_date",
+          "label": "Restock Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__end_at",
+          "label": "Sale End Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__value_with_tax",
+          "label": "Sale Price",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__start_at",
+          "label": "Sale Start Date",
+          "group": "Offer"
+        },
+        {
+          "key": "skip_offer",
+          "label": "Skip Offer",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__source_type",
+          "label": "Source Type",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__end_at",
+          "label": "Stop Selling Date",
+          "group": "Offer"
+        },
+        {
+          "key": "uvp_list_price",
+          "label": "Uvp list price",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__our_price",
+          "label": "Your Price",
+          "group": "Offer"
+        },
+        {
+          "key": "item_package_dimensions__height",
+          "label": "Item Package Height",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__length",
+          "label": "Item Package Length",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_weight",
+          "label": "Item Package Weight",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__width",
+          "label": "Item Package Width",
+          "group": "Shipping"
+        }
+      ]
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "productType",
+          "label": "Product type",
+          "group": "Classification"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Product identity"
+        },
+        {
+          "key": "name",
+          "label": "Title",
+          "group": "Product identity"
+        },
+        {
+          "key": "externally_assigned_product_identifier",
+          "label": "External Product ID",
+          "group": "Product identity"
+        },
+        {
+          "key": "supplier_declared_has_product_identifier_exemption",
+          "label": "Has GTIN exemption?",
+          "group": "Product identity"
+        },
+        {
+          "key": "merchant_suggested_asin",
+          "label": "Merchant Suggested ASIN",
+          "group": "Product identity"
+        },
+        {
+          "key": "manufacturer",
+          "label": "Manufacturer",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_number",
+          "label": "Model Number",
+          "group": "Product identity"
+        },
+        {
+          "key": "recommended_browse_nodes",
+          "label": "Recommended Browse Nodes",
+          "group": "Product identity"
+        },
+        {
+          "key": "title_differentiation",
+          "label": "Item Highlight",
+          "group": "Product identity"
+        },
+        {
+          "key": "description",
+          "label": "Product Description",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_1",
+          "label": "Bullet 1",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_2",
+          "label": "Bullet 2",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_3",
+          "label": "Bullet 3",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_4",
+          "label": "Bullet 4",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_5",
+          "label": "Bullet 5",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_6",
+          "label": "Bullet 6",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_7",
+          "label": "Bullet 7",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_8",
+          "label": "Bullet 8",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_9",
+          "label": "Bullet 9",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_10",
+          "label": "Bullet 10",
+          "group": "Product details"
+        },
+        {
+          "key": "fabric_type",
+          "label": "Fabric Type",
+          "group": "Product details"
+        },
+        {
+          "key": "keywords",
+          "label": "Search keywords",
+          "group": "Product details"
+        },
+        {
+          "key": "material_1",
+          "label": "Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "material_2",
+          "label": "Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "material_3",
+          "label": "Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "color",
+          "label": "Colour",
+          "group": "Product details"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Product details"
+        },
+        {
+          "key": "target_gender",
+          "label": "Target Gender",
+          "group": "Product details"
+        },
+        {
+          "key": "age_range_description",
+          "label": "Age Range Description",
+          "group": "Product details"
+        },
+        {
+          "key": "fit_type",
+          "label": "Fit Type",
+          "group": "Product details"
+        },
+        {
+          "key": "care_instructions",
+          "label": "Care Instructions",
+          "group": "Product details"
+        },
+        {
+          "key": "water_resistance_level",
+          "label": "Water Resistance Level",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_1",
+          "label": "Closure Type 1",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_2",
+          "label": "Closure Type 2",
+          "group": "Product details"
+        },
+        {
+          "key": "color__standardized_values",
+          "label": "Colour Map",
+          "group": "Product details"
+        },
+        {
+          "key": "department",
+          "label": "Department Name",
+          "group": "Product details"
+        },
+        {
+          "key": "fc_shelf_life",
+          "label": "Fulfillment Center Shelf Life",
+          "group": "Product details"
+        },
+        {
+          "key": "handmade_classification",
+          "label": "Handmade Classification",
+          "group": "Product details"
+        },
+        {
+          "key": "is_expiration_dated_product",
+          "label": "Is Product Expirable",
+          "group": "Product details"
+        },
+        {
+          "key": "item_package_quantity",
+          "label": "Item Package Quantity",
+          "group": "Product details"
+        },
+        {
+          "key": "item_type_name",
+          "label": "Item Type Name",
+          "group": "Product details"
+        },
+        {
+          "key": "item_weight",
+          "label": "Item Weight",
+          "group": "Product details"
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "group": "Product details"
+        },
+        {
+          "key": "league_name",
+          "label": "League Name",
+          "group": "Product details"
+        },
+        {
+          "key": "lifestyle",
+          "label": "Lifestyle",
+          "group": "Product details"
+        },
+        {
+          "key": "number_of_items",
+          "label": "Number of Items",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_1",
+          "label": "Outer Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_2",
+          "label": "Outer Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_3",
+          "label": "Outer Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_4",
+          "label": "Outer Material 4",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_5",
+          "label": "Outer Material 5",
+          "group": "Product details"
+        },
+        {
+          "key": "part_number",
+          "label": "Part Number",
+          "group": "Product details"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "group": "Product details"
+        },
+        {
+          "key": "product_expiration_type",
+          "label": "Product Expiration Type",
+          "group": "Product details"
+        },
+        {
+          "key": "product_site_launch_date",
+          "label": "Product Site Launch Date",
+          "group": "Product details"
+        },
+        {
+          "key": "special_size_type",
+          "label": "Special Size",
+          "group": "Product details"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Product details"
+        },
+        {
+          "key": "subject_character",
+          "label": "Subject Character",
+          "group": "Product details"
+        },
+        {
+          "key": "team_name",
+          "label": "Team Name",
+          "group": "Product details"
+        },
+        {
+          "key": "temperature_rating",
+          "label": "Temperature Rating",
+          "group": "Product details"
+        },
+        {
+          "key": "theme",
+          "label": "Theme",
+          "group": "Product details"
+        },
+        {
+          "key": "weave_type",
+          "label": "Weave Type",
+          "group": "Product details"
+        },
+        {
+          "key": "parentage_level",
+          "label": "Amazon listing role",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__parent_sku",
+          "label": "Amazon parent SKU",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__child_relationship_type",
+          "label": "Amazon relationship type",
+          "group": "Variations"
+        },
+        {
+          "key": "variation_theme",
+          "label": "Variation Theme Name",
+          "group": "Variations"
+        },
+        {
+          "key": "image_locator_ps01",
+          "label": "Image locator ps01",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps02",
+          "label": "Image locator ps02",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps03",
+          "label": "Image locator ps03",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps04",
+          "label": "Image locator ps04",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps05",
+          "label": "Image locator ps05",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps06",
+          "label": "Image locator ps06",
+          "group": "Images"
+        },
+        {
+          "key": "main_product_image_locator",
+          "label": "Main Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_1",
+          "label": "Other Image URL 1",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_2",
+          "label": "Other Image URL 2",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_3",
+          "label": "Other Image URL 3",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_4",
+          "label": "Other Image URL 4",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_5",
+          "label": "Other Image URL 5",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_6",
+          "label": "Other Image URL 6",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_7",
+          "label": "Other Image URL 7",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_8",
+          "label": "Other Image URL 8",
+          "group": "Images"
+        },
+        {
+          "key": "swatch_product_image_locator",
+          "label": "Swatch Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "country_of_origin",
+          "label": "Country of Origin",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplier_declared_dg_hz_regulation",
+          "label": "Dangerous Goods Regulations",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_included",
+          "label": "Are batteries included?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_required",
+          "label": "Are batteries required?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition",
+          "label": "Battery Cell Composition",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition_other_than_listed",
+          "label": "Battery Cell Composition Other Than Listed",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__weight",
+          "label": "Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "compliance_media",
+          "label": "Compliance Media Source Location",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs_chemical_h_code",
+          "label": "GHS Chemical H Code",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs",
+          "label": "GHS Class",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "hazmat",
+          "label": "Hazmat Information",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "inner",
+          "label": "Inner Material",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "is_this_product_subject_to_buyer_age_restrictions",
+          "label": "Is This Product Subject To Buyer Age Restrictions",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__energy_content",
+          "label": "Lithium Battery Energy Content",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__packaging",
+          "label": "Lithium Battery Packaging",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__weight",
+          "label": "Lithium Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_manufacturer_reference",
+          "label": "Manufacturer’s Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ec_medical_device_sales_channel",
+          "label": "Medical Device Sales Channel",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "num_batteries",
+          "label": "Number of Batteries",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_metal_cells",
+          "label": "Number of Lithium Metal Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_ion_cells",
+          "label": "Number of Lithium-ion Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "dsa_responsible_party_address",
+          "label": "Responsible Person's Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_safety_attestation",
+          "label": "Safety Attestation",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "safety_data_sheet_url",
+          "label": "Safety Data Sheet (SDS or MSDS) URL",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ships_globally",
+          "label": "Ships Globally",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplemental_condition_information__accessories",
+          "label": "Accessories",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__battery_life_percentage",
+          "label": "Battery Life Percentage",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__cosmetic",
+          "label": "Cosmetic",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_1",
+          "label": "Features 1",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_2",
+          "label": "Features 2",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_3",
+          "label": "Features 3",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_4",
+          "label": "Features 4",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_5",
+          "label": "Features 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_6",
+          "label": "Features 6",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_7",
+          "label": "Features 7",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_8",
+          "label": "Features 8",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_9",
+          "label": "Features 9",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_10",
+          "label": "Features 10",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__functional_condition",
+          "label": "Functional Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__lead_time_to_ship_max_days",
+          "label": "Handling Time",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__is_inventory_available",
+          "label": "Inventory Always Available",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_wrapped",
+          "label": "Is Gift Wrap Available",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_type",
+          "label": "Item Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "list_price",
+          "label": "List Price with Tax",
+          "group": "Offer"
+        },
+        {
+          "key": "main_offer_image_locator",
+          "label": "Main Image Location",
+          "group": "Offer"
+        },
+        {
+          "key": "max_order_quantity",
+          "label": "Maximum Order Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__maximum_seller_allowed_price",
+          "label": "Maximum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_shipping_group",
+          "label": "Merchant Shipping Group",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__map_price",
+          "label": "Minimum Advertised Price",
+          "group": "Offer"
+        },
+        {
+          "key": "map_policy",
+          "label": "Minimum Advertised Price Display",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__minimum_seller_allowed_price",
+          "label": "Minimum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_note",
+          "label": "Offer Condition Note",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_messaged",
+          "label": "Offering Can Be Gift Messaged",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__start_at",
+          "label": "Offering Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_1",
+          "label": "Other Image Location 1",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_2",
+          "label": "Other Image Location 2",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_3",
+          "label": "Other Image Location 3",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_4",
+          "label": "Other Image Location 4",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_5",
+          "label": "Other Image Location 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__packaging",
+          "label": "Packaging",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__automated_pricing_merchandising_rule_plan",
+          "label": "Pricing Rule",
+          "group": "Offer"
+        },
+        {
+          "key": "product_tax_code",
+          "label": "Product Tax Code",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__quantity",
+          "label": "Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_release_date",
+          "label": "Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__renewed_grade",
+          "label": "Renewed Grade",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__restock_date",
+          "label": "Restock Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__end_at",
+          "label": "Sale End Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__value_with_tax",
+          "label": "Sale Price",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__start_at",
+          "label": "Sale Start Date",
+          "group": "Offer"
+        },
+        {
+          "key": "skip_offer",
+          "label": "Skip Offer",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__source_type",
+          "label": "Source Type",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__end_at",
+          "label": "Stop Selling Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__our_price",
+          "label": "Your Price",
+          "group": "Offer"
+        },
+        {
+          "key": "epr_product_packaging__weight",
+          "label": "EPR Product Packaging Granular Material Weight Value",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__height",
+          "label": "Item Package Height",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__length",
+          "label": "Item Package Length",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_weight",
+          "label": "Item Package Weight",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__width",
+          "label": "Item Package Width",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_1",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 1",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_2",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 2",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_3",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 3",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_4",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 4",
+          "group": "Shipping"
+        }
+      ]
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "status": 200,
+      "columns": [
+        {
+          "key": "__productRole",
+          "label": "Product role",
+          "group": "Product relationships"
+        },
+        {
+          "key": "__parentSku",
+          "label": "Parent SKU",
+          "group": "Product relationships"
+        },
+        {
+          "key": "sku",
+          "label": "SKU",
+          "group": "Identity"
+        },
+        {
+          "key": "productType",
+          "label": "Product type",
+          "group": "Classification"
+        },
+        {
+          "key": "brand",
+          "label": "Brand",
+          "group": "Product identity"
+        },
+        {
+          "key": "name",
+          "label": "Title",
+          "group": "Product identity"
+        },
+        {
+          "key": "externally_assigned_product_identifier",
+          "label": "External Product ID",
+          "group": "Product identity"
+        },
+        {
+          "key": "supplier_declared_has_product_identifier_exemption",
+          "label": "Has GTIN exemption?",
+          "group": "Product identity"
+        },
+        {
+          "key": "merchant_suggested_asin",
+          "label": "Merchant Suggested ASIN",
+          "group": "Product identity"
+        },
+        {
+          "key": "manufacturer",
+          "label": "Manufacturer",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "group": "Product identity"
+        },
+        {
+          "key": "model_number",
+          "label": "Model Number",
+          "group": "Product identity"
+        },
+        {
+          "key": "recommended_browse_nodes",
+          "label": "Recommended Browse Nodes",
+          "group": "Product identity"
+        },
+        {
+          "key": "title_differentiation",
+          "label": "Item Highlight",
+          "group": "Product identity"
+        },
+        {
+          "key": "description",
+          "label": "Product Description",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_1",
+          "label": "Bullet 1",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_2",
+          "label": "Bullet 2",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_3",
+          "label": "Bullet 3",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_4",
+          "label": "Bullet 4",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_5",
+          "label": "Bullet 5",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_6",
+          "label": "Bullet 6",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_7",
+          "label": "Bullet 7",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_8",
+          "label": "Bullet 8",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_9",
+          "label": "Bullet 9",
+          "group": "Product details"
+        },
+        {
+          "key": "bulletPoints_10",
+          "label": "Bullet 10",
+          "group": "Product details"
+        },
+        {
+          "key": "fabric_type",
+          "label": "Fabric Type",
+          "group": "Product details"
+        },
+        {
+          "key": "keywords",
+          "label": "Search keywords",
+          "group": "Product details"
+        },
+        {
+          "key": "material_1",
+          "label": "Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "material_2",
+          "label": "Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "material_3",
+          "label": "Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "color",
+          "label": "Colour",
+          "group": "Product details"
+        },
+        {
+          "key": "size",
+          "label": "Size",
+          "group": "Product details"
+        },
+        {
+          "key": "target_gender",
+          "label": "Target Gender",
+          "group": "Product details"
+        },
+        {
+          "key": "age_range_description",
+          "label": "Age Range Description",
+          "group": "Product details"
+        },
+        {
+          "key": "fit_type",
+          "label": "Fit Type",
+          "group": "Product details"
+        },
+        {
+          "key": "care_instructions",
+          "label": "Care Instructions",
+          "group": "Product details"
+        },
+        {
+          "key": "water_resistance_level",
+          "label": "Water Resistance Level",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_1",
+          "label": "Closure Type 1",
+          "group": "Product details"
+        },
+        {
+          "key": "closure_2",
+          "label": "Closure Type 2",
+          "group": "Product details"
+        },
+        {
+          "key": "color__standardized_values",
+          "label": "Colour Map",
+          "group": "Product details"
+        },
+        {
+          "key": "department",
+          "label": "Department Name",
+          "group": "Product details"
+        },
+        {
+          "key": "fc_shelf_life",
+          "label": "Fulfillment Center Shelf Life",
+          "group": "Product details"
+        },
+        {
+          "key": "handmade_classification",
+          "label": "Handmade Classification",
+          "group": "Product details"
+        },
+        {
+          "key": "is_expiration_dated_product",
+          "label": "Is Product Expirable",
+          "group": "Product details"
+        },
+        {
+          "key": "item_package_quantity",
+          "label": "Item Package Quantity",
+          "group": "Product details"
+        },
+        {
+          "key": "item_type_name",
+          "label": "Item Type Name",
+          "group": "Product details"
+        },
+        {
+          "key": "item_weight",
+          "label": "Item Weight",
+          "group": "Product details"
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "group": "Product details"
+        },
+        {
+          "key": "league_name",
+          "label": "League Name",
+          "group": "Product details"
+        },
+        {
+          "key": "lifestyle",
+          "label": "Lifestyle",
+          "group": "Product details"
+        },
+        {
+          "key": "number_of_items",
+          "label": "Number of Items",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_1",
+          "label": "Outer Material 1",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_2",
+          "label": "Outer Material 2",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_3",
+          "label": "Outer Material 3",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_4",
+          "label": "Outer Material 4",
+          "group": "Product details"
+        },
+        {
+          "key": "outer_5",
+          "label": "Outer Material 5",
+          "group": "Product details"
+        },
+        {
+          "key": "part_number",
+          "label": "Part Number",
+          "group": "Product details"
+        },
+        {
+          "key": "pattern",
+          "label": "Pattern",
+          "group": "Product details"
+        },
+        {
+          "key": "product_expiration_type",
+          "label": "Product Expiration Type",
+          "group": "Product details"
+        },
+        {
+          "key": "product_site_launch_date",
+          "label": "Product Site Launch Date",
+          "group": "Product details"
+        },
+        {
+          "key": "special_size_type",
+          "label": "Special Size",
+          "group": "Product details"
+        },
+        {
+          "key": "style",
+          "label": "Style",
+          "group": "Product details"
+        },
+        {
+          "key": "subject_character",
+          "label": "Subject Character",
+          "group": "Product details"
+        },
+        {
+          "key": "team_name",
+          "label": "Team Name",
+          "group": "Product details"
+        },
+        {
+          "key": "temperature_rating",
+          "label": "Temperature Rating",
+          "group": "Product details"
+        },
+        {
+          "key": "theme",
+          "label": "Theme",
+          "group": "Product details"
+        },
+        {
+          "key": "weave_type",
+          "label": "Weave Type",
+          "group": "Product details"
+        },
+        {
+          "key": "parentage_level",
+          "label": "Amazon listing role",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__parent_sku",
+          "label": "Amazon parent SKU",
+          "group": "Variations"
+        },
+        {
+          "key": "child_parent_sku_relationship__child_relationship_type",
+          "label": "Amazon relationship type",
+          "group": "Variations"
+        },
+        {
+          "key": "variation_theme",
+          "label": "Variation Theme Name",
+          "group": "Variations"
+        },
+        {
+          "key": "image_locator_ps01",
+          "label": "Image locator ps01",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps02",
+          "label": "Image locator ps02",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps03",
+          "label": "Image locator ps03",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps04",
+          "label": "Image locator ps04",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps05",
+          "label": "Image locator ps05",
+          "group": "Images"
+        },
+        {
+          "key": "image_locator_ps06",
+          "label": "Image locator ps06",
+          "group": "Images"
+        },
+        {
+          "key": "main_product_image_locator",
+          "label": "Main Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_1",
+          "label": "Other Image URL 1",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_2",
+          "label": "Other Image URL 2",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_3",
+          "label": "Other Image URL 3",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_4",
+          "label": "Other Image URL 4",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_5",
+          "label": "Other Image URL 5",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_6",
+          "label": "Other Image URL 6",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_7",
+          "label": "Other Image URL 7",
+          "group": "Images"
+        },
+        {
+          "key": "other_product_image_locator_8",
+          "label": "Other Image URL 8",
+          "group": "Images"
+        },
+        {
+          "key": "swatch_product_image_locator",
+          "label": "Swatch Image URL",
+          "group": "Images"
+        },
+        {
+          "key": "country_of_origin",
+          "label": "Country of Origin",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplier_declared_dg_hz_regulation",
+          "label": "Dangerous Goods Regulations",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_included",
+          "label": "Are batteries included?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "batteries_required",
+          "label": "Are batteries required?",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition",
+          "label": "Battery Cell Composition",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__cell_composition_other_than_listed",
+          "label": "Battery Cell Composition Other Than Listed",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "battery__weight",
+          "label": "Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "compliance_media",
+          "label": "Compliance Media Source Location",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs_chemical_h_code",
+          "label": "GHS Chemical H Code",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ghs",
+          "label": "GHS Class",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "hazmat",
+          "label": "Hazmat Information",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "inner",
+          "label": "Inner Material",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "is_this_product_subject_to_buyer_age_restrictions",
+          "label": "Is This Product Subject To Buyer Age Restrictions",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__energy_content",
+          "label": "Lithium Battery Energy Content",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__packaging",
+          "label": "Lithium Battery Packaging",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "lithium_battery__weight",
+          "label": "Lithium Battery Weight",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_manufacturer_reference",
+          "label": "Manufacturer’s Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ec_medical_device_sales_channel",
+          "label": "Medical Device Sales Channel",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "num_batteries",
+          "label": "Number of Batteries",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_metal_cells",
+          "label": "Number of Lithium Metal Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "number_of_lithium_ion_cells",
+          "label": "Number of Lithium-ion Cells",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "dsa_responsible_party_address",
+          "label": "Responsible Person's Email or Electronic Address",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "gpsr_safety_attestation",
+          "label": "Safety Attestation",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "safety_data_sheet_url",
+          "label": "Safety Data Sheet (SDS or MSDS) URL",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "ships_globally",
+          "label": "Ships Globally",
+          "group": "Safety and compliance"
+        },
+        {
+          "key": "supplemental_condition_information__accessories",
+          "label": "Accessories",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__battery_life_percentage",
+          "label": "Battery Life Percentage",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__cosmetic",
+          "label": "Cosmetic",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_1",
+          "label": "Features 1",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_2",
+          "label": "Features 2",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_3",
+          "label": "Features 3",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_4",
+          "label": "Features 4",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_5",
+          "label": "Features 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_6",
+          "label": "Features 6",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_7",
+          "label": "Features 7",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_8",
+          "label": "Features 8",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_9",
+          "label": "Features 9",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__features_10",
+          "label": "Features 10",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__functional_condition",
+          "label": "Functional Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__lead_time_to_ship_max_days",
+          "label": "Handling Time",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__is_inventory_available",
+          "label": "Inventory Always Available",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_wrapped",
+          "label": "Is Gift Wrap Available",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_type",
+          "label": "Item Condition",
+          "group": "Offer"
+        },
+        {
+          "key": "list_price",
+          "label": "List Price with Tax",
+          "group": "Offer"
+        },
+        {
+          "key": "main_offer_image_locator",
+          "label": "Main Image Location",
+          "group": "Offer"
+        },
+        {
+          "key": "max_order_quantity",
+          "label": "Maximum Order Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__maximum_seller_allowed_price",
+          "label": "Maximum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_shipping_group",
+          "label": "Merchant Shipping Group",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__map_price",
+          "label": "Minimum Advertised Price",
+          "group": "Offer"
+        },
+        {
+          "key": "map_policy",
+          "label": "Minimum Advertised Price Display",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__minimum_seller_allowed_price",
+          "label": "Minimum Seller Allowed Price",
+          "group": "Offer"
+        },
+        {
+          "key": "condition_note",
+          "label": "Offer Condition Note",
+          "group": "Offer"
+        },
+        {
+          "key": "gift_options__can_be_messaged",
+          "label": "Offering Can Be Gift Messaged",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__start_at",
+          "label": "Offering Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_1",
+          "label": "Other Image Location 1",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_2",
+          "label": "Other Image Location 2",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_3",
+          "label": "Other Image Location 3",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_4",
+          "label": "Other Image Location 4",
+          "group": "Offer"
+        },
+        {
+          "key": "other_offer_image_locator_5",
+          "label": "Other Image Location 5",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__packaging",
+          "label": "Packaging",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__automated_pricing_merchandising_rule_plan",
+          "label": "Pricing Rule",
+          "group": "Offer"
+        },
+        {
+          "key": "product_tax_code",
+          "label": "Product Tax Code",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__quantity",
+          "label": "Quantity",
+          "group": "Offer"
+        },
+        {
+          "key": "merchant_release_date",
+          "label": "Release Date",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__renewed_grade",
+          "label": "Renewed Grade",
+          "group": "Offer"
+        },
+        {
+          "key": "fulfillment_availability__restock_date",
+          "label": "Restock Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__end_at",
+          "label": "Sale End Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__value_with_tax",
+          "label": "Sale Price",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__discounted_price__start_at",
+          "label": "Sale Start Date",
+          "group": "Offer"
+        },
+        {
+          "key": "skip_offer",
+          "label": "Skip Offer",
+          "group": "Offer"
+        },
+        {
+          "key": "supplemental_condition_information__source_type",
+          "label": "Source Type",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__end_at",
+          "label": "Stop Selling Date",
+          "group": "Offer"
+        },
+        {
+          "key": "purchasable_offer__our_price",
+          "label": "Your Price",
+          "group": "Offer"
+        },
+        {
+          "key": "epr_product_packaging__weight",
+          "label": "EPR Product Packaging Granular Material Weight Value",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__height",
+          "label": "Item Package Height",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__length",
+          "label": "Item Package Length",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_weight",
+          "label": "Item Package Weight",
+          "group": "Shipping"
+        },
+        {
+          "key": "item_package_dimensions__width",
+          "label": "Item Package Width",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_1",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 1",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_2",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 2",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_3",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 3",
+          "group": "Shipping"
+        },
+        {
+          "key": "epr_product_packaging__recycled_content_percentage_4",
+          "label": "Percentage of Recycled Content of Granular Material of EPR Product Packaging 4",
+          "group": "Shipping"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Snapshot of available schemas; future categories require English schema metadata or a dictionary entry.",
+    "Marketplace category names and product values may remain localized; this audit covers UI headings.",
+    "English labels do not establish listing validity or successful provider authentication."
+  ]
+}

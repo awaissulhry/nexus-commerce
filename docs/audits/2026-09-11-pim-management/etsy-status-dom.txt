@@ -1,0 +1,474 @@
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "Nexus home":
+    - /url: /
+  - textbox "Search — opens the command palette":
+    - /placeholder: Jump to anything…
+  - button "awaissulhry":
+  - button "Switch to light mode":
+  - button "Notifications":
+- main:
+  - complementary:
+    - navigation "Application navigation":
+      - link "Home":
+        - /url: /
+      - link "Products 37 pending":
+        - /url: /products
+        - generic "37 pending": "37"
+      - link "Listings 999 pending":
+        - /url: /listings
+        - generic "999 pending": 99+
+      - link "Stock":
+        - /url: /fulfillment/stock
+      - link "Inbound":
+        - /url: /fulfillment/inbound
+      - link "Outbound 4 pending":
+        - /url: /fulfillment/outbound
+        - generic "4 pending": "4"
+      - link "Replenishment":
+        - /url: /fulfillment/replenishment
+      - link "Purchase Orders":
+        - /url: /fulfillment/purchase-orders
+      - link "Suppliers":
+        - /url: /fulfillment/suppliers
+      - link "Carriers":
+        - /url: /fulfillment/carriers
+      - link "Returns":
+        - /url: /fulfillment/returns
+      - link "Orders 4 pending":
+        - /url: /orders
+        - generic "4 pending": "4"
+      - link "Pricing":
+        - /url: /pricing
+      - link "Insights":
+        - /url: /insights
+      - link "Advertising":
+        - /url: /marketing/ads
+      - link "Calendar":
+        - /url: /marketing/calendar
+      - link "Content":
+        - /url: /marketing/content
+      - link "Reviews":
+        - /url: /marketing/reviews
+      - link "Agent Fleet":
+        - /url: /fleet
+      - link "Inbox 2208 pending":
+        - /url: /inbox
+        - generic "2208 pending": 99+
+      - link "Sync Logs":
+        - /url: /sync-logs
+      - link "Connections 19 pending":
+        - /url: /settings/channels
+        - generic "19 pending": "19"
+      - link "Mappings":
+        - /url: /channels/mapping
+      - link "Settings":
+        - /url: /settings
+      - link "Recycle Bin":
+        - /url: /admin/recycle-bin
+  - button "Expand product navigation":
+  - link "Products":
+    - /url: /products/next
+  - heading "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni" [level=1]
+  - generic "GALE-JACKET"
+  - generic "Amazon ASIN B0F7J163XJ": B0F7J163XJ
+  - generic "Every cell saves on its own. There is no page Save.": Autosave on
+  - button "Review listing information"
+  - radiogroup "Editing":
+    - radio "Shared product Ready 100%":
+    - radio "Amazon":
+    - radio "eBay":
+    - radio "Shopify Not set up":
+    - radio "Etsy Not set up" [checked]:
+  - button "Market":
+  - region "Information":
+    - textbox "Find":
+      - /placeholder: Find a SKU or a name…
+    - button "All attributes (56)":
+    - button "Required 8 columns":
+    - 'button "Missing required: 105 affected cells across 5 columns and 21 rows"':
+    - 'button "Mapping errors: 22 affected cells across 2 columns and 21 rows. The mapping result has an error. Open Channel mapping to review the source rule and preview value."':
+    - 'button "Invalid values: 1 affected cell across 1 column and 1 row. 1 more on fields this view does not show (productType) — switch view to reach them"':
+    - button "Requirements incomplete"
+    - button "Customise"
+    - button "Export"
+    - button "Import"
+    - button "More":
+    - treegrid:
+      - rowgroup:
+          - columnheader "Column with Header Selection":
+            - checkbox "Column with Header Selection"
+          - columnheader "Product":
+          - columnheader "Product role":
+          - columnheader "Parent SKU":
+          - columnheader "Title":
+          - columnheader "Description":
+          - columnheader "Product media":
+          - columnheader "Featured rank":
+          - columnheader "Is customizable":
+          - columnheader "Materials":
+          - columnheader "Styles 1":
+        - row [expanded]:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Collapse listing" [expanded]:
+            - generic "Not measured": —
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET, Description"':
+            - group "GALE-JACKET, 24 media items":
+              - button "MAIN, position 1 of 24"
+              - button "Image, position 2 of 24"
+              - button "Image, position 3 of 24"
+              - button "Image, position 4 of 24"
+              - button "Image, position 5 of 24"
+            - 'button "Edit product media: GALE-JACKET"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-3XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Description"':
+            - group "GALE-JACKET-BLACK-MEN-3XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-3XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-3XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-4XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Description"':
+            - group "GALE-JACKET-BLACK-MEN-4XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-4XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-4XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-5XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Description"':
+            - group "GALE-JACKET-BLACK-MEN-5XL, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-5XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-5XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-L":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-L, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-L, Description"':
+            - group "GALE-JACKET-BLACK-MEN-L, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-L"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-L, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-L, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-M":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-M, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-M, Description"':
+            - group "GALE-JACKET-BLACK-MEN-M, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-M"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-M, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-M, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-S":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-S, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-S, Description"':
+            - group "GALE-JACKET-BLACK-MEN-S, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-S"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-S, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-S, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XL, Description"':
+            - group "GALE-JACKET-BLACK-MEN-XL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT02, position 2 of 7"
+              - button "PT01, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-XS":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XS, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XS, Description"':
+            - group "GALE-JACKET-BLACK-MEN-XS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "PT01, position 2 of 8"
+              - button "PT02, position 3 of 8"
+              - button "PT03, position 4 of 8"
+              - button "PT04, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XS"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XS, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XS, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Description"':
+            - group "GALE-JACKET-BLACK-MEN-XXL, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-BLACK-MEN-XXS":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Description"':
+            - group "GALE-JACKET-BLACK-MEN-XXS, 7 media items":
+              - button "MAIN, position 1 of 7"
+              - button "PT01, position 2 of 7"
+              - button "PT02, position 3 of 7"
+              - button "PT03, position 4 of 7"
+              - button "PT04, position 5 of 7"
+            - 'button "Edit product media: GALE-JACKET-BLACK-MEN-XXS"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-BLACK-MEN-XXS, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-3XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-3XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-3XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-3XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-4XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-4XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-4XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-4XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-5XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-5XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-5XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-5XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-L":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-L, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-L, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-L, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-L"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-L, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-L, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-M":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-M, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-M, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-M, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-M"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-M, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-M, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-S":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-S, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-S, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-S, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-S"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-S, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-S, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-XL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XS":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-XS, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XS"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XS, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXL":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-XXL, 10 media items":
+              - button "MAIN, position 1 of 10"
+              - button "MAIN, position 2 of 10"
+              - button "PT01, position 3 of 10"
+              - button "PT01, position 4 of 10"
+              - button "PT02, position 5 of 10"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXL"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXL, Styles 1"':
+        - row:
+            - checkbox "Press Space to toggle row selection (unchecked)"
+            - button "Actions for GALE-JACKET-YELLOW-MEN-XXS":
+            - 'button "Follows Master. Uses Master’s title for this product and content language. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Title"':
+            - 'generic "Mapping error: Required by the category schema: the description attribute."': "!"
+            - 'button "Follows Master. Uses Master’s description for this product and content language. The configured source currently produces no value. Mapping error: Required by the category schema: the description attribute. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Description"':
+            - group "GALE-JACKET-YELLOW-MEN-XXS, 8 media items":
+              - button "MAIN, position 1 of 8"
+              - button "MAIN, position 2 of 8"
+              - button "PT01, position 3 of 8"
+              - button "PT02, position 4 of 8"
+              - button "PT03, position 5 of 8"
+            - 'button "Edit product media: GALE-JACKET-YELLOW-MEN-XXS"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Featured rank"':
+            - 'button "Listing settings. This attribute uses its own channel or listing value. A Master mapping is not required. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Is customizable"':
+            - 'button "Follows Master. Uses Master’s material for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Materials"':
+            - 'button "Follows Master. Uses Master’s style for this product and content language. The configured source currently produces no value. Show cell details: GALE-JACKET-YELLOW-MEN-XXS, Styles 1"':
+    - status:
+      - button "Show the keyboard shortcuts": "?"
+  - complementary "Record"
+- button "Open Next.js Dev Tools":
+- alert

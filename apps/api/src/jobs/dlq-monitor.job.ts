@@ -116,8 +116,8 @@ export function startDlqMonitorCron(): void {
   }
   // Every 5 minutes. 5min matches the SP-API notification SLA — if a
   // burst of bad messages hits the DLQ we surface it within one tick.
-  scheduledTask = cron.schedule('*/5 * * * *', () => {
-    void tick()
+  scheduledTask = cron.schedule('*/5 * * * *', async () => {
+    await tick()
   })
   // Run once at boot so the first depth reading isn't delayed 5 min.
   void tick()

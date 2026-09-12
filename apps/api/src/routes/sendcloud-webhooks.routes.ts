@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * O.7 — Sendcloud webhook receiver.
  *
@@ -112,7 +113,7 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
     let secret: string | null = process.env.NEXUS_SENDCLOUD_WEBHOOK_SECRET ?? null
     try {
       const carrier = await prisma.carrier.findUnique({
-        where: { code: 'SENDCLOUD' },
+        where: { workspace_code: workspaceKey({ code: 'SENDCLOUD' }) },
         select: { webhookSecret: true },
       })
       if (carrier?.webhookSecret) {
@@ -154,7 +155,7 @@ export async function sendcloudWebhookRoutes(app: FastifyInstance) {
 
     // Resolve parcel → Shipment first (the common, outbound path).
     const shipment = await prisma.shipment.findUnique({
-      where: { sendcloudParcelId: String(parcel.id) },
+      where: { workspace_sendcloudParcelId: workspaceKey({ sendcloudParcelId: String(parcel.id) }) },
       include: { order: { select: { id: true, channel: true, marketplace: true } } },
     })
     if (!shipment) {

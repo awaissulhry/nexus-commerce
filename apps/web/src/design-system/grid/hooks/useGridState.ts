@@ -20,11 +20,17 @@
  *
  * The AG Grid State API (`getState` / `setState` / `initialState`) is the ONE serialisation —
  * columns, sort, filter model, row-group columns, pagination. Nothing here reads a column.
+ *
+ * `persistKeys` (2026-09-04): a surface may name WHICH slices of `GridState` it remembers. The
+ * studio sheets keep widths, pins and sort and deliberately NOT visibility or order — those come
+ * from the view (`views/landing.ts`), and a remembered `hiddenColIds` was the invisible state that
+ * made a sheet look like it ignored the operator (#772–#774). The list is applied on the way OUT
+ * (persist) and on the way IN (read), so a value written before the rule cannot outlive it.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GridApi, GridState } from 'ag-grid-community'
 
-import { GRID_VIEW_SCHEMA, useGridViews, type GridViewPayload, type UseGridViewsOptions } from './useGridViews'
+import { GRID_VIEW_SCHEMA, isGridStatePayload, useGridViews, type GridViewPayload, type UseGridViewsOptions } from './useGridViews'
 
 export const LAST_USED_SCHEMA = 1
 const PERSIST_DEBOUNCE_MS = 400
@@ -36,19 +42,59 @@ export interface LastUsedState<TPage> {
   savedAt: string
 }
 
+export type GridStateKey = keyof GridState
+
 export const lastUsedKey = (surface: string) => `nds-grid:${surface}:v${LAST_USED_SCHEMA}`
 
-export function readLastUsed<TPage>(surface: string): LastUsedState<TPage> | null {
+/**
+ * Keep only the named slices. `undefined` keys = keep everything (the pre-2026-09-04 behaviour,
+ * what `/products/next` relies on). An allow-list, not an omit-list: a slice AG adds in a later
+ * version is forgotten by default, which is the safe direction — stored junk reads as a preference.
+ */
+export function pickGridState(state: GridState, keys: readonly GridStateKey[] | undefined): GridState {
+  if (!keys) return state
+  const out: Record<string, unknown> = {}
+  for (const k of keys) {
+    const v = (state as Record<string, unknown>)[k]
+    if (v !== undefined) out[k] = v
+  }
+  return out as GridState
+}
+
+export function readLastUsed<TPage>(surface: string, keys?: readonly GridStateKey[]): LastUsedState<TPage> | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = window.localStorage.getItem(lastUsedKey(surface))
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<LastUsedState<TPage>>
     if (parsed.v !== LAST_USED_SCHEMA || !parsed.gridState || typeof parsed.gridState !== 'object') return null
-    return parsed as LastUsedState<TPage>
+    return keys ? { ...(parsed as LastUsedState<TPage>), gridState: pickGridState(parsed.gridState, keys) } : (parsed as LastUsedState<TPage>)
   } catch {
     return null
   }
+}
+
+/**
+ * §9.5a — what is NEVER persisted, and why the horizontal half is different from the vertical.
+ *
+ * 🔴 **Horizontal scroll is withdrawn from persistence entirely.** A restored `scroll.left` of
+ * 1,227px lands the operator past identity, past the required-and-incomplete block and past the
+ * commerce spine on every load — undoing §9.2's whole ordering decision with an accident of where
+ * somebody happened to stop scrolling last time. The ordering is a ruling; the scroll position is a
+ * side effect, and a side effect must not overrule a decision.
+ *
+ * **Vertical scroll may persist**: coming back to the row you were on is the same operator
+ * returning to their place, and it cannot hide a column.
+ *
+ * `omitScroll` drops BOTH — for the deep-link case (#425), where AG's own deferred `initialState`
+ * restore was writing the persisted position at 676ms and beating a reveal that had correctly
+ * computed and written its target at 586ms. Explicit beats implicit rather than racing it.
+ */
+export function stripScroll(state: GridState, omitScroll = false): GridState {
+  const { scroll, ...rest } = state
+  if (omitScroll || !scroll) return rest
+  // Keep the vertical half only. `top` alone is a valid `scroll` to AG; `left` is what we refuse.
+  return { ...rest, scroll: { top: scroll.top } as GridState['scroll'] }
 }
 
 export function writeLastUsed<TPage>(surface: string, state: Omit<LastUsedState<TPage>, 'v' | 'savedAt'>): void {
@@ -70,36 +116,78 @@ export function clearLastUsed(surface: string): void {
 }
 
 export interface UseGridStateOptions<TPage> extends UseGridViewsOptions<TPage> {
+  /**
+   * Drop the replayed scroll position entirely (#425). Pass it when the URL names a cell: AG's
+   * `initialState` restore is deferred behind `CtrlsService.whenReady` and lands ~90ms AFTER a
+   * reveal has already scrolled to the named cell, so the two race and the persisted value wins.
+   * An explicit coordinate should not have to out-run an implicit one.
+   */
+  omitScroll?: boolean
   /** Restore the last-used state on mount when no default view exists. Default true. */
   autoRestore?: boolean
+  /**
+   * The slices of `GridState` this surface remembers between visits. Omit to remember everything.
+   * The studio sheets pass `['columnSizing', 'columnPinning', 'sort']` — see the file header.
+   */
+  persistKeys?: readonly GridStateKey[]
+  /**
+   * The `SavedView` surface for NAMED views, when it differs from the last-used key. A channel
+   * scope remembers widths PER COORDINATE (`product-edit:AMAZON:IT`) but shares its views PER
+   * CHANNEL (`product-edit:views:AMAZON`): the column set is the channel's, not the market's.
+   */
+  viewsSurface?: string
 }
 
-export function useGridState<TPage>({ surface, baseUrl, getPageState, applyPageState, autoRestore = true }: UseGridStateOptions<TPage>) {
-  const views = useGridViews<TPage>({ surface, baseUrl, getPageState, applyPageState })
+export function useGridState<TPage>({
+  surface,
+  baseUrl,
+  getPageState,
+  applyPageState,
+  applyColumnsView,
+  autoRestore = true,
+  omitScroll = false,
+  persistKeys,
+  viewsSurface,
+}: UseGridStateOptions<TPage>) {
+  const views = useGridViews<TPage>({ surface: viewsSurface ?? surface, baseUrl, getPageState, applyPageState, applyColumnsView })
   const apiRef = useRef<GridApi | null>(null)
   const pageRef = useRef(getPageState)
   pageRef.current = getPageState
   const applyRef = useRef(applyPageState)
   applyRef.current = applyPageState
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The list is read at persist time through a ref so a caller passing an inline array does not
+  // re-bind the AG listener on every render.
+  const keysRef = useRef(persistKeys)
+  keysRef.current = persistKeys
 
   // Read once, on the client, before the grid mounts — the value `initialState` hands AG.
-  const [lastUsed] = useState<LastUsedState<TPage> | null>(() => (autoRestore ? readLastUsed<TPage>(surface) : null))
+  const [lastUsed] = useState<LastUsedState<TPage> | null>(() => (autoRestore ? readLastUsed<TPage>(surface, persistKeys) : null))
+
+  /** A schema-1 default view carries AG state; a schema-2 one carries columns and is the sheet's to apply. */
+  const defaultGridState = useMemo<GridState | null>(() => {
+    const p = views.defaultView?.payload
+    return p && isGridStatePayload<TPage>(p) ? p.gridState : null
+  }, [views.defaultView])
 
   /**
    * What the grid starts from. The server default view is fetched asynchronously; until it
    * arrives the last-used state is the best answer, and the page's own default after that. A
    * default view that lands later is applied by the page through `views.defaultView` as before.
    */
-  const initialState = useMemo<GridState | undefined>(
-    () => views.defaultView?.payload?.gridState ?? lastUsed?.gridState,
-    [views.defaultView, lastUsed],
-  )
+  const initialState = useMemo<GridState | undefined>(() => {
+    const base = defaultGridState ?? lastUsed?.gridState
+    // Stripped on the way OUT as well as the way in: a value persisted before §9.5a, or one that
+    // arrives inside a server default view, must not restore a horizontal position either.
+    return base ? stripScroll(base, omitScroll) : base
+  }, [defaultGridState, lastUsed, omitScroll])
 
   const persist = useCallback(() => {
     const api = apiRef.current
     if (!api || api.isDestroyed()) return
-    writeLastUsed<TPage>(surface, { gridState: api.getState(), page: pageRef.current() })
+    // §9.5a — the horizontal position never reaches storage in the first place, so an older
+    // persisted value cannot outlive this rule on a machine that already has one.
+    writeLastUsed<TPage>(surface, { gridState: pickGridState(stripScroll(api.getState()), keysRef.current), page: pageRef.current() })
   }, [surface])
 
   const persistSoon = useCallback(() => {
@@ -114,9 +202,10 @@ export function useGridState<TPage>({ surface, baseUrl, getPageState, applyPageS
       views.bind(api)
       api.addEventListener('stateUpdated', persistSoon)
       // The last-used PAGE state (density, page size, accordion) — the grid part rode in `initialState`.
-      if (autoRestore && lastUsed && !views.defaultView) applyRef.current(lastUsed.page)
+      // A schema-1 default view carries its own page state; a schema-2 one does not, so ours applies.
+      if (autoRestore && lastUsed && !defaultGridState) applyRef.current(lastUsed.page)
     },
-    [views, persistSoon, autoRestore, lastUsed],
+    [views, persistSoon, autoRestore, lastUsed, defaultGridState],
   )
 
   /** The page changed something AG state does not hold (density, page size, a tile). */

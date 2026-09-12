@@ -174,12 +174,12 @@ export function startPurgeSoftDeletedCron(): void {
     logger.error('purge-soft-deleted cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
+  scheduledTask = cron.schedule(schedule, async () => {
     if (process.env.NEXUS_ENABLE_SOFT_DELETE_PURGE === '0') {
       // Skip silently — runPurgeSoftDeletedOnce also no-ops on this gate.
       return
     }
-    void recordCronRun('purge-soft-deleted-products', async () => {
+    await recordCronRun('purge-soft-deleted-products', async () => {
       const r = await runPurgeSoftDeletedOnce()
       return `candidates=${r.candidates} purged=${r.purged} images=${r.dependents.productImages} listings=${r.dependents.listings}`
     }).catch((err) => {

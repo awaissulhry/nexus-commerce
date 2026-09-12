@@ -296,8 +296,8 @@ export function startLatencyWatchdogCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runLatencyWatchdog()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runLatencyWatchdog()
   })
 
   logger.info('latency-watchdog cron: started', { schedule })

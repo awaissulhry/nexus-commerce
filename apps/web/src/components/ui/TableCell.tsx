@@ -29,7 +29,7 @@
  */
 
 import { type ReactNode } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Image as ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

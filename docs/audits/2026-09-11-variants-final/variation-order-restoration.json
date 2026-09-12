@@ -1,0 +1,110 @@
+{
+  "at": "2026-09-11T23:23:28.178Z",
+  "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=variation-order&account=cmr4aaqb00025nz016k18rup9",
+  "viewport": [
+    1440,
+    900
+  ],
+  "navigation": [
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Information"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=variants&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Variants"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=images&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Media"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=errors&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Needs attention"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=analytics&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Performance"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=activity&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Activity"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Listing information"
+    },
+    {
+      "active": null,
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=presentation&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Description themes"
+    },
+    {
+      "active": "page",
+      "href": "/products/cmokmy3a40078pm0p1fvnu523/edit/studio?market=IT&scope=EBAY&tab=variation-order&account=cmr4aaqb00025nz016k18rup9",
+      "label": "Variation order"
+    }
+  ],
+  "verified": {
+    "signedIn": "awaissulhry",
+    "account": "xaviaracing",
+    "market": "IT",
+    "itemId": "257584954808",
+    "axes": [
+      "Colore",
+      "Taglia"
+    ],
+    "values": {
+      "Colore": [
+        "Nero",
+        "Giallo"
+      ],
+      "Taglia": [
+        "XXS",
+        "XS",
+        "S",
+        "M",
+        "L",
+        "XL",
+        "XXL",
+        "3XL",
+        "4XL",
+        "5XL"
+      ]
+    },
+    "keyboardAxisDraft": [
+      "Taglia",
+      "Colore"
+    ],
+    "keyboardColorDraft": [
+      "Giallo",
+      "Nero"
+    ],
+    "discard": "Original axis/value sequences restored; Save disabled",
+    "inheritance": "Restore inherited ordering opens unsaved reset preview; discarded",
+    "directUrl": "Variation order editor loaded; Save disabled",
+    "consoleErrors": []
+  },
+  "endpoint": {
+    "read": "GET /api/ebay/cockpit/presentation-order",
+    "save": "PUT /api/ebay/cockpit/presentation-order (existing implementation; not invoked in this restoration audit)"
+  },
+  "gates": {
+    "webTsc": 0,
+    "studioVitest": {
+      "exit": 0,
+      "files": 102,
+      "passed": 1561
+    }
+  },
+  "dataWrites": 0,
+  "commits": 0,
+  "pushes": 0
+}

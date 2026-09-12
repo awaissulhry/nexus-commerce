@@ -16,6 +16,8 @@
  */
 import { memo, type ReactNode } from 'react'
 
+import { GridToastBoundary } from './GridToastBoundary'
+
 export interface GridCardProps {
   /** The `GridToolbar` (or nothing). */
   toolbar?: ReactNode
@@ -27,20 +29,24 @@ export interface GridCardProps {
 
 export const GridCard = memo(function GridCard({ toolbar, children, footer, className }: GridCardProps) {
   return (
-    <div className={['nds-gridcard', 'nds-grid-card', className].filter(Boolean).join(' ')}>
-      {toolbar}
-      {children}
-      {footer}
-    </div>
+    <GridToastBoundary>
+      <div className={['nds-gridcard', 'nds-grid-card', className].filter(Boolean).join(' ')}>
+        {toolbar}
+        {children}
+        {footer}
+      </div>
+    </GridToastBoundary>
   )
 })
 
 export const GridPanel = memo(function GridPanel({ toolbar, children, footer, className }: GridCardProps) {
   return (
-    <div className={['nds-gridcard', 'nds-grid-panel', className].filter(Boolean).join(' ')}>
-      {toolbar}
-      {children}
-      {footer}
-    </div>
+    <GridToastBoundary>
+      <div className={['nds-gridcard', 'nds-grid-panel', className].filter(Boolean).join(' ')}>
+        {toolbar}
+        {children}
+        {footer}
+      </div>
+    </GridToastBoundary>
   )
 })

@@ -28,7 +28,8 @@
  * (`docs/2026-08-16-ra-parked-sections.md`), headed for Analytics › Coverage. No endpoint retired.
  */
 import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { AdsPageHeader } from '../../_shell/AdsPageHeader'
 import { RulesTabs } from '../_shared/tabs'
 import { RulesGrid } from '../_shared/RulesGrid'

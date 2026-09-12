@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AX.12 — Amazon Marketing Stream (AMS) ingest.
  *
@@ -198,7 +199,7 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
       const negativeDelta = isTraffic && ((m.impressions ?? 0) < 0 || (m.clicks ?? 0) < 0)
       if (negativeDelta) {
         const existing = await prisma.amazonAdsHourlyPerformance.findUnique({
-          where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
+          where: { profileId_adProduct_entityType_entityId_date_hour: workspaceKey({ profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour }) },
           select: { id: true },
         })
         if (!existing) {
@@ -212,7 +213,7 @@ export async function ingestMarketingStream(messages: AmsMessage[]): Promise<Ams
       }
 
       await prisma.amazonAdsHourlyPerformance.upsert({
-        where: { profileId_adProduct_entityType_entityId_date_hour: { profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour } },
+        where: { profileId_adProduct_entityType_entityId_date_hour: workspaceKey({ profileId, adProduct, entityType: 'CAMPAIGN', entityId: campaignId, date, hour }) },
         create: {
           profileId, marketplace, adProduct, date, hour, entityType: 'CAMPAIGN', entityId: campaignId, localEntityId,
           impressions: m.impressions ?? 0, clicks: m.clicks ?? 0, costMicros, currencyCode: m.currency ?? 'EUR',

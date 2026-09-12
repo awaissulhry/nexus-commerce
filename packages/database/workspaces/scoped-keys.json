@@ -1,0 +1,6097 @@
+{
+  "Product": {
+    "scalar": {
+      "sku": "workspace_sku"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "family",
+        "model": "ProductFamily",
+        "from": [
+          "familyId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "workflowStage",
+        "model": "WorkflowStage",
+        "from": [
+          "workflowStageId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "parent",
+        "model": "Product",
+        "from": [
+          "parentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "masterProduct",
+        "model": "Product",
+        "from": [
+          "masterProductId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SkuAlias": {
+    "scalar": {
+      "alias": "workspace_alias"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockImportJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ProductFamily": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "parentFamily",
+        "model": "ProductFamily",
+        "from": [
+          "parentFamilyId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "workflow",
+        "model": "ProductWorkflow",
+        "from": [
+          "workflowId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AttributeGroup": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CustomAttribute": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "group",
+        "model": "AttributeGroup",
+        "from": [
+          "groupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AttributeOption": {
+    "scalar": {},
+    "compound": {
+      "attributeId_code": [
+        "attributeId",
+        "code"
+      ]
+    },
+    "relations": [
+      {
+        "field": "attribute",
+        "model": "CustomAttribute",
+        "from": [
+          "attributeId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FamilyAttribute": {
+    "scalar": {},
+    "compound": {
+      "familyId_attributeId": [
+        "familyId",
+        "attributeId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "family",
+        "model": "ProductFamily",
+        "from": [
+          "familyId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "attribute",
+        "model": "CustomAttribute",
+        "from": [
+          "attributeId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductWorkflow": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "WorkflowStage": {
+    "scalar": {},
+    "compound": {
+      "workflowId_code": [
+        "workflowId",
+        "code"
+      ]
+    },
+    "relations": [
+      {
+        "field": "workflow",
+        "model": "ProductWorkflow",
+        "from": [
+          "workflowId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WorkflowTransition": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "fromStage",
+        "model": "WorkflowStage",
+        "from": [
+          "fromStageId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "toStage",
+        "model": "WorkflowStage",
+        "from": [
+          "toStageId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WorkflowComment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "stage",
+        "model": "WorkflowStage",
+        "from": [
+          "stageId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WorkflowAssignment": {
+    "scalar": {},
+    "compound": {
+      "productId_assigneeId_role": [
+        "productId",
+        "assigneeId",
+        "role"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "stage",
+        "model": "WorkflowStage",
+        "from": [
+          "stageId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "assignee",
+        "model": "UserProfile",
+        "from": [
+          "assigneeId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CustomerGroup": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "ProductTierPrice": {
+    "scalar": {},
+    "compound": {
+      "productId_minQty_customerGroupId": [
+        "productId",
+        "minQty",
+        "customerGroupId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "customerGroup",
+        "model": "CustomerGroup",
+        "from": [
+          "customerGroupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DigitalAsset": {
+    "scalar": {
+      "code": "workspace_code",
+      "contentHash": "workspace_contentHash"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "folder",
+        "model": "AssetFolder",
+        "from": [
+          "folderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AssetFolder": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "parent",
+        "model": "AssetFolder",
+        "from": [
+          "parentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AssetUsage": {
+    "scalar": {},
+    "compound": {
+      "assetId_scope_productId_role_sortOrder": [
+        "assetId",
+        "scope",
+        "productId",
+        "role",
+        "sortOrder"
+      ]
+    },
+    "relations": [
+      {
+        "field": "asset",
+        "model": "DigitalAsset",
+        "from": [
+          "assetId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RepricingRule": {
+    "scalar": {},
+    "compound": {
+      "productId_channel_marketplace": [
+        "productId",
+        "channel",
+        "marketplace"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RepricingDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "rule",
+        "model": "RepricingRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductVariation": {
+    "scalar": {
+      "sku": "workspace_sku"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "VariantImage": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "variant",
+        "model": "ProductVariation",
+        "from": [
+          "variantId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "VariantChannelListing": {
+    "scalar": {},
+    "compound": {
+      "variantId_channelId": [
+        "variantId",
+        "channelId"
+      ],
+      "variantId_channel_marketplace": [
+        "variantId",
+        "channel",
+        "marketplace",
+        "channelConnectionId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "variant",
+        "model": "ProductVariation",
+        "from": [
+          "variantId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelListing": {
+    "scalar": {},
+    "compound": {
+      "productId_channelMarket": [
+        "productId",
+        "channelMarket",
+        "channelConnectionId",
+        "aliasKey"
+      ],
+      "productId_channel_marketplace": [
+        "productId",
+        "channel",
+        "marketplace",
+        "channelConnectionId",
+        "aliasKey"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "alias",
+        "model": "ProductListingAlias",
+        "from": [
+          "aliasId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductListingAlias": {
+    "scalar": {},
+    "compound": {
+      "productId_channel_marketplace_channelConnectionId_position": [
+        "productId",
+        "channel",
+        "marketplace",
+        "channelConnectionId",
+        "position"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelListingSnapshot": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Marketplace": {
+    "scalar": {},
+    "compound": {
+      "channel_code": [
+        "channel",
+        "code"
+      ]
+    },
+    "relations": []
+  },
+  "ChannelListingOverride": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FieldLinkGroup": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FieldValueMap": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_attribute_fromValue": [
+        "channel",
+        "marketplace",
+        "attribute",
+        "fromValue"
+      ]
+    },
+    "relations": []
+  },
+  "SizeScaleMap": {
+    "scalar": {},
+    "compound": {
+      "scale_fromSystem_toSystem_fromValue": [
+        "scale",
+        "fromSystem",
+        "toSystem",
+        "fromValue"
+      ]
+    },
+    "relations": []
+  },
+  "MappingRevision": {
+    "scalar": {},
+    "compound": {
+      "channel_code_version": [
+        "channel",
+        "code",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "SyncAttempt": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "listingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonSuppression": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "listingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ListingIssue": {
+    "scalar": {},
+    "compound": {
+      "listingId_fingerprint": [
+        "listingId",
+        "fingerprint"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "listingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Offer": {
+    "scalar": {},
+    "compound": {
+      "channelListingId_fulfillmentMethod": [
+        "channelListingId",
+        "fulfillmentMethod"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ListingRecoveryEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelListingImage": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductImage": {
+    "scalar": {},
+    "compound": {
+      "productId_contentHash": [
+        "productId",
+        "contentHash"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "derivedFrom",
+        "model": "ProductImage",
+        "from": [
+          "derivedFromImageId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "TerminologyPreference": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BrandVoice": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "MarketplaceSync": {
+    "scalar": {},
+    "compound": {
+      "productId_channel": [
+        "productId",
+        "channel"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Channel": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Listing": {
+    "scalar": {},
+    "compound": {
+      "productId_channelId": [
+        "productId",
+        "channelId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channel",
+        "model": "Channel",
+        "from": [
+          "channelId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DraftListing": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FBAShipment": {
+    "scalar": {
+      "shipmentId": "workspace_shipmentId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "FBAShipmentItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "shipment",
+        "model": "FBAShipment",
+        "from": [
+          "shipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PricingRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "PricingRuleProduct": {
+    "scalar": {},
+    "compound": {
+      "ruleId_productId": [
+        "ruleId",
+        "productId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "rule",
+        "model": "PricingRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PricingRuleVariation": {
+    "scalar": {},
+    "compound": {
+      "ruleId_variationId": [
+        "ruleId",
+        "variationId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "rule",
+        "model": "PricingRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SyncHealthLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BulkActionJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BulkActionItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "job",
+        "model": "BulkActionJob",
+        "from": [
+          "jobId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SellerFeedback": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Campaign": {
+    "scalar": {},
+    "compound": {
+      "externalCampaignId_marketplace": [
+        "externalCampaignId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "AdGroup": {
+    "scalar": {},
+    "compound": {
+      "externalAdGroupId_campaignId": [
+        "externalAdGroupId",
+        "campaignId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "Campaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdTarget": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "adGroup",
+        "model": "AdGroup",
+        "from": [
+          "adGroupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdProductAd": {
+    "scalar": {},
+    "compound": {
+      "adGroupId_asin": [
+        "adGroupId",
+        "asin"
+      ]
+    },
+    "relations": [
+      {
+        "field": "adGroup",
+        "model": "AdGroup",
+        "from": [
+          "adGroupId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdProductSet": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_name": [
+        "channel",
+        "marketplace",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsConnection": {
+    "scalar": {
+      "profileId": "workspace_profileId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AmazonAdsProfile": {
+    "scalar": {
+      "profileId": "workspace_profileId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "KeywordWatchlist": {
+    "scalar": {},
+    "compound": {
+      "marketplace_name": [
+        "marketplace",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "KeywordWatchlistTerm": {
+    "scalar": {},
+    "compound": {
+      "watchlistId_term": [
+        "watchlistId",
+        "term"
+      ]
+    },
+    "relations": [
+      {
+        "field": "watchlist",
+        "model": "KeywordWatchlist",
+        "from": [
+          "watchlistId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "KeywordCoverageSet": {
+    "scalar": {},
+    "compound": {
+      "portfolioId_marketplace_name": [
+        "portfolioId",
+        "marketplace",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "KeywordCoverageTerm": {
+    "scalar": {},
+    "compound": {
+      "setId_term": [
+        "setId",
+        "term"
+      ]
+    },
+    "relations": [
+      {
+        "field": "set",
+        "model": "KeywordCoverageSet",
+        "from": [
+          "setId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonAdsPortfolio": {
+    "scalar": {},
+    "compound": {
+      "profileId_externalPortfolioId": [
+        "profileId",
+        "externalPortfolioId"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsDailyPerformance": {
+    "scalar": {},
+    "compound": {
+      "profileId_adProduct_entityType_entityId_date": [
+        "profileId",
+        "adProduct",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsHourlyPerformance": {
+    "scalar": {},
+    "compound": {
+      "profileId_adProduct_entityType_entityId_date_hour": [
+        "profileId",
+        "adProduct",
+        "entityType",
+        "entityId",
+        "date",
+        "hour"
+      ]
+    },
+    "relations": []
+  },
+  "AdBudgetUsageSample": {
+    "scalar": {},
+    "compound": {
+      "campaignId_source_usageUpdatedAt": [
+        "campaignId",
+        "source",
+        "usageUpdatedAt"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsSearchTerm": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SearchQueryPerformance": {
+    "scalar": {},
+    "compound": {
+      "marketplace_reportPeriod_startDate_searchQuery_asin": [
+        "marketplace",
+        "reportPeriod",
+        "startDate",
+        "searchQuery",
+        "asin"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsPlacementReport": {
+    "scalar": {},
+    "compound": {
+      "campaignId_date_placement": [
+        "campaignId",
+        "date",
+        "placement"
+      ]
+    },
+    "relations": []
+  },
+  "DataKioskQueryJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AmazonEconomicsDaily": {
+    "scalar": {},
+    "compound": {
+      "marketplaceId_date_childAsin_msku": [
+        "marketplaceId",
+        "date",
+        "childAsin",
+        "msku"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsBrandMetric": {
+    "scalar": {},
+    "compound": {
+      "profileId_brandName_date": [
+        "profileId",
+        "brandName",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsBrandBuildingMetric": {
+    "scalar": {},
+    "compound": {
+      "profileId_brandName_computationDate_lookbackPeriod_categoryNodeName": [
+        "profileId",
+        "brandName",
+        "computationDate",
+        "lookbackPeriod",
+        "categoryNodeName"
+      ]
+    },
+    "relations": []
+  },
+  "AmazonAdsReportJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AmazonAdsExportJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FbaStorageAge": {
+    "scalar": {},
+    "compound": {
+      "sku_marketplace_polledAt": [
+        "sku",
+        "marketplace",
+        "polledAt"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductProfitDaily": {
+    "scalar": {},
+    "compound": {
+      "productId_marketplace_date": [
+        "productId",
+        "marketplace",
+        "date"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdDrift": {
+    "scalar": {},
+    "compound": {
+      "entityType_entityId_field": [
+        "entityType",
+        "entityId",
+        "field"
+      ]
+    },
+    "relations": []
+  },
+  "AdvertisingActionLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BudgetPool": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BudgetPoolAllocation": {
+    "scalar": {
+      "campaignId": "workspace_campaignId"
+    },
+    "compound": {
+      "budgetPoolId_marketplace_campaignId": [
+        "budgetPoolId",
+        "marketplace",
+        "campaignId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "budgetPool",
+        "model": "BudgetPool",
+        "from": [
+          "budgetPoolId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BudgetPoolRebalance": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "budgetPool",
+        "model": "BudgetPool",
+        "from": [
+          "budgetPoolId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CampaignBidHistory": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "Campaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Coupon": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AccountSettings": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "from": [
+          "workspaceId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "NotificationPreference": {
+    "scalar": {},
+    "compound": {
+      "userId_eventType": [
+        "userId",
+        "eventType"
+      ]
+    },
+    "relations": [
+      {
+        "field": "user",
+        "model": "UserProfile",
+        "from": [
+          "userId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "NotificationWebhook": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "user",
+        "model": "UserProfile",
+        "from": [
+          "userId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ApiKey": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "DataRetentionPolicy": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "DataExportRequest": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "user",
+        "model": "UserProfile",
+        "from": [
+          "userId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WebhookEvent": {
+    "scalar": {},
+    "compound": {
+      "channel_externalId": [
+        "channel",
+        "externalId"
+      ]
+    },
+    "relations": []
+  },
+  "ChannelLiveImage": {
+    "scalar": {},
+    "compound": {
+      "productId_channel_marketplace_externalSku_slot": [
+        "productId",
+        "channel",
+        "marketplace",
+        "externalSku",
+        "slot"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelStockEvent": {
+    "scalar": {},
+    "compound": {
+      "channel_channelEventId": [
+        "channel",
+        "channelEventId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RateLimitLog": {
+    "scalar": {},
+    "compound": {
+      "channel_endpoint_resetAt": [
+        "channel",
+        "endpoint",
+        "resetAt"
+      ]
+    },
+    "relations": []
+  },
+  "SyncLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SyncError": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Order": {
+    "scalar": {},
+    "compound": {
+      "channel_channelOrderId": [
+        "channel",
+        "channelOrderId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "customer",
+        "model": "Customer",
+        "from": [
+          "customerId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Customer": {
+    "scalar": {
+      "email": "workspace_email"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CustomerSegment": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CustomerAddress": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "customer",
+        "model": "Customer",
+        "from": [
+          "customerId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CustomerNote": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "customer",
+        "model": "Customer",
+        "from": [
+          "customerId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FiscalInvoiceCounter": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FiscalInvoice": {
+    "scalar": {},
+    "compound": {
+      "issuer_fiscalYear_sequenceNumber": [
+        "issuer",
+        "fiscalYear",
+        "sequenceNumber"
+      ]
+    },
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CreditNoteCounter": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CreditNote": {
+    "scalar": {},
+    "compound": {
+      "issuer_fiscalYear_sequenceNumber": [
+        "issuer",
+        "fiscalYear",
+        "sequenceNumber"
+      ]
+    },
+    "relations": [
+      {
+        "field": "refund",
+        "model": "Refund",
+        "from": [
+          "refundId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "originalInvoice",
+        "model": "FiscalInvoice",
+        "from": [
+          "originalInvoiceId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OrderNote": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OrderRiskScore": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OrderItem": {
+    "scalar": {},
+    "compound": {
+      "orderId_externalLineItemId": [
+        "orderId",
+        "externalLineItemId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DailySalesAggregate": {
+    "scalar": {},
+    "compound": {
+      "sku_channel_marketplace_day": [
+        "sku",
+        "channel",
+        "marketplace",
+        "day"
+      ]
+    },
+    "relations": []
+  },
+  "ReplenishmentForecast": {
+    "scalar": {},
+    "compound": {
+      "sku_channel_marketplace_horizonDay_model": [
+        "sku",
+        "channel",
+        "marketplace",
+        "horizonDay",
+        "model"
+      ]
+    },
+    "relations": []
+  },
+  "ForecastModelAssignment": {
+    "scalar": {},
+    "compound": {
+      "sku_modelId": [
+        "sku",
+        "modelId"
+      ]
+    },
+    "relations": []
+  },
+  "ForecastAccuracy": {
+    "scalar": {},
+    "compound": {
+      "sku_channel_marketplace_day": [
+        "sku",
+        "channel",
+        "marketplace",
+        "day"
+      ]
+    },
+    "relations": []
+  },
+  "BrandSettings": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "RetailEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "PricingSnapshot": {
+    "scalar": {},
+    "compound": {
+      "sku_channel_marketplace_fulfillmentMethod": [
+        "sku",
+        "channel",
+        "marketplace",
+        "fulfillmentMethod"
+      ]
+    },
+    "relations": []
+  },
+  "PriceChangeEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BuyBoxHistory": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FxRate": {
+    "scalar": {},
+    "compound": {
+      "fromCurrency_toCurrency_asOf": [
+        "fromCurrency",
+        "toCurrency",
+        "asOf"
+      ]
+    },
+    "relations": []
+  },
+  "RetailEventPriceAction": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "event",
+        "model": "RetailEvent",
+        "from": [
+          "eventId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SettlementReport": {
+    "scalar": {
+      "reportId": "workspace_reportId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "FinancialTransaction": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelConnection": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "workspace",
+        "model": "Workspace",
+        "from": [
+          "workspaceId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ConnectionScope": {
+    "scalar": {},
+    "compound": {
+      "connectionId_kind_externalId": [
+        "connectionId",
+        "kind",
+        "externalId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ConnectionEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "connection",
+        "model": "ChannelConnection",
+        "from": [
+          "connectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OutboundSyncQueue": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BulkOperation": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BulkOpsTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BulkActionTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ScheduledBulkAction": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "BulkAutomationApproval": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FlatFileImport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ImportJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ImportJobRow": {
+    "scalar": {},
+    "compound": {
+      "jobId_rowIndex": [
+        "jobId",
+        "rowIndex"
+      ]
+    },
+    "relations": [
+      {
+        "field": "job",
+        "model": "ImportJob",
+        "from": [
+          "jobId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ScheduledImport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ExportJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ScheduledExport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CategorySchema": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_productType_schemaVersion": [
+        "channel",
+        "marketplace",
+        "productType",
+        "schemaVersion"
+      ]
+    },
+    "relations": []
+  },
+  "GtinExemptionApplication": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ListingWizard": {
+    "scalar": {},
+    "compound": {
+      "productId_channelsHash_status": [
+        "productId",
+        "channelsHash",
+        "status"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ScheduledImagePublish": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ScheduledWizardPublish": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "wizard",
+        "model": "ListingWizard",
+        "from": [
+          "wizardId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WizardStepEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "wizard",
+        "model": "ListingWizard",
+        "from": [
+          "wizardId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WizardTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AuditLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "APlusContent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "master",
+        "model": "APlusContent",
+        "from": [
+          "masterContentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "APlusContentVersion": {
+    "scalar": {},
+    "compound": {
+      "contentId_version": [
+        "contentId",
+        "version"
+      ]
+    },
+    "relations": [
+      {
+        "field": "content",
+        "model": "APlusContent",
+        "from": [
+          "contentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "APlusContentAsin": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "content",
+        "model": "APlusContent",
+        "from": [
+          "contentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "APlusModule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "content",
+        "model": "APlusContent",
+        "from": [
+          "contentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BrandStory": {
+    "scalar": {},
+    "compound": {
+      "brand_marketplace_locale": [
+        "brand",
+        "marketplace",
+        "locale"
+      ]
+    },
+    "relations": [
+      {
+        "field": "master",
+        "model": "BrandStory",
+        "from": [
+          "masterStoryId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BrandStoryModule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "story",
+        "model": "BrandStory",
+        "from": [
+          "storyId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BrandStoryVersion": {
+    "scalar": {},
+    "compound": {
+      "storyId_version": [
+        "storyId",
+        "version"
+      ]
+    },
+    "relations": [
+      {
+        "field": "story",
+        "model": "BrandStory",
+        "from": [
+          "storyId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BrandKit": {
+    "scalar": {
+      "brand": "workspace_brand"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "BrandWatermarkTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "brandKit",
+        "model": "BrandKit",
+        "from": [
+          "brand"
+        ],
+        "to": [
+          "brand"
+        ]
+      }
+    ]
+  },
+  "AssetLocaleOverlay": {
+    "scalar": {},
+    "compound": {
+      "assetId_locale": [
+        "assetId",
+        "locale"
+      ]
+    },
+    "relations": [
+      {
+        "field": "asset",
+        "model": "DigitalAsset",
+        "from": [
+          "assetId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ListingImage": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonMediaRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AmazonImageFeedJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonFlatFileFeedJob": {
+    "scalar": {
+      "feedId": "workspace_feedId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "EbayPushJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ChannelImagePublishJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SchemaChange": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Warehouse": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "defaultCarrierAccount",
+        "model": "CarrierAccount",
+        "from": [
+          "defaultCarrierAccountId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockLocation": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockLevel": {
+    "scalar": {},
+    "compound": {
+      "locationId_productId_variationId": [
+        "locationId",
+        "productId",
+        "variationId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockReservation": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "stockLevel",
+        "model": "StockLevel",
+        "from": [
+          "stockLevelId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockMovement": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "fromLocation",
+        "model": "StockLocation",
+        "from": [
+          "fromLocationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "toLocation",
+        "model": "StockLocation",
+        "from": [
+          "toLocationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "lot",
+        "model": "Lot",
+        "from": [
+          "lotId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "serial",
+        "model": "SerialNumber",
+        "from": [
+          "serialNumberId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "bin",
+        "model": "StockBin",
+        "from": [
+          "binId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockCostLayer": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "lot",
+        "model": "Lot",
+        "from": [
+          "lotId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Lot": {
+    "scalar": {},
+    "compound": {
+      "productId_lotNumber": [
+        "productId",
+        "lotNumber"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "originMovement",
+        "model": "StockMovement",
+        "from": [
+          "originStockMovementId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SerialNumber": {
+    "scalar": {},
+    "compound": {
+      "productId_serialNumber": [
+        "productId",
+        "serialNumber"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "variation",
+        "model": "ProductVariation",
+        "from": [
+          "variationId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "lot",
+        "model": "Lot",
+        "from": [
+          "lotId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockBin": {
+    "scalar": {},
+    "compound": {
+      "locationId_code": [
+        "locationId",
+        "code"
+      ]
+    },
+    "relations": [
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockBinQuantity": {
+    "scalar": {},
+    "compound": {
+      "stockLevelId_binId": [
+        "stockLevelId",
+        "binId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "stockLevel",
+        "model": "StockLevel",
+        "from": [
+          "stockLevelId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "bin",
+        "model": "StockBin",
+        "from": [
+          "binId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "LotRecall": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "lot",
+        "model": "Lot",
+        "from": [
+          "lotId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "YearEndSnapshot": {
+    "scalar": {
+      "year": "workspace_year"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "FbaInventoryDetail": {
+    "scalar": {},
+    "compound": {
+      "sku_marketplaceId_fulfillmentCenterId_condition": [
+        "sku",
+        "marketplaceId",
+        "fulfillmentCenterId",
+        "condition"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "MCFShipment": {
+    "scalar": {
+      "amazonFulfillmentOrderId": "workspace_amazonFulfillmentOrderId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Carrier": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CarrierService": {
+    "scalar": {},
+    "compound": {
+      "carrierId_externalId": [
+        "carrierId",
+        "externalId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "carrier",
+        "model": "Carrier",
+        "from": [
+          "carrierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CarrierServiceMapping": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "carrier",
+        "model": "Carrier",
+        "from": [
+          "carrierId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "service",
+        "model": "CarrierService",
+        "from": [
+          "serviceId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CarrierMetric": {
+    "scalar": {},
+    "compound": {
+      "carrierId_windowDays": [
+        "carrierId",
+        "windowDays"
+      ]
+    },
+    "relations": [
+      {
+        "field": "carrier",
+        "model": "Carrier",
+        "from": [
+          "carrierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PickupSchedule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "carrier",
+        "model": "Carrier",
+        "from": [
+          "carrierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CarrierAccount": {
+    "scalar": {},
+    "compound": {
+      "carrierId_accountLabel": [
+        "carrierId",
+        "accountLabel"
+      ]
+    },
+    "relations": [
+      {
+        "field": "carrier",
+        "model": "Carrier",
+        "from": [
+          "carrierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Shipment": {
+    "scalar": {
+      "sendcloudParcelId": "workspace_sendcloudParcelId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "TrackingEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "shipment",
+        "model": "Shipment",
+        "from": [
+          "shipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "TrackingMessageLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "shipment",
+        "model": "Shipment",
+        "from": [
+          "shipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ShipmentItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "shipment",
+        "model": "Shipment",
+        "from": [
+          "shipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ShippingRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Supplier": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SupplierShippingProfile": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SupplierProduct": {
+    "scalar": {},
+    "compound": {
+      "supplierId_productId": [
+        "supplierId",
+        "productId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PurchaseOrder": {
+    "scalar": {
+      "poNumber": "workspace_poNumber",
+      "supplierAckToken": "workspace_supplierAckToken",
+      "approverAckToken": "workspace_approverAckToken"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "developmentProject",
+        "model": "DevelopmentProject",
+        "from": [
+          "developmentProjectId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PurchaseOrderItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "purchaseOrder",
+        "model": "PurchaseOrder",
+        "from": [
+          "purchaseOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PurchaseOrderAttachment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "purchaseOrder",
+        "model": "PurchaseOrder",
+        "from": [
+          "purchaseOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PurchaseOrderRevision": {
+    "scalar": {},
+    "compound": {
+      "purchaseOrderId_version": [
+        "purchaseOrderId",
+        "version"
+      ]
+    },
+    "relations": [
+      {
+        "field": "purchaseOrder",
+        "model": "PurchaseOrder",
+        "from": [
+          "purchaseOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PoComment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "purchaseOrder",
+        "model": "PurchaseOrder",
+        "from": [
+          "purchaseOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PoEventLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "PoTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PoTemplateItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "template",
+        "model": "PoTemplate",
+        "from": [
+          "templateId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "PoSchedule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "template",
+        "model": "PoTemplate",
+        "from": [
+          "templateId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "InboundShipment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "purchaseOrder",
+        "model": "PurchaseOrder",
+        "from": [
+          "purchaseOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "workOrder",
+        "model": "WorkOrder",
+        "from": [
+          "workOrderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "InboundShipmentAttachment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "inboundShipment",
+        "model": "InboundShipment",
+        "from": [
+          "inboundShipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "InboundDiscrepancy": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "inboundShipment",
+        "model": "InboundShipment",
+        "from": [
+          "inboundShipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "inboundShipmentItem",
+        "model": "InboundShipmentItem",
+        "from": [
+          "inboundShipmentItemId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "InboundShipmentItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "inboundShipment",
+        "model": "InboundShipment",
+        "from": [
+          "inboundShipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "purchaseOrderItem",
+        "model": "PurchaseOrderItem",
+        "from": [
+          "purchaseOrderItemId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "InboundReceipt": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "inboundShipmentItem",
+        "model": "InboundShipmentItem",
+        "from": [
+          "inboundShipmentItemId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "WorkOrder": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Return": {
+    "scalar": {
+      "rmaNumber": "workspace_rmaNumber",
+      "idempotencyKey": "workspace_idempotencyKey"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReturnItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "return",
+        "model": "Return",
+        "from": [
+          "returnId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "lot",
+        "model": "Lot",
+        "from": [
+          "lotId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Refund": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "return",
+        "model": "Return",
+        "from": [
+          "returnId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RefundAttempt": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "refund",
+        "model": "Refund",
+        "from": [
+          "refundId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReturnPolicy": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_productType": [
+        "channel",
+        "marketplace",
+        "productType"
+      ]
+    },
+    "relations": []
+  },
+  "ReplenishmentRule": {
+    "scalar": {
+      "productId": "workspace_productId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "ReplenishmentRecommendation": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CycleCount": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CycleCountItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "cycleCount",
+        "model": "CycleCount",
+        "from": [
+          "cycleCountId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OrderRoutingRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "warehouse",
+        "model": "Warehouse",
+        "from": [
+          "warehouseId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReplenishmentSavedView": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CronRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "OutboundApiCallLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SyncLogErrorGroup": {
+    "scalar": {
+      "fingerprint": "workspace_fingerprint"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "SyncLogSavedSearch": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AlertRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AlertEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "rule",
+        "model": "AlertRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductSubstitution": {
+    "scalar": {},
+    "compound": {
+      "primaryProductId_substituteProductId": [
+        "primaryProductId",
+        "substituteProductId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "primary",
+        "model": "Product",
+        "from": [
+          "primaryProductId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "substitute",
+        "model": "Product",
+        "from": [
+          "substituteProductId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "StockoutEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "location",
+        "model": "StockLocation",
+        "from": [
+          "locationId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AutoPoRunLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FbaRestockReport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FbaRestockRow": {
+    "scalar": {},
+    "compound": {
+      "sku_marketplace_reportId": [
+        "sku",
+        "marketplace",
+        "reportId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "report",
+        "model": "FbaRestockReport",
+        "from": [
+          "reportId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FbaInboundPlanV2": {
+    "scalar": {
+      "planId": "workspace_planId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "inboundShipment",
+        "model": "InboundShipment",
+        "from": [
+          "inboundShipmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Tag": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AssetTag": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "asset",
+        "model": "DigitalAsset",
+        "from": [
+          "assetId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "tag",
+        "model": "Tag",
+        "from": [
+          "tagId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductTag": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "tag",
+        "model": "Tag",
+        "from": [
+          "tagId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "Bundle": {
+    "scalar": {
+      "productId": "workspace_productId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "BundleComponent": {
+    "scalar": {},
+    "compound": {
+      "bundleId_productId": [
+        "bundleId",
+        "productId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "bundle",
+        "model": "Bundle",
+        "from": [
+          "bundleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SavedView": {
+    "scalar": {},
+    "compound": {
+      "userId_surface_name": [
+        "userId",
+        "surface",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "Review": {
+    "scalar": {},
+    "compound": {
+      "channel_externalReviewId": [
+        "channel",
+        "externalReviewId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "attributedRequest",
+        "model": "ReviewRequest",
+        "from": [
+          "attributedRequestId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "attributedRule",
+        "model": "ReviewRule",
+        "from": [
+          "attributedRuleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewResponse": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "review",
+        "model": "Review",
+        "from": [
+          "reviewId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewSpotlight": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ReviewActionItem": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ReviewSentiment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "review",
+        "model": "Review",
+        "from": [
+          "reviewId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewCategoryRate": {
+    "scalar": {},
+    "compound": {
+      "productId_marketplace_category_date": [
+        "productId",
+        "marketplace",
+        "category",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "ReviewSpike": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonReviewInsight": {
+    "scalar": {},
+    "compound": {
+      "asin_marketplace": [
+        "asin",
+        "marketplace"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewRequest": {
+    "scalar": {},
+    "compound": {
+      "orderId_channel": [
+        "orderId",
+        "channel"
+      ]
+    },
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "rule",
+        "model": "ReviewRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewRule": {
+    "scalar": {},
+    "compound": {
+      "name_scope_marketplace": [
+        "name",
+        "scope",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "ReviewTimingDefault": {
+    "scalar": {
+      "pattern": "workspace_pattern"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "ReviewSendWindow": {
+    "scalar": {},
+    "compound": {
+      "marketplace_dayOfWeek": [
+        "marketplace",
+        "dayOfWeek"
+      ]
+    },
+    "relations": []
+  },
+  "ReviewSentimentCheck": {
+    "scalar": {
+      "token": "workspace_token"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "rule",
+        "model": "ReviewRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "reviewRequest",
+        "model": "ReviewRequest",
+        "from": [
+          "reviewRequestId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReviewMailerState": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "EmailSuppression": {
+    "scalar": {},
+    "compound": {
+      "email_channel": [
+        "email",
+        "channel"
+      ]
+    },
+    "relations": []
+  },
+  "OrderTag": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "tag",
+        "model": "Tag",
+        "from": [
+          "tagId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AiUsageLog": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AiFeatureModelPref": {
+    "scalar": {
+      "featureKey": "workspace_featureKey"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "ProductAiDraft": {
+    "scalar": {},
+    "compound": {
+      "productId_cellKey_runId": [
+        "productId",
+        "cellKey",
+        "runId"
+      ]
+    },
+    "relations": []
+  },
+  "AgentDefinition": {
+    "scalar": {
+      "key": "workspace_key"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AgentRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "agent",
+        "model": "AgentDefinition",
+        "from": [
+          "agentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AgentTool": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AgentApproval": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "agentRun",
+        "model": "AgentRun",
+        "from": [
+          "agentRunId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AgentMemory": {
+    "scalar": {},
+    "compound": {
+      "scope_entityType_entityId_key": [
+        "scope",
+        "entityType",
+        "entityId",
+        "key"
+      ]
+    },
+    "relations": []
+  },
+  "PromptTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Goal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "DashboardLayout": {
+    "scalar": {
+      "userId": "workspace_userId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "DashboardView": {
+    "scalar": {},
+    "compound": {
+      "userId_name": [
+        "userId",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "ScheduledReport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Notification": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SavedViewAlert": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "savedView",
+        "model": "SavedView",
+        "from": [
+          "savedViewId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductTranslation": {
+    "scalar": {},
+    "compound": {
+      "productId_language": [
+        "productId",
+        "language"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductRelation": {
+    "scalar": {},
+    "compound": {
+      "fromProductId_toProductId_type": [
+        "fromProductId",
+        "toProductId",
+        "type"
+      ]
+    },
+    "relations": [
+      {
+        "field": "fromProduct",
+        "model": "Product",
+        "from": [
+          "fromProductId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "toProduct",
+        "model": "Product",
+        "from": [
+          "toProductId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductSeo": {
+    "scalar": {},
+    "compound": {
+      "productId_locale": [
+        "productId",
+        "locale"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductCertificate": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ChannelPublishAttempt": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayCampaign": {
+    "scalar": {},
+    "compound": {
+      "channelConnectionId_externalCampaignId": [
+        "channelConnectionId",
+        "externalCampaignId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayRateDiscoveryPlan": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayCampaignAutomationPolicy": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayAdGroup": {
+    "scalar": {},
+    "compound": {
+      "campaignId_externalAdGroupId": [
+        "campaignId",
+        "externalAdGroupId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayAd": {
+    "scalar": {},
+    "compound": {
+      "campaignId_listingId": [
+        "campaignId",
+        "listingId"
+      ],
+      "campaignId_inventoryReference": [
+        "campaignId",
+        "inventoryReference"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "adGroup",
+        "model": "EbayAdGroup",
+        "from": [
+          "adGroupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayKeyword": {
+    "scalar": {},
+    "compound": {
+      "adGroupId_externalKeywordId": [
+        "adGroupId",
+        "externalKeywordId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "adGroup",
+        "model": "EbayAdGroup",
+        "from": [
+          "adGroupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayNegativeKeyword": {
+    "scalar": {},
+    "compound": {
+      "campaignId_externalId": [
+        "campaignId",
+        "externalId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "EbayCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayAdsReportTask": {
+    "scalar": {
+      "externalTaskId": "workspace_externalTaskId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "EbayAdsDailyPerformance": {
+    "scalar": {},
+    "compound": {
+      "marketplace_fundingModel_entityType_entityId_date": [
+        "marketplace",
+        "fundingModel",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": []
+  },
+  "EbayListingIndex": {
+    "scalar": {},
+    "compound": {
+      "marketplace_itemId": [
+        "marketplace",
+        "itemId"
+      ]
+    },
+    "relations": []
+  },
+  "EbayListingEconomics": {
+    "scalar": {},
+    "compound": {
+      "marketplace_itemId": [
+        "marketplace",
+        "itemId"
+      ]
+    },
+    "relations": []
+  },
+  "MarketingAutomationState": {
+    "scalar": {
+      "channel": "workspace_channel"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "MarketingSpendCeiling": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace": [
+        "channel",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "EbayAdsRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "EbayAdsRuleVersion": {
+    "scalar": {},
+    "compound": {
+      "ruleId_version": [
+        "ruleId",
+        "version"
+      ]
+    },
+    "relations": [
+      {
+        "field": "rule",
+        "model": "EbayAdsRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayAdsRuleExecution": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "rule",
+        "model": "EbayAdsRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayAdsProposal": {
+    "scalar": {
+      "proposedKey": "workspace_proposedKey"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "EbayAdsDigest": {
+    "scalar": {
+      "weekStart": "workspace_weekStart"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "EbayWatcherStats": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayMarkdown": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayVolumePromotion": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "EbayVolumeTierTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ScheduledProductChange": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AutomationRule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CampaignRuleAssignment": {
+    "scalar": {},
+    "compound": {
+      "campaignId_ruleId": [
+        "campaignId",
+        "ruleId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "Campaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "rule",
+        "model": "AutomationRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AutomationRuleTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AutomationRuleExecution": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "rule",
+        "model": "AutomationRule",
+        "from": [
+          "ruleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdsRuleSuggestion": {
+    "scalar": {},
+    "compound": {
+      "ruleId_entityId_proposedKey": [
+        "ruleId",
+        "entityId",
+        "proposedKey"
+      ]
+    },
+    "relations": []
+  },
+  "AdsSuggestionMute": {
+    "scalar": {},
+    "compound": {
+      "scope_entityType_entityId": [
+        "scope",
+        "entityType",
+        "entityId"
+      ]
+    },
+    "relations": []
+  },
+  "KeywordRank": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Scenario": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ScenarioRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "scenario",
+        "model": "Scenario",
+        "from": [
+          "scenarioId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ListingReconciliation": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_externalSku": [
+        "channel",
+        "marketplace",
+        "externalSku"
+      ]
+    },
+    "relations": []
+  },
+  "FlatFilePullRecord": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "FlatFilePullJob": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CatalogOrganizeSession": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CatalogOrganizeChange": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "session",
+        "model": "CatalogOrganizeSession",
+        "from": [
+          "sessionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductReadCache": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "Category": {
+    "scalar": {},
+    "compound": {
+      "parentId_slug": [
+        "parentId",
+        "slug"
+      ]
+    },
+    "relations": [
+      {
+        "field": "parent",
+        "model": "Category",
+        "from": [
+          "parentId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CategoryClosure": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "ancestor",
+        "model": "Category",
+        "from": [
+          "ancestorId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "descendant",
+        "model": "Category",
+        "from": [
+          "descendantId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ProductCategory": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "category",
+        "model": "Category",
+        "from": [
+          "categoryId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FnskuLabelTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ProductEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ListingQualitySnapshot": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RoutingDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "order",
+        "model": "Order",
+        "from": [
+          "orderId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "FeedTransformRule": {
+    "scalar": {},
+    "compound": {
+      "name_channel_marketplace": [
+        "name",
+        "channel",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "ChannelSchema": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace_fieldKey": [
+        "channel",
+        "marketplace",
+        "fieldKey"
+      ]
+    },
+    "relations": []
+  },
+  "FbaReimbursement": {
+    "scalar": {
+      "reimbursementId": "workspace_reimbursementId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "FbaInventoryAdjustment": {
+    "scalar": {
+      "adjustmentId": "workspace_adjustmentId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "MarketingCampaign": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "MarketingCampaignLink": {
+    "scalar": {},
+    "compound": {
+      "campaignId_marketplace": [
+        "campaignId",
+        "marketplace"
+      ],
+      "externalId_marketplace": [
+        "externalId",
+        "marketplace"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AmazonAdsCampaignDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "EbayPromotedDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DiscountDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ExternalAdsDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ContentPushDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "OutreachDetail": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdMutation": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdBlueprintApplication": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdKeywordProtection": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdNegativeReview": {
+    "scalar": {},
+    "compound": {
+      "protectedTerm_campaignId": [
+        "protectedTerm",
+        "campaignId"
+      ]
+    },
+    "relations": []
+  },
+  "AdBlueprint": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CampaignTarget": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CampaignBudget": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "CampaignBudgetAllocation": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "budget",
+        "model": "CampaignBudget",
+        "from": [
+          "budgetId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CampaignBudgetRebalance": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "budget",
+        "model": "CampaignBudget",
+        "from": [
+          "budgetId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CampaignMetric": {
+    "scalar": {},
+    "compound": {
+      "channel_entityType_entityId_date": [
+        "channel",
+        "entityType",
+        "entityId",
+        "date"
+      ]
+    },
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CampaignAction": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CalendarEntry": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "campaign",
+        "model": "MarketingCampaign",
+        "from": [
+          "campaignId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdSchedule": {
+    "scalar": {
+      "campaignId": "workspace_campaignId"
+    },
+    "compound": {},
+    "relations": [
+      {
+        "field": "group",
+        "model": "RankScheduleGroup",
+        "from": [
+          "groupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RankScheduleGroup": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "RankScheduleEvent": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "group",
+        "model": "RankScheduleGroup",
+        "from": [
+          "groupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RankScheduleVersion": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "group",
+        "model": "RankScheduleGroup",
+        "from": [
+          "groupId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "BudgetSchedule": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AutopilotPlan": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AutopilotDecision": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "plan",
+        "model": "AutopilotPlan",
+        "from": [
+          "planId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "RankTarget": {
+    "scalar": {
+      "key": "workspace_key"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "RankScheduleTemplate": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "ProductRankPlan": {
+    "scalar": {},
+    "compound": {
+      "productId_marketplace": [
+        "productId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "AdAudience": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdBudgetPlan": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdProductGoal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SupplierContact": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SupplierComm": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SupplierFollowUp": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DevelopmentProject": {
+    "scalar": {
+      "code": "workspace_code"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "DevelopmentProjectSupplier": {
+    "scalar": {},
+    "compound": {
+      "projectId_supplierId": [
+        "projectId",
+        "supplierId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "project",
+        "model": "DevelopmentProject",
+        "from": [
+          "projectId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "supplier",
+        "model": "Supplier",
+        "from": [
+          "supplierId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DevelopmentAttachment": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "project",
+        "model": "DevelopmentProject",
+        "from": [
+          "projectId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "DevelopmentCertification": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "project",
+        "model": "DevelopmentProject",
+        "from": [
+          "projectId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdsAutomationState": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AmazonReportRun": {
+    "scalar": {
+      "reportId": "workspace_reportId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "SharedListingMembership": {
+    "scalar": {},
+    "compound": {
+      "marketplace_itemId_sku": [
+        "marketplace",
+        "itemId",
+        "sku"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SyncChannelPolicy": {
+    "scalar": {},
+    "compound": {
+      "channel_marketplace": [
+        "channel",
+        "marketplace",
+        "channelConnectionId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelConnection",
+        "model": "ChannelConnection",
+        "from": [
+          "channelConnectionId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SyncControlAudit": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "EbayDescriptionTheme": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AmazonTemplateVault": {
+    "scalar": {
+      "templateIdentifier": "workspace_templateIdentifier"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AmazonFamilyWorkbook": {
+    "scalar": {},
+    "compound": {
+      "familyKey_marketplace": [
+        "familyKey",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "ReportShareLink": {
+    "scalar": {
+      "tokenHash": "workspace_tokenHash"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "SavedReport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "SavedReportVersion": {
+    "scalar": {},
+    "compound": {
+      "savedReportId_version": [
+        "savedReportId",
+        "version"
+      ]
+    },
+    "relations": [
+      {
+        "field": "savedReport",
+        "model": "SavedReport",
+        "from": [
+          "savedReportId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReportSchedule": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "savedReport",
+        "model": "SavedReport",
+        "from": [
+          "savedReportId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReportDelivery": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "schedule",
+        "model": "ReportSchedule",
+        "from": [
+          "scheduleId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "AdsConsoleImport": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsConsoleRow": {
+    "scalar": {},
+    "compound": {
+      "importId_windowStart_windowEnd_campaignId_adGroupId_adId_targetId_searchTerm_placement_marketplace": [
+        "importId",
+        "windowStart",
+        "windowEnd",
+        "campaignId",
+        "adGroupId",
+        "adId",
+        "targetId",
+        "searchTerm",
+        "placement",
+        "marketplace"
+      ]
+    },
+    "relations": [
+      {
+        "field": "import",
+        "model": "AdsConsoleImport",
+        "from": [
+          "importId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CustomMetric": {
+    "scalar": {},
+    "compound": {
+      "reportId_name": [
+        "reportId",
+        "name"
+      ]
+    },
+    "relations": []
+  },
+  "AgentCharter": {
+    "scalar": {},
+    "compound": {
+      "key_version": [
+        "key",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "AgentCharterRevision": {
+    "scalar": {},
+    "compound": {
+      "charterKey_revision": [
+        "charterKey",
+        "revision"
+      ]
+    },
+    "relations": []
+  },
+  "AgentEvalRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentControlAudit": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentObservation": {
+    "scalar": {},
+    "compound": {
+      "key_entityType_entityId_marketplace": [
+        "key",
+        "entityType",
+        "entityId",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "AgentFinding": {
+    "scalar": {},
+    "compound": {
+      "charterKey_entityType_entityId_dedupeKey": [
+        "charterKey",
+        "entityType",
+        "entityId",
+        "dedupeKey"
+      ]
+    },
+    "relations": []
+  },
+  "AgentPlan": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentStrategy": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentStep": {
+    "scalar": {},
+    "compound": {
+      "agentRunId_seq": [
+        "agentRunId",
+        "seq"
+      ]
+    },
+    "relations": []
+  },
+  "AgentExemplar": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentScorecard": {
+    "scalar": {},
+    "compound": {
+      "charterKey_periodStart_periodEnd": [
+        "charterKey",
+        "periodStart",
+        "periodEnd"
+      ]
+    },
+    "relations": []
+  },
+  "GraphEdge": {
+    "scalar": {},
+    "compound": {
+      "fromType_fromId_toType_toId_relation": [
+        "fromType",
+        "fromId",
+        "toType",
+        "toId",
+        "relation"
+      ]
+    },
+    "relations": []
+  },
+  "AgentFleetState": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentShadowGrade": {
+    "scalar": {
+      "findingId": "workspace_findingId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AgentWorkflow": {
+    "scalar": {
+      "key": "workspace_key"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AgentWorkflowRevision": {
+    "scalar": {},
+    "compound": {
+      "workflowKey_revision": [
+        "workflowKey",
+        "revision"
+      ]
+    },
+    "relations": []
+  },
+  "AgentAssignment": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AgentFindingRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AdsHarvestPolicy": {
+    "scalar": {},
+    "compound": {
+      "scopeGrain_scopeId_kind": [
+        "scopeGrain",
+        "scopeId",
+        "kind"
+      ]
+    },
+    "relations": []
+  },
+  "AdsHarvestDestination": {
+    "scalar": {},
+    "compound": {
+      "scopeGrain_scopeId_matchType": [
+        "scopeGrain",
+        "scopeId",
+        "matchType"
+      ]
+    },
+    "relations": []
+  },
+  "SqpReportRequest": {
+    "scalar": {
+      "reportId": "workspace_reportId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AdSpendCeiling": {
+    "scalar": {},
+    "compound": {
+      "grain_scopeId": [
+        "grain",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
+  "AdBidPolicy": {
+    "scalar": {},
+    "compound": {
+      "grain_scopeId": [
+        "grain",
+        "scopeId"
+      ]
+    },
+    "relations": []
+  },
+  "AdWriteRefusal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "AutomationRefusalDaily": {
+    "scalar": {},
+    "compound": {
+      "actorKind_actorId_dayUtc_reason": [
+        "actorKind",
+        "actorId",
+        "dayUtc",
+        "reason"
+      ]
+    },
+    "relations": []
+  },
+  "KeywordBidProposal": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
+  },
+  "EventOutbox": {
+    "scalar": {
+      "eventId": "workspace_eventId"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "CategoryChannelMapping": {
+    "scalar": {},
+    "compound": {
+      "categoryId_channel_marketplace": [
+        "categoryId",
+        "channel",
+        "marketplace"
+      ]
+    },
+    "relations": [
+      {
+        "field": "category",
+        "model": "Category",
+        "from": [
+          "categoryId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "CellFormula": {
+    "scalar": {},
+    "compound": {
+      "productId_scope_channel_marketplace_locale_fieldKey": [
+        "productId",
+        "scope",
+        "channel",
+        "marketplace",
+        "locale",
+        "fieldKey"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "MasterFieldRule": {
+    "scalar": {},
+    "compound": {
+      "productType_fieldKey": [
+        "productType",
+        "fieldKey"
+      ]
+    },
+    "relations": []
+  },
+  "MasterFieldRuleRevision": {
+    "scalar": {},
+    "compound": {
+      "productType_fieldKey_version": [
+        "productType",
+        "fieldKey",
+        "version"
+      ]
+    },
+    "relations": []
+  },
+  "MarketplaceTaxonomy": {
+    "scalar": {},
+    "compound": {
+      "taxonomy_scope": [
+        "channel",
+        "marketplace"
+      ]
+    },
+    "relations": []
+  },
+  "MarketplaceTaxonomySnapshot": {
+    "scalar": {},
+    "compound": {},
+    "relations": [
+      {
+        "field": "source",
+        "model": "MarketplaceTaxonomy",
+        "from": [
+          "sourceId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "MarketplaceTaxonomyNode": {
+    "scalar": {},
+    "compound": {
+      "taxonomy_node": [
+        "snapshotId",
+        "externalId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "snapshot",
+        "model": "MarketplaceTaxonomySnapshot",
+        "from": [
+          "snapshotId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  }
+}

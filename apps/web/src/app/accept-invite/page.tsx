@@ -1,10 +1,12 @@
 'use client'
+import AcceptWorkspaceInvitation from '../accept-workspace-invite/page'
 
 /** Phase S3 — accept an invitation (?token): preview it, set a password,
  *  and get auto-signed-in. */
 
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
 import { installAuthFetch } from '@/lib/auth/install-fetch'
 import { setCsrfToken } from '@/lib/auth/csrf-store'
@@ -93,5 +95,6 @@ function AcceptInner() {
 }
 
 export default function AcceptInvitePage() {
+  if (process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1') return <AcceptWorkspaceInvitation />
   return <Suspense fallback={<AuthCard title="Accept invitation" subtitle="Loading…"><div /></AuthCard>}><AcceptInner /></Suspense>
 }

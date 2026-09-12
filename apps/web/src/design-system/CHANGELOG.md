@@ -1,8 +1,265 @@
+## VP.F Variants final pass — 2026-09-11
+
+Added SummaryTable for compact drawer comparisons and OrderedList.keyboardGrip/compact for 28px rows with drag plus keyboard order. BulkActionBar Clear now composes the shared sm Button. Sheet toolbars use one 40px band. Projection Needs a value uses the shared row missing/warning tone. Semantic tokens cover light/dark.
+
 # Changelog — Nexus Design System
+
+## Scrolling tab bars — 2026-09-11
+
+`Tabs overflow="scroll"` constrains long labels to the host width and keeps the active tab visible. Arrow, Home and End navigation retains the existing roving focus behavior. Optional mode preserves existing consumers; mirrored in Factory and used in Products → Categories.
+
+## Quiet channel cells — 2026-09-10
+
+`TooltipPortalProvider disabled` renders labelled controls without tooltip wrappers, portal state or hover listeners, including nested providers and explicit portal hints. Channel sheets use it around the grid body and offer full cell explanations through Cell details. Header help and toolbar hints remain available. The provider and regression tests are mirrored in Factory; Factory has no channel grid or TokenCatalog. Measure cells expose the full unit through their accessible label without a competing native title.
+
+## Mixed product media — 2026-09-10
+
+`MediaPreview` supplies image, native video/audio, external-video and unknown-file presentation. Native playback is explicit; video supports alternative sources, posters, language-labelled WebVTT tracks and a transcript disclosure. Failed previews and caption loads announce a useful fallback. File links reject executable protocols; existing image-only data URL previews remain supported.
+
+`MediaStrip` is non-interactive grid content with poster thumbnails, type icons, missing-preview handling and a full media count. The grid owns the edit action. `MediaGalleryItem.mediaType` and `placeholder` carry these same distinctions through the keyboard-reorderable gallery. These components preserve normal Nexus control sizes and are mirrored in Factory.
+
+
+## Anchored Information editors — 2026-09-10
+
+`Modal.anchor` keeps a cell editor in context on desktop with viewport clamping and the existing focus boundary; narrow screens use the normal modal. `MediaGallery` supports optional removal, one-based position selectors, keyboard pickup/move/drop/cancel and visible insertion feedback. Existing control sizes are retained. Both additions are demonstrated in the media catalog and mirrored in Factory.
+
+## Readable ordering labels — 2026-09-09
+
+`OrderedList.itemLabel` names ordering controls and live announcements independently of stable resource IDs. Shopify linked products and reference lists consume it. Control geometry and keyboard actions are unchanged; component and catalog documentation are mirrored in Factory.
+
+## Shopify file previews — 2026-09-08
+
+`MediaCard` supports missing preview URLs and a file-type placeholder. Documents and processing media retain the same keyboard preview action and card geometry without issuing broken image requests. The shared CDN helper now sizes Shopify image URLs while retaining their version parameters. The component, helper and catalog specimen are mirrored between Web and Factory.
+
+## Sub-sidebar tooltip dismissal — 2026-09-08
+
+Portal tooltips dismiss on activation and Escape, and distinguish pointer focus from keyboard focus. Returning focus after a disclosure closes no longer reopens its hint; keyboard navigation inside an expanded disclosure does not rearm the opener. Fresh pointer movement or a subsequent keyboard visit can show the hint again. The interaction logic and regression tests are mirrored in Factory. No focus restoration, control sizes, styles, or timing tokens changed.
+
+## Grid lifecycle — 2026-09-08
+
+`useGridLifetime` binds the current grid instance, clears it on `onGridPreDestroyed`, and exposes `getApi()` for deferred work. Its reactive `gridApi` identifies replacement grids so hosts can reapply their column layout. A late teardown cannot clear a newer instance. The hook is mirrored in Factory without an AG runtime dependency. Product sheet adapters remain Web-only.
+
+## Account profile assignment — 2026-09-08
+
+AccountsPanel adds optional `onAssignProfile`, `includeDisconnected` and `onChanged` props. The host owns destination selection and review. Inactive accounts retain Reconnect but omit Test, Make primary and Disconnect. Defaults preserve existing consumers.
+
+## ScopeBar active destination visibility — 2026-09-08
+
+The selected scope stays visible inside the chip track after navigation, label updates and resizing. Scrolling is immediate and confined to the track; focus, roving arrow keys and page position are preserved. Factory now includes the same ScopeBar, readiness vocabulary and base styles that its existing workspace layout referenced.
+
+## Light shell semantic colors — 2026-09-08
+
+The shared token source now exposes `--nds-info-text-light` as the stable light information color. Web and Factory generate the same light `--nds-info-text` alias. Web's light shell pins information, tonal and selected-filter roles, including portals, without changing control sizes. The shell guard parses selector lists and resolves aliases in the correct theme and pin contexts, so a generated `.dark, ...` selector cannot be mistaken for light CSS. Information Pill and Tag now use the dedicated text role: deep blue in light mode and primary text in dark mode. Both exceed 7:1 on their information surface. See the catalog theme verification notes.
+
+## Drawer keyboard visibility — 2026-09-07
+
+Modal Drawer excludes controls inside collapsed disclosures from its focus wrap. Geometry alone is insufficient because Chromium may retain rectangles for closed details content. Visibility, tab index, hidden/inert ancestors and closed details are now checked together. The catalog includes a collapsed-action example; source and documentation are mirrored in Web and Factory without control-size or token changes.
+
+## Listbox focus recovery — 2026-09-07
+
+Selecting an option or dismissing Listbox with Escape returns keyboard focus to its trigger. Tab can then continue to the next field instead of restarting from the document. Click-away retains focus at the clicked destination. The shared fix is mirrored in Web and Factory without control or token changes.
+
+## Save recovery — 2026-09-07
+
+The Web-only SheetWriter supports scoped recovery reads with product/listing versions and domain checks for reference names and reset inheritance. It preserves newer queued edits, rejects late results after discard, compares structured values, and exposes unconfirmed-cell counts for Reload review. The grid catalog includes an unconfirmed-save Reload specimen. Existing Modal, Button, Input and grid status surfaces retain their sizes and styles. Factory has no grid writer adapter; both catalogs document this boundary.
+
+
+## Family action cancellation — 2026-09-07
+
+The Web-only grid action runner accepts `ActionImpact.cancelled` from a parameter picker and returns its existing silent cancellation outcome before confirmation or execution. The Web grid catalog demonstrates cancelled selection and demotion with named children. Product pickers compose the existing shared Modal and AsyncListboxPanel. AsyncListboxPanel now marks its search field for Modal’s initial focus; this shared change is mirrored in Web and Factory. Control sizes and styles are unchanged. Factory has no grid action adapter to mirror.
+
+## Tooltip token parity — 2026-09-07
+
+Factory now defines the shared tooltip foreground/background roles already used by Web. The token resolution guard recognizes actual TypeScript object style assignments (including grid geometry and portal arrow positioning), while rejecting documentation and type-only declarations as definitions. Shared component export order is aligned.
+
+## Information grid states — 2026-09-07
+
+`GridLoadingOverlay.rowKind` matches text, media and single-line thumbnail rows at the selected density. Existing `media` callers retain their behavior. The React overlay wrapper fills the grid width so percentage-width skeleton lines remain visible. The Web grid catalog includes a product-row loading specimen. Information sheets use Nexus loading/empty overlays and shared error/retry controls; unavailable reads disable layout and data actions while retaining recovery. Grid adapters remain Web-only, as documented in both platform READMEs; Factory has no grid adapter to mirror.
+
+## Account permission accuracy — 2026-09-07
+
+`AccountsPanel` distinguishes an unrecorded OAuth grant from recorded missing permissions. An empty grant list shows neutral explanatory text and a plain Reconnect action; it no longer claims every catalog permission was denied. Recorded grant shortfalls retain the warning and count. Web and Factory share the behavior and regression coverage.
 
 Newest first. Each shipped phase is an entry. Token-value changes that
 intentionally restyle the app, and breaking changes to token names or primitive
 props, are called out explicitly with a migration note.
+
+## Asynchronous choice panel — 2026-09-07
+
+`AsyncListboxPanel` composes Field, Input, ListboxPanel and Buttons for externally loaded choices. It provides loading, empty, error, retry and cancel states with standard small controls. The caller owns fetching and filtering; the panel commits option values only, skips disabled options, and keeps the input's active descendant synchronized with grouped choices. Escape cancels and Tab reaches actions without stepping through every option. `ListboxPanel.optionTabIndex` is optional, preserving existing consumers. Product categories, description themes and shipping templates consume this panel. Source and catalog examples are mirrored in Factory.
+
+## Dense header metadata spacing — 2026-09-07
+
+`DetailHeader dense` reserves its metadata track up to half the title area above the mobile breakpoint. Identity text truncates inside that track while fixed pills stay clear of autosave and actions. This fixes the product header overlap at 900px and leaves the existing mobile wrapping behavior intact. The layout rule is mirrored in Factory.
+
+## Compact formula editor — 2026-09-07
+
+Formula cells and forms use the standard Nexus `sm` controls (28px), concise in-context guidance and one consistent action row. Add text and Help are disclosed on demand; opening either hides suggestions. The body scrolls without shrinking its children into overlapping controls, while the grid action row stays visible. Formula text and its caret share the same measured font and bounds, including after resizing; code ligatures are disabled so `===` remains three visible equals signs. The field owns its focus ring, eliminating the clipped inner-input outline.
+
+`ListboxOption` adds optional `searchText` and `trailing` values. Formula suggestions show each field label once with its current value at the end; technical references remain searchable and available in the option tooltip. `ListboxPanel` measures active rows relative to its own scroll viewport, preserving the first heading and keeping keyboard-selected rows visible in a static editor. Shared Listbox and readable-focus changes are mirrored in Factory. The Web catalog includes a 320px formula form.
+
+## Mapping status contrast — 2026-09-07
+
+Information pills and tonal selected controls now use dark semantic text and surfaces. Information-pill contrast on its dark wash rises from 2.25:1 to 11.23:1. Factory also declares the missing light `--nds-info-strong` role. `MappingStatusExample` exercises both treatments in the catalog; source changes are mirrored between Web and Factory.
+
+## Formula recovery and accessible controls — 2026-09-07
+
+`Modal readable` and the shared `nds-readable` composition provide primary semantic text and a visible keyboard focus ring without changing control sizes or input typography. Modal also makes background content inert, respects nested dialogs and honors `data-autofocus` without a Strict Mode focus jump. `SegmentedControl wrap` accommodates longer choices on narrow screens. `DataGrid keyboardScroll` adds a labelled keyboard focus stop only when its table overflows; `ListboxPanel ariaLabel` names external suggestion lists. Shared source and styles are mirrored in Factory.
+
+The Web formula editor uses these controls, includes `===` comparison guidance and improves reference-token contrast. Bulk Apply and Formula history share the same guidance and expose persisted progress, safe continuation and undo after reload. The opt-in development specimen uses a disposable database; see the catalog documentation for commands and verification scope.
+
+## Formula workflow consistency and modal access — 2026-09-06
+
+Added the web grid's exported `FormulaComposer` and `FormulaGuidance`, shared by drawer fields and bulk previews. Insert field and Add text build expressions with the correct quoting; abortable previews include connection retry. Formula replacement accepts the literal value for an atomic save. The per-product save queue refreshes once after all writes settle and handles unmount/Strict Mode cleanup.
+
+Shared `Modal` traps Tab, restores its opener, lets the top dialog handle Escape, preserves a scoped dark theme, and wraps footer actions at narrow widths. Formula guidance and modal explanatory text use primary semantic text for stronger contrast. Modal source and layout changes are mirrored in Factory. The web-only grid adapter stays in Web. Catalog documentation records the shared behavior.
+
+## Guided formula editing — 2026-09-06
+
+The web grid's shared formula selector keeps text, long text, and numeric cells formula-aware after opening; structured controls can switch to formulas with `=`. The editor provides immediate guidance, keyboard suggestions, same-row reference picking, live results, and explicit Apply/Cancel. Invalid formulas stay open when submitted. Copy/fill carries expressions so each target row evaluates its own fields. `ListboxPanel` exposes an ID for combobox `aria-controls`; that shared change is mirrored in Factory. See the web catalog's `#formula-editor-example`.
+
+## Workspace navigation and neutral notices — 2026-09-06
+
+Secondary navigation links, group labels, and neutral Banner descriptions now use `--nds-text` for AAA normal-text contrast in light and dark themes. Navigation geometry and interaction remain unchanged.
+
+## Responsive drawer actions — 2026-09-06
+
+- Drawer footers wrap action buttons and retain their height at narrow widths. A 390px listing-preset review previously placed its Close button at x=-157px; shared wrapping keeps actions within the panel. Desktop single-row footers retain their geometry.
+
+## Embedded editors — 2026-09-06
+
+- Added `Drawer mode="embedded"` for reusable editors within a page. It retains shared header/body/footer/confirmation content and respects surrounding navigation. Existing modal and dock behavior is preserved. Both catalogs include a specimen.
+- Fixed the info wash in dark mode using the existing semantic primary wash and link text roles; the previous light wash made Banner text difficult to read.
+
+## Catalog and product workspace integration — 2026-09-06
+
+- Added `OrderedList`: controlled ordering with optional drag grips, keyboard-operable move buttons, disabled boundaries and live position announcements. The eBay axis/value editor consumes it while preserving the existing ordering service and presets.
+- Added the `nds-workspace-scope` ScopeBar layout for an independent, wrapping scope row below WorkspaceSubheader. The title toggle divider ends above this row and reserves no content column.
+- Added an interactive OrderedList catalog specimen. Shared components, styles, exports and catalog documentation are mirrored to Factory.
+
+
+## Shared column customization — 2026-09-06
+
+- Adopted the grouped product modal across advertising WorkspaceGrid, DataGrid, Campaigns, and reporting section controls. Search, group operations, multi-selection, and keyboard reorder remain in the shared Nexus implementation.
+- Replaced the older `ColumnCustomizer` dialog with a compatibility adapter to `PreferencesModal`; updated the catalog and mirrored the modal, logic, and grouped styles to Factory.
+- Normalized grouped order before confirmation and saved-view writes. Advertising stores now retain hidden-column order, group assignments, and locks alongside their existing preferences; old keys and layouts still load.
+- Connected operator locks to actual AG Grid pins, including Campaigns' four-column Bid Algorithm bundle. Resizing and header moves retain the new layout metadata.
+
+## Workspace secondary navigation — 2026-09-06
+
+- Added `WorkspaceSubheader`: a 48px toggle cell beside the title and tabs, with no reserved column below the strip. The 224px secondary panel overlays the workspace, follows measured shell edges, scrolls internally and fills the available workspace at narrow widths.
+- Extended `Drawer` with optional left placement, shell insets, a transparent dismissal backdrop and a labelled collapse icon. Escape, focus containment/restoration and reduced motion apply. Outside dismissal consumes the click.
+- Extended `Menu` with controlled state, selected destinations, keyboard navigation and routing adapters; `DetailHeader.titleMenu` places it beside the heading. Sidebar and title menu share one open-surface state. Links retain browser-native modified-click behavior.
+- Product Studio consumes existing visible views and permission-filtered catalog destinations. View links retain scope, market, locale and record context. Its global header is visible; compact search and a stacked subheader keep narrow layouts usable.
+- Shared source/styles are mirrored in Factory, including its previously un-emitted spacing scale. The catalog example includes a long-list and long-label specimen at `/design-system#workspace-subheader-example`.
+
+## Value source indicators — 2026-09-06
+
+- Added `SourceIndicator`: consistent icons with accessible source descriptions, optional labelled actions, focus/hover portal tooltips and a visible-label mode for legends. Informational sources remain keyboard accessible without offering a disabled action.
+- Channel sheets show a chain for Master, a pin for listing overrides, and distinct mapping/default/missing/link/formula states. Resolver source metadata distinguishes a missing Master value from an unmapped attribute. Defaults and expressions do not claim to follow Master.
+- Cell controls use a 24px target and semantic text/focus colors. The component, styles and export are mirrored in Factory; examples are in the catalog’s component section.
+
+## Advertising AG Grid adapters and tooltip layer — 2026-09-06
+
+- Web advertising uses `grid/workspace` and `grid/datagrid` behind the existing Nexus props and saved preferences. Other platforms retain their current grid imports.
+- Workspace selection and starting page now synchronize after AG initializes. Keyboard navigation follows the displayed page; embedded controls keep native Tab behavior.
+- DataGrid preserves content-driven detail-row heights, accessible grid labels, and in-cell input focus during parent updates.
+- Added `Tooltip portal` and `TooltipPortalProvider`. The advertising adapters enable the shared tooltip layer above sticky headers and scrolling panes, including first-row action buttons. Inline tooltips elsewhere retain their existing mode. Portal tooltips support focus, Escape, scroll/resize positioning, and viewport clamping.
+- Advertising theme roles live in `tokens/workspace.ts`; shared tokens and tooltip changes are mirrored in Factory. The web grid engines are not installed in Factory.
+- Reusable examples: `/design/grid-lab` (advertising comparison scenarios) and the Tooltip section of `/design-system`.
+
+## Catalog transfer alignment — 2026-09-06
+
+- `/products/catalog-transfer` now composes Nexus headers, cards, tabs, fields,
+  listboxes, radio cards, file dropzone, banners, metrics, progress, table and
+  pagination. Feature CSS handles layout and domain content using `--nds-*` tokens.
+- Added `Disclosure` for collapsible supporting content, with native keyboard
+  semantics, tokenized focus and expanded chevron. Closed/open examples live in
+  the catalog. Its props extend native details attributes and add `summary`.
+- Added optional `ariaLabel` to `DataGrid` and `ProgressBar`, preserving accessible
+  names during migration. Existing consumers render as before when omitted.
+- Shared component and style changes are mirrored in the factory design system.
+
+## [PES.1c] — 2026-09-01 — `--nds-z-modal` → `--nds-z-drawer` (naming only)
+
+Found by PES.4's z-order bug and diagnosed at the token: **`--nds-z-modal` (1410) had exactly ONE
+consumer in either app — `.nds-drawer`.** Modals have no layer of their own; `.nds-modal` renders
+inside `.nds-backdrop`, which is `--nds-z-overlay` (1400). So a token named for MODALS was the
+drawer's layer, sitting above the layer modals actually occupy — which is how a confirmation raised
+from inside a drawer rendered behind it. `--nds-z-drawer` was an unused name.
+
+- Renamed at source (`tokens/css-vars.ts`) in both apps, regenerated `tokens.css` /
+  `tokens-global.css`, and moved the single consumer in each app's `components.css` together.
+- **Value unchanged (1410) — zero visual change, verified**: a real `.nds-drawer` element still
+  computes to `1410`, `--nds-z-overlay` is still `1400`, and `--nds-z-modal` no longer resolves.
+- ⚠ NOT changed, and queued for the Owner: **whether a confirmation should out-rank a drawer at
+  all.** That is a stacking decision touching every modal+drawer pair app-wide, and it is a
+  different question from what the layer is called. This entry only removes the trap that made the
+  wrong answer look right.
+
+## [PES.1b] — 2026-09-01 — Tabs becomes a real tablist
+
+Parity audit rows 1.22 / 1.24 / 8.16 found the DS `Tabs` bar was a tablist in ROLES only. Fixed at
+the DS layer, because fixing it on the page that noticed would fork it and leave every other
+consumer with the same gap.
+
+- **Keyboard navigation** — roving tabindex plus ←/→/Home/End, modelled on `ScopeBar`. Measured
+  before the change: **zero** `onKeyDown`/`ArrowRight` in the file.
+  ⚠ **Intentional behaviour change for every consumer:** the bar is now ONE tab stop instead of one
+  per tab, and arrows move within it. That is the ARIA tablist pattern and is what a keyboard user
+  expects, but it does change tab order on ~a dozen existing surfaces. Verified on `/design-system`:
+  1 tabbable tab of 3, ArrowRight moved Overview→Targeting, focus followed the selection.
+- **The `tab` ↔ `tabpanel` pairing** — an opt-in `idBase` makes each tab emit `id` + `aria-controls`,
+  and the exported `tabPanelProps(base, activeId)` gives the caller the matching
+  `id` / `role="tabpanel"` / `aria-labelledby` for its panel. ARIA wants the relationship stated from
+  BOTH ends; the bar previously stated it from neither.
+  **Non-breaking, verified:** without `idBase` no `id` or `aria-controls` is emitted, so existing
+  consumers are untouched.
+- Mirrored into `apps/factory` (`Tabs.tsx` + `components/index.ts`) — both were files the fork-drift
+  ratchet holds identical.
+
+## [PES.1] — 2026-09-01 — The scope bar, and a detail header that can be page chrome
+
+Built for the Product Edit Studio's frame (`docs/2026-09-01-product-edit-studio-layout.md`, lane
+PES.1), in the DS rather than beside the page that needed them.
+
+- **`ScopeBar`** (`patterns/ScopeBar.tsx`) — choose which LAYER of a record you are editing: a base
+  scope plus one chip per channel, each carrying how complete that scope is, an optional `[+]`, and a
+  `right` slot for the coordinate controls those chips are read at.
+  - Readiness states and their tone/label come from PES.2's `readinessMeta(state, 'scope')`
+    (`grid/renderers/readiness.ts`) — this pattern re-exports the type and does not re-declare it,
+    and the status dot is keyed on the returned TONE, not on the state name. A local
+    `state === 'blocked' ? 'danger' : …` in the bar or in CSS would be a second copy of a mapping
+    that two surfaces must agree on. Imported by its deep path because that module is pure; the
+    `design-system/grid` barrel would pull the AG engine into a chip row.
+  - The percentage is allowed to be `null`. 🔴 `null` renders `—`, never `0%`: in a completeness vocabulary `0%` states
+    that everything required is missing, which is a strong and usually false claim about a scope
+    nobody has scored yet. `absent` draws a HOLLOW dot so "no answer" does not become a fourth status
+    colour to learn.
+  - A `radiogroup`, not a tablist — one choice out of N, beside a surface that has its own real tab
+    strip. Roving tabindex, arrows/Home/End move the selection.
+  - `label` is a visible eyebrow AND the group's accessible name (`aria-labelledby`), so the two
+    cannot drift apart the way a visible label plus a separate `aria-label` does.
+  - ⚠ It is **not a filter bar**. It changes which stored layer the surface is reading and writing,
+    not which rows pass. The ads console's `*ScopeBar` files answer the other question and were
+    merged into `AdsFilterBar`; that bar was re-forked at least three times precisely because it
+    never became one DS component, which is why this one starts here.
+- **`DetailHeader` gains a `dense` form** — the same component as a one-row PAGE BAND: back link
+  inline before the title, 48px, a bottom hairline instead of a bottom margin. New optional props:
+  `dense` · `meta` (identity that travels with the title) · `status` (a live, non-clickable state
+  region, kept apart from `actions`) · `backAsChild` (render the back control as the caller's own
+  `<Link>`, the `Button asChild` idiom — a real anchor is the only back control that honours
+  ⌘-click, middle-click and "Open in new tab").
+  - **Non-breaking, and verified so:** with the new props omitted the DOM is unchanged, including
+    not introducing the `.nds-detailhdr-right` wrapper unless `status` is passed. Its only consumer
+    is the DS catalog.
+  - Mirrored into `apps/factory` byte-identically — the file is one the fork-drift ratchet holds
+    identical in both apps.
+- Both are in the catalog (`/design-system`), and both are on `--nds-*` only.
+- **Contrast, measured on the live frame:** the eyebrow labels first shipped on `--nds-text-3`
+  (#7e8796) and measured **3.62:1** and **3.20:1** — that token clears the 3:1 ICON floor, not the
+  4.5:1 TEXT floor. Moved to `--nds-text-2`; 16 of 16 text/graphic probes now pass their floor.
+  `--nds-text-3` survives only on the `[+]` glyph and the hollow-dot ring, which are graphics.
 
 ## [GDS-4] — 2026-08-29 — The master sheet: a bounded sheet host, sheet cells, sheet validation
 
@@ -748,3 +1005,61 @@ consistency pass. Full map in `docs/AUDIT.md`; design at
   fork). Supersedes the unapproved `docs/UI_REBUILD_STRATEGY.md`.
 - **Decision:** keep the `.h10-*` class prefix until a Phase 9 rename.
 - Non-destructive: no existing page or stylesheet changed.
+
+- Added `nds-theme-responsive`: an opt-in theme boundary that uses the generated DS dark palette inside legacy shells and their portals. No duplicated feature palette.
+
+
+## 2026-09-07 — Media gallery composition
+
+Added MediaCard and MediaGallery: uncropped inspection, separate selection, explicit image failure, stable ordering, keyboard/pointer parity and removal announcements. Media uses standard Nexus control sizes; the initial 44px wrapper and ToolbarButton expansion were removed after visual review. Components, exports, styles and catalog specimen are mirrored in Web and Factory.
+
+
+### Control density correction — 2026-09-07
+
+Removed Media’s blanket control overrides and its unused 44px ToolbarButton tier. MediaGallery uses standard 28px toolbar actions with consistent spacing. `nds-readable` / `Modal readable` now affect contrast and focus only; they no longer force 44px controls or 18px input text. The Media catalog compares ordinary and readable controls using the same size props. Web and Factory are mirrored.
+
+### Media navigation — 2026-09-07
+
+Added the decorative `PressableRow.leading` slot for thumbnails in gallery navigation. Selection remains on the labelled row action, with no nested control or density override. Catalog example, source and styles are mirrored in Factory.
+
+Embedded Drawer headers now wrap long titles/subtitles within their text column, keeping Close aligned at the trailing edge. Modal sets its semantic text color on the root so plain footer text remains readable when portaled outside a dark shell. Neither correction changes control dimensions.
+
+- 2026-09-07: Restored Factory pattern token parity with Web for 54 platform aliases. Shared patterns now reference their existing semantic Nexus tokens directly; layout and component density are preserved.
+
+Account scope chips retain inactive marketplaces for history and explicitly label them “inactive” using the API’s participation state. They no longer imply that every stored marketplace is currently accessible.
+
+`AccountsPanel` now uses its own container width to wrap actions below account details at 640px and below. This keeps identity, permission text, color choices and Test/Reconnect controls readable in narrow settings panels. Check 320px and 390px viewports in both themes.
+
+
+## Grid guard cleanup — 2026-09-08
+
+The Web formula sample keeps `getRowId` and its save callback stable. New mapping, listing-preset, catalog-transfer and formula-review consumers import `DataGrid` from `design-system/grid/datagrid`; the legacy table remains available for existing consumers and the comparison lab. The adapter honors `keyboardScroll` through AG cell focus and arrow-key navigation. Grid consumers import `CellClassParams` through the public grid barrel alongside the existing grid types.
+
+The frozen Web comparison stylesheet scopes selection inputs to direct children of legacy selection cells, removes unused bulk/eBay checkbox and native-pager selectors, and names its radius values. `--nds-wsgrid-legacy-badge-radius` (4px) and `--nds-wsgrid-legacy-control-radius` (5px) preserve the reference's existing shapes; standard controls keep the current radius scale. These two token roles and generated CSS are mirrored in Factory. The AG adapter, formula catalog sample and comparison lab are Web-only.
+
+
+Business profiles (2026-09-08): AccountsPanel describes account selection within the current business. Connection activity explanations use customer-facing language.
+
+Amazon Seller migration (2026-09-08): AccountsPanel now offers a primary, explicit replacement action for env-managed accounts when the host supplies reconnect. Application-role grants are described without inventing OAuth scope counts, and environment credentials remain visibly active until Seller Central sign-in completes. Mirrored in Factory.
+
+- OrderedList omits unavailable reorder controls for a single item; multi-item keyboard and pointer ordering is unchanged.
+
+- MediaGallery `compact` keeps a larger featured first tile, contain-fit previews and keyboard move handles; contextual menus expose earlier/later/first and exact position actions.
+
+- 2026-09-10: Added `CellAction` for grid disclosures and optional thumbnail reordering in `MediaStrip`. Pointer gestures retain cell focus without starting range selection. Removed competing native thumbnail titles. Portal hints are hoverable and Escape-dismissable, skip drag hover, and use stronger secondary text contrast. Web's grid adapter now dispatches column-level open handlers for fill-handle double-clicks as well as the host handler; Factory has no grid adapter.
+
+## Information structured records — 2026-09-11
+
+`RecordListInput` composes typed fields into repeatable records. It preserves unknown saved properties, stable option codes, explicit zero/false and empty lists. Add/remove announces the change and restores focus to the affected record. Layout wraps with container width; shared tokens and controls provide light/dark presentation.
+
+### Grid host position — 2026-09-12
+
+`useGridHostTop` observes the sheet and its parent as well as the viewport, so late-loading bands preserve the 8px bottom gutter. The hook is mirrored in Factory; the AG GridSheet host exists only in Web.
+
+OrderedList keyboard grips use pointer capture for drag, including touch input; Escape cancels a drag. Native drag support remains for the existing non-button grips.
+
+FilterChip compactLabel keeps docked sheet actions in one row at 1280px; the trigger retains its full accessible label.
+
+2026-09-12: `usePointerReorder` shares captured pointer dragging across vertical OrderedList grips and horizontal AxisChip groups; keyboard reordering stays available through OrderedList.
+
+2026-09-12 VP.F: FilterChip compact/full labels preserve the shared horizontal icon-and-text alignment, including SVG block defaults.

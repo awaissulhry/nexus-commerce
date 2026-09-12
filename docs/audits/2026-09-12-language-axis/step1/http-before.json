@@ -1,0 +1,407 @@
+{
+  "at": "2026-09-11T23:07:36.736Z",
+  "phase": "before",
+  "endpoint": "http://127.0.0.1:8091/api/products/:id/global",
+  "familyRows": 21,
+  "rows": [
+    {
+      "id": "cmokmy0jf0003pm0ppnu1b2yy",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "b900db2f312421a03d97546bc111fe25101992baefe8cf5706e69d37b295664c"
+    },
+    {
+      "id": "cmokmy0jt0004pm0p0gaufo1b",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "4ea8268ab2fadcfc9f2c9b01d25d8ffd3e72cf07aac2c61e0533a17b128ad7b7"
+    },
+    {
+      "id": "cmokmy0k70005pm0puvz2ucxu",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "d63ae455c646d6dd8bcb9daf81dd1e632ef54619c2561d92700d02e9f6ac07d0"
+    },
+    {
+      "id": "cmokmy0kl0006pm0p9auaundx",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "2f26a4096b75b5400ab3c5d91b9f2824246445d17e1a0edc34d14b3ec79e0bdb"
+    },
+    {
+      "id": "cmokmy0ky0007pm0p3vj7q0mh",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "c878010bceea20fa5fc38b3bb78d67a6452c549388f53e871576767cda5e6413"
+    },
+    {
+      "id": "cmokmy0lc0008pm0p2thzmlqq",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "dee3d486139d620657cdc6d757c9133acf625b2425f64ea4ac778e186b42a4a8"
+    },
+    {
+      "id": "cmokmy0lr0009pm0p9yxk7ho0",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "082f1423c27cfa3c91e939ef6958aabd812bb1891ae933c1af1d04d1bd4c797a"
+    },
+    {
+      "id": "cmokmy0m9000apm0pm52rd77m",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "5ecb6be8a51439d7e7bc2ad9f0be805130c50cdb684445f32e577d0585bb5905"
+    },
+    {
+      "id": "cmokmy0mm000bpm0pm7k7eke4",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "936fecb7b3a326dc1c1ff80bfbb57b5508faa7e7dcf337fb4e2d7f577b24047e",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "936fecb7b3a326dc1c1ff80bfbb57b5508faa7e7dcf337fb4e2d7f577b24047e",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "9446f386fd5b4276c284ad2cf50eb7071b06ca765ca846bbe277d0fe23a7a7f7"
+    },
+    {
+      "id": "cmokmy0n4000cpm0ptkjitr0f",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "2438b7f40a4ce534b8826f8490900e61c03be394c1c95cd2393f9b9a8e8374cb"
+    },
+    {
+      "id": "cmokmy0ni000dpm0p2xvcpkma",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "88c017d9b366c499426d6ab8db58b945e911a0c4ebf2684c6ab808ff4e97be1f"
+    },
+    {
+      "id": "cmokmy0o1000epm0pca79fbbf",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "aadbfdacc04f53a0543a706f32376d1e4ff8dd490075b8ac6afac26f36be0ed8"
+    },
+    {
+      "id": "cmokmy0og000fpm0pdwckcnq0",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "9d932acfc22eac1575d5f4722ccbd31175be115e7c1ec8326e1f22e45a4cefea"
+    },
+    {
+      "id": "cmokmy0ot000gpm0p4z5vwnoo",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "1641a5b9b8cf2238b62438c661f7d1a8ff0a5bfb473b9d577a693c19f25c0856"
+    },
+    {
+      "id": "cmokmy0p6000hpm0ptee51htd",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "bce7dee7ea8888dc052a0bd2c369b198377bf842462407c3209a65be2d577468"
+    },
+    {
+      "id": "cmokmy0pk000ipm0pi8nl7pbn",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "2d74ecec5d82f6feaa851ce266829ff078138bb698ce7703efad30c28129ae02"
+    },
+    {
+      "id": "cmokmy0py000jpm0pc2jcd5ul",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "384a6d151921c5af34453210ddc88841351860eb87ac67274d3e94999015776a"
+    },
+    {
+      "id": "cmokmy0qb000kpm0p06pmx2vt",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "cf0b2520c0163d82614b4997869b17ab91456f969937ecc6076bbd7561acff5a"
+    },
+    {
+      "id": "cmokmy0qp000lpm0p2yxw35ku",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "36bcaec75f307a8be1783599a39edc4544c97f707025cd915c1ba6aa0b2f45e7",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "36bcaec75f307a8be1783599a39edc4544c97f707025cd915c1ba6aa0b2f45e7",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "f2babf3fd2585ed5b3605b9f8d03e5363d76aa99c62fd5e6c435b3bd72bc71aa"
+    },
+    {
+      "id": "cmokmy2ir005bpm0p0sm1rxx8",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "3944eac2464f619aa893dd151adefd6c1cc294aa1607892d6490431639343cc2"
+    },
+    {
+      "id": "cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "languages": [
+        "en",
+        "it"
+      ],
+      "fields": {
+        "en.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "en.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "en.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "en.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.title": "3d543dda733a10399f3c7fa1755eb156c7e3190ce65bb31c87201a08e6d993ba",
+        "it.description": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+        "it.bulletPoints": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "it.keywords": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "other": "69d4288808c72672a706b936a5d6216b0599138e874469242d7b083829e3d733"
+    }
+  ]
+}

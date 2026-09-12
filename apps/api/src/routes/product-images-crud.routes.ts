@@ -1,3 +1,7 @@
+import { cleanUpUnreferencedMedia } from '../services/images/media-file-cleanup.service.js'
+import type {} from '@fastify/multipart'
+import type {} from '@fastify/rate-limit'
+import { findLibraryAsset } from '../services/images/library-asset.service.js'
 /**
  * W8.1 — Per-product master image management.
  *
@@ -196,10 +200,7 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const alt = req.query.alt ?? null
       const force = req.query.force === 'true'
 
-      if (!isCloudinaryConfigured()) {
-        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
-      }
-
+      if (!data.mimetype.startsWith('image/')) return reply.code(400).send({ error: 'Choose an image file.' })
       const buf = await data.toBuffer()
 
       // IE.1.2 — Exact-content dedup. SHA-256 the buffer and check
@@ -298,7 +299,26 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      // Past both dedup checks — commit the bytes to Cloudinary.
+      // Connected stores use Shopify for new catalog images. Keep the existing dedup
+      // checks, and never silently switch providers if Shopify needs attention.
+      const { defaultShopifyMediaAccount, uploadReadyShopifyAsset, attachShopifyImage, ShopifyMediaError } = await import('../services/shopify/media-library.service.js')
+      try {
+        const accountId = await defaultShopifyMediaAccount()
+        if (accountId) {
+          const { asset } = await uploadReadyShopifyAsset(accountId, buf, data.filename)
+          const result = await attachShopifyImage(id, asset, type, alt)
+          const image = await prisma.productImage.update({ where: { id: result.image.id }, data: { contentHash, perceptualHash, dhash256 } })
+          emitImagesUpdated(id, 'upload-shopify', { imageId: image.id, type })
+          return reply.code(result.reused ? 200 : 201).send({ ...image, ...(result.reused ? { reused: 'exact' } : {}) })
+        }
+      } catch (error) {
+        if (error instanceof ShopifyMediaError) return reply.code(error.statusCode).send({ error: error.message })
+        req.log.error({ err: error }, 'Shopify default image upload failed')
+        return reply.code(502).send({ error: 'The Shopify upload could not be confirmed. Refresh the media library before retrying.' })
+      }
+      if (!isCloudinaryConfigured()) return reply.code(503).send({ error: 'Connect a Shopify store or configure Cloudinary to upload images.' })
+
+      // No connected Shopify store: retain the existing Nexus upload provider.
       const cloudResult = await uploadBufferToCloudinary(buf, {
         folder: `product-images/${id}`,
       })
@@ -351,10 +371,6 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       if (!/\.(mp4|mov|webm|mkv|m4v)$/i.test(filename)) {
         return reply.status(400).send({ error: 'UNSUPPORTED_VIDEO', filename })
       }
-      if (!isCloudinaryConfigured()) {
-        return reply.status(503).send({ error: 'CLOUDINARY_NOT_CONFIGURED' })
-      }
-
       let buf: Buffer
       try {
         buf = await data.toBuffer()
@@ -366,6 +382,23 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const contentHash = sha256Buffer(buf)
       const exact = await prisma.productImage.findFirst({ where: { productId: id, contentHash } })
       if (exact) return reply.status(200).send({ ...exact, reused: 'exact' })
+
+      const { defaultShopifyMediaAccount, uploadReadyShopifyAsset, attachShopifyMedia, ShopifyMediaError } = await import('../services/shopify/media-library.service.js')
+      try {
+        const accountId = await defaultShopifyMediaAccount()
+        if (accountId) {
+          const { asset } = await uploadReadyShopifyAsset(accountId, buf, filename)
+          const result = await attachShopifyMedia(id, asset, 'VIDEO', req.query.alt ?? filename, 'video')
+          const image = await prisma.productImage.update({ where: { id: result.image.id }, data: { contentHash } })
+          emitImagesUpdated(id, 'upload-shopify-video', { imageId: image.id })
+          return reply.code(result.reused ? 200 : 201).send({ ...image, ...(result.reused ? { reused: 'exact' } : {}) })
+        }
+      } catch (error) {
+        if (error instanceof ShopifyMediaError) return reply.code(error.statusCode).send({ error: error.message })
+        req.log.error({ err: error }, 'Shopify default video upload failed')
+        return reply.code(502).send({ error: 'The Shopify upload could not be confirmed. Refresh the media library before retrying.' })
+      }
+      if (!isCloudinaryConfigured()) return reply.code(503).send({ error: 'Connect a Shopify store or configure Cloudinary to upload videos.' })
 
       const existing = await nextSortOrder(id)
 
@@ -769,10 +802,49 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
       const product = await prisma.product.findUnique({ where: { id }, select: { id: true } })
       if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
 
-      const asset = await prisma.digitalAsset.findUnique({ where: { id: assetId } })
+      // ── Accept the id shape the LIBRARY actually hands out ──────────
+      // `GET /api/assets/library` merges two sources and namespaces their ids
+      // so they cannot collide: `da_<DigitalAsset.id>` and
+      // `pi_<ProductImage.id>` (assets.routes.ts). The shipped DAM picker posts
+      // `asset.id` VERBATIM, so this route received `da_…` and looked it up raw
+      // — 404 ASSET_NOT_FOUND on EVERY import from the library, in production.
+      // Verified on prod both directions before this change.
+      //
+      // Fixed here rather than in the picker because the old
+      // `tabs/images/**` tree is read-only specification for the rebuild
+      // (layout §2.10) — and because a route that tolerates the id its own
+      // library emits is the more robust contract anyway. The rebuild strips
+      // client-side too, so both UIs work either way.
+      if (assetId.startsWith('pi_')) {
+        // Naming what it IS beats a bare not-found: a `pi_` id is another
+        // product's image, not a DAM asset, so no amount of retrying finds it.
+        return reply.status(400).send({
+          error: 'ASSET_IS_PRODUCT_IMAGE',
+          message:
+            'That library entry is another product\'s image, not a DAM asset. Only `digital_asset` entries can be imported here.',
+          assetId,
+        })
+      }
+
+      // Try the de-prefixed id first (what the library emits), then the literal
+      // one, so a caller that already strips — the rebuild does — is unaffected.
+      const asset = await findLibraryAsset(assetId)
       if (!asset) return reply.status(404).send({ error: 'ASSET_NOT_FOUND' })
       if (asset.type !== 'image') {
         return reply.status(400).send({ error: 'ASSET_NOT_IMAGE', assetType: asset.type })
+      }
+
+      if (asset.storageProvider === 'shopify') {
+        const { attachShopifyImage, ShopifyMediaError } = await import('../services/shopify/media-library.service.js')
+        try {
+          const result = await attachShopifyImage(id, asset, type ?? 'ALT', alt)
+          emitImagesUpdated(id, 'import-from-dam', { imageId: result.image.id, assetId: asset.id })
+          return reply.code(result.reused ? 200 : 201).send(result)
+        } catch (error) {
+          if (error instanceof ShopifyMediaError) return reply.code(error.statusCode).send({ error: error.message })
+          req.log.error({ err: error }, 'Shopify image reuse failed')
+          return reply.code(502).send({ error: 'The Shopify image could not be verified. Refresh the library before retrying.' })
+        }
       }
 
       const meta = (asset.metadata ?? null) as Record<string, unknown> | null
@@ -1088,9 +1160,9 @@ const productImagesCrudRoutes: FastifyPluginAsync = async (fastify) => {
 
       await prisma.productImage.delete({ where: { id: imageId } })
 
-      // Best-effort Cloudinary cleanup
+      // Gallery copies can share bytes. Deleting one product reference must retain the others.
       if (existing.publicId && isCloudinaryConfigured()) {
-        deleteFromCloudinary(existing.publicId).catch(() => {/* orphaned asset — acceptable */})
+        cleanUpUnreferencedMedia({ ...existing, publicId: existing.publicId }).catch(() => {/* Retry cleanup separately; retain bytes when their references cannot be checked. */})
       }
 
       emitImagesUpdated(id, 'delete', { imageId, wasType: existing.type })

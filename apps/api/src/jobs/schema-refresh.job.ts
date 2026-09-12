@@ -58,7 +58,7 @@ export async function collectInUseSchemaTargets(
 }
 
 export async function runSchemaRefresh(): Promise<string> {
-  if (!amazonService.isConfigured()) {
+  if (!(await amazonService.isConfigured())) {
     logger.warn('schema-refresh cron: Amazon SP-API not configured — skipping')
     return 'skipped=not-configured'
   }
@@ -99,8 +99,8 @@ export function startSchemaRefreshCron(): void {
     return
   }
   const schedule = process.env.SCHEMA_REFRESH_CRON_SCHEDULE ?? '0 4 * * *' // 04:00 UTC daily
-  scheduledTask = nodeCron.schedule(schedule, () => {
-    runSchemaRefresh().catch((err) => logger.error('schema-refresh cron tick failed', { error: err?.message }))
+  scheduledTask = nodeCron.schedule(schedule, async () => {
+    await runSchemaRefresh().catch((err) => logger.error('schema-refresh cron tick failed', { error: err?.message }))
   })
   logger.info(`schema-refresh cron: scheduled (${schedule})`)
 }

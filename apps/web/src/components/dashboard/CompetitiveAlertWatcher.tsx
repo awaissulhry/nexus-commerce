@@ -26,6 +26,7 @@
 
 import { useEffect } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import { fireBrowserNotification } from '@/lib/notifications/browser-notifications'
 
 interface BuyBoxLostPayload {
@@ -53,6 +54,12 @@ export function CompetitiveAlertWatcher() {
 
     let es: EventSource | null = null
     try {
+      // Held open for the life of the page. This is GLOBAL chrome — it mounts on essentially every
+      // route — so against a local backend it permanently occupies one of the ~6 connections the
+      // browser allows per origin, and starves the page it is watching over. `streamsEnabled()`
+      // disables it for a LOCAL backend only; deployed behaviour is unchanged
+      // (`enableDevStreams(true)` re-opens it). See lib/sync/dev-stream-gate.ts.
+      if (!streamsEnabled()) return
       es = new EventSource(`${getBackendUrl()}/api/orders/events`, {
         withCredentials: true,
       } as any)

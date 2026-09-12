@@ -52,7 +52,7 @@ export function startBudgetUsageCron(): void {
     logger.info('budget-usage-sample cron NOT scheduled (NEXUS_DISABLE_BUDGET_USAGE_CRON set) — manual trigger still available')
     return
   }
-  scheduledTask = cron.schedule(BUDGET_USAGE_SCHEDULE, () => void runBudgetUsageSample())
+  scheduledTask = cron.schedule(BUDGET_USAGE_SCHEDULE, async () => { await runBudgetUsageSample() })
   logger.info(`budget-usage-sample cron scheduled (${BUDGET_USAGE_SCHEDULE})`)
 }
 

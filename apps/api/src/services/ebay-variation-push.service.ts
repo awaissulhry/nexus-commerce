@@ -1,3 +1,4 @@
+import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
 /**
  * eBay variation-group push — shared Inventory-API publisher.
  *
@@ -8,7 +9,7 @@
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
-import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey } from './ebay-theme-axes.js'
+import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
 import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
@@ -134,16 +135,7 @@ export function sortAxisValues(
 export function mergeStoredValueOrder(
   pa: Record<string, unknown>,
 ): Record<string, string[]> {
-  const valueOrder = { ...((pa._axisValueOrder ?? {}) as Record<string, string[]>) }
-  const rawSort = (pa._axisSortOrder ?? {}) as Record<string, string[]>
-  for (const [name, vals] of Object.entries(rawSort)) {
-    if (!Array.isArray(vals) || vals.length === 0) continue
-    // Skip if this dimension is already ordered under ANY of its key forms.
-    if (!(name in valueOrder) && !(axisSynonymKey(name) in valueOrder) && !(name.toLowerCase() in valueOrder)) {
-      valueOrder[name] = vals
-    }
-  }
-  return valueOrder
+  return storedPresentationValues(pa)
 }
 
 /**
@@ -796,6 +788,7 @@ export async function pushVariationGroup(
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
+  await assertLegacyPresentationPublishAllowed({ sku: String((rows.find(r => r._isParent) ?? rows[0])?.sku ?? ''), marketplace: mp, accountId: connectionId })
 
   // EFX P5 — cap consistency. eBay allows at most 12 pictures per variation in
   // a multiple-variation listing (Inventory API "Managing images"; same cap as
@@ -2833,6 +2826,7 @@ export async function buildEbayFamilyRows(
   /** Active market — its listing supplies the shared/aspect fields instead of
    *  an arbitrary channelListings[0] (cross-market bleed). Omitted = legacy. */
   marketplace?: string | null,
+  destination?: { channelConnectionId: string | null; aliasKey?: string },
 ): Promise<Array<Record<string, unknown>>> {
   const products = await prisma.product.findMany({
     where: {
@@ -2840,7 +2834,7 @@ export async function buildEbayFamilyRows(
       OR: [{ id: familyParentId }, { parentId: familyParentId }],
     },
     include: {
-      channelListings: { where: { channel: 'EBAY' } },
+      channelListings: { where: { channel: 'EBAY', ...(marketplace ? { marketplace } : {}), ...(destination ? { channelConnectionId: destination.channelConnectionId, aliasKey: destination.aliasKey ?? '' } : {}) } },
       images: { select: { url: true, sortOrder: true, type: true }, orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { sku: 'asc' },

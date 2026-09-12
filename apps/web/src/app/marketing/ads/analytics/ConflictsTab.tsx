@@ -28,7 +28,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronRight, Info, RefreshCw, Search } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Checkbox, Input, ToolbarButton } from '@/design-system/primitives'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 
 interface Contender {
   campaignId: string

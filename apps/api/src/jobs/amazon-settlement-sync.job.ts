@@ -56,8 +56,8 @@ export function startAmazonSettlementCron(): void {
     logger.error('amazon-settlement cron: invalid schedule expression', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => {
-    void runSettlementSync()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runSettlementSync()
   })
   logger.info('amazon-settlement cron: scheduled', { schedule })
 }

@@ -24,7 +24,7 @@
  * builds on for one-click gap remediation.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertTriangle,
   Check,

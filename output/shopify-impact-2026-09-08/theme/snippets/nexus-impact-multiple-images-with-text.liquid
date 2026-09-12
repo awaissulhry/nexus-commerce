@@ -1,0 +1,178 @@
+{%- liquid
+  assign nexus_variant = product.selected_or_first_available_variant
+  assign nexus_contract = nexus_variant.metafields.nexus.resolved.value
+  assign nexus_field = product.metafields.custom.multiple_images_with_text_product_page
+  if nexus_contract.fields contains 'custom.multiple_images_with_text_product_page'
+    assign nexus_field = nexus_variant.metafields.custom.multiple_images_with_text_product_page
+  endif
+-%}
+{%- assign nexus_entry = nexus_field.value -%}
+{%- assign nexus_blocks = nexus_entry -%}
+{%- if nexus_entry != blank -%}
+{%- render 'section-spacing-collapsing' -%}
+
+{%- assign visible_images_count = nexus_blocks | map: 'settings' | where: 'image' | size -%}
+
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  CSS
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+
+<style>
+  #shopify-section-{{ section.id }} {
+    --multiple-images-with-text-max-width: 580px;
+    --multiple-images-with-text-images-grid-template: {% if section.settings.images_layout != 'stacked' and visible_images_count > 1 %}repeat({% if visible_images_count == 2 %}1{% else %}2{% endif %}, auto) / minmax(0, 0.75fr) minmax(0, 1fr){% else %}none{% endif %};
+    --multiple-images-with-text-images-alignment: {% if section.settings.images_layout == 'collage' and section.settings.collage_images_alignment == 'top' or section.settings.collage_images_alignment == 'shifted' %}start{% else %}center{% endif %};
+    --multiple-images-with-text-main-image-offset: {% if section.settings.images_layout == 'collage' and section.settings.collage_images_alignment == 'shifted' and visible_images_count > 1 %}{% if visible_images_count == 2 %}40px{% else %}min(145px, 14vw){% endif %}{% else %}0px{% endif %};
+  }
+
+  {%- if section.settings.images_layout == 'stacked' or visible_images_count == 1 -%}
+    @media screen and (min-width: 1000px) {
+      #shopify-section-{{ section.id }} {
+        --multiple-images-with-text-max-width: none;
+        --multiple-images-with-text-grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+        --multiple-images-with-text-column-gap: var(--spacing-20);
+        --multiple-images-with-text-alignment: start;
+      }
+    }
+  {%- else -%}
+    @media screen and (min-width: 1000px) {
+      #shopify-section-{{ section.id }} {
+        --multiple-images-with-text-max-width: 690px;
+      }
+    }
+  {%- endif -%}
+
+  @media screen and (min-width: 1150px) {
+    #shopify-section-{{ section.id }} {
+      --multiple-images-with-text-max-width: none;
+      --multiple-images-with-text-grid-template-columns: {% if section.settings.images_layout == 'stacked' %}minmax(0, 0.8fr) minmax(0, 1fr){% else %}minmax(0, {% if visible_images_count == 1 %}max-content{% else %}1fr{% endif %}) minmax(0, 0.7fr){% endif %};
+      --multiple-images-with-text-column-gap: var(--spacing-24);
+      --multiple-images-with-text-alignment: start;
+    }
+  }
+
+  @media screen and (min-width: 1400px) {
+    #shopify-section-{{ section.id }} {
+      --multiple-images-with-text-column-gap: var(--spacing-28);
+    }
+  }
+</style>
+
+{%- comment -%}
+  ------------------------------------------------------------------------------------------------------------------------
+  LIQUID
+  ------------------------------------------------------------------------------------------------------------------------
+{%- endcomment -%}
+
+{%- assign is_narrow = false -%}
+
+{%- if section.settings.images_layout == 'stacked' -%}
+  {%- assign is_narrow = true -%}
+{%- endif -%}
+
+<div {% render 'section-properties', narrow: is_narrow %}>
+  <multiple-images-with-text class="multiple-images-with-text">
+    <multiple-images-with-text-image-list reversed swipeable="false" layout="{{ section.settings.images_layout }}" class="multiple-images-with-text__image-list">
+      {%- if visible_images_count == 0 -%}
+        {{- 'collection-1' | placeholder_svg_tag: 'placeholder rounded-sm shadow-sm' -}}
+      {%- else -%}
+        {%- comment -%}We have to reverse the images when they are stacked so that the image of the first block appears at the top of the stack{%- endcomment -%}
+        {%- if section.settings.images_layout == 'stacked' -%}
+          {%- assign section_blocks = nexus_blocks | reverse -%}
+        {%- else -%}
+          {%- assign section_blocks = nexus_blocks -%}
+        {%- endif -%}
+
+        {%- for block in section_blocks -%}
+          {%- if nexus_block_image != blank -%}
+            {%- if section.settings.images_layout == 'scattered' -%}
+              {%- capture style -%}--image-rotation: {{ nexus_block_image_rotation_degrees }}deg;{%- endcapture -%}
+            {%- endif -%}
+
+            {%- capture image_id -%}image-{{ block.system.id }}{%- endcapture -%}
+            {%- capture image_class -%}rounded-sm shadow-sm {% unless section.settings.images_layout == 'stacked' %}reveal{% endunless %}{%- endcapture -%}
+
+            {{-
+              nexus_block_image
+              | image_url: width: nexus_block_image.width
+              | image_tag: id: image_id, style: style, sizes: 'min(100vw, 500px)', widths: '200,300,400,500,600,700,800,900,1000', class: image_class
+            -}}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
+    </multiple-images-with-text-image-list>
+
+    <div class="multiple-images-with-text__content-with-nav">
+      <multiple-images-with-text-content-list swipeable="false" class="multiple-images-with-text__content-list">
+        {%- assign outputted_text_count = 0 -%}
+
+        {%- for block in nexus_blocks -%}
+{%- assign nexus_block_button_text = block.button_text.value -%}
+{%- assign nexus_block_button_url = block.button_url.value -%}
+{%- assign nexus_block_content = block.content | metafield_tag -%}
+{%- assign nexus_block_image = block.image.value -%}
+{%- assign nexus_block_image_rotation_degrees = 0 -%}
+{%- assign nexus_block_subheading = block.subheading.value -%}
+{%- assign nexus_block_title = block.heading.value -%}
+          {%- if nexus_block_subheading != blank or nexus_block_title != blank or nexus_block_content != blank -%}
+            <div
+              class="prose {% if outputted_text_count == 0 %}is-selected{% else %}reveal-invisible{% endif %}"
+              {% if nexus_block_image != blank %}
+                image-id="image-{{ block.system.id }}"
+              {% endif %}
+              
+            >
+              {%- if nexus_block_subheading != blank -%}
+                <p class="subheading">{{ nexus_block_subheading | escape }}</p>
+              {%- endif -%}
+
+              {%- if nexus_block_title != blank -%}
+                <p
+                  class="h1"
+                  {% if settings.heading_apparition != 'none' %}
+                    reveal-on-scroll="true"
+                  {% endif %}
+                >
+                  {%- render 'styled-text', content: nexus_block_title, apparition_effect: true -%}
+                </p>
+              {%- endif -%}
+
+              {{- nexus_block_content -}}
+
+              {%- if nexus_block_button_text != blank -%}
+                {%- render 'button',
+                  href: nexus_block_button_url,
+                  content: nexus_block_button_text,
+                  size: 'xl',
+                  background: section.settings.button_background,
+                  text_color: section.settings.button_text_color
+                -%}
+              {%- endif -%}
+            </div>
+
+            {%- assign outputted_text_count = outputted_text_count | plus: 1 -%}
+          {%- endif -%}
+        {%- endfor -%}
+      </multiple-images-with-text-content-list>
+
+      {%- if outputted_text_count > 1 -%}
+        <div class="prev-next-buttons">
+          <button is="prev-button" class="circle-button ring group">
+            <span class="sr-only">{{ 'general.accessibility.previous' | t }}</span>
+            <span class="animated-arrow animated-arrow--reverse"></span>
+          </button>
+
+          <button is="next-button" class="circle-button ring group">
+            <span class="sr-only">{{ 'general.accessibility.next' | t }}</span>
+            <span class="animated-arrow"></span>
+          </button>
+        </div>
+      {%- endif -%}
+    </div>
+  </multiple-images-with-text>
+</div>
+
+
+{%- endif -%}

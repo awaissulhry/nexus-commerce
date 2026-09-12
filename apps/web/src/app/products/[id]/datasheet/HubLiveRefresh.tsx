@@ -31,7 +31,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 
 interface HubLiveRefreshProps {

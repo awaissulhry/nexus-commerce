@@ -1,3 +1,4 @@
+import { runProfileTimer } from '../lib/cron/workspace-timer.js'
 /**
  * W9.4 — Scheduled-export tick.
  *
@@ -85,9 +86,9 @@ export function startScheduledExportCron(): void {
   // Don't fire at boot — backed-up queue triggering N exports
   // simultaneously on restart is unfriendly to the catalog query
   // path. Wait one interval.
-  tickTimer = setInterval(() => {
-    void runScheduledExportCronOnce()
-  }, TICK_INTERVAL_MS)
+  tickTimer = setInterval(() => { void runProfileTimer('scheduled-export', async () => {
+    await runScheduledExportCronOnce()
+  }, TICK_INTERVAL_MS) }, TICK_INTERVAL_MS)
 }
 
 export function stopScheduledExportCron(): void {

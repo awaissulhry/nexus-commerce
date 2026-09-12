@@ -1,0 +1,295 @@
+{
+  "at": "2026-09-11T22:46:44.095Z",
+  "database": {
+    "name": "nexus_development",
+    "address": "172.17.0.3/32"
+  },
+  "parent": {
+    "id": "cmokmy3a40078pm0p1fvnu523",
+    "sku": "GALE-JACKET",
+    "version": 57,
+    "variationAxes": [
+      "Taglia",
+      "Colore"
+    ]
+  },
+  "products": [
+    {
+      "id": "cmokmy0mm000bpm0pm7k7eke4",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "status": "ACTIVE",
+      "version": 1,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "XS",
+        "Color": "Nero",
+        "variantAttributes": "[object Object]"
+      },
+      "categoryAttributes": {
+        "variations": {
+          "variantAttributes": "[object Object]"
+        }
+      }
+    },
+    {
+      "id": "cmtxhudtc000fnjtk5olu5tzw",
+      "sku": "GALE-JACKET-VPF-ADD-ONE",
+      "status": "DRAFT",
+      "version": 2,
+      "parentId": null,
+      "deletedAt": null,
+      "variantAttributes": {
+        "Colore": "VPF ADD",
+        "Taglia": "VPF ADD"
+      },
+      "categoryAttributes": {
+        "variations": {
+          "Colore": "VPF ADD",
+          "Taglia": "VPF ADD"
+        }
+      }
+    },
+    {
+      "id": "cmtxfldam000anjl2mdym1ydc",
+      "sku": "GALE-JACKET-VPF-GIALLO-VPF",
+      "status": "DRAFT",
+      "version": 4,
+      "parentId": null,
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF",
+        "Color": "Giallo"
+      },
+      "categoryAttributes": {
+        "armorType": null,
+        "variations": {
+          "Size": "VPF",
+          "Color": "Giallo"
+        },
+        "waterproofRating": null
+      }
+    },
+    {
+      "id": "cmtxfld9x0008njl2fv0j2h0g",
+      "sku": "GALE-JACKET-VPF-NERO-VPF",
+      "status": "DRAFT",
+      "version": 3,
+      "parentId": null,
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF",
+        "Color": "Rosso VPF",
+        "Colore": "Rosso VPF"
+      },
+      "categoryAttributes": {
+        "color": "Rosso VPF",
+        "armorType": null,
+        "item_name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "variations": {
+          "Size": "VPF",
+          "Color": "Rosso VPF",
+          "Colore": "Rosso VPF"
+        },
+        "weave_type": null,
+        "waterproofRating": null,
+        "handmade_classification": null,
+        "recommended_browse_nodes": "2420941031"
+      }
+    },
+    {
+      "id": "cmtxi55im0009nj56rark2gp6",
+      "sku": "GALE-JACKET-VPF-SECOND-GIALLO-VPF-SECOND",
+      "status": "DRAFT",
+      "version": 2,
+      "parentId": null,
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF SECOND",
+        "Color": "Giallo"
+      },
+      "categoryAttributes": {
+        "armorType": null,
+        "variations": {
+          "Size": "VPF SECOND",
+          "Color": "Giallo"
+        },
+        "waterproofRating": null
+      }
+    },
+    {
+      "id": "cmtxi55ic0007nj56na63ysyt",
+      "sku": "GALE-JACKET-VPF-SECOND-NERO-VPF-SECOND",
+      "status": "DRAFT",
+      "version": 2,
+      "parentId": null,
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "VPF SECOND",
+        "Color": "Nero"
+      },
+      "categoryAttributes": {
+        "armorType": null,
+        "item_name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "variations": {
+          "Size": "VPF SECOND",
+          "Color": "Nero"
+        },
+        "weave_type": null,
+        "waterproofRating": null,
+        "handmade_classification": null,
+        "recommended_browse_nodes": "2420941031"
+      }
+    },
+    {
+      "id": "cmokmy0qp000lpm0p2yxw35ku",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "status": "ACTIVE",
+      "version": 1,
+      "parentId": "cmokmy3a40078pm0p1fvnu523",
+      "deletedAt": null,
+      "variantAttributes": {
+        "Size": "XS",
+        "Color": "Giallo",
+        "variantAttributes": "[object Object]"
+      },
+      "categoryAttributes": {
+        "variations": {
+          "variantAttributes": "[object Object]"
+        }
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+      "listings": 21
+    }
+  ],
+  "fixtureListings": [
+    {
+      "id": "cmtxft86l0007nj2uqhj01or7",
+      "productId": "cmtxfld9x0008njl2fv0j2h0g",
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+      "aliasKey": "",
+      "version": 10,
+      "listingStatus": "DRAFT",
+      "variationExcluded": true,
+      "syncPaused": true,
+      "isPublished": false,
+      "externalListingId": null,
+      "overrideData": {},
+      "platformAttributes": {
+        "itemSpecifics": {}
+      }
+    }
+  ],
+  "parentListing": {
+    "id": "cmpjyu1o1004rn801rl5mgtw8",
+    "version": 18,
+    "platformAttributes": {
+      "vatRate": "22",
+      "videoId": "",
+      "subtitle": "",
+      "bestOffer": false,
+      "imageUrls": [
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820629/product-images/cmokmy3a40078pm0p1fvnu523/vohkt9vi8vbxxcdngide.jpg",
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820606/product-images/cmokmy3a40078pm0p1fvnu523/flpf6ssrho4xsddnazcx.jpg",
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820608/product-images/cmokmy3a40078pm0p1fvnu523/hhhzogbq9uy06z1hnr0f.jpg",
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820612/product-images/cmokmy3a40078pm0p1fvnu523/vovwyklirnkmy6heqevl.jpg",
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820663/product-images/cmokmy3a40078pm0p1fvnu523/zfkmmtplsqis4ihkefyl.jpg",
+        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780823073/product-images/cmokmy3a40078pm0p1fvnu523/w1qje3tp3ceoxil30x6c.jpg"
+      ],
+      "weightUnit": "KILOGRAM",
+      "conditionId": "NEW",
+      "packageType": "",
+      "handlingTime": 3,
+      "packageWidth": 30,
+      "dimensionUnit": "CENTIMETER",
+      "itemSpecifics": {
+        "Marca": "Xavia Racing",
+        "Stile": "Da motociclista",
+        "Genere": "Uomo",
+        "Athlete": "Unisex",
+        "Adatto a": "Adulto unisex",
+        "Chiusura": "Cerniera",
+        "Stagione": "Tutte le stagione",
+        "Body type": "Regolare",
+        "Materiale": "Poliestere, Nylon",
+        "Quantità": "1",
+        "Team name": "Giacca",
+        "Protezione": "CE Livello 2",
+        "Scollatura": "Colletto alla coreana",
+        "Tipo di giacca": "Da moto",
+        "Caratteristiche": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+        "Paese di origine": "Pakistan",
+        "Cura dell'indumento": "Lavabile in lavatrice",
+        "Livello di protezione": "CE Livello 2",
+        "Paese di fabbricazione": "Pakistan"
+      },
+      "listingFormat": "FIXED_PRICE",
+      "packageHeight": 8,
+      "packageLength": 45,
+      "packageWeight": 2,
+      "_variationAxes": [
+        "Colore",
+        "Taglia"
+      ],
+      "bestOfferFloor": 0,
+      "returnPolicyId": "244471581017",
+      "_axisNameLabels": {
+        "Colore": "Colore",
+        "Taglia": "Taglia"
+      },
+      "_axisValueOrder": {
+        "__dim0__": [
+          "Nero",
+          "Giallo"
+        ],
+        "__dim1__": [
+          "XXS",
+          "XS",
+          "S",
+          "M",
+          "L",
+          "XL",
+          "XXL",
+          "3XL",
+          "4XL",
+          "5XL"
+        ]
+      },
+      "descriptionPush": {
+        "at": "2026-07-28T03:04:29.738Z",
+        "themeId": "cms3634nu001ile0100ixz239",
+        "galleryHash": "4c94e6a5aa98cb13b5284da99c17706c7310e3b4168731c479bb1f4c4f50ac7f",
+        "themeVersion": 5
+      },
+      "listingDuration": "GTC",
+      "paymentPolicyId": "244471571017",
+      "bestOfferCeiling": 0,
+      "sharedSkuListing": true,
+      "descriptionThemeId": "cms3634nu001ile0100ixz239",
+      "__lastPublishedAxes": {
+        "EBAY_IT": [
+          "Colore",
+          "Taglia"
+        ]
+      },
+      "fulfillmentPolicyId": "244471597017",
+      "itemLocationCountry": "IT",
+      "merchantLocationKey": "",
+      "quantityLimitPerBuyer": null,
+      "_presentationOrderRevision": {
+        "savedAt": "2026-09-11T21:15:17.723Z",
+        "version": 17,
+        "publication": "separate"
+      }
+    },
+    "isPublished": false,
+    "syncPaused": false
+  },
+  "devLoginExists": 0
+}

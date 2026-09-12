@@ -19,6 +19,7 @@ export interface CatalogueChannel {
   displayName: string
   available: boolean
   authMode: string
+  permissionModel: 'oauth_scopes' | 'application_roles'
   requiredScopes: string[]
   reviewGatedScopes: string[]
   regions: { key: string; label: string }[]
@@ -78,8 +79,8 @@ function useJson<T>(path: string, reloadSignal: unknown, pick: (raw: unknown) =>
   return { data, loading, error, reload }
 }
 
-export function useAccounts(reloadSignal: unknown) {
-  return useJson('/api/accounts', reloadSignal, (raw) => {
+export function useAccounts(reloadSignal: unknown, includeDisconnected = false) {
+  return useJson(`/api/accounts${includeDisconnected ? '?includeDisconnected=1' : ''}`, reloadSignal, (raw) => {
     const r = raw as { accounts?: AccountRow[]; notConnected?: string[]; canSwitch?: boolean }
     return { accounts: r.accounts ?? [], notConnected: r.notConnected ?? [] }
   })

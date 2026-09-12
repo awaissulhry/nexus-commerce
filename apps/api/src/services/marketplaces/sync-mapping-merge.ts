@@ -1,27 +1,13 @@
-/**
- * FM.7 — make outbound sync payloads consult the catalog mapping.
- *
- * Per-channel flag (env FM_SYNC_<CHANNEL>): off (default) | shadow | merge.
- *   off    — legacy payload untouched. Zero overhead (no preview call), so
- *            every existing sync stays byte-identical.
- *   shadow — compute the mapping payload, LOG the new-vs-legacy diff, but
- *            SERVE the legacy payload (one-deploy validation before flip).
- *   merge  — serve the legacy payload with the mapping's resolved values
- *            merged OVER it (mapping wins where a catalog rule exists;
- *            legacy fills the rest). Well-known channel fields map to the
- *            top-level payload keys; everything else lands in `attributes`.
- *
- * The off→shadow→merge flip per channel is the gated FM.7 production-
- * behaviour change. Default off means turning it on is an explicit op.
- */
-
-import { previewPayload } from '../pim/payload-preview.js'
+/** Canonical mapping values shape Amazon/eBay payloads. Unavailable resolution
+ * blocks the operation instead of silently serving stale legacy values. */
+import { resolveBatch } from '../pim/mapping/resolve-batch.service.js'
 import { logger } from '../../utils/logger.js'
 
 export type SyncMappingMode = 'off' | 'shadow' | 'merge'
 
 /** Read the per-channel FM.7 mode from env. Default 'off'. */
 export function getSyncMappingMode(channel: string): SyncMappingMode {
+  if (['AMAZON', 'EBAY'].includes(channel.toUpperCase())) return 'merge'
   const raw = (process.env[`FM_SYNC_${channel.toUpperCase()}`] ?? 'off').toLowerCase()
   return raw === 'merge' ? 'merge' : raw === 'shadow' ? 'shadow' : 'off'
 }
@@ -72,35 +58,31 @@ export function mergeMappingIntoPayload<T extends BasePayload>(
 
 /**
  * Apply the FM.7 mapping to a legacy sync payload per the per-channel mode.
- * off → returns the legacy payload untouched (no preview call). Never
- * throws — a preview failure logs + serves legacy.
+ * Amazon/eBay always use canonical resolution. Other channel adapters retain their rollout mode.
  */
 export async function applyMappingToSyncPayload<T extends BasePayload>(args: {
   productId: string
   channel: string
   marketplace: string
   legacyPayload: T
+  channelConnectionId?: string | null
+  aliasKey?: string
 }): Promise<T> {
   const mode = getSyncMappingMode(args.channel)
   if (mode === 'off') return args.legacyPayload
-  if (!args.marketplace) return args.legacyPayload
+  if (!args.marketplace) throw new Error('Choose a marketplace before generating a channel payload.')
 
-  let mapped: Record<string, unknown>
-  try {
-    const preview = await previewPayload({
-      productId: args.productId,
-      channel: args.channel,
-      marketplace: args.marketplace,
-    })
-    mapped = preview.payload
-  } catch (err) {
-    logger.warn('[fm-sync] mapping preview failed — serving legacy payload', {
-      channel: args.channel,
-      marketplace: args.marketplace,
-      productId: args.productId,
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return args.legacyPayload
+  const resolved = await resolveBatch({ productIds: [args.productId], channel: args.channel, marketplace: args.marketplace,
+    channelConnectionId: args.channelConnectionId, aliasKey: args.aliasKey })
+  const product = resolved.products[0]
+  if (!product || !resolved.catalogue?.schema.present) throw new Error('The product or category schema is unavailable. Sync was not queued.')
+  const mapped: Record<string, unknown> = {}
+  for (const field of resolved.catalogue.fields) {
+    // Prices, buffers, stock and media remain with their owning pipelines.
+    if (field.sourceOwner) continue
+    const cell = product.cells[field.fieldKey]
+    if (!cell || cell.errors.length || cell.needsTranslation) throw new Error(`Mapping validation failed for ${field.label}: ${cell?.errors.join('; ') || 'Translation or resolution is pending'}`)
+    if (cell.status === 'mapped' || cell.provenance === 'override') mapped[field.fieldKey] = cell.value
   }
 
   const { merged, changedKeys } = mergeMappingIntoPayload(args.legacyPayload, mapped)

@@ -4,7 +4,7 @@ import React from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import { ChevronRight, ChevronDown, Loader2 } from "lucide-react";
 import type { InventoryItem } from "@/types/inventory";
-import Link from "next/link";
+import Link from '@/lib/workspaces/Link';
 
 const col = createColumnHelper<InventoryItem>();
 

@@ -1,3 +1,4 @@
+import { requireLegacyCredentials } from '../../lib/workspace-legacy-credentials.js'
 /**
  * Etsy Marketplace Service
  * Handles product listing, inventory, and order operations on Etsy
@@ -259,6 +260,7 @@ export class EtsyService {
     endpoint: string,
     body?: unknown
   ): Promise<T> {
+    requireLegacyCredentials('Etsy')
     await rateLimiter.consumeToken("ETSY", endpoint);
 
     const url = `${this.baseUrl}${endpoint}`;

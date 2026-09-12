@@ -44,8 +44,8 @@ export function startBrowseNodePredictorCron(): void {
   const schedule =
     process.env.NEXUS_BROWSE_NODE_SCHEDULE ?? '0 */12 * * *'
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runBrowseNodePredictorCron()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runBrowseNodePredictorCron()
   })
 
   logger.info('browse-node-predictor cron: scheduled', { schedule })

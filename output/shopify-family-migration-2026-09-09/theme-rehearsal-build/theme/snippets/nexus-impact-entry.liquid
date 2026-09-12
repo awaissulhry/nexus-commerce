@@ -1,0 +1,16 @@
+{%- if depth < 5 -%}
+{%- assign nexus_definition = definitions | where: 'type', entry.system.type | first -%}
+{%- assign next_depth = depth | plus: 1 -%}
+{%- for entry_field in nexus_definition.fields -%}
+  {%- assign entry_value = entry[entry_field.key] -%}
+  {%- if entry_value != blank -%}
+    <div><span class="text-subdued">{{ entry_field.label | escape }}</span>
+    {%- case entry_value.type -%}
+      {%- when 'metaobject_reference' -%}{%- render 'nexus-impact-entry', entry: entry_value.value, definitions: definitions, depth: next_depth -%}
+      {%- when 'list.metaobject_reference' -%}{%- for child_entry in entry_value.value -%}{%- render 'nexus-impact-entry', entry: child_entry, definitions: definitions, depth: next_depth -%}{%- endfor -%}
+      {%- when 'json' -%}<pre>{{ entry_value.value | json | escape }}</pre>
+      {%- else -%}{{ entry_value | metafield_tag }}
+    {%- endcase -%}</div>
+  {%- endif -%}
+{%- endfor -%}
+{%- endif -%}

@@ -1,8 +1,9 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Phase 12f: Amazon SP-API Client
  * 
  * Production HTTP client for Amazon Selling Partner API
- * - Login With Amazon (LWA) authentication with token caching
+ * - Connection-scoped Login With Amazon (LWA) authentication
  * - Listings Items v2021-08-01 endpoint integration
  * - Rate limiting (5 requests/second)
  * - Error parsing for SP-API issues array
@@ -116,8 +117,6 @@ export function mapAwsRegionToSpApiSlug(region: string): string {
 }
 
 export class AmazonSpApiClient {
-  private accessToken: string | null = null
-  private tokenExpiresAt: number = 0
   // Grantless token cache — keyed by scope string
   private grantlessTokens: Map<string, { token: string; expiresAt: number }> = new Map()
   private lastRequestTime: number = 0
@@ -125,25 +124,22 @@ export class AmazonSpApiClient {
 
   private readonly clientId: string
   private readonly clientSecret: string
-  private readonly refreshToken: string
   readonly region: string
 
-  constructor() {
+  constructor(private readonly boundAccount?: { id: string; region: string }) {
     this.clientId = process.env.AMAZON_LWA_CLIENT_ID || process.env.AMAZON_CLIENT_ID || ''
     this.clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET || process.env.AMAZON_CLIENT_SECRET || ''
-    this.refreshToken = process.env.AMAZON_REFRESH_TOKEN || ''
     // SP-API endpoint slugs are 'na' | 'eu' | 'fe' — not AWS region names.
     // Map AWS region names → SP-API slugs so AMAZON_REGION=us-east-1 works.
     // Default EU to match the listings-feed path (which uses `?? 'eu'`). Xavia
     // sells on EU marketplaces; defaulting NA here made every getListingsItem hit
     // the North America endpoint → 404 on all EU listings → blind read-back.
-    this.region = mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
+    this.region = boundAccount?.region ?? mapAwsRegionToSpApiSlug(process.env.AMAZON_REGION || 'eu')
 
-    if (!this.clientId || !this.clientSecret || !this.refreshToken) {
-      logger.warn('Amazon SP-API credentials not fully configured', {
+    if (!this.clientId || !this.clientSecret) {
+      logger.warn('Amazon SP-API application credentials not fully configured', {
         hasClientId: !!this.clientId,
         hasClientSecret: !!this.clientSecret,
-        hasRefreshToken: !!this.refreshToken,
       })
     }
   }
@@ -153,55 +149,10 @@ export class AmazonSpApiClient {
    * Caches token for 50 minutes to avoid spamming auth endpoint
    */
   async getAccessToken(): Promise<string> {
-    const now = Date.now()
-
-    // Return cached token if still valid (50 minute cache)
-    if (this.accessToken && now < this.tokenExpiresAt) {
-      logger.debug('Using cached LWA token', {
-        expiresIn: Math.round((this.tokenExpiresAt - now) / 1000),
-      })
-      return this.accessToken
-    }
-
-    logger.info('Requesting new LWA token')
-
-    try {
-      const response = await fetch('https://api.amazon.com/auth/o2/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          grant_type: 'refresh_token',
-          refresh_token: this.refreshToken,
-          client_id: this.clientId,
-          client_secret: this.clientSecret,
-        }).toString(),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`LWA auth failed: ${response.status} - ${errorText}`)
-      }
-
-      const data = (await response.json()) as LWATokenResponse
-
-      // Cache token for 50 minutes (3000 seconds)
-      this.accessToken = data.access_token
-      this.tokenExpiresAt = now + 50 * 60 * 1000
-
-      logger.info('LWA token obtained successfully', {
-        expiresIn: data.expires_in,
-        cacheUntil: new Date(this.tokenExpiresAt).toISOString(),
-      })
-
-      return this.accessToken
-    } catch (error) {
-      logger.error('Failed to get LWA token', {
-        error: error instanceof Error ? error.message : String(error),
-      })
-      throw error
-    }
+    // Seller grants are connection data, even in a single-profile deployment.
+    // The shared resolver uses the encrypted DB grant when present and falls
+    // back to AMAZON_REFRESH_TOKEN only during the explicit migration window.
+    return (await import('../lib/amazon-sp-client.js')).getAmazonAccessToken(this.boundAccount?.id)
   }
 
   /**
@@ -505,7 +456,7 @@ export class AmazonSpApiClient {
     let isFba = false
     try {
       const product = await prisma.product.findUnique({
-        where: { sku },
+        where: { workspace_sku: workspaceKey({ sku: sku }) },
         select: { id: true, fulfillmentMethod: true },
       })
       if (!product) return { payload, blocked: false } // unknown SKU — upstream guards own it
@@ -1139,8 +1090,15 @@ export class AmazonSpApiClient {
         `validateListing(${sku})`,
       )
 
+      if (!response.ok) throw new Error(`Amazon validation preview returned HTTP ${response.status}`)
       const data = (await response.json()) as SPAPIResponse
-      const errors = this.parseErrors(data)
+      // An empty/error response is not affirmative channel validation. Only the
+      // preview statuses for this exact SKU can authorize a subsequent submit.
+      if (!data || data.sku !== sku || !['VALID', 'INVALID'].includes(data.status ?? '') ||
+          (data.issues !== undefined && !Array.isArray(data.issues))) {
+        throw new Error('Amazon validation preview returned an unrecognized result')
+      }
+      const errors = this.parseErrors(data) ?? (data.status === 'INVALID' ? 'Amazon marked the listing invalid without issue details.' : null)
       const warnings = this.parseWarnings(data)
       logger.info('validateListing (VALIDATION_PREVIEW) complete', {
         sku, mode: usePatch ? 'PATCH' : 'PUT', ok: errors == null, warningCount: warnings.length,
@@ -1489,4 +1447,20 @@ export class AmazonSpApiClient {
 }
 
 // Singleton instance
-export const amazonSpApiClient = new AmazonSpApiClient()
+const legacyAmazonClient = new AmazonSpApiClient()
+export const amazonSpApiClient = new Proxy(legacyAmazonClient, {
+  get(target, property) {
+    const value = Reflect.get(target, property, target)
+    if (typeof value !== 'function') return value
+    if (property === 'getGrantlessToken') return value.bind(target)
+    return async (...args: unknown[]) => {
+      if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return value.apply(target, args)
+      const { amazonAccount, getAmazonRegion } = await import('../lib/amazon-sp-client.js')
+      const options = args[0] as { accountId?: string; sellerId?: string } | undefined
+      const account = await amazonAccount({ accountId: options?.accountId, sellerId: options?.sellerId })
+      if (!account) throw new Error('Select an Amazon seller account.')
+      const client = new AmazonSpApiClient({ id: account.id, region: await getAmazonRegion(account.id) })
+      return Reflect.get(client, property).apply(client, args)
+    }
+  },
+})

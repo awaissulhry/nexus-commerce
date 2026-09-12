@@ -13,7 +13,7 @@
  * computed net. The detail page already shows fees + net per row.
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Card } from '@/components/ui/Card'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { formatOrderTotal } from '../_lib/money'

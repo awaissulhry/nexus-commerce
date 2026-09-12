@@ -92,8 +92,8 @@ export function startObservabilityRetentionCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('observability-retention', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('observability-retention', async () => {
       const r = await runObservabilityRetention()
       return `apiCalls=${r.apiCallsDeleted} cronRuns=${r.cronRunsDeleted} window=${r.windowDays}d durationMs=${r.durationMs}`
     }).catch((err) => {

@@ -34,7 +34,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Button, ToolbarButton } from '@/design-system/primitives'
 import { X, Play, AlertTriangle, CheckCircle2, CircleSlash, Loader2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
-import { DataGrid, type Column } from '@/design-system/components'
+import { DataGrid, type Column } from '@/design-system/grid/datagrid'
 
 interface EngineRun {
   id: string

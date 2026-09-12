@@ -56,8 +56,8 @@ export function startReservationSweepCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void runSweep()
+  scheduledTask = cron.schedule(schedule, async () => {
+    await runSweep()
   })
 
   logger.info('reservation-sweep cron: scheduled', { schedule })

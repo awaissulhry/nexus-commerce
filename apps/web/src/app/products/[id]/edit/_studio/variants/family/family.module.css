@@ -1,0 +1,103 @@
+/*
+ * VP.3 — the shared-product Variants surface.
+ *
+ * A CSS MODULE, deliberately: the grid's own chrome lives in `design-system/grid/theme/grid.css`
+ * and belongs to PES.2 (GRID.md §1 forbids editing it from outside), and the DS's component styles
+ * belong to VP.5. Everything here is this page's own composition — the family band's layout and the
+ * two stub pieces — and nothing in it restyles a DS component.
+ *
+ * What is left here is the Generate combinations dialog's own layout and the page's flex column.
+ * Everything else moved OUT as VP.5 shipped it: `AxisChip` and `ProjectionCell` replaced the local
+ * stubs, and `.nds-pageband` (+ `-main` / `-right` / `-label` / `-divider` / `-note`) replaced this
+ * file's `.band` block — the mapping band uses the same class, and the layout gate keys its band
+ * budget on it. Spec §8: never a second implementation, and a page-local copy of a shared band is
+ * exactly that.
+ */
+
+/* ── Generate combinations (§3.4) ─────────────────────────────────────────────────────────── */
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  font-size: var(--nds-font-size-base);
+}
+
+.axisSection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.valueRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.addValue {
+  min-width: 140px;
+  flex: 1 1 140px;
+}
+
+.patternRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* The row, not the field: the DS Input owns its own wrapper, so the growth has to be declared
+     where the wrapper actually sits. */
+  width: 100%;
+}
+
+.patternInput {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  min-width: 0;
+}
+
+/* The bordered `.nds-field` wrapper, through the DS's own `fieldClassName` hook. */
+.patternField {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.preview {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+  line-height: 1.45;
+}
+
+.preview code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-strong);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+  border: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+}
+
+.summary b {
+  color: var(--nds-text-strong);
+  font-weight: 700;
+}
+
+/* ── the surface ──────────────────────────────────────────────────────────────────────────── */
+
+.surface {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}

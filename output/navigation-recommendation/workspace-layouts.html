@@ -1,0 +1,81 @@
+<div id="nexus-workspace-layouts" aria-label="Proposed workspace layouts with illustrative data">
+  <div class="viz-row">
+    <span class="text-small text-muted">Layout sketches · illustrative data</span>
+  </div>
+  <div class="nav nav-pills" role="tablist" aria-label="Compare workspace layouts">
+    <button class="nav-link active" type="button" id="nwl-listings-tab" role="tab" aria-controls="nwl-listings" aria-selected="true">Listings</button>
+    <button class="nav-link" type="button" id="nwl-stock-tab" role="tab" aria-controls="nwl-stock" aria-selected="false">Stock</button>
+    <button class="nav-link" type="button" id="nwl-replenishment-tab" role="tab" aria-controls="nwl-replenishment" aria-selected="false">Replenishment</button>
+  </div>
+  <div id="nwl-listings" role="tabpanel" aria-labelledby="nwl-listings-tab">
+    <div class="viz-row nwl-context"><span>One row per channel listing</span><span class="text-small text-muted">View: Needs attention</span></div>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th scope="col">SKU / listing</th><th scope="col">Account / market</th><th scope="col">Live state</th><th scope="col">Update state</th><th scope="col">Inspect</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">JKT-BLK-M · A1</th><td>Amazon EU · Italy</td><td>Suppressed</td><td>Action needed</td><td><button class="btn btn-ghost" type="button" data-detail="listing-image" aria-controls="nwl-listing-detail">Image issue</button></td></tr>
+          <tr><th scope="row">JKT-BLK-M · E1</th><td>eBay EU · Italy</td><td>Active</td><td>Awaiting confirmation</td><td><button class="btn btn-ghost" type="button" data-detail="listing-price" aria-controls="nwl-listing-detail">Price update</button></td></tr>
+          <tr><th scope="row">JKT-BLK-L · S1</th><td>Shopify · EU store</td><td>Unpublished</td><td>Ready to publish</td><td><button class="btn btn-ghost" type="button" data-detail="listing-draft" aria-controls="nwl-listing-detail">Review draft</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="nwl-listing-detail" class="nwl-detail" aria-live="polite"><span class="text-small text-muted">Selected listing</span><div>Main image rejected · Open this listing’s Media in the product editor.</div></div>
+  </div>
+  <div id="nwl-stock" role="tabpanel" aria-labelledby="nwl-stock-tab" hidden>
+    <div class="viz-row nwl-context"><span>One row per SKU and location</span><span class="text-small text-muted">View: Stock balances</span></div>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th scope="col">SKU</th><th scope="col">Location</th><th scope="col" class="text-end">On hand</th><th scope="col" class="text-end">Available</th><th scope="col" class="text-end">Incoming</th><th scope="col">Inspect</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">JKT-BLK-M</th><td>Riccione</td><td class="text-end">120</td><td class="text-end">90</td><td class="text-end">60</td><td><button class="btn btn-ghost" type="button" data-detail="stock-own" aria-controls="nwl-stock-detail">Breakdown</button></td></tr>
+          <tr><th scope="row">JKT-BLK-M</th><td>Amazon FBA</td><td class="text-end">18</td><td class="text-end">12</td><td class="text-end">0</td><td><button class="btn btn-ghost" type="button" data-detail="stock-fba" aria-controls="nwl-stock-detail">Breakdown</button></td></tr>
+          <tr><th scope="row">JKT-BLK-L</th><td>Riccione</td><td class="text-end">80</td><td class="text-end">72</td><td class="text-end">0</td><td><button class="btn btn-ghost" type="button" data-detail="stock-large" aria-controls="nwl-stock-detail">Breakdown</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="nwl-stock-detail" class="nwl-detail" aria-live="polite"><span class="text-small text-muted">Selected balance</span><div>90 available · 24 committed · 6 unavailable · 60 incoming, excluded from on hand.</div></div>
+  </div>
+  <div id="nwl-replenishment" role="tabpanel" aria-labelledby="nwl-replenishment-tab" hidden>
+    <div class="viz-row nwl-context"><span>One row per SKU and destination need</span><span class="text-small text-muted">View: Action due</span></div>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead><tr><th scope="col">SKU</th><th scope="col">Destination</th><th scope="col">Act by</th><th scope="col">Suggested action</th><th scope="col" class="text-end">Units</th><th scope="col">Inspect</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">JKT-BLK-M</th><td>Amazon FBA</td><td>Today</td><td>Transfer</td><td class="text-end">36</td><td><button class="btn btn-ghost" type="button" data-detail="plan-transfer" aria-controls="nwl-plan-detail">Why 36?</button></td></tr>
+          <tr><th scope="row">JKT-BLK-M</th><td>Riccione</td><td>11 Sep</td><td>Purchase</td><td class="text-end">120</td><td><button class="btn btn-ghost" type="button" data-detail="plan-purchase" aria-controls="nwl-plan-detail">Why 120?</button></td></tr>
+          <tr><th scope="row">JKT-BLK-L</th><td>Riccione</td><td>Review</td><td>Defer purchase</td><td class="text-end">0</td><td><button class="btn btn-ghost" type="button" data-detail="plan-defer" aria-controls="nwl-plan-detail">Why defer?</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="nwl-plan-detail" class="nwl-detail" aria-live="polite"><span class="text-small text-muted">Selected recommendation</span><div>FBA has 6 days of cover · Riccione can supply 36 units after its own demand is protected.</div></div>
+  </div>
+</div>
+<style>
+  #nexus-workspace-layouts .nwl-context { justify-content: space-between; margin-block: 16px 8px; }
+  #nexus-workspace-layouts .nwl-detail { margin-block-start: 12px; display: grid; gap: 4px; }
+  #nexus-workspace-layouts th[scope="row"] { font-weight: 500; }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('nexus-workspace-layouts');
+  const details = {
+    'listing-image': ['nwl-listing-detail', 'Selected listing', 'Main image rejected · Open this listing’s Media in the product editor.'],
+    'listing-price': ['nwl-listing-detail', 'Selected listing', 'Desired price €64 · Last confirmed price €69 · Submitted 3 minutes ago; channel confirmation pending.'],
+    'listing-draft': ['nwl-listing-detail', 'Selected listing', 'Required fields complete · Review the selected store and publication changes before publishing.'],
+    'stock-own': ['nwl-stock-detail', 'Selected balance', '90 available · 24 committed · 6 unavailable · 60 incoming, excluded from on hand.'],
+    'stock-fba': ['nwl-stock-detail', 'Selected balance', '12 available · 6 committed · Amazon-managed balance; last observed 4 minutes ago.'],
+    'stock-large': ['nwl-stock-detail', 'Selected balance', '72 available · 8 committed · Open movements or start a reasoned stock adjustment.'],
+    'plan-transfer': ['nwl-plan-detail', 'Selected recommendation', 'FBA has 6 days of cover · Riccione can supply 36 units after its own demand is protected.'],
+    'plan-purchase': ['nwl-plan-detail', 'Selected recommendation', 'Supplier A · 21-day lead time · 12-unit case pack · Existing inbound and the planned FBA transfer included.'],
+    'plan-defer': ['nwl-plan-detail', 'Selected recommendation', 'Stock exceeds the current target · Review projected cover before committing to another purchase.']
+  };
+  root.querySelectorAll('[data-detail]').forEach(button => {
+    button.addEventListener('click', () => {
+      const [targetId, label, value] = details[button.dataset.detail];
+      const target = document.getElementById(targetId);
+      target.querySelector('span').textContent = label;
+      target.querySelector('div').textContent = value;
+    });
+  });
+})();
+</script>

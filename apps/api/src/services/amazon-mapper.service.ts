@@ -5,10 +5,9 @@
  * Handles variation theme mapping, attribute transformation, and parent/child relationships.
  */
 
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db.js'
 import { logger } from '../utils/logger.js';
 
-const prisma = new PrismaClient();
 
 interface VariationAttribute {
   [key: string]: string;

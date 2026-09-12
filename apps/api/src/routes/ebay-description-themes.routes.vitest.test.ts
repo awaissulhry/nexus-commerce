@@ -23,12 +23,19 @@ const productCount = vi.fn()
 const clFindFirst = vi.fn()
 const clFindMany = vi.fn()
 const themeFindUnique = vi.fn()
+const themeFindMany = vi.fn()
+const mockListThemes = vi.fn(async (..._args: unknown[]) => [])
 const themeUpdate = vi.fn()
 const mockRender = vi.fn()
+const mockResolve = vi.fn()
+const aliasFindFirst = vi.fn()
 const mockResolveMode = vi.fn()
 
+vi.mock('../services/connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_channel: string, id?: string) => id ?? 'primary-account' }))
+vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => mockResolve(...args) }))
 vi.mock('../db.js', () => ({
   default: {
+    productListingAlias: { findFirst: (...args: unknown[]) => aliasFindFirst(...args) },
     product: {
       findFirst: (...args: unknown[]) => productFindFirst(...args),
       findMany: (...args: unknown[]) => productFindMany(...args),
@@ -39,13 +46,15 @@ vi.mock('../db.js', () => ({
       findMany: (...args: unknown[]) => clFindMany(...args),
     },
     ebayDescriptionTheme: {
+      findMany: (...args: unknown[]) => themeFindMany(...args),
       findUnique: (...args: unknown[]) => themeFindUnique(...args),
       update: (...args: unknown[]) => themeUpdate(...args),
     },
   },
 }))
-vi.mock('../services/ebay-description-theme.service.js', () => ({
-  listThemes: vi.fn(async () => []),
+vi.mock('../services/ebay-description-theme.service.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../services/ebay-description-theme.service.js')>(),
+  listThemes: (...args: unknown[]) => mockListThemes(...args),
   setDefaultTheme: vi.fn(async () => undefined),
   renderListingDescriptionSafe: (...args: unknown[]) => mockRender(...args),
   galleryHashOfRows: vi.fn(() => 'hash'),
@@ -72,6 +81,8 @@ beforeEach(() => {
   productFindFirst.mockResolvedValue(null)
   productFindMany.mockResolvedValue([])
   productCount.mockResolvedValue(0)
+  mockResolve.mockResolvedValue({ products: [] })
+  aliasFindFirst.mockResolvedValue(null)
   clFindFirst.mockResolvedValue(null)
   clFindMany.mockResolvedValue([])
   mockRender.mockImplementation(async (_prisma: unknown, args: { body: string }) => ({
@@ -97,15 +108,13 @@ describe('POST /ebay/description-preview (DS-0)', () => {
       'root-1': { id: 'root-1', parentId: null },
     }
     productFindFirst.mockImplementation(async ({ where }: { where: { id: string } }) => family[where.id] ?? null)
-    clFindFirst.mockResolvedValue({ description: 'Family body', title: 'Family title' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: 'Family body', errors: [] }, title: { value: 'Family title', errors: [] } } }] })
 
     const res = await preview({ productId: 'child-1', marketplace: 'IT' })
     expect(res.statusCode).toBe(200)
 
     // The listing row is the ROOT's row for the market.
-    expect(clFindFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ productId: 'root-1', channel: 'EBAY', region: 'IT' }) }),
-    )
+    expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({ productIds: ['root-1'], channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'primary-account', aliasKey: '', fieldKeys: ['description', 'title'] }))
     // The render sees the ROOT id (theme assignment + galleries live there)
     // and the family's per-market body.
     const renderArgs = mockRender.mock.calls[0][1] as { productId: string; body: string }
@@ -118,7 +127,7 @@ describe('POST /ebay/description-preview (DS-0)', () => {
     productFindFirst.mockImplementation(async ({ where }: { where: { id: string } }) =>
       where.id === 'root-1' ? { id: 'root-1', parentId: null } : null,
     )
-    clFindFirst.mockResolvedValue({ description: 'Body', title: 'T' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: 'Body', errors: [] }, title: { value: 'T', errors: [] } } }] })
 
     await preview({ productId: 'root-1' })
     expect((mockRender.mock.calls[0][1] as { productId: string }).productId).toBe('root-1')
@@ -130,7 +139,7 @@ describe('POST /ebay/description-preview (DS-0)', () => {
 
   it('EMPTY per-market body → warning (never an error); the render still returns', async () => {
     productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
-    clFindFirst.mockResolvedValue(null) // no listing row → no body for this market
+    mockResolve.mockResolvedValue({ products: [] }) // no listing row → no body for this market
 
     const res = await preview({ productId: 'root-1', marketplace: 'de' })
     expect(res.statusCode).toBe(200)
@@ -141,7 +150,7 @@ describe('POST /ebay/description-preview (DS-0)', () => {
 
   it('whitespace-only stored description also warns; renderer warnings are preserved alongside', async () => {
     productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
-    clFindFirst.mockResolvedValue({ description: '   ', title: 'T' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: '   ', errors: [] }, title: { value: 'T', errors: [] } } }] })
     mockRender.mockResolvedValue({ html: '<div/>', themed: true, warnings: ['renderer says hi'] })
 
     const res = await preview({ productId: 'root-1' })
@@ -153,13 +162,13 @@ describe('POST /ebay/description-preview (DS-0)', () => {
 
   it('a NON-empty body produces no empty-body warning (regression guard)', async () => {
     productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
-    clFindFirst.mockResolvedValue({ description: 'Real body', title: 'T' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: 'Real body', errors: [] }, title: { value: 'T', errors: [] } } }] })
 
     const res = await preview({ productId: 'root-1' })
     expect(res.json().warnings).toEqual([])
 
     // Request-supplied body wins over the (empty) listing too.
-    clFindFirst.mockResolvedValue(null)
+    mockResolve.mockResolvedValue({ products: [] })
     const res2 = await preview({ productId: 'root-1', body: 'Draft body' })
     expect(res2.json().warnings).toEqual([])
   })
@@ -174,13 +183,13 @@ describe('POST /ebay/description-preview (DS-0)', () => {
   describe('render mode parity with the push service', () => {
     beforeEach(() => {
       productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
-      clFindFirst.mockResolvedValue({ description: 'Body', title: 'T' })
+      mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: 'Body', errors: [] }, title: { value: 'T', errors: [] } } }] })
     })
 
     it('delegates to the shared resolver, keyed on the FAMILY ROOT', async () => {
       mockResolveMode.mockResolvedValue('group')
       await preview({ productId: 'root-1' })
-      expect(mockResolveMode).toHaveBeenCalledWith(expect.anything(), 'root-1')
+      expect(mockResolveMode).toHaveBeenCalledWith(expect.anything(), 'root-1', undefined, { channelConnectionId: 'primary-account', marketplace: 'IT', aliasKey: '' })
       expect((mockRender.mock.calls[0][1] as { mode: string }).mode).toBe('group')
     })
 
@@ -202,6 +211,25 @@ describe('POST /ebay/description-preview (DS-0)', () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // 2. GET /ebay/description-themes/usage — marketplace filter + root-scoping
 // ═══════════════════════════════════════════════════════════════════════════
+
+describe('GET /ebay/description-themes?view=options', () => {
+  it('reads only choice metadata without seeding or loading full template bodies', async () => {
+    const themes = [{ id: 'theme', name: 'Classic', active: true, isDefault: true }]
+    themeFindMany.mockResolvedValue(themes)
+    const response = await app.inject({ method: 'GET', url: '/ebay/description-themes?view=options' })
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ themes })
+    expect(themeFindMany).toHaveBeenCalledWith({ select: { id: true, name: true, active: true, isDefault: true }, orderBy: [{ name: 'asc' }, { id: 'asc' }] })
+    expect(mockListThemes).not.toHaveBeenCalled()
+    expect(themeUpdate).not.toHaveBeenCalled()
+  })
+
+  it('retains the full-theme management endpoint', async () => {
+    expect((await app.inject({ method: 'GET', url: '/ebay/description-themes' })).statusCode).toBe(200)
+    expect(mockListThemes).toHaveBeenCalledTimes(1)
+    expect(themeFindMany).not.toHaveBeenCalled()
+  })
+})
 
 describe('GET /ebay/description-themes/usage (DS-0)', () => {
   it('WITHOUT marketplace: legacy behaviour — every eBay row counted, no root-resolve', async () => {
@@ -299,7 +327,7 @@ describe('PUT /ebay/description-themes/:id (DS-0 version guard)', () => {
     expect(res.statusCode).toBe(200)
     expect(themeUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 't1' },
+        where: { id: 't1', version: 5 },
         data: expect.objectContaining({ name: 'Renamed', version: { increment: 1 } }),
       }),
     )
@@ -315,5 +343,34 @@ describe('PUT /ebay/description-themes/:id (DS-0 version guard)', () => {
     themeFindUnique.mockResolvedValue(null)
     const res = await put({ name: 'X', expectedVersion: 1 })
     expect(res.statusCode).toBe(404)
+  })
+})
+
+describe('Session 3 scoped canonical preview and atomic version guard', () => {
+  it('uses the selected account and active alias for both effective content and renderer', async () => {
+    productFindFirst.mockResolvedValue({ id: 'root-1', parentId: null })
+    aliasFindFirst.mockResolvedValue({ id: 'alias-b' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: 'Canonical override body', errors: [] }, title: { value: 'Canonical title', errors: [] } } }] })
+    const response = await app.inject({ method: 'POST', url: '/ebay/description-preview', payload: { productId: 'root-1', marketplace: 'DE', accountId: 'account-b', aliasKey: 'alias-b' } })
+    expect(response.statusCode).toBe(200)
+    expect(aliasFindFirst).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ productId: 'root-1', marketplace: 'DE', channelConnectionId: 'account-b', status: 'ACTIVE' }) }))
+    expect(mockResolve).toHaveBeenCalledWith(expect.objectContaining({ channelConnectionId: 'account-b', aliasKey: 'alias-b', marketplace: 'DE' }))
+    expect(mockRender).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ body: 'Canonical override body', title: 'Canonical title', channelConnectionId: 'account-b', aliasKey: 'alias-b' }))
+  })
+  it('refuses a foreign alias and invalid canonical outputs before rendering', async () => {
+    const request = { method: 'POST' as const, url: '/ebay/description-preview', payload: { productId: 'root-1', accountId: 'account-b', aliasKey: 'foreign' } }
+    expect((await app.inject(request)).statusCode).toBe(400)
+    expect(mockResolve).not.toHaveBeenCalled()
+    aliasFindFirst.mockResolvedValue({ id: 'foreign' })
+    mockResolve.mockResolvedValue({ products: [{ cells: { description: { value: null, errors: ['Conflicting shared categories'] } } }] })
+    expect((await app.inject(request)).statusCode).toBe(422)
+    expect(mockRender).not.toHaveBeenCalled()
+  })
+  it('returns a conflict when another save wins after the initial version read', async () => {
+    themeFindUnique.mockResolvedValue({ id: 'theme-1', version: 7 })
+    themeUpdate.mockRejectedValue({ code: 'P2025' })
+    const response = await app.inject({ method: 'PUT', url: '/ebay/description-themes/theme-1', payload: { expectedVersion: 7, name: 'My draft' } })
+    expect(response.statusCode).toBe(409)
+    expect(themeUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'theme-1', version: 7 } }))
   })
 })

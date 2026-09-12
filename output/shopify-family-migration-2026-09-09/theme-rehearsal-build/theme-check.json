@@ -1,0 +1,348 @@
+[
+  {
+    "type": "LiquidHtml",
+    "check": "RemoteAsset",
+    "message": "Asset should be served by the Shopify CDN for better performance.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 224,
+      "line": 4,
+      "character": 16
+    },
+    "end": {
+      "index": 317,
+      "line": 4,
+      "character": 109
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "RemoteAsset",
+    "message": "Asset should be served by the Shopify CDN for better performance.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/article-comments.liquid",
+    "severity": 1,
+    "start": {
+      "index": 1215,
+      "line": 30,
+      "character": 18
+    },
+    "end": {
+      "index": 1272,
+      "line": 30,
+      "character": 75
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "VariableName",
+    "message": "The variable '_recovery' uses wrong naming format",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/sections/main-customers-login.liquid",
+    "severity": 1,
+    "start": {
+      "index": 674,
+      "line": 16,
+      "character": 14
+    },
+    "end": {
+      "index": 683,
+      "line": 16,
+      "character": 23
+    },
+    "suggest": [
+      {
+        "message": "Change variable '_recovery' to 'recovery'"
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "OrphanedSnippet",
+    "message": "This snippet is not referenced by any other files",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 0,
+      "line": 0,
+      "character": 0
+    },
+    "end": {
+      "index": 1,
+      "line": 1,
+      "character": 0
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "VariableName",
+    "message": "The variable '_temporary' uses wrong naming format",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/sections/newsletter-popup.liquid",
+    "severity": 1,
+    "start": {
+      "index": 322,
+      "line": 5,
+      "character": 16
+    },
+    "end": {
+      "index": 332,
+      "line": 5,
+      "character": 26
+    },
+    "suggest": [
+      {
+        "message": "Change variable '_temporary' to 'temporary'"
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "VariableName",
+    "message": "The variable 'BASE_URL' uses wrong naming format",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 1570,
+      "line": 37,
+      "character": 14
+    },
+    "end": {
+      "index": 1610,
+      "line": 37,
+      "character": 54
+    },
+    "suggest": [
+      {
+        "message": "Change variable 'BASE_URL' to 'base_url'"
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "AssetPreload",
+    "message": "For better performance, prefer using the preload_tag filter",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/layout/theme.liquid",
+    "severity": 1,
+    "start": {
+      "index": 2126,
+      "line": 43,
+      "character": 6
+    },
+    "end": {
+      "index": 2232,
+      "line": 43,
+      "character": 112
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "AssetPreload",
+    "message": "For better performance, prefer using the preload_tag filter",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/layout/theme.liquid",
+    "severity": 1,
+    "start": {
+      "index": 2308,
+      "line": 47,
+      "character": 6
+    },
+    "end": {
+      "index": 2411,
+      "line": 47,
+      "character": 109
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "RemoteAsset",
+    "message": "Asset should be served by the Shopify CDN for better performance.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/layout/theme.liquid",
+    "severity": 1,
+    "start": {
+      "index": 2024,
+      "line": 40,
+      "character": 29
+    },
+    "end": {
+      "index": 2068,
+      "line": 40,
+      "character": 73
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "VariableName",
+    "message": "The variable 'BASE_URL' uses wrong naming format",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 2228,
+      "line": 51,
+      "character": 14
+    },
+    "end": {
+      "index": 2268,
+      "line": 51,
+      "character": 54
+    },
+    "suggest": [
+      {
+        "message": "Change variable 'BASE_URL' to 'base_url'"
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "MissingRenderSnippetArguments",
+    "message": "Missing required argument 'section' in render tag for snippet 'cart-discount'.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/sections/main-cart.liquid",
+    "severity": 1,
+    "start": {
+      "index": 5363,
+      "line": 112,
+      "character": 39
+    },
+    "end": {
+      "index": 5379,
+      "line": 112,
+      "character": 55
+    },
+    "suggest": [
+      {
+        "message": "Add required argument 'section'"
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "MissingRenderSnippetArguments",
+    "message": "Missing required argument 'section' in render tag for snippet 'cart-discount'.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/sections/cart-drawer.liquid",
+    "severity": 1,
+    "start": {
+      "index": 5620,
+      "line": 125,
+      "character": 23
+    },
+    "end": {
+      "index": 5636,
+      "line": 125,
+      "character": 39
+    },
+    "suggest": [
+      {
+        "message": "Add required argument 'section'"
+      }
+    ]
+  },
+  {
+    "type": "JSON",
+    "check": "DeprecatedFontsOnSettingsSchema",
+    "message": "The font \"helvetica_n4\" is deprecated",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/config/settings_schema.json",
+    "severity": 1,
+    "start": {
+      "index": 9108,
+      "line": 396,
+      "character": 19
+    },
+    "end": {
+      "index": 9122,
+      "line": 396,
+      "character": 33
+    }
+  },
+  {
+    "type": "JSON",
+    "check": "DeprecatedFontsOnSettingsSchema",
+    "message": "The font \"helvetica_n4\" is deprecated",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/config/settings_schema.json",
+    "severity": 1,
+    "start": {
+      "index": 10619,
+      "line": 457,
+      "character": 19
+    },
+    "end": {
+      "index": 10633,
+      "line": 457,
+      "character": 33
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "LiquidComplexity",
+    "message": "Liquid complexity is 174, which exceeds the maximum of 120. The decision at line 971 pushed it over the limit. Consider simplifying conditional logic, or moving self-contained decision logic into snippets with the render tag.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/icon.liquid",
+    "severity": 1,
+    "start": {
+      "index": 61966,
+      "line": 970,
+      "character": 290
+    },
+    "end": {
+      "index": 62003,
+      "line": 970,
+      "character": 327
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "LiquidComplexity",
+    "message": "Liquid complexity is 162, which exceeds the maximum of 120. The decision at line 431 pushed it over the limit. Consider simplifying conditional logic, or moving self-contained decision logic into snippets with the render tag.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/product-info.liquid",
+    "severity": 1,
+    "start": {
+      "index": 23003,
+      "line": 430,
+      "character": 8
+    },
+    "end": {
+      "index": 23024,
+      "line": 430,
+      "character": 29
+    }
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "DeprecatedFilter",
+    "message": "Deprecated filter 'img_url', consider using 'image_url'.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 1487,
+      "line": 35,
+      "character": 57
+    },
+    "end": {
+      "index": 1496,
+      "line": 35,
+      "character": 66
+    },
+    "suggest": [
+      {
+        "message": "Replace 'img_url' with 'image_url'."
+      }
+    ]
+  },
+  {
+    "type": "LiquidHtml",
+    "check": "DeprecatedFilter",
+    "message": "Deprecated filter 'img_url', consider using 'image_url'.",
+    "uri": "file:///Users/awais/nexus-commerce/output/shopify-family-migration-2026-09-09/theme-rehearsal-build/theme/snippets/pagefly-main-js.liquid",
+    "severity": 1,
+    "start": {
+      "index": 2145,
+      "line": 49,
+      "character": 60
+    },
+    "end": {
+      "index": 2154,
+      "line": 49,
+      "character": 69
+    },
+    "suggest": [
+      {
+        "message": "Replace 'img_url' with 'image_url'."
+      }
+    ]
+  }
+]

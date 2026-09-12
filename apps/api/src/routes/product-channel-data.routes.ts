@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Channel pricing + inventory + Amazon sync-data endpoints for the
  * product edit page.
@@ -172,7 +173,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
 
         // MAP.2b — resolved once for the channels in this batch (see the loop head).
         await prisma.channelListing.upsert({
-          where: { productId_channel_marketplace: { productId: u.variantId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null } },
+          where: { productId_channel_marketplace: workspaceKey({ productId: u.variantId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null, aliasKey: '' }) },
           update: clUpdate,
           create: {
             productId: u.variantId,
@@ -403,7 +404,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       // Keep the ingested fulfillmentChannel mirror in step with the operator's
       // choice so read surfaces reading platformAttributes don't show stale data.
       const existing = await prisma.channelListing.findUnique({
-        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null } },
+        where: { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) },
         select: { platformAttributes: true },
       })
       const pa = { ...((existing?.platformAttributes as Record<string, unknown> | null) ?? {}) }
@@ -412,7 +413,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const paJson = pa as unknown as Parameters<typeof prisma.channelListing.upsert>[0]['create']['platformAttributes']
 
       await prisma.channelListing.upsert({
-        where: { productId_channel_marketplace: { productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null } },
+        where: { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) },
         update: { fulfillmentMethod: u.fulfillmentMethod, platformAttributes: paJson, lastSyncedAt: new Date(), syncStatus: 'PENDING' },
         create: {
           productId,
@@ -477,6 +478,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       const listings = await prisma.channelListing.findMany({
         where: { productId: id },
         select: {
+          id: true, channelConnectionId: true, aliasKey: true, channelConnection: { select: { displayName: true } },
           channel: true,
           marketplace: true,
           listingStatus: true,
@@ -499,6 +501,7 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
       return reply.send({
         productId: id,
         listings: listings.map((l) => ({
+          id: l.id, channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey, accountName: l.channelConnection?.displayName ?? null,
           channel: l.channel,
           marketplace: l.marketplace,
           status: l.listingStatus,

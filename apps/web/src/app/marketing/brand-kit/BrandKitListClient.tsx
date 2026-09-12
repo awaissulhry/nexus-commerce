@@ -7,7 +7,7 @@
 //   2. Brands without a kit — catalogue brands that don't have a kit
 //      yet (cliquéable to start one)
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Palette,
   Plus,

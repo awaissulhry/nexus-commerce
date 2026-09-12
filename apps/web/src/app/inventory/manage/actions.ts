@@ -1,4 +1,7 @@
 "use server";
+import { workspaceKey } from '@nexus/database/workspace-context'
+import { requireWebPermission } from '@/lib/workspaces/server'
+
 
 import { prisma } from "@nexus/database";
 import { revalidatePath } from "next/cache";
@@ -22,12 +25,13 @@ export async function quickUpdateItem(
   value: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await requireWebPermission(field === 'price' ? 'products.price.edit' : 'inventory.adjust');
     const data: Record<string, any> = {};
     if (field === "price") data.basePrice = value;
     if (field === "stock") data.totalStock = value;
 
     await prisma.product.update({
-      where: { sku },
+      where: { workspace_sku: workspaceKey({ sku: sku }) },
       data,
     });
 
@@ -59,6 +63,7 @@ export async function bulkUpdateItems(
   action: "pause" | "delete"
 ): Promise<{ success: boolean; affected: number; error?: string }> {
   try {
+    await requireWebPermission(action === 'delete' ? 'products.delete' : 'inventory.adjust');
     let affected = 0;
 
     if (action === "pause") {

@@ -1,3 +1,4 @@
+import { WorkspaceCache } from '../lib/workspace-cache.js'
 /**
  * EH.4 — Tiny in-memory TTL cache for hot GET endpoints.
  *
@@ -42,7 +43,7 @@ interface Entry<V> {
 export class TtlCache<V> {
   private readonly ttlMs: number
   private readonly maxEntries: number
-  private readonly store = new Map<string, Entry<V>>()
+  private readonly store = new WorkspaceCache<string, Entry<V>>()
 
   constructor(opts: TtlCacheOptions) {
     this.ttlMs = opts.ttlMs

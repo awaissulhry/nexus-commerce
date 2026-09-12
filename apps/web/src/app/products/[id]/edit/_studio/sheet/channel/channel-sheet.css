@@ -1,0 +1,245 @@
+/**
+ * PES.3 — the channel scope's own chrome: the alias band and the provenance badge.
+ *
+ * Page-local, following the convention of `app/fleet/fleet-pages.css` — the GRID's chrome belongs in
+ * the engine (feedback_grid_chrome_lives_in_the_engine) and is PES.2's to own, so nothing here
+ * restyles a grid part. These rules dress two things this lane invents: the alias group band and the
+ * cascade badge. Both are queued as substrate requests to PES.2 in `docs/pes-claims.md`; when the
+ * substrate lands, this file shrinks to nothing and the classes come from `design-system/grid/`.
+ *
+ * Every colour is a `--nds-*` token — an undefined class or a raw hex is the silent kind of wrong
+ * (reference_undefined_css_class_is_silent, reference_ds_channel_tokens_used_raw).
+ */
+
+/* ── The alias band ──────────────────────────────────────────────────────────────────────────── */
+
+/* The band lives in the 240px pinned identity column (ruling #77c), so every item is sized for
+   that budget: the label takes what is left after the fixed pieces, and truncates with the full
+   sentence on the cell's own title. */
+.nds-alias-band {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+/* ①②③ — the alias's ordinal mark. Tabular so bands line up as the list grows. */
+.nds-alias-mark {
+  flex: 0 0 auto;
+  font-size: var(--nds-font-size-base);
+  line-height: 1;
+  color: var(--nds-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* #712 — the variant count beside the alias label. Same line, quieter than the label it follows:
+   it is a reference number, not the thing an operator acts on. `font-weight: normal` rather than a
+   colour, because the band already spends its colour budget on the status pill and the readiness
+   bar (and a dimmed informative value is what the contrast rule refuses). */
+.nds-alias-count {
+  font-weight: var(--nds-font-weight-normal);
+  color: var(--nds-text-2);
+}
+
+.nds-alias-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+/* The channel's own id — monospace, because an ItemID/ASIN is read digit by digit. */
+/* The empty-shell marker: one word, always visible. A live listing with nothing behind it is the
+   single most important thing this band can say, so it never moves to a hover. */
+.nds-alias-shell {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* Readiness bar. Pushed right so every band's bar starts at the same x and they can be compared
+   down the column without reading a single number. */
+.nds-alias-readiness {
+  flex: 0 0 auto;
+  margin-left: auto;
+  /* 48px, not 96: at 240px total the bar competes with the listing's NAME, and a name an operator
+     cannot read is worse than a bar they read less precisely. Exact % is on the band's title. */
+  width: 48px;
+  height: 6px;
+  border-radius: var(--nds-radius-full);
+  background: var(--nds-border-subtle);
+  overflow: hidden;
+}
+
+.nds-alias-readiness-bar {
+  display: block;
+  height: 100%;
+  border-radius: var(--nds-radius-full);
+  transition: width 160ms ease;
+}
+
+/* One class per `ReadinessTone` from PES.2's `readinessMeta()` — all five, so an unrecognised
+   readiness state (which it reports as `neutral`) still paints instead of vanishing. */
+.nds-alias-readiness-success { background: var(--nds-success); }
+.nds-alias-readiness-warning { background: var(--nds-warning); }
+.nds-alias-readiness-danger  { background: var(--nds-danger); }
+.nds-alias-readiness-neutral { background: var(--nds-text-3); }
+.nds-alias-readiness-info    { background: var(--nds-text-2); }
+
+.nds-alias-pct {
+  flex: 0 0 auto;
+  width: 34px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── The cascade badge ───────────────────────────────────────────────────────────────────────── */
+
+.nds-cascade {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.nds-cascade-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── The backend-not-landed notice ───────────────────────────────────────────────────────────── */
+
+/*
+ * Shown when PES.5's read is not deployed. Deliberately plain and deliberately NOT an empty grid:
+ * "this product has no aliases" and "the endpoint does not exist" look identical to an operator, and
+ * only one of them is a fact about the catalogue.
+ */
+.nds-channel-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  border: 1px dashed var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.nds-channel-notice-title {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.nds-channel-notice code {
+  font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+}
+
+/* ── The per-alias publish control ───────────────────────────────────────────────────────────── */
+
+.nds-alias-publish {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* Mapping error. The one mapping state visible without hovering: a derived value that would not
+   ship. `unmapped` and a clean mapping stay in the tooltip — an icon on every cell of a fully
+   mapped sheet tells the operator nothing. */
+.nds-cascade-maperr {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-danger);
+  color: var(--nds-text-inverse);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* The chip-hit ring lives in the ENGINE now (grid/theme/grid.css) — PES.2 hoisted it verbatim
+   after check-ag-grid-import-boundary flagged this file for styling an `.ag-cell`. The rule was
+   right; the LOCATION was not. Grid chrome belongs to the engine
+   (feedback_grid_chrome_lives_in_the_engine), and the guard is what says so. */
+
+/**
+ * The channel toolbar's own layout.
+ *
+ * The DS prefsbar is a single row, which is right until a preflight answers: its verdict line and
+ * the eBay preview-only sentence are long, and on screen they pushed the View chips into
+ * overlapping the status text — legible in a screenshot, invisible in a diff
+ * (feedback_read_the_screen_not_the_diff). So this lane's toolbar wraps instead of overflowing, and
+ * every item keeps its own line box.
+ */
+.nds-channel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+  row-gap: 8px;
+}
+
+.nds-channel-toolbar > * {
+  min-width: 0;
+}
+
+/* A preflight verdict is a paragraph, not a chip — give it the full row it needs rather than
+   letting it squeeze everything else. */
+.nds-alias-publish {
+  flex: 1 1 100%;
+}
+
+/* The `affectsAllChannels` acknowledgement (ruling #58). Full-width and unmissable on purpose: it
+   is the one moment the sheet has to correct an assumption the operator has every reason to hold —
+   that editing on a channel scope edits that channel. */
+.nds-channel-ack {
+  flex: 1 1 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--nds-warning);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* #513 — the standing cross-market notice in the toolbar descriptor. Warning-toned rather than
+   muted: it states that an edit here leaves the channel, which an operator must not read past. */
+.cs-cross-channel-note {
+  /* 🔴 `--nds-warning-text`, NOT the `--nds-color-warning-fg` I first wrote: that token does not
+     exist, and an undefined token resolves to transparent with no error and no guard hit — the
+     notice would have been invisible while looking deliberate. Verified against the defined set. */
+  color: var(--nds-warning-text);
+}
+
+.cs-cell-details {
+  display: grid;
+  gap: var(--nds-space-16);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cs-cell-details p { margin: 0; }

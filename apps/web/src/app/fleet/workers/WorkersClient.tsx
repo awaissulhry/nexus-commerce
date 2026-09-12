@@ -40,7 +40,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle, Archive, Ban, Bot, Check, Columns, Pause as PauseIcon, Plus, RefreshCw, ShieldAlert, X } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { GLOSSARY, Term } from '@/app/marketing/ads/rules-automation/fleet/glossary'

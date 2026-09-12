@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * SQP.2 — Brand Analytics ingest, split into a REQUEST pass and a COLLECT pass.
  *
@@ -355,7 +356,7 @@ export async function collectSqpReports(args: { limit?: number; paceMs?: number 
         ) changed++
 
         await prisma.searchQueryPerformance.upsert({
-          where: { marketplace_reportPeriod_startDate_searchQuery_asin: { marketplace: req.marketplace, reportPeriod: req.reportPeriod, startDate: req.startDate, searchQuery: row.searchQuery, asin: a } },
+          where: { marketplace_reportPeriod_startDate_searchQuery_asin: workspaceKey({ marketplace: req.marketplace, reportPeriod: req.reportPeriod, startDate: req.startDate, searchQuery: row.searchQuery, asin: a }) },
           create: {
             marketplace: req.marketplace, reportPeriod: req.reportPeriod, startDate: req.startDate,
             searchQuery: row.searchQuery, asin: a,

@@ -20,6 +20,8 @@ import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
+  // Component contract tests render the real editors in Node; compile Next's preserved JSX.
+  oxc: { jsx: { runtime: 'automatic' } },
   // Matches `paths: { "@/*": ["./src/*"] }` in tsconfig.json — the tests import through it.
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },

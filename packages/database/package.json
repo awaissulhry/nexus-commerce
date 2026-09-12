@@ -10,12 +10,33 @@
       "types": "./index.d.ts",
       "import": "./index.js",
       "default": "./index.js"
+    },
+    "./workspace-context": {
+      "types": "./workspace-context.d.ts",
+      "import": "./workspace-context.js",
+      "default": "./workspace-context.js"
+    },
+    "./workspace-adapter": {
+      "types": "./workspace-adapter.d.ts",
+      "import": "./workspace-adapter.js",
+      "default": "./workspace-adapter.js"
+    },
+    "./workspace-client": {
+      "types": "./workspace-client.d.ts",
+      "import": "./workspace-client.js",
+      "default": "./workspace-client.js"
+    },
+    "./workspace-router": {
+      "types": "./workspace-router.d.ts",
+      "import": "./workspace-router.js",
+      "default": "./workspace-router.js"
     }
   },
   "scripts": {
     "dev": "echo \"Add your database dev command here\"",
-    "build": "prisma generate",
-    "postinstall": "prisma generate",
+    "build": "prisma generate && node scripts/build-runtime.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "postinstall": "prisma generate && node scripts/build-runtime.mjs",
     "check:drift": "node scripts/check-schema-drift.mjs",
     "check:column-drift": "node scripts/check-column-drift.mjs"
   },

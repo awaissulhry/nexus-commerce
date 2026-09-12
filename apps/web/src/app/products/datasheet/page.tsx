@@ -25,7 +25,7 @@
 
 import { prisma } from '@nexus/database'
 import { cookies } from 'next/headers'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ArrowLeft } from 'lucide-react'
 // ATM.1 — DS-series printable moved into /datasheet/print/ subfolder
 // so /datasheet itself can host the new cross-channel attribute hub.

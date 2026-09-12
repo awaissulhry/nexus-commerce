@@ -21,7 +21,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, Download, FlaskConical } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 import { Button, Input, SegmentedControl } from '@/design-system/primitives'
-import { DataGrid } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 
 interface Row {
   campaignId: string; name: string; marketplace: string | null; branded: boolean

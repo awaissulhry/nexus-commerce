@@ -14,7 +14,7 @@
  * Flipping a tab to its own page = build the route, set `routed: true`, drop its branch from the
  * index. Nothing else in the bar changes.
  */
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { RULE_TYPES } from './ruleTypes'
 import { useRulesTabCounts } from './tabCountsContext'

@@ -4,7 +4,7 @@
 // rows where source=FALLBACK, isClamped=true, or warnings non-empty).
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   AlertCircle,
   AlertTriangle,

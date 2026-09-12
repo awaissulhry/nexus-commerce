@@ -1,3 +1,5 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
+import { registerShopifySchemaWebhook } from '../services/shopify/schema-sync.service.js'
 /**
  * Shopify Webhook Routes
  * Handles incoming webhooks from Shopify for products, inventory, and orders.
@@ -58,6 +60,21 @@ async function handleProductUpdate(payload: ShopifyWebhookPayload): Promise<void
     const shopifyProductId = String(product.id);
 
     console.log(`[ShopifyWebhooks] Processing product update: ${shopifyProductId}`);
+
+    const managed = await prisma.channelListing.findMany({ where: { channel: 'SHOPIFY',
+      externalListingId: shopifyProductId, platformAttributes: { path: ['_nexusContent', 'version'], equals: 1 },
+    }, select: { id: true, version: true, platformAttributes: true } });
+    if (managed.length) {
+      for (const listing of managed) {
+        const attributes = (listing.platformAttributes ?? {}) as Record<string, any>;
+        const publication = attributes._nexusContentPublish ?? {};
+        if (publication.status === 'PUBLISHING' || (publication.remoteUpdatedAt && Date.parse(product.updated_at) <= Date.parse(publication.remoteUpdatedAt))) continue;
+        await prisma.channelListing.updateMany({ where: { id: listing.id, version: listing.version }, data: {
+          version: { increment: 1 }, platformAttributes: { ...attributes, _nexusContentPublish: { ...publication, status: 'REMOTE_CHANGED', observedAt: product.updated_at, error: 'Shopify reported a product change. Refresh the remote review before synchronising.' } },
+        } });
+      }
+      return;
+    }
 
     // Find product in database
     const dbProduct = await (prisma as any).product.findFirst({
@@ -170,14 +187,14 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
   const inventory = payload as any;
   const inventoryItemId = String(inventory.inventory_item_id ?? '');
   const shopifyLocationId = inventory.location_id != null ? String(inventory.location_id) : null;
-  const available = Number(inventory.available ?? 0);
+  const available = inventory.available;
   const updatedAt = inventory.updated_at != null ? String(inventory.updated_at) : new Date().toISOString();
 
   logger.info('[ShopifyWebhooks] inventory_levels/update received', {
     inventoryItemId, shopifyLocationId, available,
   });
 
-  if (!inventoryItemId) {
+  if (!inventoryItemId || !Number.isSafeInteger(available)) {
     logger.warn('[ShopifyWebhooks] inventory webhook missing inventory_item_id; skipping');
     return;
   }
@@ -200,33 +217,15 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
       return;
     }
 
-    // Resolve product. ChannelListing carries the inventory_item_id
-    // in externalListingId (Wave 4 catalogs); the legacy
-    // VariantChannelListing path uses channelVariantId. Try the
-    // canonical path first, fall back to legacy.
-    let productId: string | null = null;
-    const cl = await prisma.channelListing.findFirst({
-      where: {
-        channel: 'SHOPIFY',
-        externalListingId: { contains: inventoryItemId },
-      },
-      select: { productId: true },
+    // Canonical native variant mappings use exact inventory IDs; a substring of
+    // a product ID can match an unrelated SKU (and ProductVariation is retired).
+    const matches = await prisma.channelListing.findMany({
+      where: { channel: 'SHOPIFY', OR: [
+        { platformAttributes: { path: ['inventoryItemId'], equals: inventoryItemId } },
+        { platformAttributes: { path: ['inventoryItemId'], equals: `gid://shopify/InventoryItem/${inventoryItemId}` } },
+      ] }, select: { productId: true }, take: 2,
     });
-    if (cl?.productId) productId = cl.productId;
-    if (!productId) {
-      const variant = await (prisma as any).productVariation.findFirst({
-        where: {
-          channelListings: {
-            some: {
-              channelId: 'SHOPIFY',
-              channelVariantId: { contains: inventoryItemId },
-            },
-          },
-        },
-        select: { productId: true },
-      });
-      if (variant?.productId) productId = variant.productId;
-    }
+    let productId: string | null = matches.length === 1 ? matches[0].productId : null;
     if (!productId) {
       logger.warn('[ShopifyWebhooks] inventory webhook for unknown product', {
         inventoryItemId, shopifyLocationId,
@@ -240,7 +239,7 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
       try {
         await recordChannelStockEvent({
           channel: 'SHOPIFY',
-          channelEventId: `${inventoryItemId}:${updatedAt}`,
+          channelEventId: `${inventoryItemId}:${shopifyLocationId}:${updatedAt}`,
           sku: inventoryItemId, // best-effort placeholder
           channelReportedQty: available,
           locationId: nexusLocation.id,
@@ -263,7 +262,7 @@ async function handleInventoryUpdate(payload: ShopifyWebhookPayload): Promise<vo
     );
     const result = await recordChannelStockEvent({
       channel: 'SHOPIFY',
-      channelEventId: `${inventoryItemId}:${updatedAt}`,
+      channelEventId: `${inventoryItemId}:${shopifyLocationId}:${updatedAt}`,
       productId,
       channelReportedQty: available,
       locationId: nexusLocation.id,
@@ -335,10 +334,10 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
     // Idempotent upsert on (channel, channelOrderId).
     const dbOrder = await prisma.order.upsert({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'SHOPIFY',
           channelOrderId: shopifyOrderId,
-        },
+        }),
       },
       update: {
         status,
@@ -381,14 +380,14 @@ async function handleOrderCreate(payload: ShopifyWebhookPayload): Promise<void> 
         const sku = item.sku || item.title || `shopify-line-${item.id}`;
         const externalLineItemId = String(item.id);
         const product = sku
-          ? await prisma.product.findUnique({ where: { sku }, select: { id: true } })
+          ? await prisma.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: sku }) }, select: { id: true } })
           : null;
         await prisma.orderItem.upsert({
           where: {
-            orderId_externalLineItemId: {
+            orderId_externalLineItemId: workspaceKey({
               orderId: dbOrder.id,
               externalLineItemId,
-            },
+            }),
           },
           create: {
             orderId: dbOrder.id,
@@ -537,10 +536,10 @@ async function handleOrderUpdate(payload: ShopifyWebhookPayload): Promise<void> 
   try {
     const dbOrder = await prisma.order.findUnique({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'SHOPIFY',
           channelOrderId: shopifyOrderId,
-        },
+        }),
       },
       select: { id: true, status: true },
     });
@@ -869,10 +868,10 @@ async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): Promise<
   try {
     const dbOrder = await prisma.order.findUnique({
       where: {
-        channel_channelOrderId: {
+        channel_channelOrderId: workspaceKey({
           channel: 'SHOPIFY',
           channelOrderId: shopifyOrderId,
-        },
+        }),
       },
       select: { id: true, status: true },
     });
@@ -919,6 +918,7 @@ async function handleFulfillmentCreate(payload: ShopifyWebhookPayload): Promise<
 export async function shopifyWebhookRoutes(app: FastifyInstance) {
   // CX.0 (S9): Shopify signs the raw bytes; capture them for this plugin only.
   registerRawJsonParser(app);
+  registerShopifySchemaWebhook(app);
 
   const webhookValidator = new WebhookValidator();
   const webhookProcessor = new WebhookProcessor();
@@ -1088,7 +1088,7 @@ export async function shopifyWebhookRoutes(app: FastifyInstance) {
 
       // Check idempotency
       const eventType = "inventory/update";
-      const externalId = String(payload.id);
+      const externalId = `${payload.inventory_item_id}:${payload.location_id}:${payload.updated_at}`;
 
       const isProcessed = await WebhookProcessor.isWebhookProcessed("SHOPIFY", externalId, prisma);
       if (isProcessed) {

@@ -1,0 +1,473 @@
+{
+  "sourceSha256": "2892f02545ac15f9eaf699015f3b65e92a51223e8720bc9f10fffceed636b9ec",
+  "impactVersion": "7.2.0",
+  "customizationSourceSha256": "2e6c87df0157ef14a02419765113650b1cf4ed61b3bceafb42bcae5c5d346b70",
+  "customizationSourceVersion": "6.11.2",
+  "zip": "nexus-impact-7.2.0-review.zip",
+  "zipSha256": "3c88288af4dbeff646dba04f016adc3fb2d018b285370b31be994c6fcbc40572",
+  "zipBytes": 1307755,
+  "changes": [
+    {
+      "file": "assets/nexus-card-swatches.js",
+      "change": "added",
+      "sha256": "9ce34bb76879eb790a0dd7e64da9e3ad7fe885d2b19c7f4fe99f42fcbb346956",
+      "originalSha256": null
+    },
+    {
+      "file": "assets/nexus-collection.js",
+      "change": "added",
+      "sha256": "91aeaabd8faf417f891542136a09b74bd59f6bc7fe9ab3026f62344eb63da628",
+      "originalSha256": null
+    },
+    {
+      "file": "assets/nexus-impact.js",
+      "change": "added",
+      "sha256": "fd073ce71d4992ed862ab7f02c8ca9c1d370e68d0faeae857e8114591a08af4f",
+      "originalSha256": null
+    },
+    {
+      "file": "assets/nexus-menu-widgets.js",
+      "change": "added",
+      "sha256": "8a38a81d86a89e7466c6ecc0d17c0fa919bbd1b932c6d82f5c404c07acd53730",
+      "originalSha256": null
+    },
+    {
+      "file": "assets/nexus-xavia-customizations.css",
+      "change": "added",
+      "sha256": "c7a5c9a6327ff461e0c0dfead8aa6c5d66dabacb24b40d99b5a8aaa6122290e7",
+      "originalSha256": null
+    },
+    {
+      "file": "assets/theme.js",
+      "change": "modified",
+      "sha256": "22b9eb1c1be468611d9dc139bf857426cf60a1036d7c5006325902ca678f172f",
+      "originalSha256": "f9f3b35245d19e5b78d6b1c3742478daccb88dfc139648296c6930bd697eb392"
+    },
+    {
+      "file": "layout/theme.liquid",
+      "change": "modified",
+      "sha256": "dccc9f9c8e95877dd51f36caacde0c68b705aebeb00209b1b02d460ea47cd017",
+      "originalSha256": "a89ea2a8ca61bd12a3763a92e7639459ab8aa15a59095f473da2e68fe2acf77c"
+    },
+    {
+      "file": "locales/ar.json",
+      "change": "modified",
+      "sha256": "87e347f41b10957d4e09518e1277f86b61ec628fc5b84a1410c2412fddcbd310",
+      "originalSha256": "c600c918b981b671d6f005f34313319df73d97e441640bc4eef5778f82040174"
+    },
+    {
+      "file": "locales/cs.json",
+      "change": "modified",
+      "sha256": "df43969ddcf23d0a7cfe26040affe7377b526578158de620cb14a3dde351923b",
+      "originalSha256": "18e3adab5989d5a63d6230973ac215df7db60ab67a23ea6a1874c9168ff5b0db"
+    },
+    {
+      "file": "locales/da.json",
+      "change": "modified",
+      "sha256": "c9130c38aede7375bec1fa50a09b392502f795f978cefaee29aa7a6a675c54e5",
+      "originalSha256": "80c3b1bfeb7f26bc8d161067a0de7d4d1309f1fb696917b390124c7e45edb850"
+    },
+    {
+      "file": "locales/de.json",
+      "change": "modified",
+      "sha256": "e6bec8f560c122e94fc9ddfe4c1df7159261220bd251f1b1a6fcf1ac8e573bfa",
+      "originalSha256": "7b331d9371f972ad5804b08123dc0043aa979c9ea2a86f470d8e1b2872b0be81"
+    },
+    {
+      "file": "locales/el.json",
+      "change": "modified",
+      "sha256": "ea5de73ecdaefa45043cb41a4ea253e806b027f08b212196c67eda6361acb62c",
+      "originalSha256": "4885ca158761307ab8a9622e43bd893cec91cecbd06befe718a0cba0e5508fca"
+    },
+    {
+      "file": "locales/en.default.json",
+      "change": "modified",
+      "sha256": "f77a92295578d95f2ce44b0a45a841541a5148af23e0807998ad43c6b1090bee",
+      "originalSha256": "fa3c342898472308c497f1062044758ad02e4900b8063a92f4158fe9a78db061"
+    },
+    {
+      "file": "locales/es.json",
+      "change": "modified",
+      "sha256": "ca511d81cd75b874cf029d8adfe53239cf9c88873a26b078f6b45c936b179c3d",
+      "originalSha256": "47f32d4c7151d0a46768a58e9bf15cc5c2ad12f7a92c03946f03af404c3cd54f"
+    },
+    {
+      "file": "locales/fi.json",
+      "change": "modified",
+      "sha256": "b1fba0316d9c99de19e0c28387121ff7db4d60369d9ad7865975b4e90c6c41f8",
+      "originalSha256": "54fe2c7ea7317623d3e5424426376cd2714b200ea27a3737023339798ab6dbac"
+    },
+    {
+      "file": "locales/fr.json",
+      "change": "modified",
+      "sha256": "fbf973169dafc02456e1677364a14617bf08215bdf68897779f1f4d45d53176c",
+      "originalSha256": "170c0be91c5c41fd1680360aa454bcbd542260af49a62323e726c018fe29d7e9"
+    },
+    {
+      "file": "locales/he.json",
+      "change": "modified",
+      "sha256": "cfaa4d335ff4eae0895227b874efa48431d6430b4332c87a59b2a93b03e15eef",
+      "originalSha256": "ba947224a440f4b8857cc2e257f2b6d778cedf20800006088c2643b724a28827"
+    },
+    {
+      "file": "locales/it.json",
+      "change": "modified",
+      "sha256": "ece491d3a5538df358661771934eadb0f5a48ac85d01420b428022f1db0098d9",
+      "originalSha256": "d49310f34279f757eda93f7d1acd8cd910a9325341d137f86c6f19e7ea7df1d8"
+    },
+    {
+      "file": "locales/ja.json",
+      "change": "modified",
+      "sha256": "6f053f6206fed95c3fba8b67c55c0da4d2a309d0518710047d52a6df203f4962",
+      "originalSha256": "8d2b4b41850c399fe3afc6a79a0361370f3bc759b5cfcde67558bf2139386fc4"
+    },
+    {
+      "file": "locales/ko.json",
+      "change": "modified",
+      "sha256": "46bb15d4f7241fc360cf8da5fd1135a07b6c42aed27aa1ed445c2b5a13bbd1a7",
+      "originalSha256": "2f945a128898eac7e0508bce7fff85006462c5dfc733868817d8f45b62c2db04"
+    },
+    {
+      "file": "locales/lt.json",
+      "change": "modified",
+      "sha256": "3da02ee1af24be5cf064962b40978025ba74c22696a1c3e6d079188f28326048",
+      "originalSha256": "3b9e196e8f2df2cf1d33da447681469fa93e6f4e35bc9e6c7d27635fa6d3abdb"
+    },
+    {
+      "file": "locales/lv.json",
+      "change": "modified",
+      "sha256": "e8735308c0567b5328593db7786c42c1030baa740ecd751b78751c83ef80cfa5",
+      "originalSha256": "3445a7955a6c7b75747f718d92b9e1066c41f4b4b8b2f6b8e988441e0808eba2"
+    },
+    {
+      "file": "locales/nb.json",
+      "change": "modified",
+      "sha256": "d03bb0b6e5d1b998e11a0b22025e76807454d1441903dd7dd40e2a24e587eb1f",
+      "originalSha256": "54aabbb7cf46ab15365b2151d7e641faaa2661c2c680b5ddf182e7151b13122d"
+    },
+    {
+      "file": "locales/nl.json",
+      "change": "modified",
+      "sha256": "b21b6a175ca7b5eace9b8dbe4d5cb8f4142b2b9700a1d3c836fcbfe40ebfbaea",
+      "originalSha256": "8e47ce82f37a41510660cb8e3614c5663fa28ca0ee1fbaaa62b8c9f1036f7272"
+    },
+    {
+      "file": "locales/pl.json",
+      "change": "modified",
+      "sha256": "2240851fdafe9f95c411066c00b9072d7ebfa5ca6c4a95976c15f7243716bdc7",
+      "originalSha256": "14a3846d07014b118c69f84bbbadc37c217911c98ad9a81350c3f56b780d9d78"
+    },
+    {
+      "file": "locales/pt-BR.json",
+      "change": "modified",
+      "sha256": "52be3e151b61c04db7b9755ccbfff6acb94705b8f77dc10da254ffeb5f1029c7",
+      "originalSha256": "b97d51ecd6e0f97400f9fa3087beaf850b030e01e7fe6507275f6544900f5518"
+    },
+    {
+      "file": "locales/ro.json",
+      "change": "modified",
+      "sha256": "3ea260413b4a94531a2ece70712865da1c8e11a2a9587043a2296035d0f3d9a8",
+      "originalSha256": "f4ef609e401bdf238f84cbadc4fa981872a5ae24b21d2c152d370c5c719a9d90"
+    },
+    {
+      "file": "locales/ru.json",
+      "change": "modified",
+      "sha256": "18cb2f7cc1b6c0ad0cc74c464718c90086da507b02388ea643e84a98571f9122",
+      "originalSha256": "74ea45c69d2624d05124e2b180643ad7441310dd32a262f8bbde1627d0c43e19"
+    },
+    {
+      "file": "locales/sk.json",
+      "change": "modified",
+      "sha256": "51edbd103280cd03ba033785450cf2f4bf524e6cf68c1e1b4be5fcd6cb4245a8",
+      "originalSha256": "54b336cc93d27c997712d6e505bb04f67d47e3773768efb8262a0c2f87a3d62d"
+    },
+    {
+      "file": "locales/sl.json",
+      "change": "modified",
+      "sha256": "7159876ff5db361cff7821d5b6d4c56afd29e25cee99dc7494ee59cd2b5cc72b",
+      "originalSha256": "7a428dc5a3932d747bd19b8a51f09ade8810e2ae8975d329433429822b1cd10f"
+    },
+    {
+      "file": "locales/sv.json",
+      "change": "modified",
+      "sha256": "b5f024aac19867543a3a8a4611cd0a257fcf0af8a4f153ba1ca8e55e8e82b1c8",
+      "originalSha256": "f843a4db402f866765db0bae7e77819dddeb3480470f9900a1f25ec9e9fdcd75"
+    },
+    {
+      "file": "locales/tr.json",
+      "change": "modified",
+      "sha256": "30da1be98621081330a61c4ac4c9ced2565cb4dbfad9de6533a6a4713a16526d",
+      "originalSha256": "45bb77283b99f473908b8111457e8b200437f5e70ae645ca1fd4500a891f4f77"
+    },
+    {
+      "file": "locales/uk.json",
+      "change": "modified",
+      "sha256": "a8431d38b749e90dc8fb54ad85dbfcdc8050359c54d526b4617e179f2046cfdd",
+      "originalSha256": "0de19ac5e8dab722c1f968ff94b9dbf36acf3b1efb455fa570130ef5a89dc793"
+    },
+    {
+      "file": "locales/zh-CN.json",
+      "change": "modified",
+      "sha256": "07bedc9579b85abd3dc2eb38983990f2d4d96ccd03ca60f7ab1940b3b2a17515",
+      "originalSha256": "d54f03d401024c508a694d0706683c5c9475940054265b7d867e430eb3ac03b0"
+    },
+    {
+      "file": "locales/zh-TW.json",
+      "change": "modified",
+      "sha256": "47992f0c724e947f868e09ae92cbd8070a63e16befdba1a707dbafabeae2b4ca",
+      "originalSha256": "2ad01c4cd413c14d559b45a8a0873bb7ab8766a398a71b70714affbadcccd56a"
+    },
+    {
+      "file": "sections/header.liquid",
+      "change": "modified",
+      "sha256": "703bb56444f9c37dbbcabdaca7a6e06ba430ed5677dca01ede362d2782aa6554",
+      "originalSha256": "260bf6c5e136072380a70d6abd5be9ae928d1b25a24ef2562d7421fcb36a0a2d"
+    },
+    {
+      "file": "sections/main-collection.liquid",
+      "change": "modified",
+      "sha256": "789637332f48f3fc849fc5e02a468146685959626f433b24bf30b56ea44304df",
+      "originalSha256": "571f5780c8d97ff99447f8fb65fd2eb71dce4a3cdba5cf11fbf022ef959d80ca"
+    },
+    {
+      "file": "sections/main-product.liquid",
+      "change": "modified",
+      "sha256": "c458e0bed79a3d1f2d7c1b1d54ceb52df1b4e3e2782c5ac829b84bbbf3de20fc",
+      "originalSha256": "38dc7cec32b72aaf0fe97a17c286798ed2dced7083de981bb75dba05eda854a7"
+    },
+    {
+      "file": "sections/media-grid.liquid",
+      "change": "modified",
+      "sha256": "81333229fcf32470b9f2508907d9bc012db8b075a49ba4ae50ec82631c8ad666",
+      "originalSha256": "b3894c588888c6e1a847b47bb7158fbc77a8fa6fa2c81eb031799415fb319be7"
+    },
+    {
+      "file": "sections/media-with-text.liquid",
+      "change": "modified",
+      "sha256": "85cb9629424d92938173e823e0eccf756a29a66c9dc56ce778077dc005a7013c",
+      "originalSha256": "644c102db9313d3182021cd04c94578ca4e3c326b2e31d266caf8285a7021315"
+    },
+    {
+      "file": "sections/multiple-images-with-text.liquid",
+      "change": "modified",
+      "sha256": "8e0a4b32b25eb6eb8d9f050eeb6ef320960e70379c7b09a3d84e9f690276bd1c",
+      "originalSha256": "6310d2cd5f45f7888d88c08fff669b9db195dcf90fecd950887a6e01e7c34c4e"
+    },
+    {
+      "file": "sections/press.liquid",
+      "change": "modified",
+      "sha256": "6327e100abfb194510821d22545c02887c09ccacd26225968afb6f344437a8cc",
+      "originalSha256": "1cfcdeb27e582e169531cc8942ec2e8fb5a117434b9a853b799879f26fcea72a"
+    },
+    {
+      "file": "sections/scrolling-text.liquid",
+      "change": "modified",
+      "sha256": "609bb30a28251cf60c5a39301309249e2f060e9c7fdba76c15d88b21d51a0e5c",
+      "originalSha256": "aa6c992485871e9a683887904cdbaaec2e0bacc3bf1bca493e02cc07919abc7d"
+    },
+    {
+      "file": "sections/slideshow.liquid",
+      "change": "modified",
+      "sha256": "605c5f748283cca76ccc7c9c9b75bcb405b5780fe2fa4e0832f7a4f9a1717085",
+      "originalSha256": "aee7e1c2e4a6aeef5be0a2e5107c9fc26c400e8fa7bdf6f020b25bf12086735e"
+    },
+    {
+      "file": "sections/text-with-icons.liquid",
+      "change": "modified",
+      "sha256": "9ee043e2fda797b122dc3f0a3be118539d2f5ce633b61ec0cdbb9f810bc4dc24",
+      "originalSha256": "b53b2ebea8fa2d59f008b406ac8a3ada6f79d34e353fd06614013b5894c06aa2"
+    },
+    {
+      "file": "sections/video.liquid",
+      "change": "modified",
+      "sha256": "9f4ce41f0f9982d7172f71f42b64e31b4029d04415cc964b41fd89904ac1c105",
+      "originalSha256": "349c2c5b271d49b84a7092a30f390a133a8c4bb88cb5f8711b8fea2119332ffb"
+    },
+    {
+      "file": "snippets/nexus-impact-card-badges.liquid",
+      "change": "added",
+      "sha256": "90810a1a0ab5c63b28735f347a05b3cde586dbc38618887b0b33239ca992025a",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-card-swatches.liquid",
+      "change": "added",
+      "sha256": "ecad50868375851698975959f05025401d9364567333bdabe3e5b9c8cdca8724",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-collection-cards.liquid",
+      "change": "added",
+      "sha256": "87673723ac0eed499f2192712c538e48dd02058d901e1e10dcee75482bae32cb",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-details.liquid",
+      "change": "added",
+      "sha256": "e4b7dc1cf246070e13e8911f9c13097de4e73de182f65969801e2d8f606402f5",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-entry.liquid",
+      "change": "added",
+      "sha256": "9aa2971ebd4bb76355b8aaabc3ff3ac14f9cbbeee7bf1300049b3c587a66848b",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-features.liquid",
+      "change": "added",
+      "sha256": "a8acc6552f9e4b79c2d62f0e8f9c642be47418813879032a2d171d1474850350",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-gallery.liquid",
+      "change": "added",
+      "sha256": "eb3fc3d19114bcdaff10f80b40ce30de9c3efa9ba862bd2763bb093191deef49",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-legacy-card.liquid",
+      "change": "added",
+      "sha256": "caec722619faa14f2f8a268cf3fa6d36aa0b28e55d875c809c788a20f7a9bfa4",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-media-grid.liquid",
+      "change": "added",
+      "sha256": "ba0aeb247b2bb79e2547f8f3964e683d8bdca84965fccfb6aba1b0da4fb1a364",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-media-with-text.liquid",
+      "change": "added",
+      "sha256": "d6b2adc45e7443ebeecb6315e06022e578d173900355836367e12ecc8463ee4c",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-media.liquid",
+      "change": "added",
+      "sha256": "952f6ac0fda79c3d7472daaa6a53a11069d716411c9a0eefa53d102c295e8552",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-multiple-images-with-text.liquid",
+      "change": "added",
+      "sha256": "4956a83c324268af07b80ff9393e830be12b5c6a446ef0ced60106e6303a3993",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-press.liquid",
+      "change": "added",
+      "sha256": "a2f72d3a6ab7994fa3ce961943ffabf94ce6ecd0537338a929a11a1119f058b0",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-product-card.liquid",
+      "change": "added",
+      "sha256": "5dc8e6aa413b4e3c54a1228bb97c9933fec48c0ea2000b2cec16475007161241",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-scrolling-text.liquid",
+      "change": "added",
+      "sha256": "42335ee2ef0d155080d49e02f68c0f34c444209b9f2ff51b733f490ca2cbe6ef",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-slideshow.liquid",
+      "change": "added",
+      "sha256": "3bfed79d4b5dc8e001049d9c2e998b3b7d61e7c3f69e973267587ccd73cd0637",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-text-with-icons.liquid",
+      "change": "added",
+      "sha256": "bc4ae47e22c5490d78554a404e869b711d404f50ab9e6f957b8e7adf4e8000f5",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/nexus-impact-video.liquid",
+      "change": "added",
+      "sha256": "5ebf0921631e1ccfe9c1288c3854ddc1894e097fc05ff7a2d043b2f65c0c2ce3",
+      "originalSha256": null
+    },
+    {
+      "file": "snippets/product-card.liquid",
+      "change": "modified",
+      "sha256": "a17dc9350000302195915ffbf33d203956afa7217dbbb701bdd6f33f4a16f234",
+      "originalSha256": "386313fb7ebb17aa6a6e3adaf539f50168759c2d705ef26e1c6665920eadff6f"
+    },
+    {
+      "file": "snippets/product-gallery.liquid",
+      "change": "modified",
+      "sha256": "7384f949ca98488387217c675144a6d14827c48fcff12a489152bedde87100e6",
+      "originalSha256": "f28c03c6b7f85ec291d2a39576344170889943af350ba696ccd13f7fdb27e81c"
+    },
+    {
+      "file": "snippets/product-info.liquid",
+      "change": "modified",
+      "sha256": "fcf4e193fb89360a61b34561a0070b6783f121a03e7f92ec2266d50cd51e88d7",
+      "originalSha256": "b83b9e6cc840c47bf791dbea7eab15a8df9ca7e0cfca0a05d37b6dc229ff3752"
+    },
+    {
+      "file": "snippets/variant-picker.liquid",
+      "change": "modified",
+      "sha256": "4685bc15a68e2d7cca77a35dc1f604c747a9936cb478b487b431b7c6e41f8b50",
+      "originalSha256": "99cfee6cd55c5c8c525e7efcd078a68c0ba7e6b87d29ea187b1e4d979a7b1694"
+    },
+    {
+      "file": "templates/product.nexus-card.liquid",
+      "change": "added",
+      "sha256": "5f1c57c0e6e99ba9b2fc7e1128ca6c219ea9bf7109e49ba934d741d7a2d77bf8",
+      "originalSha256": null
+    },
+    {
+      "file": "templates/product.nexus.json",
+      "change": "added",
+      "sha256": "015a7bc12b30aff2700754bda3b69b54e862e15df11d6594f226fc1686858bb7",
+      "originalSha256": null
+    }
+  ],
+  "bindings": [
+    {
+      "section": "text_with_icons_BAFFjQ",
+      "type": "text-with-icons",
+      "field": "custom.text_with_icon"
+    },
+    {
+      "section": "media_with_text_Atat8F",
+      "type": "media-with-text",
+      "field": "custom.media_with_text_product_page"
+    },
+    {
+      "section": "scrolling_text_hN36Kj",
+      "type": "scrolling-text",
+      "field": "custom.scrolling_text_product_page"
+    },
+    {
+      "section": "video_P8W9AX",
+      "type": "video",
+      "field": "custom.video_product_page"
+    },
+    {
+      "section": "press_mHazVb",
+      "type": "press",
+      "field": "custom.press_product_page"
+    },
+    {
+      "section": "multiple_images_with_text_JpXimE",
+      "type": "multiple-images-with-text",
+      "field": "custom.multiple_images_with_text_product_page"
+    },
+    {
+      "section": "media_grid_gQJAXD",
+      "type": "media-grid",
+      "field": "custom.media_grid_product_page"
+    },
+    {
+      "section": "slideshow_AdMqHP",
+      "type": "slideshow",
+      "field": "custom.slideshow_product_page"
+    }
+  ]
+}

@@ -29,7 +29,7 @@
  *    sits on the campaign row, which is the only level where the decomposition forks.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { ChevronRight } from 'lucide-react'
 import { Card } from '@/design-system/components/Card'
 import { Pill } from '@/design-system/primitives/Pill'

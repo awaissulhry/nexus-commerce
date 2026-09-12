@@ -1,298 +1,93 @@
-"use client";
+'use client'
 
-import { useState, useTransition } from "react";
-import { saveAccountSettings } from "./actions";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { BUSINESS_COUNTRIES } from '@nexus/shared/business-profile'
+import { Banner, Card, Field } from '@/design-system/components'
+import { Button, Input, Select } from '@/design-system/primitives'
+import { registerProfileChanges } from '@/lib/workspaces/unsaved-changes'
+import { saveAccountSettings } from './actions'
+import './account-settings.css'
+const intl = Intl as typeof Intl & { supportedValuesOf(key: 'currency' | 'timeZone'): string[] }
 
-const TIMEZONES = [
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Rome",
-  "Asia/Tokyo",
-  "Asia/Shanghai",
-  "Asia/Kolkata",
-  "Australia/Sydney",
-];
-
-const CURRENCIES = [
-  { code: "USD", label: "US Dollar ($)" },
-  { code: "EUR", label: "Euro (€)" },
-  { code: "GBP", label: "British Pound (£)" },
-  { code: "JPY", label: "Japanese Yen (¥)" },
-  { code: "CAD", label: "Canadian Dollar (C$)" },
-  { code: "AUD", label: "Australian Dollar (A$)" },
-  { code: "INR", label: "Indian Rupee (₹)" },
-  { code: "CNY", label: "Chinese Yuan (¥)" },
-];
-
-const COUNTRIES = [
-  { code: "US", label: "United States" },
-  { code: "GB", label: "United Kingdom" },
-  { code: "CA", label: "Canada" },
-  { code: "AU", label: "Australia" },
-  { code: "DE", label: "Germany" },
-  { code: "FR", label: "France" },
-  { code: "IT", label: "Italy" },
-  { code: "JP", label: "Japan" },
-  { code: "CN", label: "China" },
-  { code: "IN", label: "India" },
-];
-
-interface AccountSettingsData {
-  businessName: string;
-  addressLine1: string;
-  addressLine2: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
-  timezone: string;
-  currency: string;
-  primaryMarketplace: string | null;
+export interface AccountSettingsData {
+  businessName: string
+  addressLine1: string
+  addressLine2: string
+  city: string
+  state: string
+  postalCode: string
+  country: string
+  timezone: string
+  currency: string
+  primaryMarketplace: string | null
+  updatedAt: string
 }
 
-interface Props {
-  settings: AccountSettingsData | null;
-}
+export default function AccountSettingsClient({ settings }: { settings: AccountSettingsData | null }) {
+  const [saved, setSaved] = useState(settings)
+  const [draft, setDraft] = useState(settings)
+  const [busy, setBusy] = useState(false)
+  const [message, setMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
+  const current = useRef({ draft, saved })
+  current.current = { draft, saved }
+  const inFlight = useRef<Promise<void> | null>(null)
+  const form = useRef<HTMLFormElement>(null)
+  const names = useMemo(() => new Intl.DisplayNames(['en'], { type: 'region' }), [])
+  const currencies = useMemo(() => intl.supportedValuesOf('currency'), [])
+  const timezones = useMemo(() => intl.supportedValuesOf('timeZone'), [])
+  const dirty = JSON.stringify(draft) !== JSON.stringify(saved)
 
-export default function AccountSettingsClient({ settings }: Props) {
-  const [isPending, startTransition] = useTransition();
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  const defaults: AccountSettingsData = settings || {
-    businessName: "",
-    addressLine1: "",
-    addressLine2: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    country: "US",
-    timezone: "America/New_York",
-    currency: "EUR",
-    primaryMarketplace: null,
-  };
-
-  const handleSubmit = (formData: FormData) => {
-    setMessage(null);
-    startTransition(async () => {
+  const save = useCallback((): Promise<void> => {
+    if (inFlight.current) return inFlight.current
+    if (!current.current.draft || !form.current?.reportValidity()) return Promise.reject(new Error('Complete the required business settings.'))
+    const submitted = { ...current.current.draft }
+    const data = new FormData()
+    for (const [key, value] of Object.entries(submitted)) data.set(key, value ?? '')
+    setBusy(true); setMessage(null)
+    const pending = (async () => {
       try {
-        const result = await saveAccountSettings(formData);
-        if (result.success) {
-          setMessage({ type: "success", text: "Account settings saved successfully!" });
-        }
-      } catch {
-        setMessage({ type: "error", text: "Failed to save settings" });
-      }
-    });
-  };
+        const result = await saveAccountSettings(data)
+        const next = { ...submitted, updatedAt: result.updatedAt }
+        current.current = { draft: next, saved: next }
+        setSaved(next); setDraft(next)
+        setMessage({ tone: 'success', text: 'Business settings saved.' })
+      } catch (error) {
+        setMessage({ tone: 'danger', text: error instanceof Error ? error.message : 'Business settings could not be saved.' })
+        throw error
+      } finally { setBusy(false); inFlight.current = null }
+    })()
+    inFlight.current = pending
+    return pending
+  }, [])
+  useEffect(() => registerProfileChanges('business-settings', {
+    isDirty: () => !!inFlight.current || JSON.stringify(current.current.draft) !== JSON.stringify(current.current.saved),
+    save,
+    canDiscard: () => !inFlight.current,
+    discard: () => { if (!inFlight.current) { current.current.draft = current.current.saved; setDraft(current.current.saved); setMessage(null) } },
+  }), [save])
+  useEffect(() => {
+    if (!dirty && !busy) return
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', guard)
+    return () => window.removeEventListener('beforeunload', guard)
+  }, [dirty, busy])
 
-  return (
-    <form action={handleSubmit} className="max-w-2xl space-y-6">
-      {message && (
-        <div
-          className={`px-4 py-3 rounded-lg text-sm ${
-            message.type === "success"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : "bg-red-50 text-red-800 border border-red-200"
-          }`}
-        >
-          {message.type === "success" ? "✅" : "❌"} {message.text}
-        </div>
-      )}
-
-      {/* Business Information */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Business Information</h3>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="businessName" className="block text-sm font-medium text-gray-700 mb-1">
-              Business Name
-            </label>
-            <input
-              id="businessName"
-              name="businessName"
-              type="text"
-              defaultValue={defaults.businessName}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Your Business Name"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Address */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Business Address</h3>
-        <div className="space-y-4">
-          <div>
-            <label htmlFor="addressLine1" className="block text-sm font-medium text-gray-700 mb-1">
-              Address Line 1
-            </label>
-            <input
-              id="addressLine1"
-              name="addressLine1"
-              type="text"
-              defaultValue={defaults.addressLine1}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="123 Main Street"
-            />
-          </div>
-          <div>
-            <label htmlFor="addressLine2" className="block text-sm font-medium text-gray-700 mb-1">
-              Address Line 2
-            </label>
-            <input
-              id="addressLine2"
-              name="addressLine2"
-              type="text"
-              defaultValue={defaults.addressLine2}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Suite 100"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="city" className="block text-sm font-medium text-gray-700 mb-1">
-                City
-              </label>
-              <input
-                id="city"
-                name="city"
-                type="text"
-                defaultValue={defaults.city}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="state" className="block text-sm font-medium text-gray-700 mb-1">
-                State / Province
-              </label>
-              <input
-                id="state"
-                name="state"
-                type="text"
-                defaultValue={defaults.state}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="postalCode" className="block text-sm font-medium text-gray-700 mb-1">
-                Postal Code
-              </label>
-              <input
-                id="postalCode"
-                name="postalCode"
-                type="text"
-                defaultValue={defaults.postalCode}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-            <div>
-              <label htmlFor="country" className="block text-sm font-medium text-gray-700 mb-1">
-                Country
-              </label>
-              <select
-                id="country"
-                name="country"
-                defaultValue={defaults.country}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {COUNTRIES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Preferences */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Preferences</h3>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="timezone" className="block text-sm font-medium text-gray-700 mb-1">
-              Timezone
-            </label>
-            <select
-              id="timezone"
-              name="timezone"
-              defaultValue={defaults.timezone}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {TIMEZONES.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="currency" className="block text-sm font-medium text-gray-700 mb-1">
-              Currency
-            </label>
-            <select
-              id="currency"
-              name="currency"
-              defaultValue={defaults.currency}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* PSM.1 — primary marketplace. Default-selects on Step 1 of
-              the list-wizard. Free-form text so the operator can type
-              any ISO country code (Amazon supports far more
-              marketplaces than the COUNTRIES list above). */}
-          <div>
-            <label
-              htmlFor="primaryMarketplace"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Primary marketplace
-            </label>
-            <input
-              id="primaryMarketplace"
-              name="primaryMarketplace"
-              type="text"
-              maxLength={4}
-              placeholder="e.g. IT, DE, US"
-              defaultValue={defaults.primaryMarketplace ?? ""}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              ISO country code of the marketplace you focus on most.
-              Drives Step 1 default-select on the list-wizard.
-              Leave blank for no preference.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Submit */}
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="px-6 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isPending ? "Saving…" : "Save Settings"}
-        </button>
-      </div>
-    </form>
-  );
+  if (!draft) return <Banner tone="danger" title="Business settings are unavailable">Reload this page before editing settings.</Banner>
+  const update = (key: keyof AccountSettingsData, value: string) => { setDraft(row => row && { ...row, [key]: value }); setMessage(null) }
+  const input = (key: keyof AccountSettingsData, label: string, options: { required?: boolean; maxLength?: number; hint?: string } = {}) => <Field label={label} required={options.required} hint={options.hint}><Input value={draft[key] ?? ''} onChange={event => update(key, event.target.value)} required={options.required} maxLength={options.maxLength ?? 200} disabled={busy} /></Field>
+  return <form ref={form} className="business-settings-form" onSubmit={event => { event.preventDefault(); void save().catch(() => {}) }}>
+    {message && <Banner tone={message.tone}>{message.text}</Banner>}
+    <Card header="Business information" padded><div className="business-settings-fields">{input('businessName', 'Business name', { required: true, maxLength: 80, hint: 'Used in business records. Manage the profile’s display name in Business profiles.' })}</div></Card>
+    <Card header="Business address" padded><div className="business-settings-fields">
+      {input('addressLine1', 'Address line 1')}{input('addressLine2', 'Address line 2')}
+      <div className="business-settings-pair">{input('city', 'City')}{input('state', 'State / province')}</div>
+      <div className="business-settings-pair">{input('postalCode', 'Postal code', { maxLength: 32 })}<Field label="Country" required><Select value={draft.country} onChange={event => update('country', event.target.value)} disabled={busy} required>{BUSINESS_COUNTRIES.map(code => <option key={code} value={code}>{names.of(code)}</option>)}</Select></Field></div>
+    </div></Card>
+    <Card header="Business defaults" padded><div className="business-settings-fields">
+      <Field label="Business timezone" required><Select value={draft.timezone} onChange={event => update('timezone', event.target.value)} disabled={busy} required>{[...new Set([draft.timezone, 'UTC', ...timezones])].filter(Boolean).map(zone => <option key={zone} value={zone}>{zone.replace(/_/g, ' ')}</option>)}</Select></Field>
+      <Field label="Reporting currency" required hint="Historical order and listing currencies stay as recorded."><Select value={draft.currency} onChange={event => update('currency', event.target.value)} disabled={busy} required>{[...new Set([draft.currency, ...currencies])].filter(Boolean).map(code => <option key={code} value={code}>{code}</option>)}</Select></Field>
+      {input('primaryMarketplace', 'Primary marketplace', { maxLength: 2, hint: 'Optional country code, such as IT, DE, or US. Used as a starting selection when preparing listings.' })}
+    </div></Card>
+    <div className="business-settings-actions"><Button disabled={busy || !dirty} onClick={() => { setDraft(saved); setMessage(null) }}>Discard changes</Button><Button type="submit" variant="primary" disabled={busy || !dirty}>{busy ? 'Saving…' : 'Save settings'}</Button></div>
+  </form>
 }

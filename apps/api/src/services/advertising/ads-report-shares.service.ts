@@ -1,3 +1,5 @@
+import { scopePublicToken } from '../../lib/workspace-public-links.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * RPT.15 — read-only, expiring share links.
  *
@@ -55,7 +57,7 @@ const hashToken = (token: string) => createHash('sha256').update(token).digest('
  * from an id, a timestamp or a counter, all of which are enumerable.
  */
 function mintToken(): string {
-  return randomBytes(32).toString('base64url')
+  return scopePublicToken(randomBytes(32).toString('base64url'))
 }
 
 function toDto(r: {
@@ -164,7 +166,7 @@ export async function resolveShareLink(token: string): Promise<ResolvedShare> {
   const deny = () => new ShareLinkError('This link is not valid, or has expired', 404)
   if (!token || token.length < 20 || token.length > 200) throw deny()
 
-  const row = await prisma.reportShareLink.findUnique({ where: { tokenHash: hashToken(token) } })
+  const row = await prisma.reportShareLink.findUnique({ where: { workspace_tokenHash: workspaceKey({ tokenHash: hashToken(token) }) } })
   if (!row) throw deny()
   if (row.revokedAt) throw deny()
   if (row.expiresAt.getTime() <= Date.now()) throw deny()

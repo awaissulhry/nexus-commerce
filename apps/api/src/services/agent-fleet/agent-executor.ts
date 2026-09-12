@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * NAF.A — run one agent (docs/AGENT_FLEET.md Part 12 § A).
  *
@@ -653,12 +654,12 @@ export async function executeCharter(
       for (const f of kept) {
         const saved = await prisma.agentFinding.upsert({
           where: {
-            charterKey_entityType_entityId_dedupeKey: {
+            charterKey_entityType_entityId_dedupeKey: workspaceKey({
               charterKey: key,
               entityType: f.entityType,
               entityId: f.entityId,
               dedupeKey: f.dedupeKey,
-            },
+            }),
           },
           create: {
             runId: run.id,

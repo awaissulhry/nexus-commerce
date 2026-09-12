@@ -14,11 +14,12 @@
  */
 
 import prisma from '../../db.js'
-import { resolveAttributes, type ResolvedAttributes } from './attribute-resolver.js'
-import { getResolvedRules, type FieldMappingRule } from './schema-mapping.service.js'
+import { type ResolvedAttributes } from './attribute-resolver.js'
+import { type FieldMappingRule } from './schema-mapping.service.js'
 import { resolveChannelField, linkForCoordinate, type FieldLinkGroupLike } from './resolve-channel-field.js'
-import { loadFieldLinkGroups } from './payload-preview.js'
-import { loadValueMapLookup, loadSizeScaleLookup } from './value-map.service.js'
+import { resolveBatch } from './mapping/resolve-batch.service.js'
+import { channelValuePatch, storedChannelState } from './channel-value-mutation.js'
+import type { Prisma } from '@prisma/client'
 import { valuesEqual } from './resolver-shadow.js'
 
 // B.6 — adopt-master: clear a per-coordinate override so the field follows
@@ -57,19 +58,47 @@ export async function adoptMasterForCoordinate(input: {
   channel: string
   marketplace: string
   attribute: string
+  channelConnectionId?: string | null
+  aliasKey?: string
+  expectedVersion?: number
+  actor?: string | null
 }): Promise<{ ok: true; changed: boolean }> {
-  const listing = await prisma.channelListing.findFirst({
-    where: { productId: input.productId, channel: input.channel, marketplace: input.marketplace },
-    select: { id: true, overrideData: true },
+  const listings = await prisma.channelListing.findMany({ where: { productId: input.productId,
+    channel: input.channel, marketplace: input.marketplace,
+    ...(input.channelConnectionId !== undefined ? { channelConnectionId: input.channelConnectionId } : {}),
+    aliasKey: input.aliasKey ?? '' } })
+  if (!listings.length) throw new Error('No listing for this coordinate')
+  if (listings.length !== 1) throw Object.assign(new Error('Select the listing account before adopting Master.'), { statusCode: 409 })
+  const listing = listings[0]
+  if (input.expectedVersion === undefined || input.expectedVersion !== listing.version) {
+    throw Object.assign(new Error('The listing changed or its version is missing. Reload before adopting Master.'), { statusCode: 409 })
+  }
+  const result = await resolveBatch({ productIds: [input.productId], channel: input.channel,
+    marketplace: input.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey })
+  const field = result.catalogue?.fields.find(f => f.fieldKey === input.attribute)
+  if (!field || field.sourceOwner || !result.products[0]?.cells[field.fieldKey]?.rule) {
+    throw Object.assign(new Error('This field has no shared mapping to adopt. Open its owning workspace.'), { statusCode: 400 })
+  }
+  const keys = [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])]
+  const state = storedChannelState(listing as unknown as Record<string, unknown>, field.channelStore, keys)
+  if (state.state === 'inherited') return { ok: true, changed: false }
+  const data = channelValuePatch(listing as unknown as Record<string, unknown>, field.channelStore, keys, 'INHERIT')
+  await prisma.$transaction(async tx => {
+    const written = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, updatedAt: listing.updatedAt },
+      data: { ...data, version: { increment: 1 } } as Prisma.ChannelListingUpdateManyMutationInput })
+    if (written.count !== 1) throw Object.assign(new Error('The listing changed. Reload before adopting Master.'), { statusCode: 409 })
+    await tx.channelListingOverride.create({ data: { channelListingId: listing.id, fieldName: field.fieldKey,
+      previousValue: JSON.stringify(state.value) ?? null, newValue: null, isActive: false,
+      changedBy: input.actor ?? null, reason: 'Adopt shared mapping' } })
   })
-  if (!listing) throw new Error('No listing for this coordinate')
-  const data = buildAdoptMasterUpdate(listing.overrideData as Record<string, unknown> | null, input.attribute)
-  if (Object.keys(data).length === 0) return { ok: true, changed: false }
-  await prisma.channelListing.update({ where: { id: listing.id }, data })
   return { ok: true, changed: true }
 }
 
 export interface DivergenceEntry {
+  listingId?: string
+  channelConnectionId?: string | null
+  aliasKey?: string
+  listingVersion?: number
   channel: string
   marketplace: string
   fieldKey: string
@@ -106,7 +135,7 @@ export function findCoordinateDivergences(args: {
   const { channel, marketplace, rules, masterAttrs, channelAttrs, product, locale, links, transformCtx } = args
   const out: DivergenceEntry[] = []
   for (const [fieldKey, rule] of Object.entries(rules)) {
-    const link = linkForCoordinate(links, fieldKey, channel, marketplace, null)
+    const link = linkForCoordinate(links, fieldKey, channel, marketplace, null, locale)
     const common = { fieldKey, rule, product, locale, link, transformCtx }
     const chan = resolveChannelField({ ...common, resolvedAttrs: channelAttrs })
     if (chan.source !== 'override') continue // only operator-pinned fields can diverge
@@ -123,56 +152,25 @@ export async function scanProductDivergence(input: {
   productId: string
   locale?: string
 }): Promise<DivergenceReport> {
-  const locale = input.locale ?? 'en'
-
-  const product = await prisma.product.findUnique({ where: { id: input.productId } })
+  const product = await prisma.product.findUnique({ where: { id: input.productId }, select: { id: true, sku: true } })
   if (!product) throw new Error(`Product not found: ${input.productId}`)
-  const parent = product.parentId
-    ? await prisma.product.findUnique({ where: { id: product.parentId } })
-    : null
-
   const listings = await prisma.channelListing.findMany({ where: { productId: input.productId } })
-  const links = await loadFieldLinkGroups(input.productId)
-  const lookupSizeScale = await loadSizeScaleLookup()
-
-  // Master-only resolved attrs (no channelListing → no per-coordinate
-  // overrides) — the baseline every coordinate is compared against.
-  const masterAttrs = resolveAttributes({ product: product as any, parent: parent as any, locale })
-
   const entries: DivergenceEntry[] = []
   const coords = new Set<string>()
-  for (const l of listings) {
-    if (!l.channel || !l.marketplace) continue
-    const channel = l.channel
-    const marketplace = l.marketplace as string
-    const rules = await getResolvedRules(channel, marketplace, product.productType)
-    if (Object.keys(rules).length === 0) continue
-    const lookupValueMap = await loadValueMapLookup(channel, marketplace)
-    const channelAttrs = resolveAttributes({
-      product: product as any,
-      parent: parent as any,
-      channelListing: l as any,
-      locale,
-    })
-    const found = findCoordinateDivergences({
-      channel,
-      marketplace,
-      rules,
-      masterAttrs,
-      channelAttrs,
-      product: product as any,
-      locale,
-      links,
-      transformCtx: { lookupValueMap, lookupSizeScale },
-    })
-    for (const e of found) coords.add(`${e.channel}/${e.marketplace}`)
-    entries.push(...found)
+  for (const listing of listings) {
+    if (!listing.channel || !listing.marketplace) continue
+    const coordinate = { channel: listing.channel, marketplace: listing.marketplace,
+      channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey }
+    const args = { ...coordinate, productIds: [input.productId], locale: input.locale, includeCatalogue: false }
+    const current = await resolveBatch(args)
+    const inherited = await resolveBatch({ ...args, inheritMappedFields: true })
+    for (const cell of Object.values(current.products[0]?.cells ?? {})) {
+      const master = inherited.products[0]?.cells[cell.fieldKey]
+      if (cell.provenance !== 'override' || !master || valuesEqual(cell.value, master.value)) continue
+      entries.push({ ...coordinate, listingId: listing.id, listingVersion: listing.version, fieldKey: cell.fieldKey,
+        overrideValue: cell.value, masterValue: master.value })
+      coords.add(listing.id)
+    }
   }
-
-  return {
-    productId: input.productId,
-    sku: product.sku,
-    entries,
-    counts: { total: entries.length, coordinates: coords.size },
-  }
+  return { productId: product.id, sku: product.sku, entries, counts: { total: entries.length, coordinates: coords.size } }
 }

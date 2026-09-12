@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Variation SKU relabeling — put the OWNER'S pool SKUs on a live eBay listing
  * (2026-07-18, owner decision: "I prefer my own SKUs and not the T series").
@@ -112,7 +113,7 @@ export async function relabelListingToPoolSkus(
       const old = memberships.find((m) => m.sku === e.fromSku)!
       await prisma.$transaction([
         prisma.sharedListingMembership.delete({
-          where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: e.fromSku } },
+          where: { marketplace_itemId_sku: workspaceKey({ marketplace: market, itemId, sku: e.fromSku }) },
         }),
         prisma.sharedListingMembership.create({
           data: {
@@ -334,7 +335,7 @@ export async function adoptSkulessVariations(
     const toSku = skuById.get(e.productId)
     if (!toSku) continue
     await prisma.sharedListingMembership.upsert({
-      where: { marketplace_itemId_sku: { marketplace: market, itemId, sku: toSku } },
+      where: { marketplace_itemId_sku: workspaceKey({ marketplace: market, itemId, sku: toSku }) },
       update: {
         productId: e.productId,
         variationSpecifics: e.specifics,

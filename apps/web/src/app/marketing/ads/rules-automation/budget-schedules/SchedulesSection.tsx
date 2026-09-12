@@ -62,7 +62,7 @@
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Button, Toggle, ToolbarButton } from '@/design-system/primitives'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { Plus, Eye, EyeOff, Info, ExternalLink, Trash2 } from 'lucide-react'
 import { AdsDataGrid, type GridColumn } from '../../campaigns/_grid/AdsDataGrid'
 import { HoverCard } from '../../campaigns/FilterDropdown'

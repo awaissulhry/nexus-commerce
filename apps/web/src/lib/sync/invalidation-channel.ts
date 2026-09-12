@@ -47,6 +47,7 @@ import { useEffect, useRef } from 'react'
 const CHANNEL_NAME = 'nexus:invalidations'
 
 export type InvalidationType =
+  | 'shopify.schema.changed'
   | 'product.updated'
   | 'product.created'
   | 'product.deleted'

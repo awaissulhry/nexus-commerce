@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useMemo } from 'react'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { usePathname, useRouter } from '@/lib/workspaces/navigation'
 import { Download, RefreshCw } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { cn } from '@/lib/utils'

@@ -67,7 +67,7 @@ export interface PopAnchor { x: number; y: number }
  */
 export function anchorFromEvent(ev: React.MouseEvent<HTMLElement>): PopAnchor {
   const el = ev.currentTarget
-  const td = el.closest('td')
+  const td = el.closest('.nds-ws-td, .nds-dg-td')
   const r = (td ?? el).getBoundingClientRect()
   return { x: r.left, y: r.bottom + 4 }
 }

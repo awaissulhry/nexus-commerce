@@ -113,7 +113,7 @@
 .hl-pb .st { font-weight: 800; font-variant-numeric: tabular-nums; }
 .hl-pb .st.ok { color: #067d62; } .hl-pb .st.bad { color: var(--nds-note-error-icon); }
 .hl-pb .st.warn { color: var(--nds-amber-600); } .hl-pb .st.them { color: #7c3aed; }
-.hl-pb .nds-grid-sub > td { padding: 10px 14px 12px 32px; background: var(--nds-grey-25); }
+.hl-pb .nds-grid-sub .nds-dg-sub { padding: 10px 14px 12px 32px; background: var(--nds-surface-raised); }
 .hl-pb-k { font-size: 9px; letter-spacing: .05em; text-transform: uppercase; font-weight: 800; color: var(--nds-text-2); margin: 8px 0 3px; }
 .hl-pb-k:first-child { margin-top: 0; }
 .hl-pb .nds-grid-sub pre { margin: 0; padding: 8px 10px; border-radius: var(--nds-radius-sm); background: var(--nds-grey-75); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: #37495b; overflow-x: auto; max-height: 190px; }

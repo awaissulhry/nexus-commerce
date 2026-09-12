@@ -1,3 +1,5 @@
+import { WorkspaceCache } from '../../lib/workspace-cache.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AD.1 — Amazon Advertising API HTTP client with sandbox short-circuit.
  *
@@ -199,7 +201,7 @@ interface AdsCredentials {
 
 // In-process token cache keyed by profileId. Avoids LWA round-trips on
 // every API call; tokens are evicted 60 s before their stated expiry.
-const _tokenCache = new Map<string, { token: string; expiresAt: number }>()
+const _tokenCache = new WorkspaceCache<string, { token: string; expiresAt: number }>()
 
 // Per-profileId in-flight refresh promise. Deduplicate concurrent callers
 // that all see an expired/missing cache entry at the same instant —
@@ -481,7 +483,7 @@ async function resolveCredentials(profileId: string): Promise<AdsCredentials> {
   const conn =
     profileId === 'n/a'
       ? await prisma.amazonAdsConnection.findFirst({ where: { isActive: true } })
-      : await prisma.amazonAdsConnection.findUnique({ where: { profileId } })
+      : await prisma.amazonAdsConnection.findUnique({ where: { workspace_profileId: workspaceKey({ profileId: profileId }) } })
   if (!conn?.credentialsEncrypted) {
     throw new Error(`[ADS-LIVE] no credentials for profileId=${profileId}`)
   }
@@ -517,7 +519,7 @@ export const __adsCredentialsTest = {
  * flag from `NEXUS_CX_ADS_CREDENTIALS`, because that one promises to restore the
  * credential SOURCE byte-for-byte and this changes who mints the token.
  */
-const _leasedCache = new Map<string, { token: string; expiresAt: number }>()
+const _leasedCache = new WorkspaceCache<string, { token: string; expiresAt: number }>()
 
 async function adsAccessToken(profileId: string, creds: AdsCredentials): Promise<string> {
   if (process.env.NEXUS_CX_ADS_LEASED_TOKEN === '0') return getLwaToken(profileId, creds)
@@ -566,12 +568,31 @@ async function adsConnectionIdForToken(): Promise<string | null> {
 }
 
 export async function liveCall<T>(opts: LiveCallOptions): Promise<T> {
-  const creds = await resolveCredentials(opts.profileId)
-  const token = await adsAccessToken(opts.profileId, creds)
+  let clientId: string
+  let token: string
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+    const { default: db } = await import('../../db.js')
+    const { requireWorkspace, WorkspaceError } = await import('../../lib/workspace-context.js')
+    requireWorkspace()
+    const candidates = await db.channelConnection.findMany({ where: {
+      channelType: 'AMAZON_ADS', isActive: true, authStatus: { notIn: ['disconnected', 'revoked', 'needs_reauth'] },
+      ...(opts.profileId !== 'n/a' ? { scopes: { some: { kind: 'profile', externalId: opts.profileId, isActive: true, region: opts.region } } } : {}),
+    }, select: { id: true, connectionMetadata: true }, take: 2 })
+    if (candidates.length !== 1) throw new WorkspaceError('ads_account_ambiguous', 'Select one connected advertising account for this profile and region.', 409)
+    const account = candidates[0]
+    const environment = (account.connectionMetadata as { environment?: string } | null)?.environment === 'sandbox' ? 'sandbox' : 'production'
+    const { getChannelApp } = await import('../cx/apps.service.js')
+    clientId = (await getChannelApp('AMAZON_ADS', environment)).clientId
+    token = await (await import('../cx/token.service.js')).getAccessToken(account.id)
+  } else {
+    const creds = await resolveCredentials(opts.profileId)
+    clientId = creds.clientId
+    token = await adsAccessToken(opts.profileId, creds)
+  }
   const base = REGION_ENDPOINT[opts.region]
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
-    'Amazon-Advertising-API-ClientId': creds.clientId,
+    'Amazon-Advertising-API-ClientId': clientId,
   }
   // Only send Content-Type when there is a body (GET/DELETE have none).
   if (opts.body != null) {

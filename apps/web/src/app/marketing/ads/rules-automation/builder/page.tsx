@@ -8,7 +8,7 @@
  * "Rule" button already links to. Close lands on Automations — the rule catalogue — rather than
  * `router.back()`, which is a no-op on a direct load with no history.
  */
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import { RuleTypeModal } from '../_shared/RuleTypeModal'
 
 export default function Page() {

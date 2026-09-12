@@ -16,6 +16,8 @@ import { describe, it, expect, vi } from 'vitest'
 // The gallery loader fail-open-reads the per-market image axis through the
 // real preference service (own prisma singleton) — neutralize it so tests
 // never touch a database and stay deterministic.
+vi.mock('./connection-resolver.service.js', () => ({ resolveChannelConnectionId: async (_channel: string, id?: string | null) => id === undefined ? 'primary-account' : id }))
+vi.mock('./pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: async () => ({ products: [] }) }))
 vi.mock('./ebay-image-axis-preference.service.js', () => ({
   readImageAxisPreference: async () => undefined,
 }))
@@ -432,7 +434,7 @@ describe('ensureBuiltInThemes — upgrade guard', () => {
     expect(prisma.ebayDescriptionTheme.create).not.toHaveBeenCalled()
     expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledTimes(1)
     expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
-      where: { name: XAVIA.name },
+      where: { workspace_name: { name: XAVIA.name } },
       data: { html: XAVIA.html, notes: XAVIA.notes, version: { increment: 1 } },
     })
   })
@@ -510,7 +512,7 @@ describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident r
     const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_LATEST_PREV_HTML, builtIn: true }, ...otherRows])
     await ensureBuiltInThemes(asClient(prisma))
     expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
-      where: { name: MODERNIST.name },
+      where: { workspace_name: { name: MODERNIST.name } },
       data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
     })
   })
@@ -519,7 +521,7 @@ describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident r
     const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_V1_HTML, builtIn: true }, ...otherRows])
     await ensureBuiltInThemes(asClient(prisma))
     expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
-      where: { name: MODERNIST.name },
+      where: { workspace_name: { name: MODERNIST.name } },
       data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
     })
   })
@@ -528,7 +530,7 @@ describe('ensureBuiltInThemes — Xavia Modernist upgrade chain (prod incident r
     const prisma = seedPrisma([{ name: MODERNIST.name, html: MOD_V2_HTML, builtIn: true }, ...otherRows])
     await ensureBuiltInThemes(asClient(prisma))
     expect(prisma.ebayDescriptionTheme.update).toHaveBeenCalledWith({
-      where: { name: MODERNIST.name },
+      where: { workspace_name: { name: MODERNIST.name } },
       data: { html: MODERNIST.html, notes: MODERNIST.notes, version: { increment: 1 } },
     })
   })

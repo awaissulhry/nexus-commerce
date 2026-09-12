@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import type { useRouter as useRouterType } from 'next/navigation'
 import {
   Search,

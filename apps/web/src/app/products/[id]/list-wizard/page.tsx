@@ -73,14 +73,23 @@ function ListWizardPageInner() {
   const channel = searchParams.get('channel') ?? undefined
   const marketplace = searchParams.get('marketplace') ?? undefined
   const stepParam = searchParams.get('step') ?? undefined
+  const resumeId = searchParams.get('wizard') ?? undefined
+  const accountId = searchParams.get('accountId') ?? undefined
+  const listingId = searchParams.get('listingId') ?? undefined
+  const aliasKey = searchParams.get('aliasKey') ?? undefined
 
   const [state, setState] = useState<StartState>({ phase: 'loading' })
 
   useEffect(() => {
     let alive = true
+    const controller = new AbortController()
     setState({ phase: 'loading' })
     ;(async () => {
       const backend = getBackendUrl()
+      if (!resumeId && (accountId !== undefined || listingId !== undefined || aliasKey !== undefined)) {
+        if (alive) setState({ phase: 'error', title: 'An exact draft link is required', detail: 'Start from Listing presets in the product destination. This legacy start flow cannot bind an account or listing alias.' })
+        return
+      }
 
       // Build the /start body. Phase B accepts either the legacy
       // (channel, marketplace) pair or no channels at all (Step 1 picks).
@@ -92,11 +101,18 @@ function ListWizardPageInner() {
 
       let res: Response
       try {
-        res = await fetch(`${backend}/api/listing-wizard/start`, {
+        const query = new URLSearchParams({ productId })
+        if (channel) query.set('channel', channel)
+        if (marketplace) query.set('market', marketplace)
+        if (accountId !== undefined) query.set('accountId', accountId)
+        if (listingId !== undefined) query.set('listingId', listingId)
+        if (aliasKey !== undefined) query.set('aliasKey', aliasKey)
+        res = resumeId ? await fetch(`${backend}/api/listing-wizard/${encodeURIComponent(resumeId)}?${query}`, { credentials: 'include', cache: 'no-store', signal: controller.signal }) : await fetch(`${backend}/api/listing-wizard/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(startBody),
           cache: 'no-store',
+          signal: controller.signal,
         })
       } catch {
         if (alive)
@@ -127,6 +143,10 @@ function ListWizardPageInner() {
       }
 
       const json = (await res.json()) as RawWizardResponse
+      if (json.wizard?.productId !== productId || json.product?.id !== productId) {
+        if (alive) setState({ phase: 'error', title: 'Draft scope mismatch', detail: 'The returned draft does not belong to this product. Open it from the correct product destination.' })
+        return
+      }
       if (!json.wizard || !json.product) {
         if (alive)
           setState({
@@ -176,11 +196,12 @@ function ListWizardPageInner() {
           isNew: json.isNew === true,
           stepFromUrl,
         })
-    })()
+    })().catch(error => { if (alive) setState({ phase: 'error', title: 'Could not read the draft', detail: error instanceof Error ? error.message : 'Reload the product destination and try again.' }) })
     return () => {
       alive = false
+      controller.abort()
     }
-  }, [productId, channel, marketplace, stepParam])
+  }, [productId, channel, marketplace, stepParam, resumeId, accountId, listingId, aliasKey])
 
   if (state.phase === 'loading') return <StartingView />
 
@@ -196,6 +217,7 @@ function ListWizardPageInner() {
 
   return (
     <ListWizardClient
+      key={state.wizard.id}
       initialWizard={state.wizard}
       product={state.product}
       isNew={state.isNew}

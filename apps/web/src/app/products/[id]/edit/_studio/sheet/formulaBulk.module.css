@@ -1,0 +1,6 @@
+.content { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.content p { margin: 0; }
+.field { display: flex; flex-direction: column; gap: var(--nds-space-6); }
+.note { color: var(--nds-text); font-size: var(--nds-font-size-sm); }
+.error { color: var(--nds-danger-strong); overflow-wrap: anywhere; }
+.cell { display: block; min-width: 80px; max-width: 250px; white-space: normal; overflow-wrap: anywhere; }

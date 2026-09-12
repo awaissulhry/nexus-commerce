@@ -42,7 +42,7 @@ function isFbmChannel(ch: string | null | undefined): boolean {
 
 export async function runFbaDriftDetector(): Promise<void> {
   try {
-    if (!amazonService.isConfigured()) {
+    if (!(await amazonService.isConfigured())) {
       logger.warn('fba-drift-detector: Amazon SP-API not configured — skipping')
       return
     }
@@ -149,8 +149,8 @@ export function startFbaDriftDetectorCron(): void {
     logger.error('fba-drift-detector cron: invalid schedule expression', { schedule: SCHEDULE })
     return
   }
-  scheduledTask = cron.schedule(SCHEDULE, () => {
-    void runFbaDriftDetector()
+  scheduledTask = cron.schedule(SCHEDULE, async () => {
+    await runFbaDriftDetector()
   })
   logger.info(`fba-drift-detector cron: scheduled (${SCHEDULE} UTC)`)
 }

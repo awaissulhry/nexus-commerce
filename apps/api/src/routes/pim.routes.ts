@@ -1,3 +1,4 @@
+import { productReadCacheService } from '../services/product-read-cache.service.js'
 /**
  * Catalog organization endpoints — backs /catalog/organize (renamed
  * from /pim/review on 2026-05-06). API path stays under /api/pim/* to
@@ -23,7 +24,10 @@
  */
 
 import type { FastifyPluginAsync } from 'fastify'
+import { productRoleOf } from '@nexus/shared/master-sheet'
 import prisma from '../db.js'
+import { attachProduct, demoteProduct, promoteProduct, reparentProduct, relationshipParent, relationshipTransaction } from '../services/pim/product-relationship.service.js'
+import { relationshipAliasConflicts } from '../services/pim/relationship-alias-guard.js'
 import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
@@ -63,6 +67,20 @@ async function fetchChannelCoverage(
 }
 
 const pimRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.get<{ Querystring: { kind?: string; search?: string; exclude?: string } }>('/pim/relationship-choices', async (request, reply) => {
+    const { kind, search = '', exclude = '' } = request.query
+    if (kind !== 'parent' && kind !== 'standalone') return reply.code(400).send({ error: 'Choose parent or standalone products.' })
+    const rows = await prisma.product.findMany({
+      where: { deletedAt: null, parentId: null, id: { notIn: exclude.split(',').filter(Boolean).slice(0, 3) }, AND: [
+        kind === 'parent' ? { OR: [{ isParent: true }, { children: { some: {} } }] } : { isParent: false, children: { none: {} } },
+        { OR: [{ sku: { contains: search.trim(), mode: 'insensitive' } }, { name: { contains: search.trim(), mode: 'insensitive' } }] },
+      ] },
+      select: { id: true, sku: true, name: true }, orderBy: [{ sku: 'asc' }, { id: 'asc' }], take: 51,
+    })
+    const choices = rows.slice(0, 50)
+    const blocked = kind === 'standalone' ? await relationshipAliasConflicts(prisma, choices.map(choice => choice.id)) : new Set<string>()
+    return { items: choices.map(choice => ({ ...choice, ...(blocked.has(choice.id) ? { unavailable: 'Resolve listing aliases before attaching this product.' } : {}) })), more: rows.length > 50 }
+  })
   // ── GET /pim/standalones ─────────────────────────────────────────
   // Returns products that are NOT parents and NOT children
   // (parentId === null). Optional search + pagination + filter on
@@ -331,7 +349,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
     const cached = idempotencyService.lookup('pim-attach', idempotencyKey)
     if (cached) return cached
 
-    if (!parentId || !Array.isArray(productIds) || productIds.length === 0) {
+    if (typeof parentId !== 'string' || !parentId || !Array.isArray(productIds) || productIds.length === 0 || productIds.some(id => typeof id !== 'string' || !id)) {
       return reply
         .code(400)
         .send({ error: 'parentId + productIds[] required' })
@@ -345,103 +363,25 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'A product cannot be attached to itself' })
     }
     try {
-      const parent = await prisma.product.findUnique({
-        where: { id: parentId },
-        select: { id: true, sku: true, isParent: true, parentId: true },
-      })
-      if (!parent) {
-        return reply.code(404).send({ error: 'Parent not found' })
-      }
-      if (parent.parentId) {
-        return reply.code(400).send({
-          error: `Parent "${parent.sku}" is itself a child — pick a top-level parent.`,
-        })
-      }
-      const targets = await prisma.product.findMany({
-        where: { id: { in: productIds } },
-        select: { id: true, sku: true, parentId: true, isParent: true },
-      })
-      const targetSet = new Set(targets.map((t) => t.id))
+      await relationshipTransaction(tx => relationshipParent(tx, parentId))
       const errors: Array<{ productId: string; error: string }> = []
       let attached = 0
-      // Apply each child in its own transaction so a partial
-      // failure doesn't roll back the whole batch. The first
-      // findUnique is cheap.
-      for (const productId of productIds) {
-        if (!targetSet.has(productId)) {
-          errors.push({ productId, error: 'product not found' })
-          continue
-        }
-        const t = targets.find((x) => x.id === productId)!
-        if (t.isParent) {
-          errors.push({
-            productId,
-            error: `${t.sku} is already a parent — promote/demote first`,
-          })
-          continue
-        }
-        const incomingAxes = axisValues?.[productId] ?? {}
+      // Preserve the documented per-child result; each accepted child is atomic.
+      for (const productId of [...new Set<string>(productIds)]) {
         const cleaned: Record<string, string> = {}
-        for (const [k, v] of Object.entries(incomingAxes)) {
-          const key = String(k).trim()
-          const val = String(v ?? '').trim()
-          if (key && val) cleaned[key] = val
+        for (const [k, v] of Object.entries(axisValues?.[productId] ?? {})) {
+          const key = k.trim(), value = String(v ?? '').trim()
+          if (key && value) cleaned[key] = value
         }
         try {
-          await prisma.$transaction(async (tx) => {
-            const beforeRow = await tx.product.findUnique({
-              where: { id: productId },
-              select: {
-                parentId: true,
-                variantAttributes: true,
-                categoryAttributes: true,
-              },
-            })
-            const currentCA =
-              ((beforeRow?.categoryAttributes ?? {}) as {
-                variations?: Record<string, string>
-              }) ?? {}
-            const nextCA = {
-              ...currentCA,
-              variations: { ...(currentCA.variations ?? {}), ...cleaned },
-            }
-            await tx.product.update({
-              where: { id: productId },
-              data: {
-                parentId,
-                isParent: false,
-                ...(Object.keys(cleaned).length > 0
-                  ? {
-                      variantAttributes: cleaned as any,
-                      categoryAttributes: nextCA as any,
-                    }
-                  : {}),
-              },
-            })
-            // Make sure the parent's flag is set; harmless no-op
-            // when already isParent=true.
-            if (!parent.isParent) {
-              await tx.product.update({
-                where: { id: parentId },
-                data: { isParent: true },
-              })
-            }
-          })
+          const changed = await relationshipTransaction(tx => attachProduct(tx, parentId, productId, cleaned))
           attached++
-          void auditLogService.write({
-            userId: null,
-            ip: request.ip ?? null,
-            entityType: 'Product',
-            entityId: productId,
-            action: 'attach-to-parent',
-            after: { parentId, axisValues: cleaned },
-            metadata: { source: 'pim-review' },
+          if (changed) void auditLogService.write({
+            userId: null, ip: request.ip ?? null, entityType: 'Product', entityId: productId,
+            action: 'attach-to-parent', after: { parentId, axisValues: cleaned }, metadata: { source: 'pim-review' },
           })
         } catch (err) {
-          errors.push({
-            productId,
-            error: err instanceof Error ? err.message : String(err),
-          })
+          errors.push({ productId, error: err instanceof Error ? err.message : String(err) })
         }
       }
       const responseBody = { success: true, attached, errors, parentId }
@@ -449,7 +389,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return responseBody
     } catch (err) {
       fastify.log.error({ err }, '[pim/attach-to-parent] failed')
-      return reply.code(500).send({
+      return reply.code((err as { statusCode?: number }).statusCode ?? 500).send({
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -477,28 +417,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'productId required' })
     }
     try {
-      const before = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { id: true, sku: true, isParent: true, parentId: true },
-      })
-      if (!before) {
-        return reply.code(404).send({ error: 'Product not found' })
-      }
-      if (before.parentId) {
-        return reply.code(400).send({
-          error: `${before.sku} is currently a child — detach it first`,
-        })
-      }
-      await prisma.product.update({
-        where: { id: productId },
-        data: {
-          isParent: true,
-          ...(variationTheme ? { variationTheme } : {}),
-          ...(Array.isArray(variationAxes)
-            ? { variationAxes: variationAxes as any }
-            : {}),
-        },
-      })
+      await relationshipTransaction(tx => promoteProduct(tx, productId, variationTheme, Array.isArray(variationAxes) ? variationAxes : undefined))
       void auditLogService.write({
         userId: null,
         ip: request.ip ?? null,
@@ -513,7 +432,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return responseBody
     } catch (err) {
       fastify.log.error({ err }, '[pim/promote-to-parent] failed')
-      return reply.code(500).send({
+      return reply.code((err as { statusCode?: number }).statusCode ?? 500).send({
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -594,47 +513,32 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
         .send({ error: 'Bulk promote capped at 100 entries.' })
     }
     try {
-      const candidates = await prisma.product.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, sku: true, parentId: true, isParent: true },
-      })
-      const present = new Set(candidates.map((c) => c.id))
-      const missingIds = ids.filter((id) => !present.has(id))
-      const childIds = candidates.filter((c) => c.parentId).map((c) => c.id)
-      const eligible = candidates.filter(
-        (c) => !c.parentId && !c.isParent,
-      )
-      const eligibleIds = eligible.map((c) => c.id)
-
-      let promoted = 0
-      if (eligibleIds.length > 0) {
-        const result = await prisma.product.updateMany({
-          where: { id: { in: eligibleIds } },
-          data: {
-            isParent: true,
-            ...(typeof body.variationTheme === 'string' && body.variationTheme
-              ? { variationTheme: body.variationTheme }
-              : {}),
-            ...(Array.isArray(body.variationAxes)
-              ? { variationAxes: body.variationAxes as any }
-              : {}),
-          },
+      const { promoted, candidates, childIds, missingIds } = await relationshipTransaction(async tx => {
+        const candidates = await tx.product.findMany({
+          where: { id: { in: ids }, deletedAt: null },
+          select: { id: true, sku: true, parentId: true, isParent: true },
         })
-        promoted = result.count
-        for (const id of eligibleIds) {
-          void auditLogService.write({
-            userId: null,
-            ip: request.ip ?? null,
-            entityType: 'Product',
-            entityId: id,
-            action: 'promote-to-parent',
-            after: {
-              variationTheme: body.variationTheme,
-              variationAxes: body.variationAxes,
-            },
-            metadata: { source: 'pim-review-bulk' },
-          })
-        }
+        const present = new Set(candidates.map(candidate => candidate.id))
+        const missingIds = ids.filter(id => !present.has(id))
+        const childIds = candidates.filter(candidate => candidate.parentId).map(candidate => candidate.id)
+        const eligibleIds = candidates.filter(candidate => !candidate.parentId && !candidate.isParent).map(candidate => candidate.id)
+        const result = eligibleIds.length ? await tx.product.updateMany({
+          where: { id: { in: eligibleIds }, parentId: null, isParent: false, deletedAt: null },
+          data: {
+            isParent: true, version: { increment: 1 },
+            ...(typeof body.variationTheme === 'string' && body.variationTheme ? { variationTheme: body.variationTheme } : {}),
+            ...(Array.isArray(body.variationAxes) ? { variationAxes: body.variationAxes as any } : {}),
+          },
+        }) : { count: 0 }
+        await productReadCacheService.refreshInTransaction(tx, eligibleIds)
+        return { promoted: result.count, candidates, childIds, missingIds }
+      })
+      for (const id of candidates.filter(candidate => !candidate.parentId && !candidate.isParent).map(candidate => candidate.id)) {
+        void auditLogService.write({
+          userId: null, ip: request.ip ?? null, entityType: 'Product', entityId: id,
+          action: 'promote-to-parent', after: { variationTheme: body.variationTheme, variationAxes: body.variationAxes },
+          metadata: { source: 'pim-review-bulk' },
+        })
       }
 
       return {
@@ -648,7 +552,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       }
     } catch (err) {
       fastify.log.error({ err }, '[pim/bulk-promote-to-parent] failed')
-      return reply.code(500).send({
+      return reply.code((err as { statusCode?: number }).statusCode ?? 500).send({
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -665,16 +569,16 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       try {
         const { productId } = request.params
         const self = await prisma.product.findUnique({
-          where: { id: productId },
+          where: { id: productId, deletedAt: null },
           select: {
             id: true, sku: true, name: true, isParent: true, parentId: true,
             variationTheme: true, variationAxes: true,
+            _count: { select: { children: { where: { deletedAt: null } } } },
           },
         })
         if (!self) return reply.code(404).send({ error: 'Product not found' })
 
-        const role: 'parent' | 'child' | 'standalone' =
-          self.isParent ? 'parent' : self.parentId ? 'child' : 'standalone'
+        const role = productRoleOf({ ...self, childCount: self._count.children })
 
         let parent: any = null
         let children: any[] = []
@@ -684,10 +588,10 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
           const [p, sibs] = await Promise.all([
             prisma.product.findUnique({
               where: { id: self.parentId },
-              select: { id: true, sku: true, name: true, variationTheme: true },
+              select: { id: true, sku: true, name: true, variationTheme: true, variationAxes: true },
             }),
             prisma.product.findMany({
-              where: { parentId: self.parentId, id: { not: productId } },
+              where: { parentId: self.parentId, deletedAt: null, id: { not: productId } },
               orderBy: { sku: 'asc' },
               select: { id: true, sku: true, name: true, variantAttributes: true },
             }),
@@ -696,7 +600,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
           siblings = sibs
         } else if (role === 'parent') {
           children = await prisma.product.findMany({
-            where: { parentId: productId },
+            where: { parentId: productId, deletedAt: null },
             orderBy: { sku: 'asc' },
             select: { id: true, sku: true, name: true, variantAttributes: true },
           })
@@ -716,32 +620,12 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
   // Flip isParent=false on a parent product, clearing variationTheme.
   // Blocked if children exist unless force=true (which orphans them).
   fastify.post<{
-    Body: { productId: string; force?: boolean }
+    Body: { productId: string; force?: boolean; expectedChildIds?: string[] }
   }>('/pim/demote-parent', async (request, reply) => {
-    const { productId, force } = request.body ?? ({} as any)
+    const { productId, force, expectedChildIds } = request.body ?? ({} as any)
     if (!productId) return reply.code(400).send({ error: 'productId required' })
     try {
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: {
-          id: true, sku: true, isParent: true, parentId: true,
-          _count: { select: { children: true } },
-        },
-      })
-      if (!product) return reply.code(404).send({ error: 'Product not found' })
-      if (!product.isParent) {
-        return reply.code(400).send({ error: `${product.sku} is not a parent` })
-      }
-      if (product._count.children > 0 && !force) {
-        return reply.code(409).send({
-          error: `${product.sku} has ${product._count.children} children. Detach them first or use force=true.`,
-          childCount: product._count.children,
-        })
-      }
-      await prisma.product.update({
-        where: { id: productId },
-        data: { isParent: false, variationTheme: null },
-      })
+      await relationshipTransaction(tx => demoteProduct(tx, productId, force === true, expectedChildIds))
       void auditLogService.write({
         userId: null,
         ip: request.ip ?? null,
@@ -754,7 +638,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return { success: true, productId }
     } catch (err) {
       fastify.log.error({ err }, '[pim/demote-parent] failed')
-      return reply.code(500).send({
+      return reply.code((err as { statusCode?: number }).statusCode ?? 500).send({
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -762,12 +646,12 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ── POST /pim/reparent ───────────────────────────────────────────
   // Atomically move a child to a different parent. Cycle detection
-  // (productId ≠ newParentId). If the old parent loses its last child
-  // its isParent flag is cleared automatically.
+  // (productId ≠ newParentId). An empty former parent retains its role
+  // until the operator explicitly demotes it, matching unlink and imports.
   fastify.post<{
-    Body: { productId: string; newParentId: string }
+    Body: { productId: string; newParentId: string; expectedParentId?: string }
   }>('/pim/reparent', async (request, reply) => {
-    const { productId, newParentId } = request.body ?? ({} as any)
+    const { productId, newParentId, expectedParentId } = request.body ?? ({} as any)
     if (!productId || !newParentId) {
       return reply.code(400).send({ error: 'productId + newParentId required' })
     }
@@ -775,55 +659,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.code(400).send({ error: 'A product cannot be its own parent' })
     }
     try {
-      const [product, newParent] = await Promise.all([
-        prisma.product.findUnique({
-          where: { id: productId },
-          select: { id: true, sku: true, parentId: true, isParent: true },
-        }),
-        prisma.product.findUnique({
-          where: { id: newParentId },
-          select: { id: true, sku: true, isParent: true, parentId: true },
-        }),
-      ])
-      if (!product) return reply.code(404).send({ error: 'Product not found' })
-      if (!newParent) return reply.code(404).send({ error: 'New parent not found' })
-      if (product.isParent) {
-        return reply.code(400).send({
-          error: `${product.sku} is a parent — demote it before reparenting`,
-        })
-      }
-      if (newParent.parentId) {
-        return reply.code(400).send({
-          error: `${newParent.sku} is itself a child — pick a top-level parent`,
-        })
-      }
-      if (!newParent.isParent) {
-        return reply.code(400).send({
-          error: `${newParent.sku} is not a parent product`,
-        })
-      }
-
-      const oldParentId = product.parentId
-
-      await prisma.$transaction(async (tx) => {
-        await tx.product.update({
-          where: { id: productId },
-          data: { parentId: newParentId },
-        })
-        // If old parent now has no remaining children, demote it.
-        if (oldParentId && oldParentId !== newParentId) {
-          const remaining = await tx.product.count({
-            where: { parentId: oldParentId },
-          })
-          if (remaining === 0) {
-            await tx.product.update({
-              where: { id: oldParentId },
-              data: { isParent: false },
-            })
-          }
-        }
-      })
-
+      const { oldParentId } = await relationshipTransaction(tx => reparentProduct(tx, productId, newParentId, expectedParentId))
       void auditLogService.write({
         userId: null,
         ip: request.ip ?? null,
@@ -836,7 +672,7 @@ const pimRoutes: FastifyPluginAsync = async (fastify) => {
       return { success: true, productId, newParentId, oldParentId }
     } catch (err) {
       fastify.log.error({ err }, '[pim/reparent] failed')
-      return reply.code(500).send({
+      return reply.code((err as { statusCode?: number }).statusCode ?? 500).send({
         error: err instanceof Error ? err.message : String(err),
       })
     }

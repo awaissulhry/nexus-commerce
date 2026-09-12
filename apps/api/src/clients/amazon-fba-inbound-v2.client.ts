@@ -1,3 +1,4 @@
+import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * F.1 (TECH_DEBT #50) — SP-API FBA Inbound v2024-03-20 client wrappers.
  *
@@ -30,40 +31,7 @@ const SP_REGION = (process.env.AMAZON_SP_REGION ?? 'eu') as keyof typeof REGION_
 
 let cachedToken: { value: string; expiresAt: number } | null = null
 
-async function getLwaAccessToken(): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 5 * 60_000) {
-    return cachedToken.value
-  }
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error(
-      'SP-API not configured (AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET / AMAZON_REFRESH_TOKEN)',
-    )
-  }
-  const body = new URLSearchParams({
-    grant_type: 'refresh_token',
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-  })
-  const res = await fetch(LWA_TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString(),
-  })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`LWA token exchange failed: ${res.status} ${text.slice(0, 200)}`)
-  }
-  const json = (await res.json()) as { access_token: string; expires_in: number }
-  cachedToken = {
-    value: json.access_token,
-    expiresAt: Date.now() + json.expires_in * 1000,
-  }
-  return json.access_token
-}
+async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
 const V2_BASE = '/inbound/fba/2024-03-20'
 

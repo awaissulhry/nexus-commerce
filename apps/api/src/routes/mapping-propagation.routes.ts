@@ -48,6 +48,7 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(plan)
     } catch (err: any) {
       const msg = err?.message ?? 'preview failed'
+      if (err?.statusCode) return reply.status(err.statusCode).send({ error: msg })
       if (msg.startsWith('Product not found')) return reply.status(404).send({ error: msg })
       request.log.error({ err }, 'mapping propagate-preview failed')
       return reply.status(500).send({ error: msg })
@@ -93,6 +94,7 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send(result)
     } catch (err: any) {
       const msg = err?.message ?? 'apply failed'
+      if (err?.statusCode) return reply.status(err.statusCode).send({ error: msg })
       if (msg.startsWith('Product not found')) return reply.status(404).send({ error: msg })
       request.log.error({ err }, 'mapping apply failed')
       return reply.status(500).send({ error: msg })
@@ -144,7 +146,7 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
   // override (follow flag + overrideData key) so it resolves from master.
   fastify.post<{
     Params: { id: string }
-    Body: { channel: string; marketplace: string; attribute: string }
+    Body: { channel: string; marketplace: string; attribute: string; channelConnectionId?: string | null; aliasKey?: string; expectedVersion?: number }
   }>('/products/:id/mapping/adopt-master', async (request, reply) => {
     const b = request.body
     if (!b?.channel || !b?.marketplace || !b?.attribute) {
@@ -155,11 +157,13 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
         productId: request.params.id,
         channel: b.channel,
         marketplace: b.marketplace,
-        attribute: b.attribute,
+        attribute: b.attribute, channelConnectionId: b.channelConnectionId, aliasKey: b.aliasKey,
+        expectedVersion: b.expectedVersion, actor: (request as any).user?.id ?? null,
       })
       return reply.send(result)
     } catch (err: any) {
       const msg = err?.message ?? 'adopt-master failed'
+      if (err?.statusCode) return reply.status(err.statusCode).send({ error: msg })
       if (msg.includes('No listing')) return reply.status(404).send({ error: msg })
       request.log.error({ err }, 'mapping adopt-master failed')
       return reply.status(500).send({ error: msg })

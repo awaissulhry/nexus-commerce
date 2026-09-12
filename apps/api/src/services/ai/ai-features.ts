@@ -85,6 +85,16 @@ export const AI_FEATURES: AiFeature[] = [
     label: 'Product bulk generate',
     description: 'Bulk AI content generation across selected products.',
   },
+  // PES.8 — the Product Edit Studio's enrichment lane. Separate from
+  // 'products-ai' because it is a different contract: it drafts against the
+  // channel's published caps and lands in review, never straight on the
+  // product, so its model choice is tuned for constraint-following rather
+  // than for cheap bulk copy.
+  {
+    key: 'product-enrichment',
+    label: 'Product enrichment drafts',
+    description: 'Cap-aware AI drafts for sheet cells, reviewed before they apply.',
+  },
   {
     key: 'ebay-cockpit',
     label: 'eBay cockpit assistant',

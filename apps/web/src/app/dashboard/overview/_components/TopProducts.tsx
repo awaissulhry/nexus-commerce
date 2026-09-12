@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Card } from '@/components/ui/Card'
 import { formatCurrency, NUM_FMT } from '../_lib/format'
 import type { OverviewPayload, T } from '../_lib/types'

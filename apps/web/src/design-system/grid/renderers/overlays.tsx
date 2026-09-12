@@ -21,20 +21,24 @@ export interface GridLoadingOverlayParams {
   rows?: number
   /** Draw a thumbnail block in the first cell (media rows). */
   media?: boolean
+  /** Match the host's row kind, including a thumbnail on a single-line product row. */
+  rowKind?: 'text' | 'media' | 'media-line'
 }
 
-export const GridLoadingOverlay = memo(function GridLoadingOverlay({ rows = 6, media = false }: GridLoadingOverlayParams) {
+export const GridLoadingOverlay = memo(function GridLoadingOverlay({ rows = 6, media = false, rowKind }: GridLoadingOverlayParams) {
   const density = useGridDensity()
   const tier = gridDensity[density]
-  const rowH = media ? tier.rowMedia : tier.rowText
+  const kind = rowKind ?? (media ? 'media' : 'text')
+  const hasMedia = kind !== 'text'
+  const rowH = kind === 'media-line' ? tier.rowMediaLine : kind === 'media' ? tier.rowMedia : tier.rowText
   return (
     <div className="nds-grid-skel" role="status" aria-live="polite" aria-label="Loading">
       {Array.from({ length: rows }, (_, i) => (
         <div key={i} className="nds-grid-skel-row" style={{ height: rowH }}>
-          {media && <span className="nds-grid-skel-thumb" style={{ width: tier.thumb, height: tier.thumb }} />}
+          {hasMedia && <span className="nds-grid-skel-thumb" style={{ width: tier.thumb, height: tier.thumb }} />}
           <span className="nds-grid-skel-text">
             <span className="nds-grid-skel-line" style={{ width: `${44 + ((i * 17) % 30)}%` }} />
-            {media && <span className="nds-grid-skel-line nds-grid-skel-line-sub" style={{ width: `${20 + ((i * 11) % 18)}%` }} />}
+            {kind === 'media' && <span className="nds-grid-skel-line nds-grid-skel-line-sub" style={{ width: `${20 + ((i * 11) % 18)}%` }} />}
           </span>
         </div>
       ))}

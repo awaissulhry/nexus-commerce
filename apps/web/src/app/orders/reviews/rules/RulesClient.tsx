@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import {
   Plus, Trash2, Sparkles, RefreshCw, Play, Eye, CheckCircle2, Download, Upload, Copy,
 } from 'lucide-react'

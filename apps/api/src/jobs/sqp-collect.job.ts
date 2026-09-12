@@ -93,6 +93,6 @@ export function startSqpCollectCron(): void {
     logger.error('sqp-collect cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => void runSqpCollectCron())
+  scheduledTask = cron.schedule(schedule, async () => { await runSqpCollectCron() })
   logger.info(`sqp-collect cron scheduled (${schedule})`)
 }

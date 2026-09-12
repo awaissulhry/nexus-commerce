@@ -1,0 +1,29 @@
+{
+  "checkedAt": "2026-09-07T17:30:26.262Z",
+  "deploymentWrites": 0,
+  "endpoints": [
+    {
+      "endpoint": "https://api.xavia.it/api/health",
+      "errorType": "TypeError",
+      "errorCode": "ENOTFOUND"
+    },
+    {
+      "endpoint": "https://nexusapi-production-b7bb.up.railway.app/api/health",
+      "httpStatus": 200,
+      "status": "healthy"
+    }
+  ],
+  "publicDomainConfigured": true,
+  "redisConfigured": true,
+  "endpoint": "https://nexusapi-production-b7bb.up.railway.app/api/health",
+  "httpStatus": 200,
+  "status": "healthy",
+  "queueWorkers": "enabled",
+  "dispatchPath": "immediate-bullmq",
+  "services": {
+    "database": "connected",
+    "redis": "connected",
+    "api": "operational"
+  },
+  "queueHealthy": true
+}

@@ -57,10 +57,12 @@ export interface SegmentedControlProps {
   onChange: (value: string) => void
   size?: Extract<Size, 'sm' | 'md'>
   disabled?: boolean
+  /** Wrap long choices on narrow surfaces without changing keyboard order. */
+  wrap?: boolean
   className?: string
 }
 
-export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false, ariaLabel, className }: SegmentedControlProps) {
+export function SegmentedControl({ options, value, onChange, size = 'md', disabled = false, wrap = false, ariaLabel, className }: SegmentedControlProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   const move = (dir: 1 | -1) => {
@@ -89,7 +91,7 @@ export function SegmentedControl({ options, value, onChange, size = 'md', disabl
   }
 
   const selectedIndex = options.findIndex((o) => o.value === value)
-  const cls = ['nds-seg', size, disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
+  const cls = ['nds-seg', size, wrap ? 'wrap' : '', disabled ? 'disabled' : '', className ?? ''].filter(Boolean).join(' ')
 
   return (
     <div ref={ref} className={cls} role="radiogroup" aria-label={ariaLabel} onKeyDown={onKeyDown}>

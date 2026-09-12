@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * AD.1 — Daily True Profit roll-up per (productId, marketplace, date).
  *
@@ -175,11 +176,11 @@ async function upsertRow(args: {
 
   await prisma.productProfitDaily.upsert({
     where: {
-      productId_marketplace_date: {
+      productId_marketplace_date: workspaceKey({
         productId: args.productId,
         marketplace: args.marketplace,
         date: args.date,
-      },
+      }),
     },
     create: {
       productId: args.productId,
@@ -435,7 +436,7 @@ export async function fillAdSpend(
     const [productId, marketplace] = key.split('::')
     try {
       const row = await prisma.productProfitDaily.findUnique({
-        where: { productId_marketplace_date: { productId, marketplace, date: start } },
+        where: { productId_marketplace_date: workspaceKey({ productId, marketplace, date: start }) },
         select: {
           grossRevenueCents: true,
           cogsCents: true,
@@ -472,7 +473,7 @@ export async function fillAdSpend(
       const coverage = coverageWithCost(row.coverage, row, { hasAdSpend: true })
 
       await prisma.productProfitDaily.update({
-        where: { productId_marketplace_date: { productId, marketplace, date: start } },
+        where: { productId_marketplace_date: workspaceKey({ productId, marketplace, date: start }) },
         data: { advertisingSpendCents, trueProfitCents: trueProfit, trueProfitMarginPct: marginPct, coverage },
       })
       productsUpdated++

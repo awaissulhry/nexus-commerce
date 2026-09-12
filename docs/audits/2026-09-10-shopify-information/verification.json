@@ -1,0 +1,118 @@
+{
+  "date": "2026-09-10",
+  "boundary": "Local fixture mutations, mocked API/Prisma service tests and read-only connected Shopify queries. No live Shopify/database mutation, commit, push or deployment.",
+  "tests": [
+    {
+      "command": "npm test --workspace @nexus/api -- src/services/shopify",
+      "files": 8,
+      "passed": 122,
+      "failed": 0
+    },
+    {
+      "command": "npm test --workspace @nexus/shared -- shopify-information.vitest.test.ts shopify-linked-products.vitest.test.ts",
+      "files": 2,
+      "passed": 36,
+      "failed": 0
+    },
+    {
+      "command": "npm test --workspace @nexus/web -- src/app/products/[id]/edit/_studio/shopify/informationEditing.vitest.test.ts src/app/products/[id]/edit/_studio/shopify/linked-editor.vitest.test.ts src/app/products/[id]/edit/_studio/navigationHref.vitest.test.ts",
+      "files": 3,
+      "passed": 23,
+      "failed": 0
+    }
+  ],
+  "typechecks": {
+    "web": "passed",
+    "api": "passed",
+    "factory": "passed"
+  },
+  "sharedBuild": "passed",
+  "guards": {
+    "webGeneratedTokens": "passed after sandbox IPC restriction rerun",
+    "factoryGeneratedTokens": "passed after sandbox IPC restriction rerun",
+    "tokenResolution": "passed, existing fallback notices retained",
+    "cssParse": "14 DS stylesheets passed",
+    "webTokenGuard": "165 files passed",
+    "dsConformance": "passed",
+    "rawPrimitives": "4340 existing raw controls; ratchet passed",
+    "agGridImportBoundary": "5583 TypeScript + 102 CSS; passed",
+    "dsFork": "136 shared files, 130 identical, 6 existing differences; no new drift"
+  },
+  "liveRead": {
+    "observedAt": "2026-09-10T05:35:29.857Z",
+    "status": "READ_VERIFIED",
+    "currency": "EUR",
+    "timezone": "Europe/Rome",
+    "products": 2,
+    "variants": 10,
+    "media": 13,
+    "nativeOwnersVerified": 12
+  },
+  "performance": {
+    "machine": "Apple M5 Pro, 24 GiB, macOS 26.6.2",
+    "browser": "Chrome; local Vite development fixture",
+    "products": 2,
+    "variants": 10000,
+    "columns": 61,
+    "ariaRowsIncludingHeader": 10003,
+    "sampleMountedRowElements": 37,
+    "sampleMountedCellElements": 216,
+    "keyboardSamples": 40,
+    "p95TwoRafProxyMs": 34.3,
+    "notMeasured": [
+      "actual paint latency",
+      "scroll FPS",
+      "cached media open latency",
+      "remote throughput",
+      "long-running memory"
+    ]
+  },
+  "accessibility": {
+    "checked": [
+      "DOM grid semantics",
+      "contextual names",
+      "modal containment and source-cell focus restoration",
+      "keyboard media movement cancellation",
+      "visible live status",
+      "390/1342/1440/1920 px layouts"
+    ],
+    "contrastSamples": [
+      {
+        "surface": "media guidance dark",
+        "foreground": [
+          170,
+          182,
+          194
+        ],
+        "background": [
+          24,
+          38,
+          59
+        ],
+        "ratio": 7.38
+      },
+      {
+        "surface": "media guidance light",
+        "foreground": [
+          98,
+          108,
+          123
+        ],
+        "background": [
+          255,
+          255,
+          255
+        ],
+        "ratio": 5.32
+      }
+    ],
+    "notTested": [
+      "screen reader",
+      "actual browser 200% zoom",
+      "full contrast audit",
+      "reduced motion",
+      "all editor and error states"
+    ],
+    "certification": "None"
+  }
+}

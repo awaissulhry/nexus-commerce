@@ -16,11 +16,9 @@
  */
 
 import prisma from '../../db.js'
-import { resolveAttributes, type ResolvedAttributes } from './attribute-resolver.js'
-import { getResolvedRules } from './schema-mapping.service.js'
+import { type ResolvedAttributes } from './attribute-resolver.js'
+import { resolveBatch, type ResolvedProduct } from './mapping/resolve-batch.service.js'
 import { resolveChannelField, linkForCoordinate, isPresent, type FieldLinkGroupLike } from './resolve-channel-field.js'
-import { loadFieldLinkGroups } from './payload-preview.js'
-import { loadValueMapLookup, loadSizeScaleLookup } from './value-map.service.js'
 import { PRICE_FIELD_KEYS, currencyForMarket } from '../field-resolution/propagation-fill.js'
 import { valuesEqual } from './resolver-shadow.js'
 
@@ -40,6 +38,12 @@ export interface PropagationFlags {
 export interface MappingPropagationEntry {
   channel: string
   marketplace: string
+  listingId?: string
+  channelConnectionId?: string | null
+  aliasKey?: string
+  listingVersion?: number
+  listingUpdatedAt?: Date
+  errors?: string[]
   fieldKey: string
   current: unknown
   proposed: unknown
@@ -54,6 +58,8 @@ export interface MappingPropagationEntry {
 export interface MappingPropagationPlan {
   productId: string
   sku: string
+  productVersion?: number
+  productUpdatedAt?: Date
   changedAttributes: string[]
   entries: MappingPropagationEntry[]
   counts: {
@@ -114,7 +120,7 @@ export function buildCoordinateEntries(args: {
   const out: MappingPropagationEntry[] = []
 
   for (const [fieldKey, rule] of Object.entries(rules)) {
-    const link = linkForCoordinate(links, fieldKey, channel, marketplace, null)
+    const link = linkForCoordinate(links, fieldKey, channel, marketplace, null, locale)
     const common = { fieldKey, rule, product, locale, link, transformCtx }
     const cur = resolveChannelField({ ...common, resolvedAttrs: baseAttrs })
     const prop = resolveChannelField({ ...common, resolvedAttrs: proposedAttrs })
@@ -168,57 +174,38 @@ export async function planMappingPropagation(input: {
   /** Currency source for the price guard (default IT → EUR). */
   sourceMarketplace?: string
 }): Promise<MappingPropagationPlan> {
-  const locale = input.locale ?? 'en'
-
+  if (!input.changes || typeof input.changes !== 'object' || Array.isArray(input.changes)
+    || Object.keys(input.changes).length > 500
+    || Object.keys(input.changes).some(key => !key.trim() || key.length > 200 || ['__proto__', 'constructor', 'prototype'].includes(key))) {
+    throw Object.assign(new Error('Provide at most 500 valid Master attribute changes.'), { statusCode: 400 })
+  }
   const product = await prisma.product.findUnique({ where: { id: input.productId } })
   if (!product) throw new Error(`Product not found: ${input.productId}`)
-  const parent = product.parentId
-    ? await prisma.product.findUnique({ where: { id: product.parentId } })
-    : null
-
   const listings = await prisma.channelListing.findMany({ where: { productId: input.productId } })
-  const links = await loadFieldLinkGroups(input.productId)
   const sourceCurrency = currencyForMarket(input.sourceMarketplace ?? 'IT')
-  const lookupSizeScale = await loadSizeScaleLookup()
-
-  let coords = listings.filter((l) => l.channel && l.marketplace)
-  if (input.channels?.length) coords = coords.filter((l) => input.channels!.includes(l.channel))
-  if (input.markets?.length) coords = coords.filter((l) => input.markets!.includes(l.marketplace as string))
-
+  const coords = listings.filter(l => l.channel && l.marketplace
+    && (!input.channels?.length || input.channels.includes(l.channel))
+    && (!input.markets?.length || input.markets.includes(l.marketplace!)))
   const entries: MappingPropagationEntry[] = []
-  for (const l of coords) {
-    const channel = l.channel
-    const marketplace = l.marketplace as string
-    const rules = await getResolvedRules(channel, marketplace, product.productType)
-    if (Object.keys(rules).length === 0) continue
-    const lookupValueMap = await loadValueMapLookup(channel, marketplace)
-    const baseAttrs = resolveAttributes({
-      product: product as any,
-      parent: parent as any,
-      channelListing: l as any,
-      locale,
-    })
-    const proposedAttrs = applyMasterChanges(baseAttrs, input.changes)
-    entries.push(
-      ...buildCoordinateEntries({
-        channel,
-        marketplace,
-        rules,
-        baseAttrs,
-        proposedAttrs,
-        product: product as any,
-        locale,
-        links,
-        transformCtx: { lookupValueMap, lookupSizeScale },
-        sourceCurrency,
-      }),
-    )
+  // Bounded by this product's listings; each resolution uses the exact account, alias,
+  // listing category, market language, schema normalization and destination overrides.
+  for (const listing of coords) {
+    const coordinate = { channel: listing.channel, marketplace: listing.marketplace!,
+      channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey,
+      productIds: [input.productId], locale: input.locale, includeCatalogue: false }
+    const before = await resolveBatch(coordinate)
+    const after = await resolveBatch({ ...coordinate, masterChangesByProduct: { [input.productId]: input.changes } })
+    const current = before.products[0], proposed = after.products[0]
+    if (!current || !proposed) throw new Error('Product changed during propagation preview; reload and try again.')
+    for (const entry of resolvedCoordinateEntries(current, proposed, coordinate, sourceCurrency, after.locale, Object.keys(input.changes))) {
+      entries.push({ ...entry, listingId: listing.id, listingVersion: listing.version, listingUpdatedAt: listing.updatedAt })
+    }
   }
 
   const counts = {
     total: entries.length,
     willUpdate: entries.filter((e) => e.action === 'update').length,
-    needsReview: entries.filter((e) => e.flags.needsTranslation).length,
+    needsReview: entries.filter((e) => e.flags.needsTranslation || e.errors?.length).length,
     skipped: entries.filter((e) => e.action === 'skip').length,
     currencyMismatch: entries.filter((e) => e.flags.currencyMismatch).length,
     unmappedRequired: entries.filter((e) => e.flags.unmappedRequired).length,
@@ -227,8 +214,26 @@ export async function planMappingPropagation(input: {
   return {
     productId: input.productId,
     sku: product.sku,
+    productVersion: product.version, productUpdatedAt: product.updatedAt,
     changedAttributes: Object.keys(input.changes),
     entries,
     counts,
   }
+}
+
+/** Diff canonical cells, including schema corrections and destination override precedence. */
+export function resolvedCoordinateEntries(current: ResolvedProduct, proposed: ResolvedProduct,
+  coordinate: { channel: string; marketplace: string; channelConnectionId?: string | null; aliasKey?: string },
+  sourceCurrency: string, locale: string, changedSources: string[] = []): MappingPropagationEntry[] {
+  return Object.values(proposed.cells).flatMap(cell => {
+    const before = current.cells[cell.fieldKey]
+    const refresh = cell.provenance !== 'override' && cell.sourceDependencies?.some(key => changedSources.map(k => k === 'name' ? 'title' : k).includes(key))
+    if (valuesEqual(before?.value, cell.value) && !cell.needsTranslation && !refresh) return []
+    const currencyMismatch = PRICE_FIELD_KEYS.has(cell.fieldKey) && currencyForMarket(coordinate.marketplace) !== sourceCurrency
+    return [{ ...coordinate, fieldKey: cell.fieldKey, current: before?.value ?? null, proposed: cell.value,
+      action: currencyMismatch ? 'skip' as const : 'update' as const, language: locale, errors: cell.errors,
+      flags: { transformed: cell.appliedTransforms.length > 0, needsTranslation: !!cell.needsTranslation,
+        channelLimitTrimmed: channelLimited(cell.warnings), currencyMismatch,
+        unmappedRequired: cell.required && !isPresent(cell.value) } }]
+  })
 }

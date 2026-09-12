@@ -1,3 +1,4 @@
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * FBA restore service — shared core for re-asserting AMAZON_EU fulfillment.
  *
@@ -62,7 +63,7 @@ export async function restoreFbaListings(options?: {
 }): Promise<FbaRestoreSummary> {
   const { skus, marketplaces, dryRun = true, limit } = options ?? {}
 
-  const sellerId = process.env.AMAZON_SELLER_ID ?? process.env.AMAZON_MERCHANT_ID ?? ''
+  const sellerId = (await getAmazonSellerId())
   if (!sellerId) throw new Error('AMAZON_SELLER_ID not configured')
 
   const listings = await prisma.channelListing.findMany({

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { Loader2, CheckCircle2, XCircle, Copy, ShieldAlert, FileText, List } from 'lucide-react'
 
 export interface ActionItem {

@@ -1,3 +1,7 @@
+import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
+import { assertInformationLocale } from '../services/pim/information-locale.js'
+import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
@@ -7,6 +11,42 @@ import { syncActivatedListings } from '../services/listing-activation-sync.servi
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 
 const amazonService = new AmazonService()
+
+/** Build only; used by the publish route and offline payload contract tests. */
+export async function buildMarketplaceAmazonAttributes(input: {
+  marketplace: string; marketplaceId: string; language?: string; attributes: Record<string, unknown>;
+  title?: string | null; description?: string | null; bulletPoints?: string[]; price?: unknown;
+}): Promise<Record<string, any>> {
+  const languages = await marketLanguages('AMAZON', input.marketplace)
+  const language = input.language ?? languages[0]
+  assertInformationLocale('AMAZON', language, languages)
+  const tag = languageTag(language, input.marketplace)
+  const spAttrs: Record<string, unknown> = {
+    ...input.attributes,
+  }
+  if (input.title) {
+    spAttrs.item_name = [{ value: input.title, marketplace_id: input.marketplaceId, language_tag: tag }]
+  }
+  if (input.description) {
+    spAttrs.product_description = [{ value: input.description, marketplace_id: input.marketplaceId, language_tag: tag }]
+  }
+  if (Array.isArray(input.bulletPoints) && input.bulletPoints.length > 0) {
+    spAttrs.bullet_point = input.bulletPoints.map((b: string) => ({
+      value: b,
+      marketplace_id: input.marketplaceId,
+      language_tag: tag,
+    }))
+  }
+  if (input.price != null) {
+    spAttrs.purchasable_offer = [{
+      currency: 'EUR',
+      our_price: [{ schedule: [{ value_with_tax: Number(input.price) }] }],
+      marketplace_id: input.marketplaceId,
+    }]
+  }
+
+  return spAttrs
+}
 
 const MARKETPLACES = [
   // Amazon EU
@@ -111,9 +151,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       let upserted = 0
       for (const mp of MARKETPLACES) {
         await prisma.marketplace.upsert({
-          where: { channel_code: { channel: mp.channel, code: mp.code } },
-          create: { ...mp },
-          update: { ...mp },
+          where: { channel_code: workspaceKey({ channel: mp.channel, code: mp.code }) },
+          create: { ...mp, languages: [mp.language.toLowerCase()] },
+          update: { name: mp.name, marketplaceId: 'marketplaceId' in mp ? mp.marketplaceId : undefined, domainUrl: 'domainUrl' in mp ? mp.domainUrl : undefined, region: mp.region, currency: mp.currency },
         })
         upserted++
       }
@@ -146,7 +186,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           take: 200,
         }),
         prisma.marketplace.findMany({
-          select: { channel: true, code: true, currency: true, language: true },
+          select: { channel: true, code: true, currency: true, language: true, languages: true },
         }),
       ])
 
@@ -154,7 +194,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       const meta = new Map(
         marketplaces.map((m) => [
           mpKey(m.channel, m.code),
-          { currency: m.currency, language: m.language },
+          { currency: m.currency, language: marketLanguages(m.channel, m.code, [m])[0], languages: marketLanguages(m.channel, m.code, [m]) },
         ])
       )
 
@@ -167,6 +207,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           salePrice: l.salePrice == null ? null : Number(l.salePrice),
           currency: m?.currency ?? null,
           language: m?.language ?? null,
+          languages: m?.languages ?? [],
         }
       })
 
@@ -265,7 +306,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const results = await Promise.all(
           markets.map(({ channel, marketplace, offerActive }) =>
             prisma.channelListing.upsert({
-              where: { productId_channel_marketplace: { productId: id, channel, marketplace, channelConnectionId: connByChannel.get(channel) ?? null } },
+              where: { productId_channel_marketplace: workspaceKey({ productId: id, channel, marketplace, channelConnectionId: connByChannel.get(channel) ?? null, aliasKey: '' }) },
               update: { offerActive },
               create: {
                 productId: id,
@@ -365,7 +406,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           await Promise.all(
             chunk.map(({ productId, channel, marketplace }) =>
               prisma.channelListing.upsert({
-                where: { productId_channel_marketplace: { productId, channel, marketplace, channelConnectionId: bulkConnByChannel.get(channel) ?? null } },
+                where: { productId_channel_marketplace: workspaceKey({ productId, channel, marketplace, channelConnectionId: bulkConnByChannel.get(channel) ?? null, aliasKey: '' }) },
                 update: { offerActive },
                 create: {
                   productId,
@@ -450,7 +491,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Verify the marketplace is configured
         const mp = await prisma.marketplace.findUnique({
-          where: { channel_code: { channel, code: marketplace } },
+          where: { channel_code: workspaceKey({ channel, code: marketplace }) },
         })
         if (!mp) {
           return reply
@@ -674,7 +715,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         }
         try {
           const targetMp = await prisma.marketplace.findUnique({
-            where: { channel_code: { channel, code: targetMarket } },
+            where: { channel_code: workspaceKey({ channel, code: targetMarket }) },
           })
           if (!targetMp) {
             results.push({ marketplace: targetMarket, ok: false, error: 'marketplace not configured' })
@@ -765,7 +806,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         request.body ?? {}
 
       const mp = await prisma.marketplace.findUnique({
-        where: { channel_code: { channel, code: marketplace } },
+        where: { channel_code: workspaceKey({ channel, code: marketplace }) },
       })
       if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
 
@@ -817,7 +858,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       if (channel.toUpperCase() !== 'AMAZON') {
         return reply.code(400).send({ error: 'detect-type is only supported for AMAZON' })
       }
-      if (!amazonService.isConfigured()) {
+      if (!(await amazonService.isConfigured())) {
         return reply.code(503).send({ error: 'Amazon SP-API not configured' })
       }
 
@@ -921,7 +962,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       if (categoryPath !== undefined) nextPA.detectedCategoryPath = categoryPath
 
       const mp = await prisma.marketplace.findUnique({
-        where: { channel_code: { channel, code: marketplace } },
+        where: { channel_code: workspaceKey({ channel, code: marketplace }) },
       })
       if (!mp) return reply.code(400).send({ error: `Marketplace ${channel}/${marketplace} not configured` })
 
@@ -954,7 +995,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   // Returns { ok, status, message, issues? }
   fastify.post<{
     Params: { id: string; channel: string; marketplace: string }
-    Body: Record<string, never>
+    Body: { language?: string }
   }>(
     '/products/:id/listings/:channel/:marketplace/publish',
     async (request, reply) => {
@@ -1001,10 +1042,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           issues?: { message: string; severity: string }[]
         }
 
-        if (channel.toUpperCase() === 'AMAZON' && amazonService.isConfigured()) {
-          const mpId = (MARKETPLACES.find(
-            (m) => m.channel === 'AMAZON' && m.code === marketplace,
-          ) as (typeof MARKETPLACES)[number] & { marketplaceId?: string } | undefined)?.marketplaceId
+        if (channel.toUpperCase() === 'AMAZON' && (await amazonService.isConfigured())) {
+          const marketRow = await prisma.marketplace.findFirst({ where: { channel: 'AMAZON', code: marketplace }, select: { marketplaceId: true } })
+          const mpId = marketRow?.marketplaceId
 
           if (!mpId) {
             return reply.code(400).send({ error: `No marketplaceId for AMAZON/${marketplace}` })
@@ -1017,32 +1057,11 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
             ? (pa.attributes as Record<string, unknown>)
             : {}
 
-          // Build a minimal SP-API attributes payload
-          const spAttrs: Record<string, unknown> = {
-            ...attrs,
-          }
-          if (resolvedTitle) {
-            spAttrs.item_name = [{ value: resolvedTitle, marketplace_id: mpId, language_tag: 'it_IT' }]
-          }
-          if (listing?.description) {
-            spAttrs.product_description = [{ value: listing.description, marketplace_id: mpId, language_tag: 'it_IT' }]
-          }
-          if (Array.isArray(listing?.bulletPointsOverride) && listing.bulletPointsOverride.length > 0) {
-            spAttrs.bullet_point = listing.bulletPointsOverride.map((b: string) => ({
-              value: b,
-              marketplace_id: mpId,
-              language_tag: 'it_IT',
-            }))
-          }
-          if (resolvedPrice != null) {
-            spAttrs.purchasable_offer = [{
-              currency: 'EUR',
-              our_price: [{ schedule: [{ value_with_tax: Number(resolvedPrice) }] }],
-              marketplace_id: mpId,
-            }]
-          }
+          const spAttrs = await buildMarketplaceAmazonAttributes({ marketplace, marketplaceId: mpId,
+            language: request.body?.language, attributes: attrs, title: resolvedTitle,
+            description: listing?.description, bulletPoints: listing?.bulletPointsOverride, price: resolvedPrice })
 
-          const sellerId = process.env.AMAZON_SELLER_ID ?? ''
+          const sellerId = (await getAmazonSellerId())
           const spResult = await amazonSpApiClient.putListingsItem({
             sellerId,
             sku,
@@ -1173,7 +1192,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
           },
         })
         const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]))
-        const amazonConfigured = amazonService.isConfigured()
+        const amazonConfigured = (await amazonService.isConfigured())
         // Amazon dry-run is env-gated (AMAZON_PUBLISH_MODE). Anything other
         // than an explicit 'live' is a dry-run — same default the SP-API
         // client applies — so the review can label it without guessing.

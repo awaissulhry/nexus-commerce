@@ -1,4 +1,5 @@
 'use client'
+import { WORKSPACES_ENABLED, browserWorkspaceId } from '@/lib/workspaces/paths'
 
 /**
  * CX.2 — the ONE popup bridge for every channel connect / reconnect.
@@ -19,9 +20,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { matchesConnectionAttempt, type ConnectionAttempt } from './connection-attempt'
 
 export interface ConnectedMessage {
   type: 'nexus:channel-connected'
+  workspaceId?: string
+  state?: string
   channel: string
   channelKey?: string
   connectionId?: string
@@ -33,6 +37,8 @@ export interface ConnectedMessage {
 export type ConnectIntent = 'connect' | 'reconnect' | 'adopt'
 
 export interface StartOptions {
+  /** Chosen before sign-in. Server membership and permissions remain authoritative. */
+  workspaceId?: string
   intent?: ConnectIntent
   targetConnectionId?: string
   region?: string | null
@@ -40,17 +46,15 @@ export interface StartOptions {
   url?: string
 }
 
-function isConnected(data: unknown): data is ConnectedMessage {
-  return !!data && typeof data === 'object' && (data as { type?: string }).type === 'nexus:channel-connected'
-}
-
-export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onClosedWithoutMessage?: () => void) {
+export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onClosedWithoutMessage?: (attempt: ConnectionAttempt) => void) {
   const [connecting, setConnecting] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const latest = useRef({ onConnected, onClosedWithoutMessage })
   latest.current = { onConnected, onClosedWithoutMessage }
   const popupRef = useRef<Window | null>(null)
   const heardRef = useRef(false)
+  const attemptRef = useRef<ConnectionAttempt | null>(null)
+  const timerRef = useRef<number | null>(null)
 
   useEffect(() => {
     const apiOrigin = (() => {
@@ -61,17 +65,20 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
       }
     })()
     const handle = (data: unknown): boolean => {
-      if (!isConnected(data)) return false
+      if (heardRef.current || !matchesConnectionAttempt(data, attemptRef.current, WORKSPACES_ENABLED)) return false
       heardRef.current = true
+      attemptRef.current = null
+      if (timerRef.current !== null) window.clearInterval(timerRef.current)
+      timerRef.current = null
       setConnecting(null)
-      latest.current.onConnected(data)
+      latest.current.onConnected(data as ConnectedMessage)
       return true
     }
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin && e.origin !== apiOrigin) return
       if (handle(e.data)) {
         try {
-          ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack' }, e.origin)
+          ;(e.source as Window | null)?.postMessage({ type: 'nexus:ack', state: (e.data as ConnectedMessage).state }, e.origin)
         } catch {
           /* popup already gone */
         }
@@ -82,7 +89,7 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
     try {
       bc = new BroadcastChannel('nexus-oauth')
       bc.onmessage = (e) => {
-        if (handle(e.data)) bc?.postMessage({ type: 'nexus:ack' })
+        if (handle(e.data)) bc?.postMessage({ type: 'nexus:ack', state: (e.data as ConnectedMessage).state })
       }
     } catch {
       /* no BroadcastChannel — the postMessage path above still works */
@@ -90,52 +97,72 @@ export function useConnectPopup(onConnected: (m: ConnectedMessage) => void, onCl
     return () => {
       window.removeEventListener('message', onMessage)
       bc?.close()
+      if (timerRef.current !== null) window.clearInterval(timerRef.current)
+      attemptRef.current = null
     }
   }, [])
 
   const start = useCallback(async (channelKey: string, opts: StartOptions = {}) => {
-    const popup = window.open('', '_blank', 'width=1000,height=800')
+    if (attemptRef.current) { popupRef.current?.focus(); return false }
+    const workspaceId = opts.workspaceId ?? browserWorkspaceId()
+    if (WORKSPACES_ENABLED && !workspaceId) { setError('Choose a business profile before connecting this account.'); return false }
+    const attempt: ConnectionAttempt = { channelKey, workspaceId, state: null, ...(!WORKSPACES_ENABLED && opts.url ? { legacy: true } : {}) }
+    attemptRef.current = attempt
+    const popup = window.open('', '_blank')
     popupRef.current = popup
     heardRef.current = false
     setError(null)
     setConnecting(channelKey)
     try {
-      let authUrl = opts.url
+      // Business mode always uses the shared flow that records the chosen profile.
+      let authUrl = WORKSPACES_ENABLED ? undefined : opts.url
       if (!authUrl) {
         const res = await fetch(`${getBackendUrl()}/api/cx/connect/${channelKey.toLowerCase()}/start`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30_000),
+          headers: { 'Content-Type': 'application/json', ...(WORKSPACES_ENABLED && workspaceId ? { 'x-nexus-workspace-id': workspaceId } : {}) },
           body: JSON.stringify({
             intent: opts.intent ?? (opts.targetConnectionId ? 'reconnect' : 'connect'),
             targetConnectionId: opts.targetConnectionId,
             region: opts.region ?? undefined,
           }),
         })
-        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; error?: string }
+        const data = (await res.json().catch(() => ({}))) as { success?: boolean; authUrl?: string; state?: string; error?: string }
         if (!res.ok || !data.authUrl) throw new Error(data.error || `Could not start the ${channelKey} sign-in (HTTP ${res.status})`)
+        if (!data.state) throw new Error('The sign-in request could not be verified. Please try again.')
+        if (attemptRef.current !== attempt) { popup?.close(); return false }
+        attempt.state = data.state
         authUrl = data.authUrl
       }
+      if (popup?.closed) throw new Error('The sign-in window was closed. Select Connect to try again.')
       if (popup && !popup.closed) {
         popup.location.href = authUrl
         // A legacy flow (no callback page of ours) ends when the operator closes
         // the popup; a shared-service flow ends with the message above.
-        const timer = window.setInterval(() => {
+        if (timerRef.current !== null) window.clearInterval(timerRef.current)
+        timerRef.current = window.setInterval(() => {
           if (!popup.closed) return
-          window.clearInterval(timer)
-          if (!heardRef.current) {
+          if (timerRef.current !== null) window.clearInterval(timerRef.current)
+          timerRef.current = null
+          const attempt = attemptRef.current
+          attemptRef.current = null
+          if (!heardRef.current && attempt) {
             setConnecting(null)
-            latest.current.onClosedWithoutMessage?.()
+            latest.current.onClosedWithoutMessage?.(attempt)
           }
         }, 500)
       } else {
-        // Blocked or already closed — fall back to this tab rather than doing nothing.
+        // Popup blocked: the callback returns this tab to the selected profile.
         window.location.href = authUrl
       }
+      return true
     } catch (err) {
       popup?.close()
+      attemptRef.current = null
       setConnecting(null)
       setError(err instanceof Error ? err.message : 'Connection failed')
+      return false
     }
   }, [])
 

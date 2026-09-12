@@ -33,6 +33,8 @@ import {
   toLocalRow,
   type LocalProductRow,
 } from './projection'
+import { browserWorkspaceId, WORKSPACES_ENABLED } from '@/lib/workspaces/paths'
+import { browserUserId } from '@/lib/workspaces/browser-identity'
 
 /** PGlite's surface, narrowed to what this module uses — avoids importing types at module scope. */
 interface PGliteLike {
@@ -46,6 +48,7 @@ interface PGliteLike {
 const DB_NAME = 'idb://nexus-local-catalog'
 
 let dbPromise: Promise<PGliteLike> | null = null
+let activeDatabaseName: string | null = null
 
 /** The singleton. Safe to call repeatedly; the WASM module instantiates once. */
 export async function getLocalDb(): Promise<PGliteLike> {
@@ -54,10 +57,15 @@ export async function getLocalDb(): Promise<PGliteLike> {
       'local-first: getLocalDb() called on the server. PGlite is browser-only — call it from a client component inside an effect.',
     )
   }
+  const workspaceId = browserWorkspaceId()
+  const userId = browserUserId()
+  if (WORKSPACES_ENABLED && (!workspaceId || !userId)) throw new Error('Select a business profile before opening its local catalog.')
+  const databaseName = WORKSPACES_ENABLED ? `${DB_NAME}-${encodeURIComponent(userId!)}-${encodeURIComponent(workspaceId!)}` : DB_NAME
+  if (activeDatabaseName !== databaseName) { activeDatabaseName = databaseName; dbPromise = null }
   if (!dbPromise) {
     dbPromise = (async () => {
       const { PGlite } = await import('@electric-sql/pglite')
-      const db = (await PGlite.create(DB_NAME)) as unknown as PGliteLike
+      const db = (await PGlite.create(databaseName)) as unknown as PGliteLike
       await db.exec(LOCAL_CATALOG_DDL)
       return db
     })()

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * R4.2 — eBay returns ingest.
  *
@@ -140,7 +141,7 @@ export async function ingestEbayReturn(raw: EbayReturnPayload): Promise<IngestRe
     if (amount != null) amountCents += Math.round(Number(amount) * 100)
     if (!currencyCode && li.amount?.currency) currencyCode = li.amount.currency
     const product = await prisma.product.findUnique({
-      where: { sku },
+      where: { workspace_sku: workspaceKey({ sku: sku }) },
       select: { id: true },
     })
     itemCreates.push({ sku, quantity: qty, productId: product?.id ?? null })

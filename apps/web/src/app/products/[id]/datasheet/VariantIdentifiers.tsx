@@ -28,7 +28,7 @@
  * the SKU link).
  */
 
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { AlertTriangle } from 'lucide-react'
 import type { getServerT } from '@/lib/i18n/server'
 

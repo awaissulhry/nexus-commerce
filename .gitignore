@@ -25,6 +25,7 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+.env.*-backup
 
 # Claude Code session state
 .claude/scheduled_tasks.lock
@@ -55,6 +56,12 @@ Thumbs.db
 # .next-ar0 …), and the enumerated list fell behind: on 2026-08-27 three such dirs were
 # sitting UNIGNORED in the tree. Directory-only, and no tracked path starts with `.next-`.
 .next-*/
+# A local Next verification run also emitted its build below tmp/.
+apps/web/tmp/
+
+# Python verification caches
+__pycache__/
+*.pyc
 
 # Cache
 .cache/

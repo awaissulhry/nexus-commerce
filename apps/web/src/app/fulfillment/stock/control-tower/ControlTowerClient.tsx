@@ -17,8 +17,9 @@
  */
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import Link from '@/lib/workspaces/Link'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 import {
   AlertCircle,
   AlertTriangle,

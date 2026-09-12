@@ -1,0 +1,5 @@
+{
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx": "dfe6533c3d86252d753e126ac02a681698ed488762c3e57565daa7116c5a19b4",
+  "apps/api/src/routes/product-studio.routes.ts": "7271d73b6b3e9c29751a5e7224586773f12e3e6d6a0ec15be048b9e77e9b471f",
+  "apps/api/src/lib/auth/permissions-manifest.ts": "d48ff1a5c54d28d05b0a8deb3471f7830731d812f31b2d80b1f82a84343f86bd"
+}

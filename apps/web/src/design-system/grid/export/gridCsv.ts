@@ -15,6 +15,13 @@
  * grid's own — not a second implementation on the server that has to re-derive coverage
  * roll-ups, channel states and sales windows, and drift from them.
  *
+ * THE KEY ROW (D15.2, 2026-09-04). A column may carry a machine `key`. When any column does, the
+ * file gets a SECOND header line holding the keys — the studio import matches on that line and
+ * ignores the human one, so "the file you exported is the file you import" (D15.1) is literally
+ * true. A column with `key: null` is informational (identity, readiness): its key cell is empty
+ * and the import skips it. A column with `key` UNDEFINED is a grid that knows nothing of keys, and
+ * if every column is like that no key row is written — every existing export is byte-identical.
+ *
  * RFC 4180: fields containing a comma, a quote or a newline are wrapped in quotes and inner
  * quotes are doubled; rows end CRLF. `downloadCsv` prepends a UTF-8 BOM — without it Excel reads
  * the file as the local 8-bit codepage and every Italian product name arrives mojibake.
@@ -24,6 +31,11 @@ export interface CsvColumn<TRow> {
   header: string
   /** The cell's value. Give a scalar: an object has no honest CSV form. */
   value: (row: TRow) => unknown
+  /**
+   * The machine key for the second header line. `null` = an informational column with an empty
+   * key cell; undefined = this column has no notion of a key (see the header).
+   */
+  key?: string | null
 }
 
 /** One field, escaped. `null`/`undefined` are empty, never the strings "null"/"undefined". */
@@ -36,8 +48,14 @@ export function csvField(value: unknown): string {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
+/** Does this column set carry keys at all? One column with a defined key makes the key row. */
+export function hasKeyRow<TRow>(columns: readonly CsvColumn<TRow>[]): boolean {
+  return columns.some((c) => c.key !== undefined)
+}
+
 export function toCsv<TRow>(rows: readonly TRow[], columns: readonly CsvColumn<TRow>[]): string {
   const lines = [columns.map((c) => csvField(c.header)).join(',')]
+  if (hasKeyRow(columns)) lines.push(columns.map((c) => csvField(c.key ?? '')).join(','))
   for (const row of rows) lines.push(columns.map((c) => csvField(c.value(row))).join(','))
   return lines.join('\r\n')
 }
@@ -48,7 +66,7 @@ export function toCsv<TRow>(rows: readonly TRow[], columns: readonly CsvColumn<T
  */
 export function downloadCsv(fileName: string, csv: string): void {
   if (typeof document === 'undefined') return
-  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' })
+  const blob = new Blob([`﻿${csv}`], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -64,9 +82,14 @@ export function downloadCsv(fileName: string, csv: string): void {
 /**
  * `products-2026-08-31.csv`, plus a note when the export is narrowed — two exports taken minutes
  * apart under different filters must not both be `products.csv` in the operator's downloads.
+ *
+ * `suffix` names WHICH columns the file holds (`all`, `view-pricing`) for the same reason: an
+ * "all attributes" export and a "Pricing" export of the same family on the same day are different
+ * files and must not share a name.
  */
-export function csvFileName(base: string, opts: { filtered?: boolean; date?: Date } = {}): string {
+export function csvFileName(base: string, opts: { filtered?: boolean; date?: Date; suffix?: string } = {}): string {
   const d = opts.date ?? new Date()
   const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  return `${base}-${stamp}${opts.filtered ? '-filtered' : ''}.csv`
+  const suffix = opts.suffix ? `-${opts.suffix.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')}` : ''
+  return `${base}-${stamp}${suffix}${opts.filtered ? '-filtered' : ''}.csv`
 }

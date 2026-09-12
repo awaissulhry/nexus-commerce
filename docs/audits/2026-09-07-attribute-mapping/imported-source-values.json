@@ -1,0 +1,48 @@
+{
+  "total": 338,
+  "counts": {
+    "color": 44,
+    "size": 36,
+    "style": 9
+  },
+  "examples": [
+    {
+      "id": "cmokmy2fo0053pm0pwafjwwk6",
+      "sku": "AIRMESH-JACKET-BLACK-MEN-XL",
+      "variantAttributes": {
+        "Size": "XL",
+        "Color": "Nero",
+        "Body Type": "Uomo"
+      },
+      "color": "Nero",
+      "size": "XL"
+    },
+    {
+      "id": "cmokmy0qp000lpm0p2yxw35ku",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "variantAttributes": {
+        "Size": "XS",
+        "Color": "Giallo",
+        "variantAttributes": "[object Object]"
+      },
+      "color": "Giallo",
+      "size": "XS"
+    },
+    {
+      "id": "cmokmy2y7006epm0ps6n4rug3",
+      "sku": "normal-knee-slider-yellow",
+      "variantAttributes": {
+        "Color": "Giallo"
+      },
+      "color": "Giallo"
+    },
+    {
+      "id": "cmokmy2xg006cpm0pyd90xxsj",
+      "sku": "normal-knee-slider-red",
+      "variantAttributes": {
+        "Color": "Rosso"
+      },
+      "color": "Rosso"
+    }
+  ]
+}

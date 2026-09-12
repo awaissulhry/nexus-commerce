@@ -1,0 +1,41 @@
+{
+  "at": "2026-09-11T23:47:30.498652+00:00",
+  "tests": {
+    "command": "npm --prefix apps/api test -- src/services/pim/language-axis-schema.vitest.test.ts --reporter=json --outputFile=../../docs/audits/2026-09-12-language-axis/step1-reversal/tests.json",
+    "exitCode": 0,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "types": {
+    "command": "node scripts/typecheck-scoped.mjs apps/api/src/services/pim/language-axis-schema.vitest.test.ts",
+    "exitCode": 0,
+    "logBytes": 285,
+    "initialExitCode": 1,
+    "initialIssue": "isolated test lacked Node ambient types; added explicit reference types=node"
+  },
+  "scriptsSyntax": {
+    "files": [
+      "inspect.mjs",
+      "schema-command.mjs",
+      "rehearse.mjs"
+    ],
+    "exitCode": 0
+  },
+  "whitespace": {
+    "command": "git diff --check -- packages/database/prisma/schema.prisma",
+    "exitCode": 0
+  },
+  "rehearsals": {
+    "mediaExitCode": 0,
+    "translationExitCode": 0
+  },
+  "screen": {
+    "at": "2026-09-11T23:46:00.949Z",
+    "url": "http://localhost:3000/products/cmokmy0lr0009pm0p9yxk7ho0/edit",
+    "sku": "GALE-JACKET-BLACK-MEN-XS",
+    "saveDisabled": true,
+    "probeAbsent": true,
+    "uiEdits": 0
+  }
+}

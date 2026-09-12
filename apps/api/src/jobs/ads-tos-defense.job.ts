@@ -61,6 +61,6 @@ export function startTosDefenseCron(): void {
     return
   }
   // Every 30 min — well above the daily-grain data, so steps don't thrash.
-  scheduledTask = cron.schedule('*/30 * * * *', () => void runTosDefenseCron())
+  scheduledTask = cron.schedule('*/30 * * * *', async () => { await runTosDefenseCron() })
   logger.info('top-of-search-defense cron scheduled (*/30 * * * *)')
 }

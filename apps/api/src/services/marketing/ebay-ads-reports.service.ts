@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * E2 (eBay Ads) — the async report pipeline (create → poll → download →
  * parse → ingest), implementing the ads-core ReportTaskDriver contract.
@@ -460,7 +461,7 @@ export async function pollAndIngestEbayReports(limit = 10): Promise<PollReport> 
           reportedAt: now,
         }
         await prisma.ebayAdsDailyPerformance.upsert({
-          where: { marketplace_fundingModel_entityType_entityId_date: key },
+          where: { marketplace_fundingModel_entityType_entityId_date: workspaceKey(key) },
           create: { ...key, ...data },
           update: data,
         })
@@ -476,12 +477,12 @@ export async function pollAndIngestEbayReports(limit = 10): Promise<PollReport> 
           currency: 'EUR', reportTaskId: task.id, reportedAt: now,
         }
         await prisma.ebayAdsDailyPerformance.upsert({
-          where: { marketplace_fundingModel_entityType_entityId_date: cKey },
+          where: { marketplace_fundingModel_entityType_entityId_date: workspaceKey(cKey) },
           create: { ...cKey, ...cData },
           update: cData,
         })
         await prisma.campaignMetric.upsert({
-          where: { channel_entityType_entityId_date: { channel: 'EBAY', entityType: 'CAMPAIGN', entityId: cid, date: cDate } },
+          where: { channel_entityType_entityId_date: workspaceKey({ channel: 'EBAY', entityType: 'CAMPAIGN', entityId: cid, date: cDate }) },
           create: {
             channel: 'EBAY', entityType: 'CAMPAIGN', entityId: cid, date: cDate,
             marketplace, reportedAt: now,

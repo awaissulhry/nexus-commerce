@@ -1,0 +1,33 @@
+import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { createServer } from 'vite'
+import { draft, variants } from './data.mjs'
+import { storefront } from './storefront.mjs'
+import { collectionPage, collectionFixtureCards, collectionOrder, setCollectionOrder } from './collection.mjs'
+import { inspectShopifyContent } from '../../../../../packages/shared/dist/shopify-content.js'
+const root=fileURLToPath(new URL('.',import.meta.url)),repo=resolve(root,'../../../../..')
+let saved=structuredClone(draft),revision=1,mode='normal',failSave=false
+const writes=[],cart=[],requests=[]
+const snapshot=()=>({productId:'family',name:'Xavia · Demo helmet',sku:'XV-FAMILY',initialized:true,draft:saved,variants,revision:String(revision),errors:inspectShopifyContent(saved,variants),sourceAssets:draft.assets,destination:{accountId:'fixture',listingId:'family-listing',market:'GLOBAL'},publication:{status:'NOT_PUBLISHED',productId:null,lastVerifiedAt:null,error:null,contentHash:null}})
+const server=await createServer({configFile:false,root,resolve:{alias:[{find:'@/lib/auth/AuthProvider',replacement:root+'/auth.ts'},{find:'@/lib/backend-url',replacement:root+'/backend.ts'},{find:'@',replacement:repo+'/apps/web/src'},{find:'@nexus/shared',replacement:repo+'/packages/shared'},{find:'react-dom',replacement:repo+'/node_modules/react-dom'},{find:'react',replacement:repo+'/node_modules/react'}]},esbuild:{jsx:'automatic'},define:{'process.env.NODE_ENV':'"development"'},server:{host:'127.0.0.1',port:3148,strictPort:true,fs:{allow:[root,repo]}},plugins:[{name:'fixture-studio-context',enforce:'pre',resolveId(source,importer){if(source==='../../contracts'&&importer?.includes('/images/shopify/'))return root+'/studio.ts'}},{name:'fixture-api',configureServer(vite){vite.middlewares.use(async(req,res,next)=>{const url=new URL(req.url,'http://127.0.0.1:3148');const json=(data,status=200)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data))};try{
+ if(url.pathname==='/mock-images-worker.js'){res.setHeader('Content-Type','text/javascript');res.end("self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(u.hostname==='fixture.example')e.respondWith(fetch('/media/'+u.pathname.split('/').pop()));});");return}
+ if(url.pathname.startsWith('/theme-assets/')){const name=url.pathname.slice(14);if(!/^[a-zA-Z0-9_.-]+$/.test(name))return json({},404);res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'text/javascript');res.end(readFileSync(repo+'/output/shopify-impact-2026-09-08/theme/assets/'+name));return}
+ if(url.pathname.startsWith('/media/')){const name=url.pathname.split('/').pop().replace('.svg',''),colour=name.includes('red')?'#bc292f':name.includes('blue')?'#225ca9':'#34383f';res.setHeader('Content-Type','image/svg+xml');res.end(`<svg xmlns="http://www.w3.org/2000/svg" width="800" height="800" viewBox="0 0 800 800"><rect width="800" height="800" fill="#f2f3f4"/><ellipse cx="400" cy="613" rx="225" ry="28" fill="#dedfe1"/><path d="M190 472C160 240 327 147 466 209C605 268 639 432 595 549L523 580H273L209 548Z" fill="${colour}"/><path d="M221 333C321 277 476 276 562 330L579 435L322 444L225 403Z" fill="#18232c"/><path d="M224 349C353 310 460 308 557 345" stroke="#8293a2" stroke-width="12" fill="none"/><path d="M232 488L320 495L354 545H267Z" fill="#151a20"/><text x="390" y="267" fill="white" font-family="Arial" font-size="22" letter-spacing="5">XAVIA</text><text x="400" y="715" text-anchor="middle" font-family="Arial" fill="#3d4148" font-size="22">${name.replace(/-/g,' ').toUpperCase()} · SAMPLE IMAGE</text></svg>`);return}
+ if (/^\/(it|en)\/collections\/demo$/.test(url.pathname)) { res.setHeader('Content-Type','text/html'); res.end(await collectionPage(url)); return }
+ if(/^\/(it|en)\/products\/demo$/.test(url.pathname)&&url.searchParams.get('view')==='nexus-card'){res.setHeader('Content-Type','text/html');res.end(await collectionPage(url,true));return}
+ if(/^\/(it|en)\/products\/demo$/.test(url.pathname)){requests.push(url.search);if(url.searchParams.has('option_values')){if(mode==='failure'){res.statusCode=503;res.end('Fixture option failure');return}if(mode==='race'&&url.searchParams.get('option_values')?.startsWith('Blue'))await new Promise(r=>setTimeout(r,1500))}res.setHeader('Content-Type','text/html');res.end(await storefront(url,mode));return}
+ if (url.pathname.endsWith('/cart.js')) return json({items:[],item_count:0,total_price:0})
+ if(!url.pathname.startsWith('/api/'))return next()
+ let body={};if(req.method!=='GET'){let raw='';for await(const chunk of req)raw+=chunk;body=raw?JSON.parse(raw):{}}
+ if(url.pathname==='/api/fixture/mode'){mode=url.searchParams.get('mode')??'normal';failSave=mode==='conflict';return json({mode})}
+ if(url.pathname==='/api/fixture/evidence')return json({writes,cart,requests})
+ if(url.pathname==='/api/fixture/cart'){const item=variants[Number(body.id)-1];if(!item||!item.stock)return json({error:'Unavailable variant'},422);cart.push({id:body.id,sku:item.sku,price:item.price});return json(item)}
+ if(url.pathname.endsWith('/shopify-content/collections')) return json({collections:[{id:'gid://shopify/Collection/1',title:'Helmets · Sample collection'}]})
+ if (url.pathname.includes('/shopify-content/collections/1')) { if(req.method==='PUT'){setCollectionOrder(body.order);writes.push(body)} return json({collectionId:'1',title:'Helmets · Sample collection',domain:'xavia-sample.myshopify.com',cards:collectionFixtureCards,order:collectionOrder,revision:'collection-1',remoteRevision:'remote-collection-1',publication:null}) }
+ if(url.pathname.endsWith('/shopify-content')){if(req.method==='PUT'){if(failSave||body.expectedRevision!==String(revision))return json({error:'The family changed. Your edits are preserved; reload before saving.'},409);saved=body.draft;revision++;writes.push(body)}return json(snapshot())}
+ if(url.pathname.endsWith('/shopify-content/preview'))return json({...snapshot(),domain:'xavia-sample.myshopify.com',locations:[{id:'gid://shopify/Location/1',name:'Sample warehouse'}],remote:null,remoteRevision:'remote-1'})
+ if(url.pathname.endsWith('/shopify-content/synchronize'))return json({message:'Simulated verification of four native variants. No Shopify writes were made.'})
+ return json({error:'Unsupported fixture endpoint'},404)
+ }catch(error){console.error(error);json({error:error.message},500)}})}}],optimizeDeps:{include:['react','react-dom/client']}})
+await server.listen();console.log('Nexus and Impact local review: http://127.0.0.1:3148')

@@ -169,6 +169,6 @@ export function startMarketingRuleEvaluatorCron(): void {
     return
   }
   // Every 15 min — matches the advertising/replenishment evaluators.
-  scheduledTask = cron.schedule('*/15 * * * *', () => void runMarketingRuleEvaluatorCron())
+  scheduledTask = cron.schedule('*/15 * * * *', async () => { await runMarketingRuleEvaluatorCron() })
   logger.info('marketing-rule-evaluator cron scheduled (*/15 * * * *)')
 }

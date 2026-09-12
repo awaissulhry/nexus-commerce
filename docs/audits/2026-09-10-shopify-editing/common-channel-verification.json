@@ -1,0 +1,23 @@
+{
+  "api": {
+    "passed": 326,
+    "failed": 0,
+    "skipped": 1,
+    "files": 28
+  },
+  "web": {
+    "passed": 115,
+    "files": 11
+  },
+  "shared": {
+    "passed": 48,
+    "files": 4
+  },
+  "live_shopify_writes": false,
+  "fixture3175_removed": true,
+  "separate_shopify_information_grid_removed": true,
+  "grid_chrome_probes": 12,
+  "unrelated_guard_failure": "Web/Factory design-system components/index.ts drift",
+  "browser_scope": "Actual localhost:3000 editor; read/open/cancel, F2, native range selection, focus restoration, light/dark; no catalog writes",
+  "report": "COMMON-CHANNEL-SHEET.md"
+}

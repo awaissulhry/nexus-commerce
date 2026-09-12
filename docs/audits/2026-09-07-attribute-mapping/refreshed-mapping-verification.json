@@ -1,0 +1,953 @@
+{
+  "verifiedAt": "2026-09-07T16:16:04.958Z",
+  "productCount": 338,
+  "definitionCount": 241,
+  "listingCoverage": [
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "total": 214,
+      "covered": 214,
+      "categories": {
+        "OUTERWEAR": 136,
+        "AUTO_ACCESSORY": 10,
+        "COAT": 13,
+        "SUIT": 43,
+        "PANTS": 12
+      },
+      "uncovered": []
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "total": 123,
+      "covered": 123,
+      "categories": {
+        "OUTERWEAR": 110,
+        "COAT": 13
+      },
+      "uncovered": []
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "total": 115,
+      "covered": 115,
+      "categories": {
+        "OUTERWEAR": 102,
+        "COAT": 13
+      },
+      "uncovered": []
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "total": 252,
+      "covered": 249,
+      "categories": {
+        "177101": 25,
+        "177104": 224,
+        "UNCLASSIFIED": 3
+      },
+      "uncovered": [
+        {
+          "sku": "1J-EYE5-Y0TW",
+          "listingId": "f67fa2a9-3155-43b7-a640-9e3287e329d8",
+          "status": "DRAFT",
+          "account": "cmr4aaqb00025nz016k18rup9",
+          "alias": "",
+          "category": null,
+          "covered": false
+        },
+        {
+          "sku": "UD-LVLM-1H8T",
+          "listingId": "8b622996-338e-491e-9920-3dba33fb978a",
+          "status": "DRAFT",
+          "account": "cmr4aaqb00025nz016k18rup9",
+          "alias": "",
+          "category": null,
+          "covered": false
+        },
+        {
+          "sku": "xracing",
+          "listingId": "cd1866bf-115e-403f-92da-4a7eeb0a0637",
+          "status": "DRAFT",
+          "account": "cmr4aaqb00025nz016k18rup9",
+          "alias": "",
+          "category": null,
+          "covered": false
+        }
+      ]
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "total": 273,
+      "covered": 273,
+      "categories": {
+        "OUTERWEAR": 148,
+        "GLOVES": 17,
+        "AUTO_ACCESSORY": 17,
+        "SUIT": 50,
+        "COAT": 21,
+        "PANTS": 20
+      },
+      "uncovered": []
+    }
+  ],
+  "parity": [
+    {
+      "channel": "AMAZON",
+      "sku": "AIRMESH-JACKET-BLACK-MEN-XL",
+      "category": {
+        "channelCategoryId": "COAT",
+        "channelCategoryPath": null,
+        "browseNodeId": null,
+        "source": "productType",
+        "categoryId": null,
+        "categoryName": null,
+        "reviewed": false
+      },
+      "counts": {
+        "mapped": 138,
+        "unmapped": 65,
+        "errors": 22,
+        "requiredMissing": 22
+      },
+      "differing": [],
+      "examples": {
+        "color": {
+          "value": "Nero",
+          "source": "color",
+          "provenance": "catalogRule",
+          "errors": []
+        },
+        "fabric_type": {
+          "value": null,
+          "source": "fabric_type",
+          "provenance": "missing",
+          "errors": [
+            "Field 'Fabric Type' is required."
+          ]
+        },
+        "material": {
+          "value": null,
+          "source": "material",
+          "provenance": "missing",
+          "errors": []
+        }
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "category": {
+        "channelCategoryId": "OUTERWEAR",
+        "channelCategoryPath": null,
+        "browseNodeId": null,
+        "source": "productType",
+        "categoryId": null,
+        "categoryName": null,
+        "reviewed": false
+      },
+      "counts": {
+        "mapped": 71,
+        "unmapped": 65,
+        "errors": 16,
+        "requiredMissing": 16
+      },
+      "differing": [],
+      "examples": {
+        "color": {
+          "value": "Giallo",
+          "source": "categoryAttributes.color",
+          "provenance": "catalogRule",
+          "errors": []
+        },
+        "fabric_type": {
+          "value": "Polyester",
+          "source": "fabric_type",
+          "provenance": "catalogRule",
+          "errors": []
+        },
+        "material": {
+          "value": null,
+          "source": "categoryAttributes.material",
+          "provenance": "missing",
+          "errors": []
+        },
+        "size": {
+          "value": "XS",
+          "source": "categoryAttributes.size",
+          "provenance": "catalogRule",
+          "errors": []
+        }
+      }
+    },
+    {
+      "channel": "EBAY",
+      "sku": "AIRMESH-JACKET-BLACK-MEN-XL",
+      "category": {
+        "channelCategoryId": "177104",
+        "channelCategoryPath": null,
+        "browseNodeId": null,
+        "source": "listing",
+        "categoryId": null,
+        "categoryName": null,
+        "reviewed": false
+      },
+      "counts": {
+        "mapped": 48,
+        "unmapped": 0,
+        "errors": 2,
+        "requiredMissing": 1
+      },
+      "differing": [],
+      "examples": {
+        "color": {
+          "value": "Nero",
+          "source": "color",
+          "provenance": "catalogRule",
+          "errors": []
+        },
+        "material": {
+          "value": null,
+          "source": "material",
+          "provenance": "missing",
+          "errors": []
+        },
+        "size": {
+          "value": "XL",
+          "source": "size",
+          "provenance": "catalogRule",
+          "errors": []
+        }
+      }
+    },
+    {
+      "channel": "EBAY",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "category": {
+        "channelCategoryId": "177104",
+        "channelCategoryPath": null,
+        "browseNodeId": null,
+        "source": "listing",
+        "categoryId": null,
+        "categoryName": null,
+        "reviewed": false
+      },
+      "counts": {
+        "mapped": 48,
+        "unmapped": 0,
+        "errors": 3,
+        "requiredMissing": 1
+      },
+      "differing": [],
+      "examples": {
+        "color": {
+          "value": "Giallo",
+          "source": "color",
+          "provenance": "override",
+          "errors": []
+        },
+        "material": {
+          "value": "Poliestere, Nylon",
+          "source": "material",
+          "provenance": "override",
+          "errors": []
+        },
+        "size": {
+          "value": "XXS",
+          "source": "size",
+          "provenance": "override",
+          "errors": []
+        }
+      }
+    }
+  ],
+  "failures": [],
+  "scopes": [
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "AUTO_ACCESSORY",
+      "counts": {
+        "total": 139,
+        "mapped": 64,
+        "unmapped": 0,
+        "owned": 75,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:27.625Z",
+        "ageDays": 0,
+        "version": "6a928c0f3fcee2e4401a8638295a56096e216816ef5e782796950a30023bffd3",
+        "note": null
+      }
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177104",
+      "counts": {
+        "total": 48,
+        "mapped": 30,
+        "unmapped": 0,
+        "owned": 18,
+        "required": 6,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "channelSchema",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:31.522Z",
+        "ageDays": 0,
+        "version": "16ecb82c7471b446b4e6f1c86677d3f2b7fb18d543077245d4fb5ac0912070e0",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "GLOVES",
+      "counts": {
+        "total": 130,
+        "mapped": 57,
+        "unmapped": 0,
+        "owned": 73,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:35.151Z",
+        "ageDays": 0,
+        "version": "d985d98a05c67564fcb2dc49e251040c6f62816d18503ffd6663204d8d5fb91d",
+        "note": null
+      }
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177101",
+      "counts": {
+        "total": 42,
+        "mapped": 24,
+        "unmapped": 0,
+        "owned": 18,
+        "required": 6,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "channelSchema",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:40.321Z",
+        "ageDays": 0,
+        "version": "e1b1dc051129bbf46b15a3b02ca09b82c5577a532a61ddc2d5f5e393b7c965ed",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "AUTO_ACCESSORY",
+      "counts": {
+        "total": 137,
+        "mapped": 65,
+        "unmapped": 0,
+        "owned": 72,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:42.274Z",
+        "ageDays": 0,
+        "version": "cc0b901f75051e9eddd5fffd064070a9d3a15f06a56bfffdffe66fb93ec5079c",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "SUIT",
+      "counts": {
+        "total": 165,
+        "mapped": 96,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:44.725Z",
+        "ageDays": 0,
+        "version": "11eb609e4b3aa055ca28444367ff2668908ad924d4d215438e6f12cf1742c388",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 130,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 63,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:47.504Z",
+        "ageDays": 0,
+        "version": "148c52b8182d18e4966898ec800f629b355f5953b9adac07f6c5f39eb6bc8da3",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 136,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:50.064Z",
+        "ageDays": 0,
+        "version": "aee2ab599ca5580a78bbe5398d01a601c6cff7dd986c053219d4df74533f75ac",
+        "note": null
+      }
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "category": "177109",
+      "counts": {
+        "total": 50,
+        "mapped": 32,
+        "unmapped": 0,
+        "owned": 18,
+        "required": 6,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "channelSchema",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:35:54.805Z",
+        "ageDays": 0,
+        "version": "294fedcdff535336952620006a2e61cb2fffaedbfa0d30ec23e03ab9afa290f4",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "PANTS",
+      "counts": {
+        "total": 183,
+        "mapped": 112,
+        "unmapped": 0,
+        "owned": 71,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:00.682Z",
+        "ageDays": 0,
+        "version": "9d8dd826242a2ad260230d7c31a24f32abbcc610e0878f223d2a762bf60d7198",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "COAT",
+      "counts": {
+        "total": 203,
+        "mapped": 134,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:09.996Z",
+        "ageDays": 0,
+        "version": "6d76b6ae4ca98f4a8d3bd5dea8e00906b070cd604706bd75321dcc8d3f63e7a8",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "GLOVES",
+      "counts": {
+        "total": 132,
+        "mapped": 56,
+        "unmapped": 0,
+        "owned": 76,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:28.549Z",
+        "ageDays": 0,
+        "version": "bcb9880d2cfe401c4d151746310d40b03cabbff58ea4af36a470f110cc452074",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "PANTS",
+      "counts": {
+        "total": 186,
+        "mapped": 112,
+        "unmapped": 0,
+        "owned": 74,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:33.649Z",
+        "ageDays": 0,
+        "version": "214bdb6a4d78d1e111f38878b80842cea5c202a0d4a414abb194448bd756d067",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "SUIT",
+      "counts": {
+        "total": 167,
+        "mapped": 95,
+        "unmapped": 0,
+        "owned": 72,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:38.621Z",
+        "ageDays": 0,
+        "version": "dbf58b88213a1bc6181cc79e00ec26db6b0ae98c691089bce03ba637e8654697",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "COAT",
+      "counts": {
+        "total": 203,
+        "mapped": 134,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:45.682Z",
+        "ageDays": 0,
+        "version": "c43f6925ac662fa2f3d51182a26e897c214932fabf2e0eb714c59b5b438f955d",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "COAT",
+      "counts": {
+        "total": 197,
+        "mapped": 134,
+        "unmapped": 0,
+        "owned": 63,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:27.656Z",
+        "ageDays": 0,
+        "version": "51d2327ac1291b0d63c26198b0b41d4684874ec9d3f1c441a0cc677ceee2ff60",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "AUTO_ACCESSORY",
+      "counts": {
+        "total": 131,
+        "mapped": 65,
+        "unmapped": 0,
+        "owned": 66,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:50.368Z",
+        "ageDays": 0,
+        "version": "25aec1f74327ebedfe2fc0bdd0d4c40c7dc4adbe9d9150db3c2b7c96829c2efc",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "AUTO_ACCESSORY",
+      "counts": {
+        "total": 137,
+        "mapped": 65,
+        "unmapped": 0,
+        "owned": 72,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:53.648Z",
+        "ageDays": 0,
+        "version": "e8c7f2e6c73e2b4638d5be96f9f4fc08f6886ebd299f35253fe3b0c4f374c8b8",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "AUTO_ACCESSORY",
+      "counts": {
+        "total": 137,
+        "mapped": 65,
+        "unmapped": 0,
+        "owned": 72,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:36:59.902Z",
+        "ageDays": 0,
+        "version": "e73c663dc41662b32768e73a59084e1f561cfb494a13658d66465ba8371f85c3",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 136,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:10.140Z",
+        "ageDays": 0,
+        "version": "43a9ee6eb98250cd364af2a2118bc710078dfd2ae29e53ab3a4167c144ae959c",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 138,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 71,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:14.670Z",
+        "ageDays": 0,
+        "version": "547f56016919bdbf1e008f19f223414524595795925f5d5dbb0a761144d7b5ee",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "category": "COAT",
+      "counts": {
+        "total": 205,
+        "mapped": 133,
+        "unmapped": 0,
+        "owned": 72,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:19.292Z",
+        "ageDays": 0,
+        "version": "fdf64b2c71b7971c50577f035c0c965ac569dee23f8b726dba8392b8ed827333",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "COAT",
+      "counts": {
+        "total": 203,
+        "mapped": 134,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:23.166Z",
+        "ageDays": 0,
+        "version": "824507ae2ce9783665f02ae65839a3b8eec6a5ecac588b795c19afd7d06749c1",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 136,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:34.170Z",
+        "ageDays": 0,
+        "version": "e58f2666ef5b1de4396a26bdb186b9dcadfb417e9acaa9b12a1cd7e923026d04",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "OUTERWEAR",
+      "counts": {
+        "total": 136,
+        "mapped": 67,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:36.608Z",
+        "ageDays": 0,
+        "version": "f470cc9df576796500ff9aea1199ed79fe5cb44e377202d76888e0e2e793c023",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "SUIT",
+      "counts": {
+        "total": 165,
+        "mapped": 96,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:40.098Z",
+        "ageDays": 0,
+        "version": "a510d8882f342bdbc10d271f5728325b213ca9da3859f4252dcbdaf496d50676",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "SUIT",
+      "counts": {
+        "total": 165,
+        "mapped": 96,
+        "unmapped": 0,
+        "owned": 69,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:44.050Z",
+        "ageDays": 0,
+        "version": "9b50883da577a8fa380e6251d79f6909fbc6be01716c6778e7edbf64f836d005",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "SUIT",
+      "counts": {
+        "total": 159,
+        "mapped": 96,
+        "unmapped": 0,
+        "owned": 63,
+        "required": 8,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:46.739Z",
+        "ageDays": 0,
+        "version": "3ed916b663d50195f13976989294beeb397da9c7c79159baca6d3482c8ca761d",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "category": "PANTS",
+      "counts": {
+        "total": 183,
+        "mapped": 112,
+        "unmapped": 0,
+        "owned": 71,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:49.825Z",
+        "ageDays": 0,
+        "version": "0d4dd505d12f74f29fc5efc3267a05a50563d73c81ad7b2bebcbd4b6f81f47ee",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "category": "PANTS",
+      "counts": {
+        "total": 177,
+        "mapped": 112,
+        "unmapped": 0,
+        "owned": 65,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:54.749Z",
+        "ageDays": 0,
+        "version": "d5da2bae3e8e40ab640b9754dc0e60dae4e1f2f3105319a33beb9713b07582c2",
+        "note": null
+      }
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "category": "PANTS",
+      "counts": {
+        "total": 183,
+        "mapped": 112,
+        "unmapped": 0,
+        "owned": 71,
+        "required": 7,
+        "requiredUnmapped": 0,
+        "coveragePct": 100
+      },
+      "schema": {
+        "source": "amazonCache",
+        "present": true,
+        "fetchedAt": "2026-09-07T15:37:58.494Z",
+        "ageDays": 0,
+        "version": "21de30cd5710ad8f331f632b6e040b710f6181291c753f9667ec2fbd52fd771e",
+        "note": null
+      }
+    }
+  ]
+}

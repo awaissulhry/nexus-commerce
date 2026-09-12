@@ -1,3 +1,4 @@
+import { marketLanguages } from '../pim/market-languages.js'
 /**
  * Phase 5.5: Amazon-listing content generation.
  *
@@ -60,19 +61,6 @@ export class BudgetExceededError extends Error {
   }
 }
 
-const LANGUAGE_FOR_MARKETPLACE: Record<string, string> = {
-  IT: 'Italian',
-  DE: 'German',
-  FR: 'French',
-  ES: 'Spanish',
-  UK: 'British English (use UK spellings — colour, organise, …)',
-  US: 'American English',
-  NL: 'Dutch',
-  SE: 'Swedish',
-  PL: 'Polish',
-  CA: 'Canadian English',
-  MX: 'Mexican Spanish',
-}
 
 export type ContentField = 'title' | 'bullets' | 'description' | 'keywords'
 
@@ -104,6 +92,7 @@ export interface TerminologyEntry {
 export interface GenerationParams {
   product: ProductContext
   marketplace: string
+  channel?: string
   fields: ContentField[]
   /** 0–4. Higher values nudge temperature so regenerations yield
    *  visibly different copy. */
@@ -389,18 +378,18 @@ export class ListingContentService {
    * cost ~$X" before clicking Confirm.
    *
    * Returns zero-cost rows when the kill switch is on or no provider
-   * is configured — the estimator is read-only and never throws.
+   * is configured — the estimator is read-only. An unconfigured marketplace is refused.
    * Token estimation skews over for non-English content (4 chars/
    * token heuristic), which is the safe direction for pre-flight
    * forecasting.
    */
-  previewCost(params: GenerationParams): {
+  async previewCost(params: GenerationParams): Promise<{
     estimatedCostUSD: number
     callCount: number
     provider: ProviderName | null
     model: string | null
     perField: Array<{ field: ContentField; estimatedCostUSD: number }>
-  } {
+  }> {
     if (isAiKillSwitchOn()) {
       return {
         estimatedCostUSD: 0,
@@ -420,8 +409,8 @@ export class ListingContentService {
         perField: [],
       }
     }
-    const language =
-      LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
+    const contentLanguage = (await marketLanguages(params.channel ?? 'AMAZON', params.marketplace))[0]
+    const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(contentLanguage) ?? contentLanguage
     let total = 0
     const perField: Array<{ field: ContentField; estimatedCostUSD: number }> = []
     for (const f of params.fields) {
@@ -452,8 +441,8 @@ export class ListingContentService {
   }
 
   async generate(params: GenerationParams): Promise<GenerationResult> {
-    const language =
-      LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
+    const contentLanguage = (await marketLanguages(params.channel ?? 'AMAZON', params.marketplace))[0]
+    const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(contentLanguage) ?? contentLanguage
 
     // AI-1.2 — distinguish kill-switch ON from no-credentials so the
     // wizard surfaces the right error to the operator. Both cases

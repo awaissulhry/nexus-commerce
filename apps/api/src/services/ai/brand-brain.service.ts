@@ -55,7 +55,7 @@ async function upsertEmbedding(
       ${EMBEDDING_MODEL}, ${EMBEDDING_DIMS},
       ${vecStr}::vector, ${snippet.slice(0, 500)}, now()
     )
-    ON CONFLICT ("entityType", "entityId", "field")
+    ON CONFLICT ("workspaceId", "entityType", "entityId", "field")
     DO UPDATE SET
       model      = EXCLUDED.model,
       dimensions = EXCLUDED.dimensions,

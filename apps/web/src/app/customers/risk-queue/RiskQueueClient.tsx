@@ -17,7 +17,7 @@
 //   - Re-score  → POST /api/customers/:id/recompute-risk
 
 import { useCallback, useEffect, useState } from 'react'
-import Link from 'next/link'
+import Link from '@/lib/workspaces/Link'
 import { RefreshCw, Check, X } from 'lucide-react'
 import PageHeader from '@/components/layout/PageHeader'
 import { Card } from '@/components/ui/Card'

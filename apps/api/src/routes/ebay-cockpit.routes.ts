@@ -1,3 +1,4 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
 /**
  * eBay Listing Cockpit API
  *
@@ -121,6 +122,11 @@ interface CategorySuggestion {
 }
 
 export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
+  fastify.get<{ Querystring: PresentationDestinationInput }>('/ebay/cockpit/presentation-order', async request => readPresentationOrder(request.query))
+  fastify.put<{ Body: PresentationDestinationInput & { expectedVersion: number; expectedToken: string; change: PresentationOrderChange } }>('/ebay/cockpit/presentation-order', async (request, reply) => {
+    if (!request.body?.change || typeof request.body.expectedToken !== 'string' || !Number.isInteger(request.body.expectedVersion)) return reply.code(400).send({ error: 'A current listing version, input token and order change are required' })
+    return savePresentationOrder(request.body, (request as any).user?.id ?? (request as any).authUser?.id ?? null)
+  })
   // ── POST /api/ebay/cockpit/suggest-categories ───────────────────────
   // Wraps EbayCategoryService.searchCategories with listing-friendly
   // inputs (title + description). Returns top N ranked candidates so
@@ -588,6 +594,7 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'Body is required' })
     }
     const { parentProductId, marketplace, pickedAxes, axisSortOrder, axisNameLabels, axisValueLabels, axisValueOrder, cells } = body
+    if (pickedAxes !== undefined || axisSortOrder !== undefined || axisValueOrder !== undefined) return reply.code(409).send({ error: 'Use the destination-specific presentation order editor with the current listing version and input token', orderUrl: '/api/ebay/cockpit/presentation-order' })
 
     if (!parentProductId || !marketplace) {
       return reply.code(400).send({ error: 'parentProductId, marketplace are required' })
@@ -1311,11 +1318,8 @@ export default async function ebayCockpitRoutes(fastify: FastifyInstance) {
     const categoryId = (platform.categoryId as string | undefined) ?? null
     const categoryName = (platform.categoryName as string | undefined) ?? null
 
-    const LANG: Record<string, string> = {
-      IT: 'Italian',  DE: 'German', FR: 'French',
-      ES: 'Spanish',  UK: 'British English', US: 'American English',
-    }
-    const targetLang = LANG[marketplace.toUpperCase()] ?? 'English'
+    const language = (await marketLanguages('EBAY', marketplace))[0]
+    const targetLang = new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
 
     if (operation === 'essentials') {
       const currentTitle = (listing?.title ?? product.name ?? '').slice(0, 200)
@@ -1942,3 +1946,4 @@ function parseAiJson(raw: string): Record<string, unknown> {
     return JSON.parse(m[0])
   }
 }
+import { readPresentationOrder, savePresentationOrder, type PresentationDestinationInput, type PresentationOrderChange } from '../services/ebay-presentation-order.service.js'

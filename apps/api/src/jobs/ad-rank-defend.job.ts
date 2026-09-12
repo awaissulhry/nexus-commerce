@@ -764,10 +764,10 @@ export function startRankDefendCron(): void {
   // OFF by default — operator opts in (and the write-gate still governs live pushes).
   if (process.env.NEXUS_ENABLE_RANK_DEFEND !== '1') { logger.info('ad-rank-defend cron disabled (set NEXUS_ENABLE_RANK_DEFEND=1)'); return }
   const schedule = process.env.NEXUS_RANK_DEFEND_SCHEDULE ?? '*/15 * * * *'
-  task = cron.schedule(schedule, () => {
-    if (running) { logger.warn('[ad-rank-defend] previous tick still in flight — skipping this run'); return }
+  task = cron.schedule(schedule, async () => {
+    if (running) { await logger.warn('[ad-rank-defend] previous tick still in flight — skipping this run'); return }
     running = true
-    void runRankDefendCron().finally(() => { running = false })
+    await runRankDefendCron().finally(() => { running = false })
   })
   logger.info(`ad-rank-defend cron scheduled (${schedule})`)
 }

@@ -32,7 +32,7 @@ const emit = (rows: ReadonlyArray<CssVar>, indent = '  '): string =>
     .map((r) => `${r.section ? `\n${indent}/* ── ${r.section} ── */\n` : ''}${indent}${r.name}: ${r.value};`)
     .join('\n')
 
-const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark {\n${emit(cssVarsDark)}\n}\n`
+const css = `${HEAD}\n\n:root {\n${emit(cssVars)}\n}\n\n.dark, .dark body:has(.nds-theme-responsive), .dark body .nds-theme-responsive {\n${emit(cssVarsDark)}\n}\n`
 
 if (process.argv.includes('--check')) {
   const current = readFileSync(OUT, 'utf8')

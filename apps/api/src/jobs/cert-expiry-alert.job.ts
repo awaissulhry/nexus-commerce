@@ -87,7 +87,7 @@ export function startCertExpiryAlertCron(): void {
     logger.error('cert-expiry-alert cron: invalid schedule', { schedule })
     return
   }
-  scheduledTask = cron.schedule(schedule, () => { void runCertExpiryAlertOnce() })
+  scheduledTask = cron.schedule(schedule, async () => { await runCertExpiryAlertOnce() })
   logger.info('cert-expiry-alert cron: scheduled', { schedule })
 }
 

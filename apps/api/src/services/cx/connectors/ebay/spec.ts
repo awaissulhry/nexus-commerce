@@ -12,7 +12,10 @@
  * 215xxx 403 family the prod financial sync has been hitting daily.
  */
 
-import { registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type RateLimitReading } from '../../catalog.js'
+import { classifyAuthError, registerChannel, type ChannelSpec, type ConnectionHandle, type HeartbeatResult, type RateLimitReading } from '../../catalog.js'
+import { CredentialsDecryptError } from '../../../../lib/crypto.js'
+import { ChannelAppConfigurationError } from '../../app-configuration-error.js'
+import { RefreshFailed } from '../../token.service.js'
 import { ebaySignatureAppliesTo } from './signing.js'
 
 const S = 'https://api.ebay.com/oauth/api_scope'
@@ -52,9 +55,10 @@ export const EBAY_MARKETPLACES = ['IT', 'DE', 'FR', 'ES', 'UK', 'NL', 'BE', 'AT'
 
 async function identity(handle: ConnectionHandle) {
   const token = await handle.token()
-  const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS.production.apiz
+  const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS[handle.environment ?? 'production'].apiz
   const res = await fetch(`${base}/commerce/identity/v1/user/`, {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(20_000),
   })
   if (!res.ok) return null
   const data = (await res.json()) as { userId?: string; username?: string }
@@ -66,13 +70,15 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
   const started = Date.now()
   try {
     const token = await handle.token()
-    const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS.production.apiz
+    const base = process.env.EBAY_IDENTITY_BASE ?? EBAY_HOSTS[handle.environment ?? 'production'].apiz
     const res = await fetch(`${base}/commerce/identity/v1/user/`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(20_000),
     })
     const latencyMs = Date.now() - started
     if (res.ok) {
       const data = (await res.json()) as { userId?: string; username?: string }
+      if (!data?.userId) return { ok: false, latencyMs, errorClass: 'unknown', message: 'eBay returned no account identity; access could not be verified.' }
       return {
         ok: true,
         latencyMs,
@@ -84,11 +90,15 @@ async function heartbeat(handle: ConnectionHandle): Promise<HeartbeatResult> {
       ok: false,
       latencyMs,
       status: res.status,
-      errorClass: res.status === 401 ? 'auth_revoked' : res.status === 429 ? 'rate_limited' : 'unknown',
+      errorClass: classifyAuthError(res.status, text),
       message: `identity ${res.status}: ${text.slice(0, 200)}`,
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    if (err instanceof RefreshFailed) return { ok: false, latencyMs: Date.now() - started, errorClass: err.errorClass, message }
+    if (err instanceof ChannelAppConfigurationError || err instanceof CredentialsDecryptError || /NEXUS_CREDENTIAL_ENC_KEY|No ChannelApp row/i.test(message)) {
+      return { ok: false, latencyMs: Date.now() - started, errorClass: 'configuration', message: 'The server cannot read this account’s credentials. Check the deployment encryption key and channel app configuration.' }
+    }
     const cls = message.includes('needs_reauth') || message.includes('no credentials') ? 'auth_expired' : 'network'
     return { ok: false, latencyMs: Date.now() - started, errorClass: cls, message }
   }

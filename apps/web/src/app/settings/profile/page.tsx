@@ -1,4 +1,4 @@
-import { prisma } from '@nexus/database'
+import { currentWebProfile } from '@/lib/workspaces/server'
 import ProfilePageClient from './ProfilePageClient'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +7,7 @@ export default async function ProfilePage() {
   // Defensive try/catch — see TECH_DEBT #61.
   let profile: any = null
   try {
-    profile = await (prisma as any).userProfile.findFirst()
+    profile = await currentWebProfile()
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[settings/profile] prisma error:', err)

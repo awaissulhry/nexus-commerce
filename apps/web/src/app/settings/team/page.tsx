@@ -4,9 +4,10 @@
  * invitations) against the /api/team + /api/auth/invitations endpoints.
  */
 import TeamAccessClient from './TeamAccessClient'
+import WorkspaceTeamClient from './WorkspaceTeamClient'
 
 export const dynamic = 'force-dynamic'
 
 export default function SettingsTeamPage() {
-  return <TeamAccessClient />
+  return process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1' ? <WorkspaceTeamClient /> : <TeamAccessClient />
 }

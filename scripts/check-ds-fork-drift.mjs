@@ -36,7 +36,14 @@ const BASELINE = join(ROOT, 'scripts/ds-fork-baseline.json')
 // and the "fix" it demanded was to hand-copy build artifacts into factory. Nothing is lost: a
 // declaration cannot drift while its source is identical, and a source that differs is caught
 // directly.
-const EXT = /(?<!\.d)\.(tsx|ts|css)$/
+// `.mjs` added 2026-09-03 (hub P14, DS.1). The DS ships TOOLING as well as components —
+// `tools/token-guard.mjs` and `tools/api-guard.mjs` are in both apps — and `.mjs` sat outside this
+// extension list, so neither was compared. That is the third member of the family this guard's own
+// header describes: a stale copy is still valid code, and a stale GUARD is worse than a stale
+// component because it reports on the tree it was pointed at while looking clean. Measured: the
+// factory `token-guard.mjs` was an Aug-25 snapshot that scanned `apps/web`, so factory's DS had
+// never been checked by it in any version, and nothing here could see that.
+const EXT = /(?<!\.d)\.(tsx|ts|css|mjs)$/
 
 const walk = (dir, base = dir, out = []) => {
   if (!existsSync(dir)) return out

@@ -49,7 +49,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
+import { useRouter } from '@/lib/workspaces/navigation'
 /**
  * 🔴 The design-system stylesheets are imported PER PAGE in this app — there is no global load, and
  * `rules-automation/layout.tsx` brings in `rules-automation.css` only. This page is the first in the

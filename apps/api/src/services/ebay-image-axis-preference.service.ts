@@ -17,6 +17,7 @@
  * this area has been two code paths deciding the same thing differently.
  */
 import prisma from '../db.js'
+import { resolveChannelConnectionId } from './connection-resolver.service.js'
 
 /** Key inside ChannelListing.platformAttributes holding the per-market pick. */
 export const IMAGE_AXIS_KEY = '_imageAxis'
@@ -38,11 +39,13 @@ export function normalizeMarket(marketplace?: string | null): string | undefined
 export async function readImageAxisPreference(
   productId: string,
   marketplace?: string | null,
+  destination?: { channelConnectionId: string | null; aliasKey?: string },
 ): Promise<string | undefined> {
   const mkt = normalizeMarket(marketplace)
   if (mkt) {
+    const channelConnectionId = await resolveChannelConnectionId('EBAY', destination?.channelConnectionId)
     const cl = await prisma.channelListing.findFirst({
-      where: { productId, channel: 'EBAY', marketplace: mkt },
+      where: { productId, channel: 'EBAY', marketplace: mkt, channelConnectionId, aliasKey: destination?.aliasKey ?? '' },
       select: { platformAttributes: true },
     })
     const pa = isObj(cl?.platformAttributes) ? cl!.platformAttributes : {}

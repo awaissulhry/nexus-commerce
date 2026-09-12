@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * ALA Phase 4 — Listings-Items issue mirror.
  *
@@ -62,7 +63,7 @@ export async function mirrorListingIssues(
 
   for (const f of byFingerprint.values()) {
     await prisma.listingIssue.upsert({
-      where: { listingId_fingerprint: { listingId, fingerprint: f.fingerprint } },
+      where: { listingId_fingerprint: workspaceKey({ listingId, fingerprint: f.fingerprint }) },
       create: {
         listingId,
         code: f.code,

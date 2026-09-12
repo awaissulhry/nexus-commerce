@@ -1,3 +1,4 @@
+import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * M1 — refresh SP-API marketplace participations and persist to DB.
  *
@@ -50,29 +51,7 @@ export interface ParticipationRefreshResult {
   warnings: string[]
 }
 
-async function getLwaAccessToken(): Promise<string> {
-  const clientId = process.env.AMAZON_LWA_CLIENT_ID
-  const clientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('LWA credentials missing (need AMAZON_LWA_CLIENT_ID + AMAZON_LWA_CLIENT_SECRET + AMAZON_REFRESH_TOKEN)')
-  }
-  const res = await fetch('https://api.amazon.com/auth/o2/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: clientId,
-      client_secret: clientSecret,
-    }).toString(),
-  })
-  if (!res.ok) {
-    throw new Error(`LWA token exchange failed: ${res.status} ${await res.text()}`)
-  }
-  const data = (await res.json()) as { access_token: string }
-  return data.access_token
-}
+async function getLwaAccessToken(): Promise<string> { return getAmazonAccessToken() }
 
 function deriveStatus(p: SpapiParticipation): ParticipationStatus {
   if (p.participation?.isParticipating === false) return 'NOT_PARTICIPATING'

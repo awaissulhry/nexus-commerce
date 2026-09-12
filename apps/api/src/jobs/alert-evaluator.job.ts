@@ -34,8 +34,8 @@ export function startAlertEvaluatorCron(): void {
     return
   }
 
-  scheduledTask = cron.schedule(schedule, () => {
-    void recordCronRun('alert-evaluator', async () => {
+  scheduledTask = cron.schedule(schedule, async () => {
+    await recordCronRun('alert-evaluator', async () => {
       const r = await runAlertEvaluator()
       return `evaluated=${r.rulesEvaluated} fired=${r.rulesFired} resolved=${r.rulesResolved} unchanged=${r.rulesUnchanged} errors=${r.errors}`
     }).catch((err) => {

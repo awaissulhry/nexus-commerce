@@ -16,7 +16,8 @@ import { AlertTriangle, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { ScopeOptions } from './ScopeForm'
-import { DataGrid, Listbox } from '@/design-system/components'
+import { Listbox } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
 
 interface Ceiling {
   id: string

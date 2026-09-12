@@ -13,6 +13,8 @@
  */
 
 import prisma from '../db.js'
+import { authenticatedUserId } from '../lib/auth/identity-context.js'
+import { workspaceContext } from '../lib/workspace-context.js'
 
 export type SettingsAuditKey =
   | 'account'
@@ -90,7 +92,7 @@ export async function writeSettingsAudit(
 
     const row = await (prisma as any).auditLog.create({
       data: {
-        userId: null,
+        userId: authenticatedUserId() ?? workspaceContext()?.actorUserId ?? null,
         entityType: 'Settings',
         entityId: input.key,
         action: input.action,

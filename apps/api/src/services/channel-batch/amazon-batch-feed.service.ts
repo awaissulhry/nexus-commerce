@@ -1,3 +1,4 @@
+import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
  * W12.1 — Amazon JSON_LISTINGS_FEED batch submission.
  *
@@ -82,6 +83,17 @@ export interface AmazonBatchSubmission {
   marketplaceIds: string[]
   sellerId: string
   operations: AmazonBatchOperation[]
+  /**
+   * 🔴 A caller's explicit request NOT to submit. One-way: `true` forces a rehearsal, `false` and
+   * `undefined` defer to the publish gate. It can never cause a submission that the gate would
+   * otherwise have prevented.
+   *
+   * Added 2026-09-01 (PES.7). Before this field existed, callers had no way to ask for a rehearsal
+   * at all — `amazon-image-feed.service.ts` looked as though it forwarded one
+   * (`...(dryRun ? {} : {})`, an empty object in both branches) and did not, so a request asking
+   * for a dry run submitted a real feed whenever the gate was open.
+   */
+  dryRun?: boolean
 }
 
 export interface AmazonBatchResult {
@@ -227,10 +239,27 @@ export async function submitAmazonListingsBatch(
 
   const body = buildJsonListingsFeedBody(input)
 
-  if (isDryRunEnv()) {
+  /*
+   * 🔴 DO NOT "simplify" this to `if (isDryRunEnv())`.
+   *
+   * The two halves are not redundant and never collapse into each other:
+   *   • `isDryRunEnv()` is the DEPLOYMENT's gate — it says whether this environment may reach
+   *     Amazon at all.
+   *   • `input.dryRun === true` is THIS CALLER's explicit request not to submit, which must be
+   *     honoured even in a fully live environment. It is what makes "rehearse this publish" a
+   *     thing an operator can ask for.
+   *
+   * With the gate closed the second half looks like dead code, because the first is always true —
+   * which is exactly how it came to be dropped before (PES.7, 2026-09-01: the caller's flag was
+   * spread into this call as `...(dryRun ? {} : {})` and reached nothing, so ticking "dry run"
+   * submitted a real feed the moment the gate opened). Deleting either half re-opens that.
+   */
+  const callerRequestedRehearsal = input.dryRun === true
+  if (isDryRunEnv() || callerRequestedRehearsal) {
     logger.info('[amazon-batch] dryRun — feed not submitted', {
       messageCount: input.operations.length,
       bytes: body.length,
+      reason: callerRequestedRehearsal ? 'caller requested' : 'publish gate',
     })
     return {
       feedId: `dryrun-${Date.now()}`,
@@ -242,24 +271,7 @@ export async function submitAmazonListingsBatch(
 
   // Lazy-load the SP-API client so dry-run paths never pay the
   // import cost (the client pulls in AWS auth chain + a 1MB+ tree).
-  const { SellingPartner } = await import('amazon-sp-api')
-  const refreshToken = process.env.AMAZON_REFRESH_TOKEN
-  const lwaClientId = process.env.AMAZON_LWA_CLIENT_ID
-  const lwaClientSecret = process.env.AMAZON_LWA_CLIENT_SECRET
-  if (!refreshToken || !lwaClientId || !lwaClientSecret) {
-    throw new Error(
-      'AmazonBatch: AMAZON_REFRESH_TOKEN / AMAZON_LWA_CLIENT_ID / AMAZON_LWA_CLIENT_SECRET required',
-    )
-  }
-  const sp: any = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: refreshToken,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: lwaClientId,
-      SELLING_PARTNER_APP_CLIENT_SECRET: lwaClientSecret,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  })
+  const sp: any = amazonSpClient()
 
   // Step 1: create feed document slot.
   const docRes: any = await sp.callAPI({
@@ -340,15 +352,7 @@ export async function pollAmazonFeedStatus(feedId: string): Promise<{
     }
   }
   const { SellingPartner } = await import('amazon-sp-api')
-  const sp: any = new SellingPartner({
-    region: (process.env.AMAZON_REGION ?? 'eu') as any,
-    refresh_token: process.env.AMAZON_REFRESH_TOKEN!,
-    credentials: {
-      SELLING_PARTNER_APP_CLIENT_ID: process.env.AMAZON_LWA_CLIENT_ID!,
-      SELLING_PARTNER_APP_CLIENT_SECRET: process.env.AMAZON_LWA_CLIENT_SECRET!,
-    },
-    options: { auto_request_tokens: true, auto_request_throttled: true },
-  })
+  const sp: any = amazonSpClient()
   const res: any = await withTimeout(
     sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } }),
     25_000,

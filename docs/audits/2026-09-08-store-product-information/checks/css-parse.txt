@@ -1,0 +1,2 @@
+  comments: NOT stripped — they are what this gate checks
+✓ css-parse: 14 DS stylesheets parse (comments balanced, braces balanced, no NUL bytes)

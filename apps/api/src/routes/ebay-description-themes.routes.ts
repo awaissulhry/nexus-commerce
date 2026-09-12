@@ -1,3 +1,8 @@
+import { readPresentationDescription } from '../services/ebay-presentation-publication.service.js'
+import { presentationDestination } from '../services/ebay-presentation-order.service.js'
+import { MappingConflict } from '../services/pim/mapping/revision-token.js'
+import { resolveBatch } from '../services/pim/mapping/resolve-batch.service.js'
+import { resolveChannelConnectionId } from '../services/connection-resolver.service.js'
 /**
  * ED.1/ED.2 — eBay description-theme CRUD + preview.
  *
@@ -9,6 +14,7 @@ import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
 import {
   listThemes,
+  resolveFamilyRootId,
   setDefaultTheme,
   renderListingDescriptionSafe,
   galleryHashOfRows,
@@ -16,32 +22,22 @@ import {
   resolveDescriptionMode,
 } from '../services/ebay-description-theme.service.js'
 
-/**
- * DS-0 — resolve a product id to its FAMILY ROOT (mirror of the push
- * service's walk in ebay-description-push.service.ts: ≤3 hops, deleted
- * parents stop the walk). Unknown ids resolve to themselves so existing
- * behaviour (render/lookup against the given id) is preserved.
- */
-async function resolveFamilyRootId(productId: string): Promise<string> {
-  let node = await prisma.product.findFirst({
-    where: { id: productId, deletedAt: null },
-    select: { id: true, parentId: true },
-  })
-  if (!node) return productId
-  for (let hop = 0; node.parentId && hop < 3; hop++) {
-    const parent = await prisma.product.findFirst({
-      where: { id: node.parentId, deletedAt: null },
-      select: { id: true, parentId: true },
-    })
-    if (!parent) break
-    node = parent
-  }
-  return node.id
-}
 
 export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstance) {
+  fastify.get<{ Querystring: { productId: string; marketplace: string; accountId: string; aliasKey?: string } }>('/ebay/presentation-description', async request => {
+    if (!request.query.accountId?.trim()) throw new MappingConflict('Choose an explicit account for the product preview')
+    return readPresentationDescription(request.query)
+  })
   // ── List (seeds the built-in starters on first call) ─────────────────────
-  fastify.get('/ebay/description-themes', async (_request, reply) => {
+  fastify.get<{ Querystring: { view?: string } }>('/ebay/description-themes', async (request, reply) => {
+    if (request.query.view === 'options') {
+      // Grid lookups need identity/state only. Reading names must not seed or update templates.
+      const themes = await prisma.ebayDescriptionTheme.findMany({
+        select: { id: true, name: true, active: true, isDefault: true },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      })
+      return reply.send({ themes })
+    }
     const themes = await listThemes(prisma)
     return reply.send({ themes })
   })
@@ -57,10 +53,29 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
   // by FAMILY ROOT (child listings don't inflate counts; the root's own row
   // wins because assignment lives on the family parent's CL). Absent param =
   // exactly the legacy all-listings behaviour.
-  fastify.get<{ Querystring: { marketplace?: string } }>(
+  fastify.get<{ Querystring: { marketplace?: string; accountId?: string; aliasKey?: string; productId?: string } }>(
     '/ebay/description-themes/usage',
     async (request, reply) => {
       const marketplace = request.query.marketplace?.trim().toUpperCase() || undefined
+      if (request.query.accountId !== undefined || request.query.aliasKey !== undefined || request.query.productId) {
+        if (!marketplace) return reply.code(400).send({ error: 'Choose a market for destination usage' })
+        const connectionId = await resolveChannelConnectionId('EBAY', request.query.accountId)
+        const aliasKey = request.query.aliasKey ?? ''
+        if (aliasKey && !request.query.productId) return reply.code(400).send({ error: 'Choose the product for this alternate listing' })
+        const destination = request.query.productId ? await presentationDestination({ ...request.query, productId: request.query.productId, marketplace }) : null
+        const roots = await prisma.channelListing.findMany({ where: { channel: 'EBAY', marketplace, channelConnectionId: connectionId, aliasKey, ...(destination ? { productId: destination.productId } : { product: { parentId: null, deletedAt: null } }) }, select: { productId: true } })
+        const byThemeId: Record<string, number> = {}; let defaults = 0, raw = 0
+        for (let offset = 0; offset < roots.length; offset += 100) {
+          const resolved = await resolveBatch({ channel: 'EBAY', marketplace, channelConnectionId: connectionId, aliasKey, productIds: roots.slice(offset, offset + 100).map(r => r.productId), fieldKeys: ['descriptionThemeId'], includeCatalogue: false })
+          for (const product of resolved.products) {
+            const cell = product.cells.descriptionThemeId
+            if (cell?.errors.length) return reply.code(409).send({ error: cell.errors.join('; ') })
+            const id = cell?.value
+            if (id === 'none') raw++; else if (typeof id === 'string' && id) byThemeId[id] = (byThemeId[id] ?? 0) + 1; else defaults++
+          }
+        }
+        return { total: roots.length, default: defaults, raw, byThemeId, scope: destination ? 'selected listing' : 'selected account and market' }
+      }
 
       const countAssignments = (attrsList: Iterable<Record<string, unknown>>) => {
         const byThemeId: Record<string, number> = {}
@@ -140,7 +155,7 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
   // CURRENT curated gallery + assigned theme version, so the modal can show a
   // stale badge with one-click re-push. Batch DB reads only — no eBay calls,
   // no writes, never an automatic re-push.
-  fastify.get<{ Querystring: { productIds?: string; marketplace?: string } }>(
+  fastify.get<{ Querystring: { productIds?: string; marketplace?: string; accountId?: string; aliasKey?: string } }>(
     '/ebay/description-themes/staleness',
     async (request, reply) => {
       const idsRaw = (request.query.productIds ?? '')
@@ -153,6 +168,15 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
       const MAX_IDS = 200
       const ids = [...new Set(idsRaw)].slice(0, MAX_IDS)
       const marketplace = (request.query.marketplace ?? 'IT').toUpperCase()
+      if (request.query.accountId !== undefined || request.query.aliasKey !== undefined) {
+        const products = []
+        for (const productId of ids) {
+          const result = await readPresentationDescription({ productId, marketplace, accountId: request.query.accountId, aliasKey: request.query.aliasKey })
+          const { html: _html, ...status } = result
+          products.push(status)
+        }
+        return { marketplace, products }
+      }
       const region = marketplace === 'UK' ? 'GB' : marketplace
 
       // Resolve each requested id to its FAMILY ROOT (stamps live on the
@@ -270,7 +294,7 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
           .send({ error: 'version conflict — theme was modified elsewhere', currentVersion: existing.version })
       }
       const theme = await prisma.ebayDescriptionTheme.update({
-        where: { id },
+        where: { id, version: existing.version },
         data: {
           ...(name?.trim() ? { name: name.trim() } : {}),
           ...(typeof html === 'string' && html.trim() ? { html } : {}),
@@ -278,6 +302,9 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
           ...(typeof active === 'boolean' ? { active } : {}),
           version: { increment: 1 },
         },
+      }).catch((error: { code?: string }) => {
+        if (error.code === 'P2025') throw new MappingConflict('This theme changed while saving. Reload its current version before editing.')
+        throw error
       })
       return reply.send({ theme })
     },
@@ -316,14 +343,23 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
       themeId?: string
       /** ED.4 — preview an UNSAVED theme draft (rendered, never persisted). */
       themeHtml?: string
+      accountId?: string
+      aliasKey?: string
     }
   }>('/ebay/description-preview', async (request, reply) => {
-    const { productId, marketplace = 'IT', sku, mode, body, title, themeId, themeHtml } = request.body ?? {}
+    const { productId, marketplace = 'IT', sku, mode, body, title, themeId, themeHtml, accountId, aliasKey = '' } = request.body ?? {}
     if (!productId) return reply.code(400).send({ error: 'productId required' })
     // DS-0 — a child-row seed previews its FAMILY (per-market content, theme
     // assignment and galleries all live on the root's listing row, which is
     // exactly what a push renders). Root products resolve to themselves.
-    const rootProductId = await resolveFamilyRootId(productId)
+    const rootProductId = await resolveFamilyRootId(prisma, productId)
+    if (accountId !== undefined && (typeof accountId !== 'string' || !accountId.trim())) return reply.code(400).send({ error: 'Choose a nonempty account ID' })
+    if (typeof aliasKey !== 'string') return reply.code(400).send({ error: 'Invalid listing alias' })
+    const connectionId = await resolveChannelConnectionId('EBAY', accountId)
+    if (aliasKey) {
+      const alias = await prisma.productListingAlias.findFirst({ where: { id: aliasKey, productId: rootProductId, channel: 'EBAY', marketplace: marketplace.toUpperCase(), channelConnectionId: connectionId, status: 'ACTIVE' }, select: { id: true } })
+      if (!alias) return reply.code(400).send({ error: 'The listing alias does not belong to this product and destination' })
+    }
     // DS-6 — when the caller doesn't force a mode, derive it the way the PUSH
     // service does. The old `= 'group'` default made the Studio preview a
     // standalone product with per-colour gallery sections that its push would
@@ -331,19 +367,21 @@ export default async function ebayDescriptionThemesRoutes(fastify: FastifyInstan
     // preview. resolveDescriptionMode is now that ONE shared derivation (it
     // also scores pool shells as 'group'; counting children alone hid the
     // Colori section on every adopted/shared-pool listing).
-    const resolvedMode: 'single' | 'group' = mode ?? (await resolveDescriptionMode(prisma, rootProductId))
-    const listing = await prisma.channelListing.findFirst({
-      where: { productId: rootProductId, channel: 'EBAY', region: marketplace.toUpperCase() === 'UK' ? 'GB' : marketplace.toUpperCase() },
-      select: { description: true, title: true },
-    })
-    const resolvedBody = body ?? listing?.description ?? ''
+    const resolvedMode: 'single' | 'group' = mode ?? (await resolveDescriptionMode(prisma, rootProductId, undefined, { channelConnectionId: connectionId, aliasKey, marketplace: marketplace.toUpperCase() }))
+    const resolved = await resolveBatch({ channel: 'EBAY', marketplace: marketplace.toUpperCase(), productIds: [rootProductId],
+      channelConnectionId: connectionId, aliasKey, fieldKeys: ['description', 'title'], includeCatalogue: false })
+    const cells = resolved.products[0]?.cells
+    const contentErrors = [body === undefined && cells?.description, title === undefined && cells?.title].flatMap(cell => cell ? cell.errors : [])
+    if (contentErrors.length) return reply.code(422).send({ error: contentErrors.join('; ') })
+    const resolvedBody = body ?? String(cells?.description?.value ?? '')
     const result = await renderListingDescriptionSafe(prisma, {
       productId: rootProductId,
+      channelConnectionId: connectionId, aliasKey,
       marketplace,
       mode: resolvedMode,
       sku,
       body: resolvedBody,
-      title: title ?? listing?.title ?? undefined,
+      title: title ?? (cells?.title?.value == null ? undefined : String(cells.title.value)),
       themeIdOverride: themeId,
       themeHtmlOverride: themeHtml,
     })

@@ -1,3 +1,4 @@
+import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * ES1 — Manual-rule Suggestions.
  *
@@ -190,7 +191,7 @@ export async function generateSuggestionsFromExecution(args: {
       // the FIRST sighting.
       const proposal = { ...action, ...(res.output as object) } as object
       await prisma.adsRuleSuggestion.upsert({
-        where: { ruleId_entityId_proposedKey: { ruleId: args.ruleId, entityId: ent.id, proposedKey: key } },
+        where: { ruleId_entityId_proposedKey: workspaceKey({ ruleId: args.ruleId, entityId: ent.id, proposedKey: key }) },
         create: {
           ruleId: args.ruleId, ruleName: args.ruleName, executionId: args.executionId, trigger: args.trigger, marketplace,
           entityType: ent.type, entityId: ent.id, entityName: ent.name,
@@ -1132,7 +1133,7 @@ export async function muteSuggestion(id: string, opts: { by?: string } = {}): Pr
   if (!sug) return { ok: false, httpStatus: 404, error: 'not_found' }
   if (sug.status !== 'pending') return { ok: false, httpStatus: 409, error: `already ${sug.status}` }
   await prisma.adsSuggestionMute.upsert({
-    where: { scope_entityType_entityId: { scope: 'rules', entityType: sug.entityType, entityId: sug.entityId } },
+    where: { scope_entityType_entityId: workspaceKey({ scope: 'rules', entityType: sug.entityType, entityId: sug.entityId }) },
     create: {
       scope: 'rules', entityType: sug.entityType, entityId: sug.entityId,
       entityName: sug.entityName, marketplace: sug.marketplace,

@@ -1,3 +1,4 @@
+import { marketLanguages } from '../services/pim/market-languages.js'
 /**
  * Phase 5.3: ListingWizard CRUD.
  *
@@ -17,6 +18,7 @@
 
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
+import { validateProductPresetDraft, parseProductPresetScope, productPresetScopeOf, sameProductPresetScope, validateProductPresetScope } from '../services/listing-wizard/product-presets.js'
 import { listEtag, matches } from '../utils/list-etag.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
@@ -176,31 +178,8 @@ function aspectIdFromName(name: string): string {
 }
 
 // ── Phase G — language + format derivation for content dedup ────
-const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
-  IT: 'it',
-  DE: 'de',
-  FR: 'fr',
-  ES: 'es',
-  UK: 'en',
-  GB: 'en',
-  US: 'en',
-  CA: 'en',
-  MX: 'es',
-  AU: 'en',
-  JP: 'ja',
-  GLOBAL: 'en',
-}
-
-function languageForMarketplace(marketplace: string): string {
-  return MARKETPLACE_TO_LANGUAGE[marketplace.toUpperCase()] ?? 'en'
-}
-
-/** Same content can be reused across channels iff (language, platform)
- *  match — the platform decides the format rules (Amazon: 200-char
- *  title, 5×500-char bullets; eBay: 80-char title; Shopify: long
- *  HTML; Woo: long HTML). */
-function contentGroupKey(platform: string, marketplace: string): string {
-  return `${languageForMarketplace(marketplace)}:${platform.toUpperCase()}`
+async function contentGroupKey(platform: string, marketplace: string): Promise<string> {
+  return `${(await marketLanguages(platform, marketplace))[0]}:${platform.toUpperCase()}`
 }
 
 interface StartBody {
@@ -247,6 +226,7 @@ const EBAY_MARKETPLACES: MarketplaceOption[] = [
 ]
 
 interface PatchBody {
+  expectedUpdatedAt?: string
   currentStep?: number
   state?: Record<string, unknown>
   // Per-channel overrides keyed by "PLATFORM:MARKET". PATCHed slices
@@ -268,6 +248,23 @@ const VALID_CHANNELS = new Set([
 ])
 
 const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
+  // Product-preset drafts have a frozen destination. Publication/scheduling must wait
+  // for account-aware orchestration; existing unbound wizard behavior is unchanged.
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (!request.routeOptions.url.includes('/listing-wizard/:id')) return
+    const id = (request.params as { id?: string }).id
+    if (!id) return
+    try {
+      if (!await validateProductPresetDraft(prisma, id)) return
+      const draftPatch = request.method === 'PATCH' && request.routeOptions.url.endsWith('/listing-wizard/:id')
+      const telemetry = request.method === 'POST' && request.routeOptions.url.endsWith('/listing-wizard/:id/events')
+      if (request.method !== 'GET' && !draftPatch && !telemetry) {
+        return reply.code(409).send({ error: 'This draft is saved for a specific account and listing. Publishing, scheduling and other listing operations are not available for it yet.' })
+      }
+    } catch (error) {
+      return reply.code(409).send({ error: error instanceof Error ? error.message : 'The draft destination is unavailable.' })
+    }
+  })
   // ── Phase B — Step 1 connection-status surface ────────────────
   // GET /api/listing-wizard/connection-status
   //
@@ -280,7 +277,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // Amazon: configured if any of the SP-API credential env vars
       // are set. Use the same "isConfigured" check the AmazonService
       // does internally so this stays in sync.
-      const amazonConnected = amazonService.isConfigured()
+      const amazonConnected = (await amazonService.isConfigured())
 
       // eBay: any active account counts. MAP.3 — a readiness check is genuinely
       // account-agnostic; it goes through the resolver so "active" means one thing.
@@ -904,6 +901,10 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!body.productId) {
         return reply.code(400).send({ error: 'productId is required' })
       }
+      const coordinates = ['accountId', 'channelConnectionId', 'aliasKey', 'aliasId', 'listingId', 'productContext']
+      if ([body, ...(Array.isArray(body.channels) ? body.channels : [])].some(value => coordinates.some(key => Object.prototype.hasOwnProperty.call(value, key)))) {
+        return reply.code(409).send({ error: 'This legacy start route cannot bind accounts or listing aliases. Apply a preset from the explicit product destination.' })
+      }
 
       // Multi-channel input (Phase B canonical form): { productId,
       // channels: [{platform, marketplace}, ...] }.
@@ -967,6 +968,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { createdAt: 'desc' },
       })
       const isNew = !wizard
+      if (wizard && productPresetScopeOf(wizard)) return reply.code(409).send({ error: 'Resume this destination-bound draft using its exact product/account/listing link.' })
       if (!wizard) {
         wizard = await prisma.listingWizard.create({
           data: {
@@ -1012,7 +1014,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{ Params: { id: string }; Querystring: { productId?: string; channel?: string; accountId?: string; market?: string; listingId?: string; aliasKey?: string } }>(
     '/listing-wizard/:id',
     async (request, reply) => {
       const wizard = await prisma.listingWizard.findUnique({
@@ -1021,6 +1023,14 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       if (!wizard) {
         return reply.code(404).send({ error: 'Wizard not found' })
       }
+      if (request.query.productId && request.query.productId !== wizard.productId) return reply.code(409).send({ error: 'This draft belongs to another product.' })
+      const scope = productPresetScopeOf(wizard)
+      if (scope) {
+        try {
+          const requested = parseProductPresetScope({ ...request.query, listingId: request.query.listingId || null })
+          if (!sameProductPresetScope(scope, requested)) throw new Error('This draft belongs to another product, account or listing scope.')
+        } catch (error) { return reply.code(409).send({ error: error instanceof Error ? error.message : 'Use the exact draft link.' }) }
+      } else if (request.query.accountId !== undefined || request.query.listingId !== undefined || request.query.aliasKey !== undefined) return reply.code(409).send({ error: 'This legacy draft has no reviewed account/listing binding. Apply a preset from the product destination first.' })
       const product = await prisma.product.findUnique({
         where: { id: wizard.productId },
         select: {
@@ -1053,6 +1063,20 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: `Wizard is ${wizard.status.toLowerCase()}` })
       }
       const body = request.body ?? {}
+      const scope = productPresetScopeOf(wizard)
+      if (body.channels?.some(value => ['accountId', 'channelConnectionId', 'aliasKey', 'aliasId', 'listingId'].some(key => Object.prototype.hasOwnProperty.call(value, key)))) return reply.code(409).send({ error: 'Account/listing coordinates cannot be stored in the legacy channel tuple.' })
+      if (scope) {
+        if (typeof body.expectedUpdatedAt !== 'string') return reply.code(409).send({ error: 'Reload this product draft before saving so its current revision can be checked.' })
+        const state = (wizard.state ?? {}) as Record<string, unknown>
+        if (['productPresetScope', 'productPresetReceipt'].some(key => body.state && Object.prototype.hasOwnProperty.call(body.state, key) && !sameProductPresetScope(body.state[key], state[key])) || body.channels && !sameProductPresetScope(body.channels, wizard.channels) || body.channelStates && Object.keys(body.channelStates).some(key => key !== `${scope.channel}:${scope.market}`)) {
+          return reply.code(409).send({ error: 'The reviewed product/account/listing destination cannot be replaced. Review another preset from that product scope.' })
+        }
+      } else if (body.state && ['productPresetScope', 'productPresetReceipt'].some(key => Object.prototype.hasOwnProperty.call(body.state, key))) {
+        return reply.code(400).send({ error: 'Product preset binding is created only by a reviewed preset application.' })
+      }
+      if (body.expectedUpdatedAt !== undefined && body.expectedUpdatedAt !== wizard.updatedAt.toISOString()) {
+        return reply.code(409).send({ error: 'The wizard changed. Reload it before saving these choices.' })
+      }
       const merged = {
         ...((wizard.state as Record<string, unknown> | null) ?? {}),
         ...((body.state ?? {}) as Record<string, unknown>),
@@ -1112,14 +1136,19 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           : wizard.currentStep
 
       const next = await prisma.listingWizard.update({
-        where: { id: wizard.id },
+        where: { id: wizard.id, status: 'DRAFT', updatedAt: wizard.updatedAt, version: wizard.version },
         data: {
+          version: { increment: 1 },
           currentStep: nextStep,
           state: merged as any,
           channelStates: mergedChannelStates as any,
           ...(channelsUpdate ?? {}),
         },
+      }).catch((error: unknown) => {
+        if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') return null
+        throw error
       })
+      if (!next) return reply.code(409).send({ error: 'The wizard changed during save. Reload it before retrying.' })
 
       // C.0 — fire-and-forget step-transition telemetry. Telemetry
       // failures must never break the PATCH (writeStepTransition
@@ -2308,11 +2337,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
       >()
       for (const c of channels) {
-        const key = contentGroupKey(c.platform, c.marketplace)
+        const key = await contentGroupKey(c.platform, c.marketplace)
         const channelKey = `${c.platform}:${c.marketplace}`
         if (!groups.has(key)) {
           groups.set(key, {
-            language: languageForMarketplace(c.marketplace),
+            language: (await marketLanguages(c.platform, c.marketplace))[0],
             platform: c.platform,
             marketplaces: [c.marketplace],
             channelKeys: [channelKey],
@@ -2362,6 +2391,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
             orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
           })
           const result = await listingContentService.generate({
+            channel: g.platform,
             product: {
               id: product.id,
               sku: product.sku,
@@ -2559,7 +2589,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // missing creds surface as a blocking checklist item rather
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
-        AMAZON: amazonService.isConfigured(),
+        AMAZON: (await amazonService.isConfigured()),
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
@@ -2656,7 +2686,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
       // missing creds surface as a blocking checklist item rather
       // than a post-submit FAILED entry.
       const readiness: Record<string, boolean> = {
-        AMAZON: amazonService.isConfigured(),
+        AMAZON: (await amazonService.isConfigured()),
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
@@ -3554,7 +3584,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(404).send({ error: `Product ${id} not found` })
       }
       const channelKey = `${channel}:${marketplace}`
-      const language = languageForMarketplace(marketplace)
+      const language = (await marketLanguages(channel, marketplace))[0]
       const variant =
         typeof request.body?.variant === 'number'
           ? Math.max(0, Math.min(4, request.body.variant))
@@ -3569,6 +3599,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
         })
         const result = await listingContentService.generate({
+            channel: channel,
           product: {
             id: product.id,
             sku: product.sku,
@@ -3811,11 +3842,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
         >()
         for (const c of channels) {
-          const key = contentGroupKey(c.platform, c.marketplace)
+          const key = await contentGroupKey(c.platform, c.marketplace)
           const channelKey = `${c.platform}:${c.marketplace}`
           if (!groups.has(key)) {
             groups.set(key, {
-              language: languageForMarketplace(c.marketplace),
+              language: (await marketLanguages(c.platform, c.marketplace))[0],
               platform: c.platform,
               marketplaces: [c.marketplace],
               channelKeys: [channelKey],
@@ -3897,6 +3928,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
               orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
             })
             const result = await listingContentService.generate({
+            channel: g.platform,
               product: {
                 id: product.id,
                 sku: product.sku,
@@ -5310,11 +5342,11 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
           { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
         >()
         for (const c of channels) {
-          const key = contentGroupKey(c.platform, c.marketplace)
+          const key = await contentGroupKey(c.platform, c.marketplace)
           const channelKey = `${c.platform}:${c.marketplace}`
           if (!groups.has(key)) {
             groups.set(key, {
-              language: languageForMarketplace(c.marketplace),
+              language: (await marketLanguages(c.platform, c.marketplace))[0],
               platform: c.platform,
               marketplaces: [c.marketplace],
               channelKeys: [channelKey],
@@ -5353,7 +5385,8 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
 
         for (const [groupKey, g] of groups) {
           const representativeMarketplace = g.marketplaces[0]!
-          const preview = listingContentService.previewCost({
+          const preview = await listingContentService.previewCost({
+            channel: g.platform,
             product: {
               id: product.id,
               sku: product.sku,
