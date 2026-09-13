@@ -38,11 +38,14 @@ import { useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
 
 import { readLastMarket, writeLastMarket } from './lastMarket'
+import { languageSelection, toggleLanguage } from './sheet/languages'
+import { connectionScopePolicy } from './presence/connection'
+import { channelLabel } from './scopes'
 import { primaryStudioAccount } from './accountScope'
 import { useWorkspaceDestination, type DestinationState } from './useWorkspaceDestination'
 import { createWorkspaceSaveStore } from './workspaceSave'
 import { studioChannelViewPatch } from './navigationHref'
-import { parseReadinessResponse } from './readiness'
+import { parseReadinessResponse, parseReadinessMatrix } from './readiness'
 import {
   leaveConfirmMessage,
   pendingWrites,
@@ -52,6 +55,7 @@ import { isViewChipVisible } from './viewChips'
 import {
   channelServesMarket,
   defaultLocaleFor,
+  scopeLanguages,
   localeLabel,
   defaultMarket,
   historyStateIsInternal,
@@ -144,6 +148,9 @@ export interface StudioScopeValue {
   scope: StudioScopeId
   market: string | null
   locale: string | null
+  primaryLanguage: string | null
+  locales: string[] | null
+  setLocales(locales: string[] | null): void
   tab: StudioTabId
   /** `null` on master — master has no channel coordinate. */
   coordinate: StudioCoordinate | null
@@ -158,6 +165,11 @@ export interface StudioScopeValue {
 }
 
 const ScopeCtx = createContext<StudioScopeValue | null>(null)
+interface DiscoveryState { failed: boolean | null; note: string | null; retry?: () => Promise<void>; retrying: boolean }
+const DiscoveryCtx = createContext<DiscoveryState | null>(null)
+export function useStudioDiscovery() { return useContext(DiscoveryCtx) }
+export function useStudioDiscoveryFailure(): boolean | null { return useStudioDiscovery()?.failed ?? null }
+
 
 export function useStudioScope(): StudioScopeValue {
   const v = useContext(ScopeCtx)
@@ -438,7 +450,7 @@ function useReadinessQuery(productId: string, market: string | null, nonce: numb
         }
         const json: unknown = await res.json()
         if (cancelled) return
-        setQuery({ status: 'ready', byScope: parseReadinessResponse(json), at: Date.now(), coordinate })
+        setQuery({ status: 'ready', byScope: parseReadinessResponse(json), matrix: parseReadinessMatrix(json), at: Date.now(), coordinate })
       } catch (e) {
         if (cancelled) return
         const timedOut = e instanceof DOMException && e.name === 'AbortError'
@@ -619,13 +631,17 @@ function useInFlightGuard(state: StudioSaveState): void {
 /* ── the provider ────────────────────────────────────────────────────────────────────────── */
 
 export interface StudioStateProviderProps {
+  marketplacesFailed?: boolean
+  discoveryRetry?: () => Promise<void>
+  discoveryRetrying?: boolean
   product: StudioProduct
   family?: StudioFamily | null
   marketplaces: MarketplaceLite[]
+  primaryLanguage: string | null
   children: ReactNode
 }
 
-export function StudioStateProvider({ product, family = null, marketplaces, children }: StudioStateProviderProps) {
+export function StudioStateProvider({ product, family = null, marketplaces, marketplacesFailed, discoveryRetry, discoveryRetrying, primaryLanguage, children }: StudioStateProviderProps) {
   const scopeChangeGuards = useRef(new Set<() => boolean>())
   const registerScopeChangeGuard = useCallback((guard: () => boolean) => {
     scopeChangeGuards.current.add(guard)
@@ -636,8 +652,8 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
   const pathname = usePathname()
   const search = useSearchParams()
 
-  const baseOptions = useMemo(() => deriveScopeOptions(marketplaces), [marketplaces])
-  const [shopifyLocales, setShopifyLocales] = useState<{ accountId: string; locales: { locale: string; primary: boolean; published: boolean }[] } | null>(null)
+  const baseOptions = useMemo(() => deriveScopeOptions(marketplaces, primaryLanguage), [marketplaces, primaryLanguage])
+  const [, setShopifyLocales] = useState<{ accountId: string; locales: { locale: string; primary: boolean; published: boolean }[] } | null>(null)
   const registerShopifyLocales = useCallback((accountId: string, locales: { locale: string; primary: boolean; published: boolean }[]) => {
     setShopifyLocales(old => old?.accountId === accountId && JSON.stringify(old.locales) === JSON.stringify(locales) ? old : { accountId, locales })
   }, [])
@@ -665,23 +681,19 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
   const requestedAccount = scope === MASTER_SCOPE ? undefined : search.get('account') ?? (listingId ? undefined : primaryStudioAccount(accounts)?.id)
   const destination = useWorkspaceDestination(product.id, scope, market, requestedAccount, listingId)
   const accountId = requestedAccount ?? (destination.status === 'ready' ? destination.data.accountId : undefined)
-  const storeLocales = scope === 'SHOPIFY' && shopifyLocales && shopifyLocales.accountId === accountId ? shopifyLocales.locales : null
+  const localesParam = search.get('locales')
+  const locales = useMemo(() => languageSelection(localesParam), [localesParam])
   const localeParam = search.get(URL_KEYS.locale)
-  const supportedLanguages = useMemo(() => marketplaces.find(m => m.channel === scope && m.code === market)?.languages ?? [], [marketplaces, scope, market])
-  const options = useMemo(() => storeLocales ? { ...baseOptions, locales: storeLocales.map(l => ({ code: l.locale, label: localeLabel(l.locale) + (l.primary ? ' · primary' : '') })) }
-    : ['AMAZON', 'EBAY'].includes(scope) ? { ...baseOptions, locales: supportedLanguages.map(code => ({ code, label: localeLabel(code) })) } : baseOptions,
-  [baseOptions, storeLocales, scope, supportedLanguages])
-  const localeError = localeParam && !/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(localeParam) ? 'This content language is invalid. Choose a language.'
-    : ['AMAZON', 'EBAY'].includes(scope) && localeParam && !supportedLanguages.includes(localeParam.toLowerCase()) ? `Choose a supported content language for this destination: ${supportedLanguages.join(', ')}.` : null
+  const supportedLanguages = useMemo(() => scopeLanguages(scope, market, marketplaces, primaryLanguage), [scope, market, marketplaces, primaryLanguage])
+  const options = useMemo(() => ({ ...baseOptions, locales: supportedLanguages.map(code => ({ code, label: localeLabel(code) })) }), [baseOptions, supportedLanguages])
+  const localeError = locales && (!locales.length || locales.some(code => !supportedLanguages.includes(code))) ? 'Choose supported content languages for this scope.'
+    : localeParam && !/^[a-z]{2,3}$/.test(localeParam) ? 'This content language is invalid. Choose a language.'
+    : localeParam && !supportedLanguages.includes(localeParam) ? `Choose a supported content language for this scope: ${supportedLanguages.join(', ')}.` : null
   const scopeError = scopeParam && scopeParam !== scope ? 'This channel is unavailable in the selected market. Choose an available scope.'
     : marketParam && marketParam !== market ? 'This market is unavailable. Choose an available market.'
     : scope === MASTER_SCOPE && listingId ? 'A listing needs its channel and market. Choose a channel scope to continue.' : localeError
 
-  const locale = useMemo(() => {
-    if (scope === 'SHOPIFY') return (localeParam ? storeLocales?.find(l => l.locale.toLowerCase() === localeParam.toLowerCase())?.locale ?? localeParam : null) ?? storeLocales?.find(l => l.primary)?.locale ?? (market ? defaultLocaleFor(market, marketplaces, scope === MASTER_SCOPE ? undefined : scope) : null)
-    if (localeParam) return localeParam
-    return market ? defaultLocaleFor(market, marketplaces, scope === MASTER_SCOPE ? undefined : scope) : null
-  }, [localeParam, options, market, marketplaces, scope, storeLocales])
+  const locale = locales?.[0] ?? localeParam ?? (scope === MASTER_SCOPE ? primaryLanguage : supportedLanguages[0] ?? null)
 
   /*
    * The tab is validated against the CURRENT SCOPE, not just against the list of ids.
@@ -851,7 +863,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
     (patch: Record<string, string | undefined>, asHistory = false) => {
       const current = new URLSearchParams(searchRef.current)
       const changingScope = Object.entries(patch).some(([key, value]) =>
-        ['scope', 'market', 'locale', 'account', 'listing', 'tab'].includes(key) && (value || null) !== current.get(key))
+        ['scope', 'market', 'locale', 'locales', 'account', 'listing', 'tab'].includes(key) && (value || null) !== current.get(key))
       if (changingScope && !canChangeEditor()) return
       enqueue(patch, asHistory)
     },
@@ -899,9 +911,9 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
       // The open record belongs to the scope that opened it: a row id from the master sheet is not
       // a row in a channel's alias tree, so carrying it across would open the drawer on nothing.
       push({
-        account: undefined, listing: undefined,
+        account: undefined, listing: undefined, locales: undefined,
         [URL_KEYS.scope]: next === MASTER_SCOPE ? undefined : next,
-        [URL_KEYS.locale]: ['AMAZON', 'EBAY'].includes(next) ? undefined : localeParam ?? undefined,
+        [URL_KEYS.locale]: undefined,
         [URL_KEYS.market]: next !== MASTER_SCOPE && market && !channelServesMarket(next, market, options)
           ? options.channels.find(c => c.id === next)?.markets[0] : market ?? undefined,
         [URL_KEYS.record]: undefined,
@@ -920,26 +932,31 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
       // changes the content language a session is looking at. Both are resolved HERE, in one URL
       // write, rather than by a second effect that would land as a separate history state.
       const strands = scope !== MASTER_SCOPE && !channelServesMarket(scope, code, options)
-      const nextLocale = defaultLocaleFor(code, marketplaces, scope === MASTER_SCOPE || strands ? undefined : scope)
+      const nextLocale = scope === MASTER_SCOPE || strands ? primaryLanguage : defaultLocaleFor(code, marketplaces, scope)
       writeLastMarket(code)
       push({
         [URL_KEYS.market]: code,
+        locales: undefined,
         account: strands ? undefined : accountId,
         listing: undefined,
         [URL_KEYS.scope]: strands ? undefined : scopeParam ?? undefined,
         // Only re-default the locale when the operator had not pinned one.
-        [URL_KEYS.locale]: ['AMAZON', 'EBAY'].includes(scope) ? nextLocale ?? undefined : localeParam ?? (nextLocale ?? undefined),
+        [URL_KEYS.locale]: scope === MASTER_SCOPE ? localeParam ?? nextLocale ?? undefined : nextLocale ?? undefined,
         [URL_KEYS.record]: undefined,
         [URL_KEYS.cell]: undefined,
         [URL_KEYS.chip]: undefined,
       })
     },
-    [push, scope, scopeParam, localeParam, options, marketplaces, accountId],
+    [push, scope, scopeParam, localeParam, options, marketplaces, accountId, primaryLanguage],
   )
 
   const setAccount = useCallback((id: string) => push({ account: id, listing: undefined, [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined, [URL_KEYS.chip]: undefined }), [push])
   const setListing = useCallback((id?: string) => push({ account: accountId, listing: id, [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined, [URL_KEYS.chip]: undefined }), [push, accountId])
-  const setLocale = useCallback((code: string) => push({ [URL_KEYS.locale]: code }), [push])
+  const setLocales = useCallback((codes: string[] | null) => push({ locales: codes?.join(',') }), [push])
+  const setLocale = useCallback((code: string) => {
+    if (locales) setLocales(toggleLanguage(locales, code, supportedLanguages))
+    else push({ [URL_KEYS.locale]: code })
+  }, [push, locales, setLocales, supportedLanguages])
   const setTab = useCallback(
     (next: StudioTabId, channel?: string) => {
       if (channel !== undefined) {
@@ -962,6 +979,8 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
       scope,
       market,
       locale,
+      primaryLanguage,
+      locales, setLocales,
       tab,
       coordinate,
       options,
@@ -971,7 +990,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
       setLocale,
       setTab,
     }),
-    [accountId, accounts, setAccount, registerScopeChangeGuard, canChangeEditor, registerShopifyLocales, listingId, destination, scopeError, setListing, scope, market, locale, tab, coordinate, options, marketplaces, setScope, setMarket, setLocale, setTab],
+    [accountId, accounts, setAccount, registerScopeChangeGuard, canChangeEditor, registerShopifyLocales, listingId, destination, scopeError, setListing, scope, market, locale, primaryLanguage, locales, setLocales, tab, coordinate, options, marketplaces, setScope, setMarket, setLocale, setTab],
   )
 
   const rowId = search.get(URL_KEYS.record)
@@ -1049,6 +1068,8 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
 
   return (
     <ProductCtx.Provider value={product}>
+      <DiscoveryCtx.Provider value={{ failed: marketplacesFailed ?? null, retry: discoveryRetry, retrying: discoveryRetrying === true,
+        note: connectionScopePolicy(accounts.find(a => a.id === accountId)?.health, channelLabel(scope), marketplacesFailed === true).note }}>
       <FamilyCtx.Provider value={family}>
       <ScopeCtx.Provider value={scopeValue}>
         <RecordCtx.Provider value={recordValue}>
@@ -1062,6 +1083,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, chil
         </RecordCtx.Provider>
       </ScopeCtx.Provider>
       </FamilyCtx.Provider>
+    </DiscoveryCtx.Provider>
     </ProductCtx.Provider>
   )
 }

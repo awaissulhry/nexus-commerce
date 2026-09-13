@@ -1,3 +1,4 @@
+import { marketLanguages } from './pim/market-languages.js'
 import { getAmazonAccessToken } from '../lib/amazon-sp-client.js'
 /**
  * Phase 9 — Amazon A+ Content metadata reconciliation.
@@ -101,7 +102,7 @@ export async function pullAPlusContentMetadata(opts: {
   // produce the same shape so re-ingests don't re-introduce the prefix.
   const marketplaceRow = await prisma.marketplace.findFirst({
     where: { channel: 'AMAZON', marketplaceId },
-    select: { code: true },
+    select: { channel: true, code: true, language: true, languages: true },
   })
   const marketCode = marketplaceRow?.code ?? marketplaceId.slice(0, 6)
 
@@ -125,7 +126,7 @@ export async function pullAPlusContentMetadata(opts: {
         select: { id: true },
       })
 
-      const locale = 'it-IT' // Default Italian; Amazon's list endpoint doesn't expose locale per doc
+      const locale = marketLanguages('AMAZON', marketCode, marketplaceRow ? [marketplaceRow] : [])[0] // Metadata omits language; use the destination authority.
 
       // Amazon's `updateTime` reflects when the document was last
       // modified server-side. For PUBLISHED status this is effectively

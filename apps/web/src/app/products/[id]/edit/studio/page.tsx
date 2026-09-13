@@ -38,6 +38,7 @@ export default async function ProductStudioPage({ params }: { params: Promise<{ 
           product={result.data.product}
           family={result.data.family}
           marketplaces={result.data.marketplaces}
+      primaryLanguage={result.data.primaryLanguage}
           marketplacesFailed={result.data.marketplacesFailed}
         />
       ) : (

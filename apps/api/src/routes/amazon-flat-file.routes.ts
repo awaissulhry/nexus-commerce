@@ -17,6 +17,7 @@ import { amazonSpClient } from '../lib/amazon-sp-client.js'
 
 import type { FastifyInstance } from 'fastify'
 import prisma from '../db.js'
+import { assertRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import { CategorySchemaService } from '../services/categories/schema-sync.service.js'
 import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import {
@@ -616,7 +617,13 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
     // UFX P6d — WithReport: a row with no resolvable product type (own cell →
     // parent row by parent_sku → batch default) is SKIPPED with a per-row error
     // instead of schema-halting the whole feed with productType:'' (4002010).
-    const { body, messageCount, skippedRows } = flatFileService.buildJsonFeedBodyWithReport(rows, mp, sellerId, expandedFields, {
+    // Presence W1: current stored locks are mandatory even when the earlier
+    // best-effort local sync failed. Request cells cannot clear those locks.
+    const push = await flatFileService.prepareRowsForPush(rows, mp)
+    if (push.refusals.length > 0) {
+      return reply.code(409).send({ error: push.refusals[0].sentence, refusal: push.refusals[0], refusals: push.refusals })
+    }
+    const { body, messageCount, skippedRows } = flatFileService.buildJsonFeedBodyWithReport(push.rows, mp, sellerId, expandedFields, {
       enumCodeMap,
       numericFields,
       booleanFields,
@@ -1802,9 +1809,10 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
   // Market-scoped listing removal. Deletes the AMAZON ChannelListing(s) for
   // each target product+marketplace pair without touching the Product record
   // or its stock (inventory invariant I2/I3).
-  // Body: { targets: Array<{ productId: string; marketplace: string }> }
-  fastify.post<{ Body: { targets?: Array<{ productId: string; marketplace: string }> } }>(
+  // Every target names product, market, account and alias; channel is AMAZON.
+  fastify.post<{ Body: { targets?: Array<{ productId: string; marketplace: string; channelConnectionId: string | null; aliasKey: string }> } }>(
     '/amazon/flat-file/remove',
+    { preHandler: async (request) => assertRequestPermission(request, 'products.delete') },
     async (request, reply) => {
       const targets = request.body?.targets ?? []
       const results = []
@@ -1813,7 +1821,7 @@ export default async function amazonFlatFileRoutes(fastify: FastifyInstance) {
           results.push({ productId: t?.productId ?? '', marketplace: t?.marketplace ?? '', channelListingsRemoved: 0, delisted: false, error: 'productId and marketplace are required' })
           continue
         }
-        results.push(await removeAmazonListing(prisma, t))
+        results.push(await removeAmazonListing(prisma, { ...t, actor: requestUserId(request) }))
       }
       return reply.send({ results })
     },

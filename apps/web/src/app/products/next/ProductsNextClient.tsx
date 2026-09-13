@@ -21,13 +21,22 @@ import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
 import { Button, Input, Pill } from '@/design-system/primitives'
 import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
+import {
+  VARIATION_MAPPING_LABELS,
+  VARIATION_MAPPING_TITLE,
+  VARIATION_MAPPING_URL_KEY,
+  VARIATION_MAPPING_VALUES,
+  isVariationMappingValue,
+  parseVariationMappingFilter,
+  serialiseVariationMappingFilter,
+} from './variationMappingFilter'
 import { eur0 } from '@/design-system/lib'
 
 // The grid. One engine (AG Grid Enterprise, Server-Side Row Model), and the four things this
 // product owns around it: the theme and defaults (NexusGrid), the server contract
 // (productsServerContract), the Customise bridge (columnPrefs) and state persistence
 // (useGridViews). Nothing else.
-import { GridDensityProvider, NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
+import { GridDensityProvider, NexusGrid, SCOPE_READINESS_STATES, readinessMeta, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
 import { createProductsDatasource, isFamilyFooter, type ProductsListStats } from '@/app/products/next/productsDatasource'
 import { gridFilterDef } from '@/design-system/grid/filters/gridFilters'
 import {
@@ -42,6 +51,10 @@ import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, Sel
 import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type AgMenuItemDef, type DefaultMenuItem, type GetContextMenuItemsParams, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
+import { languageColumns } from './languageColumns'
+import { TranslateDialog, useCatalogLanguages } from './TranslateDialog'
+import { Listbox } from '@/design-system/components/Listbox'
+import { catalogLanguageColumn } from '@nexus/shared/products-grid'
 import {
   buildPageColumns,
   columnLabel,
@@ -148,6 +161,7 @@ const EMPTY_FILTERS: ProductFilters = EMPTY_CONTEXT_FILTERS
 
 /** What a saved view stores BESIDE the grid state — the page's own knobs. */
 interface PageViewState {
+  language?: string
   filters: ProductFilters
   tile: KpiTileKey
   density: DensityMode
@@ -208,6 +222,10 @@ function ProductsNextInner() {
   const familyId = searchParams?.get('parent') ?? null
 
   // ── State ─────────────────────────────────────────────────────
+  const [language, setLanguage] = useState('')
+  const [translateOpen, setTranslateOpen] = useState(false)
+  const languages = useCatalogLanguages()
+  useEffect(() => { if (languages.sourceLanguage) setLanguage(prior => prior || languages.sourceLanguage!) }, [languages.sourceLanguage])
   const [filters, setFilters] = useState<ProductFilters>(EMPTY_FILTERS)
   const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY)
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
@@ -216,6 +234,69 @@ function ProductsNextInner() {
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
   const [customizeOpen, setCustomizeOpen] = useState(false)
+  /**
+   * VT.4 — the `Variation mapping` dimension (VX §11.4, values `docs/vt1-contracts.md` §5).
+   *
+   * It is page state and not a `ProductGridContextFilters` key, because that contract lives in
+   * `packages/shared/products-grid.ts` and the server half of this dimension does not exist yet: the
+   * `ReadinessIndex` rows it reads are VT.1b's (VT.1 emits the three variation readiness kinds with the
+   * SHEET payload, not into the index, and the index has no provenance column at all). Adding the key to
+   * the shared contract now would declare a dimension the API silently ignores — `reference_api_accepts_a_flag_it_ignores`.
+   *
+   * So the selection is REAL and VISIBLE: it seeds from the URL (design §3.7's
+   * `?filter=variation-mapping:derived|rule|overridden`, which VT.3's `[List]` button writes), it writes
+   * back to the URL, and while the server cannot honour it the page says so through the SAME
+   * `unsupported` banner every other unhonoured filter uses. It never looks applied when it is not.
+   */
+  const urlVariationFilter = useMemo(
+    () => parseVariationMappingFilter(searchParams?.get('filter')),
+    [searchParams],
+  )
+  /**
+   * 🔴 VT.4b — it is no longer page state. The selection lives in `filters.variationMapping`, a key of the
+   * SHARED `ProductGridContextFilters`, so it rides in the grid request the datasource already sends and
+   * `restrictVariationMapping` narrows on it server-side (VT.1b). While it was local state the dimension could
+   * only be honest ABOUT not narrowing; now it narrows, and the `unsupported` banner reports only what the
+   * server itself could not apply.
+   */
+  /**
+   * 🔴 The URL is this dimension's ONE owner, and it is deliberately NOT stored in `filters`.
+   *
+   * Measured on screen first: with the selection held in `filters`, the saved-layout restore
+   * (`restorePageState`, which runs after mount) overwrote it with the saved `[]`, so a pasted
+   * `?filter=variation-mapping:collides` link produced a grid request carrying `variationMapping: []` —
+   * captured, 4 visits, every one of them. A saved layout is a DEFAULT; a link an operator pasted is an
+   * INSTRUCTION, and the instruction has to win. Keeping it out of `filters` removes the race instead of
+   * ordering two writers, and it is merged into the grid context below, so the request still carries it.
+   */
+  const [variationMapping, setVariationMapping] = useState<string[]>(urlVariationFilter.values)
+  useEffect(() => { setVariationMapping(urlVariationFilter.values) }, [urlVariationFilter.values])
+  /**
+   * Write the selection into `?filter=` so the state is shareable and a reload keeps it.
+   *
+   * 🔴 `history.replaceState({}, …)` and NOT `window.history.state` (`reference_next_query_cursor`, #626):
+   * a state object carrying Next's `__NA` makes the app router SKIP its apply, so the URL moves while
+   * `useSearchParams` never re-renders and every chip that depends on it goes inert. An empty object is the
+   * one safe argument. `replaceState` rather than `router.replace` because this is a filter, not a
+   * navigation: `router.replace` would fire an RSC request and re-run the page's force-dynamic loader for a
+   * change the grid re-queries itself.
+   */
+  const setVariationMappingFilter = useCallback((next: string[]) => {
+    const values = next.filter(isVariationMappingValue)
+    setVariationMapping(values)
+    if (typeof window === 'undefined') return
+    const url = new URL(window.location.href)
+    const term = serialiseVariationMappingFilter(values)
+    // Only this lane's term is rewritten; any other `filter=` term in the parameter survives untouched.
+    const others = (url.searchParams.get('filter') ?? '')
+      .split(',')
+      .map((t) => t.trim())
+      .filter((t) => t && t.split(':')[0] !== 'variation-mapping')
+    const merged = [...others, ...(term ? [term] : [])].join(',')
+    if (merged) url.searchParams.set('filter', merged)
+    else url.searchParams.delete('filter')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+  }, [])
 
   // ── The grid's own state ───────────────────────────────────────
   // Sort, column order, widths, visibility, pinning, filters and selection all live IN the grid
@@ -294,10 +375,19 @@ function ProductsNextInner() {
     return () => { workingRequest.current += 1 }
   }, [loadSavedLayout])
 
-  const pageSnapshot = useCallback((): PageViewState => ({ filters, tile: activeTile, density, lockedColumns, pageSize, ...(columnLayoutRef.current ? { columnLayout: columnLayoutRef.current } : {}) }), [filters, activeTile, density, lockedColumns, pageSize])
+  const pageSnapshot = useCallback((): PageViewState => ({ language, filters, tile: activeTile, density, lockedColumns, pageSize, ...(columnLayoutRef.current ? { columnLayout: columnLayoutRef.current } : {}) }), [language, filters, activeTile, density, lockedColumns, pageSize])
   const restorePageState = useCallback((pg: PageViewState) => {
     columnLayoutRef.current = pg.columnLayout ?? null
-    setFilters(pg.filters ?? EMPTY_FILTERS)
+    if (pg.language) setLanguage(pg.language)
+    /**
+     * 🔴 VT.4b — MERGED over `EMPTY_FILTERS`, not assigned.
+     *
+     * A saved layout is JSON written before `variationMapping` existed, so `pg.filters` has no such key and a
+     * plain assignment left `filters.variationMapping` UNDEFINED — measured on screen: every `/products` route
+     * rendered the error boundary, `TypeError: Cannot read properties of undefined (reading 'filter')`. Any
+     * future context key has the same shape, so the merge is the fix, not a guard on one field.
+     */
+    setFilters({ ...EMPTY_FILTERS, ...(pg.filters ?? {}) })
     setActiveTile(pg.tile ?? null)
     setDensity(pg.density ?? DEFAULT_DENSITY)
     const viewLocks = composeLocks(pg.lockedColumns ?? DEFAULT_LOCKED_COLUMNS)
@@ -331,7 +421,7 @@ function ProductsNextInner() {
   // What AG's state cannot hold — density, page size, the accordion, a tile, the padlocks — is the
   // page's; the state hook is told when it moves so the last-used state carries it too.
   const gridViewsMarkDirty = gridViews.markDirty
-  useEffect(() => { gridViewsMarkDirty() }, [gridViewsMarkDirty, filters, activeTile, density, lockedColumns, pageSize])
+  useEffect(() => { gridViewsMarkDirty() }, [gridViewsMarkDirty, filters, activeTile, density, lockedColumns, pageSize, language])
 
   // ── Data the page fetches itself ───────────────────────────────
   // The grid asks the server for blocks (see the datasource below). The page's own fetches are
@@ -516,8 +606,8 @@ function ProductsNextInner() {
   const columns = useMemo(
     // The Channels cell reads `activeChannels`; omitting it froze the column on the empty roster
     // it was built with, so every row read "no channels" while /api/connections answered 200.
-    () => buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }),
-    [activeChannels, onDuplicate, router],
+    () => { const base = buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }); return [...base.slice(0, 1), ...languageColumns(language), ...base.slice(1)] },
+    [activeChannels, onDuplicate, router, language],
   )
 
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => columns.map((c) => ({
@@ -532,6 +622,9 @@ function ProductsNextInner() {
    */
   const filterDefFor = useCallback(
     (key: string): Partial<ColDef<ProductRow>> => {
+      const local = catalogLanguageColumn(key)
+      if (local?.field === 'readiness') return gridFilterDef('set', { options: SCOPE_READINESS_STATES.map(state => ({ value: state, label: readinessMeta(state, 'scope').label })) })
+      if (local?.field === 'fallback') return gridFilterDef('set', { options: [{ value: 'true', label: 'Falls back to source' }, { value: 'false', label: 'Has requested language' }] })
       const kind = (GRID_FILTER_COLUMNS as Record<string, 'set' | 'number' | 'text' | undefined>)[key]
       if (!kind) return {}
       if (kind === 'text') return gridFilterDef('text')
@@ -601,8 +694,28 @@ function ProductsNextInner() {
   // Stable identity, live context: a ref lets one datasource read the CURRENT page context on
   // every request, and the effect below tells the grid to re-ask whenever that context changes.
   // Names and codes travel as the operator sees them; the server resolves them to ids.
-  const ctxRef = useRef({ filters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS })
-  ctxRef.current = { filters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS }
+  /**
+   * VT.4b — the context the datasource posts. `variationMapping` is merged in HERE, from its own owner (the
+   * URL), so the grid request carries it whatever a saved layout held. Everything else is `filters` verbatim.
+   */
+  /**
+   * 🔴 R-VT-11 — the request carries the URL's UNKNOWN words too, so the server narrows on them.
+   *
+   * `variationMapping` is the CHIP state and holds only words the page can draw a chip for. The request must
+   * carry what the operator actually asked for: with `?filter=variation-mapping:teleport` the page used to
+   * send nothing, so the grid answered 31 rows under a banner saying the filter was not applied — while the
+   * same word sent to `GET ?variationMapping=teleport` answered 0. A filter that widens is a lie.
+   * `restrictVariationMapping` is the single arbiter (VT.4b) and already narrows an unanswerable filter to
+   * nothing; handing it the raw words makes the two layers agree, and the banner then explains a row set that
+   * is actually correct.
+   */
+  const variationMappingRequest = useMemo(
+    () => [...variationMapping, ...urlVariationFilter.unknown.filter((w) => !variationMapping.includes(w))],
+    [variationMapping, urlVariationFilter.unknown],
+  )
+  const ctxFilters = useMemo(() => ({ ...filters, variationMapping: variationMappingRequest }), [filters, variationMappingRequest])
+  const ctxRef = useRef({ filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS, language })
+  ctxRef.current = { filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS, language }
   const datasource = useMemo(
     () =>
       createProductsDatasource<ProductRow>({
@@ -628,7 +741,9 @@ function ProductsNextInner() {
     // The sort and the column filters are AG's own; AG re-asks on its own when they change.
     () => JSON.stringify(buildGridRequest(ctxRef.current, { sortModel: [], groupKeys: [] }).context),
     // ctxRef mirrors exactly these; listing them keeps the memo honest.
-    [filters, activeTile, familyId],
+    // VT.4b: `ctxFilters` (which carries `variationMapping`) rather than `filters`, so a change to the
+    // catalogue's Variation mapping term re-asks the server exactly as every other context filter does.
+    [ctxFilters, activeTile, familyId, language],
   )
   const lastSignature = useRef<string | null>(null)
   useEffect(() => {
@@ -1019,8 +1134,10 @@ function ProductsNextInner() {
     const f = filters
     // Every column filter except the Product search, which has its own box, plus the page's own.
     const columnFilters = Object.keys(filterModel).filter((k) => k !== AG_AUTO_COL && k !== 'product').length
-    return columnFilters + f.stock.length + f.fulfillment.length + f.families.length + f.workflowStages.length + f.missingChannels.length
-  }, [filters, filterModel])
+    /* R-VT-11: an unknown word in the URL IS an active filter — it narrows the grid to nothing — so it
+       counts. A toolbar reading "no filters" over an empty grid is the same lie one layer up. */
+    return columnFilters + f.stock.length + f.fulfillment.length + f.families.length + f.workflowStages.length + f.missingChannels.length + variationMappingRequest.length
+  }, [filters, filterModel, variationMappingRequest])
 
   /**
    * Export the QUERY, not the viewport.
@@ -1091,10 +1208,21 @@ function ProductsNextInner() {
     if (facetOptions.stages.length)
       dims.push({ key: 'workflowStages', label: 'Workflow stage', kind: 'multiselect', value: filters.workflowStages, onChange: (v) => setF('workflowStages', v), options: facetOptions.stages.map(([code, label]) => ({ value: code, label })), searchable: true })
     dims.push({ key: 'missingChannels', label: 'Missing channel', kind: 'multiselect', value: filters.missingChannels, onChange: (v) => setF('missingChannels', v), options: CHANNEL_OPTS })
+    /* VT.4 — VX §11.4. No `count` on the options: the facet numbers come from the `ReadinessIndex`
+       variation rows (VT.1b), and an option labelled with a count nobody measured is worse than one
+       with none. */
+    dims.push({
+      key: 'variationMapping',
+      label: VARIATION_MAPPING_TITLE,
+      kind: 'multiselect',
+      value: variationMapping,
+      onChange: setVariationMappingFilter,
+      options: VARIATION_MAPPING_VALUES.map((value) => ({ value, label: VARIATION_MAPPING_LABELS[value] })),
+    })
     dims.push({ key: 'price', label: 'Price', kind: 'range', unit: '€', ...rangeOf('price'), onChange: setRangeFilter('price') })
     dims.push({ key: 'stockUnits', label: 'Stock units', kind: 'range', ...rangeOf('available'), onChange: setRangeFilter('available') })
     return dims
-  }, [filters, facetOptions, setF, allTags, setValuesOf, setSetFilter, rangeOf, setRangeFilter])
+  }, [filters, facetOptions, setF, allTags, setValuesOf, setSetFilter, rangeOf, setRangeFilter, variationMapping, setVariationMappingFilter])
 
   const selectedCount = selection.ids.length
 
@@ -1215,7 +1343,9 @@ function ProductsNextInner() {
           dimensions={filterDimensions}
           activeCount={activeFilterCount}
           onClear={() => {
+            // `setVariationMappingFilter([])` also clears the URL term; EMPTY_FILTERS already carries [].
             setFilters(EMPTY_FILTERS)
+            setVariationMappingFilter([])
             // Column filters clear too; the search box is not an accordion filter and stays.
             const keep = gridApi?.getFilterModel()[AG_AUTO_COL]
             gridApi?.setFilterModel(keep ? { [AG_AUTO_COL]: keep } : null)
@@ -1223,10 +1353,36 @@ function ProductsNextInner() {
         />
       </div>
 
-      {unsupported.length > 0 && (
+      {/**
+        * 🔴 R-VT-11 — this banner's CLOSING CLAUSE and its duplication were both measured on screen by VT.F
+        * and both had to change, because the behaviour underneath it changed.
+        *
+        * With the unknown word now sent to the server (`variationMappingRequest`), `?filter=variation-mapping:
+        * teleport` reads **0 products** where it read 31. So:
+        *
+        *  1. *"the rows above are wider than the filters you set"* became FALSE in exactly the case this
+        *     banner most often fires — the rows had narrowed to nothing. A sentence that describes the
+        *     opposite of what the grid is showing is worse than no sentence, because a reader trusts it over
+        *     the count. The clause is now chosen by WHICH layer could not apply the filter: a word the server
+        *     rejected narrows to nothing and says so; a filter the server ignored genuinely does widen.
+        *  2. The word was printed TWICE — once from the server's own `unsupported` list (`variation-mapping
+        *     teleport`) and once from the page's URL clause — because the page now hands the raw word to the
+        *     server, which names it back. De-duplicated on the WORD, so the sentence names it once.
+        */}
+      {(unsupported.length > 0 || urlVariationFilter.unknown.length > 0) && (
         <Banner tone="warning" className={styles.unattributed}>
-          Not applied by the server: {unsupported.map((u) => u.replace(':', ' ')).join(', ')} — the rows above
-          are wider than the filters you set.
+          {urlVariationFilter.unknown.length > 0
+            ? `No rows can match: the link asked for variation mapping "${urlVariationFilter.unknown.join('", "')}", which is not one of ${VARIATION_MAPPING_VALUES.join(' · ')}. Remove it to see the rows your other filters select.`
+            : `Not applied by the server: ${unsupported.map((u) => u.replace(':', ' ')).join(', ')} — the rows above are wider than the filters you set.`}
+          {/* Both layers had something to say: name the server's OTHER unapplied filters too, without
+              repeating the variation-mapping word the sentence above already named. */}
+          {urlVariationFilter.unknown.length > 0 && unsupported.some((u) => !u.startsWith(`${VARIATION_MAPPING_URL_KEY}:`)) && (
+            <>
+              {' '}Also not applied by the server:{' '}
+              {unsupported.filter((u) => !u.startsWith(`${VARIATION_MAPPING_URL_KEY}:`)).map((u) => u.replace(':', ' ')).join(', ')}
+              {' '}— those rows are wider than the filters you set.
+            </>
+          )}
         </Banner>
       )}
 
@@ -1237,6 +1393,8 @@ function ProductsNextInner() {
         </Banner>
       )}
 
+      <TranslateDialog open={translateOpen} onClose={() => setTranslateOpen(false)} language={language} scope={{ kind: 'grid', grid: buildGridRequest(ctxRef.current, { sortModel: [], groupKeys: [], filterModel }) }} />
+      {languages.error && <div role="alert">{languages.error}</div>}
       {/* One card: toolbar + grid + pager share the grid rectangle (Ad-Manager parity). The grid
           is exactly as tall as the page of rows the footer selects — 50, 100, 200 or 500 — and
           the PAGE scrolls, as Seller Central's and Ad Manager's tables do. Expand a family and
@@ -1265,6 +1423,8 @@ function ProductsNextInner() {
           }
           right={
             <>
+              <Listbox size="sm" ariaLabel="Language" value={language} options={languages.options} onChange={setLanguage} width={160} />
+              <Button size="sm" disabled={!language} onClick={() => setTranslateOpen(true)}>Translate…</Button>
               {/* Density steps aside while rows are selected: the bulk actions need the room. */}
               {selectedCount === 0 && (
                 <GridDensityToggle value={density} onChange={setDensity} />

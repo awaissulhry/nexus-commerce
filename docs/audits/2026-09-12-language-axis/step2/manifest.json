@@ -1,0 +1,775 @@
+{
+  "at": "2026-09-12T05:43:15.464739+00:00",
+  "ledgerSectionLine": 38953,
+  "sourceCount": 70,
+  "files": [
+    {
+      "file": "apps/api/src/routes/amazon-flat-file.routes.ts",
+      "mtime": "2026-09-12T05:31:23.489230+00:00",
+      "sha256": "5521c5f8369fdae0c878610421b7d3ff8e56ebdbddd5a9887012df90aed1250b",
+      "bytes": 92235
+    },
+    {
+      "file": "apps/api/src/routes/ebay-cockpit.routes.ts",
+      "mtime": "2026-09-12T00:33:39.060498+00:00",
+      "sha256": "c1c05f7cb7a5bef324034638e205bc7488b6cbc54ecabb78e2c1880222e0d315",
+      "bytes": 83801
+    },
+    {
+      "file": "apps/api/src/routes/field-links.routes.ts",
+      "mtime": "2026-09-12T00:00:19.359535+00:00",
+      "sha256": "22e08cdd75c1a94ed12bdb1e0cea9c88aad3b1b1f3bfee74a8f7f7f0b4cc8fab",
+      "bytes": 22190
+    },
+    {
+      "file": "apps/api/src/routes/listing-wizard.routes.ts",
+      "mtime": "2026-09-12T05:31:23.499209+00:00",
+      "sha256": "aaf9264b6dc8cd7ed56575ad3856793c207e3eb1a5f1cb1f03425f9c74e2d366",
+      "bytes": 207737
+    },
+    {
+      "file": "apps/api/src/routes/listings-syndication.routes.ts",
+      "mtime": "2026-09-12T05:31:23.500184+00:00",
+      "sha256": "79d80d4737734d12450fa6817ffd05fc04e47b17d965e3ff95871cdfab1b00d0",
+      "bytes": 167072
+    },
+    {
+      "file": "apps/api/src/routes/marketing-automation.routes.ts",
+      "mtime": "2026-09-12T00:01:50.044796+00:00",
+      "sha256": "7019f5b4f5ddb253dda15efc6c1372979f56934059cf9077f8c5d7b0794ec1f2",
+      "bytes": 18152
+    },
+    {
+      "file": "apps/api/src/routes/marketplaces.routes.ts",
+      "mtime": "2026-09-12T05:31:23.500781+00:00",
+      "sha256": "68da4e4dd544d993bf0ae86d270f7bea61b8a38b2af46ba684796c8ee6302a08",
+      "bytes": 54939
+    },
+    {
+      "file": "apps/api/src/routes/pim-global.routes.ts",
+      "mtime": "2026-09-12T00:07:59.297843+00:00",
+      "sha256": "c892643623b4d8e5b185af2d32a8c7f2af0487d14b42b4c6b5da7287b816f335",
+      "bytes": 29813
+    },
+    {
+      "file": "apps/api/src/routes/product-translations.routes.ts",
+      "mtime": "2026-09-12T00:07:59.298036+00:00",
+      "sha256": "913845fbb60e870ad27bb35cf874c210b5106fb23063dd98abd338316188bf48",
+      "bytes": 16848
+    },
+    {
+      "file": "apps/api/src/routes/products-ai.routes.ts",
+      "mtime": "2026-09-12T00:01:50.044387+00:00",
+      "sha256": "dcdbe7c715eec45b8abaf7362fe4ffd0f72daa00836d0491978ab288d22cfa6d",
+      "bytes": 22007
+    },
+    {
+      "file": "apps/api/src/services/__tests__/pim-resolve-channel-field.test.ts",
+      "mtime": "2026-09-12T00:12:01.562274+00:00",
+      "sha256": "795878fc37a7edfacf03bdb540a33a3ed4031fa62c253dfc1fd96587449a0246",
+      "bytes": 21883
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/generate.service.ts",
+      "mtime": "2026-09-12T00:01:50.045182+00:00",
+      "sha256": "bfc97db8fc42f8f60b0b7a23597c3d4e8bc9e3dcdffbf4a759232f97c0f65b16",
+      "bytes": 19378
+    },
+    {
+      "file": "apps/api/src/services/ai/listing-content.service.ts",
+      "mtime": "2026-09-12T00:31:12.308404+00:00",
+      "sha256": "25ff101bd5088b431b589b863ebd1304ea7bfba5422181d67a9f9bc6b88dc89b",
+      "bytes": 61296
+    },
+    {
+      "file": "apps/api/src/services/amazon/value-translate.service.ts",
+      "mtime": "2026-09-12T00:33:39.060319+00:00",
+      "sha256": "8c9894b7c386411e1107c87901aedce5dccc1c4d6f09010f104079eb09c55591",
+      "bytes": 11532
+    },
+    {
+      "file": "apps/api/src/services/categories/marketplace-ids.ts",
+      "mtime": "2026-09-12T00:00:19.356021+00:00",
+      "sha256": "da5c6e4bf29206ec84044981d53bf6c719128eac78716cd734b7fea6bc920880",
+      "bytes": 1173
+    },
+    {
+      "file": "apps/api/src/services/categories/schema-sync.service.ts",
+      "mtime": "2026-09-12T05:31:23.505308+00:00",
+      "sha256": "e1d0922eaeb8c58d69a8e131c1bb0056d69336ab238fea44239b94325b49472f",
+      "bytes": 23102
+    },
+    {
+      "file": "apps/api/src/services/categories/seller-schema.service.ts",
+      "mtime": "2026-09-12T00:00:19.357080+00:00",
+      "sha256": "abc1df7830238a07fa1f5b9a99d70a4be6fa8d8b54b9429b2bd3467bb6968aee",
+      "bytes": 2197
+    },
+    {
+      "file": "apps/api/src/services/compliance-resolver.service.ts",
+      "mtime": "2026-09-12T00:05:48.203405+00:00",
+      "sha256": "9741a80d69b8892651ef8d18eaa10a04a436a5227b0d35ffd308b8a0c14448d0",
+      "bytes": 21705
+    },
+    {
+      "file": "apps/api/src/services/images/amazon-media-client.ts",
+      "mtime": "2026-09-12T00:05:48.203683+00:00",
+      "sha256": "62f35a39acaa7d8363358a46bcd14b246219d2adda197b5099d7f04ee3fc446e",
+      "bytes": 10241
+    },
+    {
+      "file": "apps/api/src/services/listing-automation/action-handlers.ts",
+      "mtime": "2026-09-12T00:05:48.202235+00:00",
+      "sha256": "190463de36a91c59342bb636c3571dffae15f82b14fc64b0766c95134bf0b6a5",
+      "bytes": 13010
+    },
+    {
+      "file": "apps/api/src/services/listing-automation/triggers.ts",
+      "mtime": "2026-09-12T00:00:19.357427+00:00",
+      "sha256": "7c1f2649d1ff3c7f298e3375343a4433f9818275bcedcb69dc012eda8718988a",
+      "bytes": 2888
+    },
+    {
+      "file": "apps/api/src/services/listing-automation/triggers.vitest.test.ts",
+      "mtime": "2026-09-12T00:12:01.562041+00:00",
+      "sha256": "e7624d563484f9f84192ef22e7db08ba92565c1419250dd1fa9ee98572bd5321",
+      "bytes": 2765
+    },
+    {
+      "file": "apps/api/src/services/listing-preflight.service.ts",
+      "mtime": "2026-09-12T00:05:48.204432+00:00",
+      "sha256": "ca801c62f201731568a271c81bd8059012c265dbd97a8e75521bf7db3826015d",
+      "bytes": 38546
+    },
+    {
+      "file": "apps/api/src/services/listing-wizard/ebay-publish.adapter.ts",
+      "mtime": "2026-09-12T00:31:12.308857+00:00",
+      "sha256": "578fbe4a8a6d3953f4c4a50132163e7e9f36d2aa44764f360f6011c727b69151",
+      "bytes": 29613
+    },
+    {
+      "file": "apps/api/src/services/listing-wizard/submission.service.ts",
+      "mtime": "2026-09-12T05:28:55.660775+00:00",
+      "sha256": "504467b9cc105c578f70ebbceedab551f3a9c6d979f85c27a56fe69f1a4269b7",
+      "bytes": 57218
+    },
+    {
+      "file": "apps/api/src/services/outbound-sync.service.ts",
+      "mtime": "2026-09-12T05:31:23.515236+00:00",
+      "sha256": "2448113827a662cedb15ed51819d1e23aefbf172de279ec568dfacc2305eaa41",
+      "bytes": 102732
+    },
+    {
+      "file": "apps/api/src/services/outbound-sync.vitest.test.ts",
+      "mtime": "2026-09-12T00:12:01.722889+00:00",
+      "sha256": "cea08ee00a1f94fa2b9b2ca04765b7ce33b452982d146a859774c52cfc61d6f6",
+      "bytes": 15998
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-product-transfer.ts",
+      "mtime": "2026-09-12T00:01:50.047215+00:00",
+      "sha256": "43b0da36be7e2acada15185a8c4b1df12ebaf9b807066a3343d2e8870500b300",
+      "bytes": 9369
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+      "mtime": "2026-09-12T00:01:50.045554+00:00",
+      "sha256": "971b53a69fb104f68dc365423f4e9c0fee49460dfa41509e20dec75b47c0695c",
+      "bytes": 5724
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-export.ts",
+      "mtime": "2026-09-12T00:21:09.967435+00:00",
+      "sha256": "be04fb9308b0f330f54b0297c197914480f306f7211f2d1457cfbec11506afdc",
+      "bytes": 18954
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer.service.ts",
+      "mtime": "2026-09-12T00:05:48.204140+00:00",
+      "sha256": "dbee9b56b230449360d80e63718e14d025e8b41beb9924e9d7442af6274cbe60",
+      "bytes": 21338
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+      "mtime": "2026-09-12T00:01:50.046872+00:00",
+      "sha256": "96f1171555c5013369558b6fd944d7187af688630e85341555289f2d2e62f804",
+      "bytes": 8459
+    },
+    {
+      "file": "apps/api/src/services/pim/ebay-value-map.service.ts",
+      "mtime": "2026-09-12T00:31:12.308665+00:00",
+      "sha256": "9e0ef968c5a43288a04ba4b4d31d4fa7fd85397df04a47a4f5c206a70d8df20c",
+      "bytes": 5392
+    },
+    {
+      "file": "apps/api/src/services/pim/global-content.ts",
+      "mtime": "2026-09-12T00:07:59.297496+00:00",
+      "sha256": "06e2138845fa92451cae9ace2e0305172e5abdce490f97f4c793fe6b392c2206",
+      "bytes": 1555
+    },
+    {
+      "file": "apps/api/src/services/pim/global-content.vitest.test.ts",
+      "mtime": "2026-09-12T00:10:17.139466+00:00",
+      "sha256": "f4f32a30dc9ae99fd3258df05edef6778c48626ce1ba55c231dc5fdd36dc85f8",
+      "bytes": 2813
+    },
+    {
+      "file": "apps/api/src/services/pim/information-locale.ts",
+      "mtime": "2026-09-12T00:03:19.622762+00:00",
+      "sha256": "eb8b65af65d2e4329e980a528c7f63074fe078eff8a90d009c2291c971dc64a7",
+      "bytes": 861
+    },
+    {
+      "file": "apps/api/src/services/pim/listing-readiness.service.ts",
+      "mtime": "2026-09-12T00:01:50.048009+00:00",
+      "sha256": "8ff8a964da132178e4d48c5de837f47db3f92e05d16c402dd2178e51139479d6",
+      "bytes": 12703
+    },
+    {
+      "file": "apps/api/src/services/pim/listing-readiness.vitest.test.ts",
+      "mtime": "2026-09-12T00:26:06.670645+00:00",
+      "sha256": "4aec590d61cc71d7b096c3f7548e50a2c6850ac3a90ca96e22d14ccd477a1922",
+      "bytes": 9975
+    },
+    {
+      "file": "apps/api/src/services/pim/localized-route.vitest.test.ts",
+      "mtime": "2026-09-12T00:10:17.139144+00:00",
+      "sha256": "c2825fe5001c1906f6c7bcd2242096361146dd27cbe721b219a9b4369b5f424c",
+      "bytes": 4493
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping-propagation.service.ts",
+      "mtime": "2026-09-12T00:05:48.202406+00:00",
+      "sha256": "f958e46b22010e5b3fee8c0f6c5b5cc9cfebd335226fdb324e0aeb10c6b13c63",
+      "bytes": 10759
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/impact.service.ts",
+      "mtime": "2026-09-12T00:01:50.045880+00:00",
+      "sha256": "82b7584edaedb384c4dd2a49e084ba01f7ceb4ce8e2dcf79867d489e892b726e",
+      "bytes": 31895
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+      "mtime": "2026-09-12T00:05:48.202727+00:00",
+      "sha256": "f14c4ccd81f9e8044e648f6dd3f219aeeae31307a8a2919977cd262a06076283",
+      "bytes": 3747
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+      "mtime": "2026-09-12T00:01:50.049092+00:00",
+      "sha256": "37dc602cbf3fffd7317950b53585dd3fe40d4185665ae6189eecb357d0e0ae50",
+      "bytes": 27754
+    },
+    {
+      "file": "apps/api/src/services/pim/market-language-consumers.vitest.test.ts",
+      "mtime": "2026-09-12T05:21:06.846532+00:00",
+      "sha256": "4da0ac44fa5e9fd89993796a0f359ee81fcbcb7fb096c1178f3e90b3c27a3cd4",
+      "bytes": 6585
+    },
+    {
+      "file": "apps/api/src/services/pim/market-language-payloads.vitest.test.ts",
+      "mtime": "2026-09-12T05:38:59.081079+00:00",
+      "sha256": "97a86c82cf2a7d1324043aa2145f855cabad28b8143ea81a83ad38f57900f344",
+      "bytes": 3619
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages-guard.ts",
+      "mtime": "2026-09-12T00:19:09.597174+00:00",
+      "sha256": "552a427c59b16963c0bb53dc0d064723ed0f1e78cca1ff41dd378055772ae584",
+      "bytes": 3047
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages-guard.vitest.test.ts",
+      "mtime": "2026-09-12T00:20:11.226567+00:00",
+      "sha256": "bb6b1df619ce7f17cb16703e29a0c8956aeba263bf7c39206e185f2574a614a9",
+      "bytes": 2833
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages-schema.vitest.test.ts",
+      "mtime": "2026-09-11T23:56:39.909612+00:00",
+      "sha256": "5e3dec874efdc07ce520b55d31db6b5694447cec418a9d6313425676ecfdc7a2",
+      "bytes": 1868
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages.ts",
+      "mtime": "2026-09-11T23:55:08.321217+00:00",
+      "sha256": "ab805b568a5adc7f82ddf8ac3547cefebcd54f31c82430f67a877816c93a7e69",
+      "bytes": 2894
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages.vitest.test.ts",
+      "mtime": "2026-09-12T00:10:17.041326+00:00",
+      "sha256": "13db53efedc4c00f79cb8728efa758869b56e712f53a4cad675d654aaf3fbb5d",
+      "bytes": 3259
+    },
+    {
+      "file": "apps/api/src/services/pim/readiness.service.ts",
+      "mtime": "2026-09-12T00:05:48.205487+00:00",
+      "sha256": "2da0130b19ce0e88fd3f36ebbdef3c4ecf755554d381125f85aafcf924db34de",
+      "bytes": 15358
+    },
+    {
+      "file": "apps/api/src/services/pim/reconcile-divergence.service.ts",
+      "mtime": "2026-09-12T00:21:09.916358+00:00",
+      "sha256": "464a6240e5d1e648e513b5db6bbf5363d72761cd923652d5382e856cb9ae34f7",
+      "bytes": 8788
+    },
+    {
+      "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+      "mtime": "2026-09-12T00:01:50.048415+00:00",
+      "sha256": "3c95fe1e65c448f7e27baff581b8539a7ee6b56b9e97896fa05c91e2d5fb7663",
+      "bytes": 29112
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-columns.service.ts",
+      "mtime": "2026-09-12T00:20:11.266852+00:00",
+      "sha256": "6c8c7b8ceb55bdfbc67291bfd44058dd0e4789460c8c700e2c9caa47f81f50e4",
+      "bytes": 62190
+    },
+    {
+      "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+      "mtime": "2026-09-12T05:33:51.175380+00:00",
+      "sha256": "2528c995a31daf815cf8bd4c6658d968e7f6f14941b5a2db048185243c11bb71",
+      "bytes": 91951
+    },
+    {
+      "file": "apps/api/src/services/products/translation-resolver.service.ts",
+      "mtime": "2026-09-12T00:01:50.043583+00:00",
+      "sha256": "aeb960d99da3807db7a499cf8368a3be3eeba00a28f2e8a9741f6a85a1b64c64",
+      "bytes": 4609
+    },
+    {
+      "file": "apps/api/src/services/reviews/review-insert-pdf.service.ts",
+      "mtime": "2026-09-12T00:23:38.092214+00:00",
+      "sha256": "e50a4b57e65f9c4d58b60857dedef1eb319aad5cf250067ac110000382dc45bc",
+      "bytes": 7368
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+      "mtime": "2026-09-12T00:18:40.403052+00:00",
+      "sha256": "dc6b44a0972aff5b5335486dfeb920bf8bf974e21452e68f72dc13350ef3baa7",
+      "bytes": 52073
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts",
+      "mtime": "2026-09-12T00:22:18.358616+00:00",
+      "sha256": "e5087d51deb4c0de69bdee612d6389fb8f67087cb8c3741b9a44543649b68a80",
+      "bytes": 32900
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/scopes.ts",
+      "mtime": "2026-09-12T00:07:59.298811+00:00",
+      "sha256": "99f758d88ace8adef4df7de2b9d2600dca7a8b3c064a5206603ec20a36665462",
+      "bytes": 11577
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/scopes.vitest.test.ts",
+      "mtime": "2026-09-12T05:21:06.890311+00:00",
+      "sha256": "04734572ccb7f4bf0d620abe7c33056041bf8a9ad316c78bfd99cbc8011e9ee8",
+      "bytes": 17273
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+      "mtime": "2026-09-12T00:07:59.299717+00:00",
+      "sha256": "1346084e3acc1a782fabd876ad7b08c3130f8d69cb9554540afb3750411b743a",
+      "bytes": 141175
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts",
+      "mtime": "2026-09-12T00:22:18.358300+00:00",
+      "sha256": "f6108769702be0e0c1abbc637868c3da85c1c562a0ef6a9676820eb9c9f5e2f3",
+      "bytes": 15984
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+      "mtime": "2026-09-12T00:07:59.298604+00:00",
+      "sha256": "1d0785ae027be4dc09920600c507263762378437b612bf15cb89b0e7f978e088",
+      "bytes": 13980
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx",
+      "mtime": "2026-09-12T00:07:59.298409+00:00",
+      "sha256": "4a1a7fd7c05d7818807e389080edeb6cc547dd9960c4f2f22d8206a8e676d155",
+      "bytes": 37994
+    },
+    {
+      "file": "apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx",
+      "mtime": "2026-09-12T00:33:09.715491+00:00",
+      "sha256": "2e0b77c453e53b724dd42cca77ff498211a7067afff84f4d4944938fc74a0f5a",
+      "bytes": 60883
+    },
+    {
+      "file": "apps/web/src/app/products/_sheet/types.ts",
+      "mtime": "2026-09-12T00:22:18.358051+00:00",
+      "sha256": "17ebdd606d7bf8aa0358a6fc0a4f3eb6d917538c01a38a0e7cc0fc7b10f04fb8",
+      "bytes": 5413
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/additional-labels-before.json",
+      "mtime": "2026-09-12T00:33:39.059960+00:00",
+      "sha256": "b395a6fc4b83127aa1710ae4954d7c9c6bec010ebc3cf3d9aa994ebb7a9c7008",
+      "bytes": 101142
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/additional-maps-before.json",
+      "mtime": "2026-09-12T00:30:14.181153+00:00",
+      "sha256": "7aa7f486b5f8aab56ccdc6547fa03e181039a007cb8baee03e712daab319a912",
+      "bytes": 164560
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/api-before-sweep-tests.json",
+      "mtime": "2026-09-12T05:22:20.936661+00:00",
+      "sha256": "1f9a6a84fd80b723ae2324314a61e709fa797c227a75c4d296ac74f64b536fbc",
+      "bytes": 136518
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/api-before-sweep-tests.log",
+      "mtime": "2026-09-12T05:22:20.936967+00:00",
+      "sha256": "9dc3d09d6ebb496158f4325713944cf48a1e5dcb3bc57b29f4687189fe4499f8",
+      "bytes": 2146
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/authority-payload-tests.json",
+      "mtime": "2026-09-12T00:10:18.406452+00:00",
+      "sha256": "7de75b87be5cc29f266ea71f58cc6cf86d29612279b77ecc60d0d8975b756ef1",
+      "bytes": 6188
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/authority-sweep-tests.json",
+      "mtime": "2026-09-12T05:21:09.903761+00:00",
+      "sha256": "fd6ae1a655950b9c2bdff74c2622aaa1f2c3083f5d7f68abf6648c9e4ff14150",
+      "bytes": 5510
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/authority-sweep-tests.log",
+      "mtime": "2026-09-12T05:21:09.903918+00:00",
+      "sha256": "9456d376b397b27d935bd47f14a8374c7ea9ced28230503c005f6cd9e5bd887c",
+      "bytes": 1098
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/belgium-paths-input.json",
+      "mtime": "2026-09-12T05:30:04.370312+00:00",
+      "sha256": "1a13083d4c15fa2c3c38ceeb07bc4067150ffe0be4177c583147fe489e9b80f8",
+      "bytes": 13337
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/belgium-paths.json",
+      "mtime": "2026-09-12T05:40:41.144319+00:00",
+      "sha256": "1ba65c2da3bad184f5c9ece51c41a02ebe1bcfe64c57047d3f360ffdeceeef25",
+      "bytes": 17340
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/belgium-paths.md",
+      "mtime": "2026-09-12T05:40:41.144466+00:00",
+      "sha256": "45a8feb4857d970b8e9a4c3ed14598282af9e0fe0ee2710637f6a935e89f36e0",
+      "bytes": 11255
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/checks.json",
+      "mtime": "2026-09-12T05:40:41.201833+00:00",
+      "sha256": "84a22967fce1bc56fca2f1403ea60257ed67144f7a8dfbf6caba123797e1bbc7",
+      "bytes": 3387
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/commands.json",
+      "mtime": "2026-09-12T00:00:19.291028+00:00",
+      "sha256": "53b3dbd5a08b0b37adc9465ec6e4bb16f916265b6128b9d23d2dd2c77d47059f",
+      "bytes": 409
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/consumer-fixed-tests.json",
+      "mtime": "2026-09-12T00:25:28.663147+00:00",
+      "sha256": "9642fce7fffa94965b928c256c372fbfb839f34c69f738ae1db7f638e2a32f58",
+      "bytes": 11890
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/consumer-tests.json",
+      "mtime": "2026-09-12T00:23:00.701891+00:00",
+      "sha256": "8ba4c3f5fc95f0278a0012189983e00750c2ae7d89151bc2f81c3eb64f5c4700",
+      "bytes": 42903
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/current-scope.json",
+      "mtime": "2026-09-12T05:21:09.143691+00:00",
+      "sha256": "cd8dce58d96afd83be59bcfd42ab0c3cde11780795d4214bcc114a61ad5ef762",
+      "bytes": 4229
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/final-api-tests.json",
+      "mtime": "2026-09-12T05:22:27.632504+00:00",
+      "sha256": "0a974deb59c77afc786accdef67cc66d1e708c1789c85d75027a914f7f88bb46",
+      "bytes": 137290
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/final-api-tests.log",
+      "mtime": "2026-09-12T05:22:27.632682+00:00",
+      "sha256": "191c85c34256e34e67d82f801803676448d607421e2f57ad224b7eb0f7d5e2fb",
+      "bytes": 1973
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/guard-current.log",
+      "mtime": "2026-09-12T00:08:26.514718+00:00",
+      "sha256": "559da20abbdfd59054e35bbac87f590e77a8cc8d14c6511e072699d539e2466e",
+      "bytes": 313
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/guard-final.log",
+      "mtime": "2026-09-12T05:35:47.932282+00:00",
+      "sha256": "e0e9423eb40c8e7e19babe77f57d1df9d16167d8a5f0a31dee69015fdee6a787",
+      "bytes": 1033
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/guard-first.log",
+      "mtime": "2026-09-12T00:03:43.586223+00:00",
+      "sha256": "286a20e2938487413ce1210039a37f90677cb65d99fa6843ca963dd46b55f9a8",
+      "bytes": 7291
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/guard-output.json",
+      "mtime": "2026-09-12T05:40:41.150773+00:00",
+      "sha256": "38c1139884db8b18342bfc0fd5b6afe5af48ff35ae129f9e9bf64223447bbd0f",
+      "bytes": 720
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/http-global.json",
+      "mtime": "2026-09-12T00:25:47.731816+00:00",
+      "sha256": "fba4dd7bcb972ebff5086578dbac497fc0b543e980f6cb85b19462265db01dec",
+      "bytes": 2132
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/http-marketplaces.json",
+      "mtime": "2026-09-12T00:25:47.719519+00:00",
+      "sha256": "f61cbdd00f5c5f0dd07e3db08917779582b097038c4eb862108b48574fd0071b",
+      "bytes": 430612
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/http-receipt.json",
+      "mtime": "2026-09-12T00:26:06.719555+00:00",
+      "sha256": "ab301526204755101d37be1356838bbc9340dba896b505d731e7f2d3df03a468",
+      "bytes": 1116
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/information-failure.log",
+      "mtime": "2026-09-12T00:13:23.040364+00:00",
+      "sha256": "c8d88f6ff1c8c1a8e156e3ed062d13cf7532db5cdcef3bba7db03d19bcdd46ce",
+      "bytes": 1622
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/information-final-tests.json",
+      "mtime": "2026-09-12T05:34:18.645504+00:00",
+      "sha256": "41c452e8492424db33dc288eca79e8d3e9492fa9db953e7b1ac83a6d9554f6f1",
+      "bytes": 4462
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/information-tests.json",
+      "mtime": "2026-09-12T00:17:24.251512+00:00",
+      "sha256": "3d2c437e8e6ffd02e40a7fb6feb75f3a12f3ea6aac0c5e15fcf2ee8fbab192c4",
+      "bytes": 4459
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/inspect.mjs",
+      "mtime": "2026-09-11T23:55:49.436480+00:00",
+      "sha256": "4c95eb5a573d9bf1b34b6aacbcc96bae7da55b97d2e1c5eabf67d0acfe2369df",
+      "bytes": 4074
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/local-after.json",
+      "mtime": "2026-09-11T23:59:32.729026+00:00",
+      "sha256": "3460564966f1820bceb7c2de8e218c8427a7b25b7701596914cb9e7ad05bd1fd",
+      "bytes": 259505
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/local-before.json",
+      "mtime": "2026-09-11T23:56:09.718481+00:00",
+      "sha256": "35800c5cde2dc5ac79ad9ae012e433e21f13e1498b40b352ca5c1ec25026a11e",
+      "bytes": 257713
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/payload-final-tests.json",
+      "mtime": "2026-09-12T05:39:00.427590+00:00",
+      "sha256": "19648085529aa3a28320803428fc729d7c58d57fef28f46cdddf863fbf015f38",
+      "bytes": 2536
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/preset-patch-before.json",
+      "mtime": "2026-09-12T00:32:37.248101+00:00",
+      "sha256": "96bcd0348069b3cdf4d225c1a0187d1cd29573c08156303ffd760430b702793e",
+      "bytes": 2775
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/preset-patch-tests.json",
+      "mtime": "2026-09-12T00:32:37.905805+00:00",
+      "sha256": "1fe44a9aac7d10ba90159636dd2dd4cbe616a82ecc301f4a31638da0128bda10",
+      "bytes": 1076
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/production-after.json",
+      "mtime": "2026-09-11T23:59:04.151239+00:00",
+      "sha256": "1ec14f317600688d105ec7fb54ca7c5a6eb6281cb734f743970fbf0d57539d87",
+      "bytes": 254434
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/production-before.json",
+      "mtime": "2026-09-11T23:56:07.147636+00:00",
+      "sha256": "d829b4bf7161f1b028ba106614b44db25bf2ac1f6e0b83b61da14f99b1a2a6e4",
+      "bytes": 252642
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/proposed-fixture-check.json",
+      "mtime": "2026-09-12T00:27:16.128427+00:00",
+      "sha256": "4e043a18c01f810118e8679b05cf61d5cbf36a918afb8334e5149dfb03bfd50a",
+      "bytes": 362
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/proposed-fixture-tests.json",
+      "mtime": "2026-09-12T00:27:16.076533+00:00",
+      "sha256": "c939207db2797c0753802098165d7aff6fb5c9f824c4176fa82b6832a7217a5b",
+      "bytes": 16329
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/protected-files.json",
+      "mtime": "2026-09-12T05:40:41.150491+00:00",
+      "sha256": "f3bbf9ee26a5f145c1dfbcbc5e07904b315c3f9a5dea4c49f2e70b80a020959f",
+      "bytes": 9222
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/protected-gpsr-fixture-proposal.patch",
+      "mtime": "2026-09-12T00:23:57.950444+00:00",
+      "sha256": "1300050f8bf2c02e86151e65daa4657a884bed343958945be53c9173763b48aa",
+      "bytes": 468
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/protected-gpsr-tests.json",
+      "mtime": "2026-09-12T00:19:20.353957+00:00",
+      "sha256": "5a50e75a7b06b134e86f4257fbb684124a2c0b15a9bd15ca272100e1d0aba02d",
+      "bytes": 18419
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/readiness-test-before.json",
+      "mtime": "2026-09-12T00:23:38.002305+00:00",
+      "sha256": "13be70c24861e82d11837c4bd5cf15e5833eab8c320417f260351bfecec87cb3",
+      "bytes": 10267
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/regression-tests.json",
+      "mtime": "2026-09-12T00:12:04.386732+00:00",
+      "sha256": "6014ce986302a3d8458d78061b81c4a3df5c92869be04408cb7da83af2b3c706",
+      "bytes": 70911
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/schema-command.mjs",
+      "mtime": "2026-09-11T23:55:08.250148+00:00",
+      "sha256": "6c3271a30af0c3eb764be14a1271783659e77af42f88d79ab1ae8f1e6101029a",
+      "bytes": 1210
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/schema-tests.json",
+      "mtime": "2026-09-11T23:56:41.065832+00:00",
+      "sha256": "3988f8067ad909188197bfdde9d9865b57365f19869b192bd313dc37e714ad60",
+      "bytes": 1000
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/scope-status.txt",
+      "mtime": "2026-09-12T05:31:33.545440+00:00",
+      "sha256": "8276579c8635adf47d5446af9c06c5af8b91b35698a77626f330c30a4aa7a70a",
+      "bytes": 369
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/screen.png",
+      "mtime": "2026-09-12T00:25:05.581268+00:00",
+      "sha256": "03467be01198241f0ac1cc3bf6eae7b64d59f7ec8986b1d5a974faa4b4b83e1f",
+      "bytes": 17159
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/screen.txt",
+      "mtime": "2026-09-12T00:25:05.618756+00:00",
+      "sha256": "3cd43120f57b3859ecb92b6f11c2af3617a9d3d0e8386fdff9a9001609d8740b",
+      "bytes": 292
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/shared-type-diagnostics.json",
+      "mtime": "2026-09-12T05:36:26.172841+00:00",
+      "sha256": "04ad7485482dd1bd0d70d796e25b9f138f3ca2f3b4f1577125a12a916d0a60ff",
+      "bytes": 1273
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/source-before.json",
+      "mtime": "2026-09-11T23:54:07.366158+00:00",
+      "sha256": "193cf9dd9ef2d0915bb7bcaa014d926b6e757fa9d133e18731b4b69d06075a77",
+      "bytes": 17014
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/source-before.json.gz",
+      "mtime": "2026-09-11T23:54:07.457663+00:00",
+      "sha256": "110dc27342aaac56eaab25f7b2ff8ca968f52548c25615673602d665f97af73a",
+      "bytes": 682839
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/step2-source.diff",
+      "mtime": "2026-09-12T05:40:41.201692+00:00",
+      "sha256": "dd2c58479cbbab96fa7b39f7f0a08ffd34babdbd98bbc2a4875380bd4378e0b8",
+      "bytes": 104708
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/types-current.log",
+      "mtime": "2026-09-12T00:08:30.364265+00:00",
+      "sha256": "57e5e918480cab3f60ef674e254d36adb3fadb9ca2a4fee15190775357069849",
+      "bytes": 599
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/types-final.log",
+      "mtime": "2026-09-12T05:34:23.152255+00:00",
+      "sha256": "4f06524bda7aacf4ae6b8021d21e495de9cd09cfb315c57b2bfc9bfafafff2a2",
+      "bytes": 972
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/types-first.log",
+      "mtime": "2026-09-12T00:03:47.473574+00:00",
+      "sha256": "0f20c3f663e6a078e08190d830b5532d5703690f8956f18e4b7093296281732c",
+      "bytes": 2613
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/web-scope-tests.json",
+      "mtime": "2026-09-12T05:21:09.056700+00:00",
+      "sha256": "e182ed166a0749147a52cf24857c96b091bbeb6a07c36eaf4366f7da044965e9",
+      "bytes": 12078
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/web-types.log",
+      "mtime": "2026-09-12T00:13:11.807694+00:00",
+      "sha256": "8db768cef0dfdfc367e5d0f1f6a7aa50195d3a68aad998ee342d5ecfc9aa4421",
+      "bytes": 285
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step2/wire-before.json",
+      "mtime": "2026-09-12T00:21:34.439737+00:00",
+      "sha256": "84cbab428c94ec9827518860a070b3cd49153e945f3a1ec90671ea89563ca6ec",
+      "bytes": 59346
+    },
+    {
+      "file": "docs/catalog-redesign-sessions/session-02-presets-integration/submission-contract.patch",
+      "mtime": "2026-09-12T00:32:37.248426+00:00",
+      "sha256": "040e546e01891187b595c48ef72493adf3942e612388b268eabf3953e8eb618d",
+      "bytes": 2491
+    },
+    {
+      "file": "docs/pes-claims.md",
+      "mtime": "2026-09-12T05:43:15.463025+00:00",
+      "sha256": "9012e5d4e578acbc9ff24434afe6ea284a1009903202cba5589894f82a3ef04f",
+      "bytes": 3581771
+    },
+    {
+      "file": "packages/database/prisma/migrations/20260912_lx2_marketplace_languages/migration.sql",
+      "mtime": "2026-09-11T23:55:08.249874+00:00",
+      "sha256": "8dfcd3d7294caf7f7cf1b28b1d24bf757aa9160a06321f66e01a855af67d37ad",
+      "bytes": 501
+    },
+    {
+      "file": "packages/database/prisma/schema.prisma",
+      "mtime": "2026-09-11T23:59:17.707122+00:00",
+      "sha256": "fc514d0c26cd3b2fc7f3e5eea792a3ce5d91f420ce4671178bbfde75824cf209",
+      "bytes": 855799
+    }
+  ]
+}

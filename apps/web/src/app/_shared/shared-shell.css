@@ -450,7 +450,7 @@ body:has(.h10-shell),
   --nds-border-subtle: var(--nds-grey-150);
   --nds-danger-soft: var(--nds-red-soft);
   --nds-danger-strong: #a3211a;
-  --nds-danger-text: #9c2f2a;
+  --nds-danger-text: #7d2621;
   --nds-imgup-drag: #e9f2ff;
   --nds-imgup-surface: #f7faff;
   --nds-info-soft: var(--nds-blue-100);
@@ -474,7 +474,7 @@ body:has(.h10-shell),
   --nds-primary-soft: var(--nds-blue-100);
   --nds-rail-bg: var(--nds-rail-surface);
   --nds-rail-border: var(--nds-rail-line);
-  --nds-rail-chev: #98a2b3;
+  --nds-rail-chev: var(--nds-grey-450);
   --nds-rail-chip-active-bg: #dce8fb;
   --nds-rail-chip-active-fg: #1f6fde;
   --nds-rail-chip-bg: #e8ebf0;
@@ -488,7 +488,7 @@ body:has(.h10-shell),
   --nds-stale-text: var(--nds-warning-text);
   --nds-success-soft: var(--nds-green-soft);
   --nds-success-strong: var(--nds-green-700);
-  --nds-success-text: #146034;
+  --nds-success-text: #0b4b28;
   --nds-surface: var(--nds-white);
   --nds-surface-hover: var(--nds-grey-75);
   --nds-surface-raised: var(--nds-grey-25);
@@ -505,7 +505,7 @@ body:has(.h10-shell),
   --nds-text-strong: var(--nds-grey-700);
   --nds-warning-soft: #fff6e8;
   --nds-warning-strong: var(--nds-amber-700);
-  --nds-warning-text: #6d3f10;
+  --nds-warning-text: #653a0f;
   --nds-wash-primary: var(--nds-blue-50);
 
   /* GDS grid aliases (design-system/tokens/grid.ts). Same trap as the entries above: a `var(X)`
@@ -569,7 +569,7 @@ body:has(.h10-shell),
      +1 on this file. */
   --nds-chrome-bg: #18263b;
   --nds-prov-ai-fg: var(--nds-purple-700);
-  --nds-prov-formula-fg: var(--nds-cyan-700);
+  --nds-prov-formula-fg: #094b5e;
   --nds-prov-inherited-fg: var(--nds-blue-700);
 
   /* 🔴 The ALIAS case (hub #597). `--nds-topbar-bg` is `var(--nds-chrome-bg)` in `:root` with NO

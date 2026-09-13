@@ -14,15 +14,26 @@ import { buildAxes } from './studio-sheet.service.js'
 
 const ebay: SheetCoordinate = { channel: 'EBAY', marketplace: 'IT', label: 'eBay · IT', inMarket: true }
 
+/**
+ * VT.1 (2026-09-13, D-VT9): `buildSheetColumns` now leads EVERY scope with the engine-owned `variation_theme`
+ * column, which belongs to no registry field and no channel spec. These assertions are about what the FIELDS and
+ * the SPECS produce, so they read the columns without it. Filtered by KIND, not by key or position, so the filter
+ * cannot silently drop a real column that happens to sort first.
+ */
+const fieldColumns = <T extends { kind?: string }>(columns: T[]): T[] => columns.filter(c => c.kind !== 'variationTheme')
+
 describe('family-owned Master', () => {
   it('keeps shared bullet points in one uncapped list while channel slots remain category-specific', () => {
-    const { columns } = buildSheetColumns({ familySchema: true, fields: [{ id: 'bulletPoints', label: 'Bullet points', type: 'text', category: 'content', editable: true }], coordinates: [], scopeKind: 'master' })
+    const { columns: all } = buildSheetColumns({ familySchema: true, fields: [{ id: 'bulletPoints', label: 'Bullet points', type: 'text', category: 'content', editable: true }], coordinates: [], scopeKind: 'master' })
+    const columns = fieldColumns(all)
     expect(columns).toHaveLength(1)
     expect(columns[0]).toMatchObject({ key: 'bulletPoints', shape: 'list', cardinality: { min: 0, max: null } })
+    // and the engine column is there exactly once, on master too
+    expect(all.filter(c => c.kind === 'variationTheme')).toHaveLength(1)
   })
   it('keeps localized family keys canonical and closed lists strict', () => {
-    const { columns } = buildSheetColumns({ familySchema: true, fields: [{ id: 'attr_finish', label: 'Finish', category: 'category', type: 'select', options: ['matte', 'gloss'], localizable: true, editable: true }], coordinates: [], scopeKind: 'master' })
-    expect(columns[0]).toMatchObject({ key: 'finish', storage: 'localizedContent', mode: 'strict' })
+    const { columns: all } = buildSheetColumns({ familySchema: true, fields: [{ id: 'attr_finish', label: 'Finish', category: 'category', type: 'select', options: ['matte', 'gloss'], localizable: true, editable: true }], coordinates: [], scopeKind: 'master' })
+    expect(fieldColumns(all)[0]).toMatchObject({ key: 'finish', storage: 'localizedContent', mode: 'strict' })
   })
   it('keeps shared definitions and historical values without importing Amazon requirements', () => {
     const amazon: SheetCoordinate = { ...ebay, channel: 'AMAZON', label: 'Amazon · IT' }
@@ -32,10 +43,11 @@ describe('family-owned Master', () => {
       { id: 'attr_lining', label: 'Lining', type: 'text', category: 'category', group: { key: 'master:attributes', label: 'Specifications' }, scope: 'per_variant', editable: true },
       ...savedAttributeFields([{ discontinued_detail: 'retained', variations: { Size: 'L' } }]),
     ], specs: [{ coordinate: amazon, spec }], coordinates: [amazon], scopeKind: 'master' })
-    expect(columns.map(c => c.key)).toEqual(['name', 'lining', 'discontinued_detail'])
-    expect(columns[0].requiredBy).toEqual(['Master'])
-    expect(columns[1].scope).toBe('per_variant')
-    expect(columns[2].group).toBe('Additional saved attributes')
+    const fields = fieldColumns(columns)
+    expect(fields.map(c => c.key)).toEqual(['name', 'lining', 'discontinued_detail'])
+    expect(fields[0].requiredBy).toEqual(['Master'])
+    expect(fields[1].scope).toBe('per_variant')
+    expect(fields[2].group).toBe('Additional saved attributes')
   })
 
   it('preserves structured historical values without offering a destructive scalar edit', () => {
@@ -86,9 +98,10 @@ describe('category-specific channel rules', () => {
   it('keeps category selection available before any Amazon definition is loaded', () => {
     const coordinate: SheetCoordinate = { ...ebay, channel: 'AMAZON', label: 'Amazon · IT' }
     const { columns } = buildSheetColumns({ fields: [], coordinates: [coordinate], scopeKind: 'channel', specs: [{ coordinate, spec: amazonClassificationSpec('IT') }] })
-    expect(columns[0].key).toBe('productType')
-    expect(columns[0].writeField).toBe('attr_productType')
-    expect(columns[0].storage).toBe('listing')
+    const first = fieldColumns(columns)[0]
+    expect(first.key).toBe('productType')
+    expect(first.writeField).toBe('attr_productType')
+    expect(first.storage).toBe('listing')
   })
 
   it('retains scalar number and boolean types, including zero and false', () => {

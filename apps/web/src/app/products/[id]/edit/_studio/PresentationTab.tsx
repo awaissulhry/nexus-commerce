@@ -133,7 +133,7 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
         <dl className={styles.facts}>
           <div><dt>Account</dt><dd>{accountLabel}</dd></div>
           <div><dt>Market</dt><dd>{market}</dd></div>
-          <div><dt>eBay item</dt><dd>{row?.listing?.externalListingId || 'Not published'}</dd></div>
+          <div><dt>eBay item</dt><dd>{row?.listing == null ? 'No listing record here' : row.listing.externalListingId == null ? 'No eBay item number recorded' : row.listing.externalListingId === '' ? 'The recorded eBay item number is empty' : row.listing.externalListingId}</dd></div>
         </dl>
       </div>
     </Card>}
@@ -174,7 +174,7 @@ function EbayPresentation({ market, mode }: { market: string; mode: 'description
       </div>
       <Card header={<span role="heading" aria-level={2} className={styles.sectionTitle}>Buyer preview</span>} headerAction={<Button disabled={busy || previewing} onClick={() => setRefresh(n => n + 1)}>Refresh</Button>}>
         <div className={styles.stack}>
-          <p>{selectedAlias?.label || 'Primary listing'} · {accountLabel} · {market}</p>
+          <p>{selectedAlias?.label == null || selectedAlias.label === '' ? 'Listing alias label not reported' : selectedAlias.label} · {accountLabel} · {market}</p>
           {previewing && <ProgressBar indeterminate ariaLabel="Rendering description preview" />}
           {preview && <>
             <p role="status">{preview.stale ? preview.reasons.join(' · ') : 'Matches the recorded description publication.'}</p>

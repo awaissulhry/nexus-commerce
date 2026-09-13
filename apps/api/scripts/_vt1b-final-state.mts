@@ -1,0 +1,10 @@
+import '../src/env.js'
+const { default: p } = await import('../src/db.js')
+const l = await p.channelListing.findMany({ where: { product: { sku: { startsWith: 'VX-TEST-3AX' } } }, select: { channel: true, marketplace: true, variationTheme: true, externalListingId: true, listingStatus: true } })
+console.log('VX-TEST-3AX listings:', l.length, '| rows carrying a theme:', l.filter(x => x.variationTheme !== null).length, '| rows with an external id:', l.filter(x => x.externalListingId).length, '| statuses:', JSON.stringify([...new Set(l.map(x => x.listingStatus))]))
+const g = await p.channelListing.findFirst({ where: { product: { sku: 'GALE-JACKET' }, channel: 'AMAZON', marketplace: 'IT' }, select: { variationTheme: true, version: true, externalListingId: true } })
+console.log('GALE AMAZON/IT:', JSON.stringify(g))
+const mk = await p.marketplace.findFirst({ where: { channel: 'AMAZON', code: 'IT' }, select: { updatedAt: true } })
+const ov = await p.$queryRawUnsafe<Array<{ md5: string; keys: number; hasRule: boolean }>>(`SELECT md5(("schemaMapping"->'byProductType'->'AUTO_ACCESSORY')::text) md5, (SELECT count(*)::int FROM jsonb_object_keys("schemaMapping"->'byProductType'->'AUTO_ACCESSORY')) keys, ("schemaMapping" ? 'variationsByProductType') "hasRule" FROM "Marketplace" WHERE channel='AMAZON' AND code='IT'`)
+console.log('AMAZON/IT mapping:', JSON.stringify(ov[0]), '(expect md5 fab5f685ad1abac6bbd2ceb37855dc27, 65 keys, hasRule false)')
+await p.$disconnect()

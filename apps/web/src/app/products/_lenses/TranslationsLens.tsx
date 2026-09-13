@@ -32,20 +32,35 @@ import { Card } from '@/components/ui/Card'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { getBackendUrl } from '@/lib/backend-url'
+import { sharedContentAddress } from '@nexus/shared/content-language'
+import { flattenGrouped, primaryLanguageFrom } from '../[id]/edit/_studio/scopes'
+import type { MarketplaceLite } from '../[id]/edit/_studio/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/i18n/use-translations'
 import { type ProductRow } from '../_types'
 
-// Marketplace code per locale — bulk-generate endpoint takes
-// marketplace, internally resolves to language via the
-// translation-resolver service. Map matches the API's
-// LANGUAGE_FOR_MARKETPLACE table (IT→it, DE→de, etc.).
-const MARKETPLACE_FOR_LOCALE: Record<string, string> = {
-  it: 'IT',
-  en: 'UK',
-  de: 'DE',
-  fr: 'FR',
-  es: 'ES',
+/**
+ * 🔴 LX.FIN (R-LX-25) — the locale→marketplace LITERAL that used to sit here is gone.
+ *
+ * It was a market fact invented on a page, and `Marketplace.languages` is the only authority
+ * (design §4 / the `check-market-languages` gate). Worse, it was wrong in a way nobody could see:
+ * `POST /api/products/ai/bulk-generate` derives its target language from the MARKETPLACE
+ * (`languageForMarketplace(marketplace, 'AMAZON')`) and then refuses any write whose
+ * `contentAddress` disagrees with it, so a map that drifted from the table by one row would write
+ * German text under an Italian address, or be refused with a sentence about an address the page
+ * never sent.
+ *
+ * Now the pair comes from the workspace's own `GET /api/marketplaces/grouped` — the same endpoint
+ * and the same `flattenGrouped` / `primaryLanguageFrom` readers the studio scope bar uses, so there
+ * is one answer to "which market carries this language" in the application.
+ */
+let groupedPromise: Promise<{ markets: MarketplaceLite[]; primaryLanguage: string | null } | null> | null = null
+function marketAuthority() {
+  groupedPromise ??= fetch(`${getBackendUrl()}/api/marketplaces/grouped`, { credentials: 'include' })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((body) => (body ? { markets: flattenGrouped(body), primaryLanguage: primaryLanguageFrom(body) } : null))
+    .catch(() => null)
+  return groupedPromise
 }
 
 // Active locale set. Move to BrandSettings when configurability
@@ -150,6 +165,28 @@ export function TranslationsLens({
         return
       }
 
+      /**
+       * 🔴 LX.FIN (R-LX-25) — the address and the market, DERIVED, and the verb refuses rather than
+       * guessing. Measured before this fix on 2026-09-13 through the shared validator the route runs
+       * (`products-ai.routes.ts:128`): this body carried no `contentAddress` at all and every press
+       * answered **400 "Content needs a ContentAddress before it can be saved."** — the verb had been
+       * inert since the router landed, and the toast said only "HTTP 400".
+       */
+      const authority = await marketAuthority()
+      /* The route resolves the language as `languageForMarketplace(marketplace, 'AMAZON')`, so the
+         market has to be one AMAZON actually carries — a market picked from another channel would
+         resolve to a different language and the generated text would land under the wrong one. */
+      const market = (authority?.markets ?? []).find(
+        (m) => m.channel === 'AMAZON' && m.languages?.[0]?.toLowerCase() === translateLocale.toLowerCase(),
+      )
+      if (!authority || !market) {
+        toast.error(
+          authority
+            ? `No active marketplace sells in ${translateLocale.toUpperCase()} — nothing was sent.`
+            : 'The marketplace table could not be read, so nothing was sent.',
+        )
+        return
+      }
       const res = await fetch(
         `${getBackendUrl()}/api/products/ai/bulk-generate`,
         {
@@ -158,7 +195,8 @@ export function TranslationsLens({
           body: JSON.stringify({
             productIds: candidates,
             fields: ['title', 'description', 'bullets', 'keywords'],
-            marketplace: MARKETPLACE_FOR_LOCALE[translateLocale] ?? 'IT',
+            marketplace: market.code,
+            contentAddress: sharedContentAddress(translateLocale, authority.primaryLanguage),
           }),
         },
       )

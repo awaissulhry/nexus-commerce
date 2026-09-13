@@ -28,7 +28,8 @@ import { recascadeAfterSyncControlChange } from '../services/stock-movement.serv
 import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
 import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
 import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
-import { closeMarketOffers, reopenMarketOffers } from '../services/amazon-market-offer.service.js'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../services/amazon-market-offer.service.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
 import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
@@ -571,7 +572,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     }
   }
 
-  interface ListingTarget { productId: string; channel: string; marketplace: string }
+  interface ListingTarget extends ListingCoordinate {}
   interface MembershipTarget { itemId: string; marketplace: string; sku: string }
 
   app.post('/stock/sync-control/actions', async (request, reply) => {
@@ -596,7 +597,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
       expandEuAligned?: boolean
     }
     const actor = actorOf(request as never)
-    const listings = body.listings ?? []
+    const listings = [...(body.listings ?? [])]
     const memberships = body.memberships ?? []
     if (!body.action) return reply.code(400).send({ error: 'action required' })
     const result: {
@@ -610,6 +611,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
     // failure (the old handler returned Fastify's naked 'Internal Server
     // Error' — the P2028 incident shipped zero information to the operator).
     try {
+      listings.forEach(whereCoordinate)
       if (body.masterIds?.length) {
         // SCD.4 — expand each selected group SERVER-side to every master folded
         // into it. Previously this trusted the client to send memberMasterIds,
@@ -634,7 +636,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         const [cls, mems] = await Promise.all([
           prisma.channelListing.findMany({
             where: { productId: { in: pids }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
-            select: { productId: true, channel: true, marketplace: true },
+            select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true },
           }),
           prisma.sharedListingMembership.findMany({
             where: { productId: { in: pids }, status: 'ACTIVE' },
@@ -681,7 +683,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
         const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
         const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
         if (LISTING_LANE.includes(body.action)) {
-          for (const c of clsT) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
+          for (const c of clsT) listings.push(c)
         }
         if (SHARED_LANE.includes(body.action)) {
           for (const m of memsT) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
@@ -712,21 +714,22 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           const euRows = await prisma.channelListing.findMany({
             where: { productId: { in: pids }, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
             select: {
-              productId: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
+              productId: true, channel: true, channelConnectionId: true, aliasKey: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
               quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true,
               product: { select: { sku: true } },
             },
           })
+          const euKey = (r: { productId: string; channelConnectionId: string | null; aliasKey: string }) => JSON.stringify([r.productId, r.channelConnectionId, r.aliasKey])
           const targetsByPid = new Map<string, Set<string>>()
           for (const t of euTargets) {
-            const set = targetsByPid.get(t.productId) ?? new Set<string>()
+            const set = targetsByPid.get(euKey(t)) ?? new Set<string>()
             set.add(t.marketplace.toUpperCase())
-            targetsByPid.set(t.productId, set)
+            targetsByPid.set(euKey(t), set)
           }
           const conflictedPids: string[] = []
           for (const [pid, mkts] of targetsByPid) {
             const prodRows = euRows
-              .filter((r) => r.productId === pid)
+              .filter((r) => euKey(r) === pid)
               .map((r) => ({
                 marketplace: r.marketplace,
                 followMasterQuantity: r.followMasterQuantity,
@@ -741,21 +744,21 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           }
           if (conflictedPids.length > 0) {
             // The extra rows the TRUE (EU-wide) action covers.
-            const additions: Array<{ productId: string; channel: string; marketplace: string }> = []
+            const additions: ListingTarget[] = []
             const previews: Array<{ sku: string; addedMarkets: string[] }> = []
             for (const pid of conflictedPids) {
               const targeted = targetsByPid.get(pid) ?? new Set<string>()
               const extra = euRows.filter(
-                (r) => r.productId === pid && r.fulfillmentMethod !== 'FBA' &&
+                (r) => euKey(r) === pid && r.fulfillmentMethod !== 'FBA' &&
                   // SCT.6 — NEVER expand into a CLOSED market: consenting to an
                   // EU-wide quantity action must not reopen a closed offer.
                   !r.offerClosedAt &&
                   AMAZON_EU_SHARED_MARKETS.has(r.marketplace.toUpperCase()) &&
                   !targeted.has(r.marketplace.toUpperCase()),
               )
-              for (const r of extra) additions.push({ productId: pid, channel: 'AMAZON', marketplace: r.marketplace })
+              for (const r of extra) additions.push({ productId: r.productId, channel: 'AMAZON', marketplace: r.marketplace, channelConnectionId: r.channelConnectionId, aliasKey: r.aliasKey })
               previews.push({
-                sku: euRows.find((r) => r.productId === pid)?.product?.sku ?? pid,
+                sku: euRows.find((r) => euKey(r) === pid)?.product?.sku ?? pid,
                 addedMarkets: [...new Set(extra.map((r) => r.marketplace.toUpperCase()))],
               })
             }
@@ -813,7 +816,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
               result.unchanged += targets.length
               continue
             }
-            const svcTargets = targets.map((t) => ({ productId: t.productId, marketplace: t.marketplace }))
+            const svcTargets = targets
             const r = body.action === 'CLOSE_OFFER'
               ? await closeMarketOffers({ targets: svcTargets, actor })
               : await reopenMarketOffers({ targets: svcTargets, actor })
@@ -845,7 +848,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
           if (body.action === 'FOLLOW' || body.action === 'PIN') {
             const r = await setFollowMasterQuantity({
-              productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor,
+              productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor, coordinates: targets,
             })
             result.updated += r.updated
             result.skippedFba += r.skippedFba
@@ -872,7 +875,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
 
           if (body.action === 'BUFFER') {
             const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
-            const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor })
+            const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor, coordinates: targets })
             result.updated += r.updated
             result.skippedFba += r.skippedFba
             if (r.error) {
@@ -894,16 +897,16 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
           // PAUSE / RESUME / ZERO_PIN — resolve rows, fail-closed FBA exclusion.
           const rows = await prisma.channelListing.findMany({
             where: {
-              OR: targets.map((t) => ({ productId: t.productId, channel: t.channel, marketplace: t.marketplace })),
+              OR: targets.map(whereCoordinate),
             },
             select: {
-              id: true, productId: true, channel: true, marketplace: true, region: true,
-              externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true,
+              id: true, productId: true, channel: true, marketplace: true, region: true, channelConnectionId: true, aliasKey: true,
+              externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true, platformAttributes: true,
               product: { select: { fulfillmentMethod: true, sku: true } },
             },
           })
           const eligible = rows.filter((r) => {
-            const fba = r.fulfillmentMethod === 'FBA' || (r.fulfillmentMethod == null && r.product?.fulfillmentMethod === 'FBA') || r.product?.fulfillmentMethod === 'FBA'
+            const fba = isFbaCoordinate(r)
             if (fba) result.skippedFba++
             return !fba
           })
@@ -912,7 +915,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             const ids = eligible.filter((r) => !r.syncPaused).map((r) => r.id)
             result.unchanged += eligible.length - ids.length
             if (ids.length) {
-              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: true } })
+              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: true } })
               result.updated += u.count
             }
             await audit(eligible.map((r) => ({
@@ -923,7 +926,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
             result.unchanged += eligible.length - ids.length
             if (ids.length) {
-              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: false } })
+              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: false } })
               result.updated += u.count
               for (const r of eligible) if (r.syncPaused) recascadeProducts.add(r.productId)
             }
@@ -938,7 +941,7 @@ export default async function syncControlRoutes(app: FastifyInstance): Promise<v
             // sequential round-trips made a 500-row Zero & Pin needlessly slow.
             if (eligible.length) {
               const u = await prisma.channelListing.updateMany({
-                where: { id: { in: eligible.map((r) => r.id) } },
+                where: { OR: eligible.map(r => ({ id: r.id, ...whereCoordinate(r) })) },
                 data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING' },
               })
               result.updated += u.count

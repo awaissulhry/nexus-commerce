@@ -17,12 +17,33 @@
  */
 
 import prisma from '../db.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
 import { logger } from '../utils/logger.js'
-import { tryResolveConnection } from './connection-resolver.service.js'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+
+/** Full reads let the terminal-intent check take effect when PR.5 adds the
+ * column; today's schema has no endedAt. Conservatively skip every ENDED row. */
+function terminal(row: { listingStatus?: string; presenceIntent?: string; endedAt?: unknown }): boolean {
+  return row.listingStatus === 'ENDED' || !!row.endedAt || ['ENDED', 'DISCONTINUED', 'RELEASED'].includes(row.presenceIntent ?? '')
+}
+
+export async function backfillListingIdentity(coordinate: ListingCoordinate, itemId: string): Promise<number> {
+  const where = { ...whereCoordinate(coordinate), externalListingId: null }
+  const row = await prisma.channelListing.findFirst({ where })
+  if (!row || terminal(row)) return 0
+  const updated = await prisma.channelListing.updateMany({
+    where: { ...where, id: row.id, listingStatus: row.listingStatus,
+      ...('presenceIntent' in row ? { presenceIntent: row.presenceIntent } : {}),
+    },
+    data: { externalListingId: itemId },
+  })
+  return updated.count
+}
 
 export interface LabelGuardSummary {
+  refusals: Array<{ marketplace: string; itemId: string; code: string; sentence: string }>
   checked: number
   set: number
   kept: number
@@ -74,24 +95,19 @@ export async function relinkNullPoolMemberships(): Promise<{ scanned: number; re
 }
 
 export async function ensureListingLabels(scope?: Array<{ marketplace: string; itemId: string }>): Promise<LabelGuardSummary> {
-  const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0 }
-
-  // MAP.3 — DECLARED. The optional `scope` argument names items, not an account.
-  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
-  if (!conn) return summary
-  const token = await ebayAuthService.getValidToken(conn.id)
+  const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0, refusals: [] }
 
   const scopeItemIds = scope?.length ? new Set(scope.map((s) => s.itemId)) : null
 
-  let targets: Array<{ marketplace: string; itemId: string; parentSku: string; lane: 'membership' | 'cl' }>
+  let targets: Array<{ marketplace: string; itemId: string; parentSku: string; channelConnectionId: string | null; lane: 'membership' | 'cl' }>
   const groups = await prisma.sharedListingMembership.groupBy({
-    by: ['marketplace', 'itemId', 'parentSku'],
+    by: ['marketplace', 'itemId', 'parentSku', 'channelConnectionId'],
     where: scope?.length
-      ? { OR: scope.map((s) => ({ marketplace: s.marketplace.toUpperCase(), itemId: s.itemId })) }
-      : {},
+      ? { status: 'ACTIVE', OR: scope.map((s) => ({ marketplace: s.marketplace.toUpperCase(), itemId: s.itemId })) }
+      : { status: 'ACTIVE' },
   })
   targets = groups
-    .map((g) => ({ marketplace: g.marketplace, itemId: g.itemId, parentSku: g.parentSku ?? '', lane: 'membership' as const }))
+    .map((g) => ({ marketplace: g.marketplace, itemId: g.itemId, parentSku: g.parentSku ?? '', channelConnectionId: g.channelConnectionId, lane: 'membership' as const }))
     // numeric parentSku = the pre-S6 first-touch fallback — not a real label
     .filter((t) => t.parentSku && !/^\d+$/.test(t.parentSku))
 
@@ -104,12 +120,10 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
   )
   const laneACls = await prisma.channelListing.findMany({
     where: { channel: 'EBAY', externalListingId: { not: null }, product: { deletedAt: null, parentId: null } },
-    select: {
-      externalListingId: true, marketplace: true, region: true,
-      product: { select: { sku: true, productType: true } },
-    },
+    include: { product: { select: { sku: true, productType: true } } },
   })
   for (const cl of laneACls) {
+    if (terminal(cl)) continue
     const itemId = String(cl.externalListingId ?? '').trim()
     if (!itemId || !/^\d+$/.test(itemId)) continue // empty/junk ItemIDs never reach GetItem
     if (memberItemIds.has(itemId)) continue // membership target already covers it
@@ -122,6 +136,7 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
       itemId,
       parentSku: sku,
       lane: 'cl',
+      channelConnectionId: cl.channelConnectionId,
     })
     if (cl.product?.productType === 'EBAY_LISTING_SHELL') {
       // A shell bound to a live listing with ZERO memberships = half-adopted:
@@ -146,14 +161,15 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
           select: { id: true },
         })
         if (!parentProduct) continue
-        const updated = await prisma.channelListing.updateMany({
-          where: {
-            productId: parentProduct.id, channel: 'EBAY',
-            OR: [{ marketplace: t.marketplace }, { region: t.marketplace }],
-            externalListingId: null,
-          },
-          data: { externalListingId: t.itemId },
+        if (!t.channelConnectionId) continue // never guess a primary account
+        const candidates = await prisma.channelListing.findMany({
+          where: { productId: parentProduct.id, channel: 'EBAY', marketplace: t.marketplace, channelConnectionId: t.channelConnectionId },
+          take: 2,
         })
+        // Memberships have no alias field: only an unambiguous stored row can
+        // provide that level. Even a terminal sibling makes this ambiguous.
+        if (candidates.length !== 1) continue
+        const updated = { count: await backfillListingIdentity(candidates[0], t.itemId) }
         if (updated.count > 0) {
           summary.clLinked += updated.count
           logger.info('ebay-label-guard: backfilled CL externalListingId from membership', { itemId: t.itemId, parentSku: t.parentSku })
@@ -163,8 +179,31 @@ export async function ensureListingLabels(scope?: Array<{ marketplace: string; i
   }
 
   for (const t of targets) {
+    const refuse = (code: string, sentence: string) => {
+      summary.failed++
+      summary.refusals.push({ marketplace: t.marketplace, itemId: t.itemId, code, sentence })
+    }
+    if (!t.channelConnectionId) { refuse('PUSH_CONTROL_UNAVAILABLE', 'The owning account is unknown; label repair was not sent.'); continue }
     summary.checked++
+    let controls
     try {
+      // An ItemID can be shared by several product coordinates. Every owning
+      // row must allow this push; no primary-account fallback or empty control.
+      controls = await prisma.channelListing.findMany({ where: {
+        channel: 'EBAY', externalListingId: t.itemId,
+        channelConnectionId: t.channelConnectionId, marketplace: t.marketplace.toUpperCase(),
+      } })
+      controls.forEach(whereCoordinate)
+    } catch {
+      refuse('PUSH_CONTROL_UNAVAILABLE', 'Listing controls could not be read; label repair was not sent.')
+      continue
+    }
+    if (!controls.length) { refuse('PUSH_CONTROL_UNAVAILABLE', 'No owning listing controls were found; label repair was not sent.'); continue }
+    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null)
+    if (locked) { refuse(locked.code, locked.sentence); continue }
+    if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
+    try {
+      const token = await ebayAuthService.getValidToken(t.channelConnectionId)
       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${t.itemId}</ItemID><OutputSelector>Item.SKU</OutputSelector></GetItemRequest>`,
         { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })

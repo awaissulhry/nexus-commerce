@@ -27,6 +27,21 @@ import { emitUncoveredColumns, applyDeepValue, type DeepFieldSpec } from './flat
 import { extractConditionalFields } from '../listing-wizard/conditional-requirements.js'
 import { amazonMarketplaceId } from '../categories/marketplace-ids.js'
 import { buildListingScopeWhere, type ListingScope } from '../flat-file/listing-scope.js'
+import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
+import { closedMarketSet } from '../amazon-market-offer.service.js'
+import { whereCoordinate } from '../../lib/listing-coordinate.js'
+
+/** PR-PRESENCE-SANCTIONED-PAIR: offerActive:false => skip_offer:true is the ONE
+ * sanctioned two-flag pairing. Acknowledged close owns offerClosedAt + offerActive;
+ * a flat-file save/submit cannot clear suppression while any push lock remains. */
+export function applyAmazonOfferPushLock(listing: (PushLockListing & { offerActive?: boolean | null }) | null,
+  attributes: Record<string, any>, marketplaceId: string, closed = false) {
+  const refusal = assertPushAllowed(listing)
+    ?? (closed ? assertPushAllowed({ offerClosedAt: 'closed' }) : null)
+  if (refusal || listing?.offerActive === false) attributes.skip_offer = [{ value: true, marketplace_id: marketplaceId }]
+  else if (attributes.skip_offer === undefined) attributes.skip_offer = [{ value: false, marketplace_id: marketplaceId }]
+  return refusal
+}
 
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -1378,6 +1393,8 @@ export function applySnapshotOverlay(
     _isNew: false,
     _status: 'idle',
     _listingId: liveRow._listingId,
+    _channelConnectionId: liveRow._channelConnectionId,
+    _aliasKey: liveRow._aliasKey,
     _version: liveRow._version,
     _asin: liveRow._asin,
     _listingStatus: liveRow._listingStatus,
@@ -2080,6 +2097,39 @@ export class AmazonFlatFileService {
     return mergeManifestsIntoUnion(manifests, types)
   }
 
+  /** Direct feed boundary: a request's row data cannot override the current stored lock. */
+  async prepareRowsForPush(rows: FlatFileRow[], marketplace: string): Promise<{
+    rows: FlatFileRow[]; refusals: Array<{ sku: string; code: string; sentence: string }>
+  }> {
+    const mp = marketplace.toUpperCase()
+    const skus = [...new Set(rows.map(row => String(row.item_sku ?? '').trim()).filter(Boolean))]
+    const listings = await this.prisma.channelListing.findMany({ where: {
+      channel: 'AMAZON', marketplace: mp, product: { sku: { in: skus } },
+    }, include: { product: { select: { sku: true } } } })
+    const closed = await closedMarketSet([...new Set(listings.map(listing => listing.productId))])
+    const prepared: FlatFileRow[] = [], refusals: Array<{ sku: string; code: string; sentence: string }> = []
+    for (const row of rows) {
+      const sku = String(row.item_sku ?? '').trim()
+      const matches = listings.filter(listing => listing.product.sku === sku)
+      // Deliberate destructive feed operations are lifecycle work (Wave 4/5),
+      // and cannot be authorised by an ordinary push preflight.
+      if (String(row.record_action ?? '').toLowerCase() === 'delete') {
+        refusals.push({ sku, code: 'PUSH_LIFECYCLE_REFUSED', sentence: 'A permanent Amazon delete requires the listing lifecycle preflight.' })
+        continue
+      }
+      if (matches.length > 1 || row._listingId && matches[0]?.id !== row._listingId) {
+        refusals.push({ sku, code: 'PUSH_COORDINATE_AMBIGUOUS', sentence: 'Choose the exact listing account and alias before sending this row.' })
+        continue
+      }
+      const listing = matches[0]
+      const refusal = assertPushAllowed(listing)
+        ?? (listing && closed.has(`${listing.productId}|${mp}`) ? assertPushAllowed({ offerClosedAt: 'closed' }) : null)
+      if (refusal) { refusals.push({ sku, ...refusal }); continue }
+      prepared.push(listing?.offerActive === false ? { ...row, skip_offer: 'true' } : row)
+    }
+    return { rows: prepared, refusals }
+  }
+
   async getExistingRows(
     marketplace: string,
     productType?: string,
@@ -2135,6 +2185,13 @@ export class AmazonFlatFileService {
         orderBy: [{ parentId: 'asc' }, { sku: 'asc' }],
         take: 2000,
       })
+    }
+
+    // Removed coordinates stay excluded until an explicit re-save clears the
+    // removal service's stamp. A scoped family read must honour it too.
+    products = products.filter(product => !(product.categoryAttributes as any)?.amazonFileExcluded?.[mp])
+    for (const product of products) {
+      if (product.channelListings.length > 1) throw new Error(`Choose the exact account and alias for Amazon ${mp} ${product.sku}; this flat-file row has multiple listing identities.`)
     }
 
     // Build id→sku map so child rows can resolve parent SKU without extra queries
@@ -2324,6 +2381,8 @@ export class AmazonFlatFileService {
       // toggles so the flat file UI can show INHERITED vs OVERRIDE indicators per row.
       if (listing) {
         row._listingId = listing.id
+        row._channelConnectionId = listing.channelConnectionId
+        row._aliasKey = listing.aliasKey
         row._version = (listing as any).version ?? null
         // Expose the DB-persisted ASIN as the private _asin metadata so the
         // frontend can use it for image loading, the "open on Amazon" link, and
@@ -3195,8 +3254,12 @@ export class AmazonFlatFileService {
           const snapshot = row
             ? Object.fromEntries(Object.entries(row).filter(([k]) => !k.startsWith('_')))
             : undefined
+          const coordinateWhere = whereCoordinate({ productId: p.id, channel: 'AMAZON', marketplace: mp,
+            channelConnectionId: row?._channelConnectionId as string | null, aliasKey: row?._aliasKey as string })
+          const target = await this.prisma.channelListing.findFirst({ where: coordinateWhere, select: { id: true } })
+          if (!target || row?._listingId && row._listingId !== target.id) throw new Error(`The Amazon ${mp} listing identity changed for ${p.sku}; reload the row.`)
           await this.prisma.channelListing.updateMany({
-            where: { productId: p.id, channel: 'AMAZON', marketplace: mp },
+            where: { ...coordinateWhere, id: target.id },
             data: {
               listingStatus: 'ENDED',
               isPublished: false,
@@ -3361,6 +3424,7 @@ export class AmazonFlatFileService {
       )
     }
 
+    const closedMarkets = await closedMarketSet([...productBySku.values()].map(product => product.id))
     await Promise.allSettled(validRows.map(async (row) => {
       const sku = String(row.item_sku).trim()
       const product = productBySku.get(sku)
@@ -3407,17 +3471,11 @@ export class AmazonFlatFileService {
         // ── Upsert ChannelListing ───────────────────────────────────
         const existing = await this.prisma.channelListing.findFirst({
           where: { productId: product.id, channel: 'AMAZON', marketplace: mp },
-          select: { id: true, quantity: true, version: true, offerActive: true, platformAttributes: true },
+          // All mapped columns include syncPaused/offerClosedAt and, after Wave 2,
+          // presenceIntent; a platformAttributes key must never shadow the column.
         })
 
-        // MA.1 — when the operator has paused this market, inject skip_offer=true
-        // so Amazon suppresses the buy box without losing the listing data.
-        if (existing && existing.offerActive === false) {
-          collapsedAttrs.skip_offer = [{ value: true, marketplace_id: marketplaceId }]
-        } else if (existing?.offerActive !== false && collapsedAttrs.skip_offer === undefined) {
-          // Ensure a previously-paused listing that's now active clears skip_offer.
-          collapsedAttrs.skip_offer = [{ value: false, marketplace_id: marketplaceId }]
-        }
+        const pushRefusal = applyAmazonOfferPushLock(existing, collapsedAttrs, marketplaceId, closedMarkets.has(`${product.id}|${mp}`))
 
         const listingPayload: Record<string, any> = {
           channel: 'AMAZON',
@@ -3452,10 +3510,11 @@ export class AmazonFlatFileService {
             collapsedAttrs,
             resolveBrowseNodeId(row as Record<string, unknown>, (existing as any)?.platformAttributes),
           ),
-          syncStatus: opts.isPublished ? 'SYNCED' : 'PENDING',
+          syncStatus: pushRefusal ? 'FAILED' : opts.isPublished ? 'SYNCED' : 'PENDING',
           lastSyncedAt: new Date(),
-          lastSyncStatus: opts.isPublished ? 'SUCCESS' : null,
-          ...(opts.isPublished ? { isPublished: true, listingStatus: 'ACTIVE' } : {}),
+          lastSyncStatus: pushRefusal ? 'SKIPPED' : opts.isPublished ? 'SUCCESS' : null,
+          ...(pushRefusal ? { lastSyncError: `${pushRefusal.code}: ${pushRefusal.sentence}` } : {}),
+          ...(opts.isPublished && !pushRefusal ? { isPublished: true, listingStatus: 'ACTIVE' } : {}),
           ...((() => {
             // Link the listing to its ASIN: prefer an imported _asin, else the
             // typed Product ID column when it holds an ASIN (a relist). Barcode

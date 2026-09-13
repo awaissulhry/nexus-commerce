@@ -1,0 +1,73 @@
+[
+  {
+    "bands": [
+      {
+        "bottom": 105,
+        "class": "studio-module__yugToW__skelHeader",
+        "height": 49,
+        "left": 66,
+        "right": 1440,
+        "top": 56,
+        "width": 1374,
+        "x": 66,
+        "y": 56
+      },
+      {
+        "bottom": 145,
+        "class": "studio-module__yugToW__skelScope",
+        "height": 40,
+        "left": 66,
+        "right": 1440,
+        "top": 105,
+        "width": 1374,
+        "x": 66,
+        "y": 105
+      },
+      {
+        "bottom": 0,
+        "class": "studio-module__yugToW__skelHeader",
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "bottom": 0,
+        "class": "studio-module__yugToW__skelScope",
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "bottom": 0,
+        "class": "nds-workspace-subheader",
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "bottom": 0,
+        "class": "nds-scopebar nds-workspace-scope",
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      }
+    ],
+    "loading": ""
+  }
+]

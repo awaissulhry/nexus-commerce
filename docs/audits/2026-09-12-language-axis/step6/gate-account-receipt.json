@@ -1,0 +1,16 @@
+{
+  "at": "2026-09-13T01:30:58.675Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "userId": "lx4_gate_da778dba-6b1b-4912-a05b-dad2ba810e47",
+  "memberId": "lx4_gate_member_ed8ed5ee-9267-4ffc-bfe1-6a9e9cca7f6f",
+  "workspaceId": "nexus_legacy_workspace",
+  "role": "OPS_MANAGER",
+  "legacyRoleAssignment": true,
+  "hashAlgorithm": "argon2id",
+  "helper": "apps/api/src/lib/auth/password.ts",
+  "credentialsPersistedToFiles": false
+}

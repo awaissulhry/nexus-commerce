@@ -1,0 +1,47 @@
+{
+  "bar": {
+    "bottom": 186,
+    "height": 40,
+    "left": 67,
+    "right": 1439,
+    "top": 146,
+    "width": 1372,
+    "x": 67,
+    "y": 146
+  },
+  "clientWidth": 1372,
+  "focused": true,
+  "input": {
+    "bottom": 253.5,
+    "height": 26,
+    "left": 714.1328125,
+    "right": 1006.1328125,
+    "top": 227.5,
+    "width": 292,
+    "x": 714.1328125,
+    "y": 227.5
+  },
+  "insideBar": false,
+  "prompt": {
+    "bottom": 309.5,
+    "height": 126,
+    "left": 700.1328125,
+    "right": 1020.1328125,
+    "top": 183.5,
+    "width": 320,
+    "x": 700.1328125,
+    "y": 183.5
+  },
+  "required": {
+    "bottom": 179.5,
+    "height": 28,
+    "left": 832.2734375,
+    "right": 964.625,
+    "top": 151.5,
+    "width": 132.3515625,
+    "x": 832.2734375,
+    "y": 151.5
+  },
+  "scrollWidth": 1372,
+  "theme": "dark"
+}

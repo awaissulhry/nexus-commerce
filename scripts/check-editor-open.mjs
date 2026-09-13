@@ -86,12 +86,6 @@ const ROWS_MS = Number(process.env.EDITOR_ROWS_MS ?? 60000)
  * Column ids are the fixture's. A kind whose column is not on screen ABSTAINS loudly rather than
  * passing at 0/0 — the vacuous-green shape this programme has removed three times.
  */
-const KINDS = [
-  { kind: 'text', colId: 'name', mode: 'inline' },
-  { kind: 'longtext', colId: 'item_name', mode: 'popup' },
-  { kind: 'number', colId: 'basePrice', mode: 'inline' },
-  { kind: 'select', colId: 'status', mode: 'popup' },
-]
 /** Every gesture the ruling names. `=` is the one that must open the FORMULA popup on every kind. */
 const GESTURES = ['dblclick', 'enter', 'f2', 'type', 'equals']
 /** Both hit-points. `corner` is the fill handle — the whole defect — and is never optional. */
@@ -130,11 +124,12 @@ const CONTRACT_DOC = 'docs/2026-09-03-cell-editing-contract.md'
 /** The fixture announcement is found by TOKEN, never by section number — see the note at its use. */
 const LEDGER_DOC = 'docs/pes-claims.md'
 const FIXTURE_TOKEN = 'FIXTURE-REGISTER-B0-FLUSH'
-function readContract() {
+/* MX.G — the same parser reads the MATRIX table (its own markers), driven only on the Matrix host. */
+function readContract(markers = 'CONTRACT-TABLE') {
   let text
   try { text = readFileSync(CONTRACT_DOC, 'utf8') } catch { return { rows: null, error: `${CONTRACT_DOC} could not be read` } }
-  const seg = text.split('<!-- CONTRACT-TABLE-START -->')[1]?.split('<!-- CONTRACT-TABLE-END -->')[0]
-  if (!seg) return { rows: null, error: `no CONTRACT-TABLE markers in ${CONTRACT_DOC}` }
+  const seg = text.split(`<!-- ${markers}-START -->`)[1]?.split(`<!-- ${markers}-END -->`)[0]
+  if (!seg) return { rows: null, error: `no ${markers} markers in ${CONTRACT_DOC}` }
   const lines = seg.split('\n').map((l) => l.trim()).filter((l) => l.startsWith('|'))
   if (lines.length < 3) return { rows: null, error: `the contract table has ${lines.length} lines; expected a header, a rule and at least one row` }
   const cells = (l) => l.split('|').slice(1, -1).map((c) => c.trim())
@@ -151,12 +146,12 @@ function readContract() {
     for (let i = 0; i < gestures.length; i++) {
       /* Strip the provenance mark; it is for the reader, not the assertion. An unknown token FAILS. */
       const token = c[3 + i].replace(/[✓·]/g, '').trim()
-      if (!/^(inline|pop:text|pop:list|pop:multi|pop:measure|pop:fx|none|none\+say)$/.test(token)) {
+      if (!/^(inline|pop:value|pop:text|pop:list|pop:multi|pop:measure|pop:sale|pop:fx|none|none\+say)$/.test(token)) {
         return { rows: null, error: `unknown expectation "${c[3 + i]}" for ${c[0]}/${c[1]}/${gestures[i]}` }
       }
       expect[gestures[i]] = token
     }
-    rows.push({ kind: c[0], state: c[1], col: c[2], expect })
+    rows.push({ kind: c[0], state: c[1], col: c[2].split(',')[0].trim(), candidates: c[2].split(',').map(v => v.trim()), expect })
   }
   return { rows, gestures }
 }
@@ -172,6 +167,13 @@ function readCaps() {
   return Object.keys(caps).length ? caps : null
 }
 
+// The document owns the driving columns and modes for the four scalar editor arms too.
+const scalarContract = readContract()
+if (!scalarContract.rows) { console.error(scalarContract.error); process.exit(2) }
+const KINDS = scalarContract.rows.filter(row => row.state === 'fresh' && ['text', 'longtext', 'number', 'select'].includes(row.kind))
+  .map(row => ({ kind: row.kind, colId: row.col, expect: row.expect }))
+if (KINDS.length !== 4) { console.error('The contract must declare four fresh scalar editor rows.'); process.exit(2) }
+
 const STAMP_FILES = [
   CONTRACT_DOC,
   'apps/web/src/design-system/grid/NexusGrid.tsx',
@@ -181,6 +183,24 @@ const STAMP_FILES = [
   'apps/web/src/design-system/grid/hosts/GridSheet.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx',
   'scripts/check-editor-open.mjs',
+  'scripts/studio-browser-auth.mjs',
+  'apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx',
+  'apps/web/src/design-system/components/SourceIndicator.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheet.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetSurface.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetTab.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useProductSheetInteraction.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGeometry.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetPreferences.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGridBindings.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetChips.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/sheetChips.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetSaveStatus.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetRows.ts',
 ]
 /** `HH:MM:SS` — prefixed to every assertion line so a finding can be placed in a time window. */
 const at = () => new Date().toTimeString().slice(0, 8)
@@ -213,7 +233,14 @@ const processHeader = () => {
       return m ? { pid: Number(m[1]), ppid: Number(m[2]), args: m[3] } : null
     }).filter(Boolean)
   } catch { /* a header that cannot read the table says so below rather than claiming a quiet machine */ }
-  const gates = rows.filter((r) => r.args.startsWith('node ') && r.args.includes('check-editor-open.mjs'))
+  /* 🔴 The SESSION WRAPPER is not contention — it is this process's own launcher.
+     `scripts/studio-gate-session.mjs -- node scripts/check-editor-open.mjs --strict` carries the gate
+     command in its argv, so the string match counted it as a second gate and the header printed
+     "🔴 ANOTHER GATE IS RUNNING" about the parent that started this one. Excluded by PID (`ppid`),
+     not by the wrapper's name, so a genuine second gate launched through the wrapper is still seen. */
+  const gates = rows.filter(
+    (r) => /^(?:\S+\/)?node\s/.test(r.args) && r.args.includes('check-editor-open.mjs') && r.pid !== process.ppid,
+  )
   const gatePids = new Set(gates.map((g) => g.pid))
   /* Browsers by PARENT CHAIN to a live gate, never by the string "chrome": the Owner had 26 helper
      processes of their own browser open, which this header once reported as contention. */
@@ -351,12 +378,16 @@ const EDITOR_SEL = '.ag-cell-inline-editing, .ag-popup-editor'
 const shapeOf = () => {
   const p = document.querySelector('.ag-popup-editor')
   if (!p) return document.querySelector('.ag-cell-inline-editing') ? 'inline' : 'NONE'
-  if (p.querySelector('.nds-formula-editor')) return 'popup:formula'
+  if (p.querySelector('.nds-formula-editor [aria-label="Formula"]')) return 'popup:formula'
+  if (p.querySelector('.nds-formula-editor textarea[aria-label="Cell value"]')) return 'popup:largetext'
+  if (p.querySelector('.nds-formula-editor input[aria-label="Cell value"]')) return 'popup:value'
   if (p.querySelector('.ag-large-text-input')) return 'popup:largetext'
   /* AM.1 shapes BEFORE the listbox test: the list editor contains an option list and would read as
      the single select. Markers read from the components (`ListPanelEditor`, `MeasureEditor`). */
   if (p.querySelector('.nds-list-editor')) return 'popup:multi'
   if (p.querySelector('.nds-measure-editor')) return 'popup:measure'
+  /* MX.G — the Matrix sale editor (`SaleCellEditor`): price + two DS date fields. */
+  if (p.querySelector('.nds-matrix-sale-editor')) return 'popup:sale'
   if (p.querySelector('[role="listbox"], [class*="listbox"], [class*="Listbox"]')) return 'popup:listbox'
   return 'popup:UNCLASSIFIED:' + (p.firstElementChild?.className || '?').toString().split(' ')[0].slice(0, 24)
 }
@@ -428,7 +459,7 @@ const renderedCols = async (rowId) => {
  * resolution", 10 rows). Virtualisation means a locator cannot scroll to something that does not
  * exist — the GRID has to be moved first. Steps by ~80% of the viewport so no column is skipped.
  */
-const bringOnScreen = async (rowId, colId) => {
+const bringOnScreen = async (rowId, colId, spot = 'centre') => {
   /* 🔴 PRESENT IS NOT VISIBLE. This asked only whether the cell EXISTS, and AG renders a buffer of
      columns beyond the viewport — so it returned true for a cell sitting off the right edge, callers
      clicked at a coordinate outside the window, and the failure surfaced as "the fixture cell did
@@ -443,17 +474,17 @@ const bringOnScreen = async (rowId, colId) => {
      still be underneath it — which the run then reported as "the point is over ag-Grid-AutoColumn".
      Asking the browser what is actually at the click point answers existence, viewport clipping and
      overlay in one question, and it is the same question `fire()` asks, so the two cannot disagree. */
-  const here = async () => page.evaluate(([rid, cid]) => {
+  const here = async () => page.evaluate(([rid, cid, hitSpot]) => {
     const el = document.querySelector(`.ag-row[row-id="${rid}"] .ag-cell[col-id="${cid}"]`)
     if (!el) return false
     const r = el.getBoundingClientRect()
     if (r.width < 8 || r.height < 4) return false
-    const x = r.left + Math.min(r.width * 0.4, 30)
-    const y = r.top + r.height * 0.5
+    const x = hitSpot === 'corner' ? r.right - 3 : r.left + Math.min(r.width * 0.4, 40)
+    const y = hitSpot === 'corner' ? r.bottom - 3 : r.top + r.height * 0.5
     if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) return false
     const hit = document.elementFromPoint(x, y)
-    return !!hit && hit.closest('.ag-cell[col-id]')?.getAttribute('col-id') === cid
-  }, [rowId, colId])
+    return !!hit && (hit.closest('.ag-cell[col-id]')?.getAttribute('col-id') === cid || hit.classList.contains('ag-fill-handle'))
+  }, [rowId, colId, spot])
   if (await here()) return true
   const width = await page.evaluate(() => {
     const v = document.querySelector('.ag-grid-viewport, .ag-body-horizontal-scroll-viewport')
@@ -502,7 +533,7 @@ const armHeldSave = async (rowId) => {
     if (!e) return { ok: false, over: 'nothing (off screen?)' }
     const cellEl = e.closest('.ag-cell[col-id]')
     return { ok: !!cellEl && cellEl.getAttribute('col-id') === col, over: cellEl?.getAttribute('col-id') ?? (e.className || e.tagName).toString().split(' ')[0] }
-  }, [b.x + Math.min(b.width * 0.4, 30), b.y + b.height * 0.5, FLUSH_FIXTURE_COL])
+  }, [b.x + Math.min(b.width * 0.4, 40), b.y + b.height * 0.5, FLUSH_FIXTURE_COL])
   let ctl = await aim()
   if (!ctl.ok) {
     await page.mouse.wheel(-320, 0)
@@ -511,7 +542,7 @@ const armHeldSave = async (rowId) => {
     if (nb) { b = nb; ctl = await aim() }
   }
   if (!ctl.ok) return { ok: false, why: `the point is over ${ctl.over}, not ${FLUSH_FIXTURE_COL} — the fixture cell was never clicked` }
-  await page.mouse.dblclick(b.x + Math.min(b.width * 0.4, 30), b.y + b.height * 0.5)
+  await page.mouse.dblclick(b.x + Math.min(b.width * 0.4, 40), b.y + b.height * 0.5)
   const opened = await page.waitForFunction((s2) => document.querySelector(s2), EDITOR_SEL, { timeout: 600, polling: 'raf' }).then(() => true).catch(() => false)
   if (!opened) return { ok: false, why: `the fixture cell did not open (pointer was over ${ctl.over})` }
   const before = expectedHeld.length
@@ -519,6 +550,20 @@ const armHeldSave = async (rowId) => {
   await page.keyboard.type(`ZZGATE-FLUSH-${++flushSeq}`, { delay: 10 })
   await page.keyboard.press('Enter')
   await page.waitForTimeout(700)
+  if (expectedHeld.length === before) {
+    // LX.8: inherited/drift content has no destination until the operator chooses one.
+    const acknowledgement = page.getByRole('button', { name: /^(Edit|Write) the shared / })
+    if (await acknowledgement.count()) {
+      const pin = page.getByRole('button', { name: /^Pin on / })
+      const cancel = page.getByRole('button', { name: 'Cancel', exact: true })
+      if (!(await acknowledgement.isVisible()) || !(await pin.isVisible()) || !(await cancel.isVisible())) {
+        expectingHeldWrite = false
+        return { ok: false, why: 'the acknowledgement did not show both destinations and Cancel' }
+      }
+      await acknowledgement.click()
+      await page.waitForTimeout(700)
+    }
+  }
   if (expectedHeld.length === before) {
     expectingHeldWrite = false
     return { ok: false, why: 'no save was armed — the flush state was NOT produced' }
@@ -530,15 +575,22 @@ const load = async () => {
   inFlight = 'load'
   await page.goto(STUDIO, { waitUntil: 'domcontentloaded' })
   const ok = await page.waitForFunction(() => document.querySelectorAll('.ag-row[row-id]').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
-  if (!ok) return null
+  if (!ok) {
+    const visible = (await page.locator('body').innerText()).slice(0, 800)
+    throw new Error(`Editor rows were not rendered at ${page.url()}; visible page: ${visible}`)
+  }
   return page.evaluate(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') ?? null)
 }
 
 /** One gesture, with its positive control. Returns `{opened, shape}` or `{abstain}`. */
 async function fire(rowId, colId, gesture, spot) {
+  if (!(await bringOnScreen(rowId, colId, spot))) return { abstain: `column ${colId} could not be brought on screen` }
   const loc = page.locator(`.ag-row[row-id="${rowId}"] .ag-cell[col-id="${colId}"]`).first()
   if (!(await loc.count())) return { abstain: `column ${colId} is not on the sheet` }
-  await loc.scrollIntoViewIfNeeded().catch(() => {})
+  // Playwright's scroll waits for a stable element. Keep that layout control, then
+  // recheck the actual center/corner after any scrolling it performed.
+  if (!(await loc.scrollIntoViewIfNeeded({ timeout: 2500 }).then(() => true).catch(() => false))) return { abstain: `column ${colId} did not stabilize` }
+  if (!(await bringOnScreen(rowId, colId, spot))) return { abstain: `column ${colId} has no visible ${spot} after layout settled` }
   const b = await loc.boundingBox()
   if (!b) return { abstain: `column ${colId} has no box` }
   let x = spot === 'corner' ? b.x + b.width - 3 : b.x + Math.min(b.width * 0.4, 40)
@@ -550,7 +602,7 @@ async function fire(rowId, colId, gesture, spot) {
     const cell = e.closest('.ag-cell[col-id]')
     if (!cell) return { ok: false, why: `the point is over ${(e.className || e.tagName).toString().split(' ')[0]}, not a cell` }
     const got = cell.getAttribute('col-id')
-    return got === colId ? { ok: true, on: 'cell' } : { ok: false, why: `the point is over cell ${got}, not ${colId}` }
+    return got === colId ? { ok: true, on: 'cell', target: { tag: e.tagName, className: (e.className || '').toString(), role: e.getAttribute('role'), label: e.getAttribute('aria-label'), x, y } } : { ok: false, why: `the point is over cell ${got}, not ${colId}` }
   }, [x, y, colId])
   let ctl = await aim(x, y)
   /* 🔴 ONE re-aim, then abstain. `scrollIntoViewIfNeeded` parks a column at the viewport's left
@@ -579,7 +631,7 @@ async function fire(rowId, colId, gesture, spot) {
   const opened = await page.waitForFunction((s) => document.querySelector(s), EDITOR_SEL, { timeout: 250, polling: 'raf' })
     .then(() => true).catch(() => false)
   if (opened) await page.waitForTimeout(120)
-  return { opened, shape: opened ? await page.evaluate(shapeOf) : 'NONE', on: ctl.on }
+  return { opened, shape: opened ? await page.evaluate(shapeOf) : 'NONE', detail: { status: opened ? await page.locator('.ag-popup-editor [role="status"]').allTextContents() : [], target: ctl.target ?? ctl.on, active: await page.evaluate(() => ({ tag: document.activeElement?.tagName, role: document.activeElement?.getAttribute('role'), col: document.activeElement?.closest('.ag-cell')?.getAttribute('col-id') })) }, on: ctl.on }
 }
 
 const failures = []
@@ -655,7 +707,7 @@ for (const timing of GESTURE_TIMINGS) {
     if (timing === 'settled') await page.waitForTimeout(15000)
   }
   for (const k of KINDS) {
-    let opened = 0, n = 0, abst = 0, wrote = 0
+    let opened = 0, n = 0, abst = 0, wrote = 0, wrongMode = 0
     const shapes = new Map()
     for (let i = 0; i < REPS; i++) {
       const { gesture, spot } = plan(i)
@@ -671,11 +723,11 @@ for (const timing of GESTURE_TIMINGS) {
       if (res.abstain) { abst++; abstentions.push(`${timing}/${k.kind}/${gesture}/${spot}: ${res.abstain}`); continue }
       n++
       if (res.opened) opened++
-      else failures.push(`${timing} · ${k.kind} (${k.colId}) · ${gesture} · ${spot}${res.on === 'fill-handle' ? ' (ON THE FILL HANDLE — the 2026-09-03 P0)' : ''}: NO EDITOR within 250ms`)
+      else failures.push(`${timing} · ${k.kind} (${k.colId}) · ${gesture} · ${spot}${res.on === 'fill-handle' ? ' (ON THE FILL HANDLE — the 2026-09-03 P0)' : ''}: NO EDITOR within 250ms; detail=${JSON.stringify(res.detail)}`)
       shapes.set(res.shape, (shapes.get(res.shape) ?? 0) + 1)
       /* Ruling 2: the same column always opens the same way. `=` is always the formula popup. */
-      const want = gesture === 'equals' ? 'popup:formula' : k.mode === 'inline' ? 'inline' : k.kind === 'longtext' ? 'popup:largetext' : 'popup:listbox'
-      if (res.opened && res.shape !== want) failures.push(`${timing} · ${k.kind} · ${gesture} · ${spot}: opened ${res.shape}, expected ${want} (one editor mode per kind — ruling 2)`)
+      const want = { inline: 'inline', 'pop:value': 'popup:value', 'pop:text': 'popup:largetext', 'pop:list': 'popup:listbox', 'pop:fx': 'popup:formula' }[k.expect[gesture]]
+      if (res.opened && res.shape !== want) { wrongMode++; failures.push(`${timing} · ${k.kind} · ${gesture} · ${spot}: opened ${res.shape}, expected ${want} (one editor mode per kind — ruling 2); status=${JSON.stringify(res.detail)}`) }
       await escape_()
       await page.waitForTimeout(300) // let a debounced writer flush before we attribute
       if (armedWrites.length > before) {
@@ -684,7 +736,7 @@ for (const timing of GESTURE_TIMINGS) {
       }
     }
     results.push({ timing, kind: k.kind, colId: k.colId, opened, n, abst, wrote, shapes })
-    const bar = n > 0 && opened === n && wrote === 0 && abst === 0 ? '✅' : '❌'
+    const bar = n > 0 && opened === n && wrote === 0 && abst === 0 && wrongMode === 0 ? '✅' : '❌'
     console.log(`   ${at()} ${bar} ${k.kind.padEnd(9)} ${k.colId.padEnd(12)} opened ${String(opened).padStart(2)}/${String(n).padStart(2)}   ` +
       `${[...shapes].map(([s, c]) => `${s}×${c}`).join(' ').padEnd(30)} writes-armed ${wrote}${abst ? `   ABSTAINED ${abst}` : ''}`)
   }
@@ -712,9 +764,9 @@ if (RUN.includes('geometry')) {
   const caps = readCaps()
   /** kind → a column that opens that editor, and the gesture that opens it. */
   const GEOMETRY_TARGETS = [
-    { kind: 'longtext', colId: 'product_description', gesture: 'dblclick' },
+    { kind: 'longtext', colId: 'description', gesture: 'dblclick' },
     { kind: 'select', colId: 'status', gesture: 'dblclick' },
-    { kind: 'formula', colId: 'name', gesture: 'equals' },
+    { kind: 'formula', colId: 'description', gesture: 'equals' },
   ]
   if (!caps) {
     failures.push(`geometry: NOT MEASURED — could not read EDITOR_CAPS from ${CAPS_SOURCE}. The gate cannot assert a cap it could not read.`)
@@ -730,7 +782,7 @@ if (RUN.includes('geometry')) {
         await escape_()
         const sel = `.ag-row[row-id="${rowId}"] .ag-cell[col-id="${t.colId}"]`
         const loc = page.locator(sel).first()
-        if (!(await loc.count())) { failures.push(`geometry@${vw} · ${t.kind}: NOT MEASURED — column ${t.colId} is not on the sheet`); continue }
+        if (!(await bringOnScreen(rowId, t.colId))) { failures.push(`geometry@${vw} · ${t.kind}: NOT MEASURED — column ${t.colId} is not on the sheet`); continue }
         /* 🔴 PARK IT AGAINST THE RIGHT EDGE BY COMPUTING THE OFFSET, not by stepping blindly.
            AG VIRTUALISES COLUMNS: scrolling fully right removes `product_description` from the DOM
            altogether, and the first version of this then hung 30s on a `boundingBox()` for a cell
@@ -765,7 +817,7 @@ if (RUN.includes('geometry')) {
         const capHere = caps[t.kind]?.width ?? 0
         const binds = roomHere < capHere
         if (!binds) failures.push(`geometry@${vw} · ${t.kind}: NOT MEASURED AT THE EDGE — ${t.colId} parked at x=${Math.round(b.x)} leaves ${Math.round(roomHere)}px, which is not below the ${capHere}px cap, so the room term does not bind and this reading cannot fail.`)
-        const x = b.x + Math.min(b.width * 0.4, 30), y = b.y + b.height * 0.5
+        const x = b.x + Math.min(b.width * 0.4, 40), y = b.y + b.height * 0.5
         const aimed = await page.evaluate(([x, y, col]) =>
           document.elementFromPoint(x, y)?.closest('.ag-cell[col-id]')?.getAttribute('col-id') === col, [x, y, t.colId])
         if (!aimed) { failures.push(`geometry@${vw} · ${t.kind}: NOT MEASURED — the point is not over ${t.colId}`); continue }
@@ -780,8 +832,8 @@ if (RUN.includes('geometry')) {
           const cell = document.querySelector('.ag-cell.ag-cell-popup-editing')
           const pr = p2.getBoundingClientRect(), cr = cell?.getBoundingClientRect()
           const val = cell?.querySelector('.nds-cell-value')
-          const kind = p2.querySelector('.nds-formula-editor') ? 'formula'
-            : p2.querySelector('.ag-large-text-input') ? 'longtext'
+          const kind = p2.querySelector('.nds-formula-editor [aria-label="Formula"]') ? 'formula'
+            : p2.querySelector('.ag-large-text-input, .nds-formula-editor textarea[aria-label="Cell value"]') ? 'longtext'
             : p2.querySelector('[role="listbox"], [class*="istbox"]') ? 'select' : 'UNCLASSIFIED'
           return { inline: false, kind,
             px: Math.round(pr.x), pw: Math.round(pr.width), pright: Math.round(pr.right),
@@ -795,9 +847,9 @@ if (RUN.includes('geometry')) {
                selector has moved" three times — an assertion that cannot see its subject. It failed
                loudly rather than passing vacuously, which is the only reason it was caught. */
             ta: (() => {
-              const el = p2.querySelector('.ag-text-area-input')
+              const el = p2.querySelector('.ag-text-area-input, textarea[aria-label="Cell value"]')
               if (!el) return { found: false }
-              const outer = p2.querySelector('.ag-large-text')
+              const outer = p2.querySelector('.ag-large-text, .nds-formula-fieldwrap')
               const rr = el.getBoundingClientRect(), oo = outer?.getBoundingClientRect()
               return { found: true, resize: getComputedStyle(el).resize,
                 taH: Math.round(rr.height), outerH: oo ? Math.round(oo.height) : null }
@@ -868,10 +920,20 @@ if (RUN.includes('contract')) {
     console.log(`   ❌ ${contractError}`)
   } else {
     console.log(`   ${contractRows.length} rows × ${contractGestures.length} gestures parsed from the document`)
+    /**
+     * MX.G — the MATRIX host (`?tab=matrix`, master scope) drives the MATRIX table, not the sheet's:
+     * its columns are `<coordinateKey>.<kind>` col-ids with no `/studio/sheet` contract behind them, so
+     * `declared` is resolved from the RENDERED col-ids by kind suffix and the driving ROW from the cell's
+     * own class (`nds-cell-is-editable` for `fresh`, `nds-cell-is-locked` for `locked`). A kind the host
+     * does not render is n/a. The sheet's rows are never driven here and the Matrix rows never on a sheet.
+     */
+    const matrixContract = readContract('MATRIX-CONTRACT-TABLE')
+    if (!matrixContract.rows) failures.push(`contract MATRIX: NOT MEASURED — ${matrixContract.error}`)
     const SCOPES_TO_RUN = [
-      { key: 'master', url: STUDIO, apiQ: `scope=master&market=${MARKET}&locale=${LOCALE}` },
-      { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it`, apiQ: 'scope=channel&channel=AMAZON&market=IT&locale=it' },
-      { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it`, apiQ: 'scope=channel&channel=EBAY&market=IT&locale=it' },
+      { key: 'master', url: STUDIO, apiQ: `scope=master&market=${MARKET}&locale=${LOCALE}`, rows: contractRows },
+      { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it`, apiQ: 'scope=channel&channel=AMAZON&market=IT&locale=it', rows: contractRows },
+      { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it`, apiQ: 'scope=channel&channel=EBAY&market=IT&locale=it', rows: contractRows },
+      { key: 'MATRIX', url: `${STUDIO}&tab=matrix`, apiQ: null, matrix: true, rows: matrixContract.rows ?? [] },
     ]
     /**
      * 🔴 THE TABLE NAMES A COLUMN, THE SCOPE DECIDES WHICH ONE. `col` is the master column and is
@@ -883,23 +945,32 @@ if (RUN.includes('contract')) {
      */
     const contractsByScope = new Map()
     for (const sc of SCOPES_TO_RUN) {
-      const cols = await fetch(`${API}/api/products/${PRODUCT}/studio/sheet?${sc.apiQ}`)
-        .then((r) => (r.ok ? r.json() : null)).then((j) => j?.columns ?? null).catch(() => null)
+      if (!sc.apiQ) continue /* the Matrix host has no column contract on the sheet route */
+      /* MX.F — "could not read" must say WHY: the status the page-context fetch got, or the error it threw.
+         Three runs (17:27, 17:32, 18:19) reported NOT MEASURED on every sheet scope with the cause swallowed. */
+      const got = await page.evaluate(async url => {
+        try {
+          const response = await fetch(url, { credentials: 'include' })
+          const body = response.ok ? await response.json().catch(() => null) : null
+          return { status: response.status, cols: body?.columns ?? null, keys: body && typeof body === 'object' ? Object.keys(body).slice(0, 8) : null }
+        } catch (e) { return { status: null, cols: null, error: String(e).slice(0, 160) } }
+      }, `${API}/api/products/${PRODUCT}/studio/sheet?${sc.apiQ}`).catch((e) => ({ status: null, cols: null, error: `evaluate: ${String(e).slice(0, 160)}` }))
+      const cols = got?.cols ?? null
       contractsByScope.set(sc.key, cols)
-      if (!cols) failures.push(`contract ${sc.key}: NOT MEASURED — could not read the column contract from the API, so no column can be resolved by kind`)
+      if (!cols) failures.push(`contract ${sc.key}: NOT MEASURED — could not read the column contract from the API (HTTP ${got?.status ?? 'none'}${got?.error ? ` · ${got.error}` : ''}${got?.keys ? ` · body keys ${got.keys.join(',')}` : ''}), so no column can be resolved by kind`)
     }
     for (const scope of SCOPES_TO_RUN) {
       console.log(`\n   ── scope ${scope.key}`)
       /* `locked` / `fxblocked` need a column that is not in the landing view. Reveal it ONCE per
          scope through the one Customise dialog, exactly as an operator would. */
       let revealed = false
-      for (const row of contractRows) {
-        const needsReveal = row.state === 'locked' || row.state === 'fxblocked'
+      for (const row of scope.rows) {
+        const needsReveal = !scope.matrix && (row.state === 'locked' || row.state === 'fxblocked')
         inFlight = `contract/${scope.key}/${row.kind}/${row.state}`
         await page.goto(scope.url, { waitUntil: 'domcontentloaded' })
         const ready = await page.waitForFunction(() => document.querySelectorAll('.ag-row[row-id]').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
         if (!ready) { failures.push(`contract ${scope.key} · ${row.kind}/${row.state}: NOT MEASURED — no rows rendered`); continue }
-        const rowId = await page.evaluate(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') ?? document.querySelector('.ag-row[row-id]')?.getAttribute('row-id'))
+        let rowId = await page.evaluate(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') ?? document.querySelector('.ag-row[row-id]')?.getAttribute('row-id'))
         /* The three timing states, produced rather than waited for. */
         /* 🔴 `batch` is a 400ms sample of the FORMULA BATCH window, but the column model needs
            longer to restore — deciding "not rendered" at 400ms made two channel rows report
@@ -929,6 +1000,28 @@ if (RUN.includes('contract')) {
             if (!tick) { await page.keyboard.press('Escape'); await page.waitForTimeout(400) }
           }
         }
+        /* MX.G — the Matrix host: resolve by col-id SUFFIX and pick the row whose cell wears the state's class. */
+        if (scope.matrix) {
+          await page.waitForTimeout(1500)
+          const hit = await page.evaluate(([kind, state]) => {
+            const cls = state === 'locked' ? 'nds-cell-is-locked' : (kind === 'listing' || kind === 'syncState') ? null : 'nds-cell-is-editable'
+            for (const r of document.querySelectorAll('.ag-row[row-id]')) {
+              const cell = [...r.querySelectorAll('.ag-cell[col-id]')].find((c) => (c.getAttribute('col-id') || '').endsWith(`.${kind}`) && (!cls || c.classList.contains(cls)))
+              if (cell) return { rowId: r.getAttribute('row-id'), colId: cell.getAttribute('col-id') }
+            }
+            return null
+          }, [row.kind, row.state])
+          if (!hit) {
+            const any = await page.evaluate((kind) => [...document.querySelectorAll('.ag-header-cell[col-id]')].some((h) => (h.getAttribute('col-id') || '').endsWith(`.${kind}`)), row.kind)
+            if (!any) { console.log(`   ·  ${row.kind.padEnd(9)} ${row.state.padEnd(10)} n/a — MATRIX renders no ${row.kind} column`); continue }
+            failures.push(`contract MATRIX · ${row.kind}/${row.state}: NOT MEASURED — a ${row.kind} column is rendered but no row carries a ${row.state} cell of it`)
+            console.log(`   ${at()} ❌ ${row.kind.padEnd(9)} ${row.state.padEnd(10)} no row carries a ${row.state} ${row.kind} cell`)
+            continue
+          }
+          rowId = hit.rowId
+          contractsByScope.set(scope.key, [{ key: hit.colId, kind: row.kind, editable: row.state !== 'locked', formulaWritable: row.kind === 'price', shape: 'scalar' }])
+          row.candidates = [hit.colId]
+        }
         const scopeCols = contractsByScope.get(scope.key)
         const wantLocked = row.state === 'locked' || row.state === 'fxblocked'
         /* Which columns of this kind does this scope declare, and which are RENDERED right now? */
@@ -946,8 +1039,8 @@ if (RUN.includes('contract')) {
            made `condition_type` editable (the channel accepts it) and turned eBay's `brand` into the
            394-option "Marca" aspect; driving them by name measured a listbox against `none+say` and a
            select against `inline` — the sheet was right both times (2026-09-05 02:33). */
-        const namedOk = rendered.includes(row.col) && declared.some((c) => c.key === row.col)
-        let target = namedOk ? row.col : declared.map((c) => c.key).find((k) => rendered.includes(k)) ?? null
+        const namedTarget = row.candidates.find(key => rendered.includes(key) && declared.some(c => c.key === key))
+        let target = namedTarget ?? declared.map((c) => c.key).find((k) => rendered.includes(k)) ?? null
         const revealDiag = { ticked: 'not attempted' }
         if (!target && declared.length) {
           /* Declared but not rendered — reveal one through the ONE Customise dialog. */
@@ -1055,12 +1148,12 @@ if (RUN.includes('contract')) {
           await cell.scrollIntoViewIfNeeded().catch(() => {})
           const b = await cell.boundingBox({ timeout: 2500 }).catch(() => null)
           if (!b) { got[g] = 'NOBOX'; failures.push(`contract ${scope.key} · ${row.kind}/${row.state}/${g}: NOT MEASURED — no box`); bad++; continue }
-          let x = b.x + Math.min(b.width * 0.4, 30), y = b.y + b.height * 0.5
+          let x = b.x + Math.min(b.width * 0.4, 40), y = b.y + b.height * 0.5
           let aimed = await page.evaluate(([x, y, c]) => document.elementFromPoint(x, y)?.closest('.ag-cell[col-id]')?.getAttribute('col-id') === c, [x, y, target])
           if (!aimed) {
             await page.mouse.wheel(-320, 0); await page.waitForTimeout(220)
             const nb = await cell.boundingBox({ timeout: 2500 }).catch(() => null)
-            if (nb) { x = nb.x + Math.min(nb.width * 0.4, 30); y = nb.y + nb.height * 0.5
+            if (nb) { x = nb.x + Math.min(nb.width * 0.4, 40); y = nb.y + nb.height * 0.5
               aimed = await page.evaluate(([x, y, c]) => document.elementFromPoint(x, y)?.closest('.ag-cell[col-id]')?.getAttribute('col-id') === c, [x, y, target]) }
           }
           if (!aimed) { got[g] = 'ABSTAIN'; failures.push(`contract ${scope.key} · ${row.kind}/${row.state}/${g}: NOT MEASURED — the point is not over ${target}`); bad++; continue }
@@ -1080,7 +1173,7 @@ if (RUN.includes('contract')) {
              everywhere else. Bounded, so a genuine silence still fails rather than hanging. */
           if (opened) await page.waitForTimeout(160)
           else await page.waitForFunction(() =>
-            /read-only|cannot be edited|does not apply|per variation|not writable/i.test(
+            /read-only|cannot be edited|does not apply|per variation|not writable|calculated from.*relationship|is a fact|set with the tick|Amazon-managed|has no listing of its own|not buyable|Guard reads FBA|cannot be changed here|A formula owns this cell/i.test(
               [...document.querySelectorAll('.nds-toasts')].map((n) => n.textContent ?? '').join(' ')),
             null, { timeout: 1500, polling: 'raf' }).catch(() => {})
           const shape = opened ? await page.evaluate(shapeOf) : 'NONE'
@@ -1092,10 +1185,10 @@ if (RUN.includes('contract')) {
              separate pre-existing defect; asserted here against every host so this check measures
              the sheet rather than the DOM order of two portals. */
           const said = opened ? false : await page.evaluate(() =>
-            /read-only|cannot be edited|does not apply|per variation|not writable/i.test(
+            /read-only|cannot be edited|does not apply|per variation|not writable|calculated from.*relationship|is a fact|set with the tick|Amazon-managed|has no listing of its own|not buyable|Guard reads FBA|cannot be changed here|A formula owns this cell/i.test(
               [...document.querySelectorAll('.nds-toasts')].map((n) => n.textContent ?? '').join(' ')))
           const actual = opened
-            ? { inline: 'inline', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:formula': 'pop:fx' }[shape] ?? shape
+            ? { inline: 'inline', 'popup:value': 'pop:value', 'popup:largetext': 'pop:text', 'popup:listbox': 'pop:list', 'popup:multi': 'pop:multi', 'popup:measure': 'pop:measure', 'popup:sale': 'pop:sale', 'popup:formula': 'pop:fx' }[shape] ?? shape
             : (said ? 'none+say' : 'none')
           got[g] = actual
           if (actual !== row.expect[g]) {
@@ -1146,15 +1239,22 @@ if (RUN.includes('refused')) {
     const m = await page.evaluate((rid) => {
       const cell = document.querySelector(`.ag-row[row-id="${rid}"] .ag-cell[col-id="name"]`)
       if (!cell) return { found: false }
-      const mark = cell.querySelector('.nds-cell-prov-refused')
+      const mark = cell.querySelector('.nds-cell-prov-refused, [data-value-source="warning"]')
       return { found: true,
         refusedClass: cell.classList.contains('nds-cell-is-formula-refused'),
         formulaClass: cell.classList.contains('nds-cell-is-formula'),
         markPresent: !!mark, markTitle: mark?.getAttribute('title') ?? null,
         markText: (mark?.textContent ?? '').trim(),
         classes: cell.className,
-        formulaMark: !!cell.querySelector('.nds-cell-prov-formula') }
+        formulaMark: !!cell.querySelector('.nds-cell-prov-formula, [data-value-source="formula"]') }
     }, rowId)
+    if (m.markPresent && m.markTitle == null) {
+      await page.locator(`.ag-row[row-id="${rowId}"] .ag-cell[col-id="name"] [data-value-source="warning"]`).first().hover()
+      const tooltip = page.getByRole('tooltip')
+      await tooltip.waitFor({ state: 'visible', timeout: 2500 }).catch(() => {})
+      m.markTitle = await tooltip.last().textContent().catch(() => null)
+      m.markText = 'warning icon'
+    }
     /* 🔴 DOES THE RULE COMPUTE, OR DID AG NOT APPLY IT? Scrolling the column out of view and back
        makes AG DESTROY and RECREATE the cell, which re-runs `cellClassRules` from scratch. If the
        class appears only after that, the inputs were right and the refresh never re-evaluated them;
@@ -1181,7 +1281,7 @@ if (RUN.includes('refused')) {
          and also refused" — the same false claim in two glyphs, which is the defect #780 names. */
       if (m.formulaMark) problems.push('the ƒ mark is still present beside the warning — a refused cell must not also claim it was calculated')
       if (m.formulaClass) problems.push('the cell still carries .nds-cell-is-formula')
-      if (!m.markPresent) problems.push('no .nds-cell-prov-refused mark rendered')
+      if (!m.markPresent) problems.push('no refusal warning rendered')
       /* The tooltip is the SERVER'S sentence verbatim — no prefix, no field name, no client wording.
          Compared against the exact string the wire carried, so a client that "helpfully" wraps it
          fails here rather than in front of an operator. */
@@ -1203,7 +1303,10 @@ console.log('\n── negative control (the run above is worthless if this opens
      `name` header is virtualised away and the control reported NOT RUN (2026-09-05 02:41). Scroll home first. */
   await page.evaluate(() => { const v = document.querySelector('.ag-grid-viewport, .ag-body-horizontal-scroll-viewport'); if (v) v.scrollLeft = 0 })
   await page.waitForTimeout(400)
-  const head = page.locator('.ag-header-cell[col-id="name"], .ag-header-cell[col-id="brand"]').first()
+  /* MX.F — the MATRIX host is the LAST scope loaded and renders no `name`/`brand` column, so the control reported
+     NOT RUN on every Matrix run (2026-09-13 18:19) and called its own greens vacuous. `basePrice` is the Matrix
+     host's own header (SHARED group) and exists on the master sheet too. */
+  const head = page.locator('.ag-header-cell[col-id="name"], .ag-header-cell[col-id="brand"], .ag-header-cell[col-id="basePrice"]').first()
   const hb = (await head.count()) ? await head.boundingBox() : null
   if (!hb) {
     failures.push('negative control: NOT RUN — no header cell to aim at, so nothing here proves the detector can report a miss')
@@ -1242,7 +1345,7 @@ console.log(`\n── API writes armed across the whole run: ${armedWrites.lengt
    that token, and a token that has gone missing FAILS the run instead of printing a wrong pointer. */
 const fixtureRef = (() => {
   try {
-    const line = readFileSync(LEDGER_DOC, 'utf8').split('\n').find((l) => l.includes(FIXTURE_TOKEN))
+    const line = readFileSync(LEDGER_DOC, 'utf8').split('\n').find((l) => /^#{1,6}\s/.test(l) && l.includes(FIXTURE_TOKEN))
     return line ? line.replace(/^#+\s*/, '').trim() : null
   } catch { return null }
 })()
@@ -1263,11 +1366,14 @@ for (const w of armedWrites.slice(0, 8)) console.log(`   [${w.during}] ${w.req} 
  * compared to master's; a difference fails, and a null on master fails as NOT MEASURED rather than
  * comparing equal to another null. */
 if (RUN.includes('parity')) {
-  console.log(`\n── parity (master·DE, AMAZON·IT, EBAY·IT — one chrome, one footer, one cell)`)
+  console.log(`\n── parity (master·DE, AMAZON·IT, EBAY·IT, MATRIX — one chrome, one footer, one cell)`)
   const PARITY_SCOPES = [
     { key: 'master', url: STUDIO },
     { key: 'AMAZON·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=IT&locale=it` },
     { key: 'EBAY·IT', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it` },
+    /* MX.G — the Matrix host: the same `GridSheet` substrate, so the same chrome, footer and cell readings
+       must hold. Declared here 2026-09-13 before the page was on screen; MX.F's `--strict` run measures it. */
+    { key: 'MATRIX', url: `${STUDIO}&tab=matrix` },
   ]
   const readings = new Map()
   for (const sc of PARITY_SCOPES) {
@@ -1282,7 +1388,7 @@ if (RUN.includes('parity')) {
       const text = editable.find((c) => !c.classList.contains('nds-cell-is-select') && !c.classList.contains('nds-ag-num') && !c.querySelector('.nds-cell-longtext-text'))
       const cs = text ? getComputedStyle(text) : null
       const select = editable.find((c) => c.classList.contains('nds-cell-is-select'))
-      const footer = (document.querySelector('.nds-grid-sheet-status')?.innerText || '').replace(/\s+/g, ' ').trim()
+      const footer = (document.querySelector('.nds-grid-sheet-status .nds-grid-sheet-noteslot')?.innerText || '').replace(/\s+/g, ' ').trim()
       return {
         headerH: hdr ? Math.round(hdr.getBoundingClientRect().height) : null,
         rowH: row ? Math.round(row.getBoundingClientRect().height) : null,
@@ -1294,6 +1400,44 @@ if (RUN.includes('parity')) {
         identityHeader: document.querySelector('.ag-header-cell[col-id="ag-Grid-AutoColumn"] .ag-header-cell-text')?.textContent?.trim() ?? null,
         everyCellHasBase: editable.length ? editable.every((c) => c.classList.contains('nds-ag-cell')) : null,
         selectHasChevron: select ? !!select.querySelector('svg, .nds-select-chevron, [class*="chevron"]') : null,
+        /* 🔴 VT.2 — the `Variation theme` column, REQUIRED on all three scopes.
+           It is one engine definition (`variationThemeColumnDef`) spread by BOTH sheet builders, and
+           it is a STRUCTURAL column (ruling R-VT-1) so a saved view may not drop it — which is
+           exactly the failure this reading exists to catch. Not an `opt_`: a scope where it does not
+           render is a defect, not an n/a. `null` on any scope makes the comparison say NOT MEASURED
+           rather than pass on two matching nulls. */
+        variationTheme: (() => {
+          const h = document.querySelector('.ag-header-cell[col-id="variation_theme"]')
+          const cell = document.querySelector('.ag-row[row-index="0"] .ag-cell[col-id="variation_theme"]')
+          if (!h || !cell) return null
+          const cs = getComputedStyle(cell)
+          const ids = [...document.querySelectorAll('.ag-header-cell[col-id]')].map((x) => x.getAttribute('col-id'))
+          return {
+            header: h.querySelector('.ag-header-cell-text')?.textContent?.trim() ?? null,
+            width: Math.round(h.getBoundingClientRect().width),
+            /* D-VT9: FIRST after the identity block, on every scope.
+               🔴 Expressed as "the first column that is not one of AG's own" rather than as an index
+               equality. AG renders pinned-left, centre and pinned-right in SEPARATE containers and
+               virtualises the centre, so `indexOf` against a filtered count read `false` on all three
+               scopes while the column was demonstrably at position 2 on a scope measured by hand — an
+               index into a partial, re-ordered list is not a position. */
+            /* 🔴 The IDENTITY BLOCK is four things, not one prefix, and this run is how that was
+               established rather than assumed. With only `ag-Grid-*` excluded the predicate read
+               FALSE on all three scopes; printing the neighbours showed why —
+               channels lead with `__productRole, __parentSku, variation_theme` (which IS first after
+               identity) and master leads with `productMedia, __productRole, __parentSku,
+               variation_theme` (the media column sits ahead of the identity helpers on master only).
+               So the set is named, and a scope that puts anything ELSE in front is a red. */
+            afterIdentity:
+              ids.filter((k) => !k.startsWith('ag-Grid-') && !['productMedia', '__productRole', '__parentSku'].includes(k))[0] ===
+              'variation_theme',
+            pad: `${cs.paddingLeft}/${cs.paddingRight}`,
+            font: `${cs.fontSize} ${cs.fontWeight}`,
+            /* The engine's own wrapper, so a scope drawing its own markup here is caught. */
+            usesEngineCell: !!cell.querySelector('.nds-axes-cell'),
+            fillHandleSuppressed: !cell.querySelector('.ag-fill-handle'),
+          }
+        })(),
         /* AM.1 — optional readings (`opt_`): compared only where BOTH scopes render such a cell; a scope
            with no list column in its landing view says n/a rather than failing. */
         opt_listChip: (() => {
@@ -1324,6 +1468,24 @@ if (RUN.includes('parity')) {
     readings.set(sc.key, r)
     console.log(`   ${sc.key.padEnd(10)} ${JSON.stringify(r)}`)
   }
+  /* 🔴 R-VT-4 — the ruled width, asserted ABSOLUTELY and not only for parity. The loop below compares
+     the channels to master, so three scopes agreeing on the WRONG number pass it: that is exactly what
+     happened between VT.2b and VT.2c, which both reported `width: 200` as "byte-identical on master,
+     AMAZON·IT and EBAY·IT" and unchanged — a true parity statement about a value the ruling had already
+     moved. A ruling nothing measures is a doc entry. */
+  const VARIATION_THEME_WIDTH = 160
+  for (const [key, r] of readings) {
+    if (r.variationTheme == null) { failures.push(`R-VT-4 ${key} · variation theme width: NOT MEASURED — the column did not render on this scope`); continue }
+    if (r.variationTheme.width !== VARIATION_THEME_WIDTH) {
+      failures.push(
+        `R-VT-4 ${key} · variation theme width ${r.variationTheme.width}, ruled ${VARIATION_THEME_WIDTH} — ` +
+          `the producer is \`variationThemeColumn()\` in sheet-columns.service.ts and the engine default is ` +
+          `\`shapeColumn.ts\` \`col.width ?? ${VARIATION_THEME_WIDTH}\`; a saved view carrying an explicit width for ` +
+          `this column is the other explanation and is worth checking before either is changed`,
+      )
+    }
+  }
+
   const ref = readings.get('master')
   if (!ref) failures.push('parity: NOT MEASURED — master could not be read, so there is nothing to compare the channels to')
   else {
@@ -1343,12 +1505,12 @@ await browser.close()
 
 if (abstentions.length) {
   console.error(`\n🔴 ${abstentions.length} GESTURE(S) NOT MEASURED — "could not measure" is not "measured green":`)
-  for (const a of abstentions.slice(0, 12)) console.error(`   · ${a}`)
+  for (const a of abstentions) console.error(`   · ${a}`)
   failures.push(`${abstentions.length} gesture(s) could not be measured`)
 }
 if (failures.length) {
   console.error(`\n❌ OPEN-GESTURE GATE FAILED — ${failures.length} finding(s):`)
-  for (const f of failures.slice(0, 30)) console.error(`   · ${f}`)
+  for (const f of failures) console.error(`   · ${f}`)
   if (failures.length > 30) console.error(`   … and ${failures.length - 30} more`)
   process.exit(1)
 }
@@ -1356,7 +1518,7 @@ const total = results.reduce((a, r) => a + r.n, 0)
 const parts = []
 if (GESTURE_TIMINGS.length) parts.push(`${total} open gestures across ${GESTURE_TIMINGS.length} timing(s) × ${KINDS.length} kinds × ${GESTURES.length} gestures × ${SPOTS.length} hit-points, every one opening an editor within 250ms`)
 if (RUN.includes('geometry')) parts.push(`${geometryMeasured} geometry readings (3 editor kinds × 3 viewport widths, each parked against the right edge)`)
-if (RUN.includes('contract')) parts.push(`${contractChecked} contract assertions read from ${CONTRACT_DOC} across three scopes`)
-if (RUN.includes('parity')) parts.push(`${parityChecked} parity readings equal to master's across the two channel scopes`)
+if (RUN.includes('contract')) parts.push(`${contractChecked} contract assertions read from ${CONTRACT_DOC} across three sheet scopes and the Matrix host`)
+if (RUN.includes('parity')) parts.push(`${parityChecked} parity readings equal to master's across the two channel scopes and the Matrix host`)
 if (RUN.includes('refused')) parts.push(`${refusedChecked} refused-cell readings from a stubbed wire (no write, no fixture)`)
-console.log(`\n✅ OPEN-GESTURE GATE PASSED — ${parts.join('; ')}. ${armedWrites.length} API writes armed, ${expectedHeld.length} expected saves held open, negative control held.`)
+console.log(`\n✅ ${ONLY ? 'FOCUSED BLOCK PASSED (not the full gate)' : 'OPEN-GESTURE GATE PASSED'} — ${parts.join('; ')}. ${armedWrites.length} API writes armed, ${expectedHeld.length} expected saves held open, negative control held.`)

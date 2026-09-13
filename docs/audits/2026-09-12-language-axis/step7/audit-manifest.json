@@ -1,0 +1,438 @@
+{
+  "at": "2026-09-13T00:30:46.991115+00:00",
+  "note": "Audit artifacts; this manifest excludes its own recursively changing hash. Source file hashes are in source-manifest.json.",
+  "files": [
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/api-tests-complete.json",
+      "mtime": "2026-09-12T23:44:34.606843+00:00",
+      "bytes": 75280,
+      "sha256": "f3f7b268ce7c8116fd53d844c42898d5a09b4f1c261611cec70e5b84bbae70a1"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/api-tests-final.json",
+      "mtime": "2026-09-12T23:20:02.153212+00:00",
+      "bytes": 71008,
+      "sha256": "2df0b88ea30cce60a1c61272f704c88a63ac8dbb056b353037d7e060f8a18de8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/api-tests.json",
+      "mtime": "2026-09-12T23:08:39.452229+00:00",
+      "bytes": 62089,
+      "sha256": "6d4047ba1929eb7c0065b7c3d5fff439f82dea59391ee2ffedffa471abd8dafe"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/before.json",
+      "mtime": "2026-09-12T22:20:12.062861+00:00",
+      "bytes": 1512243,
+      "sha256": "5c3512ba744cfa951388a3b82d770ce9d7c59969422d7701da384cd52d8c1ba6"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/build-runtime.mjs",
+      "mtime": "2026-09-12T23:32:53.082673+00:00",
+      "bytes": 4934,
+      "sha256": "8e39978efaeb574a5e80e54393fc2aaedbd9a3ecfdb589d052f3892990380d51"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/cache-payload-tests.json",
+      "mtime": "2026-09-12T22:18:18.158165+00:00",
+      "bytes": 5716,
+      "sha256": "6387ae3aa6efc91fbbf8f272937afe3f0996c6b561213b054d126016a78f5144"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/cache-tests.json",
+      "mtime": "2026-09-12T22:15:48.939905+00:00",
+      "bytes": 4530,
+      "sha256": "f0e42a9d51239a7f4be42f8a85b63949bb825f6fc73ac05de4cfa1c79e171280"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/catalog-tests.json",
+      "mtime": "2026-09-12T22:50:45.598518+00:00",
+      "bytes": 9048,
+      "sha256": "05c0ccfe24adfeadd2ed3772cb551dc5ea98003d91bb9f9335952092eb1a42c8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/checks.json",
+      "mtime": "2026-09-12T23:44:45.631911+00:00",
+      "bytes": 14546,
+      "sha256": "36e0e673da3f3b02a11abb97fcadf757e1d641c30eea54fc10848f0b3691276e"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/fixture-census.json",
+      "mtime": "2026-09-12T23:48:51.968180+00:00",
+      "bytes": 310,
+      "sha256": "cf81c8e6fc40e54a4775a5615eaa5f53477eab0583dd6dd529278fda78ee4685"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/fixture-language-workbook.xlsx",
+      "mtime": "2026-09-12T23:21:44.026696+00:00",
+      "bytes": 375629,
+      "sha256": "83bb18d6a847ea86f4e368b1e7512c4d765248d7d3967affa4f0e3d4d7bc7cd9"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/grid-1440-dark.png",
+      "mtime": "2026-09-12T23:37:46.853594+00:00",
+      "bytes": 106068,
+      "sha256": "4003714a82ae2ff7a8492badbbfe921dae4a3901f206a618b23e78f3e03d4a3b"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/grid-1440-light.png",
+      "mtime": "2026-09-12T23:37:45.999493+00:00",
+      "bytes": 116641,
+      "sha256": "1330a0cde6bf5b996c8aac6988607c7e3996a185486746e897034bd089eedc51"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/grid-1728-dark.png",
+      "mtime": "2026-09-12T23:36:21.182379+00:00",
+      "bytes": 119482,
+      "sha256": "8d3b4bf5ec9ef23864d94559a904cf994735b9f22b56ef6247b1066d2bdc3de8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/grid-1728-light.png",
+      "mtime": "2026-09-12T23:36:20.291956+00:00",
+      "bytes": 129826,
+      "sha256": "833bcad5fe7dd9b2beb010525ff09cc180aa63b9aed76dddc0794582c73d60b9"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-1440-dark.png",
+      "mtime": "2026-09-12T23:56:35.983199+00:00",
+      "bytes": 105596,
+      "sha256": "c1abb7671e7d1d5f193554ad37c4c6fd0322fff751ef27ccd6b50591baaeca9c"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-1440-light.png",
+      "mtime": "2026-09-12T23:56:35.140929+00:00",
+      "bytes": 107325,
+      "sha256": "802ff131a86d60c22d68f8a60bcbbce728b195906724e94ec07e2f8c078da78e"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-1728-dark.png",
+      "mtime": "2026-09-12T23:56:38.252814+00:00",
+      "bytes": 112241,
+      "sha256": "c87a19f40b983e6c293c8c57cba11137bd715d13171f0310d1ae07c58d5666db"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-1728-light.png",
+      "mtime": "2026-09-12T23:56:37.412923+00:00",
+      "bytes": 113849,
+      "sha256": "b5366037e790d02df9c4a0decc195b0eb40b97805ade7a0b3986650b4500b7b8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-768-dark.png",
+      "mtime": "2026-09-12T23:56:40.539714+00:00",
+      "bytes": 79000,
+      "sha256": "013ab60388022ff9fc7b4d695febc0d5791e9271668cdeaaa3f35fe20b048c1b"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-768-light.png",
+      "mtime": "2026-09-12T23:56:39.699367+00:00",
+      "bytes": 80490,
+      "sha256": "92a0e270a649e90e480f726f9e6af5fda81c6fd1ef0be337011563b6658fa932"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-tests-initial.json",
+      "mtime": "2026-09-12T22:43:48.749106+00:00",
+      "bytes": 54734,
+      "sha256": "fa045daf14f2191ee1bff50a884c313c986ba625a845b44ca699861133a03523"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/import-tests.json",
+      "mtime": "2026-09-12T22:58:00.451176+00:00",
+      "bytes": 51750,
+      "sha256": "386e2f058710124d779bae1d478f3a8ca64797a95a9ed6cc32a9c0617b15ae56"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/job-tests.json",
+      "mtime": "2026-09-12T22:59:54.115563+00:00",
+      "bytes": 9796,
+      "sha256": "b3aadfde353a4cb1a7d9c9eb70bf3427744a53a843e97c115474dbfd42d2987c"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/local-read.json",
+      "mtime": "2026-09-12T23:03:00.100240+00:00",
+      "bytes": 11517,
+      "sha256": "31123c65117c95d75419677f6cc16c5d4cc281aa919a2347dbe7b2b031ba3c57"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/local-read.mjs",
+      "mtime": "2026-09-12T23:48:51.493087+00:00",
+      "bytes": 5582,
+      "sha256": "2b921cc76d92769028d57dbb5cd651679a964a8f9c0038cbc997d16f2eee4330"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/permissions-before.json",
+      "mtime": "2026-09-12T23:43:33.467065+00:00",
+      "bytes": 42795,
+      "sha256": "fc117df03225c3b7c7f3baaa3fd82e849c14a789e0c903cb745947d53f939521"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/permissions-tests.json",
+      "mtime": "2026-09-12T23:45:01.113727+00:00",
+      "bytes": 3350,
+      "sha256": "fc67c43a35189d1766b9a2365ec4a9c1a474e3ef4d1074646cf4fae4c6385970"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/presentation-checks.json",
+      "mtime": "2026-09-13T00:04:55.481355+00:00",
+      "bytes": 10659,
+      "sha256": "3704b8290318ea3551519616a615ad071e0da4ef89632bcea1f820bda9b6c399"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/protected-before.json",
+      "mtime": "2026-09-12T22:14:32.558345+00:00",
+      "bytes": 6244,
+      "sha256": "1d3fcf5b36a5eda2a7bd303c3e3399fbfebd6031dff2257a0c9c8e21dd2dcbfd"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-1440-dark.png",
+      "mtime": "2026-09-13T00:01:35.666729+00:00",
+      "bytes": 70327,
+      "sha256": "d13ed5089ee28928abe69cd9ea40f5a69e13b82384b7c35967ccbf7c537dba41"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-1440-light.png",
+      "mtime": "2026-09-13T00:01:34.204579+00:00",
+      "bytes": 70951,
+      "sha256": "ed1c52c576422dcd61decfaa14dfdc560e8284174cb3bc20f018bfa03e747822"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-1728-dark.png",
+      "mtime": "2026-09-13T00:01:39.277716+00:00",
+      "bytes": 73781,
+      "sha256": "b1dfb06e24b85722c3a33c8780d83aede8c063fdafefa772281f881e851c7ad6"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-1728-light.png",
+      "mtime": "2026-09-13T00:01:37.812625+00:00",
+      "bytes": 74484,
+      "sha256": "2bfe4568c50f85b9bcfc647546748c664ce890eb04bc2a512052b0ea7daee798"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-768-dark.png",
+      "mtime": "2026-09-13T00:01:42.711148+00:00",
+      "bytes": 55570,
+      "sha256": "7852bfb98a457c693002892bbc15aa5edb9292099128e01b37c80cb54dc39a0e"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-768-light.png",
+      "mtime": "2026-09-13T00:01:41.273453+00:00",
+      "bytes": 56162,
+      "sha256": "ec6a7b95e4b78caba8e33a3ab7599a16c66d8400a6ba99969a4dfe4861676ff9"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-final-tests.json",
+      "mtime": "2026-09-12T23:41:09.412317+00:00",
+      "bytes": 3445,
+      "sha256": "56a837095d756c145c35fa32090029ed8c745571c13f7d79ad6a7c517160211b"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/readiness-translate-before.png",
+      "mtime": "2026-09-12T23:39:47.487550+00:00",
+      "bytes": 100873,
+      "sha256": "e7a0e3322271d95176c46e68af98a3b1d23a591e7aca88525150de209a8a662b"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/rehearse.mjs",
+      "mtime": "2026-09-12T23:17:07.479586+00:00",
+      "bytes": 13959,
+      "sha256": "3aed724b33ea43840998bc37e4966e64ef6e49f79661d58e61c7e6ce52f633ff"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/report.md",
+      "mtime": "2026-09-13T00:29:45.387850+00:00",
+      "bytes": 8803,
+      "sha256": "c12bc21cbc1b45e92326b1f15ccbd823f327ecac6d76b52dfe0c886cfba60c94"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/retry-tests.json",
+      "mtime": "2026-09-12T23:17:18.615260+00:00",
+      "bytes": 11632,
+      "sha256": "f167a4eacf08389c5132da619fdfbb3d23062ca575ae94224bc3ab7c6ffe0ec1"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/run-checks.mjs",
+      "mtime": "2026-09-12T23:44:30.311118+00:00",
+      "bytes": 2033,
+      "sha256": "b8d32615e8199657938528b75d6afa8918e38abdec89f5b22ee6b77354830ce1"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/runtime-build.json",
+      "mtime": "2026-09-12T23:47:46.601247+00:00",
+      "bytes": 50175,
+      "sha256": "19a6d9caecd5e3d4ada776e66c58dadc5273bc89173da9d07a34abfb8508d025"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/runtime.mjs",
+      "mtime": "2026-09-12T23:47:46.577949+00:00",
+      "bytes": 2171012,
+      "sha256": "5615e4ea06f41ebd49b98444e699251da30cda4566f643f8e8f179e6cad64805"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screen-api-evidence.json",
+      "mtime": "2026-09-13T00:27:14.290178+00:00",
+      "bytes": 3856981,
+      "sha256": "83c7ec459988b295d7a6f0e50a454b0427cd1b7152cf7417a4605b95005f2cdb"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screen-server.mjs",
+      "mtime": "2026-09-13T00:08:27.466640+00:00",
+      "bytes": 9030,
+      "sha256": "1f955e1a72d41aa67a957a03b845c15262b7b3abaa62d292ef51774549bb3a56"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screen-summary.json",
+      "mtime": "2026-09-13T00:27:34.065417+00:00",
+      "bytes": 3717,
+      "sha256": "43b4870227952cfd9db713f13facea4383d97bc819d70c396c905f1c3cc6558d"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screens-final.json",
+      "mtime": "2026-09-13T00:02:22.437976+00:00",
+      "bytes": 17647,
+      "sha256": "844d75bb19edb04b9d264a0fda6023538407a55284fcc816514f17ca8c832d06"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screens-first.json",
+      "mtime": "2026-09-12T23:39:47.588333+00:00",
+      "bytes": 6366,
+      "sha256": "4fe6fe827e0ec6ba761226432a819169c82d1efebd0e8b91683ced6264a5c8c4"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/screens-second.json",
+      "mtime": "2026-09-12T23:56:40.540072+00:00",
+      "bytes": 9709,
+      "sha256": "404149c1434fc2b35e19b74998a4e2c4367a65119d033d023a3346e17f9ccc37"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/source-manifest.json",
+      "mtime": "2026-09-13T00:27:34.073985+00:00",
+      "bytes": 20932,
+      "sha256": "79198b60db7e8f472645a581bef3c56888e8844df95c453c9ee3574a9763d6c8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/strict-gate.interrupted.json",
+      "mtime": "2026-09-13T00:08:06.659403+00:00",
+      "bytes": 372,
+      "sha256": "b13ce8032ee1060d09297a2f2964126fa5ef5abe2bed99e896c21b925ef86121"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/strict-gate.interrupted.log",
+      "mtime": "2026-09-13T00:08:06.659110+00:00",
+      "bytes": 2378,
+      "sha256": "e0ce969ec23765a82e10ff9cc9ff60bd4f97b5b56426dc84a3c50bd6504f0d65"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/strict-gate.json",
+      "mtime": "2026-09-13T00:26:44.281992+00:00",
+      "bytes": 601,
+      "sha256": "6cc80a16da0779d5873b598fe86d7a5eb0eb624334a8e0d56e5f58f36ea39c29"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/strict-gate.log",
+      "mtime": "2026-09-13T00:26:44.261294+00:00",
+      "bytes": 15378,
+      "sha256": "784ce0a79df6959ae4239b313e41de70c3b94c21ccaffd6d9d9ff1dde34eb50b"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/strict-gate.mjs",
+      "mtime": "2026-09-12T23:57:39.876291+00:00",
+      "bytes": 1791,
+      "sha256": "d6b0073b30d2bfbff40b6576747ec710bdb180d50924a3950fb94e3d1125b88f"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/test-before.json",
+      "mtime": "2026-09-12T22:48:21.346705+00:00",
+      "bytes": 41751,
+      "sha256": "07ddf7b635b2b1196dc48775357560e2828069310c8a731b981f5d7cb3b143a8"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-1440-dark.png",
+      "mtime": "2026-09-13T00:01:36.353797+00:00",
+      "bytes": 91237,
+      "sha256": "5aa151805c3143ea5a82d80e2a5c09c1874c9077434d5025aa424ec5787cdd21"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-1440-light.png",
+      "mtime": "2026-09-13T00:01:34.795579+00:00",
+      "bytes": 97018,
+      "sha256": "36460a76928c101ff8fb52097e11af7121712bf172699422ed226c288f1865ff"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-1728-dark.png",
+      "mtime": "2026-09-13T00:01:39.851596+00:00",
+      "bytes": 95572,
+      "sha256": "cb0f9530e049f11a430bf6fb0ec6bfa65df24f36eb7395c5b9f5fd90c502ae4f"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-1728-light.png",
+      "mtime": "2026-09-13T00:01:38.426206+00:00",
+      "bytes": 101290,
+      "sha256": "93dea6f12f00d519da196efb736b7a37bca99f5630cfe7e87e4ab1e219a12c73"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-768-dark.png",
+      "mtime": "2026-09-13T00:01:43.279090+00:00",
+      "bytes": 66844,
+      "sha256": "d2531178b3738ebe5beea8a44c619112dd0f223a04e6e8fdcc386725e19300ed"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/translate-768-light.png",
+      "mtime": "2026-09-13T00:01:41.846135+00:00",
+      "bytes": 73224,
+      "sha256": "90b4a2c5c592d391b842b61feaf4ea0adf355614cac787105447a96a9cb31996"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/web-tests.json",
+      "mtime": "2026-09-12T23:23:02.391354+00:00",
+      "bytes": 9195,
+      "sha256": "6cb79940adb3177f4353c9953ba4743f8ad5a7bdd0453bf00ab6302c8114f8e1"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/workbook-ui-before.json",
+      "mtime": "2026-09-12T22:57:54.286478+00:00",
+      "bytes": 15562,
+      "sha256": "fb066a65923179c8ebccc1bc2839032770e31334420f68ca797b225be42b1b88"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-after.json",
+      "mtime": "2026-09-12T23:21:44.236161+00:00",
+      "bytes": 8092718,
+      "sha256": "258cb659988061d4e4ec981765035c1ec246073260f40b7ab2f735cc1c96dc95"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-after.json.1789255256095.previous",
+      "mtime": "2026-09-12T23:15:44.431031+00:00",
+      "bytes": 8091634,
+      "sha256": "a5911c23f395218ac54c536afcd57eb676b6d58dcc9dbcc7ffe10e0acb0ca7fc"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-baseline.json",
+      "mtime": "2026-09-12T23:20:56.194703+00:00",
+      "bytes": 8091752,
+      "sha256": "357c3c71ffe72296917f1365b53165a08e2384e4d091456c6bce08ab4c013d69"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-baseline.json.1789255256094.previous",
+      "mtime": "2026-09-12T23:15:31.912673+00:00",
+      "bytes": 8091752,
+      "sha256": "9643eeb63ca006efcc9829c117a6db669dd10fd07fb064e26506843b1a1780c4"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-receipt.json",
+      "mtime": "2026-09-12T23:21:44.160840+00:00",
+      "bytes": 1667,
+      "sha256": "c35698579937b35e83c2c5ebb464c9ccbe797214441ef59bd0a792caa513eab3"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-restored.json",
+      "mtime": "2026-09-12T23:21:53.123655+00:00",
+      "bytes": 96117,
+      "sha256": "34173859cf0102bdbc0abd6c01275a892a04cbcacb0eaebbd09bf071f49022b3"
+    },
+    {
+      "path": "docs/audits/2026-09-12-language-axis/step7/write-restored.json.1789255256095.previous",
+      "mtime": "2026-09-12T23:15:53.169400+00:00",
+      "bytes": 95365,
+      "sha256": "be592705598ea8e129d96816d120b1793188e8da76b2d05b9fa59cb00be69c2e"
+    }
+  ]
+}

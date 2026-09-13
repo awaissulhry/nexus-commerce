@@ -21,6 +21,11 @@
 .nds-pgbtn:focus-visible,
 .nds-fpanel-toggle:focus-visible,
 .nds-builder-navitem:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-primary);
+  outline-offset: 1px;
   box-shadow: var(--nds-focus-ring);
 }
+
+/* Focus inside a clipped control group; the control ink must clear 3:1 on each fill. */
+.nds-btn.nds-focus-inset:focus-visible { outline-offset: -3px; outline-color: currentColor; }
+.nds-btn[aria-disabled="true"]:focus-visible { opacity: 1; }

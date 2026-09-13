@@ -10,6 +10,7 @@ export const shopifyContentSchema = z.object({
   target: z.enum(['new-draft', 'linked-product']).optional(),
   collectionMode: z.enum(['groups', 'variants', 'family']).optional(), collectionAxes: z.array(z.string()).max(3).optional(),
   version: z.literal(1), defaultLocale: locale, locales: z.array(locale).min(1).max(20), axes: z.array(z.string().min(1).max(255)).max(3),
+  optionNames: z.record(z.string(), z.string().min(1).max(255)).optional(),
   assets: z.array(z.object({ id, url: z.url().refine(v => v.startsWith('https://'), 'Media require HTTPS'), type: z.enum(['IMAGE', 'VIDEO', 'MODEL_3D']).optional(), alt: z.string().max(512), translations: z.record(locale, z.string().max(512)).default({}), accessibility: z.record(locale, z.object({ captions: z.array(mediaCaptionSchema).max(30).optional(), transcript: z.string().max(50000).optional() }).strict()).optional() }).strict()).max(250),
   groups: z.array(z.object({ id, name: z.string().min(1).max(160), assetIds: z.array(id).max(250), featuredId: id.nullable() }).strict()).max(250),
   fields: z.array(fieldSchema).max(80),

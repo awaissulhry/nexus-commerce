@@ -70,7 +70,6 @@ export const CANONICAL_TABS = [
   'EBAY',
   'SHOPIFY',
   // Hidden-by-default rest, in roughly authoring-flow order
-  'locales',
   'seo',
   'compliance',
   'workflow',
@@ -213,7 +212,6 @@ function reconcile(saved: TabPref[] | null): TabPref[] {
 const TAB_I18N_KEYS: Partial<Record<TabKey, string>> = {
   master: 'products.edit.tab.master',
   images: 'products.edit.tab.images',
-  locales: 'products.edit.tab.locales',
   seo: 'products.edit.tab.seo',
   compliance: 'products.edit.tab.compliance',
   workflow: 'products.edit.tab.workflow',

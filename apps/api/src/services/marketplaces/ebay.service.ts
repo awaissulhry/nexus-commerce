@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 import type { EbayListingData } from "../ai/gemini.service.js";
 import { recordApiCall } from "../outbound-api-call-log.service.js";
 
@@ -161,6 +163,11 @@ export class EbayService {
    * Updates the available quantity for an existing inventory item on eBay.
    */
   async updateInventory(sku: string, quantity: number, productId?: string): Promise<void> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [] })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const token = await this.getAccessToken();
     const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
 
@@ -266,6 +273,11 @@ export class EbayService {
    * Finds the active offer by SKU, then updates its pricing.
    */
   async updatePrice(sku: string, newPrice: number, productId?: string): Promise<void> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [] })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const token = await this.getAccessToken();
 
     try {
@@ -387,6 +399,11 @@ export class EbayService {
     quantity: number,
     productId?: string
   ): Promise<string> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [], allowAbsent: true })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const token = await this.getAccessToken();
 
     // Step 0: Ensure merchant location is configured
@@ -399,7 +416,7 @@ export class EbayService {
     const offerId = await this.createOffer(token, sku, ebayData, price, quantity, productId);
 
     // Step 3: Publish the Offer
-    const listingId = await this.publishOffer(token, offerId, productId);
+    const listingId = await this.publishOffer(token, offerId, productId, sku);
 
     console.log(
       `[EbayService] Listing published: SKU=${sku}, offerId=${offerId}, listingId=${listingId}`
@@ -418,6 +435,11 @@ export class EbayService {
     quantity: number,
     productId?: string
   ): Promise<void> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [], allowAbsent: true })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const url = `${EBAY_API_BASE}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`;
 
     // Build item specifics as eBay expects them (name/value pairs)
@@ -496,6 +518,11 @@ export class EbayService {
     quantity: number,
     productId?: string
   ): Promise<string> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [], allowAbsent: true })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const url = `${EBAY_API_BASE}/sell/inventory/v1/offer`;
 
     const payload = {
@@ -649,6 +676,12 @@ export class EbayService {
    */
   async updateVariantPrice(variantSku: string, newPrice: number, productId?: string): Promise<void> {
     try {
+      const pushControls = await readPushControls({ channel: 'EBAY', skus: [variantSku], productIds: productId ? [productId] : [] })
+      for (const row of pushControls) {
+        const refusal = assertPushAllowed(row)
+        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+      }
+
       const accessToken = await this.getAccessToken();
 
       // Find the inventory item by SKU
@@ -794,8 +827,14 @@ export class EbayService {
   private async publishOffer(
     token: string,
     offerId: string,
-    productId?: string
+    productId: string | undefined,
+    sku: string
   ): Promise<string> {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [sku], productIds: productId ? [productId] : [], allowAbsent: true })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const url = `${EBAY_API_BASE}/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`;
 
     try {

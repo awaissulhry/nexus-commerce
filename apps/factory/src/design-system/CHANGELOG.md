@@ -199,3 +199,52 @@ Mirrors Web’s `AccountsPanel`, account model, tests, application-role permissi
 ## Monospace token parity — 2026-09-12
 
 Factory now defines `--nds-font-mono` for its grid editor styles. Both apps use a monospace fallback when the host does not supply `--font-mono`; generated stylesheets are refreshed.
+
+### 2026-09-12 — LX strict editor gate
+
+- SourceIndicator can show an exact server refusal through `tooltip`, preserving action naming.
+- Formula-aware value textareas retain the grid editor’s no-manual-resize rule.
+
+The exact SourceIndicator `tooltip` also supplies a native title, so critical server refusals remain available in hosts that disable custom tooltip portals.
+
+LX.10 (2026-09-13): `outdated` is the translation-age provenance member, with a History glyph and warning semantic tokens. `describeCellSource()` produces the shared member/from/tooltip contract. Precedence: refused → AI → outdated → formula → mapped → inherited/pinned → own.
+
+- 2026-09-13 · Language-axis LX.11: added `nds-ag-group-start` for readable labels on field groups wider than the viewport. Product Studio uses the existing strip-height token on both sheets.
+
+2026-09-13 · Formula reference context: the Web AG formula adapter passes the edited field key to candidates, source labels and reference highlighting. Hosts can bind canonical references to a language-qualified view column. Existing single-language callbacks remain compatible. Verify editing a French column offers French field values and highlights the French source cell. Factory has no AG formula adapter; no shared Factory runtime changes.
+
+## Unscorable readiness — 2026-09-13
+
+CompletenessPill renders — with an accessible explanation when pct is null. It preserves scored ratios and state tones. Extracted from the web identity band into the same standalone renderer in Web and Factory.
+
+## Canonical content marks — 2026-09-13
+
+Both Studio sheets consume describeCellSource + ProvenanceMark for language, pin and source tiers. Resolver-owned `from` takes precedence over legacy row labels. Mapping diagnostics alone no longer assert derivation when the server supplies `derived: false`. Factory mirrors the shared classifier.
+
+Canonical pin marks accept the DS description as their tooltip, keeping the addressed listing distinct from the shared language it overrides. API and inline explanations use the same sentence.
+
+
+### 2026-09-13 — Variation Theme consistency and narrow editors
+
+AxesPanel/AxesPanelEditor and VariationThemeValue share the server’s effective projection, including rule provenance, intentional omissions, unavailable schemas and collisions. The popup fits the viewport, wraps instructions in narrow hosts and uses strong semantic text tokens. Reset keeps its own intent when opening a live-change plan. Factory includes the editor, renderer and their grid dependencies; the drift guard requires their counterparts.
+
+## Presence contract and accessibility — PR.6 — 2026-09-13
+
+Grid actions now carry typed reach and reversibility; validation refuses a softer confirmation than the captured consequences require. This enhances the contract so guards can enforce promises that previously lived in prose. Declaration order is preserved in both menu adapters. Danger tone is rendered on the emitted button/link selectors; held menu items retain their visible description and title, accept keyboard focus, and cannot execute.
+
+PresenceMark composes Tag, Pill and AsOf; no timestamp or stale observation can imply current green verification. AsOf shares the promoted ago/when formatters and says “not checked” or “never” for absence. ActionConfirm now lives in components with a compatibility export from grid/actions; exact typing, visible acknowledgement, Cancel-first focus, read-only SummaryTable review and typed reversal sentences share one implementation. SummaryTable row tone remains on a Pill. Disclosure accepts Tone and retains native open semantics. CellSaveMark distinguishes saving/waiting/unknown by glyph and border shape; provenance marks have accessible names without tab stops. SheetStatuses accepts data only, uses md Pills, exposes details through a focusable control and retains alerts when surplus coalesces. Views naming/deletion uses an anchored popover while its trigger stays in place.
+
+Named danger/success/formula text tokens are raised, with source-derived ground calculations in docs/audits/2026-09-13-presence/pr6/contrast.mjs. Focus outlines replace weak glow-only rules; aria-disabled styling pairs native disabled selectors. Browser and guard results are recorded separately in the PR.6 ledger; this entry does not certify unfinished gates. Shared files and new shared components are mirrored in Factory; web-only catalog and Views integration remain web-only.
+
+
+### PR.6 approved accessibility follow-up — 2026-09-13
+
+ScopeBar now lets arrow keys reach a held scope and its InfoTip without changing the selected scope; Enter and click remain guarded. Theme-controlled AxesPanel checkboxes keep keyboard focus, their supplied explanation and unchanged checked state. The ModeNotches consumer exposes the pending-write sentence through its existing refusal banner callback.
+
+`nds-focus-inset` keeps a Button outline inside a clipped joined control and uses currentColor so the ring follows the actual normal, selected and hovered ink. Use it only where that ink clears 3:1 on every control fill. The catalog includes held and editable axes as local demonstrations; held scopes are in the existing ScopeBar example. PresenceMark additionally accepts `{line, now, via?}` for canonical aggregate metadata without an invented member Presence, and preserves “Could not ask” when observation time/source are absent.
+
+With Owner approval, existing danger/warning/formula text tokens now clear 7:1 across the conservative 80-ground light and dark matrices; success already clears that bar. No new token, fill, or ratchet-baseline increase. The corrected source-derived measurements live in the PR.6 audit.
+
+SheetStatuses accepts compact=true from the host’s existing last toolbar tier: one +N control retains every detail and danger announcement; default rendering remains at most three Pills. It defines no breakpoint.
+
+PresenceMark axis=intent|fact|both (default both) separates adjacent columns; compact=true moves the full canonical explanation into a keyboard-reachable InfoTip. Fact keeps AsOf; no vocabulary or freshness logic is duplicated.

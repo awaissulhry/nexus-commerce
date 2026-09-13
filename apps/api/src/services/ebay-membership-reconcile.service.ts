@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Membership reconcile — adopt a live eBay listing AS IT IS (GALE root cause,
@@ -173,6 +175,11 @@ export async function reconcileMembershipsFromEbay(
    *  listings, wrong for ALT shells (their parent SKU is the shell). */
   preferredParentSku?: string,
 ): Promise<ReconcileResult> {
+  const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const market = marketplace.toUpperCase()
   const xml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">

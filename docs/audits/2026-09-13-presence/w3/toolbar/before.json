@@ -1,0 +1,726 @@
+{
+  "paddingBefore": {
+    "document": {
+      "client": 900,
+      "scroll": 900
+    },
+    "rules": [
+      {
+        "css": "box-sizing: border-box; margin: 0px; padding: 0px;",
+        "selector": "*",
+        "source": "http://localhost:3000/_next/static/chunks/%5Broot-of-the-server%5D__04yri0h._.css"
+      },
+      {
+        "css": "border-bottom: 1px solid var(--nds-border-subtle); padding: 14px 16px;",
+        "selector": ".nds-gridcard .nds-toolbar",
+        "source": "http://localhost:3000/_next/static/chunks/%5Broot-of-the-server%5D__04yri0h._.css"
+      },
+      {
+        "css": "height: var(--nds-toolbar-h, 40px); min-height: var(--nds-toolbar-h, 40px); flex: 0 0 var(--nds-toolbar-h, 40px); box-sizing: border-box; flex-wrap: nowrap; align-items: center; min-width: 0px; padding: 0px 6px; overflow-x: auto;",
+        "selector": ".nds-grid-sheet .nds-toolbar",
+        "source": "http://localhost:3000/_next/static/chunks/nexus-commerce_apps_web_src_09o46.v._.css"
+      },
+      {
+        "css": "flex-wrap: wrap; flex-basis: auto; height: auto; padding-block: 6px; overflow-x: visible;",
+        "selector": ".nds-grid-sheet .nds-toolbar",
+        "source": "http://localhost:3000/_next/static/chunks/nexus-commerce_apps_web_src_09o46.v._.css"
+      }
+    ],
+    "shell": {
+      "client": 844,
+      "scroll": 844
+    },
+    "theme": "inter_19d2945c-module__e4KC9a__variable space_grotesk_e8d41e02-module__b-qUWW__variable jetbrains_mono_858a281-module__48ca2W__variable",
+    "toolbar": {
+      "boxSizing": "border-box",
+      "clientWidth": 1372,
+      "height": "40px",
+      "padding": "0px 6px",
+      "rect": {
+        "bottom": 186,
+        "height": 40,
+        "left": 67,
+        "right": 1439,
+        "top": 146,
+        "width": 1372,
+        "x": 67,
+        "y": 146
+      },
+      "scrollWidth": 1372
+    },
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "lightBefore": {
+    "bands": [
+      {
+        "class": "nds-workspace-subheader",
+        "h": 49
+      },
+      {
+        "class": "nds-scopebar nds-workspace-scope",
+        "h": 40
+      }
+    ],
+    "bar": {
+      "bottom": 186,
+      "clientWidth": 1372,
+      "height": 40,
+      "left": 67,
+      "padding": "0px 6px",
+      "right": 1439,
+      "scrollWidth": 1372,
+      "top": 146,
+      "width": 1372,
+      "x": 67,
+      "y": 146
+    },
+    "controls": [
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "Find",
+        "left": 148.3828125,
+        "right": 465.3828125,
+        "role": null,
+        "text": "Find",
+        "top": 152.5,
+        "width": 317,
+        "x": 148.3828125,
+        "y": 152.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 474.3828125,
+        "right": 598.5234375,
+        "role": null,
+        "text": "Custom (227) ",
+        "top": 151.5,
+        "width": 124.140625,
+        "x": 474.3828125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 606.5234375,
+        "right": 738.875,
+        "role": null,
+        "text": "Required1 column",
+        "top": 151.5,
+        "width": 132.3515625,
+        "x": 606.5234375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 746.875,
+        "right": 904.6015625,
+        "role": null,
+        "text": "Languages64 columns",
+        "top": 151.5,
+        "width": 157.7265625,
+        "x": 746.875,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm nds-toolbar-fold-trigger",
+        "height": 28,
+        "label": null,
+        "left": 912.6015625,
+        "right": 1012.53125,
+        "role": null,
+        "text": "Filters4",
+        "top": 151.5,
+        "width": 99.9296875,
+        "x": 912.6015625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 1020.53125,
+        "right": 1126.921875,
+        "role": null,
+        "text": "Classification",
+        "top": 151.5,
+        "width": 106.390625,
+        "x": 1020.53125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 1298.5859375,
+        "right": 1387,
+        "role": null,
+        "text": "Customise",
+        "top": 151.5,
+        "width": 88.4140625,
+        "x": 1298.5859375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": "More",
+        "left": 1395,
+        "right": 1433,
+        "role": null,
+        "text": "More",
+        "top": 151.5,
+        "width": 38,
+        "x": 1395,
+        "y": 151.5
+      }
+    ],
+    "prompt": [],
+    "rows": 22,
+    "theme": "light",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "lightPromptBefore": {
+    "bands": [
+      {
+        "class": "nds-workspace-subheader",
+        "h": 49
+      },
+      {
+        "class": "nds-scopebar nds-workspace-scope",
+        "h": 40
+      }
+    ],
+    "bar": {
+      "bottom": 186,
+      "clientWidth": 1372,
+      "height": 40,
+      "left": 67,
+      "padding": "0px 6px",
+      "right": 1439,
+      "scrollWidth": 1372,
+      "top": 146,
+      "width": 1372,
+      "x": 67,
+      "y": 146
+    },
+    "controls": [
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "Find",
+        "left": 148.3828125,
+        "right": 408.140625,
+        "role": null,
+        "text": "Find",
+        "top": 152.5,
+        "width": 259.7578125,
+        "x": 148.3828125,
+        "y": 152.5
+      },
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "View name",
+        "left": 418.140625,
+        "right": 598.140625,
+        "role": null,
+        "text": "View name",
+        "top": 152.5,
+        "width": 180,
+        "x": 418.140625,
+        "y": 152.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn primary sm",
+        "height": 28,
+        "label": null,
+        "left": 605.140625,
+        "right": 690.203125,
+        "role": null,
+        "text": "Save view",
+        "top": 151.5,
+        "width": 85.0625,
+        "x": 605.140625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 696.203125,
+        "right": 762.1875,
+        "role": null,
+        "text": "Cancel",
+        "top": 151.5,
+        "width": 65.984375,
+        "x": 696.203125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 770.1875,
+        "right": 902.5390625,
+        "role": null,
+        "text": "Required1 column",
+        "top": 151.5,
+        "width": 132.3515625,
+        "x": 770.1875,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 910.5390625,
+        "right": 1068.265625,
+        "role": null,
+        "text": "Languages64 columns",
+        "top": 151.5,
+        "width": 157.7265625,
+        "x": 910.5390625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm nds-toolbar-fold-trigger",
+        "height": 28,
+        "label": null,
+        "left": 1076.265625,
+        "right": 1176.1953125,
+        "role": null,
+        "text": "Filters4",
+        "top": 151.5,
+        "width": 99.9296875,
+        "x": 1076.265625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 1184.1953125,
+        "right": 1290.5859375,
+        "role": null,
+        "text": "Classification",
+        "top": 151.5,
+        "width": 106.390625,
+        "x": 1184.1953125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 1298.5859375,
+        "right": 1387,
+        "role": null,
+        "text": "Customise",
+        "top": 151.5,
+        "width": 88.4140625,
+        "x": 1298.5859375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": "More",
+        "left": 1395,
+        "right": 1433,
+        "role": null,
+        "text": "More",
+        "top": 151.5,
+        "width": 38,
+        "x": 1395,
+        "y": 151.5
+      }
+    ],
+    "prompt": [
+      {
+        "inBar": true,
+        "parent": "<span style=\"display: inline-flex; gap: 6px; align-items: center;\"><span class=\"nds-field xs\"><input placeholder=\"View name\" aria-label=\"View name\" value=\"\" style=\"width: 180px;\"></span><button type=\"button\" class=\"nds-btn primary sm\" disabled=\"\">Save view</button><button type=\"button\" class=\"nds-btn ghost sm\">Cancel</button></span>",
+        "rect": {
+          "bottom": 178.5,
+          "height": 26,
+          "left": 418.140625,
+          "right": 598.140625,
+          "top": 152.5,
+          "width": 180,
+          "x": 418.140625,
+          "y": 152.5
+        }
+      }
+    ],
+    "rows": 22,
+    "theme": "light",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "darkBefore": {
+    "bands": [
+      {
+        "class": "nds-workspace-subheader",
+        "h": 49
+      },
+      {
+        "class": "nds-scopebar nds-workspace-scope",
+        "h": 40
+      }
+    ],
+    "bar": {
+      "bottom": 186,
+      "clientWidth": 1372,
+      "height": 40,
+      "left": 67,
+      "padding": "0px 6px",
+      "right": 1439,
+      "scrollWidth": 1372,
+      "top": 146,
+      "width": 1372,
+      "x": 67,
+      "y": 146
+    },
+    "controls": [
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "Find",
+        "left": 148.3828125,
+        "right": 465.3828125,
+        "role": null,
+        "text": "Find",
+        "top": 152.5,
+        "width": 317,
+        "x": 148.3828125,
+        "y": 152.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 474.3828125,
+        "right": 598.5234375,
+        "role": null,
+        "text": "Custom (227) ",
+        "top": 151.5,
+        "width": 124.140625,
+        "x": 474.3828125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 606.5234375,
+        "right": 738.875,
+        "role": null,
+        "text": "Required1 column",
+        "top": 151.5,
+        "width": 132.3515625,
+        "x": 606.5234375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 746.875,
+        "right": 904.6015625,
+        "role": null,
+        "text": "Languages64 columns",
+        "top": 151.5,
+        "width": 157.7265625,
+        "x": 746.875,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm nds-toolbar-fold-trigger",
+        "height": 28,
+        "label": null,
+        "left": 912.6015625,
+        "right": 1012.53125,
+        "role": null,
+        "text": "Filters4",
+        "top": 151.5,
+        "width": 99.9296875,
+        "x": 912.6015625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 1020.53125,
+        "right": 1126.921875,
+        "role": null,
+        "text": "Classification",
+        "top": 151.5,
+        "width": 106.390625,
+        "x": 1020.53125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 1298.5859375,
+        "right": 1387,
+        "role": null,
+        "text": "Customise",
+        "top": 151.5,
+        "width": 88.4140625,
+        "x": 1298.5859375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": "More",
+        "left": 1395,
+        "right": 1433,
+        "role": null,
+        "text": "More",
+        "top": 151.5,
+        "width": 38,
+        "x": 1395,
+        "y": 151.5
+      }
+    ],
+    "prompt": [],
+    "rows": 22,
+    "theme": "dark",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  },
+  "darkPromptBefore": {
+    "bands": [
+      {
+        "class": "nds-workspace-subheader",
+        "h": 49
+      },
+      {
+        "class": "nds-scopebar nds-workspace-scope",
+        "h": 40
+      }
+    ],
+    "bar": {
+      "bottom": 186,
+      "clientWidth": 1372,
+      "height": 40,
+      "left": 67,
+      "padding": "0px 6px",
+      "right": 1439,
+      "scrollWidth": 1372,
+      "top": 146,
+      "width": 1372,
+      "x": 67,
+      "y": 146
+    },
+    "controls": [
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "Find",
+        "left": 148.3828125,
+        "right": 408.140625,
+        "role": null,
+        "text": "Find",
+        "top": 152.5,
+        "width": 259.7578125,
+        "x": 148.3828125,
+        "y": 152.5
+      },
+      {
+        "bottom": 178.5,
+        "class": "",
+        "height": 26,
+        "label": "View name",
+        "left": 418.140625,
+        "right": 598.140625,
+        "role": null,
+        "text": "View name",
+        "top": 152.5,
+        "width": 180,
+        "x": 418.140625,
+        "y": 152.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn primary sm",
+        "height": 28,
+        "label": null,
+        "left": 605.140625,
+        "right": 690.203125,
+        "role": null,
+        "text": "Save view",
+        "top": 151.5,
+        "width": 85.0625,
+        "x": 605.140625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 696.203125,
+        "right": 762.1875,
+        "role": null,
+        "text": "Cancel",
+        "top": 151.5,
+        "width": 65.984375,
+        "x": 696.203125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 770.1875,
+        "right": 902.5390625,
+        "role": null,
+        "text": "Required1 column",
+        "top": 151.5,
+        "width": 132.3515625,
+        "x": 770.1875,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-fchip md",
+        "height": 28,
+        "label": null,
+        "left": 910.5390625,
+        "right": 1068.265625,
+        "role": null,
+        "text": "Languages64 columns",
+        "top": 151.5,
+        "width": 157.7265625,
+        "x": 910.5390625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm nds-toolbar-fold-trigger",
+        "height": 28,
+        "label": null,
+        "left": 1076.265625,
+        "right": 1176.1953125,
+        "role": null,
+        "text": "Filters4",
+        "top": 151.5,
+        "width": 99.9296875,
+        "x": 1076.265625,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn ghost sm",
+        "height": 28,
+        "label": null,
+        "left": 1184.1953125,
+        "right": 1290.5859375,
+        "role": null,
+        "text": "Classification",
+        "top": 151.5,
+        "width": 106.390625,
+        "x": 1184.1953125,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": null,
+        "left": 1298.5859375,
+        "right": 1387,
+        "role": null,
+        "text": "Customise",
+        "top": 151.5,
+        "width": 88.4140625,
+        "x": 1298.5859375,
+        "y": 151.5
+      },
+      {
+        "bottom": 179.5,
+        "class": "nds-btn sm",
+        "height": 28,
+        "label": "More",
+        "left": 1395,
+        "right": 1433,
+        "role": null,
+        "text": "More",
+        "top": 151.5,
+        "width": 38,
+        "x": 1395,
+        "y": 151.5
+      }
+    ],
+    "prompt": [
+      {
+        "inBar": true,
+        "parent": "<span style=\"display: inline-flex; gap: 6px; align-items: center;\"><span class=\"nds-field xs\"><input placeholder=\"View name\" aria-label=\"View name\" value=\"\" style=\"width: 180px;\"></span><button type=\"button\" class=\"nds-btn primary sm\" disabled=\"\">Save view</button><button type=\"button\" class=\"nds-btn ghost sm\">Cancel</button></span>",
+        "rect": {
+          "bottom": 178.5,
+          "height": 26,
+          "left": 418.140625,
+          "right": 598.140625,
+          "top": 152.5,
+          "width": 180,
+          "x": 418.140625,
+          "y": 152.5
+        }
+      }
+    ],
+    "rows": 22,
+    "theme": "dark",
+    "viewport": {
+      "height": 900,
+      "width": 1440
+    }
+  }
+}

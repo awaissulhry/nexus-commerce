@@ -113,3 +113,20 @@ describe('passthrough', () => {
     expect(validate('* * * * *')).toBe(true)
   })
 })
+
+describe('LX.F P3-26 — the claim can outlive a long RUN', () => {
+  it('uses the default 50 s, and a job may claim longer', async () => {
+    const task = schedule('*/5 * * * *', () => {}) as never as { __handler: () => Promise<void> }
+    await task.__handler()
+    // The default is shorter than the shortest schedule, so the next tick is contestable.
+    expect(redisSet.mock.calls[0][3]).toBe(50_000)
+
+    // The reconcile's own claim: measured ≈150 s for 37 families against a 50 s lease.
+    redisSet.mockClear(); store.clear()
+    const long = schedule('17 2 * * *', () => {}, { lockTtlMs: 30 * 60_000 }) as never as { __handler: () => Promise<void> }
+    await long.__handler()
+    expect(redisSet.mock.calls[0][3]).toBe(30 * 60_000)
+    // …and it is still far shorter than that job's own daily period.
+    expect(30 * 60_000).toBeLessThan(24 * 60 * 60_000)
+  })
+})

@@ -60,7 +60,6 @@ import { AdsTab } from './tabs/AdsTab'
 import { TimelineTab } from './tabs/TimelineTab'
 import WorkflowTab from './tabs/WorkflowTab'
 import RelationsTab from './tabs/RelationsTab'
-import LocalesTab from './tabs/LocalesTab'
 import MatrixTab from './tabs/MatrixTab'
 import ChannelListingTab from './tabs/ChannelListingTab'
 import EbayCockpit from './tabs/ebay-cockpit/EbayCockpit'
@@ -912,18 +911,6 @@ export default function ProductEditClient({
             {t('products.edit.tab.images')}
           </TopTabButton>
         )
-      case 'locales':
-        return (
-          <TopTabButton
-            key={key}
-            tabKey={key}
-            active={isActive}
-            onClick={() => goToTab('locales')}
-            dirty={dirty}
-          >
-            {t('products.edit.tab.locales')}
-          </TopTabButton>
-        )
       case 'seo':
         return (
           <TopTabButton
@@ -1358,16 +1345,6 @@ export default function ProductEditClient({
               discardSignal={discardSignal}
               onDirtyChange={(count) => setTabDirty('images', count)}
               onPreSaveAll={registry.saveAll}
-            />
-          </div>
-        )}
-
-        {topTab === 'locales' && (
-          <div role="tabpanel" id="panel-locales" aria-labelledby="tab-locales">
-            <LocalesTab
-              product={product}
-              discardSignal={discardSignal}
-              onDirtyChange={(count) => setTabDirty('locales', count)}
             />
           </div>
         )}

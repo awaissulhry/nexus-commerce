@@ -1,3 +1,4 @@
+import { normalizeLanguage, languageEntry } from '../services/pim/content-language.js'
 /**
  * MC.8.1 — Amazon A+ Content (Brand Registry) CRUD.
  *
@@ -45,7 +46,7 @@ async function snapshotAplusContent(
     name: content.name,
     brand: content.brand,
     marketplace: content.marketplace,
-    locale: content.locale,
+    locale: normalizeLanguage(content.locale),
     status: content.status,
     notes: content.notes,
     modules: content.modules.map((m) => ({
@@ -118,7 +119,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     })
-    return { items: rows }
+    return { items: rows.map(row => ({ ...row, locale: normalizeLanguage(row.locale) })) }
   })
 
   // ── Detail ────────────────────────────────────────────────
@@ -156,7 +157,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
     })
     if (!content)
       return reply.code(404).send({ error: 'A+ content not found' })
-    return { content }
+    return { content: { ...content, locale: normalizeLanguage(content.locale), localizations: content.localizations.map(row => ({ ...row, locale: normalizeLanguage(row.locale) })), master: content.master ? { ...content.master, locale: normalizeLanguage(content.master.locale) } : null } }
   })
 
   // ── Create ────────────────────────────────────────────────
@@ -193,7 +194,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         name: body.name.trim(),
         brand: body.brand?.trim() || null,
         marketplace: body.marketplace.trim(),
-        locale: body.locale.trim(),
+        locale: normalizeLanguage(body.locale.trim()),
         masterContentId: body.masterContentId ?? null,
         status: 'DRAFT',
         // Operator can pre-attach ASINs at create time (common for
@@ -212,7 +213,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         asinAttachments: true,
       },
     })
-    return reply.code(201).send({ content })
+    return reply.code(201).send({ content: { ...content, locale: normalizeLanguage(content.locale) } })
   })
 
   // ── Patch ─────────────────────────────────────────────────
@@ -247,7 +248,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data,
       })
-      return { content }
+      return { content: { ...content, locale: normalizeLanguage(content.locale) } }
     } catch (err: any) {
       if (err?.code === 'P2025')
         return reply.code(404).send({ error: 'A+ content not found' })
@@ -375,7 +376,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         name: content.name,
         brand: content.brand,
         marketplace: content.marketplace,
-        locale: content.locale,
+        locale: normalizeLanguage(content.locale),
         modules: content.modules.map((m) => ({
           type: m.type,
           payload: (m.payload as Record<string, unknown>) ?? {},
@@ -402,7 +403,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
           name: content.name,
           brand: content.brand,
           marketplace: content.marketplace,
-          locale: content.locale,
+          locale: normalizeLanguage(content.locale),
           modules: content.modules.map((m) => ({
             type: m.type,
             payload: (m.payload as Record<string, unknown>) ?? {},
@@ -563,7 +564,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
           where: { id },
           data: { scheduledFor: scheduled },
         })
-        return { content }
+        return { content: { ...content, locale: normalizeLanguage(content.locale) } }
       } catch (err: any) {
         if (err?.code === 'P2025')
           return reply.code(404).send({ error: 'A+ content not found' })
@@ -589,7 +590,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
         name: content.name,
         brand: content.brand,
         marketplace: content.marketplace,
-        locale: content.locale,
+        locale: normalizeLanguage(content.locale),
         modules: content.modules.map((m) => ({
           type: m.type,
           payload: (m.payload as Record<string, unknown>) ?? {},
@@ -700,17 +701,11 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
       // If a sibling for this marketplace+locale already exists,
       // return it instead of creating a duplicate. Operator likely
       // clicked twice; idempotency is friendlier than a 409.
-      const existing = await prisma.aPlusContent.findFirst({
-        where: {
-          masterContentId: sourceId,
-          marketplace: body.marketplace,
-          locale: body.locale,
-        },
-      })
+      const existing = languageEntry((await prisma.aPlusContent.findMany({ where: { masterContentId: sourceId, marketplace: body.marketplace } })).map(row => [row.locale, row] as const), body.locale!)
       if (existing)
         return reply
           .code(200)
-          .send({ content: existing, alreadyExisted: true })
+          .send({ content: { ...existing, locale: normalizeLanguage(existing.locale) }, alreadyExisted: true })
 
       const cloned = await prisma.$transaction(async (tx) => {
         const created = await tx.aPlusContent.create({
@@ -718,7 +713,7 @@ const aPlusContentRoutes: FastifyPluginAsync = async (fastify) => {
             name: `${source.name}${body.nameSuffix ? ` — ${body.nameSuffix}` : ` (${body.locale})`}`,
             brand: source.brand,
             marketplace: body.marketplace!,
-            locale: body.locale!,
+            locale: normalizeLanguage(body.locale!),
             masterContentId: source.id,
             status: 'DRAFT',
           },

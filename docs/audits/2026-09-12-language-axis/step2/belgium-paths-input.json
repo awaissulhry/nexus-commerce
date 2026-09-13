@@ -1,0 +1,326 @@
+[
+  [
+    "packages/database/prisma/schema.prisma",
+    "languages     String[]",
+    "Column absent; scalar nl.",
+    "languages=[nl,fr], ordered; scalar nl retained. Legacy Product JSON default unchanged under columns-only migration rule."
+  ],
+  [
+    "apps/api/src/services/products/translation-resolver.service.ts",
+    "async function languageForMarketplace",
+    "BE=fr; inverse preference map.",
+    "AMAZON/BE default nl. Inverse lookup uses configured rows, preferring a monolingual match."
+  ],
+  [
+    "apps/api/src/services/outbound-sync.service.ts",
+    "export async function buildAmazonListingPatch",
+    "BE always fr_BE.",
+    "nl_BE by default, fr_BE explicitly; unsupported de refused naming nl, fr. Actual built payload tests."
+  ],
+  [
+    "apps/api/src/services/categories/marketplace-ids.ts",
+    "export async function amazonLocale",
+    "BE absent → en_US.",
+    "BE nl_BE. Mocked reordered row produces fr_BE."
+  ],
+  [
+    "apps/api/src/services/categories/schema-sync.service.ts",
+    "locale: await amazonLocale",
+    "BE schema-label locale en_US.",
+    "BE nl_BE. Separate English-label request remains English through languageTag(en,US)."
+  ],
+  [
+    "apps/api/src/services/categories/seller-schema.service.ts",
+    "locale: await amazonLocale",
+    "BE schema-label locale en_US.",
+    "BE nl_BE. No provider request made."
+  ],
+  [
+    "apps/api/src/routes/marketplaces.routes.ts",
+    "export async function buildMarketplaceAmazonAttributes",
+    "Builder stamped it_IT; actual BE route lacked marketplace ID in static list.",
+    "Builder defaults nl_BE, supports fr_BE; ID now from AMAZON/BE row. Seed updates preserve configured arrays. Payload-only tests; no route publication."
+  ],
+  [
+    "apps/api/src/routes/listings-syndication.routes.ts",
+    "export function extractLocaleTitle",
+    "BE tag absent → first item_name entry. Scalar metadata nl.",
+    "Default matches nl_BE; helper matches fr_BE when supplied fr. nl/fr metadata exposed. Existing fallback when no matching tag remains until Step 3. Wrong-first-entry positive control tested."
+  ],
+  [
+    "apps/api/src/routes/field-links.routes.ts",
+    "const planMembers: PropagationMember[]",
+    "Both plans and source fallback hardcoded BE=nl.",
+    "Both plans and source fallback read channel-qualified row: AMAZON/BE default nl; explicit source language retained."
+  ],
+  [
+    "apps/api/src/routes/listing-wizard.routes.ts",
+    "async function contentGroupKey",
+    "BE absent → en content groups.",
+    "nl:AMAZON groups; generation/preview receive group channel. No AI generation invoked."
+  ],
+  [
+    "apps/api/src/services/listing-wizard/submission.service.ts",
+    "function contentGroupKey",
+    "BE absent → en:AMAZON group.",
+    "nl:AMAZON group and language=nl review metadata. Actual composer chooses Dutch fixture over English decoy."
+  ],
+  [
+    "apps/api/src/services/listing-automation/triggers.ts",
+    "Language authority is Marketplace.languages",
+    "Hardcoded BE=nl helper.",
+    "Map/helper deleted; actions use row authority."
+  ],
+  [
+    "apps/api/src/services/listing-automation/action-handlers.ts",
+    "const lang = (await marketLanguages",
+    "Hardcoded BE=nl in grouping/result selection.",
+    "AMAZON/BE nl from row, retained per listing for result selection. No automation run."
+  ],
+  [
+    "apps/api/src/services/reviews/review-insert-pdf.service.ts",
+    "const language = (await marketLanguages",
+    "BE absent → English insert.",
+    "BE requests nl; explicit refusal before opening PDF because no Dutch COPY edition exists. No machine copy added. Refusal + French PDF positive control tested."
+  ],
+  [
+    "apps/api/src/services/listing-preflight.service.ts",
+    "const expected = ctx.languages",
+    "BE [fr_BE,nl_BE] hardcoded.",
+    "[nl_BE,fr_BE] from supplied authority; accepts both and names ordered alternatives for mismatch. Italian warning retained with authority supplied."
+  ],
+  [
+    "apps/api/src/routes/amazon-flat-file.routes.ts",
+    "const gpsrLanguages = await marketLanguages",
+    "Two GPSR contexts relied on internal map.",
+    "Both load ordered row once and pass languages to preflight. Route is outside protected services glob; neither route rehearsed."
+  ],
+  [
+    "apps/api/src/services/pim/readiness.service.ts",
+    "languages: v.languages",
+    "GPSR relied on internal map.",
+    "Existing validator receives coordinate languages and derives nl_BE,fr_BE. No new readiness-index work."
+  ],
+  [
+    "apps/api/src/services/pim/sheet-columns.service.ts",
+    "const languageCoordinate = coordinates[0]",
+    "Code-only default lookup; BE scalar nl, fr refused.",
+    "Channel-qualified default nl, allows nl/fr, coordinate carries ordered languages. Store GLOBAL coordinates use their actual GLOBAL row."
+  ],
+  [
+    "apps/api/src/services/pim/information-locale.ts",
+    "export function assertInformationLocale",
+    "BE accepted only nl.",
+    "Accepts nl/fr; de refused naming both. Exact gate tested."
+  ],
+  [
+    "apps/api/src/routes/pim-global.routes.ts",
+    "const languages = [...new Set(markets.flatMap",
+    "Fixed en/source + table languages.",
+    "Configured market union includes nl/fr. XAVIA GALE GET200 returns nine language slots; no write."
+  ],
+  [
+    "apps/api/src/services/pim/global-content.ts",
+    "const languages = new Set",
+    "Fixed en/source + table languages.",
+    "Configured languages plus source/table languages. JSON excluded; old missing-translation fallback remains until Step 3."
+  ],
+  [
+    "apps/api/src/routes/product-translations.routes.ts",
+    "availableLanguages:",
+    "No availableLanguages field; inverse preference map.",
+    "Configured availableLanguages includes nl/fr; inverse market selection uses rows. Storage boundaries retained for Step 4."
+  ],
+  [
+    "apps/api/src/routes/products-ai.routes.ts",
+    "const targetLang = await languageForMarketplace",
+    "BE fr.",
+    "AMAZON/BE nl; no AI or write invocation."
+  ],
+  [
+    "apps/api/src/routes/marketing-automation.routes.ts",
+    "const targetLang = await languageForMarketplace",
+    "BE fr.",
+    "AMAZON/BE nl; existing primary rule retained; no automation run."
+  ],
+  [
+    "apps/api/src/services/ai/enrichment/generate.service.ts",
+    "await languageForMarketplace(input.scope.marketplace",
+    "BE fr; old helper ignored channel.",
+    "Selected channel row, AMAZON/BE nl; no generation run."
+  ],
+  [
+    "apps/api/src/services/pim/catalog-product-transfer.ts",
+    "markets.flatMap(m => marketLanguages",
+    "BE projected fr and one market locale.",
+    "AMAZON/BE default nl, both nl/fr in available locales. No transfer/export run."
+  ],
+  [
+    "apps/api/src/services/pim/catalog-transfer-export.ts",
+    "const templateLocale = localizedOnly",
+    "BE fr; template also used code-only scalar lookup.",
+    "Default nl from channel-qualified row; loaded workbook metadata agrees. No export/import run."
+  ],
+  [
+    "apps/api/src/services/pim/catalog-transfer-effects.ts",
+    "const locale = cell.locale",
+    "Missing BE locale → fr.",
+    "Missing BE locale → AMAZON/BE nl; explicit locale retained. No transfer apply."
+  ],
+  [
+    "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+    "for (const language of await marketLanguages",
+    "BE added one locale fr.",
+    "Selected row contributes both nl/fr. No workbook operation."
+  ],
+  [
+    "apps/api/src/services/pim/catalog-transfer.service.ts",
+    "db.marketplace.findMany",
+    "Lookup by code set could cross channels.",
+    "Lookup uses channel/code pairs; current BE row belongs only to AMAZON."
+  ],
+  [
+    "apps/api/src/services/pim/listing-readiness.service.ts",
+    "aliasKey: listing.aliasKey, locale:",
+    "BE fr.",
+    "Configured AMAZON/BE nl; missing coordinate unavailable instead of guessed language."
+  ],
+  [
+    "apps/api/src/services/pim/mapping/impact.service.ts",
+    "language: before.locale",
+    "BE fallback fr.",
+    "Selected channel default, nl for AMAZON/BE; explicit resolved locale retained."
+  ],
+  [
+    "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+    "input.locale ?? await languageForMarketplace",
+    "BE fallback fr.",
+    "AMAZON/BE fallback nl; explicit locale retained."
+  ],
+  [
+    "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+    "const locale = input.locale",
+    "BE fallback fr independent of channel.",
+    "Selected channel default nl for AMAZON/BE; explicit fr retained and passed to link helper."
+  ],
+  [
+    "apps/api/src/services/pim/resolve-channel-field.ts",
+    "targetLanguage: string",
+    "Pure link helper internally derived BE=fr.",
+    "Pure helper receives resolved targetLanguage, default nl or selected fr."
+  ],
+  [
+    "apps/api/src/services/pim/mapping-propagation.service.ts",
+    "linkForCoordinate(",
+    "BE link target internally fr.",
+    "Passes resolved locale: default nl / explicit fr."
+  ],
+  [
+    "apps/api/src/services/pim/studio-sheet.service.ts",
+    "linkForCoordinate(",
+    "BE link target internally fr.",
+    "Passes studio resolved locale: default nl / explicit fr."
+  ],
+  [
+    "apps/api/src/services/pim/reconcile-divergence.service.ts",
+    "const link = linkForCoordinate",
+    "BE link target internally fr.",
+    "Passes selected locale to pure helper; no per-field async query."
+  ],
+  [
+    "apps/api/src/services/compliance-resolver.service.ts",
+    "BE: { doc:",
+    "Actual hosted BE manual is French, fr_BE.",
+    "Same French document and fr_BE through languageTag. Document-edition map is not default market-language authority. Dutch is never stamped on French copy."
+  ],
+  [
+    "apps/api/src/services/images/amazon-media-client.ts",
+    "locale: languageTag",
+    "Explicit en_US schema-label request.",
+    "Same explicit English label request through languageTag(en,US); no provider call."
+  ],
+  [
+    "apps/api/src/services/ai/listing-content.service.ts",
+    "const contentLanguage =",
+    "BE absent → English prompt.",
+    "Selected channel authority; AMAZON/BE Dutch. Actual cost-preview prompt tested; no AI provider call."
+  ],
+  [
+    "apps/api/src/services/listing-wizard/ebay-publish.adapter.ts",
+    "export async function contentLanguageFor",
+    "BE absent → en-US.",
+    "Current EBAY/BE absent → refusal; configured test row derives nl-BE or fr-BE in row order. DE/GB tested too; publisher never invoked."
+  ],
+  [
+    "apps/api/src/services/pim/ebay-value-map.service.ts",
+    "const language = (await marketLanguages",
+    "BE language label fell back to BE; not English.",
+    "Requires EBAY/BE row, absent currently. Configured nl would display Dutch; seeder never run."
+  ],
+  [
+    "apps/api/src/services/amazon/value-translate.service.ts",
+    "const sourceLanguage = marketLanguages",
+    "BE source/target labels fell back to BE.",
+    "Loaded AMAZON/BE row gives Dutch for both. Async public signature unchanged; no translation run."
+  ],
+  [
+    "apps/api/src/routes/ebay-cockpit.routes.ts",
+    "const language = (await marketLanguages",
+    "BE absent → English.",
+    "Requires EBAY/BE row, absent currently; configured nl would display Dutch. No AI operation."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/scopes.ts",
+    "export function defaultLocaleFor",
+    "Scalar language; defaults combined all channels sharing code.",
+    "Ordered array and explicit channel: AMAZON/BE nl, allowed nl/fr. Collision + reordered-row positive controls pass."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+    "const supportedLanguages =",
+    "AMAZON/BE fixed nl, fr refused; Master/Etsy added static language list.",
+    "AMAZON/BE nl/fr accepted, nl default; static extra list removed. New Languages view remains Step 6."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+    "data?.scope.locale ?? locale",
+    "Two pending-locale fallbacks guessed it.",
+    "Uses API-resolved locale, then selected locale, then empty pending context; no invented Italian."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx",
+    "availableLanguages",
+    "Older editor had fixed supported language list.",
+    "Choices come from API availableLanguages including nl/fr. Older editor retained under D6."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+    "languages?:",
+    "MarketplaceLite had scalar only.",
+    "Wire mirror includes ordered languages, preserving BE nl/fr."
+  ],
+  [
+    "apps/web/src/app/products/_sheet/types.ts",
+    "languages?:",
+    "No coordinate languages wire field.",
+    "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts",
+    "languages?:",
+    "No coordinate languages wire field.",
+    "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  ],
+  [
+    "apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts",
+    "languages?:",
+    "No coordinate languages wire field.",
+    "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  ],
+  [
+    "apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx",
+    "<SummaryField label=\"Language\"",
+    "BE absent → em dash.",
+    "Displays producer language, nl for AMAZON/BE. Map removed; wire parity + actual composer tested."
+  ]
+]

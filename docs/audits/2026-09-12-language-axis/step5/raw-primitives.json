@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-12T21:59:58.594Z",
+  "command": [
+    "node",
+    "scripts/check-raw-primitives-ratchet.mjs",
+    "--check"
+  ],
+  "exitCode": 0,
+  "output": "✓ raw-primitive ratchet: 4340 raw control(s) (baseline 4692) — no file rose\n"
+}

@@ -37,7 +37,7 @@ export async function recoverSheetRow<T extends RecoveryRow>(body: unknown, requ
       try {
         const field = cell.colId
         const labels = isPickerReference(field)
-          ? (await loadReferenceChoices(field, { market: scope.market, productType: row.productType, connectionId: page.scope.connectionId ?? scope.accountId }, true)).labels
+          ? (await loadReferenceChoices(field, { market: scope.market, productType: row.productType, connectionId: page.scope.connectionId ?? scope.accountId }, { live: true, refresh: true })).labels
           : Object.fromEntries((await loadEbayPolicies(scope.market, true, page.scope.connectionId ?? scope.accountId))[policyLists[field]].map(policy => [policy.id, policy.name]))
         equal = sheetValuesMatch(stored.value, resolveReferenceValue(field, cell.value, Object.entries(labels).map(([id, name]) => ({ id, name }))))
       } catch { matches[cell.colId] = null; continue }

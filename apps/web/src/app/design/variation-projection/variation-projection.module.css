@@ -1,0 +1,506 @@
+/**
+ * /design/variation-projection — page-local classes that READ THE DS TOKENS. 2026-09-13.
+ *
+ * Same reasoning as `language-axis.module.css`: `ds-conformance-guard` forbids inline `fontSize`
+ * and inline hex colours, and the DS ships no type-scale utility, so a page's only conforming place
+ * for a size is a module class resolving to a published `--nds-font-size-*` step. Every colour here
+ * is a semantic token; there is not one literal in the file.
+ *
+ * Nothing here restyles a DS component. The classes are page scaffolding (the shell, the scenario
+ * frames, the stage chrome) plus the two diagram surfaces the DS has no component for — the layer
+ * map and the resolution chain — which are drawn with borders and tokens, never with colour values.
+ */
+
+.page {
+  font-family: var(--nds-font-sans);
+  color: var(--nds-text);
+  background: var(--nds-bg);
+  min-height: 100dvh;
+  padding: 24px 24px 96px;
+  display: grid;
+  gap: 40px;
+}
+
+/* ── head ─────────────────────────────────────────────────────────────────────────────────── */
+
+.head {
+  display: grid;
+  gap: 8px;
+  max-width: 1000px;
+}
+
+.eyebrow {
+  font-size: var(--nds-font-size-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nds-text-3);
+  font-weight: var(--nds-font-weight-semibold, 600);
+}
+
+.title {
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-bold, 700);
+  line-height: 1.2;
+  margin: 0;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: var(--nds-font-size-md);
+  color: var(--nds-text-2);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* ── scenario frame ───────────────────────────────────────────────────────────────────────── */
+
+.scenario {
+  display: grid;
+  gap: 10px;
+  scroll-margin-top: 16px;
+}
+
+.scenarioTitle {
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-bold, 700);
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.scenarioId {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold, 600);
+  color: var(--nds-text-3);
+  font-family: var(--nds-font-mono);
+}
+
+.hint {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  margin: 0;
+  line-height: 1.55;
+  max-width: 1000px;
+}
+
+.stage {
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+
+.stageLabel {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  background: var(--nds-surface-raised);
+  border-bottom: 1px solid var(--nds-border-subtle);
+  padding: 5px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stageBody {
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+/* A workspace stage: no padding, because the bands inside it are full-bleed like the real page. */
+.stageFlush {
+  display: grid;
+}
+
+/* ── the band row (the page band the design adds to; `.nds-pageband` supplies the geometry) ── */
+
+.bandSource {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+.bandSourceStrong {
+  font-weight: var(--nds-font-weight-semibold, 600);
+  color: var(--nds-text);
+}
+
+/* ── the docked track: grid beside a 420px panel, the studio's own shape ──────────────────── */
+
+.track {
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+}
+
+.trackMain {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.trackDock {
+  flex: 0 0 420px;
+  width: 420px;
+  border-left: 1px solid var(--nds-border);
+  background: var(--nds-surface);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dockHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.dockTitle {
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-bold, 700);
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dockSub {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  margin: 0;
+}
+
+.dockBody {
+  padding: 14px 16px;
+  display: grid;
+  gap: 18px;
+  align-content: start;
+  overflow: auto;
+}
+
+.dockFoot {
+  margin-top: auto;
+  padding: 10px 12px;
+  border-top: 1px solid var(--nds-border-subtle);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.section {
+  display: grid;
+  gap: 8px;
+}
+
+.sectionTitle {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-bold, 700);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sectionHint {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sourceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+/* One mapping row: grip · axis · arrow · target listbox. 28px controls, the sm tier. */
+.mapRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.mapRowAxis {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold, 600);
+  width: 84px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mapRowGrip {
+  color: var(--nds-text-3);
+  display: inline-flex;
+  cursor: grab;
+}
+
+.mapRowArrow {
+  color: var(--nds-text-3);
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.mapRowGrow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dropped {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  font-style: italic;
+}
+
+/* ── diagrams: the layer map and the resolution chain ─────────────────────────────────────── */
+
+.layers {
+  display: grid;
+  gap: 8px;
+}
+
+.layer {
+  display: grid;
+  grid-template-columns: 132px 1fr 148px;
+  gap: 12px;
+  align-items: start;
+  border: 1px solid var(--nds-border-subtle);
+  border-left: 3px solid var(--nds-border-strong, var(--nds-border));
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  padding: 10px 12px;
+}
+
+.layerName {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-bold, 700);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--nds-text-2);
+}
+
+.layerWhat {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.layerWhere {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
+.chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.chainStep {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  padding: 4px 9px;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  min-height: 28px;
+}
+
+.chainStepWins {
+  border-color: var(--nds-border-strong, var(--nds-border));
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold, 600);
+}
+
+.chainArrow {
+  color: var(--nds-text-3);
+  display: inline-flex;
+}
+
+.chainOut {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text);
+}
+
+/* ── the preview payload block ────────────────────────────────────────────────────────────── */
+
+.code {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  line-height: 1.55;
+  color: var(--nds-text);
+  background: var(--nds-surface-raised);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  padding: 10px 12px;
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  max-height: 300px;
+}
+
+.buyer {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-raised);
+  padding: 10px 12px;
+}
+
+.buyerAxis {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.buyerName {
+  font-size: var(--nds-font-size-xs);
+  font-weight: var(--nds-font-weight-semibold, 600);
+  color: var(--nds-text-2);
+  min-width: 76px;
+}
+
+.buyerValues {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ── small shared bits ────────────────────────────────────────────────────────────────────── */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rowTight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.spread {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.note {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+  margin: 0;
+  line-height: 1.55;
+}
+
+.mono {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  align-items: center;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+}
+
+.two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.planSteps {
+  display: grid;
+  gap: 6px;
+}
+
+.planStep {
+  display: grid;
+  grid-template-columns: 22px 74px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  padding-bottom: 6px;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.planStepN {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-3);
+}
+
+.planStepDetail {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  display: block;
+}
+
+.keepsLoses {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.listTight {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-2);
+  line-height: 1.6;
+}
+
+.gridHost {
+  /* The sheet's own frame; the grid inside supplies its own row and header geometry. */
+  border-top: 1px solid var(--nds-border-subtle);
+}

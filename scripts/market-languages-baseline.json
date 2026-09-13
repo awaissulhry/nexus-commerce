@@ -1,0 +1,19 @@
+[
+  "services/ebay-variation-push.service.ts:454: market to language map; the only authority is Marketplace.languages",
+  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:122: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:129: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/bulk-operations/lib/grid-columns.tsx:187: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/fulfillment/inbound/v2/NewPlanModal.tsx:131: Marketplace array lookup by code without channel",
+  "apps/web/src/app/marketing/aplus/AplusListClient.tsx:339: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:105: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:106: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:107: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:108: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:109: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/aplus/_lib/types.ts:110: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/automation/_lib/presets.ts:47: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/marketing/brand-story/BrandStoryListClient.tsx:349: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling",
+  "apps/web/src/app/products/[id]/datasheet/LaunchReadiness.tsx:47: market to language map; the only authority is Marketplace.languages",
+  "apps/web/src/app/products/[id]/datasheet/TranslationsTab.tsx:50: market to language map; the only authority is Marketplace.languages",
+  "apps/web/src/app/settings/profile/ProfileClient.tsx:130: regional tag used as a content language; normalizeLanguage() keeps one language-only spelling"
+]

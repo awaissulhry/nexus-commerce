@@ -1,0 +1,109 @@
+[
+  {
+    "name": "api-tests",
+    "cmd": "../../node_modules/.bin/vitest",
+    "args": [
+      "run",
+      "src/services/products/products-grid.contract.vitest.test.ts",
+      "src/services/pim/amazon-content-payload.vitest.test.ts",
+      "src/services/pim/catalog-language.vitest.test.ts",
+      "src/services/pim/catalog-transfer-export.vitest.test.ts",
+      "src/services/pim/catalog-transfer-jobs.vitest.test.ts",
+      "src/services/pim/catalog-transfer-transaction.vitest.test.ts",
+      "src/services/pim/catalog-transfer.vitest.test.ts",
+      "src/services/pim/catalog-translate.vitest.test.ts",
+      "src/services/pim/catalog-workbook-scopes.vitest.test.ts",
+      "src/services/pim/catalog-workbook.vitest.test.ts",
+      "src/services/pim/import-diff.service.vitest.test.ts",
+      "src/services/pim/listing-readiness.vitest.test.ts",
+      "src/services/pim/market-language-payloads.vitest.test.ts",
+      "src/services/pim/market-languages-guard.vitest.test.ts",
+      "src/services/pim/studio-columns-cache.vitest.test.ts",
+      "src/services/pim/channel-specs/cache-first.vitest.test.ts",
+      "src/services/pim/import-jobs.vitest.test.ts",
+      "src/lib/auth/permissions-manifest-order.vitest.test.ts",
+      "--reporter=json",
+      "--outputFile=../../docs/audits/2026-09-12-language-axis/step7/api-tests-complete.json"
+    ],
+    "cwd": "apps/api",
+    "start": "2026-09-12T23:44:30.362Z",
+    "finish": "2026-09-12T23:44:34.633Z",
+    "exitCode": 0,
+    "output": "{\n  \"guard\": \"LX.2\",\n  \"scanned\": 1493,\n  \"exempt\": [\n    \"services/amazon/flat-file-coerce-ai.ts\",\n    \"services/amazon/flat-file-coerce.ts\",\n    \"services/amazon/flat-file-hydrate.service.ts\",\n    \"services/amazon/flat-file-mapping-ai.ts\",\n    \"services/amazon/flat-file-mapping.ts\",\n    \"services/amazon/flat-file-merge.ts\",\n    \"services/amazon/flat-file-propagate.service.ts\",\n    \"services/amazon/flat-file-pull-preview.service.ts\",\n    \"services/amazon/flat-file-pull.service.ts\",\n    \"services/amazon/flat-file-schema-walk.ts\",\n    \"services/amazon/flat-file-verify-live.service.ts\",\n    \"services/amazon/flat-file.service.ts\",\n    \"services/channel-batch/amazon-batch-feed.service.ts\"\n  ],\n  \"violations\": []\n}\nJSON report written to /Users/awais/nexus-commerce/docs/audits/2026-09-12-language-axis/step7/api-tests-complete.json\n"
+  },
+  {
+    "name": "api-types",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/typecheck-scoped.mjs",
+      "apps/api/src/routes/catalog-transfer.routes.ts",
+      "apps/api/src/routes/marketplaces.routes.ts",
+      "apps/api/src/services/products/products-grid.contract.ts",
+      "apps/api/src/services/pim/catalog-transfer-jobs.ts",
+      "apps/api/src/services/outbound-sync.service.ts",
+      "apps/api/src/lib/auth/permissions-manifest.ts"
+    ],
+    "start": "2026-09-12T23:44:34.635Z",
+    "finish": "2026-09-12T23:44:39.096Z",
+    "exitCode": 0,
+    "output": "✓ apps/api: 6 file(s) given + 0 ambient + transitive imports — clean in 4.4s\n\n  scope: the files given and everything they IMPORT — not their consumers.\n  An exported-signature change can be green here and break a caller; for that, run the\n  workspace's own `npm run typecheck`.\n"
+  },
+  {
+    "name": "web-types",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/typecheck-scoped.mjs",
+      "apps/web/src/app/products/next/ProductsNextClient.tsx",
+      "apps/web/src/app/products/listing-readiness/page.tsx",
+      "apps/web/src/app/products/catalog-transfer/page.tsx"
+    ],
+    "start": "2026-09-12T23:44:39.097Z",
+    "finish": "2026-09-12T23:44:41.705Z",
+    "exitCode": 0,
+    "output": "✓ apps/web: 3 file(s) given + 1 ambient + transitive imports — clean in 2.6s\n\n  scope: the files given and everything they IMPORT — not their consumers.\n  An exported-signature change can be green here and break a caller; for that, run the\n  workspace's own `npm run typecheck`.\n"
+  },
+  {
+    "name": "check-raw-primitives-ratchet",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/check-raw-primitives-ratchet.mjs"
+    ],
+    "start": "2026-09-12T23:44:41.706Z",
+    "finish": "2026-09-12T23:44:42.061Z",
+    "exitCode": 0,
+    "output": "740 file(s) hold 4340 raw control(s) the DS already ships\n\n    98  apps/web/src/app/fulfillment/inbound/InboundWorkspace.tsx\n    75  apps/web/src/app/fulfillment/returns/ReturnsWorkspace.tsx\n    55  apps/web/src/app/fulfillment/stock/StockWorkspace.tsx\n    49  apps/web/src/app/fulfillment/suppliers/SuppliersClient.tsx\n    45  apps/web/src/app/fulfillment/purchase-orders/[id]/PurchaseOrderDetailClient.tsx\n    45  apps/web/src/app/listings/ListingsWorkspace.tsx\n    42  apps/web/src/app/fulfillment/outbound/PendingShipmentsClient.tsx\n    40  apps/web/src/app/products/[id]/list-wizard/steps/Step5Variations.tsx\n    39  apps/web/src/app/products/_shared/ProductDrawer.tsx\n    35  apps/web/src/app/orders/reviews/rules/RulesClient.tsx\n    34  apps/web/src/app/fulfillment/suppliers/development/[id]/ProjectDetailClient.tsx\n    34  apps/web/src/app/reconciliation/ReconciliationClient.tsx\n"
+  },
+  {
+    "name": "ds-conformance-guard",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/ds-conformance-guard.mjs"
+    ],
+    "start": "2026-09-12T23:44:42.062Z",
+    "finish": "2026-09-12T23:44:43.091Z",
+    "exitCode": 0,
+    "output": "section              select     date       fontSize   hex        legacyKit  rawColor   tailwindType\nproducts             12         0          0          1          301        7674       3709       \nfulfillment          0          0          2          2          215        4840       2892       \nmarketing            0          0          0          0          68         1805       881        \nsettings             0          0          0          0          45         1184       735        \ncatalog              1          0          0          0          16         1052       525        \nbulk-operations      1          1          0          0          38         956        485        \nlistings             0          0          0          0          45         706        459        \ndashboard            0          0          0          0          30         726        401        \norders               0          0          0          0          44         630        426        \nsync-logs            0          0          0          0          23         554        238        \npricing              0          0          0          0          32         328        221        \n_shared              2          1          0          0          8          376        136        \ninsights             0          0          0          0          21         306        181        \ncustomers            0          0          0          0          16         244        150        \nreconciliation       0          0          0          0          0          133        76         \ndesign               0          0          0          0          16         13         124        \nadmin                0          0          0          0          1          78         52         \nperformance          0          0          0          0          0          66         53         \npo                   0          0          0          0          0          53         49         \nanalytics            0          0          0          0          0          58         29         \naudit-log            0          0          0          0          3          52         29         \ncommand-matrix       0          0          0          0          1          51         15         \ntrack                0          0          0          0          0          40         19         \nreports              0          0          0          0          0          33         23         \nmarketing/ads        0          2          4          30         0          0          0          \ninbox                0          0          0          0          2          26         6          \ninventory            0          0          0          0          1          13         8          \nlogin                0          0          0          0          0          10         10         \naccept-invite        0          0          0          0          0          7          7          \nforgot-password      0          0          0          0          0          5          5          \nreset-password       0          0          0          0          0          5          5          \nunsubscribed         0          0          0          0          0          6          3          \n_auth                0          0          0          0          0          4          4          \nerror.tsx            0          0          0          0          1          4          3          \nnot-found.tsx        0          0          0          0          1          4          2          \n403                  0          0          0          0          0          2          2          \nlayout.tsx           0          0          0          0          2          1          0          \nloading.tsx          0          0          0          0          0          1          1          \n\n(zero-count sections omitted; legacy consoles + Amazon H10 world allowlisted)\n"
+  },
+  {
+    "name": "check-token-resolution",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/check-token-resolution.mjs"
+    ],
+    "start": "2026-09-12T23:44:43.091Z",
+    "finish": "2026-09-12T23:44:44.147Z",
+    "exitCode": 0,
+    "output": "\n── web  (apps/web/src)\n   109 stylesheet(s) · 383 token(s) defined · 345 consumed\n   ·  --nds-surface-canvas — undefined but every use carries a fallback (information, not a failure) — apps/web/src/app/products/next-gen/next-gen.css:19\n   abstained: 12\n      --nds-dg-font — written at runtime — apps/web/src/design-system/grid/datagrid/geometry.ts:119\n      --nds-dg-line — written at runtime — apps/web/src/design-system/grid/datagrid/geometry.ts:120\n      --nds-dg-pad-x — written at runtime — apps/web/src/design-system/grid/datagrid/geometry.ts:118\n      --nds-dg-pad-y — written at runtime — apps/web/src/design-system/grid/datagrid/geometry.ts:117\n      --nds-editor-h — written at runtime — apps/web/src/design-system/grid/editors/sheet.ts:95\n      --nds-editor-w — written at runtime — apps/web/src/design-system/grid/editors/sheet.ts:94\n      --nds-formula-ref — written at runtime — apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx:171\n      --nds-grid-header-h — written at runtime — apps/web/src/design-system/grid/NexusGrid.tsx:373\n      --nds-grid-sheet-gutter — written at runtime — apps/web/src/design-system/grid/hosts/GridSheet.tsx:61\n      --nds-grid-sheet-top — written at runtime — apps/web/src/design-system/grid/hosts/GridSheet.tsx:60\n      --nds-media-size — written at runtime — apps/web/src/design-system/grid/renderers/MediaCellView.tsx:77\n      --nds-tooltip-arrow-x — written at runtime — apps/web/src/design-system/primitives/Tooltip.tsx:118\n\n── factory  (apps/factory/src)\n   7 stylesheet(s) · 328 token(s) defined · 237 consumed\n   ·  --nds-bg-subtle — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/app/globals.css:112\n   ·  --nds-editor-h — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:828\n   ·  --nds-editor-w — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:819\n   ·  --nds-fab-reserve-inline — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:1021\n   ·  --nds-formula-ref — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:839\n   ·  --nds-grid-sheet-gutter — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:1006\n   ·  --nds-grid-sheet-top — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:1006\n   ·  --nds-media-size — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/grid/theme/grid.css:864\n   ·  --nds-topbar-h — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/design-system/styles/components.css:617\n   ·  --nds-wash-danger — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/app/(app)/financials/_components/InvoiceModals.tsx:23\n   ·  --nds-wash-success — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/app/(app)/orders/_components/OrderDetail.tsx:418\n   ·  --nds-wash-warning — undefined but every use carries a fallback (information, not a failure) — apps/factory/src/app/(app)/contacts/_components/ComparePricing.tsx:99\n   abstained: 1\n      --nds-tooltip-arrow-x — written at runtime — apps/factory/src/design-system/primitives/Tooltip.tsx:118\n   🔴 --nds-surface-2 — consumed with NO fallback, defined nowhere in this app\n        apps/web/src/app/design/variation-projection/variation-projection.module.css:111\n        apps/web/src/app/design/variation-projection/variation-projection.module.css:294\n        apps/web/src/app/design/variation-projection/variation-projection.module.css:333\n        apps/web/src/app/design/variation-projection/variation-projection.module.css:365\n        apps/web/src/app/design/variation-projection/variation-projection.module.css:380\n"
+  },
+  {
+    "name": "check-ag-grid-import-boundary",
+    "cmd": "/opt/homebrew/Cellar/node/25.9.0_2/bin/node",
+    "args": [
+      "scripts/check-ag-grid-import-boundary.mjs"
+    ],
+    "start": "2026-09-12T23:44:44.147Z",
+    "finish": "2026-09-12T23:44:45.631Z",
+    "exitCode": 0,
+    "output": "✓ ag-grid import boundary: only the engine and the labs import AG Grid; no stylesheet outside the engine addresses it (5853 ts + 109 css scanned)\n"
+  }
+]

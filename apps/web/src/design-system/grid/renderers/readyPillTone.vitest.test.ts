@@ -43,3 +43,5 @@ describe('readyPillTone — state, not percentage', () => {
     expect(readyPillTone('ready')).not.toBe('warning')
   })
 })
+
+it('a listing reference is info, never a selling claim', () => { expect(readyPillTone('live')).toBe('info') })

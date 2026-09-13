@@ -1,3 +1,4 @@
+import { normalizeLanguage } from '../../pim/content-language.js'
 /**
  * PES.8 — how a draft addresses one sheet cell.
  *
@@ -72,7 +73,7 @@ export function encodeCellKey(input: CellAddress): string {
     channel: input.channel ?? null,
     marketplace: input.marketplace ?? null,
     aliasId: input.aliasId ?? null,
-    locale: input.locale ?? null,
+    locale: input.locale ? normalizeLanguage(input.locale) : null,
     writeField: input.writeField,
   }
   assertSegment('writeField', a.writeField)
@@ -116,7 +117,7 @@ export function decodeCellKey(key: string): CellAddress {
     let locale: string | null = null
     for (const s of segs) {
       if (s.startsWith(ALIAS_SIGIL)) aliasId = s.slice(ALIAS_SIGIL.length)
-      else if (s.startsWith(LOCALE_SIGIL)) locale = s.slice(LOCALE_SIGIL.length)
+      else if (s.startsWith(LOCALE_SIGIL)) locale = normalizeLanguage(s.slice(LOCALE_SIGIL.length))
       else throw new CellKeyError(`unrecognised segment ${JSON.stringify(s)} in ${JSON.stringify(key)}`)
     }
     return { aliasId, locale }

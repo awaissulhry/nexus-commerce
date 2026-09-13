@@ -1,0 +1,122 @@
+[
+  {
+    "name": "focus-visible",
+    "command": "node scripts/check-focus-visible.mjs",
+    "exit": 0,
+    "load": 6.53,
+    "uptime": "20:02  up 16 days, 21:10, 19 users, load averages: 6.53 5.68 5.75",
+    "log": "/private/tmp/nexus-pr6-presence/final-focus-visible.log"
+  },
+  {
+    "name": "token-role",
+    "command": "node scripts/check-token-role.mjs",
+    "exit": 0,
+    "load": 6.53,
+    "uptime": "20:02  up 16 days, 21:10, 19 users, load averages: 6.53 5.68 5.75",
+    "log": "/private/tmp/nexus-pr6-presence/final-token-role.log"
+  },
+  {
+    "name": "silent-disabled",
+    "command": "node scripts/check-silent-disabled.mjs",
+    "exit": 1,
+    "load": 6.53,
+    "uptime": "20:02  up 16 days, 21:10, 19 users, load averages: 6.53 5.68 5.75",
+    "log": "/private/tmp/nexus-pr6-presence/final-silent-disabled.log"
+  },
+  {
+    "name": "ds-dts-fresh",
+    "command": "node scripts/check-ds-dts-fresh.mjs --check",
+    "exit": 0,
+    "load": 6.53,
+    "uptime": "20:02  up 16 days, 21:10, 19 users, load averages: 6.53 5.68 5.75",
+    "log": "/private/tmp/nexus-pr6-presence/final-ds-dts-fresh.log"
+  },
+  {
+    "name": "ds-fork-drift",
+    "command": "node scripts/check-ds-fork-drift.mjs --check",
+    "exit": 0,
+    "load": 6.33,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 6.33 5.65 5.74",
+    "log": "/private/tmp/nexus-pr6-presence/final-ds-fork-drift.log"
+  },
+  {
+    "name": "grid-swatch-contrast",
+    "command": "node scripts/check-grid-swatch-contrast.mjs --check",
+    "exit": 0,
+    "load": 6.33,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 6.33 5.65 5.74",
+    "log": "/private/tmp/nexus-pr6-presence/final-grid-swatch-contrast.log"
+  },
+  {
+    "name": "dark-alias-scope",
+    "command": "node scripts/check-dark-alias-scope.mjs --check",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-dark-alias-scope.log"
+  },
+  {
+    "name": "dark-pin-parity",
+    "command": "node scripts/check-dark-pin-parity.mjs",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-dark-pin-parity.log"
+  },
+  {
+    "name": "token-resolution",
+    "command": "node scripts/check-token-resolution.mjs --check",
+    "exit": 1,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-token-resolution.log"
+  },
+  {
+    "name": "css-parse",
+    "command": "node scripts/check-css-parse.mjs",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-css-parse.log"
+  },
+  {
+    "name": "css-hex-ratchet",
+    "command": "node scripts/check-css-hex-ratchet.mjs --check",
+    "exit": 1,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-css-hex-ratchet.log"
+  },
+  {
+    "name": "css-radius-ratchet",
+    "command": "node scripts/check-css-radius-ratchet.mjs --check",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-css-radius-ratchet.log"
+  },
+  {
+    "name": "css-ds-shadow-ratchet",
+    "command": "node scripts/check-css-ds-shadow-ratchet.mjs --check",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-css-ds-shadow-ratchet.log"
+  },
+  {
+    "name": "ag-grid-import-boundary",
+    "command": "node scripts/check-ag-grid-import-boundary.mjs",
+    "exit": 0,
+    "load": 5.66,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.66 5.53 5.70",
+    "log": "/private/tmp/nexus-pr6-presence/final-ag-grid-import-boundary.log"
+  },
+  {
+    "name": "contrast",
+    "command": "node docs/audits/2026-09-13-presence/pr6/contrast.mjs --check --suggest",
+    "exit": 1,
+    "load": 5.61,
+    "uptime": "20:02  up 16 days, 21:11, 19 users, load averages: 5.61 5.52 5.69",
+    "log": "/private/tmp/nexus-pr6-presence/final-contrast.log"
+  }
+]

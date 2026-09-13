@@ -1,3 +1,6 @@
+import { normalizeLanguage } from '../services/pim/content-language.js'
+import { findAssetOverlayForLanguage } from '../services/asset-locale-overlay-store.service.js'
+import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W4.5 — DAM CRUD API.
@@ -1180,7 +1183,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
     const id = request.params.id.startsWith('da_')
       ? request.params.id.slice(3)
       : request.params.id
-    const locale = request.query.locale ?? 'it-IT'
+    const locale = normalizeLanguage(request.query.locale ?? PRIMARY_CONTENT_LOCALE)
 
     const asset = await prisma.digitalAsset.findUnique({
       where: { id },
@@ -1222,7 +1225,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       locale,
       profile: validProfile ?? null,
       activeOverlay: overlay
-        ? { id: overlay.id, locale: overlay.locale, text: overlay.text }
+        ? { id: overlay.id, locale: normalizeLanguage(overlay.locale), text: overlay.text }
         : null,
       variants,
     }
@@ -1247,7 +1250,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
         where: { assetId: id },
         orderBy: { locale: 'asc' },
       })
-      return { overlays }
+      return { overlays: overlays.map(overlay => ({ ...overlay, locale: normalizeLanguage(overlay.locale) })) }
     },
   )
 
@@ -1273,9 +1276,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const id = request.params.id.startsWith('da_')
         ? request.params.id.slice(3)
         : request.params.id
-      const locale = (request as unknown as {
-        params: { id: string; locale: string }
-      }).params.locale
+      const locale = normalizeLanguage((request as unknown as { params: { id: string; locale: string } }).params.locale)
       if (!locale)
         return reply.code(400).send({ error: 'locale is required' })
       const body = request.body ?? {}
@@ -1289,8 +1290,9 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       if (!asset)
         return reply.code(404).send({ error: 'asset not found' })
 
+      const existing = await findAssetOverlayForLanguage(id, locale)
       const overlay = await prisma.assetLocaleOverlay.upsert({
-        where: { assetId_locale: workspaceKey({ assetId: id, locale }) },
+        where: { assetId_locale: workspaceKey({ assetId: id, locale: existing?.locale ?? locale }) },
         update: {
           text: body.text.trim(),
           position: body.position ?? 'south',
@@ -1314,7 +1316,7 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
           enabled: body.enabled ?? true,
         },
       })
-      return { overlay }
+      return { overlay: { ...overlay, locale: normalizeLanguage(overlay.locale) } }
     },
   )
 
@@ -1324,10 +1326,12 @@ const assetsRoutes: FastifyPluginAsync = async (fastify) => {
       const id = request.params.id.startsWith('da_')
         ? request.params.id.slice(3)
         : request.params.id
-      const locale = request.params.locale
+      const locale = normalizeLanguage(request.params.locale)
+      const existing = await findAssetOverlayForLanguage(id, locale)
+      if (!existing) return reply.code(404).send({ error: 'overlay not found' })
       try {
         await prisma.assetLocaleOverlay.delete({
-          where: { assetId_locale: workspaceKey({ assetId: id, locale }) },
+          where: { id: existing.id },
         })
       } catch {
         return reply.code(404).send({ error: 'overlay not found' })

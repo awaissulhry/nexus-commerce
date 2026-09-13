@@ -28,8 +28,13 @@ const field = (fieldKey: string, extra: Partial<CatalogueField> = {}): Catalogue
 const input = { channel: 'EBAY', marketplace: 'IT', productIds: ['p'] }
 beforeEach(() => {
   vi.clearAllMocks()
-  db.products.mockResolvedValue([{ id: 'p', sku: 'SKU', name: 'Master title', brand: 'Master brand', basePrice: 49, totalStock: 0,
-    localizedContent: { it: { title: 'Titolo condiviso' } }, categoryAttributes: { material: 'Leather' }, variantAttributes: {}, parentId: null }])
+  // LX.F R-LX-13 — the Italian title is the PRODUCT COLUMN (`it` is the primary
+  // language, so it has no translation row by contract), and the legacy
+  // `localizedContent` key stays in the fixture deliberately: it is the arm that
+  // must NOT be read. Before LX it supplied the value; the retired slot now
+  // carries a decoy, so any reader that reaches for it fails loudly here.
+  db.products.mockResolvedValue([{ id: 'p', sku: 'SKU', name: 'Titolo condiviso', brand: 'Master brand', basePrice: 49, totalStock: 0,
+    translations: [], localizedContent: { it: { title: 'RETIRED — must not be read' } }, categoryAttributes: { material: 'Leather' }, variantAttributes: {}, parentId: null }])
   db.listings.mockResolvedValue([])
   db.mapping.mockResolvedValue({ fields: {} })
   db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('title', { priority: 'required',
@@ -38,13 +43,16 @@ beforeEach(() => {
 
 describe('editor, preview and validation share channel inheritance', () => {
   it('simulates imported storage patches without changing stored products or independent listing aliases', async () => {
-    const stored = [{ productId: 'p', title: 'Pinned title', followMasterTitle: false }]
+    const stored = [{ productId: 'p', channel: 'EBAY', marketplace: 'IT', title: 'Pinned title', followMasterTitle: false }]
     db.listings.mockResolvedValue(stored)
     const before = await resolveBatch(input)
-    const after = await resolveBatch({ ...input, aliasKey: 'summer', channelConnectionId: 'account-a', productChangesByProduct: { p: { localizedContent: { it: { title: 'New shared title' } } } }, listingChangesByProduct: { p: { followMasterTitle: true, title: null } } })
+    // The primary-language shared title is the `name` column (LX.8's routing table),
+  // not a `localizedContent` patch — `catalog-transfer-effects.ts:76` excludes content
+  // fields from this simulation for exactly that reason.
+    const after = await resolveBatch({ ...input, aliasKey: 'summer', channelConnectionId: 'account-a', productChangesByProduct: { p: { name: 'New shared title' } }, listingChangesByProduct: { p: { followMasterTitle: true, title: null } } })
     expect(before.products[0].cells.title.value).toBe('Pinned title')
     expect(after.products[0].cells.title.value).toBe('New shared title')
-    expect(stored).toEqual([{ productId: 'p', title: 'Pinned title', followMasterTitle: false }])
+    expect(stored).toEqual([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', title: 'Pinned title', followMasterTitle: false }])
     expect(db.listings).toHaveBeenLastCalledWith(expect.objectContaining({ where: expect.objectContaining({ aliasKey: 'summer', channelConnectionId: 'account-a', marketplace: 'IT' }) }))
     expect((await resolveBatch(input)).products[0].cells.title.value).toBe('Pinned title')
   })
@@ -57,7 +65,7 @@ describe('editor, preview and validation share channel inheritance', () => {
   it('simulates Master changes through both flat and localized paths without changing explicit destination overrides', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('item_name', { rule: { source: 'name' } }),
       field('description', { rule: { source: 'localizedContent.{locale}.title' } }), field('brand', { rule: { source: 'title' } })] })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { brand: 'Pinned destination' } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { brand: 'Pinned destination' } }])
     const result = await resolveBatch({ ...input, masterChangesByProduct: { p: { title: 'Proposed title' } } })
     expect(result.products[0].cells.item_name.value).toBe('Proposed title')
     expect(result.products[0].cells.description.value).toBe('Proposed title')
@@ -67,7 +75,7 @@ describe('editor, preview and validation share channel inheritance', () => {
   it('reconciliation removes only mapped overrides while retaining listing-owned settings', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('fabric', { rule: { source: 'material' } }),
       field('policy', { rule: null, sourceOwner: { kind: 'listing', label: 'Policies', path: 'policy' } })] })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { fabric: 'Pinned suede', policy: 'policy-1' } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { fabric: 'Pinned suede', policy: 'policy-1' } }])
     const result = await resolveBatch({ ...input, inheritMappedFields: true })
     expect(result.products[0].cells.fabric.value).toBe('Leather')
     expect(result.products[0].cells.policy.value).toBe('policy-1')
@@ -84,26 +92,42 @@ describe('editor, preview and validation share channel inheritance', () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('packageWeight', { rule: { source: 'basePrice', transforms: [{ type: 'expr', expr: 'measure($basePrice, null)' }] } })] })
     expect((await resolveBatch(input)).products[0].cells.packageWeight.errors.join(' ')).toContain('measure() needs a unit')
   })
-  it('restoring Master ignores both the old snapshot and old override', async () => {
-    db.listings.mockResolvedValue([{ productId: 'p', followMasterTitle: true, title: 'Old sync', titleOverride: 'Old override' }])
+  /**
+   * LX.F R-LX-13 — split, because LX.3 changed what "restored" means on the wire.
+   *
+   * `followMasterTitle: true` with a stale `title` column is a FOLLOWING SNAPSHOT:
+   * LX.3 reads the legacy pin for `languages[0]` and marks it `drift`, because that
+   * snapshot is what the channel currently shows. A RESET is no longer expressed by
+   * the follow flag — it writes the field into the pin row's `follows` list, and
+   * the resolver then skips the legacy value entirely (`content-resolver.ts:189`).
+   * Both arms are the shipped contract, so both are measured.
+   */
+  it('reads a following legacy snapshot as the channel value (LX.3 drift)', async () => {
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', followMasterTitle: true, title: 'Old sync', titleOverride: 'Old override' }])
+    const result = await resolveBatch(input)
+    expect(result.products[0].cells.title.value).toBe('Old sync')
+  })
+  it('a reset through the pin row returns to Master, ignoring snapshot and override', async () => {
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', followMasterTitle: true, title: 'Old sync', titleOverride: 'Old override',
+      translations: [{ language: 'it', follows: ['title'], attributes: {}, source: 'manual' }] }])
     const result = await resolveBatch(input)
     expect(result.products[0].cells.title.value).toBe('Titolo condiviso')
     expect(result.products[0].cells.title.provenance).toBe('catalogRule')
   })
   it('an explicit target override wins even when the mapping reads a different source', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('brand', { rule: { source: 'material', transforms: [{ type: 'upperCase' }] } })] })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { brand: 'Listing brand' } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { brand: 'Listing brand' } }])
     expect((await resolveBatch(input)).products[0].cells.brand).toMatchObject({ value: 'Listing brand', provenance: 'override', appliedTransforms: [] })
   })
   it('does not feed one listing override into another field mapping', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('fabric_type', { rule: { source: 'categoryAttributes.material' } })] })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { material: 'Listing-only material' } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { material: 'Listing-only material' } }])
     expect((await resolveBatch(input)).products[0].cells.fabric_type).toMatchObject({ value: 'Leather', provenance: 'catalogRule' })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { material: 'Listing-only material', fabric_type: 'Explicit fabric' } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { material: 'Listing-only material', fabric_type: 'Explicit fabric' } }])
     expect((await resolveBatch(input)).products[0].cells.fabric_type).toMatchObject({ value: 'Explicit fabric', provenance: 'override' })
   })
   it('keeps alias listing overrides isolated from the primary listing', async () => {
-    db.listings.mockImplementation(async ({ where }: any) => [{ productId: 'p', followMasterTitle: false,
+    db.listings.mockImplementation(async ({ where }: any) => [{ productId: 'p', channel: 'EBAY', marketplace: 'IT', followMasterTitle: false,
       titleOverride: where.aliasKey === 'alternate' ? 'Alias title' : 'Primary title' }])
     const primary = await resolveBatch(input)
     const alias = await resolveBatch({ ...input, aliasKey: 'alternate' })
@@ -113,7 +137,7 @@ describe('editor, preview and validation share channel inheritance', () => {
   })
   it('a deliberate empty override stays empty and fails required validation', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('material', { priority: 'required' })] })
-    db.listings.mockResolvedValue([{ productId: 'p', overrideData: { material: null } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { material: null } }])
     const result = await resolveBatch(input)
     expect(result.products[0].cells.material.value).toBeNull()
     expect(result.products[0].counts.requiredMissing).toBe(1)
@@ -121,7 +145,7 @@ describe('editor, preview and validation share channel inheritance', () => {
   it('preview includes direct channel-only settings without a stored mapping', async () => {
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('returnPolicy', { rule: null, status: 'unmapped',
       channelStore: { kind: 'platformAttributes', path: ['policies', 'return'] } })] })
-    db.listings.mockResolvedValue([{ productId: 'p', platformAttributes: { policies: { return: 'policy-123' } } }])
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', platformAttributes: { policies: { return: 'policy-123' } } }])
     const preview = await previewPayload({ ...input, productId: 'p' })
     expect(preview.payload).toEqual({ returnPolicy: 'policy-123' })
   })
@@ -194,7 +218,7 @@ describe('Master changes across channels, markets, accounts and aliases', () => 
     db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('fabric_type', { rule: { source: 'categoryAttributes.material' } })] })
     db.listings.mockImplementation(async ({ where }: any) =>
       where.channel === 'AMAZON' && where.marketplace === 'IT' && where.channelConnectionId === 'account-a' && where.aliasKey === 'alternate'
-        ? [{ productId: 'p', overrideData: { fabric_type: 'Pinned suede' } }]
+        ? [{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { fabric_type: 'Pinned suede' } }]
         : [])
     const coordinates = ['AMAZON', 'EBAY'].flatMap(channel => ['IT', 'DE', 'FR', 'ES'].flatMap(marketplace =>
       ['account-a', 'account-b'].flatMap(channelConnectionId => ['', 'alternate'].map(aliasKey => ({ channel, marketplace, channelConnectionId, aliasKey })))))
@@ -225,7 +249,7 @@ describe('presentation defaults use the canonical channel resolver', () => {
     expect(b.products[0].cells.descriptionThemeId).toMatchObject({ value: 'theme-b', supplyingRule: { id: 'account-b', version: 3 } })
     const a = await resolveBatch({ ...input, channelConnectionId: 'a' })
     expect(a.products[0].cells.descriptionThemeId.value).toBe('theme-1')
-    db.listings.mockImplementation(async ({ where }: any) => where.aliasKey === 'alias' ? [{ productId: 'p', overrideData: { descriptionThemeId: 'custom-theme' } }] : [])
+    db.listings.mockImplementation(async ({ where }: any) => where.aliasKey === 'alias' ? [{ productId: 'p', channel: 'EBAY', marketplace: 'IT', overrideData: { descriptionThemeId: 'custom-theme' } }] : [])
     expect((await resolveBatch({ ...input, channelConnectionId: 'b', aliasKey: 'alias' })).products[0].cells.descriptionThemeId).toMatchObject({ value: 'custom-theme', provenance: 'override' })
   })
 })

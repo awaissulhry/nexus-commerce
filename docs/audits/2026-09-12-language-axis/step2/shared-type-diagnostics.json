@@ -1,0 +1,8 @@
+{
+  "measuredAt": "2026-09-12T05:36:26.172366+00:00",
+  "file": "apps/api/src/lib/amazon-sp-client.ts",
+  "mtime": "2026-09-12T05:32:51.154860+00:00",
+  "sha256": "8adf374581f11a83273ae9da70c4c31909a8c3f63b77f974cb47f6720a956755",
+  "editedByThisSession": false,
+  "diagnostics": "\u2717 apps/api: 2 error(s) across 58 file(s) in 6.9s\napps/api/src/lib/amazon-sp-client.ts(85,5): error TS2322: Type '(...args: any[]) => Promise<any>' is not assignable to type '(<TOperation extends Operation>(req_params: ReqParams<TOperation>) => Promise<ObjectType<TOperation>>) & (<T extends unknown>(details: DownloadDocument, options?: DownloadOptions) => T) & (<T>(details: { ...; }, feed: { ...; }) => T)'.\n  Type '(...args: any[]) => Promise<any>' is not assignable to type '<T extends unknown>(details: DownloadDocument, options?: DownloadOptions) => T'.\n    Type 'Promise<any>' is not assignable to type 'T'.\n      'Promise<any>' is assignable to the constraint of type 'T', but 'T' could be instantiated with a different subtype of constraint 'unknown'.\napps/api/src/lib/amazon-sp-client.ts(87,14): error TS2540: Cannot assign to 'access_token' because it is a read-only property.\n\u2713 apps/web: 10 file(s) given + 1 ambient + transitive imports \u2014 clean in 4.4s\n"
+}

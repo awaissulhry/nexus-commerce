@@ -1,0 +1,119 @@
+{
+  "recordedAt": "2026-09-13T11:51:59.454334+00:00",
+  "gitHead": "da1078ddf4ede503ad7bf1f52dc74f2ed5a70d61",
+  "scope": "Current working tree, including pre-existing uncommitted work. Hashes captured at end of review. Only audit artifacts added.",
+  "files": {
+    "apps/api/src/services/pim/variation-rules.service.ts": "49da06e8f9e74a356008615843bf5444f5f123412680d189027e1d3390d800c4",
+    "apps/api/src/services/pim/variation-theme-facts.ts": "1fe521644570b80221cef557a8ac32b3b95536cb124f7227732f27eb83369bf0",
+    "apps/api/src/services/pim/variation-rule-view.service.ts": "d4814d93516a1f59c0b13f0804e932af4fd84249e8dfb64d5ddd0244594f251e",
+    "apps/api/src/services/pim/family-projection.service.ts": "eaa06ac22532f7ccc4920b46da160bf01d099f8acc20626c9cb94e4b100d75dc",
+    "apps/api/src/services/pim/studio-sheet.service.ts": "d7c9f2de5c65ec806ec45dd4171941a019e6fa9aadfd0d5b78de2d2a024164e3",
+    "apps/api/src/services/pim/schema-mapping.service.ts": "85e1fd79cdf64c2a14f8ad59de13f350bac0ff705cb840dd3b83d1ed9553e72e",
+    "apps/api/src/services/listing-wizard/amazon-publish.adapter.ts": "ee3afde3f3bb23b210b959f5d6aa371284a7ebcb5ee27775c74508ac6e3625c9",
+    "apps/api/src/services/shopify/content-workspace.service.ts": "eee7fe58b11b50abe2139580402f05d051362f8c6cf0602bbcb3604eb12b9bcf",
+    "apps/api/src/services/shopify/content-publisher.ts": "f82534ea6a05939327e042ad7ea4a098c82e036a48bc04190d2574b8b7b707eb",
+    "apps/web/src/design-system/grid/editors/AxesPanelEditor.tsx": "96c598c957d3cce00dc3dc5523a5c05bfa08184f363bedc32f4ea539ddb47a7d",
+    "apps/web/src/design-system/grid/renderers/variationTheme.tsx": "4a5d928ac4408857885a8d17fbfaa6e295e3f41ce6181913f7de2c57a5154795",
+    "apps/web/src/design-system/grid/editors/sheetWriter.ts": "d517c0db604529ec415583e71b181b465ca9ff912226e3278b3fe44c622f3bd1",
+    "apps/web/src/design-system/grid/theme/grid.css": "bbe3d52daca8705579d5f29fd17f061c37f185a396a8d9e7e5bbbb80cd68fd6b",
+    "scripts/check-ds-fork-drift.mjs": "5d746f56e111227cf272602735bdec0f8ad9acca66843836dfa3db2573e60d41"
+  },
+  "validation": [
+    {
+      "command": "npm test --workspace=apps/web -- variationTheme AxesPanelEditor themeChangePlan themePlanAsk variations variationMappingFilter",
+      "exitCode": 0,
+      "filesPassed": 7,
+      "testsPassed": 202
+    },
+    {
+      "cwd": "apps/api",
+      "command": "npm test -- variation-rules variation-theme-segments variation-rule-store variation-rule-view shared-variation-values variation-ebay-precedence family-variation-axes family-projection theme-change variation-mapping-filter",
+      "exitCode": 0,
+      "filesPassed": 11,
+      "testsPassed": 185,
+      "database": "127.0.0.1/nexus_development, pinned by test config"
+    },
+    {
+      "command": "npm run typecheck --workspace=apps/api",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run typecheck --workspace=apps/web",
+      "exitCode": 0
+    },
+    {
+      "command": "npm run tokens:check",
+      "exitCode": 0,
+      "note": "First sandbox run failed EPERM creating a tsx socket; escalated rerun passed."
+    },
+    {
+      "command": "node scripts/check-ds-fork-drift.mjs --check",
+      "exitCode": 0,
+      "note": "156 shared files, 8 baseline differences; missing factory files are excluded by this guard."
+    },
+    {
+      "command": "node scripts/check-ag-grid-import-boundary.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node scripts/check-raw-primitives-ratchet.mjs",
+      "exitCode": 0,
+      "note": "Historical inventory: 739 files, 4338 raw controls; not a claim that all controls are migrated."
+    },
+    {
+      "command": "node scripts/check-dark-alias-scope.mjs",
+      "exitCode": 0
+    },
+    {
+      "command": "node --import tsx docs/audits/2026-09-13-variation-theme-review/probe.mts",
+      "exitCode": 0,
+      "note": "Behavioral observations, not assertions of correctness. Real function bodies, in-memory I/O; three positive controls refused."
+    },
+    {
+      "command": "node docs/audits/2026-09-13-variation-theme-review/read-local.mjs",
+      "exitCode": 0,
+      "note": "Sandbox localhost connections failed; escalated rerun captured individual HTTP statuses. Etsy projection 400 is not a pass."
+    }
+  ],
+  "browser": {
+    "product": "GALE-JACKET",
+    "coordinate": "AMAZON IT",
+    "desktop": {
+      "width": 1440,
+      "height": 900,
+      "popupWidth": 420,
+      "popupHeight": 320
+    },
+    "narrow": {
+      "width": 390,
+      "height": 844,
+      "popupWidth": 161,
+      "popupLeft": 229,
+      "clipping": true
+    },
+    "hint": {
+      "text": "Esc discards \u00b7 \u23ce saves",
+      "fontSizePx": 11,
+      "foreground": [
+        126,
+        135,
+        150
+      ],
+      "background": [
+        255,
+        255,
+        255
+      ],
+      "contrast": 3.62
+    },
+    "themeAndViewportRestored": true,
+    "catalogSaveSubmitted": false
+  },
+  "factoryMissing": [
+    "grid/editors/AxesPanelEditor.tsx",
+    "grid/renderers/variationTheme.tsx",
+    "grid/editors/sheetWriter.ts",
+    "grid/editors/sheetColumn.ts",
+    "grid/editors/shapeColumn.ts"
+  ]
+}

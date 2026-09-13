@@ -23,8 +23,9 @@ vi.mock('../services/cx/apps.service.js', () => ({ getChannelApp: async () => ({
 const requests = vi.fn(async (_config: unknown, _args: unknown[]) => ({ ok: true }))
 const downloads = vi.fn(async () => 'document')
 vi.mock('amazon-sp-api', () => ({ SellingPartner: class {
-  access_token: string
-  constructor(readonly config: any) { this.access_token = config.access_token }
+  _access_token: string
+  constructor(readonly config: any) { this._access_token = config.access_token }
+  get access_token() { return this._access_token }
   callAPI(...args: unknown[]) { return requests({ ...this.config, access_token: this.access_token }, args) }
   download() { return downloads() }
   upload() { return downloads() }

@@ -1,3 +1,6 @@
+import type { ListingPresenceFields } from '../../presence/fields'
+import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
+import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared/content-language'
 /**
  * PES.3 — the wire contract of a CHANNEL SCOPE of the Product Edit Studio sheet.
  *
@@ -45,13 +48,26 @@
  */
 export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
 
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
+/**
+ * VT.2 (2026-09-13, additive) — `'variationTheme'` is the `Variation theme` column
+ * (`docs/vt1-contracts.md` §1): one column served on EVERY scope whose value is a `VariationThemeCell`
+ * object rather than a scalar. It is declared in this mirror because the ROUTING fact is the kind —
+ * the engine's `variationThemeColumnDef` is selected on `col.kind === 'variationTheme'`, never on the
+ * column key — and a comparison against a literal outside the union is a type error, so without it
+ * the builder below could not route at all. Same reason as every other widening in this file: a
+ * consumer that cannot name what the server sends cannot consume it.
+ */
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
 
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
 
 /** One column of a channel's field family, as the channel schema defines it. */
 export interface SheetColumn {
+  /** Resolver-owned field classification used by the Languages saved view. */
+  localizable?: boolean
+  /** Set on a <key>@<locale> column in the saved Languages view. */
+  locale?: string
   managedBy?: 'productMedia'
   shopifyField?: import('@nexus/shared/shopify-information').InformationField
   familyRules?: Record<string, { required: boolean; sortOrder: number }>
@@ -113,7 +129,8 @@ export interface SheetColumn {
   // ── AM.1 (2026-09-05) — the shape vocabulary, mirrored from `sheet-columns.service.ts` ─────────
   // All OPTIONAL: an older server omits them and every consumer must read absence as `scalar`.
   /** Default `scalar`. A `list` column's value is an array; a `measure` column's is `{ value, unit }`. */
-  shape?: 'scalar' | 'list' | 'measure'
+  /** `'axes'` — VT.2's variation-theme projection (additive 2026-09-13). */
+  shape?: 'scalar' | 'list' | 'measure' | 'axes'
   /** list only. `max: null` = unbounded. A bounded list ≤ 10 arrives as slot columns instead. */
   cardinality?: { min: number; max: number | null }
   /** measure only. */
@@ -165,6 +182,7 @@ export type ChannelValueSource =
   | 'aliasExplicit'
   | 'channelOverride'
   | 'channelExplicit'
+  | 'channelSnapshot' // LX.3: following legacy text; follows=true, never an operator pin.
   | 'default'
 
 /**
@@ -205,11 +223,8 @@ export type StudioWriteVerb = 'master' | 'channel'
  * mapped-ness from a non-empty source under-counts.
  */
 export interface MappedCell {
+  derived?: boolean
   nexusDraft?: boolean
-  requestedLocale?: string
-  effectiveLocale?: string
-  translationState?: 'current' | 'fallback' | 'draft' | 'reviewed' | 'outdated' | 'missing'
-  needsTranslation?: boolean
 
   sourceOwner?: { kind: 'listing' | 'system'; label: string; path: string } | null
 
@@ -232,12 +247,13 @@ export interface MappedCell {
 }
 
 /** PES.5 §3.2 — `SheetCellValue` plus the studio's provenance and write routing. */
-export interface StudioCellValue {
+export interface StudioCellValue extends importContentWriteFacts {
   nexusDraft?: boolean
-  requestedLocale?: string
-  effectiveLocale?: string
-  translationState?: 'current' | 'fallback' | 'draft' | 'reviewed' | 'outdated' | 'missing'
-  needsTranslation?: boolean
+  tier?: importResolvedContent['tier']
+  language?: importResolvedContent['language']
+  requested?: importResolvedContent['requested']
+  provenance?: importResolvedContent['provenance']
+  translation?: importResolvedContent['translation']
 
   resettable?: boolean
   shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite
@@ -367,7 +383,7 @@ export interface StudioRow {
 }
 
 /** PES.5's `SheetListing` — the row's own listing state on this coordinate. */
-export interface SheetListing {
+export interface SheetListing extends ListingPresenceFields {
   id: string
   /**
    * 🔴 The version a CHANNEL write must CAS against — the LISTING's, never the product's.

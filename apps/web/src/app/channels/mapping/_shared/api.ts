@@ -227,3 +227,23 @@ export const fetchMappingHistory = (channel: string, code: string) => json<{
 
 export interface PreviewListing { id: string; channel: string; marketplace: string; channelConnectionId: string | null; aliasKey: string; accountName: string | null }
 export const fetchPreviewListings = (productId: string) => json<{ listings: PreviewListing[] }>(`${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/listings`).then(r => r.listings)
+
+// ── VT.3 — the Variations rule (design §3.7 · VX §11.1) ────────────
+// ONE route, two calls: `dryRun: true` is the blast-radius simulation that must run before the
+// same PUT commits. Requested from VT.1 in `docs/pes-claims.md`; until it answers, the group reads
+// the honest unavailable state from the thrown error's `status` rather than inventing a rule.
+
+const variationsPath = (channel: string, code: string, categoryId?: string | null) =>
+  `${base()}/channel-mapping/${encodeURIComponent(channel)}/${encodeURIComponent(code)}/variations${
+    categoryId ? `/${encodeURIComponent(categoryId)}` : ''}`
+
+export const fetchVariationRule = (channel: string, code: string, categoryId: string | null, signal?: AbortSignal) =>
+  json<import('./contracts').VariationRuleView>(variationsPath(channel, code, categoryId), { signal })
+
+export const putVariationRule = (
+  channel: string, code: string, categoryId: string | null,
+  body: import('./contracts').VariationRuleWrite,
+) =>
+  json<import('./contracts').VariationRuleSimulation>(variationsPath(channel, code, categoryId), {
+    method: 'PUT', body: JSON.stringify(body),
+  })

@@ -1,3 +1,4 @@
+import { catalogLanguageValues, orderCatalogLanguage, restrictCatalogLanguage } from '../pim/catalog-language.js'
 /**
  * The products list — ONE implementation behind two routes.
  *
@@ -69,6 +70,20 @@ export async function isCacheReady(): Promise<boolean> {
 }
 
 export interface ProductListQuery {
+  /**
+   * VT.1b (VX §11.4) — the catalogue's `Variation mapping` dimension:
+   * `?variationMapping=derived|rule|overridden|unset|collides`, the same pipe-separated words the page's
+   * `?filter=variation-mapping:…` term carries. Narrowed server-side by `restrictVariationMapping`.
+   */
+  variationMapping?: string
+  language?: string
+  languageStates?: string[]
+  /** LX.F P2-16 — tri-state. `'none'` is "the operator selected no value in the
+   *  fallback@<lang> filter", which used to be written onto `languageStates` (the
+   *  READINESS predicate) and silently clobbered a readiness filter set moments
+   *  earlier by the same loop. */
+  languageFallback?: boolean | 'none'
+  languageSort?: { field: 'title' | 'description' | 'readiness' | 'fallback'; direction: 'asc' | 'desc' }
   page?: string
   limit?: string
   search?: string
@@ -613,6 +628,27 @@ export async function resolveProductsScope(q: ProductListQuery) {
   const stockActive = stockPredicate.levels.length > 0 || stockPredicate.min !== undefined || stockPredicate.max !== undefined
   if (stockActive) await restrictToStock(where, cacheWhere, useCache, stockPredicate)
 
+  const languageIds = await restrictCatalogLanguage(q, where)
+  if (languageIds !== null) {
+    where.AND = [...(where.AND ?? []), { id: { in: languageIds } }]
+    cacheWhere.AND = [...(cacheWhere.AND ?? []), { id: { in: languageIds } }]
+  }
+
+  // VT.1b (VX §11.4) — the Variation mapping dimension, narrowed the same way and in the same place as the language
+  // one: bounded by the ids the scope already admits, and applied to BOTH predicates so the cached read cannot answer
+  // wider than the live one.
+  if (q.variationMapping !== undefined && String(q.variationMapping).trim() !== '') {
+    const { restrictVariationMapping } = await import('../pim/variation-mapping-filter.js')
+    const candidates = await prisma.product.findMany({
+      where: languageIds !== null ? { AND: [where, { id: { in: languageIds } }] } : where,
+      select: { id: true },
+    })
+    const variationIds = await restrictVariationMapping(q.variationMapping, candidates.map(row => row.id))
+    if (variationIds !== null) {
+      where.AND = [...(where.AND ?? []), { id: { in: variationIds } }]
+      cacheWhere.AND = [...(cacheWhere.AND ?? []), { id: { in: variationIds } }]
+    }
+  }
   return { page, limit, where, cacheWhere, useCache, orderBy, sort, stockLevel, includeCoverage, includeTags, includeSales, salesDays }
 }
 
@@ -831,6 +867,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
     preorderedIds = ordered.map((row) => row.id)
   }
 
+  if (q.language && q.languageSort) preorderedIds = await orderCatalogLanguage(q, where, (page - 1) * limit, limit)
+
   // Phase 10b — short-circuit with 304 when nothing has changed.
   // /products grid polls every 30s + on visibility-change; without
   // ETag every poll re-runs the heavy product list with relations.
@@ -841,12 +879,13 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       page,
       limit,
       sort: q.sort,
+      language: q.language, languageSort: q.languageSort,
       includeCoverage,
       includeTags,
       parentId: q.parentId ?? null,
     },
   })
-  if (opts.etagMatches?.(etag)) {
+  if (!q.language && opts.etagMatches?.(etag)) {
     return { status: 304 as const, etag }
   }
 
@@ -1324,6 +1363,11 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       tags: includeTags ? (tagsByProduct.get(p.id) ?? []) : undefined,
     }
   })
+
+  if (q.language) {
+    const content = await catalogLanguageValues(products.map(product => product.id), q.language)
+    for (const product of products) Object.assign(product, { languageContent: content.get(product.id) ?? null })
+  }
 
   const body = {
     products,

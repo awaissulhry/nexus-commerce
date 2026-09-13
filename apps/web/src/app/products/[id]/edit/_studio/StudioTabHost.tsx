@@ -25,8 +25,8 @@ import { useStudioScope, useStudioProduct } from './contracts'
 import { studioAccountAccess } from './accountScope'
 import { STUDIO_TAB_LABELS } from './navigation'
 import { ErrorsSyncTab } from './channel-ops/ErrorsSyncTab'
-import { ChannelScopeTab } from './sheet/channel'
-import { MasterSheetTab } from './sheet/master'
+import { MatrixTab } from './matrix/MatrixTab'
+import { ProductSheetTab } from './sheet/ProductSheetTab'
 import { MASTER_SCOPE, type StudioTabId } from './types'
 import { ShopifyFamilyTab, ShopifyMetafieldsTab } from './shopify/ShopifyLinkedRoute'
 import { VariantsTab } from './variants/VariantsTab'
@@ -38,16 +38,12 @@ import styles from './studio.module.css'
  * `noUnusedLocals` failed the build. Removed by PES.7 as a consequence of filling those slots —
  * disclosed in docs/pes-claims.md, not a silent edit to another lane's frame.
  */
-function SheetTab() {
-  const { scope } = useStudioScope()
-  // Both branches are taken now: PES.2 owns master, PES.3 owns every channel scope. Each reads the
-  // coordinate from `useStudioScope()` itself and reports its writes through `useSaveReporter()`.
-  if (scope === MASTER_SCOPE) return <MasterSheetTab />
-  return <ChannelScopeTab />
-}
-
 const TABS: Record<StudioTabId, () => ReactNode> = {
-  sheet: SheetTab,
+  sheet: ProductSheetTab,
+  // MX.P — the Matrix: variants × (coordinate × offer field), on the same sheet substrate. ONE state,
+  // every coordinate at once; the scope bar's chips FILTER its groups rather than switching surfaces
+  // (`docs/2026-09-13-matrix-page-design.md` Revision). The frame does not know what it looks like.
+  matrix: MatrixTab,
   // ONE Variants page: `VariantsTab` is the SWITCH — master is VP.3's surface, a channel scope is VP.4's
   // projection of the same family (variants spec §1.1). The frame does not know what either looks like.
   variants: VariantsTab,

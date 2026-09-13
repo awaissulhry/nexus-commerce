@@ -1,3 +1,4 @@
+import { VARIATION_RULE_KEY } from '../variation-rule-store.js'
 import { InvalidMappingError, validateMapping, type MarketplaceSchemaMapping, type FieldMappingRule } from '../schema-mapping.service.js'
 import { exprDependenciesDeep, renameRuleCalls } from './expr.js'
 
@@ -55,7 +56,11 @@ export function validateReviewMapping(mapping: MarketplaceSchemaMapping) {
 }
 
 export function allMappingFields(...mappings: MarketplaceSchemaMapping[]): string[] {
-  return [...new Set(mappings.flatMap(m => [m.fields, ...Object.values(m.byProductType ?? {})].flatMap(b => Object.keys(b))))].sort()
+  // VT.1b / R-VT-2 — `variations` inside a category bucket is the variation RULE, not a field. Without this skip a
+  // restore or an expression review lists it as a field whose rule is `null`, i.e. a phantom "remove variations"
+  // change row in the review — and `changedFields` below would ask the activation to delete it.
+  return [...new Set(mappings.flatMap(m => [m.fields, ...Object.values(m.byProductType ?? {})]
+    .flatMap(b => Object.keys(b).filter(key => key !== VARIATION_RULE_KEY))))].sort()
 }
 
 export function changedFields(before: MarketplaceSchemaMapping, after: MarketplaceSchemaMapping): Array<{ fieldKey: string; rule: FieldMappingRule | null }> {

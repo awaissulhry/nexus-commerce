@@ -1,5 +1,8 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { storedPresentationValues } from './ebay-theme-axes.js'
 import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
+import { assertListingContentReviewed } from './pim/publish-review-gate.js'
 import type { AddFixedPriceItemInput, TradingVariation } from './ebay-trading-api.service.js'
 import { toTradingConditionId } from './ebay-condition.js'
 import { aspectCanonicalName, ASPECT_SYNONYM_GROUPS, AXIS_SYNONYM_GROUPS, axisSynonymKey, canonicalizeRowAspects } from './ebay-theme-axes.js'
@@ -291,7 +294,14 @@ export async function createSharedListing(
   const addFn = ctx.addFixedPriceItemFn ?? addFixedPriceItem
 
   try {
+    const pushControls = await readPushControls({ channel: 'EBAY', skus: [parentSku, ...variantRows.map(row => str(row.sku))], allowAbsent: true })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     await assertLegacyPresentationPublishAllowed({ sku: parentSku, marketplace: market })
+    // D7 / R-LX-7 — the one review verdict, beside the presentation one.
+    await assertListingContentReviewed({ sku: parentSku, channel: 'EBAY', marketplace: market })
     // Incident #23 — the adopt belt must never bow to a CORPSE. A membership
     // (or row ItemID) can reference a listing that has since been ended
     // (deleted pre-sweep-fix, ended in Seller Hub…). Verify liveness with

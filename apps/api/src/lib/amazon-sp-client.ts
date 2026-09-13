@@ -84,7 +84,9 @@ export async function getAmazonSpClient(accountId?: string, options: { auto_requ
     const original = client[method].bind(client)
     client[method] = async (...args: any[]) => {
       if (workspaceContext()?.workspaceId !== scope?.workspaceId) throw new WorkspaceError('amazon_context_changed', 'An Amazon operation cannot change business profile.')
-      client.access_token = await getAmazonAccessToken(id)
+      // amazon-sp-api exposes access_token as a getter only. Its requests read
+      // _access_token; update that backing field while CX owns token refresh.
+      client._access_token = await getAmazonAccessToken(id)
       return original(...args)
     }
   }

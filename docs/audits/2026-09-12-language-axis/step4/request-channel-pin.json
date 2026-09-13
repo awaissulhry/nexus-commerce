@@ -1,0 +1,42 @@
+{
+  "writtenAt": "2026-09-12T14:46:56.301Z",
+  "label": "Title",
+  "body": {
+    "changes": [
+      {
+        "id": "cmokmy0lr0009pm0p9yxk7ho0",
+        "field": "name",
+        "value": "XAVIA LX4 channel-pin control",
+        "contentAddress": {
+          "tier": "pin",
+          "language": "de",
+          "coordinate": {
+            "channel": "AMAZON",
+            "market": "DE",
+            "accountId": "cmothu9bo0000nz01asw6wx8j"
+          }
+        },
+        "contentVersion": 0,
+        "target": "channel"
+      }
+    ],
+    "expectedVersion": 17,
+    "marketplaceContexts": [
+      {
+        "marketplace": "DE",
+        "locale": "de",
+        "channel": "AMAZON",
+        "accountId": "cmothu9bo0000nz01asw6wx8j",
+        "aliasKey": ""
+      }
+    ]
+  },
+  "status": 200,
+  "result": {
+    "updated": 1,
+    "errors": [],
+    "success": true,
+    "currentVersion": 18,
+    "versionOf": "channelListing"
+  }
+}

@@ -12,14 +12,39 @@ const formulaDeleteMany = vi.fn()
 const auditCreate = vi.fn()
 const auditWrite = vi.fn()
 
-vi.mock('../../../db.js', () => ({
-  default: {
+/**
+ * CLOSE.1 (the 20 attributed API reds) — `Marketplace.languages` IS the contract `market-languages.ts` reads,
+ * so the mock has to carry it. Without this model the service died on
+ * `prisma.marketplace.findFirst` with `Cannot read properties of undefined (reading 'findFirst')`:
+ * LX made the market's languages an authority every coordinate consults (`loadContext` →
+ * `marketLanguages(channel, marketplace)`), and this fixture predated it. Rows, not a code→language
+ * rule, because rows are what the table holds.
+ */
+const MARKETPLACE_ROWS = [
+  { channel: 'EBAY', code: 'IT', languages: ['it'], language: 'it' },
+  { channel: 'EBAY', code: 'DE', languages: ['de'], language: 'de' },
+  { channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' },
+  { channel: 'AMAZON', code: 'DE', languages: ['de'], language: 'de' },
+]
+const marketplaceFindFirst = async (args: any) => MARKETPLACE_ROWS.find(row =>
+  (!args?.where?.channel || row.channel === args.where.channel) && (!args?.where?.code || row.code === args.where.code)) ?? null
+
+vi.mock('../../../db.js', () => {
+  const client: Record<string, unknown> = {
+    /* CLOSE.1 — `restoreFormulaSnapshot` runs inside `inDatabaseTransaction`
+       (`lib/database-context.ts:53`), which calls `client.$transaction`. The mock had no such
+       function, so the restore test died with `client.$transaction is not a function` rather than
+       asserting anything. The interactive form is the one the service uses: it hands the callback a
+       client, and that client is THIS mock — the same rows the assertions read. */
+    $transaction: (fn: any) => (typeof fn === 'function' ? fn(client) : Promise.all(fn)),
+    marketplace: { findFirst: (...a: unknown[]) => marketplaceFindFirst(a[0]) },
     product: { findUnique: (...a: unknown[]) => productFindUnique(...a), findUniqueOrThrow: (...a: unknown[]) => productFindUnique(...a), update: (...a: unknown[]) => productUpdate(...a) },
     channelListing: { findFirst: (...a: unknown[]) => listingFindFirst(...a), update: (...a: unknown[]) => listingUpdate(...a) },
     auditLog: { create: (...a: unknown[]) => auditCreate(...a) },
     cellFormula: { findUnique: (...a: unknown[]) => formulaFindUnique(...a), deleteMany: (...a: unknown[]) => formulaDeleteMany(...a), upsert: (...a: unknown[]) => formulaUpsert(...a), findMany: (...a: unknown[]) => formulaFindMany(...a) },
-  },
-}))
+  }
+  return { default: client }
+})
 vi.mock('../../audit-log.service.js', () => ({ auditLogService: { write: (...a: unknown[]) => auditWrite(...a) } }))
 vi.mock('../schema-mapping.service.js', () => ({ getMappingForMarketplace: async () => ({ expressions: {} }) }))
 vi.mock('./field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: [] }) }))
@@ -131,22 +156,22 @@ describe('safe formula persistence', () => {
 describe('atomic literal replacement and undo', () => {
   const coord = { productId: PID, scope: 'master' as const, locale: 'de', market: 'DE', fieldKey: 'basePrice' }
   it('removes the previous formula inside the value transaction, including a same-value edit', async () => {
-    formulaFindUnique.mockResolvedValue({ expr: '12', dependsOn: [] })
+    formulaFindMany.mockResolvedValue([{ locale: 'de', expr: '12', dependsOn: [] }])
     await setCellLiteral({ ...coord, value: 12 })
     expect(writer).toHaveBeenCalledWith(expect.objectContaining({ value: 12, atomic: expect.any(Function), expectedVersion: 3 }))
     expect(formulaDeleteMany).toHaveBeenCalledTimes(1)
     expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ action: 'formula.pinned' }) }))
   })
   it('keeps the previous formula when the literal write is refused', async () => {
-    formulaFindUnique.mockResolvedValue({ expr: '12', dependsOn: [] })
+    formulaFindMany.mockResolvedValue([{ locale: 'de', expr: '12', dependsOn: [] }])
     writer.mockResolvedValue({ ok: false, error: 'Version conflict' })
     await expect(setCellLiteral({ ...coord, value: 20 })).rejects.toThrow('Version conflict')
     expect(formulaDeleteMany).not.toHaveBeenCalled()
   })
   it('detects a changed formula even when its last good value stayed the same', async () => {
-    formulaFindUnique.mockResolvedValue({ expr: '12', version: 1, lastError: null })
+    formulaFindMany.mockResolvedValue([{ locale: 'de', expr: '12', version: 1, lastError: null }])
     const before = await readFormulaCell(coord)
-    formulaFindUnique.mockResolvedValue({ expr: '$missing', version: 2, lastError: 'Unknown field' })
+    formulaFindMany.mockResolvedValue([{ locale: 'de', expr: '$missing', version: 2, lastError: 'Unknown field' }])
     await expect(setCellLiteral({ ...coord, value: 20, expectedState: before.expectedState })).rejects.toThrow('changed after the preview')
     expect(writer).not.toHaveBeenCalled()
   })

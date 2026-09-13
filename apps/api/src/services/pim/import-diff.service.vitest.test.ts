@@ -19,6 +19,12 @@ const getStudioSheet = vi.fn()
 vi.mock('./studio-sheet.service.js', () => ({
   getStudioSheet: (...a: unknown[]) => getStudioSheet(...a),
 }))
+// LX.F F5 — the ONE authority answers "is this a language we sell in?" here too.
+const availableLanguages = vi.fn(async () => ['it', 'de', 'fr', 'nl', 'en'])
+vi.mock('./market-languages.js', async () => ({
+  ...(await vi.importActual<typeof import('./market-languages.js')>('./market-languages.js')),
+  availableContentLanguages: () => availableLanguages(),
+}))
 
 import { coerceByKind, computeImportDiff, fromFileForm, LIST_SEPARATOR, optionCodeFor, parseHeader } from './import-diff.service.js'
 
@@ -251,4 +257,78 @@ describe('writeField — the write path is told the WRITE field, the outcome nam
     expect(skip.reason).toBe('Field not editable on this listing')
     expect(diff.cells.find((c) => c.fieldKey === 'brand')?.verdict).toBe('changed')
   })
+})
+
+it('keeps German and French previews, write addresses, and refusals independent', async () => {
+  getStudioSheet.mockImplementation(async ({ locale }) => ({ columns: [{ key: 'sku' }, { key: 'name', writeField: 'name', kind: 'text' }], rows: [{ id: 'p1', sku: 'XAVIA', values: { sku: cell('XAVIA'), name: { ...cell(`Before ${locale}`), contentAddress: { tier: 'language', language: locale } } } }] }))
+  const diff = await computeImportDiff({ productId: 'p1', market: 'IT', headerRow: ['sku', 'name@de', 'name@fr'], rows: [{ sku: 'XAVIA', 'name@de': 'Deutsch', 'name@fr': 'Français' }], blankPolicy: 'ignore', validateBatch: async candidates => {
+    expect(candidates.map(c => c.contentAddress)).toEqual([{ tier: 'language', language: 'de' }, { tier: 'language', language: 'fr' }])
+    return new Map([['p1:name@de', 'German refusal']])
+  } })
+  expect(diff.cells.filter(c => c.fieldKey === 'name').map(c => [c.scope.locale, c.before, c.verdict])).toEqual([['de', 'Before de', 'refused'], ['fr', 'Before fr', 'changed']])
+  expect(parseHeader('title@amazon:BE:fr-BE')?.scope.locale).toBe('fr')
+  expect(parseHeader('title@amazon:BE:fr@de')).toBeNull()
+})
+
+it('LX.F P2-18 — both locale positions accept the same tags and normalise them', () => {
+  // The master position used to gate on /^[a-z]{2,3}$/, so these three parsed on a
+  // channel coordinate and returned null (an unrecognised column) on master.
+  for (const raw of ['title@de', 'title@DE', 'title@de-DE', 'title@de_DE']) {
+    expect(parseHeader(raw), raw).toMatchObject({ fieldKey: 'title', scope: { kind: 'master', locale: 'de' } })
+  }
+  expect(parseHeader('title@amazon:IT:de-DE')?.scope).toMatchObject({ kind: 'channel', marketplace: 'IT', locale: 'de' })
+  // POSITIVE CONTROL for the rejection arm: the permissive shape still refuses a
+  // non-language, and the normaliser's throw is the rejection rather than a crash.
+  expect(parseHeader('title@1x')).toBeNull()
+  expect(parseHeader('title@toolongforalanguage')).toBeNull()
+  expect(parseHeader('brand')).toMatchObject({ scope: { kind: 'master', locale: null } })
+})
+
+it('LX.F P2-13 / F3 — ONE header grammar, round-tripped arm by arm', async () => {
+  const { contentHeaderKey } = await import('@nexus/shared/content-header')
+  const arms: Array<[string, Parameters<typeof contentHeaderKey>[1], string, Record<string, unknown>]> = [
+    // The one that changed a TIER: the web writer dropped the language on a master
+    // scope, so a German master export round-tripped onto the Italian source.
+    ['title', { kind: 'master', locale: 'de' }, 'title@de', { kind: 'master', locale: 'de' }],
+    ['title', { kind: 'master', locale: 'de-DE' }, 'title@de', { kind: 'master', locale: 'de' }],
+    ['brand', { kind: 'master' }, 'brand', { kind: 'master', locale: null }],
+    // Casing and the trailing colon: one spelling now, and it parses back to the same
+    // coordinate either way (the parser upper-cases), so no existing file changes meaning.
+    ['title', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'de' }, 'title@amazon:IT:de', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'de' }],
+    ['brand', { kind: 'channel', channel: 'amazon', marketplace: 'it' }, 'brand@amazon:IT:', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: null }],
+    ['description', { kind: 'channel', channel: 'EBAY', marketplace: 'DE', locale: 'de_DE' }, 'description@ebay:DE:de', { kind: 'channel', channel: 'EBAY', marketplace: 'DE', locale: 'de' }],
+  ]
+  for (const [field, scope, header, parsed] of arms) {
+    expect(contentHeaderKey(field, scope), `${field} ${JSON.stringify(scope)}`).toBe(header)
+    expect(parseHeader(header)?.scope, header).toMatchObject(parsed)
+    expect(parseHeader(header)?.fieldKey, header).toBe(field)
+  }
+  // The FORM rides before the coordinate, and survives the round trip.
+  expect(contentHeaderKey('keywords', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'de' }, 'list')).toBe('keywords[]@amazon:IT:de')
+  expect(parseHeader('keywords[]@amazon:IT:de')).toMatchObject({ fieldKey: 'keywords', form: 'list', scope: { locale: 'de' } })
+  // POSITIVE CONTROL that there is only ONE writer now. The web module cannot be
+  // imported here (its own imports use the web's path aliases), so the claim is made
+  // against its SOURCE: `exportKeyFor` delegates to the shared grammar and no longer
+  // composes a header itself.
+  const { readFileSync } = await import('node:fs')
+  const webExport = readFileSync(new URL('../../../../web/src/app/products/[id]/edit/_studio/sheet/sheetExport.ts', import.meta.url), 'utf8')
+  const body = webExport.slice(webExport.indexOf('export function exportKeyFor'))
+  const fn = body.slice(0, body.indexOf('\n}') + 2)
+  expect(fn).toContain('return contentHeaderKey(key, scope, form)')
+  expect(fn).not.toContain('@${')   // no second composition
+  expect(webExport).toContain("from '@nexus/shared/content-header'")
+})
+
+it('LX.F F5 — a language the authority does not know is an UNKNOWN COLUMN, never a write', async () => {
+  // `parseHeader` validates the SHAPE of a locale, not its existence, so `name@zz` used
+  // to parse as `{tier:'language', language:'zz'}` and a write would have created a
+  // ProductTranslation row in a language nothing sells in — while the catalogue path
+  // (`catalog-translate.ts:68`) refused exactly that value. One rule now.
+  getStudioSheet.mockResolvedValue({ columns: [{ key: 'name', label: 'Name', writeField: 'name', kind: 'text', editable: true }], rows: [{ id: 'p1', sku: 'XAVIA', values: { name: { value: 'Giacca' } } }] })
+  const diff = await computeImportDiff({ productId: 'p1', market: 'IT', headerRow: ['sku', 'name@zz', 'name@de'],
+    rows: [{ sku: 'XAVIA', 'name@zz': 'Nonsense', 'name@de': 'Deutsch' }], blankPolicy: 'ignore' } as never)
+  expect(diff.unknownColumns).toContain('name@zz')
+  expect(diff.cells.some(cell => cell.scope.locale === 'zz')).toBe(false)
+  // POSITIVE CONTROL in the same run: the language the authority DOES know is diffed.
+  expect(diff.cells.some(cell => cell.scope.locale === 'de')).toBe(true)
 })

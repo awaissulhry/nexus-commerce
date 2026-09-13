@@ -1,3 +1,5 @@
+import { normalizeLanguage } from '../services/pim/content-language.js'
+import { findBrandStoryForLanguage } from '../services/brand-story-records.service.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * MC.9.1 — Amazon Brand Story (Brand Registry) CRUD.
@@ -38,7 +40,7 @@ async function snapshotBrandStory(
     name: story.name,
     brand: story.brand,
     marketplace: story.marketplace,
-    locale: story.locale,
+    locale: normalizeLanguage(story.locale),
     status: story.status,
     notes: story.notes,
     modules: story.modules.map((m) => ({
@@ -102,7 +104,7 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     })
-    return { items: rows }
+    return { items: rows.map(row => ({ ...row, locale: normalizeLanguage(row.locale) })) }
   })
 
   fastify.get('/brand-stories/:id', async (request, reply) => {
@@ -132,7 +134,7 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
     })
     if (!story)
       return reply.code(404).send({ error: 'Brand Story not found' })
-    return { story }
+    return { story: { ...story, locale: normalizeLanguage(story.locale), localizations: story.localizations.map(row => ({ ...row, locale: normalizeLanguage(row.locale) })), master: story.master ? { ...story.master, locale: normalizeLanguage(story.master.locale) } : null } }
   })
 
   fastify.post('/brand-stories', async (request, reply) => {
@@ -163,19 +165,21 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: 'masterStoryId does not exist' })
     }
 
+    const sameLanguage = await findBrandStoryForLanguage(body.brand.trim(), body.marketplace.trim(), body.locale)
+    if (sameLanguage) return reply.code(409).send({ error: 'A Brand Story for this language already exists', existingId: sameLanguage.id })
     try {
       const story = await prisma.brandStory.create({
         data: {
           name: body.name.trim(),
           brand: body.brand.trim(),
           marketplace: body.marketplace.trim(),
-          locale: body.locale.trim(),
+          locale: normalizeLanguage(body.locale.trim()),
           masterStoryId: body.masterStoryId ?? null,
           status: 'DRAFT',
         },
         include: { modules: true },
       })
-      return reply.code(201).send({ story })
+      return reply.code(201).send({ story: { ...story, locale: normalizeLanguage(story.locale) } })
     } catch (err: any) {
       // Unique constraint on (brand, marketplace, locale) — Amazon
       // rejects two stories competing for the same audience, so we
@@ -187,7 +191,7 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
             brand_marketplace_locale: workspaceKey({
               brand: body.brand.trim(),
               marketplace: body.marketplace.trim(),
-              locale: body.locale.trim(),
+              locale: normalizeLanguage(body.locale.trim()),
             }),
           },
           select: { id: true },
@@ -230,7 +234,7 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
         where: { id },
         data,
       })
-      return { story }
+      return { story: { ...story, locale: normalizeLanguage(story.locale) } }
     } catch (err: any) {
       if (err?.code === 'P2025')
         return reply.code(404).send({ error: 'Brand Story not found' })
@@ -368,19 +372,11 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
       // Idempotent — if a sibling for this brand+marketplace+locale
       // already exists, return it. Brand+marketplace+locale is the
       // unique key on BrandStory itself.
-      const existing = await prisma.brandStory.findUnique({
-        where: {
-          brand_marketplace_locale: workspaceKey({
-            brand: source.brand,
-            marketplace: body.marketplace,
-            locale: body.locale,
-          }),
-        },
-      })
+      const existing = await findBrandStoryForLanguage(source.brand, body.marketplace, body.locale!)
       if (existing)
         return reply
           .code(200)
-          .send({ story: existing, alreadyExisted: true })
+          .send({ story: { ...existing, locale: normalizeLanguage(existing.locale) }, alreadyExisted: true })
 
       const cloned = await prisma.$transaction(async (tx) => {
         const created = await tx.brandStory.create({
@@ -388,7 +384,7 @@ const brandStoryRoutes: FastifyPluginAsync = async (fastify) => {
             name: `${source.name}${body.nameSuffix ? ` — ${body.nameSuffix}` : ` (${body.locale})`}`,
             brand: source.brand,
             marketplace: body.marketplace!,
-            locale: body.locale!,
+            locale: normalizeLanguage(body.locale!),
             masterStoryId: source.id,
             status: 'DRAFT',
           },
@@ -461,7 +457,7 @@ const additionalRoutes: FastifyPluginAsync = async (fastify) => {
         name: story.name,
         brand: story.brand,
         marketplace: story.marketplace,
-        locale: story.locale,
+        locale: normalizeLanguage(story.locale),
         modules: story.modules.map((m) => ({
           type: m.type,
           payload: (m.payload as Record<string, unknown>) ?? {},
@@ -486,7 +482,7 @@ const additionalRoutes: FastifyPluginAsync = async (fastify) => {
         name: story.name,
         brand: story.brand,
         marketplace: story.marketplace,
-        locale: story.locale,
+        locale: normalizeLanguage(story.locale),
         modules: story.modules.map((m) => ({
           type: m.type,
           payload: (m.payload as Record<string, unknown>) ?? {},
@@ -508,7 +504,7 @@ const additionalRoutes: FastifyPluginAsync = async (fastify) => {
           name: story.name,
           brand: story.brand,
           marketplace: story.marketplace,
-          locale: story.locale,
+          locale: normalizeLanguage(story.locale),
           modules: story.modules.map((m) => ({
             type: m.type,
             payload: (m.payload as Record<string, unknown>) ?? {},
@@ -650,7 +646,7 @@ const additionalRoutes: FastifyPluginAsync = async (fastify) => {
           where: { id },
           data: { scheduledFor: scheduled },
         })
-        return { story }
+        return { story: { ...story, locale: normalizeLanguage(story.locale) } }
       } catch (err: any) {
         if (err?.code === 'P2025')
           return reply.code(404).send({ error: 'Brand Story not found' })

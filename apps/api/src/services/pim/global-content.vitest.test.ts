@@ -20,9 +20,9 @@ describe('LX.1 global content table projection', () => {
   it('retains native-column fallback for missing translations without adding records', () => {
     expect(globalContentLocales(product, null, ['en'])).toEqual({ en: { title: 'Giacca', description: 'Descrizione', bulletPoints: ['Fonte'], keywords: ['moto'] }, it: { title: 'Giacca', description: 'Descrizione', bulletPoints: ['Fonte'], keywords: ['moto'] } })
   })
-  it('includes parent table languages and preserves existing variant-native precedence', () => {
+  it('includes parent table languages and keeps child precedence inside the language tier', () => {
     const result = globalContentLocales({ ...product, id: 'child', parentId: 'p', translations: [{ language: 'de', name: 'Kind' }] }, { ...product, translations: [{ language: 'de', name: 'Eltern' }, { language: 'fr', name: 'Parent français' }], localizedContent: { nl: { title: 'Legacy parent' } } })
-    expect(result.de.title).toBe('Kind'); expect(result.fr.title).toBe('Giacca'); expect(result.nl).toBeUndefined()
+    expect(result.de.title).toBe('Kind'); expect(result.fr.title).toBe('Parent français'); expect(result.nl).toBeUndefined()
   })
   it('keeps byte-level text, list order and multilingual Unicode from table records', () => {
     const result = globalContentLocales({ ...product, translations: [{ language: 'DE', name: '  Jacke\n', description: '<p>Größe é e\u0301</p>', bulletPoints: ['z', 'a'], keywords: ['eins', 'zwei'] }] }, null)

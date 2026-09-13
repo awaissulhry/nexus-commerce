@@ -1,0 +1,20 @@
+{
+  "at": "2026-09-12T14:45:31.468Z",
+  "phase": "master-primary",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "restored": [
+    {
+      "table": "Product",
+      "id": "cmokmy0lr0009pm0p9yxk7ho0",
+      "fields": [
+        "name",
+        "version",
+        "updatedAt"
+      ],
+      "action": "restored baseline values"
+    }
+  ],
+  "auditRows": "retained as rehearsal history"
+}

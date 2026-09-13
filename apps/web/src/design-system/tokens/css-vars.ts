@@ -240,12 +240,13 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // toggle measured #146034 on #e7f4ec = 6.74:1 while the DS pair was 5.40:1, so it could not
   // convert without losing contrast. Darkening only the TEXT clears it at 6.95:1 on the existing
   // --nds-success-soft, so the wash does not move.
-  { name: '--nds-success-text', value: '#146034' },
+  // PR.6: derived on cell, hover, child, primary-soft and danger-soft grounds, not on a plain panel alone.
+  { name: '--nds-success-text', value: '#0b4b28' },
   // #6d3f10, was #8a5316. Same story as the -text tier one tier up, one more turn: four spellings
   // of a "this view is stale, click to reload" chip measured #6d3f10 on #fff6e8 = 8.27:1, while
   // Button variant="warning" was 5.69:1 — so four call sites of ONE concept could not converge
   // without losing contrast. The console computed the better number again; the DS adopts it.
-  { name: '--nds-warning-text', value: '#6d3f10' },
+  { name: '--nds-warning-text', value: '#653a0f' },
   // The tone palettes ship soft/text/strong but no BORDER step, so a tinted warning control had
   // nowhere to land — this is `.bp-btn.warn`'s measured #f0d9a8, tokenised. A tint's hairline is
   // decorative, so the number does not move; the TEXT is what rose (5.66 -> 5.69).
@@ -274,7 +275,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // they exist so the cue does not have to be abandoned.
   { name: '--nds-note-warn-border', value: '#e0d4a8' },
   { name: '--nds-note-error-border', value: '#eec9c4' },
-  { name: '--nds-danger-text', value: '#9c2f2a' },
+  // PR.6 Owner-approved completion: danger/warning/formula text clears every cell wash × row ground.
+  // Candidate derivation and both-theme ratios live in presence/pr6/contrast.mjs; no wash or new token.
+  { name: '--nds-danger-text', value: '#7d2621' },
   { name: '--nds-info-text-light', value: '#10457f' },
   { name: '--nds-info-text', value: 'var(--nds-info-text-light)' },
 
@@ -287,7 +290,7 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // can carry. `grid.css:527` already reads `var(--nds-prov-ai-fg, var(--nds-purple-700))`, so
   // these take over with no edit there.
   { name: '--nds-prov-ai-fg', value: '#6d28d9' },        // surface 7.10 · ai-tint 5.88 · pinned 6.48
-  { name: '--nds-prov-formula-fg', value: '#0e7490' },   // surface 5.36 · ai-tint 4.43 · pinned 4.88
+  { name: '--nds-prov-formula-fg', value: '#094b5e' },   // PR.6: character ink; full declared-ground measurements in presence/pr6/contrast.mjs
   // `inherited` / `via` read `--nds-info-strong`, which is `var(--nds-blue-700)` declared once at
   // `:root` and never in `.dark` — the third instance of the same class in one night. The light
   // value is unchanged (5.98 / 4.94 / 5.45); only dark was ever broken.
@@ -578,7 +581,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 6.32
   { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
   { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
-  { name: '--nds-danger-text', value: '#ef9c93' },       // on surface 7.14
+  { name: '--nds-danger-text', value: '#f3b7b0' },       // PR.6: >=7.05 across the full declared-ground matrix
   // Provenance marks in dark. The light values are dark-by-construction (they exist to be read on
   // a white cell), so on #18263b they measure 2.14 and 2.00 — the exact failure a semantic token
   // exists to prevent. Measured over all three grounds a mark can land on: the cell, the AI-draft
@@ -608,7 +611,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // value still follows `--nds-chrome-bg`, so this never needs updating when that ground moves.
   { name: '--nds-topbar-bg', value: 'var(--nds-chrome-bg)' },
   { name: '--nds-prov-ai-fg', value: '#c4b5fd' },        // surface 8.25 · ai-tint 8.18 · pinned 7.70
-  { name: '--nds-prov-formula-fg', value: '#22d3ee' },   // surface 8.43 · ai-tint 8.36 · pinned 7.87
+  { name: '--nds-prov-formula-fg', value: '#39d8f0' },   // PR.6: >=7.08 across the full declared-ground matrix
   // Deliberately NOT #8ab6f0: that is `--nds-text-link` in dark, and reusing it would make
   // "inherited" and "a link" the same colour in dark and different in light — the same reasoning
   // the dark `--nds-primary` entry above already records for itself.
@@ -623,7 +626,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // dark canvas — so -text aliases to it. --nds-stale-text follows --nds-warning-text and needs
   // no entry of its own.
   { name: '--nds-success-text', value: 'var(--nds-success-strong)' },   // 8.14 on success-soft
-  { name: '--nds-warning-text', value: 'var(--nds-warning-strong)' },   // 7.24 on warning-soft
+  { name: '--nds-warning-text', value: '#f2bc79' },   // PR.6: pending cell over hover ground >=7.07
   // warning-soft had no dark value, so a "warning" surface rendered a LIGHT amber wash on a dark
   // canvas — a contrast PASS that is still a visual bug, and the reason a ratio check alone is
   // not enough.

@@ -1,3 +1,5 @@
+import { resolveContent } from '../services/pim/content-resolver.js'
+import { contentListing } from '../services/pim/content-read.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
 import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import type { FastifyInstance } from 'fastify'
@@ -119,20 +121,11 @@ function listingUrlFor(channel: string, marketplace: string, externalId: string 
   }
 }
 
-// G.3 — extract locale-specific title from platformAttributes.
-// Amazon stores it in attributes.item_name[].value keyed by language_tag.
-// eBay stores it directly as the listing title (l.title); return null here
-// so the frontend falls back to l.title for eBay.
-export function extractLocaleTitle(pa: unknown, marketplace: string, language: string): string | null {
-  if (!pa || typeof pa !== 'object') return null
-  const attrs = (pa as any).attributes
-  if (!attrs || typeof attrs !== 'object') return null
-  const itemName = attrs.item_name
-  if (!Array.isArray(itemName) || itemName.length === 0) return null
-  const langTag = languageTag(language, marketplace)
-  const match = langTag ? itemName.find((n: any) => n?.language_tag === langTag) : null
-  const value = match?.value ?? itemName[0]?.value
-  return typeof value === 'string' && value.length > 0 ? value.slice(0, 200) : null
+/** Listing title projection; outbound platformAttributes never supplies product content. */
+export function extractLocaleTitle(product: Record<string, any>, listing: Record<string, any>, languages: readonly string[], requested = languages[0]): string | null {
+  const hydrated = contentListing(product, listing, undefined, languages)!
+  const resolved = resolveContent({ product: product as any, parent: product.parent, listing: hydrated, field: 'title', address: { requested, coordinate: hydrated.coordinate } })
+  return typeof resolved.value === 'string' && resolved.value.length ? resolved.value : null
 }
 
 export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
@@ -247,7 +240,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         Promise.resolve(etagCount),
         prisma.channelListing.findMany({
           where,
-          include: {
+          include: { translations: true,
             product: {
               select: {
                 id: true, sku: true, name: true, amazonAsin: true,
@@ -288,6 +281,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const offerMethodsByProduct = new Map<string, Set<'FBA' | 'FBM'>>()
       const stockByProduct = new Map<string, { fba: number; non: number }>()
       const fallbackByProduct = new Map<string, 'FBA' | 'FBM' | null>()
+      const contentByProduct = new Map<string, Record<string, any>>()
       if (pageProductIds.length > 0) {
         const [offerRows, stockRows, productRows] = await Promise.all([
           prisma.offer.findMany({
@@ -310,7 +304,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           }),
           prisma.product.findMany({
             where: { id: { in: pageProductIds } },
-            select: { id: true, fulfillmentMethod: true },
+            select: { id: true, workspaceId: true, fulfillmentMethod: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true, translations: true, parent: { include: { translations: true } } },
           }),
         ])
         for (const o of offerRows) {
@@ -326,6 +320,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           stockByProduct.set(s.productId, cur)
         }
         for (const p of productRows) {
+          contentByProduct.set(p.id, p)
           fallbackByProduct.set(p.id, (p.fulfillmentMethod ?? null) as 'FBA' | 'FBM' | null)
         }
       }
@@ -375,7 +370,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           browseNodePath: (l.platformAttributes as any)?.browseNodePath ?? null,
           browseNodeId: (l.platformAttributes as any)?.browseNodeId ?? null,
           ebayCategoryId: (l.platformAttributes as any)?.categoryId ?? null,
-          localeTitle: l.channel === 'AMAZON' && m?.language ? extractLocaleTitle(l.platformAttributes, l.marketplace, m.language) : null,
+          localeTitle: l.channel === 'AMAZON' && m?.language ? extractLocaleTitle(contentByProduct.get(l.productId)!, l, m.languages, m.language) : null,
           product: (() => {
             const buckets = stockByProduct.get(l.productId) ?? { fba: 0, non: 0 }
             return {
@@ -550,7 +545,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const [errorRows, suppressedRows, draftRows, failedSyncRows, pendingSyncRows, sampleAll] = await Promise.all([
         prisma.channelListing.findMany({
           where: { ...where, OR: [{ listingStatus: 'ERROR' }, { syncStatus: 'FAILED' }, { lastSyncStatus: 'FAILED' }] },
-          include: { product: { select: { id: true, sku: true, name: true } } },
+          include: { translations: true, product: { select: { id: true, sku: true, name: true } } },
           orderBy: { updatedAt: 'desc' },
           take: 100,
         }),
@@ -558,7 +553,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         prisma.channelListing.count({ where: { ...where, listingStatus: 'DRAFT' } }),
         prisma.channelListing.count({ where: { ...where, lastSyncStatus: 'FAILED' } }),
         prisma.channelListing.count({ where: { ...where, OR: [{ syncStatus: 'PENDING' }, { lastSyncStatus: 'PENDING' }] } }),
-        prisma.channelListing.findMany({
+        prisma.channelListing.findMany({ include: { translations: true },
           where,
           orderBy: { updatedAt: 'desc' },
           take: 500,
@@ -699,7 +694,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const listings = await prisma.channelListing.findMany({
         where: listingsWhere,
-        select: {
+        select: { translations: true,
           id: true, productId: true, channel: true, marketplace: true,
           listingStatus: true, syncStatus: true, lastSyncStatus: true,
           lastSyncedAt: true, lastSyncError: true,
@@ -863,7 +858,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const drafts = await prisma.channelListing.findMany({
         where: draftWhere,
-        include: { product: { select: { id: true, sku: true, name: true, basePrice: true } } },
+        include: { translations: true, product: { select: { id: true, sku: true, name: true, basePrice: true } } },
         orderBy: { updatedAt: 'desc' },
         take: limit,
       })
@@ -871,7 +866,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // For "uncovered": list products that don't have any listing on this channel
       const productsWithListings = await prisma.channelListing.findMany({
         where: { channel },
-        select: { productId: true },
+        select: { translations: true, productId: true },
         distinct: ['productId'],
       })
       const coveredIds = new Set(productsWithListings.map((p) => p.productId))
@@ -937,7 +932,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string }
       const l = await prisma.channelListing.findUnique({
         where: { id },
-        include: {
+        include: { translations: true,
           product: {
             select: {
               id: true, sku: true, name: true, basePrice: true, totalStock: true,
@@ -951,7 +946,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const companions = await prisma.channelListing.findMany({
         where: { productId: l.productId, id: { not: id } },
-        select: {
+        select: { translations: true,
           id: true, channel: true, marketplace: true,
           listingStatus: true, syncStatus: true, lastSyncStatus: true,
           lastSyncedAt: true, lastSyncError: true,
@@ -1286,7 +1281,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // we still increment, just no concurrent-edit detection.
       const current = await prisma.channelListing.findUnique({
         where: { id },
-        select: { id: true, version: true, platformAttributes: true },
+        select: { translations: true, id: true, version: true, platformAttributes: true },
       })
       if (!current) return reply.code(404).send({ error: 'Listing not found' })
       if (
@@ -1367,7 +1362,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         prisma.channelListing.count({ where: { ...where, listingStatus: 'SUPPRESSED' } }),
         prisma.channelListing.findMany({
           where,
-          select: {
+          select: { translations: true,
             id: true,
             estimatedFbaFee: true,
             referralFeePercent: true,
@@ -1512,7 +1507,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         prisma.channelListing.count({ where: { ...where, listingStatus: 'ERROR' } }),
         prisma.channelListing.findMany({
           where,
-          select: {
+          select: { translations: true,
             id: true,
             // C.14 — latest watcher snapshot per listing. We pull all
             // snapshots and reduce to the most recent on the server
@@ -1928,7 +1923,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const listing = await prisma.channelListing.findUnique({
         where: { id: body.channelListingId },
-        select: { id: true, channel: true, price: true, marketplace: true },
+        select: { translations: true, id: true, channel: true, price: true, marketplace: true },
       })
       if (!listing) return reply.code(404).send({ error: 'Listing not found' })
       if (listing.channel !== 'EBAY') {
@@ -2147,7 +2142,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
                 ...(r.marketplace ? { marketplace: r.marketplace } : {}),
               })),
             },
-            select: {
+            select: { translations: true,
               id: true,
               channel: true,
               marketplace: true,
@@ -2241,7 +2236,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
         prisma.channelListing.count({ where: { ...where, listingStatus: 'ERROR' } }),
         prisma.channelListing.findMany({
           where,
-          select: {
+          select: { translations: true,
             id: true,
             isPublished: true,
             salePrice: true,
@@ -2315,7 +2310,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const listing = await prisma.channelListing.findUnique({
         where: { id: body.listingId },
-        select: { id: true, channel: true },
+        select: { translations: true, id: true, channel: true },
       })
       if (!listing) return reply.code(404).send({ error: 'Listing not found' })
       if (listing.channel !== 'AMAZON') {
@@ -2526,7 +2521,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const listing = await prisma.channelListing.findUnique({
         where: { id },
-        select: {
+        select: { translations: true,
           id: true,
           channel: true,
           marketplace: true,
@@ -2939,7 +2934,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const listing = await prisma.channelListing.findUnique({
         where: { id },
-        select: {
+        select: { translations: true,
           id: true,
           channel: true,
           marketplace: true,
@@ -2999,7 +2994,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
       const exists = await prisma.channelListing.findUnique({
         where: { id },
-        select: { id: true },
+        select: { translations: true, id: true },
       })
       if (!exists) return reply.code(404).send({ error: 'Listing not found' })
 
@@ -3086,7 +3081,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
 
     const existing = await prisma.channelListing.findUnique({
       where: { id },
-      select: {
+      select: { translations: true,
         id: true,
         channel: true,
         marketplace: true,
@@ -3411,7 +3406,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
           try {
             const rows = await prisma.channelListing.findMany({
               where: { id: { in: ids } },
-              select: { id: true, followMasterQuantity: true },
+              select: { translations: true, id: true, followMasterQuantity: true },
             })
             for (const r of rows) followQtyBefore.set(r.id, r.followMasterQuantity)
           } catch (preReadErr) {
@@ -3649,7 +3644,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       // Source listing — get the values to push
       const sourceListing = await prisma.channelListing.findFirst({
         where: { productId: source.id, channel: channel.toUpperCase(), marketplace: marketplace.toUpperCase() },
-        select: {
+        select: { translations: true,
           price: true, title: true, description: true,
           quantity: true, bulletPointsOverride: true,
         },
@@ -3702,7 +3697,7 @@ export async function listingsSyndicationRoutes(fastify: FastifyInstance) {
       for (const sibling of siblings) {
         const existing = await prisma.channelListing.findFirst({
           where: { productId: sibling.id, channel: ch, marketplace: mp },
-          select: { id: true, price: true, quantity: true },
+          select: { translations: true, id: true, price: true, quantity: true },
         })
 
         // Build update — field values + mark followMaster=false for each pushed field

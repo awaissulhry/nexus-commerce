@@ -10,7 +10,12 @@ vi.mock('../db.js', () => ({
   default: {
     cellFormula: {
       findUnique: (...a: unknown[]) => formulaFindUnique(...a),
-      findMany: (...a: unknown[]) => formulaFindMany(...a),
+      // Regional-language lookups now read coordinate rows and normalize in memory.
+      findMany: async (...a: unknown[]) => {
+        const rows = await formulaFindMany(...a)
+        const row = await formulaFindUnique(...a)
+        return rows?.length ? rows : row ? [row] : []
+      },
       delete: (...a: unknown[]) => formulaDelete(...a),
     },
     product: { findUnique: async () => null },

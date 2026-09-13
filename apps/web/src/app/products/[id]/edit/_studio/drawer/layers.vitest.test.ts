@@ -93,7 +93,7 @@ describe('toLayer', () => {
 
 describe('isInherited', () => {
   it('treats every layer that TRACKS something else as inherited', () => {
-    for (const layer of ['master', 'locale', 'linked', 'mapped', 'default'] as Layer[]) {
+    for (const layer of ['master', 'locale', 'linked', 'mapped', 'default', 'channelSnapshot'] as Layer[]) {
       expect(isInherited(layer), layer).toBe(true)
     }
   })
@@ -172,7 +172,7 @@ describe('every layer is presentable', () => {
   it('has both a label and a hint — a chip with no words is a colour', () => {
     const layers: Layer[] = [
       'master', 'variant', 'alias', 'aliasVariant', 'channel', 'linked', 'default',
-      'locale', 'mapped', 'locked', 'unknown',
+      'locale', 'mapped', 'locked', 'channelSnapshot', 'unknown',
     ]
     for (const layer of layers) {
       expect(LAYER_LABEL[layer], layer).toBeTruthy()
@@ -200,5 +200,16 @@ describe('previousWasRecorded — hub ruling #14', () => {
     // Rendering a value that was never captured invents a change that did not happen. Rendering
     // "not recorded" for a value that WAS captured only under-claims.
     expect(previousWasRecorded({ previous: undefined, previousRecorded: undefined })).toBe(false)
+  })
+})
+
+describe('following channel snapshots', () => {
+  it('names the stored channel value even when a legacy fold says master', () => {
+    expect(toLayer('channelSnapshot')).toBe('channelSnapshot')
+    expect(resolveLayer({ source: 'channelSnapshot', layer: 'master' })).toBe('channelSnapshot')
+    expect(LAYER_LABEL.channelSnapshot).toBe('Channel snapshot')
+    expect(LAYER_HINT.channelSnapshot).toContain('not an operator pin')
+    expect(isOwnValue({ source: 'channelSnapshot' })).toBe(false)
+    expect(resolveLayer({ source: 'master', layer: 'master' })).toBe('master')
   })
 })

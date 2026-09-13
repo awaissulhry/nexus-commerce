@@ -18,22 +18,22 @@
  *
  * This module therefore type-imports the grid and imports no React at all.
  */
+import { commitLanguageGroups } from '../languageWrites'
 import { getBackendUrl } from '@/lib/backend-url'
 
-import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
-import type { SheetColumn, StudioRow, StudioSheet } from './types'
-import type { UseMasterSheetOptions } from './useMasterSheet'
-
+import { askForThemeChangePlan } from '../../variants/channel/themePlanAsk'
 /**
- * Where one cell writes.
- *
- * The bulk endpoint takes `Product` columns and `attr_*` (its `categoryAttributes` merge); a locale
- * slot has no route through it and goes to the per-product global patch. A batch can therefore be
- * split across two calls for one row — which is fine, and is why `commit` returns per-cell outcomes
- * rather than one verdict for the row.
+ * 🔴 From the MODULE, not from `@/design-system/grid`. The barrel re-exports `NexusGrid.tsx` and a
+ * node test importing anything through it dies at parse — the lesson this file's own header is
+ * about. `editors/sheetWriter.ts` type-imports AG and value-imports only `./roundTrip`, which is
+ * likewise a pure `.ts`, so this import keeps the module node-testable.
  */
-const routeFor = (column: SheetColumn | undefined) =>
-  column?.storage === 'localizedContent' ? 'localized' : 'bulk'
+import { variationThemeWrite } from '@/design-system/grid/editors/sheetWriter'
+
+import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
+import type { VariationThemeWriteFacts } from '@/design-system/grid/editors/sheetWriter'
+import type { StudioRow, StudioSheet } from './types'
+import type { UseMasterSheetOptions } from './useMasterSheet'
 
 /**
  * The master scope's write, as a MODULE-LEVEL function so it can be tested.
@@ -72,7 +72,7 @@ export interface MasterCommitContext {
   market: string
 }
 
-export async function commitMasterRow(
+async function commitMasterLanguage(
   req: SheetWriteRequest<StudioRow>,
   ctx: MasterCommitContext,
 ): Promise<SheetWriteResult> {
@@ -81,8 +81,7 @@ export async function commitMasterRow(
   const byKey = new Map(columns.map((c) => [c.key, c]))
   const cells: Record<string, { ok: boolean; reason?: string; unreachable?: boolean }> = {}
 
-  const bulk = req.cells.filter((c) => routeFor(byKey.get(c.colId)) === 'bulk')
-  const localized = req.cells.filter((c) => routeFor(byKey.get(c.colId)) === 'localized')
+  const bulk = req.cells
 
 /**
  * The row version a response is allowed to teach us — `undefined` when it is about something else.
@@ -128,6 +127,8 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
         body: JSON.stringify({
           changes: bulk.map((c) => ({
             id: req.rowId,
+            contentAddress: req.row?.values?.[c.colId]?.contentAddress,
+            contentVersion: req.row?.values?.[c.colId]?.contentVersion,
             // The server told us the field name; never re-derive it from the column key.
             field: byKey.get(c.colId)?.writeField ?? c.colId,
             // 🔴 On the MASTER scope a `reset` really is "store nothing here", because the layer
@@ -174,7 +175,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
       if (res.status === 409) {
         conflict = true
         version = versionFromBody(body)
-        batchReason = 'Someone else changed this row. Refresh to see their version.'
+        batchReason = body?.message || body?.error || 'Someone else changed this row. Refresh to see their version.'
         for (const c of bulk) cells[c.colId] = { ok: false, reason: batchReason }
       } else if (!res.ok) {
         const errors: Array<{ id?: string; field?: string; error?: string }> = Array.isArray(body?.errors) ? body.errors : []
@@ -207,35 +208,7 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
       }
     }
 
-    if (localized.length > 0) {
-      const patch: Record<string, Record<string, unknown>> = { [ctx.locale]: {} }
-      const reset: Record<string, string[]> = {}
-      for (const c of localized) {
-        const col = byKey.get(c.colId)
-        const field = (col?.slot ? `${col.slot.of}[${col.slot.index}]` : c.colId).replace(/^attr_/, '').replace(/^name$/, 'title')
-        if (c.intent === 'reset') (reset[ctx.locale] ??= []).push((col?.slot?.of ?? c.colId).replace(/^attr_/, '').replace(/^name$/, 'title'))
-        else patch[ctx.locale][field] = c.value === '' ? null : c.value
-      }
-      const res = await fetch(`${backend}/api/products/${req.rowId}/global`, {
-        method: 'PATCH',
-        signal: AbortSignal.timeout(30_000),
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patch, ...(Object.keys(reset).length ? { reset } : {}), expectedVersion: version ?? req.expectedVersion }),
-      })
-      const body = await res.json().catch(() => null)
-      if (res.status >= 500 || res.ok && !body) throw new Error('Save confirmation was unavailable. Checking the stored values.')
-      if (res.ok) {
-        version = versionFromBody(body) ?? version
-        for (const c of localized) cells[c.colId] = { ok: true }
-        anyOk = true
-      } else {
-        if (res.status === 409) conflict = true
-        const detail = Array.isArray(body?.details) ? body.details[0] : undefined
-        const reason = detail || body?.error || `Refused (HTTP ${res.status})`
-        for (const c of localized) cells[c.colId] = { ok: false, reason }
-      }
-    }
+
   } catch (err) {
     /*
      * 🔴 `unreachable: true`. This catch swallows a NETWORK failure — `fetch` rejects when the
@@ -260,4 +233,189 @@ function versionFromBody(body: { currentVersion?: unknown; versionOf?: unknown }
   const firstReason = Object.values(cells).find((c) => !c.ok)?.reason
   ctx.opts.onWriteEnd?.(writeId, ok, ok ? undefined : (batchReason ?? firstReason), req.rowId)
   return { ok: ok || anyOk, reason: batchReason, version, cells, conflict }
+}
+
+
+/**
+ * VT.2 — a `variationTheme` cell does NOT go through `PATCH /api/products/bulk`.
+ *
+ * Its fact has ONE writer (design §3.6, D-VT3), and the bulk route no longer accepts it at all —
+ * `variation_theme` was removed from `CHANNEL_WRITABLE` and from `CHANNEL_FIELD_MAP` by VT.1, so a
+ * batch carrying it would be refused by the write gate rather than landing somewhere nothing reads.
+ *
+ * 🔴 **This function is the reason the branch FIRES.** `variationThemeWrite` decided the endpoint,
+ * the body and the plan/none outcomes from the first hour, and 20 tests proved every one of them —
+ * and nothing on the sheet ever called it, so a witnessed reorder gesture on `VX-TEST-3AX` (the
+ * editor's own footer reading `order`, Enter pressed, the cell repainted) issued **zero requests**
+ * and left `Product.version` at 2. A decision function nobody calls is not a write path; it is a
+ * unit test with a nice comment.
+ */
+export async function commitVariationTheme<T>(
+  req: SheetWriteRequest<T>,
+  productId: string,
+): Promise<SheetWriteResult> {
+  const backend = getBackendUrl()
+  const cells: NonNullable<SheetWriteResult['cells']> = {}
+  let version: number | undefined
+  let conflict = false
+  for (const cell of req.cells) {
+    /* The reported value carries its own BASELINE (see `VariationThemeCell.baseline`); the row's
+       current value cannot serve as one, because AG's setter already replaced it in place. */
+    const after = (cell.value ?? null) as (VariationThemeWriteFacts & { baseline?: VariationThemeWriteFacts }) | null
+    const decision = variationThemeWrite({ kind: 'variationTheme' }, after?.baseline ?? null, after)
+    if (!decision.send) {
+      /* A held commit is not a refusal to paint red: `plan` means VT.4's dry-run Modal opens and
+         nothing is written, and `Nothing changed` means the operator closed an editor they had not
+         edited. Both are `ok` with the server's own sentence carried as the reason. */
+      const reason = 'plan' in decision ? decision.plan.reason : decision.reason
+      /**
+       * VT.2c — and now the Modal actually OPENS. `ThemeChangePlanHost` (mounted by `ChannelSheet`)
+       * answers this and fetches the plan with `dryRun: true`; NOTHING is written on this path, which
+       * is the decision `variationThemeWrite` already took two lines above.
+       *
+       * `askForThemeChangePlan` returning false means no host was listening, and the `reason` above is
+       * then the whole of what the operator sees — a degraded answer, never a silent one, and never a
+       * write either way.
+       */
+      /* `channel: null` is the MASTER coordinate, and master has no lock to plan for
+         (`variation-rules.service.ts` returns `locked: null` there) — so a plan without a channel is a
+         shape that cannot occur, and it is refused rather than coerced into a string. */
+      if ('plan' in decision && after?.write?.coordinate.channel) {
+        askForThemeChangePlan({
+          reason,
+          setChangeIs: decision.plan.setChangeIs,
+          request: {
+            /* The coordinate is sent back VERBATIM from the cell (contract §1's rule) — re-deriving it
+               here is how a channel edit lands on the wrong coordinate. */
+            coordinate: {
+              productId,
+              channel: after.write.coordinate.channel,
+              market: after.write.coordinate.market,
+              accountId: after.write.coordinate.accountId,
+              aliasKey: after.write.aliasKey,
+            },
+            expectedVersion: after.write.expectedVersion,
+            ...(after.resetRequested ? { reset: true } : {
+            ...(after.theme ? { theme: after.theme.code } : {}),
+            /**
+             * 🔴 The FAMILY's own spelling (`Colore`), never the canonical key (`color`).
+             *
+             * Measured on the wire 2026-09-13: the first plan request sent
+             * `mapping:[{axisKey:"color"},{axisKey:"size"}]` and the route answered **400
+             * `bad_projection_request`** — `"Scollatura" is not one of this family's axes`, listing
+             * `axes: ["Colore","Taglia"]`. The same fact VT.2b fixed for the `variation-axes` body one
+             * function away: a cell carries its family spelling in `axes[].familyKey`, and a caller that
+             * re-derives it sends a key no family has.
+             */
+            mapping: after.axes
+              .filter((a) => a.included && a.target)
+              .map((a, order) => ({ axisKey: a.familyKey ?? a.axisKey, target: a.target as string, order })),
+            }),
+          },
+        })
+      }
+      cells[cell.colId] = { ok: true, reason }
+      continue
+    }
+    const query = new URLSearchParams()
+    if (decision.query.channel) query.set('channel', decision.query.channel)
+    if (decision.query.market) query.set('market', decision.query.market)
+    if (decision.query.accountId) query.set('accountId', decision.query.accountId)
+    if (decision.query.aliasKey) query.set('aliasKey', decision.query.aliasKey)
+    const url = `${backend}/api/products/${productId}/studio/${decision.endpoint}${query.size ? `?${query}` : ''}`
+    try {
+      const res = await fetch(url, {
+        method: 'PATCH',
+        signal: AbortSignal.timeout(30_000),
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(decision.body),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (res.ok) {
+        cells[cell.colId] = { ok: true }
+        const next = (payload as { version?: number; product?: { version?: number } }).version ?? (payload as { product?: { version?: number } }).product?.version
+        if (typeof next === 'number') version = next
+      } else {
+        /* 409 → repaint + refetch exactly like every other cell (design §3.6). */
+        if (res.status === 409) conflict = true
+        const body = payload as { error?: string; message?: string; detail?: string; locked?: { reason?: string; setChangeIs?: 'relist' | 'new-parent' | 'in-place' } }
+        /**
+         * 🔴 VT.F item A6 — the `axes_locked` RACE, which is the one 409 that is not a conflict to
+         * repaint but an OPERATION to plan.
+         *
+         * The sequence: the cell was read while the coordinate was a draft, so `cell.locked` was null and
+         * `variationThemeWrite` correctly decided to SEND; between that read and this PATCH the
+         * coordinate went live, and VT.1b's route now answers `409 axes_locked` with the lock's own
+         * sentence. Before this branch the operator's only signal was a refused cell carrying the raw
+         * code `axes_locked` — the design's §3.5 rule ("a SET change on a live coordinate is a plan")
+         * enforced on the local read and abandoned on the server's. The two doors must answer the same
+         * way, so the server's 409 opens the SAME dry-run Modal the local gate opens, with the SERVER's
+         * reason (it is the one that knows the listing went live).
+         *
+         * The cell reads `ok` with that sentence, exactly as the local plan path does: nothing was
+         * written either way, and painting red would say a change failed when the truth is that it needs
+         * a plan. `conflict` stays true, so the row refetches and comes back carrying the lock — without
+         * that the next commit would race the same way again.
+         */
+        if (res.status === 409 && body.error === 'axes_locked' && after?.write?.coordinate.channel) {
+          const reason = body.locked?.reason ?? body.message ?? 'This coordinate went live while you were editing it.'
+          const opened = askForThemeChangePlan({
+            reason,
+            setChangeIs: body.locked?.setChangeIs ?? 'relist',
+            request: {
+              coordinate: {
+                productId,
+                channel: after.write.coordinate.channel,
+                market: after.write.coordinate.market,
+                accountId: after.write.coordinate.accountId,
+                aliasKey: after.write.aliasKey,
+              },
+              expectedVersion: after.write.expectedVersion,
+              ...(after.theme ? { theme: after.theme.code } : {}),
+              mapping: after.axes
+                .filter((a) => a.included && a.target)
+                .map((a, order) => ({ axisKey: a.familyKey ?? a.axisKey, target: a.target as string, order })),
+            },
+          })
+          /* 🔴 `askForThemeChangePlan` returning false means NO HOST WAS LISTENING. Reporting `ok` then
+             would hide the refusal behind a Modal that never opened — so the cell keeps the server's
+             sentence as a refusal in that case, which is degraded but never silent. */
+          cells[cell.colId] = opened ? { ok: true, reason } : { ok: false, reason }
+          continue
+        }
+        cells[cell.colId] = { ok: false, reason: body.detail ?? body.message ?? body.error ?? `The server refused this change (${res.status})` }
+      }
+    } catch (err) {
+      /* A rejected fetch is an UNKNOWN outcome, never a refusal — the same rule the bulk path below
+         records at length. */
+      cells[cell.colId] = { ok: false, unreachable: true, reason: err instanceof Error ? err.message : String(err) }
+    }
+  }
+  return { ok: Object.values(cells).every((c) => c.ok), cells, version, conflict }
+}
+
+export function commitMasterRow(req: SheetWriteRequest<StudioRow>, ctx: MasterCommitContext): Promise<SheetWriteResult> {
+  const byKey = new Map(ctx.sheet?.columns.map(column => [column.key, column]) ?? [])
+  /* Split the batch the way `commitLanguageGroups` splits it by language: a fill or a paste can
+     carry a theme cell beside ordinary ones, and each half goes to the route that accepts it. */
+  const theme = req.cells.filter((c) => byKey.get(c.colId)?.kind === 'variationTheme')
+  if (theme.length > 0) {
+    const rest = req.cells.filter((c) => byKey.get(c.colId)?.kind !== 'variationTheme')
+    return (async () => {
+      const themed = await commitVariationTheme({ ...req, cells: theme }, req.rowId)
+      if (rest.length === 0) return themed
+      const other = await commitMasterRow({ ...req, cells: rest }, ctx)
+      return {
+        ok: themed.ok && other.ok,
+        cells: { ...themed.cells, ...other.cells },
+        version: other.version ?? themed.version,
+        conflict: themed.conflict || other.conflict,
+        unreachable: themed.unreachable || other.unreachable,
+        reason: themed.reason ?? other.reason,
+      }
+    })()
+  }
+  return commitLanguageGroups(req, key => byKey.get(key)?.locale ?? ctx.locale,
+    (request, language) => commitMasterLanguage(request, { ...ctx, locale: language ?? ctx.locale }))
 }

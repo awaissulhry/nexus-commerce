@@ -1,4 +1,3 @@
-import { etsyContentState } from '../etsy/information-content.js'
 import type { ChannelStore } from './channel-specs/types.js'
 import { readPath } from './sheet-values.js'
 
@@ -16,7 +15,7 @@ export function readStoredChannelValue(store: ChannelStore | undefined, listing:
     const override = CHANNEL_OVERRIDE_COLUMNS[store.column]
     return override ? row[override] ?? row[store.column] : row[store.column]
   }
-  if (store?.kind === 'platformAttributes' && store.path[0] === '_etsyInformationLocales') return etsyContentState(row, store.path[1], store.path[2])?.value
+  // Stored-path inspection also captures existing writer/CAS state. Content readers use resolveContent.
   if (store?.kind === 'platformAttributes') {
     const value = readPath(row.platformAttributes, store.path)
     if (value !== undefined) return value

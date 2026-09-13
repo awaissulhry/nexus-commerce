@@ -35,3 +35,17 @@ describe('formula entry uses the actual reactive editor contract', () => {
     expect(onValueChange).toHaveBeenCalledWith('=$brand & " Jacket"')
   })
 })
+
+it('passes the edited field to reference candidates, source labels and reference highlighting', () => {
+  const candidatesFor = vi.fn(() => [{ name: 'name', kind: 'field' as const }, { name: 'brand', kind: 'field' as const }])
+  const sourceLabel = vi.fn(() => 'Shared product · fr')
+  const colIdOfRef = vi.fn((name: string, fieldKey?: string) => name === 'name' ? fieldKey! : name)
+  const editor = formulaCellEditorSelector({ ...wiring, candidatesFor, sourceLabel, colIdOfRef },
+    { key: 'name@fr', formulaWritable: true }, { component: 'agTextCellEditor' }, () => 'p1').cellEditorSelector({ data: {} })
+  const params = editor.params as any
+  expect(candidatesFor).toHaveBeenCalledWith({}, 'name@fr')
+  expect(sourceLabel).toHaveBeenCalledWith('name@fr')
+  expect(params.candidates.map((candidate: any) => candidate.name)).toEqual(['brand'])
+  expect(params.colIdOfRef('name')).toBe('name@fr')
+  expect(colIdOfRef).toHaveBeenLastCalledWith('name', 'name@fr')
+})

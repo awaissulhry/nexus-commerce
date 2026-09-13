@@ -23,6 +23,8 @@ import { formulaSaveOutcome } from '@/design-system/grid'
 import { createFormulaSaveQueue } from '@/design-system/grid/editors/formulaSaveQueue'
 import type { FormulaFunctionDoc, FormulaPreviewResponse } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
+import { columnLanguages, languageField } from './sheet/languages'
+import { formulaReadKey } from './sheet/formulaColumns'
 
 export interface CellFormulaRow {
   productId: string
@@ -44,6 +46,7 @@ export interface CellFormulaRow {
 }
 
 export interface UseCellFormulasInput {
+  writeFacts?: (rowId: string, fieldKey: string) => import('@nexus/shared/content-language').ContentWriteFacts | undefined
   channelConnectionId?: string | null
   aliasKey?: string | null
   /** The family's parent — the id in the URL, used for the family-wide read. */
@@ -65,6 +68,7 @@ export interface UseCellFormulasInput {
   locale: string
   /** Every row on the sheet, so one batch read covers the family. */
   rowIds: readonly string[]
+  columnKeys?: readonly string[]
   rowScopes?: Readonly<Record<string, { productId: string; aliasKey: string }>>
   onSettled?: () => void
   onValueSaved?: (rowId: string, fieldKey: string, value: unknown) => void
@@ -74,6 +78,7 @@ export interface CellFormulas {
   ready: boolean
   loadError: string | null
   sourceLabel: string
+  sourceLabelFor: (fieldKey?: string) => string
   replace: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
 
   /** `rowId` + `fieldKey` → the stored expression, so editing a formula cell opens the formula. */
@@ -105,23 +110,26 @@ export interface CellFormulas {
    is not a negative result, and that time the quiet instrument was mine. */
 const key = (rowId: string, fieldKey: string) => `${rowId}::${fieldKey}`
 
-export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, rowScopes, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
+export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, writeFacts, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
   const coord = useMemo(() => ({ scope, channel, marketplace, market, locale, channelConnectionId, aliasKey }), [scope, channel, marketplace, market, locale, channelConnectionId, aliasKey])
+  const columnsKey = JSON.stringify(columnKeys ?? [])
+  const keys = useMemo(() => JSON.parse(columnsKey) as string[], [columnsKey])
+  const languages = useMemo(() => { const selected = columnLanguages(keys); return selected.length ? selected : [locale] }, [keys, locale])
   const rowScopeKey = JSON.stringify(rowScopes ?? {})
   const scopes = useMemo(() => JSON.parse(rowScopeKey) as NonNullable<UseCellFormulasInput['rowScopes']>, [rowScopeKey])
-  const target = useCallback((rowId: string) => {
+  const target = useCallback((rowId: string, fieldKey: string) => {
     if (rowScopes && !scopes[rowId]) throw new Error('This listing is no longer in the selected destination. Reload before editing.')
-    return { ...coord, productId: scopes[rowId]?.productId ?? rowId, aliasKey: scopes[rowId]?.aliasKey ?? coord.aliasKey }
-  }, [coord, scopes, !!rowScopes])
-  const coordinateKey = JSON.stringify([coord, rowScopeKey])
+    return { ...coord, ...languageField(fieldKey, locale), productId: scopes[rowId]?.productId ?? rowId, aliasKey: scopes[rowId]?.aliasKey ?? coord.aliasKey }
+  }, [coord, scopes, !!rowScopes, locale])
+  const coordinateKey = JSON.stringify([coord, rowScopeKey, columnsKey])
   const idsKey = rowIds.join(',')
   const snapshotKey = JSON.stringify([coordinateKey, idsKey])
   const [snapshot, setSnapshot] = useState<{ key: string; formulas: Map<string, CellFormulaRow> }>({ key: '', formulas: new Map() })
   const [loadError, setLoadError] = useState<string | null>(null)
   const [functions, setFunctions] = useState<FormulaFunctionDoc[]>([])
   const [nonce, setNonce] = useState(0)
-  const live = useRef({ coordinateKey, onSettled, onValueSaved })
-  live.current = { coordinateKey, onSettled, onValueSaved }
+  const live = useRef({ coordinateKey, writeFacts, onSettled, onValueSaved })
+  live.current = { coordinateKey, writeFacts, onSettled, onValueSaved }
   const revision = useRef(0)
   const queue = useMemo(() => createFormulaSaveQueue(() => {
     if (live.current.coordinateKey !== coordinateKey) return
@@ -150,45 +158,51 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
         const alias = scopes[id]?.aliasKey ?? coord.aliasKey ?? ''
         groups.set(alias, [...(groups.get(alias) ?? []), id])
       }
-      for (const [listingAlias, group] of groups) {
-      for (let start = 0; start < group.length; start += 250) {
-        const batch = group.slice(start, start + 250)
-        const rowByProduct = new Map(batch.map(id => [scopes[id]?.productId ?? id, id]))
-        const response = await fetch(`${getBackendUrl()}/api/pim/formulas/batch`, {
-          method: 'POST', credentials: 'include', signal: controller.signal,
-          headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...coord, aliasKey: listingAlias, productIds: [...rowByProduct.keys()] }),
-        })
-        if (!response.ok) throw new Error('Could not load formulas. Retry before editing formula fields.')
-        const body = await response.json()
-        if (!body.formulas || typeof body.formulas !== 'object') throw new Error('The formula list could not be read. Retry before editing.')
-        const add = (f: CellFormulaRow) => { if (f && typeof f.expr === 'string') next.set(key(rowByProduct.get(f.productId) ?? f.productId, f.fieldKey), f) }
-        if (Array.isArray(body.formulas)) body.formulas.forEach(add)
-        else for (const [pid, fields] of Object.entries(body.formulas)) {
-          for (const [fieldKey, f] of Object.entries(fields as Record<string, CellFormulaRow>)) add({ ...f, productId: pid, fieldKey })
+      for (const language of languages) {
+        for (const [listingAlias, group] of groups) {
+          for (let start = 0; start < group.length; start += 250) {
+            const batch = group.slice(start, start + 250)
+            const rowByProduct = new Map(batch.map(id => [scopes[id]?.productId ?? id, id]))
+            const response = await fetch(`${getBackendUrl()}/api/pim/formulas/batch`, {
+              method: 'POST', credentials: 'include', signal: controller.signal,
+              headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...coord, locale: language, aliasKey: listingAlias, productIds: [...rowByProduct.keys()] }),
+            })
+            if (!response.ok) throw new Error('Could not load formulas. Retry before editing formula fields.')
+            const body = await response.json()
+            if (!body.formulas || typeof body.formulas !== 'object') throw new Error('The formula list could not be read. Retry before editing.')
+            const add = (f: CellFormulaRow) => {
+              if (!f || typeof f.expr !== 'string') return
+              const viewKey = formulaReadKey(keys, f.fieldKey, language, locale)
+              if (viewKey) next.set(key(rowByProduct.get(f.productId) ?? f.productId, viewKey), f)
+            }
+            if (Array.isArray(body.formulas)) body.formulas.forEach(add)
+            else for (const [pid, fields] of Object.entries(body.formulas)) {
+              for (const [fieldKey, f] of Object.entries(fields as Record<string, CellFormulaRow>)) add({ ...f, productId: pid, fieldKey })
+            }
+          }
         }
-      }
       }
       if (!controller.signal.aborted && mine === revision.current) setSnapshot({ key: snapshotKey, formulas: next })
     }
     read().catch(error => { if (!controller.signal.aborted) setLoadError(error instanceof Error ? error.message : String(error)) })
     return () => controller.abort()
-  }, [idsKey, nonce, coord, scopes, snapshotKey])
+  }, [idsKey, nonce, coord, scopes, snapshotKey, languages, keys, locale])
 
   const ready = snapshot.key === snapshotKey && !loadError
   const exprFor = useCallback((rowId: string, fieldKey: string) => snapshot.key === snapshotKey ? snapshot.formulas.get(key(rowId, fieldKey))?.expr ?? null : null, [snapshot, snapshotKey])
   const errorFor = useCallback((rowId: string, fieldKey: string) => snapshot.key === snapshotKey ? snapshot.formulas.get(key(rowId, fieldKey))?.lastError ?? null : null, [snapshot, snapshotKey])
   const preview = useCallback(async (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal): Promise<FormulaPreviewResponse> => {
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/preview`, { method: 'POST', credentials: 'include', signal,
-      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...target(rowId), fieldKey, expr }) })
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...target(rowId, fieldKey), expr }) })
     const body = await res.json()
     return res.ok ? body : { ok: false, error: body?.error ?? 'Could not check the formula.' }
   }, [target])
 
   const commit = useCallback((rowId: string, fieldKey: string, change: { expr: string } | { value: unknown }) => queue.enqueue(rowId, async () => {
-    const destination = target(rowId)
+    const destination = target(rowId, fieldKey)
     const literal = 'value' in change
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(destination.productId)}${literal ? '/value' : ''}`, {
-      method: 'PUT', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...destination, fieldKey, ...change }),
+      method: 'PUT', credentials: 'include', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...destination, ...change, contentAddress: live.current.writeFacts?.(rowId, fieldKey)?.contentAddress, contentAcknowledged: live.current.writeFacts?.(rowId, fieldKey)?.contentAcknowledged }),
     })
     const body = await res.json()
     if (!res.ok) return { ok: false, error: body?.error ?? 'Could not save this field.' }
@@ -207,14 +221,18 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
   const save = useCallback((rowId: string, fieldKey: string, expr: string) => commit(rowId, fieldKey, { expr }), [commit])
   const replace = useCallback((rowId: string, fieldKey: string, value: unknown) => commit(rowId, fieldKey, { value }), [commit])
   const pinOver = useCallback((rowId: string, fieldKey: string) => queue.enqueue(rowId, async () => {
-    const { productId: canonicalId, ...destination } = target(rowId)
-    const q = new URLSearchParams({ fieldKey })
+    const { productId: canonicalId, ...destination } = target(rowId, fieldKey)
+    const q = new URLSearchParams()
     for (const [name, value] of Object.entries(destination)) if (value != null) q.set(name, value)
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(canonicalId)}?${q}`, { method: 'DELETE', credentials: 'include' })
     const body = await res.json()
     return res.ok ? { ok: true } : { ok: false, error: body?.error ?? 'Could not remove the formula.' }
   }), [queue, target])
   void productId
-  return { ready, loadError, sourceLabel: scope === 'channel' ? `${channel} · ${marketplace} · ${locale}` : `Shared product · ${locale}`,
+  const sourceLabelFor = (fieldKey?: string) => {
+    const language = languageField(fieldKey ?? '', locale).locale
+    return scope === 'channel' ? `${channel} · ${marketplace} · ${language}` : `Shared product · ${language}`
+  }
+  return { ready, loadError, sourceLabel: sourceLabelFor(), sourceLabelFor,
     exprFor, errorFor, functions, preview, save, replace, pinOver, reload }
 }

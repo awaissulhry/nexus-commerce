@@ -14,14 +14,16 @@
  */
 
 import { getBackendUrl } from '@/lib/backend-url'
+import { connectionHealth } from './presence/connection'
 
-import { flattenGrouped } from './scopes'
+import { flattenGrouped, primaryLanguageFrom } from './scopes'
 import type { MarketplaceLite, StudioFamily, StudioProduct } from './types'
 
 export interface StudioData {
   product: StudioProduct
   /** Set only when the product is a variation. `null` on a parent or a standalone product. */
   family: StudioFamily | null
+  primaryLanguage: string | null
   marketplaces: MarketplaceLite[]
   /**
    * True when the marketplace table could not be read but the product could.
@@ -46,6 +48,7 @@ function toStudioProduct(raw: unknown): StudioProduct | null {
     sku: p.sku,
     name: typeof p.name === 'string' ? p.name : null,
     status: typeof p.status === 'string' ? p.status : null,
+    ...(p.deletedAt === null || typeof p.deletedAt === 'string' ? { deletedAt: p.deletedAt } : {}),
     isParent: p.isParent === true,
     parentId: typeof p.parentId === 'string' ? p.parentId : null,
     productType: typeof p.productType === 'string' ? p.productType : null,
@@ -97,23 +100,45 @@ export async function loadStudioData(id: string): Promise<StudioLoadResult> {
     if (!product) return { kind: 'error', code: null }
 
     let marketplaces: MarketplaceLite[] = []
+    let primaryLanguage: string | null = null
     let marketplacesFailed = true
     if (marketsRes.status === 'fulfilled' && marketsRes.value.ok) {
-      marketplaces = flattenGrouped(await marketsRes.value.json())
-      marketplacesFailed = false
+      const grouped = await marketsRes.value.json()
+      marketplaces = flattenGrouped(grouped)
+      primaryLanguage = primaryLanguageFrom(grouped)
+      marketplacesFailed = primaryLanguage === null
     }
-    // A seeded marketplace never proves a connected account. Shared content languages remain
-    // available even when connection discovery fails; no channel scope is invented on failure.
-    const connected = new Set<string>()
+    // Keep revoked/disconnected accounts in the scope inventory. A failed read is unknown.
     const accountsByChannel = new Map<string, NonNullable<MarketplaceLite['accounts']>>()
+    let connectionsRead = false
     if (connectionsRes.status === 'fulfilled' && connectionsRes.value.ok) {
-      const data = await connectionsRes.value.json()
-      for (const c of data.connections ?? []) if (c.isActive && c.isManagedBy !== 'pending') {
-        connected.add(c.channel)
-        accountsByChannel.set(c.channel, [...(accountsByChannel.get(c.channel) ?? []), { id: c.id, label: c.accountLabel || c.storeName || c.sellerName || c.channel, primary: !!c.isPrimary }])
-      }
-    } else marketplacesFailed = true
-    marketplaces = marketplaces.map(m => ({ ...m, connected: connected.has(m.channel), accounts: accountsByChannel.get(m.channel) ?? [] }))
+      try {
+        const data: unknown = await connectionsRes.value.json()
+        if (!data || typeof data !== 'object' || !Array.isArray((data as { connections?: unknown }).connections)) throw new Error('Connections not reported')
+        const connections = (data as { connections: unknown[] }).connections
+        for (const raw of connections) {
+          if (!raw || typeof raw !== 'object') throw new Error('Connection not reported')
+          const c = raw as Record<string, unknown>
+          if (typeof c.id !== 'string' || typeof c.channel !== 'string') throw new Error('Connection identity not reported')
+          if (c.isManagedBy === 'pending') continue
+          const labels = [c.accountLabel, c.storeName, c.sellerName]
+          const label = labels.find((v): v is string => typeof v === 'string' && v.trim().length > 0)
+          const health = connectionHealth(c, Date.now())
+          accountsByChannel.set(c.channel, [...(accountsByChannel.get(c.channel) ?? []), {
+            id: c.id, label: label == null ? c.id : label, primary: c.isPrimary === true, health,
+          }])
+        }
+        connectionsRead = true
+      } catch { accountsByChannel.clear() }
+    }
+    if (!connectionsRead) marketplacesFailed = true
+    marketplaces = marketplaces.map(m => {
+      const accounts = accountsByChannel.get(m.channel) ?? []
+      if (!connectionsRead) return { ...m, connectionHealth: null }
+      const healthy = accounts.find(a => a.health?.state === 'connected')
+      return { ...m, connected: healthy != null, accounts,
+        connectionHealth: healthy?.health ?? accounts[0]?.health ?? null }
+    })
 
     // One extra call, and ONLY for a variation. A parent pays nothing for this.
     let family: StudioFamily | null = null
@@ -140,7 +165,7 @@ export async function loadStudioData(id: string): Promise<StudioLoadResult> {
       }
     }
 
-    return { kind: 'ok', data: { product, family, marketplaces, marketplacesFailed } }
+    return { kind: 'ok', data: { product, family, marketplaces, primaryLanguage, marketplacesFailed } }
   } catch {
     // Transport failure (DNS, cold start, reset) — a soft failure the client pass can retry.
     return { kind: 'error', code: null }

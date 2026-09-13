@@ -1,543 +1,109 @@
-/**
- * PIM A.1 — Attribute resolver verifier.
- *
- * Pins the merge precedence contract that downstream phases depend on.
- * Any change to merge order requires updating these tests.
- */
+import { describe, expect, it } from 'vitest'
+import { resolveAttributes, resolveAttributesFlat, resolveAttributesBySource, type ProductLike, type ResolveInput } from '../pim/attribute-resolver.js'
+import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 
-import { describe, it, expect } from 'vitest'
-import {
-  resolveAttributes,
-  resolveAttributesFlat,
-  resolveAttributesBySource,
-  type ProductLike,
-  type ChannelListingLike,
-} from '../pim/attribute-resolver.js'
+const product = (over: Partial<ProductLike> = {}): ProductLike => ({ id: 'p1', parentId: null, categoryAttributes: null, localizedContent: null, variantAttributes: null, ...over })
+const listing = (over: Record<string, unknown> = {}) => ({ id: 'cl1', overrideData: null, ...over })
+const read = (input: ResolveInput) => resolveAttributes({ coordinate: { channel: 'EBAY', market: 'IT', accountId: 'account-a' }, marketLanguages: [PRIMARY_CONTENT_LOCALE, 'en', 'de'], ...input })
 
-// ────────────────────────────────────────────────────────────────────
-// Fixture builders — keep test bodies focused on the assertion, not
-// scaffold setup.
-// ────────────────────────────────────────────────────────────────────
-
-function mkProduct(overrides: Partial<ProductLike> = {}): ProductLike {
-  return {
-    id: 'p_default',
-    parentId: null,
-    categoryAttributes: null,
-    localizedContent: null,
-    variantAttributes: null,
-    ...overrides,
-  }
-}
-
-function mkChannelListing(overrides: Partial<ChannelListingLike> = {}): ChannelListingLike {
-  return {
-    id: 'cl_default',
-    overrideData: null,
-    ...overrides,
-  }
-}
-
-// ────────────────────────────────────────────────────────────────────
-// Case 1: standalone product, no variant, no channel
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — standalone product', () => {
-  it('returns master categoryAttributes with source=master', () => {
-    const product = mkProduct({
-      id: 'p1',
-      categoryAttributes: { material: 'Cowhide', armor: 'CE Level 2' },
-    })
-
-    const result = resolveAttributes({ product, parent: null })
-
+describe('attribute adapter: factual inheritance', () => {
+  it('retains factual values and their owning product', () => {
+    const result = read({ product: product({ categoryAttributes: { material: 'Cowhide', armor: 'CE2' } }), parent: null })
     expect(result.material).toEqual({ value: 'Cowhide', source: 'master', inheritedFrom: 'p1' })
-    expect(result.armor).toEqual({ value: 'CE Level 2', source: 'master', inheritedFrom: 'p1' })
+    expect(result.armor.value).toBe('CE2')
   })
-
-  it('returns empty result when product has nothing set', () => {
-    const product = mkProduct()
-    const result = resolveAttributes({ product, parent: null })
-    expect(Object.keys(result)).toHaveLength(0)
+  it('represents unset content explicitly without inventing factual fields', () => {
+    const result = read({ product: product(), parent: null })
+    expect(Object.keys(result).sort()).toEqual(['bulletPoints', 'description', 'keywords', 'title'])
+    expect(Object.values(result).every(cell => cell.value === null)).toBe(true)
   })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 2: variant inheritance from parent
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — variant inheritance', () => {
-  it('variant inherits parent categoryAttributes when own is empty', () => {
-    const parent = mkProduct({ id: 'parent1', categoryAttributes: { material: 'Cowhide' } })
-    const variant = mkProduct({ id: 'v1', parentId: 'parent1' })
-
-    const result = resolveAttributes({ product: variant, parent })
-
+  it('inherits parent facts and lets a child override one field', () => {
+    const parent = product({ id: 'parent', categoryAttributes: { material: 'Cowhide', brand: 'Xavia' } })
+    const child = product({ parentId: parent.id, categoryAttributes: { material: 'Kangaroo' } })
+    const result = read({ product: child, parent })
+    expect(result.material).toEqual({ value: 'Kangaroo', source: 'variant', inheritedFrom: child.id })
+    expect(result.brand).toEqual({ value: 'Xavia', source: 'master', inheritedFrom: parent.id })
+  })
+  it('normalizes physical variant axes while retaining the child as their owner', () => {
+    const parent = product({ id: 'parent' })
+    const result = read({ product: product({ parentId: parent.id, variantAttributes: { Color: 'Black', Size: '52' } }), parent })
+    expect(result.color).toEqual({ value: 'Black', source: 'variant', inheritedFrom: 'p1' })
+    expect(result.size.value).toBe('52')
+  })
+  it.each([null, false, 0, ''])('preserves an explicit factual override of %j', value => {
+    const result = read({ product: product({ categoryAttributes: { material: 'Cowhide', armor: 'CE2' } }), parent: null, channelListing: listing({ overrideData: { material: value } }) })
+    expect(result.material).toEqual({ value, source: 'channelOverride', inheritedFrom: 'cl1' })
+    expect(result.armor.value).toBe('CE2')
+  })
+  it('an absent override leaves the master fact intact', () => {
+    const result = read({ product: product({ categoryAttributes: { material: 'Cowhide' } }), parent: null, channelListing: listing({ overrideData: { other: 'present' } }) })
     expect(result.material.value).toBe('Cowhide')
     expect(result.material.source).toBe('master')
-    expect(result.material.inheritedFrom).toBe('parent1')
   })
-
-  it('variant overrides parent when own categoryAttributes set', () => {
-    const parent = mkProduct({ id: 'parent1', categoryAttributes: { material: 'Cowhide' } })
-    const variant = mkProduct({
-      id: 'v1',
-      parentId: 'parent1',
-      categoryAttributes: { material: 'Kangaroo' },
-    })
-
-    const result = resolveAttributes({ product: variant, parent })
-
-    expect(result.material.value).toBe('Kangaroo')
-    expect(result.material.source).toBe('variant')
-    expect(result.material.inheritedFrom).toBe('v1')
+  it.each([
+    { followMasterPrice: false, priceOverride: 999, price: 875, expected: 999 },
+    { followMasterPrice: false, priceOverride: null, price: 875, expected: 875 },
+    { followMasterPrice: true, priceOverride: 999, price: 875, expected: 850 },
+    { priceOverride: 999, price: 875, expected: 850 },
+  ])('respects price follow and legacy numeric fallback: %j', ({ expected, ...over }) => {
+    const result = read({ product: product({ categoryAttributes: { price: 850 } }), parent: null, channelListing: listing(over) })
+    expect(result.price.value).toBe(expected)
   })
-
-  it('variant axis values (variantAttributes) carry variant source', () => {
-    const parent = mkProduct({ id: 'parent1', categoryAttributes: { brand: 'Xavia' } })
-    const variant = mkProduct({
-      id: 'v1',
-      parentId: 'parent1',
-      variantAttributes: { Color: 'Black', Size: '52' },
-    })
-
-    const result = resolveAttributes({ product: variant, parent })
-
-    expect(result.Color).toEqual({ value: 'Black', source: 'variant', inheritedFrom: 'v1' })
-    expect(result.brand.value).toBe('Xavia')
-    expect(result.brand.source).toBe('master')
+  it('keeps zero quantity overrides', () => {
+    const result = read({ product: product({ categoryAttributes: { quantity: 8 } }), parent: null, channelListing: listing({ followMasterQuantity: false, quantityOverride: 0 }) })
+    expect(result.quantity).toEqual({ value: 0, source: 'channelExplicit', inheritedFrom: 'cl1' })
   })
 })
 
-// ────────────────────────────────────────────────────────────────────
-// Case 3: locale fallback
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — locale fallback', () => {
-  it('uses requested locale when present', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Racing Suit' }, it: { title: 'Tuta da Pista' } },
-    })
-
-    const result = resolveAttributes({ product, parent: null, locale: 'it' })
-
-    expect(result.title.value).toBe('Tuta da Pista')
-    expect(result.title.source).toBe('masterLocale')
+describe('attribute adapter: language-addressed content', () => {
+  it('reads source columns with their native language and provenance', () => {
+    const result = read({ product: product({ name: 'Giacca', description: 'Pelle', bulletPoints: ['Protezione'] }), parent: null })
+    expect(result.title).toMatchObject({ value: 'Giacca', source: 'masterColumn', inheritedFrom: 'p1', effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: 'current' })
+    expect(result.description.value).toBe('Pelle')
+    expect(result.bulletPoints.value).toEqual(['Protezione'])
   })
-
-  it('falls back to en when requested locale is missing', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Racing Suit' }, it: {} },
-    })
-
-    const result = resolveAttributes({ product, parent: null, locale: 'it' })
-
-    expect(result.title.value).toBe('Racing Suit')
-    expect(result.title.source).toBe('masterLocale')
+  it('uses ProductTranslation for the requested language and falls back per field', () => {
+    const result = read({ product: product({ name: 'Giacca', description: 'Pelle', translations: [{ language: 'de', name: 'Jacke', attributes: {}, bulletPoints: [], keywords: [] }] as any }), parent: null, locale: 'de' })
+    expect(result.title).toMatchObject({ value: 'Jacke', tier: 'language', effectiveLocale: 'de' })
+    expect(result.description).toMatchObject({ value: 'Pelle', tier: 'source', effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: 'fallback' })
   })
-
-  it('per-key locale fallback — partial it content fills gaps from en', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: {
-        en: { title: 'Racing Suit', description: 'A racing suit.' },
-        it: { title: 'Tuta da Pista' }, // description absent
-      },
-    })
-
-    const result = resolveAttributes({ product, parent: null, locale: 'it' })
-
-    expect(result.title.value).toBe('Tuta da Pista')
-    expect(result.description.value).toBe('A racing suit.')
+  it('normalizes regional requests without changing the stored language', () => {
+    const result = read({ product: product({ name: 'Giacca', translations: [{ language: 'de-DE', name: 'Jacke' }] as any }), parent: null, locale: 'de-AT' })
+    expect(result.title).toMatchObject({ value: 'Jacke', requestedLocale: 'de', effectiveLocale: 'de' })
   })
-
-  it('defaults to en when no locale specified', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Racing Suit' }, it: { title: 'Tuta' } },
-    })
-
-    const result = resolveAttributes({ product, parent: null })
-
-    expect(result.title.value).toBe('Racing Suit')
+  it('does not read retired localized JSON or untagged fact bags as content', () => {
+    const result = read({ product: product({ name: 'Giacca', localizedContent: { de: { title: 'Retired' } }, categoryAttributes: { title: 'Wrong bag' } }), parent: null, locale: 'de', channelListing: listing({ overrideData: { title: 'Wrong override' } }) })
+    expect(result.title).toMatchObject({ value: 'Giacca', tier: 'source', translationState: 'fallback' })
+  })
+  it('source content remains authoritative when factual synthesis is disabled', () => {
+    expect(read({ product: product({ name: 'Giacca' }), parent: null, synthesize: false }).title.value).toBe('Giacca')
+  })
+  it('uses the child source and falls back to the parent when the child has none', () => {
+    const parent = product({ id: 'parent', name: 'Parent', description: 'Parent description' })
+    const result = read({ product: product({ parentId: parent.id, name: 'Child' }), parent })
+    expect(result.title).toMatchObject({ value: 'Child', inheritedFrom: 'p1' })
+    expect(result.description).toMatchObject({ value: 'Parent description', inheritedFrom: parent.id })
+  })
+  it.each([true])('ignores legacy title overrides while following (%s)', followMasterTitle => {
+    const result = read({ product: product({ name: 'Giacca' }), parent: null, channelListing: listing({ followMasterTitle, titleOverride: 'Pinned' }) })
+    expect(result.title.value).toBe('Giacca')
+  })
+  it('uses an explicit legacy pin only in the listing primary language', () => {
+    const input = { product: product({ name: 'Giacca' }), parent: null, channelListing: listing({ followMasterTitle: false, titleOverride: 'Pinned' }) }
+    expect(read(input).title).toMatchObject({ value: 'Pinned', source: 'channelExplicit', tier: 'pin', inheritedFrom: 'cl1' })
+    expect(read({ ...input, locale: 'de' }).title.value).toBe('Giacca')
+  })
+  it('requires market language authority before reading listing content', () => {
+    expect(() => resolveAttributes({ product: product(), parent: null, channelListing: listing() })).toThrow('hydrated Marketplace.languages')
   })
 })
 
-// ────────────────────────────────────────────────────────────────────
-// Case 4: channel-level JSONB override (overrideData bag)
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — channel overrideData', () => {
-  it('channel override beats master value', () => {
-    const product = mkProduct({ id: 'p1', categoryAttributes: { material: 'Cowhide' } })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { material: 'Premium Cowhide' },
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.material).toEqual({
-      value: 'Premium Cowhide',
-      source: 'channelOverride',
-      inheritedFrom: 'cl1',
-    })
+describe('attribute adapter convenience projections', () => {
+  it('flat projection includes factual and explicitly empty content values', () => {
+    expect(resolveAttributesFlat({ product: product({ categoryAttributes: { material: 'Cowhide' } }), parent: null })).toEqual({ material: 'Cowhide', title: null, description: null, bulletPoints: null, keywords: null })
   })
-
-  it('channel override coexists with non-overridden master keys', () => {
-    const product = mkProduct({
-      id: 'p1',
-      categoryAttributes: { material: 'Cowhide', armor: 'CE2' },
-    })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { material: 'Premium Cowhide' },
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.material.source).toBe('channelOverride')
-    expect(result.armor.source).toBe('master')
-  })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 5: SSOT explicit overrides (Phase 20 followMaster* + *Override)
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — SSOT explicit overrides', () => {
-  it('respects followMasterTitle=true: titleOverride is ignored, master wins', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Master Title' }, it: {} },
-    })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      followMasterTitle: true,
-      titleOverride: 'Channel Title',
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.title.value).toBe('Master Title')
-    expect(result.title.source).toBe('masterLocale')
-  })
-
-  it('followMasterTitle=false: titleOverride wins with channelExplicit source', () => {
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Master Title' }, it: {} },
-    })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      followMasterTitle: false,
-      titleOverride: 'Channel Title',
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.title).toEqual({
-      value: 'Channel Title',
-      source: 'channelExplicit',
-      inheritedFrom: 'cl1',
-    })
-  })
-
-  it('followMasterPrice=false with priceOverride=999 returns 999 channelExplicit', () => {
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      followMasterPrice: false,
-      priceOverride: 999,
-    })
-    const product = mkProduct({ id: 'p1', categoryAttributes: { price: 850 } })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.price.value).toBe(999)
-    expect(result.price.source).toBe('channelExplicit')
-  })
-
-  it('followMasterPrice=false but priceOverride=null falls back to direct .price column', () => {
-    // Legacy row that never got Phase-20-migrated: keeps value in
-    // .price not .priceOverride. Resolver must still surface it.
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      followMasterPrice: false,
-      priceOverride: null,
-      price: 875,
-    })
-    const product = mkProduct({ id: 'p1', categoryAttributes: { price: 850 } })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.price.value).toBe(875)
-    expect(result.price.source).toBe('channelExplicit')
-  })
-
-  it('followMaster flag absent defaults to TRUE (mirrors schema default)', () => {
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      titleOverride: 'Should be ignored',
-      // followMasterTitle is undefined here
-    })
-    const product = mkProduct({
-      id: 'p1',
-      localizedContent: { en: { title: 'Master Title' }, it: {} },
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.title.value).toBe('Master Title')
-  })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 6: explicit null vs absent key semantics
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — null vs absent', () => {
-  it('explicit null in overrideData overrides master to null (not the same as absent)', () => {
-    const product = mkProduct({ id: 'p1', categoryAttributes: { material: 'Cowhide' } })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { material: null },
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.material.value).toBeNull()
-    expect(result.material.source).toBe('channelOverride')
-  })
-
-  it('absent key in overrideData leaves master value intact', () => {
-    const product = mkProduct({ id: 'p1', categoryAttributes: { material: 'Cowhide' } })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { otherKey: 'value' },
-    })
-
-    const result = resolveAttributes({ product, parent: null, channelListing })
-
-    expect(result.material.value).toBe('Cowhide')
-    expect(result.material.source).toBe('master')
-    expect(result.otherKey.source).toBe('channelOverride')
-  })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 7: convenience wrappers
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributesFlat', () => {
-  it('strips provenance and returns plain key→value map', () => {
-    const product = mkProduct({
-      id: 'p1',
-      categoryAttributes: { material: 'Cowhide', armor: 'CE2' },
-    })
-
-    const flat = resolveAttributesFlat({ product, parent: null })
-
-    expect(flat).toEqual({ material: 'Cowhide', armor: 'CE2' })
-  })
-})
-
-describe('resolveAttributesBySource', () => {
-  it('filters to only the requested origin sources', () => {
-    const parent = mkProduct({ id: 'parent1', categoryAttributes: { brand: 'Xavia' } })
-    const variant = mkProduct({
-      id: 'v1',
-      parentId: 'parent1',
-      variantAttributes: { Color: 'Black' },
-    })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { material: 'Premium Cowhide' },
-    })
-
-    const onlyOverrides = resolveAttributesBySource(
-      { product: variant, parent, channelListing },
-      ['channelOverride', 'channelExplicit'],
-    )
-
-    expect(Object.keys(onlyOverrides)).toEqual(['material'])
-    expect(onlyOverrides.material.value).toBe('Premium Cowhide')
-  })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 8: full-stack scenario — variant + channel + locale together
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — full stack', () => {
-  it('master → variant → channelOverride → channelExplicit all compose', () => {
-    const parent = mkProduct({
-      id: 'parent1',
-      categoryAttributes: { material: 'Cowhide', armor: 'CE2', brand: 'Xavia' },
-      localizedContent: {
-        en: { title: 'Apex Racing Suit', description: 'A premium suit.' },
-        it: { title: 'Tuta Apex' },
-      },
-    })
-    const variant = mkProduct({
-      id: 'v1',
-      parentId: 'parent1',
-      variantAttributes: { Color: 'Black/White', Size: '52' },
-      categoryAttributes: { material: 'Kangaroo' }, // override parent
-    })
-    const channelListing = mkChannelListing({
-      id: 'cl1',
-      overrideData: { armor: 'CE Level 2 (Certified)' }, // override parent
-      followMasterPrice: false,
-      priceOverride: 1299,
-    })
-
-    const result = resolveAttributes({
-      product: variant,
-      parent,
-      channelListing,
-      locale: 'it',
-    })
-
-    // From parent master
-    expect(result.brand).toEqual({ value: 'Xavia', source: 'master', inheritedFrom: 'parent1' })
-    // From parent locale (it has title, en fills description)
-    expect(result.title.value).toBe('Tuta Apex')
-    expect(result.description.value).toBe('A premium suit.')
-    // From variant
-    expect(result.material).toEqual({ value: 'Kangaroo', source: 'variant', inheritedFrom: 'v1' })
-    expect(result.Color.source).toBe('variant')
-    expect(result.Size.value).toBe('52')
-    // From channelOverride bag
-    expect(result.armor).toEqual({
-      value: 'CE Level 2 (Certified)',
-      source: 'channelOverride',
-      inheritedFrom: 'cl1',
-    })
-    // From channelExplicit (SSOT)
-    expect(result.price).toEqual({
-      value: 1299,
-      source: 'channelExplicit',
-      inheritedFrom: 'cl1',
-    })
-  })
-})
-
-// ────────────────────────────────────────────────────────────────────
-// Case 9 (A.4): legacy-column synthesis layer
-// ────────────────────────────────────────────────────────────────────
-describe('resolveAttributes — synthesis from legacy columns', () => {
-  it('synthesizes title from Product.name when localizedContent is empty', () => {
-    const product = mkProduct({
-      id: 'p1',
-      name: 'Racing Suit',
-      description: 'A premium racing suit.',
-      bulletPoints: ['Cowhide', '1.3mm thick'],
-      brand: 'Xavia',
-    })
-
-    const result = resolveAttributes({ product, parent: null })
-
-    expect(result.title).toEqual({
-      value: 'Racing Suit',
-      source: 'masterColumn',
-      inheritedFrom: 'p1:name',
-      requestedLocale: 'en',
-      effectiveLocale: 'it',
-      translationState: 'fallback',
-    })
-    expect(result.description.value).toBe('A premium racing suit.')
-    expect(result.description.source).toBe('masterColumn')
-    expect(result.bulletPoints.value).toEqual(['Cowhide', '1.3mm thick'])
-    expect(result.brand.value).toBe('Xavia')
-  })
-
-  it('JSONB localizedContent.en wins over synthesized Product.name', () => {
-    const product = mkProduct({
-      id: 'p1',
-      name: 'Old name',
-      localizedContent: { en: { title: 'New JSONB Title' }, it: {} },
-    })
-
-    const result = resolveAttributes({ product, parent: null })
-
-    expect(result.title.value).toBe('New JSONB Title')
-    expect(result.title.source).toBe('masterLocale')
-  })
-
-  it('does NOT synthesize when synthesize=false (strict JSONB-only mode)', () => {
-    const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
-
-    const result = resolveAttributes({ product, parent: null, synthesize: false })
-
-    expect(result.title).toBeUndefined()
-  })
-
-  it('marks native Italian content current in Italian and identifies fallback elsewhere', () => {
-    const product = mkProduct({ id: 'p1', name: 'Racing Suit' })
-
-    const result = resolveAttributes({ product, parent: null, locale: 'it' })
-
-    expect(result.title).toMatchObject({ value: 'Racing Suit', requestedLocale: 'it', effectiveLocale: 'it', translationState: 'current' })
-    expect(resolveAttributes({ product, parent: null, locale: 'de' }).title).toMatchObject({
-      value: 'Racing Suit', requestedLocale: 'de', effectiveLocale: 'it', translationState: 'fallback',
-    })
-  })
-
-  it('variant column synthesis overrides parent column synthesis', () => {
-    const parent = mkProduct({ id: 'parent1', name: 'Racing Apparel' })
-    const variant = mkProduct({ id: 'v1', parentId: 'parent1', name: 'Racing Apparel — Size 52' })
-
-    const result = resolveAttributes({ product: variant, parent })
-
-    expect(result.title.value).toBe('Racing Apparel — Size 52')
-    expect(result.title.inheritedFrom).toBe('v1:name')
-  })
-
-  it('variant column synthesis beats parent JSONB localizedContent', () => {
-    // The variant's own column data represents an explicit per-variant
-    // value, matching "variant overrides master" semantics elsewhere.
-    const parent = mkProduct({
-      id: 'parent1',
-      localizedContent: { en: { title: 'Parent JSONB Title' }, it: {} },
-    })
-    const variant = mkProduct({ id: 'v1', parentId: 'parent1', name: 'Variant Specific Name' })
-
-    const result = resolveAttributes({ product: variant, parent })
-
-    expect(result.title.value).toBe('Variant Specific Name')
-    expect(result.title.source).toBe('masterColumn')
-    expect(result.title.inheritedFrom).toBe('v1:name')
-  })
-
-  it('empty array on bulletPoints does NOT synthesize (treated as no data)', () => {
-    const product = mkProduct({ id: 'p1', name: 'Title', bulletPoints: [] })
-
-    const result = resolveAttributes({ product, parent: null })
-
-    expect(result.title.value).toBe('Title')
-    expect(result.bulletPoints).toBeUndefined()
-  })
-
-  it('null/undefined columns do not synthesize', () => {
-    const product = mkProduct({
-      id: 'p1',
-      name: null,
-      description: undefined,
-      brand: null,
-    })
-
-    const result = resolveAttributes({ product, parent: null })
-
-    expect(result.title).toBeUndefined()
-    expect(result.description).toBeUndefined()
-    expect(result.brand).toBeUndefined()
-  })
-
-  it('channel override beats variant-column synthesis', () => {
-    const variant = mkProduct({ id: 'v1', name: 'Variant Name' })
-    const cl = mkChannelListing({
-      id: 'cl1',
-      followMasterTitle: false,
-      titleOverride: 'Channel Title',
-    })
-
-    const result = resolveAttributes({ product: variant, parent: null, channelListing: cl })
-
-    expect(result.title.value).toBe('Channel Title')
-    expect(result.title.source).toBe('channelExplicit')
+  it('filters to explicit channel factual overrides', () => {
+    const result = resolveAttributesBySource({ product: product({ categoryAttributes: { material: 'Cowhide' } }), parent: null, channelListing: listing({ overrideData: { material: 'Premium' } }), coordinate: { channel: 'EBAY', market: 'IT' }, marketLanguages: ['it'] }, ['channelOverride', 'channelExplicit'])
+    expect(result).toEqual({ material: { value: 'Premium', source: 'channelOverride', inheritedFrom: 'cl1' } })
   })
 })

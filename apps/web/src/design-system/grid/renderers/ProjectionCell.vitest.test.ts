@@ -34,7 +34,7 @@ describe('ProjectionCell · the five states', () => {
   it('paints a solid dot, the §9 word and a live tick for a listed variant', () => {
     const out = html(params(true, { state: 'listed' }, { onToggle: () => {} }))
     expect(out).toContain('nds-projcell-dot solid')
-    expect(out).toContain('data-tone="success"')
+    expect(out).toContain('data-tone="info"')
     expect(out).toContain('>Listed<')
     expect(out).toContain('type="checkbox"')
     expect(out).toContain('checked=""')

@@ -19,9 +19,9 @@ export interface StatusPill {
  * renders neutral with the raw value: an unknown status is still a fact, and inventing a
  * friendlier word for it would not be.
  */
-export declare function authStatusPill(authStatus: string, consecutiveFailures?: number): StatusPill;
+export declare function authStatusPill(authStatus: string, consecutiveFailures?: number, isActive?: boolean): StatusPill;
 /** The Reconnect label — names the shortfall when the grant is behind the catalogue. */
-export declare function reconnectLabel(scopeDrift: string[] | undefined): string;
+export declare function reconnectLabel(scopeDrift: string[] | undefined, grantedScopes?: string[]): string;
 export interface PermissionsLine {
     /** `warning` = a pill; `null` = plain text. */
     tone: 'warning' | null;
@@ -31,7 +31,7 @@ export interface PermissionsLine {
  * "22 permissions granted", or a warning "N permissions not granted" when the grant is behind
  * the catalogue. `null` when the API sent neither list (pre-CX.1).
  */
-export declare function permissionsLine(grantedScopes: string[] | undefined, scopeDrift: string[] | undefined, managedBy?: string): PermissionsLine | null;
+export declare function permissionsLine(grantedScopes: string[] | undefined, scopeDrift: string[] | undefined, managedBy?: string, permissionModel?: 'oauth_scopes' | 'application_roles'): PermissionsLine | null;
 /**
  * Relative wording for an ISO timestamp. `null` is "never" — the column exists and nothing has
  * written it. A column NOTHING writes yet goes through `timestampText(…, 'untracked')` instead:
@@ -45,7 +45,7 @@ export declare function relativeTime(iso: string | null | undefined, now?: numbe
  */
 export type StampKind = 'tracked' | 'untracked' | 'na';
 export declare const NOT_TRACKED_TEXT = "not tracked yet";
-export declare const NOT_TRACKED_REASON = "No receiver or sender writes this column until CX.4";
+export declare const NOT_TRACKED_REASON = "Activity tracking is not available for this connection yet.";
 export declare function timestampText(iso: string | null | undefined, kind?: StampKind, now?: number): string;
 /** The `title` behind a stamp: the absolute instant, or the reason there is none. */
 export declare function timestampTitle(label: string, iso: string | null | undefined, kind?: StampKind): string;
@@ -55,10 +55,11 @@ export interface ScopeRow {
     kind: string;
     externalId: string;
     label: string | null;
+    isActive?: boolean;
 }
 /** How many scope chips a row shows before folding the rest behind "+N more". */
 export declare const SCOPE_CHIP_CAP = 12;
-/** A chip's text: the channel's label when it gave one, else the raw id — never invented. */
+/** Missing provider names are explicit; marketplace/profile IDs are never display labels. */
 export declare function scopeChipLabel(s: ScopeRow): string;
 export interface VisibleScopes {
     visible: ScopeRow[];
@@ -74,8 +75,8 @@ export declare function visibleScopes(scopes: ScopeRow[], expanded: boolean, cap
 export declare function errorLineVisible(authStatus: string | undefined, lastError: string | null | undefined): boolean;
 export interface RowActions {
     makePrimary: boolean;
-    /** Always offered — env-managed rows too (Amazon participations call). */
-    test: true;
+    /** Offered for active accounts, including env-managed connections. */
+    test: boolean;
     /** The button label, or `null` when the row has no grant to re-authorise. */
     reconnect: string | null;
     disconnect: boolean;
@@ -85,9 +86,11 @@ export interface RowActions {
 /** Which actions a row offers, and what Reconnect says. */
 export declare function rowActions(a: {
     isPrimary: boolean;
+    isActive?: boolean;
     managedBy: string;
     scopeDrift?: string[];
-}, hasReconnect: boolean): RowActions;
+    grantedScopes?: string[];
+}, hasReconnect: boolean, actionLabel?: string | null): RowActions;
 export interface HeartbeatOutcome {
     ok: boolean;
     /** The inline text the row prints — "OK · 412 ms" / "Failed · auth_expired · …". */

@@ -40,7 +40,7 @@ describe('classifyListings', () => {
     expect(impact.live).toHaveLength(1)
     expect(impact.local).toHaveLength(1)
     expect(impact.live[0].label).toBe('amazon · DE — ACTIVE, B0F7J163XJ')
-    expect(impact.local[0].label).toBe('shopify · GLOBAL — DRAFT, never published to the channel')
+    expect(impact.local[0].label).toBe('shopify · GLOBAL — DRAFT, no marketplace id on this record')
   })
 
   it('a row with no status still reads as a sentence', () => {

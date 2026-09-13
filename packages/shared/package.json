@@ -6,6 +6,30 @@
   "main": "./dist/vault.js",
   "types": "./dist/vault.d.ts",
   "exports": {
+    "./studio-publication": {
+      "types": "./dist/studio-publication.d.ts",
+      "default": "./dist/studio-publication.js"
+    },
+    "./listing-capabilities": {
+      "types": "./dist/listing-capabilities.d.ts",
+      "default": "./dist/listing-capabilities.js"
+    },
+    "./publish-gate": {
+      "types": "./dist/publish-gate.d.ts",
+      "default": "./dist/publish-gate.js"
+    },
+    "./listing-risk": {
+      "types": "./dist/listing-risk.d.ts",
+      "default": "./dist/listing-risk.js"
+    },
+    "./push-lock": {
+      "types": "./dist/push-lock.d.ts",
+      "default": "./dist/push-lock.js"
+    },
+    "./cell-provenance": {
+      "types": "./dist/cell-provenance.d.ts",
+      "default": "./dist/cell-provenance.js"
+    },
     "./shopify-information-editing": {
       "types": "./dist/shopify-information-editing.d.ts",
       "default": "./dist/shopify-information-editing.js"
@@ -70,9 +94,21 @@
       "types": "./dist/agent-fleet.d.ts",
       "default": "./dist/agent-fleet.js"
     },
+    "./variation-mapping": {
+      "types": "./dist/variation-mapping.d.ts",
+      "default": "./dist/variation-mapping.js"
+    },
     "./products-grid": {
       "types": "./dist/products-grid.d.ts",
       "default": "./dist/products-grid.js"
+    },
+    "./matrix-contract": {
+      "types": "./dist/matrix-contract.d.ts",
+      "default": "./dist/matrix-contract.js"
+    },
+    "./matrix-preview": {
+      "types": "./dist/matrix-preview.d.ts",
+      "default": "./dist/matrix-preview.js"
     },
     "./master-sheet": {
       "types": "./dist/master-sheet.d.ts",
@@ -93,6 +129,18 @@
     "./product-media": {
       "types": "./dist/product-media.d.ts",
       "default": "./dist/product-media.js"
+    },
+    "./channel-label": {
+      "types": "./dist/channel-label.d.ts",
+      "import": "./dist/channel-label.js"
+    },
+    "./content-header": {
+      "types": "./dist/content-header.d.ts",
+      "import": "./dist/content-header.js"
+    },
+    "./content-language": {
+      "types": "./dist/content-language.d.ts",
+      "import": "./dist/content-language.js"
     }
   },
   "scripts": {

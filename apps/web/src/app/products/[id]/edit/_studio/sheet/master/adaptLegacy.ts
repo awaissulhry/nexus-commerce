@@ -128,11 +128,17 @@ export function adaptLegacySheet(page: LegacySheetPage, familyId: string): Studi
       rowKind: r.isParent ? 'parent' : 'variant',
       aliasId: null,
       values,
-      // The catalogue read answers a verdict PER coordinate; the studio route answers one for the
-      // scope. Kept in the legacy-only field rather than collapsed — there is no honest single
-      // value to pick from "Amazon: errors, eBay: live", and inventing one would put a verdict on
-      // screen that no server ever gave.
-      readinessByCoordinate: (r.readiness ?? {}) as NonNullable<StudioRow['readinessByCoordinate']>,
+      /**
+       * 🔴 LX.FIN (R-LX-22) — `readinessByCoordinate` is GONE, not moved.
+       *
+       * It was the only producer of that field anywhere, and it fed a per-coordinate column set in the
+       * ROW vocabulary that only ever rendered on this fallback path. The master sheet now builds those
+       * columns from `ReadinessIndex` through the readiness contract, in the SCOPE vocabulary
+       * (`useMasterSheetAdapter` `coordinateReadinessColumns`), which this path reads too — the contract
+       * is independent of which adapter produced the sheet. So the field had no reader left, and LX.15's
+       * rule is "fed or deleted, never left dead". The catalogue read's own per-coordinate answer is
+       * still on the wire; nothing here converts it into the other vocabulary.
+       */
       listing: null,
       completeness: r.completeness,
     }

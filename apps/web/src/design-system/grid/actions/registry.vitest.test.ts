@@ -11,6 +11,10 @@ import {
   isRunnable,
   requiresTypedConfirm,
   validateImpact,
+  validateAction,
+  frictionFor,
+  requiresAcknowledgement,
+  reversalSentence,
   type ActionImpact,
   type GridAction,
 } from './registry'
@@ -25,6 +29,58 @@ const act = (over: Partial<GridAction<Row>> & Pick<GridAction<Row>, 'id' | 'scop
   available: () => AVAILABLE,
   run: async () => ({ ok: true }),
   ...over,
+})
+
+describe('Presence consequence contract', () => {
+  const cases = [
+    ['local', 'exact', 'none', false], ['local', 'lossy', 'confirm', false], ['local', 'none', 'confirm', true],
+    ['local-destructive', 'exact', 'confirm', false], ['local-destructive', 'lossy', 'confirm', true], ['local-destructive', 'none', 'type-to-confirm', false],
+    ['channel', 'exact', 'confirm', false], ['channel', 'lossy', 'confirm', true], ['channel', 'none', 'type-to-confirm', false],
+  ] as const
+  it.each(cases)('%s / %s requires %s, acknowledgement %s', (reach, fidelity, level, ack) => {
+    const impact: ActionImpact = { title: 'Change SKU-1?', reach, reversal: { verb: 'Restore', fidelity }, level,
+      acknowledge: ack ? 'I understand the loss.' : undefined,
+      subject: { kind: reach === 'channel' ? 'external-id' : 'sku', value: 'SKU-1' }, confirmPhrase: 'SKU-1' }
+    expect(frictionFor(impact)).toBe(level)
+    expect(requiresAcknowledgement(impact)).toBe(ack)
+    expect(validateImpact(impact)).toEqual([])
+    if (level !== 'none') expect(validateImpact({ ...impact, level: 'none' }).length).toBeGreaterThan(0)
+    if (ack) expect(validateImpact({ ...impact, acknowledge: undefined }).join()).toContain('acknowledgement')
+    expect(validateImpact({ ...impact, level: 'type-to-confirm' })).toEqual([])
+  })
+  it.each(['none', 'confirm', 'type-to-confirm'] as const)('preserves legacy %s without inventing reach', level => {
+    const impact: ActionImpact = { title: 'Change SKU-1?', level, confirmPhrase: 'SKU-1' }
+    expect(frictionFor(impact)).toBe('none')
+    expect(validateImpact(impact)).toEqual([])
+    expect(reversalSentence(impact)).toBe('Reversibility has not been checked.')
+  })
+  it('refuses a channel declaration before preflight and a missing reversal afterwards', () => {
+    expect(validateAction({ reach: 'channel' }).join()).toContain('no preflight')
+    const preflight = async (): Promise<ActionImpact> => ({ title: 'End?', level: 'confirm' })
+    expect(validateAction({ reach: 'channel', preflight })).toEqual([])
+    expect(validateAction({ reach: 'channel', preflight }, { title: 'End?', level: 'confirm' }).join()).toContain('no reversal')
+  })
+  it('refuses undeclared reach and blocking unknown checks, permits report-only unknown', () => {
+    const preflight = async (): Promise<ActionImpact> => ({ title: 'End?', level: 'confirm' })
+    const impact: ActionImpact = { title: 'End?', level: 'confirm', reach: 'channel', reversal: { verb: 'Restore', fidelity: 'exact' } }
+    expect(validateAction({ reach: 'local', preflight }, impact).join()).toContain('widened')
+    const finding = { label: 'Could not check orders', severity: 'unknown' as const, asOf: null }
+    expect(validateAction({ reach: 'channel', preflight }, { ...impact, findings: [finding] })).toEqual([])
+    expect(validateAction({ reach: 'channel', preflight }, { ...impact, findings: [{ ...finding, blocking: true }] }).join()).toContain('blocking check')
+  })
+  it('a refused channel verb never becomes available before preflight', () => {
+    const action = act({ id: 'end', scope: ROW, reach: 'channel' })
+    expect(actionsFor([action], ROW, [child])[0].availability.kind).toBe('disabled')
+  })
+  it('rejects a generic password or a phrase different from the actual subject', () => {
+    expect(validateImpact({ title: 'Delete?', level: 'type-to-confirm', confirmPhrase: 'DELETE' }).join()).toContain('generic password')
+    expect(validateImpact({ title: 'Delete?', level: 'type-to-confirm', confirmPhrase: 'SKU-2', subject: { kind: 'sku', value: 'SKU-1' } }).join()).toContain('differs')
+  })
+  it('derives distinct reversal promises from all three fidelities', () => {
+    expect(reversalSentence({ reversal: { verb: 'Restore', fidelity: 'exact' } })).toBe('Undo with “Restore”. Everything is restored exactly.')
+    expect(reversalSentence({ reversal: { verb: 'Restore', fidelity: 'lossy' } })).toContain('Some information cannot be restored.')
+    expect(reversalSentence({ reversal: { verb: 'Restore', fidelity: 'none' } })).toBe('This cannot be undone.')
+  })
 })
 
 /** A slice of the real family verbs, with their actual role rules. */

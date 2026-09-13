@@ -1,0 +1,56 @@
+[
+  {
+    "language": "de",
+    "compared": 122871,
+    "mainCompared": 31976,
+    "diffs": 0
+  },
+  {
+    "language": "en",
+    "compared": 282396,
+    "mainCompared": 111916,
+    "diffs": 0
+  },
+  {
+    "language": "es",
+    "compared": 122639,
+    "mainCompared": 31976,
+    "diffs": 0
+  },
+  {
+    "language": "fr",
+    "compared": 154607,
+    "mainCompared": 47964,
+    "diffs": 0
+  },
+  {
+    "language": "it",
+    "compared": 122930,
+    "mainCompared": 31976,
+    "diffs": 0
+  },
+  {
+    "language": "nl",
+    "compared": 118468,
+    "mainCompared": 31976,
+    "diffs": 0
+  },
+  {
+    "language": "pl",
+    "compared": 82644,
+    "mainCompared": 15988,
+    "diffs": 0
+  },
+  {
+    "language": "sv",
+    "compared": 82644,
+    "mainCompared": 15988,
+    "diffs": 0
+  },
+  {
+    "language": "tr",
+    "compared": 82644,
+    "mainCompared": 15988,
+    "diffs": 0
+  }
+]

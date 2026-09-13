@@ -1,3 +1,4 @@
+import { categorySchemaMarkets } from '../categories/category-schema-coordinate.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * PIM D.1 — Bridge from live SP-API schema → ChannelSchema rows.
@@ -79,7 +80,9 @@ export async function syncSchemaToChannelSchema(input: {
   const cached = await prisma.categorySchema.findFirst({
     where: {
       channel,
-      marketplace,
+      // LX.F2 R-LX-20 — this used the caller's spelling verbatim, so an eBay read saw exactly one of
+      // the table's two spellings for the same market and never the other.
+      marketplace: { in: categorySchemaMarkets(channel, marketplace) },
       productType,
       isActive: true,
     },

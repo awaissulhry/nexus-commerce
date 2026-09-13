@@ -22,8 +22,15 @@ export interface Column<T> {
     sortValue?: (row: T) => number | string;
     /**
      * Hold this column in place in the Customise dialog — never hidden, never dragged — WITHOUT
-     * pinning it to an edge. Position picks the end it holds: past the last movable column it
-     * locks to the right, anywhere else to the left. Ignored unless `customizable`.
+     * pinning it to an edge.
+     *
+     * `sticky`/`stickyRight` already imply it, and until now they were the only way to say it. That
+     * forced a grid whose Product and Actions columns must not move to pin them as well, which is a
+     * visible, different decision: /products/next had its sticky toggles removed deliberately
+     * because pinning the Product column was not wanted, and the column still has to stay put.
+     *
+     * Position picks the end it holds: past the last movable column it locks to the right, anywhere
+     * else to the left. Ignored unless `customizable`.
      */
     prefsLocked?: boolean;
     /** pin this column to the left (sticky); give a numeric `width` so offsets stack */
@@ -34,6 +41,15 @@ export interface Column<T> {
     /** value rendered in the totals row */
     total?: ReactNode;
     /**
+     * Heading this column sits under in the Customise dialog's column tick-list. Columns without
+     * one collect under the dialog's list label, so a grid that declares no groups renders exactly
+     * one section and is unchanged. Ignored unless `customizable`.
+     *
+     * Presentation only — grouping does NOT constrain column order. The dialog's ordered list is
+     * flat and reorders freely across groups.
+     */
+    group?: string;
+    /**
      * Plain-text name for the Customise dialog. Only needed when `label` is not a
      * string — most grids here pass JSX (`<Hdr …/>`, `<TipText>…</TipText>`), and
      * a dialog row reading "sku" instead of "SKU" is a worse lie than a verbose
@@ -42,6 +58,10 @@ export interface Column<T> {
     prefsLabel?: string;
 }
 export interface DataGridProps<T> {
+    /** Accessible table name, especially when multiple grids share a page. */
+    ariaLabel?: string;
+    /** Offer a keyboard focus stop when the table overflows its viewport. */
+    keyboardScroll?: boolean;
     columns: Array<Column<T>>;
     rows: T[];
     rowKey: (row: T) => string;
@@ -106,8 +126,14 @@ export interface DataGridProps<T> {
     getSubRows?: (row: T) => T[] | undefined;
     /**
      * Let `getSubRows` children carry their own selection checkbox, and count them in select-all
-     * while they are visible. Off by default: the grids using `getSubRows` with `selectable`
-     * today render an EMPTY checkbox cell for children, and `rowSelectable` still gates each one.
+     * while they are visible.
+     *
+     * Off by default, because the two grids using `getSubRows` with `selectable` today render an
+     * EMPTY checkbox cell for children — an ad group is acted on through its campaign, and turning
+     * that on under them would change what their select-all means. A grid whose children are
+     * independently actionable (a product variation has its own status, its own price) opts in.
+     *
+     * `rowSelectable` still gates each child, exactly as it gates each parent.
      */
     subRowSelectable?: boolean;
     /**
@@ -194,10 +220,25 @@ export interface DataGridProps<T> {
     onCustomizeOpenChange?: (open: boolean) => void;
     /** Dialog heading + trigger label (default "Customise"). */
     customizeTitle?: string;
+    /**
+     * Sort fields offered INSIDE the Customise dialog, as `{value: columnKey, label}`.
+     *
+     * Omit it (every existing consumer) and the dialog shows no Sort section, exactly as before:
+     * a grid that sorts from its headers does not need a second way to say the same thing.
+     *
+     * Pass it when the operator is used to setting sort there. A page that HAD this section and
+     * then adopted `customizable` lost it silently, with no way to ask for it back — that is the
+     * gap this closes. The chosen field is applied through the same path as a header click, so
+     * controlled `sort` / `onSortChange` consumers stay in charge of their own state.
+     */
+    prefsSortFields?: ReadonlyArray<{
+        value: string;
+        label: string;
+    }>;
 }
 /**
  * The universal data grid (`.nds-grid`; the richer `.nds-wsgrid` is the ads console's): sortable headers, row selection
  * with select-all, sticky header, pinned left columns, an optional sticky totals
  * row, and an empty state. Generic over the row type.
  */
-export declare function DataGrid<T>({ columns, rows, rowKey, selectable, selected, onSelectedChange, rowSelectable, rowSelectableHint, selectAllHint, selectRowHint, showTotals, emptyState, renderExpanded, expanded, rowProps, size, headerProps, cellProps, getSubRows, subRowSelectable, initialSort, sort: controlledSort, onSortChange, rowClassName, maxHeight, className, customizable, storageKey, customizeOpen, onCustomizeOpenChange, customizeTitle, }: DataGridProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function DataGrid<T>({ ariaLabel, keyboardScroll, columns, rows, rowKey, selectable, selected, onSelectedChange, rowSelectable, rowSelectableHint, selectAllHint, selectRowHint, showTotals, emptyState, renderExpanded, expanded, rowProps, size, headerProps, cellProps, getSubRows, subRowSelectable, initialSort, sort: controlledSort, onSortChange, rowClassName, maxHeight, className, customizable, storageKey, customizeOpen, onCustomizeOpenChange, customizeTitle, prefsSortFields, }: DataGridProps<T>): import("react/jsx-runtime").JSX.Element;

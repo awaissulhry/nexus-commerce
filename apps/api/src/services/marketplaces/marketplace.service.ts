@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 /**
  * Unified Marketplace Service
  * Provides a consistent interface for operations across Amazon, eBay, Shopify, WooCommerce, and Etsy
@@ -137,6 +139,13 @@ export class MarketplaceService {
 
     for (const update of updates) {
       try {
+        if (update.channel !== "ETSY") {
+          const pushControls = await readPushControls({ channel: update.channel, skus: [String(update.channelVariantId)], externalIds: [String(update.channelVariantId), ...(update.channelProductId ? [String(update.channelProductId)] : [])] })
+          for (const row of pushControls) {
+            const refusal = assertPushAllowed(row)
+            if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+          }
+        }
         switch (update.channel) {
           case "AMAZON":
             await this.amazon.updateVariantPrice(
@@ -202,20 +211,7 @@ export class MarketplaceService {
             break;
 
           case "ETSY":
-            if (!this.etsy) {
-              throw new Error("Etsy service not initialized");
-            }
-            await this.etsy.updateListingPrice(
-              parseInt(update.channelVariantId, 10),
-              update.price || 0
-            );
-            results.push({
-              channel: "ETSY",
-              success: true,
-              message: `Updated price to $${update.price?.toFixed(2)} for listing ${update.channelVariantId}`,
-              timestamp: new Date(),
-            });
-            break;
+            throw new Error("Etsy presence is READ-ONLY through Wave 4 by decision D9.");
 
           default:
             throw new Error(`Unknown marketplace channel: ${update.channel}`);
@@ -245,6 +241,13 @@ export class MarketplaceService {
 
     for (const update of updates) {
       try {
+        if (update.channel !== "ETSY") {
+          const pushControls = await readPushControls({ channel: update.channel, skus: [String(update.channelVariantId)], externalIds: [String(update.channelVariantId), ...(update.channelProductId ? [String(update.channelProductId)] : [])] })
+          for (const row of pushControls) {
+            const refusal = assertPushAllowed(row)
+            if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+          }
+        }
         switch (update.channel) {
           case "AMAZON":
             // Amazon doesn't have a direct inventory update method in the current implementation

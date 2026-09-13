@@ -178,3 +178,50 @@ Account names (2026-09-08): `accountDisplayName` / `channelDisplayName` are expo
 Amazon Seller migration (2026-09-08): verify an ENV-managed Amazon row, its primary **Replace environment credentials** action, the application-role permission copy, and the preserved ENV fallback note. Exercise both website authorization and private-app self-authorization import. Repeat after conversion to confirm the row reads as connected and no longer offers ENV replacement. Check narrow and desktop layouts in light and dark themes.
 
 Monospace token parity (2026-09-12): grid formula/editor specimens use `--nds-font-mono` in both apps, with a fallback for hosts without a custom mono font.
+
+Cell provenance contract: `@nexus/shared/cell-provenance` is the shared type, re-exported by `grid/renderers/provenance.ts`. The existing provenance examples and renderer are unchanged by the Step 3 type extraction.
+
+SourceIndicator accepts `tooltip` for exact server copy while its accessible action label still names the source and action. Formula-aware long-text editors keep the sheet’s no-resize-handle rule.
+
+The exact SourceIndicator `tooltip` also supplies a native title, so critical server refusals remain available in hosts that disable custom tooltip portals.
+
+LX.10 (2026-09-13): `outdated` is the translation-age provenance member, with a History glyph and warning semantic tokens. `describeCellSource()` produces the shared member/from/tooltip contract. Precedence: refused → AI → outdated → formula → mapped → inherited/pinned → own.
+
+- Grid field groups: `headerClass: "nds-ag-group-start"` keeps long groups labelled at the visible start. Use `gridGeometry.stripH` for the group band; Languages in Product Studio is the consuming example.
+
+2026-09-13 · Formula reference context: the Web AG formula adapter passes the edited field key to candidates, source labels and reference highlighting. Hosts can bind canonical references to a language-qualified view column. Existing single-language callbacks remain compatible. Verify editing a French column offers French field values and highlights the French source cell. Factory has no AG formula adapter; no shared Factory runtime changes.
+
+`CompletenessPill`: `pct={null}` displays — (no bar), with `tip` naming why the contract cannot be scored. Finite values retain the bar, percent and independent state tone. Channel sheets compose the existing EmptyState in an empty field body to name a missing contract and the Requirements → Refresh requirements action.
+
+`describeCellSource` takes canonical resolver provenance and translation review/outdated facts. Pass its `member` to ProvenanceMark.provenance and its `from` to ProvenanceMark.from; use `tooltip` for the cell explanation. `mapped.derived=false` distinguishes a direct inherited read carrying diagnostics from a computed rule.
+
+`ProvenanceMark.tooltip` accepts the exact sentence from `describeCellSource`. A canonical pin names its own answering coordinate and explains that shared language changes do not replace it; it never claims to follow that same pin.
+
+
+### Variation Theme
+
+Use `grid/editors/AxesPanelEditor` for an editable Information sheet cell and `AxesPanel` for a dock. Render the server’s `VariationThemeCell` with `VariationThemeValue`; adapt projection drafts with `axesCellFromProjection`. The parent owns the selection; child rows are read-only. An empty override differs from inheritance. Display source, schema availability, collisions and live-operation restrictions as served. A Nexus save does not confirm marketplace delivery. The popup supports narrow hosts, keyboard opening, Escape discard and Enter commit.
+
+
+### Presence and consequence controls — PR.6
+
+Use `components/PresenceMark` with the canonical `Presence` from `grid/renderers/presence`: intent, intentAt, fact, observedAt, inFlight, now and the read-owned freshnessMs. Tag carries intent; Pill carries the observation; stale Selling loses success tone. REFUSED retains Could not ask even when observedAt is null. No readiness converter is supplied. `AsOf at={null}` says not checked; `kind="event"` says never. Explicit unknown source (`via={null}`) says not checked. A valid time hydrates safely before adopting the viewer's locale.
+
+`components/ActionConfirm` and `useActionConfirm` render the same captured ActionImpact: reversal, subject, findings, review, acknowledgement and exact subject typing. Keep preflight refusals visible; do not turn a failed check into a confirmation. `grid/actions/ActionConfirm` remains a compatibility export. `validateAction`, `validateImpact` and `frictionFor` guard registry execution.
+
+`MenuItemDef.tone` applies to the emitted button or link without reordering declarations; `separator` is the existing group boundary. Put an unavailable reason in both description and title. Description-bearing held items receive keyboard focus and refuse activation. `Disclosure tone="warning"|"danger"` retains native details/open behavior. Per-row SummaryTable tone stays on a Pill in the cell.
+
+`CellSaveMark state="saving"|"waiting"|"unknown"` adds an announced glyph and distinct ring; keep CellSaveReason for the actual refusal text. `SheetStatuses status={...}` accepts data only, renders at most three md Pills, exposes details on a focusable Pill, and retains danger announcements when surplus is coalesced. The web catalog contains the interactive PresenceExample, including GridViewsMenu's local anchored naming prompt; Factory has no GridViewsMenu host.
+
+
+### PR.6 approved accessibility follow-up — 2026-09-13
+
+ScopeBar now lets arrow keys reach a held scope and its InfoTip without changing the selected scope; Enter and click remain guarded. Theme-controlled AxesPanel checkboxes keep keyboard focus, their supplied explanation and unchanged checked state. The ModeNotches consumer exposes the pending-write sentence through its existing refusal banner callback.
+
+`nds-focus-inset` keeps a Button outline inside a clipped joined control and uses currentColor so the ring follows the actual normal, selected and hovered ink. Use it only where that ink clears 3:1 on every control fill. The catalog includes held and editable axes as local demonstrations; held scopes are in the existing ScopeBar example. PresenceMark additionally accepts `{line, now, via?}` for canonical aggregate metadata without an invented member Presence, and preserves “Could not ask” when observation time/source are absent.
+
+With Owner approval, existing danger/warning/formula text tokens now clear 7:1 across the conservative 80-ground light and dark matrices; success already clears that bar. No new token, fill, or ratchet-baseline increase. The corrected source-derived measurements live in the PR.6 audit.
+
+SheetStatuses accepts compact=true from the host’s existing last toolbar tier: one +N control retains every detail and danger announcement; default rendering remains at most three Pills. It defines no breakpoint.
+
+PresenceMark axis=intent|fact|both (default both) separates adjacent columns; compact=true moves the full canonical explanation into a keyboard-reachable InfoTip. Fact keeps AsOf; no vocabulary or freshness logic is duplicated.

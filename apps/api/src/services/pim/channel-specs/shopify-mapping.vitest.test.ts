@@ -47,7 +47,10 @@ describe('Shopify information mapping contract', () => {
   it('projects every mapping destination once, with native labels and protected typed writes', () => {
     const spec = shopifyProductSpec(schema([def(), def({ namespace: 'custom-other' }), def({ namespace: 'custom_other' })]), 'a')
     const sheet = buildSheetColumns({ fields: [], specs: [{ coordinate, spec }], coordinates: [coordinate], scopeKind: 'channel' })
-    expect(sheet.columns).toHaveLength(spec.fields.length)
+    // VT.1 (2026-09-13): every SPEC field is still exactly one column; the engine-owned `variation_theme` column
+    // is served on every scope and belongs to no spec, so the one-per-field invariant is asserted without it.
+    expect(sheet.columns.filter(c => c.kind !== 'variationTheme')).toHaveLength(spec.fields.length)
+    expect(sheet.columns.filter(c => c.kind === 'variationTheme')).toHaveLength(1)
     for (const f of spec.fields) {
       const c = sheet.columns.find(c => c.channels?.[coordinate.label]?.key === f.key)!
       expect(c, f.key).toBeDefined()

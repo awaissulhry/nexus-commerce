@@ -1,3 +1,4 @@
+import { normalizeLanguage } from '../../pim/content-language.js'
 /**
  * PES.8 — run an enrichment batch.
  *
@@ -155,7 +156,7 @@ function addressFor(scope: EnrichmentScope, writeField: string): CellAddress {
     channel: scope.channel,
     marketplace: scope.marketplace,
     aliasId: scope.aliasId ?? null,
-    locale: scope.locale ?? null,
+    locale: scope.locale ? normalizeLanguage(scope.locale) : null,
     writeField,
   }
 }

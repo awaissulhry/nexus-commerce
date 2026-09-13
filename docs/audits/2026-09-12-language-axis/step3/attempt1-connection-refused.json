@@ -1,0 +1,89 @@
+{
+  "startedAt": "2026-09-12T06:26:25.398Z",
+  "target": {
+    "environment": "production",
+    "service": "@nexus/api",
+    "host": "ep-purple-river-altf6t3y-pooler.c-3.eu-central-1.aws.neon.tech",
+    "database": "neondb"
+  },
+  "build": {
+    "builtAt": "2026-09-12T06:25:56.289Z",
+    "files": [
+      {
+        "file": "apps/api/src/services/pim/channel-field-map.ts",
+        "sha256": "c22e340054b7e18d1a2767466c4f016e2247b37207400ef7da3102be0e4f7827"
+      },
+      {
+        "file": "apps/api/src/services/pim/master-field-gate.ts",
+        "sha256": "ac36cc101955b64ed470dee985fbf10981611e668a4212bfbcc516f28958b57a"
+      },
+      {
+        "file": "apps/api/src/services/pim/content-locale.ts",
+        "sha256": "89bc20e717a38efe54fd311dbf9a1f9a6498c651dd92dbc149581c7f91775941"
+      },
+      {
+        "file": "apps/api/src/services/pim/variant-attribute-keys.ts",
+        "sha256": "355b983b2d84ffc45a61836455159b8620c8c6d931fbe9d98397fab8e4855487"
+      },
+      {
+        "file": "apps/api/src/services/pim/attribute-resolver.ts",
+        "sha256": "5bc5135b38621a2b537fb95282f5333c138d9179f5de872180880157b21a9d5e"
+      },
+      {
+        "file": "apps/api/src/services/pim/content-language.ts",
+        "sha256": "f3ae69bc3a23decbf2ad922602ed564d868886ff5ca306c5937f047b6991dab9"
+      },
+      {
+        "file": "apps/api/src/services/pim/content-resolver.ts",
+        "sha256": "e68782d75d7d7807b5fd0e7546715a3f8dde18717da2cf927abbc8efb3052b5f"
+      },
+      {
+        "file": "apps/api/src/services/pim/market-languages.ts",
+        "sha256": "21aa2ce58cad65cfa27bac6907cbf06e4c1fedb46797db2b495435163755cb6b"
+      },
+      {
+        "file": "apps/api/src/services/pim/sheet-values.ts",
+        "sha256": "f9272caaefe9a99baf5c7ef18ccd438c0fa72378df162d9b0bb3ff2f83cb6ad5"
+      },
+      {
+        "file": "apps/api/src/services/etsy/information-content.ts",
+        "sha256": "c566fe4280181fef882f3a7a7ea438e52711a0509d421a34af0dbad5aa47ab81"
+      },
+      {
+        "file": "apps/api/src/services/pim/content-resolver-shadow.ts",
+        "sha256": "f43075246cc68f3d5767d2d57f9d3c35a4ae5af68d2479c7c4bfc0b06a5048ed"
+      },
+      {
+        "file": "apps/api/src/routes/listings-syndication.routes.ts",
+        "sha256": "902bc58103cf1cb32711e2cabe7d71e8ad440bfac4ee22ee75d629d75c118f61"
+      }
+    ],
+    "extractedHelperSha256": "48e10aceb308e52093ea4f3212dc269292f4df4744ab6a02b70abeb518afd4dd",
+    "bundleSha256": "829602ef547bb0eb9368eef9e2b48d54f2d61e70f9be672d16050923253cec55",
+    "runtimeDatabase": "throwing stub; loaded-row marketLanguages overload only"
+  },
+  "positiveControls": {
+    "passed": 5,
+    "total": 5,
+    "injectedDefectRejected": true,
+    "belgiumBothLanguages": true
+  },
+  "scriptSha256": "f5c674f547604855aa53611a5720ab41eb4a44b54319971baba0b33615289e07",
+  "coverage": [],
+  "flag": "unchanged; no consumer imports v2",
+  "classifications": {
+    "R1-legacy-json-retired": "Product.localizedContent no longer supplies text; no values are moved or backfilled.",
+    "R2-default-language-listing-pin": "Existing listing title/description and broken-inheritance overrides are pins for Marketplace.languages[0] only.",
+    "R3-language-before-source": "A parent language translation answers before a child native source value; child wins within each tier.",
+    "R4-native-source-authority": "Native Product columns supply primary text; untagged category aliases and primary translation rows no longer override those columns.",
+    "R5-untagged-text-override-retired": "overrideData continues to hold facts but no longer supplies language content.",
+    "R6-explicit-source-fallback": "An exact-language sourceContent miss now returns source text with its actual source language.",
+    "R7-outbound-content-retired": "Provider/store-specific content bags no longer supply authored language content.",
+    "R8-language-review-metadata": "The resolved value reports its actual language and translation-row review status.",
+    "R9-regional-key-normalized": "An existing regional table key is found in memory through the language-only normaliser; nothing is rewritten.",
+    "R10-empty-field-fallback": "Absent/default empty text fields fall through individually rather than hiding a populated lower tier."
+  },
+  "error": "error: unsupported startup parameter in options: default_transaction_read_only. Please use unpooled connection or remove this parameter from the startup package. More details: https://neon.tech/docs/connect/connection-errors#unsupported-startup-parameter",
+  "rolledBack": false,
+  "correction": "Connection was refused before BEGIN; no transaction existed to roll back."
+}

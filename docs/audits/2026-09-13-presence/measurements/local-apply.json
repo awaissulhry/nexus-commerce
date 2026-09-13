@@ -1,0 +1,52 @@
+{
+  "host": "127.0.0.1:55439/nexus_development",
+  "container": "nexus-development-postgres-20260908",
+  "file": "/Users/awais/nexus-commerce/packages/database/prisma/migrations-pending/20260913180000_pr_presence/migration.sql",
+  "sha256": "12c5bad77d4933f7b39350d37bd7d3513027fd6943810caf70e96c55d7dd2d4d",
+  "startedAt": "2026-09-13T18:43:58.377Z",
+  "gates": [
+    "M1",
+    "W1.1",
+    "W1.2",
+    "W1.3",
+    "W1.4",
+    "W1.5-QUEUE",
+    "W1.5-PUSH",
+    "W1.6-GATE",
+    "W1.6-OFFER"
+  ],
+  "gateStates": {
+    "M1": "DONE",
+    "W1.1": "DONE",
+    "W1.2": "DONE",
+    "W1.3": "DONE",
+    "W1.4": "DONE",
+    "W1.5-QUEUE": "DONE",
+    "W1.5-PUSH": "DONE",
+    "W1.6-GATE": "DONE",
+    "W1.6-OFFER": "DONE"
+  },
+  "identity": {
+    "database": "nexus_development",
+    "role": "postgres",
+    "gale_version": 59,
+    "listing_control": 1003
+  },
+  "failedMigrations": [],
+  "committedAt": "2026-09-13T18:43:58.441Z",
+  "commands": [
+    "BEGIN",
+    "SET",
+    "SET",
+    "DO",
+    "ALTER",
+    "CREATE",
+    "CREATE",
+    "CREATE",
+    "ALTER",
+    "ALTER",
+    "GRANT",
+    "DO",
+    "COMMIT"
+  ]
+}

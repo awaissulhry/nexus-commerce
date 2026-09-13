@@ -1,0 +1,20 @@
+{
+  "guard": "LX.2",
+  "scanned": 1481,
+  "exempt": [
+    "services/amazon/flat-file-coerce-ai.ts",
+    "services/amazon/flat-file-coerce.ts",
+    "services/amazon/flat-file-hydrate.service.ts",
+    "services/amazon/flat-file-mapping-ai.ts",
+    "services/amazon/flat-file-mapping.ts",
+    "services/amazon/flat-file-merge.ts",
+    "services/amazon/flat-file-propagate.service.ts",
+    "services/amazon/flat-file-pull-preview.service.ts",
+    "services/amazon/flat-file-pull.service.ts",
+    "services/amazon/flat-file-schema-walk.ts",
+    "services/amazon/flat-file-verify-live.service.ts",
+    "services/amazon/flat-file.service.ts",
+    "services/channel-batch/amazon-batch-feed.service.ts"
+  ],
+  "violations": []
+}

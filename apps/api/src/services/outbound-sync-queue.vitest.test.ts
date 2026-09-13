@@ -5,9 +5,10 @@
  * default (NEXUS_ENABLE_AMAZON_PUBLISH unset → 'gated'), so dispatch returns a
  * synthetic FAILED with no network — enough to prove the row was dispatched.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const db = vi.hoisted(() => ({
+  channelListing: { findMany: vi.fn(async () => []) },
   outboundSyncQueue: {
     findUnique: vi.fn(),
     findMany: vi.fn(async () => [] as any[]),
@@ -16,6 +17,9 @@ const db = vi.hoisted(() => ({
     updateMany: vi.fn(async () => ({ count: 1 })),
   },
 }))
+const outboundTrap = vi.hoisted(() => { const stub = vi.fn(() => { throw new Error('Unexpected outbound fetch') }); vi.stubGlobal('fetch', stub); return stub })
+vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: null, addJobSafely: vi.fn(), readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
+vi.mock('./product-event.service.js', () => ({ productEventService: { emit: vi.fn() } }))
 vi.mock('../db.js', () => ({ default: db }))
 vi.mock('../lib/amazon-sp-client.js', () => ({ getAmazonSellerId: async () => 'seller-test' }))
 vi.mock('./channel-publish-audit.service.js', () => ({
@@ -108,3 +112,5 @@ describe('A2.3 — cron skip predicate (backstop)', () => {
     expect(inProgressUpdates().length).toBe(0) // nothing processed
   })
 })
+
+afterEach(() => expect(outboundTrap).not.toHaveBeenCalled())

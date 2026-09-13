@@ -1,0 +1,65 @@
+
+📌 BUILD STAMP — every file whose change can invalidate a reading below (sha1, first 8):
+   22:33:11  sha1:467d7fcb  docs/2026-09-03-cell-editing-contract.md
+   10:50:36  sha1:22b88761  apps/web/src/design-system/grid/NexusGrid.tsx
+   11:51:12  sha1:2f6b33f0  apps/web/src/design-system/grid/editors/openGesture.ts
+   01:51:51  sha1:10b69d50  apps/web/src/design-system/grid/editors/editorBox.ts
+   21:59:08  sha1:ffab68b1  apps/web/src/design-system/grid/theme/grid.css
+   00:09:09  sha1:a3fb04f6  apps/web/src/design-system/grid/hosts/GridSheet.tsx
+   03:23:01  sha1:e63dbd62  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx
+   22:33:11  sha1:6148695f  scripts/check-editor-open.mjs
+   21:17:29  sha1:c1b8148a  scripts/studio-browser-auth.mjs
+   07:53:52  sha1:11b41029  apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx
+   22:33:11  sha1:bde7979f  apps/web/src/design-system/components/SourceIndicator.tsx
+   21:59:08  sha1:8bfc2f04  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx
+   16:56:18  sha1:9101293e  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
+
+🕐 22:35:33 · WHAT ELSE COULD BE SHARING THIS API — a snapshot, not a window
+   gate processes (node, this script), incl. this one: 1
+     pid 94854 ppid 94839  /opt/homebrew/Cellar/node/25.9.0_2/bin/node scripts/check-editor-open.mjs --strict
+   browser processes owned by a gate: 0
+   (a snapshot cannot see a run that already exited or one that starts later — read as "at least these, at this instant")
+
+🔎 FOCUSED RUN — EDITOR_ONLY=first. The other timings are NOT RUN and therefore NOT PASSING:
+     · early
+     · settled
+     · geometry
+     · contract
+     · refused
+     · parity
+   Do not quote this run as a gate pass.
+
+── first (one gesture per page load — the arm the defect lived in)
+   22:36:07 ✅ text      brand        opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:36:39 ❌ longtext  name         opened 18/20   popup:largetext×15 NONE×2 popup:formula×3 writes-armed 0
+   22:38:28 ✅ number    basePrice    opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:38:55 ❌ select    status       opened  1/ 1   popup:listbox×1                writes-armed 0   ABSTAINED 19
+
+── negative control (the run above is worthless if this opens an editor)
+   ✅ a header double-click opens nothing — the detector can report a miss
+
+── wire
+   API hosts the page dialled: loopback:8091 · expected loopback:8091
+
+── API writes armed across the whole run: 0 (aborted at the network layer; none reached a database)
+── expected saves HELD open to produce the `flush` state: 0 (on name, XAVIA fixture, never completed)
+   announced at: tooltip=DIFFERS`; the token lookup resolved `FIXTURE-REGISTER-B0-FLUSH` and would fail on its absence
+
+🔴 19 GESTURE(S) NOT MEASURED — "could not measure" is not "measured green":
+   · first/select/dblclick/centre: the point is over nothing — off screen?
+   · first/select/dblclick/corner: the point is over nothing — off screen?
+   · first/select/enter/centre: the point is over nothing — off screen?
+   · first/select/enter/corner: the point is over nothing — off screen?
+   · first/select/f2/corner: the point is over nothing — off screen?
+   · first/select/type/centre: the point is over nothing — off screen?
+   · first/select/type/corner: the point is over nothing — off screen?
+   · first/select/equals/centre: the point is over nothing — off screen?
+   · first/select/equals/corner: the point is over nothing — off screen?
+   · first/select/dblclick/centre: the point is over nothing — off screen?
+   · first/select/dblclick/corner: the point is over nothing — off screen?
+   · first/select/enter/centre: the point is over nothing — off screen?
+
+❌ OPEN-GESTURE GATE FAILED — 3 finding(s):
+   · first · longtext (name) · type · centre: NO EDITOR within 250ms
+   · first · longtext (name) · equals · centre: NO EDITOR within 250ms
+   · 19 gesture(s) could not be measured

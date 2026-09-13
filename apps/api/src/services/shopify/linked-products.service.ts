@@ -1,6 +1,7 @@
 import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
 import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../../db.js'
 import { emptyShopifyLinkedDraft, fieldAddress, linkedFamilyChanges, shopifyLinkedDraftSchema, validateShopifyField, shopifyReferenceError, shopifyDefinitionApplicability,
   type ShopifyFieldEdit, type ShopifyFieldSnapshot, type ShopifyStoreSchema, type ShopifyLinkedAutomation, type ShopifyLinkedDraft, type ShopifyLinkedPlan, type ShopifyLinkedWorkspace } from '@nexus/shared/shopify-linked-products'
@@ -49,7 +50,7 @@ export async function linkedState(tx: Tx, destination: WorkspaceDestination) {
     hasSheetMedia: listings.some(l => { const attrs = object(l.platformAttributes); return !!attrs._productMediaLocales || !!attrs[SHEET_MEDIA_SYNC] }),
     destination: { accountId: destination.accountId, listingId: listing?.id ?? null, market: destination.marketplace }, revision, draft: parsed.data, suggestedProductIds, automation: { ...pausedAutomation(), ...object(pa[AUTOMATION_KEY]) },
     operation: operation ? { id: operation.id, status: operation.status, completed: operation.completed, total: operationTotal(operation), error: operation.error, ...(operation.sheetGalleries?.length ? { includesSheetMedia: true } : {}) } : null }
-  return { family, listing, pa, draft: parsed.data, operation, revision, workspace }
+  return { family, listing, listings, pa, draft: parsed.data, operation, revision, workspace }
 }
 
 export async function writeLinkedState(tx: Tx, destination: WorkspaceDestination, current: Awaited<ReturnType<typeof linkedState>>, patch: Record<string, unknown>) {
@@ -244,7 +245,11 @@ export async function beginLinkedSync(productId: string, scope: ContentScope, bo
     const current = await linkedState(tx, destination)
     if (current.revision !== input.expectedRevision) throw new WorkspaceScopeError('The draft changed after review.')
     if (origin === 'AUTOMATIC' && current.workspace.automation?.mode !== 'AUTOMATIC') throw new WorkspaceScopeError('Automation is paused. Review its settings before continuing.')
-    if (current.listing?.syncPaused || current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
+    for (const listing of current.listings) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw Object.assign(new WorkspaceScopeError(refusal.sentence, 409), { code: refusal.code, refusal })
+    }
+    if (current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
     if (current.operation && current.operation.status !== 'VERIFIED') throw new WorkspaceScopeError('Resume or reconcile the previous operation first.')
     if (gallerySchema && (await readSheetGallerySources(tx, destination, gallerySchema)).revision !== plan.galleryRevision) throw new WorkspaceScopeError('A gallery changed after review. Refresh the review before synchronizing.')
     const verification = new Map<string, ShopifyFieldEdit>(current.draft.baselineLinks.map(f => [fieldAddress(f), { ...f, nextValue: f.value, ownerLabel: 'Family member' }]))
@@ -267,7 +272,11 @@ export async function advanceLinkedSync(productId: string, scope: ContentScope, 
     if (op.status === 'VERIFIED') return op
     if (automated && (op.origin !== 'AUTOMATIC' || current.workspace.automation?.mode !== 'AUTOMATIC')) throw new WorkspaceScopeError('Automation is paused. Review or resume it before continuing.')
     if (op.lease && op.leaseUntil > Date.now()) throw new WorkspaceScopeError('This synchronization is already running. Reload its progress before retrying.')
-    if (current.listing?.syncPaused || current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
+    for (const listing of current.listings) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw Object.assign(new WorkspaceScopeError(refusal.sentence, 409), { code: refusal.code, refusal })
+    }
+    if (current.listing?.syncLocked) throw new WorkspaceScopeError('Synchronization is paused for this listing.', 422)
     const next = { ...op, lease, leaseUntil: Date.now() + 5 * 60_000, status: 'RUNNING' as const, error: null }
     await writeLinkedState(tx, destination, current, { [OPERATION_KEY]: next }); return next
   })

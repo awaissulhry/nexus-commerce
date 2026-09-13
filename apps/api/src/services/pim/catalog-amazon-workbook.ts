@@ -1,3 +1,4 @@
+import { normalizeLanguage } from './content-language.js'
 import type { TransferRow, TransferIssue } from '@nexus/shared/catalog-transfer'
 import { detectAmazonTemplate, type AmazonTemplateParse } from '../amazon/template-workbook.js'
 import type { ChannelSpec, ChannelFieldSpec } from './channel-specs/types.js'
@@ -7,7 +8,6 @@ import { checkWorkbookSize } from './catalog-source-file.js'
 import { TRANSFER_MAX_FILE_BYTES, TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
 
 type Destination = { accountId: string; marketplace: string; language: string; existingListingSkus?: Set<string> }
-const normalizeLanguage = (value: string) => value.replace(/_/g, '-').toLowerCase()
 const pathOf = (header: string) => header.replace(/\[[^\]]*\]/g, '').replace(/#\d+/g, '').split('.')
 const slotOf = (header: string) => [...header.matchAll(/#(\d+)/g)].map(m => Number(m[1]))
 const sourceValue = (parsed: AmazonTemplateParse, header: string, value: string) => {
@@ -20,7 +20,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
   if (!destination.accountId) throw new Error('Select the Amazon account that owns these listings')
   if (parsed.meta.grammar !== 'v2' || !parsed.meta.marketplace || !parsed.meta.contentLanguageTag) throw new Error('This Amazon workbook has no reliable marketplace/language metadata. Use column mapping with an explicit destination.')
   if (parsed.meta.marketplace !== destination.marketplace) throw new Error(`This workbook belongs to Amazon ${parsed.meta.marketplace}, not ${destination.marketplace}`)
-  if (normalizeLanguage(parsed.meta.contentLanguageTag).split('-')[0] !== normalizeLanguage(destination.language).split('-')[0]) throw new Error('The workbook language does not match the configured destination language')
+  if (normalizeLanguage(parsed.meta.contentLanguageTag) !== normalizeLanguage(destination.language)) throw new Error('The workbook language does not match the configured destination language')
   const rows: TransferRow[] = [], issues: TransferIssue[] = [], exclusions: SourceExclusion[] = []
   const skuHeader = parsed.headers.find(h => h === 'contribution_sku#1.value')
   const typeHeader = parsed.headers.find(h => h === 'product_type#1.value')
@@ -120,7 +120,7 @@ export async function readAmazonCatalogWorkbook(buffer: Buffer, accountId: strin
         if (!title) { result.issues.push({ row: 0, sku, field: 'item_name', message: 'A new product needs a verified name in the Amazon workbook' }); continue }
         const record = parsed.rows.find(r => r['contribution_sku#1.value']?.trim() === sku)!
         const base = { row: title.row, sku, entity: 'Products' as const, channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', action: 'SET' as const }
-        result.rows.push({ ...base, field: 'family', value: family.code }, { ...base, field: 'name', value: title.value }, { ...base, locale: market.language.toLowerCase(), field: 'name', value: title.value })
+        result.rows.push({ ...base, field: 'family', value: family.code }, { ...base, field: 'name', value: title.value }, { ...base, locale: normalizeLanguage(market.language), field: 'name', value: title.value })
         if (parentHeader && record[parentHeader]?.trim()) result.rows.push({ ...base, field: 'parentSku', value: record[parentHeader].trim() })
       }
     }

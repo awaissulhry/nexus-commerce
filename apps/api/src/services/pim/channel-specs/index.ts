@@ -1,3 +1,5 @@
+import { categorySchemaMarket, categorySchemaMarkets } from '../../categories/category-schema-coordinate.js'
+import { cachedSchemasOnly } from '../cached-schema-context.js'
 import { WorkspaceCache } from '../../../lib/workspace-cache.js'
 /**
  * AM.1 — the DB-backed loaders for channel specs, with the caches the page-load path needs.
@@ -57,7 +59,6 @@ async function amazonStamp(marketplace: string, productType: string): Promise<st
 export async function loadAmazonSpec(marketplace: string, productType: string, accountId?: string | null): Promise<ChannelSpec> {
   const mk = String(marketplace).toUpperCase()
   const pt = String(productType).toUpperCase()
-  if (accountId) return (await import('../../categories/seller-schema.service.js')).amazonSellerSpec(accountId, mk, pt)
   const key = `AMAZON|${mk}|${pt}`
   const stamp = await amazonStamp(mk, pt)
   const hit = specCache.get(key)
@@ -69,6 +70,8 @@ export async function loadAmazonSpec(marketplace: string, productType: string, a
     select: { schemaDefinition: true, fetchedAt: true, schemaVersion: true },
   })
   if (!row) {
+    // An account-specific provider read is a cache-miss fallback, never a page-load bypass.
+    if (accountId && !cachedSchemasOnly()) return (await import('../../categories/seller-schema.service.js')).amazonSellerSpec(accountId, mk, pt)
     return remember(key, stamp, {
       channel: 'AMAZON', marketplace: mk, category: pt, fields: [], groups: [],
       fetchedAt: null, schemaVersion: null, coverage: {}, unrecognised: [], absent: true,
@@ -112,13 +115,14 @@ export async function loadAmazonEnglishLabels(productType: string): Promise<Map<
 
 /** A separate contract per leaf. Missing metadata never borrows another category's aspects. */
 export async function loadEbaySpec(marketplace: string, categoryIds: string[]): Promise<ChannelSpec> {
-  const mk = String(marketplace).toUpperCase().replace(/^EBAY_/, '')
+  // LX.F2 R-LX-20 — ONE authority for this coordinate (`categories/category-schema-coordinate.ts`).
+  const mk = categorySchemaMarket('EBAY', marketplace) ?? 'IT'
   const cats = [...new Set(categoryIds.map(String).map(c => c.trim()).filter(Boolean))]
   if (cats.length > 1) throw new Error('Load eBay categories separately to preserve each leaf contract')
   const category = cats[0] ?? '*'
   const [cached, schemaRows] = await Promise.all([
     cats.length ? prisma.categorySchema.findFirst({
-      where: { channel: 'EBAY', marketplace: { in: [mk, `EBAY_${mk}`] }, productType: category, isActive: true },
+      where: { channel: 'EBAY', marketplace: { in: categorySchemaMarkets('EBAY', mk) }, productType: category, isActive: true },
       orderBy: [{ fetchedAt: 'desc' }, { id: 'asc' }],
       select: { schemaDefinition: true, fetchedAt: true, schemaVersion: true },
     }) : Promise.resolve(null),

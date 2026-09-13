@@ -393,56 +393,6 @@ export class EtsyService {
   }
 
   /**
-   * Update listing price
-   */
-  async updateListingPrice(
-    listingId: number,
-    price: number
-  ): Promise<void> {
-    try {
-      await this.request(
-        "PATCH",
-        `/shops/${this.shopId}/listings/${listingId}`,
-        {
-          price: (price * 100).toFixed(0), // Etsy uses cents
-        }
-      );
-    } catch (error) {
-      throw new MarketplaceSyncError(
-        "ETSY",
-        "VALIDATION",
-        `Failed to update listing price: ${error instanceof Error ? error.message : String(error)}`,
-        { listingId, price }
-      );
-    }
-  }
-
-  /**
-   * Update listing quantity
-   */
-  async updateListingQuantity(
-    listingId: number,
-    quantity: number
-  ): Promise<void> {
-    try {
-      await this.request(
-        "PATCH",
-        `/shops/${this.shopId}/listings/${listingId}`,
-        {
-          quantity,
-        }
-      );
-    } catch (error) {
-      throw new MarketplaceSyncError(
-        "ETSY",
-        "VALIDATION",
-        `Failed to update listing quantity: ${error instanceof Error ? error.message : String(error)}`,
-        { listingId, quantity }
-      );
-    }
-  }
-
-  /**
    * Update variation quantity
    */
   async updateVariationQuantity(

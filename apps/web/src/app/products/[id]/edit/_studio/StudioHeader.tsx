@@ -62,8 +62,8 @@ export function StudioHeader({ titleMenu }: { titleMenu?: ReactNode }) {
               {product.asin}
             </span>
           )}
-          <Pill tone={statusTone(product.status)} dot>
-            {statusLabel(product.status)}
+          <Pill tone={product.deletedAt != null ? 'neutral' : statusTone(product.status)} dot title={product.deletedAt != null ? `Moved to the bin at ${product.deletedAt}.` : undefined}>
+            {product.deletedAt != null ? 'Binned' : statusLabel(product.status)}
           </Pill>
           {product.isParent && <Pill tone="info">Parent</Pill>}
           {product.parentId &&

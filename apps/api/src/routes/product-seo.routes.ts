@@ -1,3 +1,5 @@
+import { normalizeLanguage, languageEntry } from '../services/pim/content-language.js'
+import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * W12 — Per-product SEO metadata CRUD.
@@ -25,6 +27,12 @@ import type { FastifyPluginAsync } from 'fastify';
 import { Prisma } from '@prisma/client';
 import prisma from '../db.js';
 
+// Historical "default" is the source address, never a second language.
+const seoLanguage = (tag: string) => normalizeLanguage(tag === 'default' ? PRIMARY_CONTENT_LOCALE : tag)
+async function seoRow(productId: string, requested: string) {
+  const rows = await prisma.productSeo.findMany({ where: { productId } })
+  return languageEntry(rows.map(row => [seoLanguage(row.locale), row] as const), requested)
+}
 const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
   // ── GET all locales ─────────────────────────────────────────────────
   fastify.get<{ Params: { id: string } }>(
@@ -34,7 +42,7 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
         where: { productId: req.params.id },
         orderBy: { locale: 'asc' },
       })
-      return reply.send(rows)
+      return reply.send(rows.map(row => ({ ...row, locale: seoLanguage(row.locale) })))
     },
   )
 
@@ -42,11 +50,9 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { id: string; locale: string } }>(
     '/products/:id/seo/:locale',
     async (req, reply) => {
-      const row = await prisma.productSeo.findUnique({
-        where: { productId_locale: workspaceKey({ productId: req.params.id, locale: req.params.locale.toLowerCase() }) },
-      })
+      const row = await seoRow(req.params.id, seoLanguage(req.params.locale))
       if (!row) return reply.status(404).send({ error: 'SEO_NOT_FOUND' })
-      return reply.send(row)
+      return reply.send({ ...row, locale: seoLanguage(row.locale) })
     },
   )
 
@@ -65,14 +71,15 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
     };
   }>('/products/:id/seo/:locale', async (req, reply) => {
     const productId = req.params.id
-    const locale = req.params.locale.toLowerCase()
+    const locale = seoLanguage(req.params.locale)
     const body = req.body ?? {}
 
     const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } })
     if (!product) return reply.status(404).send({ error: 'PRODUCT_NOT_FOUND' })
 
+    const existing = await seoRow(productId, locale)
     const row = await prisma.productSeo.upsert({
-      where: { productId_locale: workspaceKey({ productId, locale }) },
+      where: { productId_locale: workspaceKey({ productId, locale: existing?.locale ?? locale }) },
       create: {
         productId,
         locale,
@@ -97,7 +104,7 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
       },
     })
 
-    return reply.status(200).send(row)
+    return reply.status(200).send({ ...row, locale: seoLanguage(row.locale) })
   })
 
   // ── DELETE ──────────────────────────────────────────────────────────
@@ -105,12 +112,10 @@ const productSeoRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:id/seo/:locale',
     async (req, reply) => {
       const productId = req.params.id
-      const locale = req.params.locale.toLowerCase()
-      const existing = await prisma.productSeo.findUnique({
-        where: { productId_locale: workspaceKey({ productId, locale }) },
-      })
+      const locale = seoLanguage(req.params.locale)
+      const existing = await seoRow(productId, locale)
       if (!existing) return reply.status(404).send({ error: 'SEO_NOT_FOUND' })
-      await prisma.productSeo.delete({ where: { productId_locale: workspaceKey({ productId, locale }) } })
+      await prisma.productSeo.delete({ where: { id: existing.id } })
       return reply.send({ deleted: true })
     },
   )

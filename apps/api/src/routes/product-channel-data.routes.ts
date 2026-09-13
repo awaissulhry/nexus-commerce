@@ -17,6 +17,8 @@ import { MARKETPLACE_ID_TO_CODE } from '../utils/marketplace-code.js'
 import { getPendingMcfReservedByProduct } from '../services/amazon-mcf.service.js'
 import { primaryConnectionIds } from '../services/connection-resolver.service.js'
 import { applyChannelFollows, isFollowableField, FOLLOWABLE_FIELDS } from '../services/pim/channel-follows.service.js'
+import { setFulfillmentMethod } from '../services/pim/fulfillment-method.service.js'
+import { writeChannelPrices, type PriceWriteTarget } from '../services/pim/channel-price-write.service.js'
 
 // Normalize Amazon's fulfilment value (stored on
 // ChannelListing.platformAttributes.fulfillmentChannel) to FBA/FBM. AFN =
@@ -157,57 +159,36 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     // MAP.2b — one resolve for the whole batch; the answer cannot change during it.
     const pcdConn = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
 
-    const ops = updates.map(async (u) => {
+    // MX.1 / Add 4(b) — the PRICE write is the ONE channel price write (`channel-price-write.service.ts`): `price` AND
+    // `priceOverride` + `followMasterPrice = false` (null clears back to master), the sale + its window, a PriceChangeEvent,
+    // an override audit row, ONE PRICE_UPDATE enqueue — and REAL per-row outcomes (this route used to answer the request
+    // count after `Promise.allSettled`, report 19 §5.5). The row's existence stays this route's legacy contract: a child
+    // without a listing row still gets one created as a draft, then the service writes it. The legacy `quantity` write is
+    // kept verbatim below (not the Matrix's path; the Matrix pins through the Sync Control primitives).
+    const targets: PriceWriteTarget[] = []
+    const legacyQuantity: Array<{ listingId: string; quantity: number }> = []
+    for (const u of updates) {
       const mp = u.marketplace.toUpperCase()
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
-
-      if (u.variantId) {
-        // Primary: upsert the child product's ChannelListing (what flat file reads).
-        // Use upsert not updateMany so that child products without an existing
-        // ChannelListing row still get the price written — updateMany would silently
-        // match 0 records and the flat file would never see the change.
-        const clUpdate: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
-        if (u.price !== undefined && u.price !== null) { clUpdate.price = u.price; clUpdate.followMasterPrice = false }
-        if (u.salePrice !== undefined) clUpdate.salePrice = u.salePrice
-        if (u.quantity !== undefined && u.quantity !== null) { clUpdate.quantity = u.quantity; clUpdate.followMasterQuantity = false }
-
-        // MAP.2b — resolved once for the channels in this batch (see the loop head).
-        await prisma.channelListing.upsert({
-          where: { productId_channel_marketplace: workspaceKey({ productId: u.variantId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null, aliasKey: '' }) },
-          update: clUpdate,
-          create: {
-            productId: u.variantId,
-            channel: ch,
-            marketplace: mp,
-            channelMarket: `${ch}_${mp}`,
-            region: mp,
-            ...clUpdate,
-          },
-        })
-
-        // Secondary: also update VariantChannelListing for completeness
-        const vclData: Record<string, any> = { lastSyncedAt: new Date() }
-        if (u.price !== undefined && u.price !== null) vclData.channelPrice = u.price
-        if (u.quantity !== undefined && u.quantity !== null) vclData.channelQuantity = u.quantity
-        await prisma.variantChannelListing.updateMany({
-          where: { variantId: u.variantId, marketplace: mp, channel: ch },
-          data: vclData,
-        }).catch(() => { /* VariantChannelListing may not exist — non-fatal */ })
-      } else {
-        // Product-level update (no variantId)
-        const data: Record<string, any> = { lastSyncedAt: new Date(), syncStatus: 'PENDING' }
-        if (u.price !== undefined && u.price !== null) { data.price = u.price; data.followMasterPrice = false }
-        if (u.salePrice !== undefined) data.salePrice = u.salePrice
-        if (u.quantity !== undefined && u.quantity !== null) { data.quantity = u.quantity; data.followMasterQuantity = false }
-        await prisma.channelListing.updateMany({
-          where: { productId: id, marketplace: mp, channel: ch },
-          data,
-        })
-      }
-    })
-
-    await Promise.allSettled(ops)
-    return reply.send({ ok: true, updated: updates.length })
+      const productId = u.variantId ?? id
+      const where = { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn.get(ch) ?? null, aliasKey: '' }) }
+      const existing = await prisma.channelListing.findUnique({ where, select: { id: true } })
+      const listingId = existing?.id ?? (await prisma.channelListing.create({
+        data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn.get(ch) ?? null, syncStatus: 'PENDING' },
+        select: { id: true },
+      })).id
+      const t: PriceWriteTarget = { listingId }
+      if (u.price !== undefined) t.price = u.price
+      if (u.salePrice !== undefined) t.sale = { value: u.salePrice, start: (u as { salePriceStart?: string | null }).salePriceStart ?? null, end: (u as { salePriceEnd?: string | null }).salePriceEnd ?? null }
+      targets.push(t)
+      if (u.quantity !== undefined && u.quantity !== null) legacyQuantity.push({ listingId, quantity: u.quantity })
+    }
+    const actor = (request as { authUser?: { email?: string; id?: string } }).authUser?.email ?? 'channel-pricing'
+    const r = await writeChannelPrices({ targets, actor, source: 'MANUAL_OVERRIDE', reason: 'channel-pricing' })
+    for (const q of legacyQuantity) {
+      await prisma.channelListing.update({ where: { id: q.listingId }, data: { quantity: q.quantity, followMasterQuantity: false, syncStatus: 'PENDING' } }).catch(() => undefined)
+    }
+    return reply.send({ ok: r.refused === 0 && r.conflict === 0, updated: r.applied, noop: r.noop, refused: r.refused, conflict: r.conflict, results: r.results })
   })
 
   // ── GET /api/products/:id/channel-inventory ─────────────────────────────
@@ -396,74 +377,30 @@ export default async function productChannelDataRoutes(fastify: FastifyInstance)
     // MAP.2b — one resolve for the whole batch.
     const pcdConn2 = await primaryConnectionIds(updates.map((u) => (u.channel ?? 'AMAZON').toUpperCase()))
 
-    const ops = updates.map(async (u) => {
+    // MX.1 / Add 4(a) — the write is the ONE fulfilment write (`fulfillment-method.service.ts`): the typed column AND the
+    // flat `platformAttributes.fulfillmentChannel` AND the nested `fulfillment_availability[0].fulfillment_channel_code`
+    // (what the FBA guard reads) land together, an FBA→FBM change while FBA stock is on hand is refused BY NAME, the
+    // SCT.6d product-flag follow-on is kept, and the response carries REAL per-row outcomes — never the request count
+    // (report 18 §5.2/§5.4). The row's existence stays this route's legacy contract (a missing row is created as a draft).
+    const targets: Array<{ listingId: string; method: 'FBA' | 'FBM' | null }> = []
+    for (const u of updates) {
       const mp = u.marketplace.toUpperCase()
       const ch = (u.channel ?? 'AMAZON').toUpperCase()
       const productId = u.variantId ?? id
-
-      // Keep the ingested fulfillmentChannel mirror in step with the operator's
-      // choice so read surfaces reading platformAttributes don't show stale data.
-      const existing = await prisma.channelListing.findUnique({
-        where: { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) },
-        select: { platformAttributes: true },
-      })
-      const pa = { ...((existing?.platformAttributes as Record<string, unknown> | null) ?? {}) }
-      if (u.fulfillmentMethod == null) delete pa.fulfillmentChannel
-      else pa.fulfillmentChannel = u.fulfillmentMethod === 'FBA' ? 'AFN' : 'MFN'
-      const paJson = pa as unknown as Parameters<typeof prisma.channelListing.upsert>[0]['create']['platformAttributes']
-
-      await prisma.channelListing.upsert({
-        where: { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) },
-        update: { fulfillmentMethod: u.fulfillmentMethod, platformAttributes: paJson, lastSyncedAt: new Date(), syncStatus: 'PENDING' },
-        create: {
-          productId,
-          channel: ch,
-          marketplace: mp,
-          channelMarket: `${ch}_${mp}`,
-          region: mp,
-          fulfillmentMethod: u.fulfillmentMethod,
-          platformAttributes: paJson,
-          lastSyncedAt: new Date(),
-          syncStatus: 'PENDING',
-        },
-      })
-    })
-
-    await Promise.allSettled(ops)
-
-    // SCT.6d — COMPLETE an FBA→FBM conversion from the Matrix tab. The toggle
-    // above writes the LISTING-level method, but the fail-closed FBA guard
-    // also reads the VARIANT product's flag — which stranded the AIREON
-    // conversion (24 variants stayed product.fm='FBA' with no UI path to fix
-    // it). When a variant is toggled FBM and EVERY other FBA signal is clear
-    // (no other FBA listing, no FBA stock on hand, no active FBA offer), the
-    // product flag now follows automatically — the same fail-safe predicate
-    // as the master-edit cascade. Toggling FBA locks the product flag
-    // immediately (locking harder is always safe).
-    const conversions: string[] = []
-    for (const u of updates) {
-      const productId = u.variantId ?? id
-      if (u.fulfillmentMethod === 'FBA') {
-        await prisma.product.updateMany({ where: { id: productId, fulfillmentMethod: { not: 'FBA' } }, data: { fulfillmentMethod: 'FBA' } })
-        continue
-      }
-      if (u.fulfillmentMethod !== 'FBM') continue
-      const prod = await prisma.product.findUnique({ where: { id: productId }, select: { fulfillmentMethod: true } })
-      if (String(prod?.fulfillmentMethod ?? '').toUpperCase() !== 'FBA') continue
-      const [otherFbaListing, fbaStock, fbaOffer] = await Promise.all([
-        prisma.channelListing.findFirst({ where: { productId, fulfillmentMethod: 'FBA' }, select: { id: true } }),
-        prisma.stockLevel.aggregate({ where: { productId, location: { code: 'AMAZON-EU-FBA' } }, _sum: { quantity: true } }),
-        prisma.offer.findFirst({ where: { channelListing: { productId }, fulfillmentMethod: 'FBA', isActive: true }, select: { id: true } }).catch(() => null),
-      ])
-      if (!otherFbaListing && (fbaStock._sum.quantity ?? 0) === 0 && !fbaOffer) {
-        await prisma.product.update({ where: { id: productId }, data: { fulfillmentMethod: 'FBM' } })
-        conversions.push(productId)
-      } else {
-        request.log.warn({ productId, otherFbaListing: !!otherFbaListing, fbaStock: fbaStock._sum.quantity ?? 0, fbaOffer: !!fbaOffer },
-          'fulfillment toggle: product flag HELD (live FBA evidence remains)')
-      }
+      const where = { productId_channel_marketplace: workspaceKey({ productId, channel: ch, marketplace: mp, channelConnectionId: pcdConn2.get(ch) ?? null, aliasKey: '' }) }
+      const existing = await prisma.channelListing.findUnique({ where, select: { id: true } })
+      const listingId = existing?.id ?? (await prisma.channelListing.create({
+        data: { productId, channel: ch, marketplace: mp, channelMarket: `${ch}_${mp}`, region: mp, channelConnectionId: pcdConn2.get(ch) ?? null, syncStatus: 'PENDING' },
+        select: { id: true },
+      })).id
+      targets.push({ listingId, method: u.fulfillmentMethod })
     }
-    return reply.send({ ok: true, updated: updates.length, productConversions: conversions.length })
+    const actor = (request as { authUser?: { email?: string; id?: string } }).authUser?.email ?? 'channel-fulfillment'
+    const r = await setFulfillmentMethod({ targets, actor })
+    return reply.send({
+      ok: r.refused === 0 && r.conflict === 0, updated: r.applied, noop: r.noop, refused: r.refused, conflict: r.conflict,
+      results: r.results, productConversions: r.productConversions.length, productConversionIds: r.productConversions,
+    })
   })
 
   // ── GET /api/products/:id/listings ──────────────────────────────────────

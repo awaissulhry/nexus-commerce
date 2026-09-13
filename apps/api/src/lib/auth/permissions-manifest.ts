@@ -170,6 +170,7 @@ export const ENTRIES: Entry[] = [
   P(F.marketingPublish, pfx('/api/image-publish-jobs')),
 
   // ── S2 coverage: catalog / PIM sub-resources ───────────────────
+  P(F.productsPublish, (_m, p) => /^\/api\/products\/[^/]+\/studio-publication(?:\/|$)/.test(p)),
   RW(F.pimManage, F.pimManage, pfx('/api/attribute-groups')),
   RW(F.pimManage, F.pimManage, pfx('/api/attribute-options')),
   RW(F.pimManage, F.pimManage, pfx('/api/family-attributes')),
@@ -221,6 +222,17 @@ export const ENTRIES: Entry[] = [
 
   // Shopify publication controls must precede the broad advertising /automation matcher.
   P(F.productsPublish, (m, p) => m !== 'GET' && /^\/api\/products\/[^/]+\/shopify-linked\/(synchronize|advance|entry|automation|automation-check)$/.test(p)),
+
+  // PR.1 Presence W0: specific rules precede every channel/product prefix.
+  P(F.productsDelete, (m, p) => m === 'POST' && (p === '/api/amazon/flat-file/remove' || p === '/api/products/bulk-hard-delete')),
+  P(F.productsDelete, (m, p) => m === 'POST' && p === '/api/products/delist-cascade/cancel'),
+  P(F.productsEdit, (m, p) => m === 'PUT' && /^\/api\/products\/[^/]+\/matrix\/channel-listing\/[^/]+$/.test(p)),
+  P(F.productsDelete, (m, p) => m === 'POST' && /^\/api\/products\/[^/]+\/recover$/.test(p)),
+  P(F.productsView, (m, p) => (m === 'POST' && /^\/api\/products\/[^/]+\/recover\/preview$/.test(p)) || (m === 'GET' && /^\/api\/products\/[^/]+\/recover\/events$/.test(p))),
+  P(F.productsEdit, (m, p) => m === 'POST' && p === '/etsy/sync/listings'),
+  P(F.inventoryAdjust, (m, p) => m === 'POST' && p === '/etsy/sync/inventory/from-etsy'),
+  P(F.ordersEdit, (m, p) => m === 'POST' && p === '/etsy/sync/orders'),
+  P(F.productsPublish, (m, p) => m === 'POST' && (p === '/etsy/sync/inventory/to-etsy' || /^\/etsy\/orders\/[^/]+\/(?:status|fulfillment)$/.test(p))),
 
   // ── Advertising ─────────────────────────────────────────────────
   // RPT.5 — saved report definitions. Scoped ABOVE the catch-all on purpose:
@@ -370,6 +382,9 @@ export const ENTRIES: Entry[] = [
   RW(F.listingsView, F.channelsSync, pfx('/ebay')),
 
   // ── Products / catalog / PIM ────────────────────────────────────
+  P(F.productsView, (m, p) => m === 'GET' && ['/api/catalog-transfer/languages', '/api/catalog-transfer/translate/runs'].includes(p) || m === 'POST' && ['/api/products/grid', '/api/catalog-transfer/translate/preview'].includes(p)),
+  P(F.productsTranslationsEdit, (m, p) => m === 'POST' && /^\/api\/catalog-transfer\/translate\/[^/]+\/revert$/.test(p)),
+  P(F.aiRun, (m, p) => m === 'POST' && p === '/api/catalog-transfer/translate/apply'),
   P(F.productsView, (m, p) => m === 'GET' && (p === '/api/catalog-transfer/readiness' || p === '/api/catalog-transfer/readiness/options')),
   P(F.productsView, (m, p) => m === 'GET' && /^\/api\/catalog-transfer\/products\/[^/]+\/options$/.test(p)),
   P(F.productsExport, (_m, p) => p === '/api/catalog-transfer/export' || /^\/api\/catalog-transfer\/products\/[^/]+\/export$/.test(p)),
@@ -435,7 +450,15 @@ export const ENTRIES: Entry[] = [
   // `permissions-manifest-order.vitest.test.ts` now fails on any new instance
   // of this — the shadowing is invisible by reading, so it needs a test, not a
   // convention.
+  // MX.1 — the Matrix page's four routes (`studio-matrix.routes.ts`). An EXPLICIT entry rather than the
+  // /api/products prefix fall-through, placed BEFORE that prefix (most-specific-first): GET → products.view,
+  // PATCH/POST → products.edit. The financial permission `products.price.edit` is enforced INSIDE the matrix
+  // services on the price cells (Add 4(d)) — the `has('/price')` rule above cannot see a path that carries no
+  // `/price` segment, which is exactly why report 25 §5.10 found it gating nothing.
+  RW(F.productsView, F.productsEdit, (_m, p) => /^\/api\/products\/[^/]+\/studio\/matrix(?:\/|$)/.test(p)),
   RW(F.aiView, F.aiRun, pfx('/api/products-ai')),
+  // Presence: this POST only reads operational dependencies.
+  RW(F.productsView, F.productsView, (_m, p) => p === '/api/products/operational-impact'),
   RW(F.productsView, F.productsEdit, pfx('/api/products')),
 
   // ── AI / agents ─────────────────────────────────────────────────

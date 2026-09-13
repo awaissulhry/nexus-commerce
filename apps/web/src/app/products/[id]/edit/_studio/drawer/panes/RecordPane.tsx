@@ -24,7 +24,7 @@ import type {
   SheetColumn,
   SheetRow,
 } from '../types'
-import type { FormulaCandidate } from '@/design-system/grid'
+import { columnLanguages, languageField } from '../../sheet/languages'
 import { buildFormulaCandidates } from '../formulaCandidates'
 import { PressableRow } from '@/design-system/components/PressableRow'
 import styles from '../drawer.module.css'
@@ -79,7 +79,7 @@ export function RecordPane({
   /**
    * What a `$reference` may name on THIS record, with the value each column currently holds.
    *
-   * 🔴 Built ONCE per record here rather than per field. There are ~100 fields in this pane and the
+   * 🔴 Built ONCE per record and language here rather than per field. There are ~100 fields in this pane and the
    * list is identical for every one of them; building it inside `RecordField` would mint a hundred
    * copies of the same array on every render and hand each memoised field a prop that differs by
    * identity every time — the exact shape FE.1 measured costing 178.8 ms of a 254 ms drawer open.
@@ -88,10 +88,10 @@ export function RecordPane({
    * and its answer overrides this list the moment it arrives. Deriving "unknown" from here alone
    * would mark a good reference wrong whenever the record shows fewer columns than the market has.
    */
-  const formulaCandidates = useMemo<FormulaCandidate[]>(
-    () => (formulas ? buildFormulaCandidates(columns, row.values, formulas.functions) : []),
-    [formulas, columns, row.values],
-  )
+  const formulaCandidates = useMemo(() => {
+    const languages = [...new Set([scope.locale ?? '', ...columnLanguages(columns.map(column => column.key))])]
+    return new Map(languages.map(locale => [locale, formulas ? buildFormulaCandidates(columns, row.values, formulas.functions, undefined, locale) : []]))
+  }, [formulas, columns, row.values, scope.locale])
 
   const groups = useMemo(() => {
     const byGroup = new Map<string, SheetColumn[]>()
@@ -288,7 +288,7 @@ export function RecordPane({
                     onHistory={onHistory}
                     rowId={row.id}
                     formulas={formulas}
-                    candidates={formulaCandidates}
+                    candidates={formulaCandidates.get(languageField(col.key, scope.locale ?? '').locale) ?? []}
                     onFormulaSaved={onFormulaSaved}
                     writesRefused={writesRefused}
                   />

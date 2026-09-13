@@ -67,9 +67,9 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
         .then(body => apply(Object.fromEntries(Object.entries(policyLists).map(([key, list]) => [key, Object.fromEntries((body[list] ?? []).map(policy => [policy.id, policy.name]))])))))
     }
     if (channel === 'ETSY') for (const field of ['shipping_profile_id', 'shop_section_id', 'return_policy_id', 'readiness_state_id']) {
-      if (present.has(field) && isReferenceField(field)) tasks.push(loadReferenceChoices(field, { connectionId, market }).then(choices => apply({ [field]: choices.labels })))
+      if (present.has(field) && isReferenceField(field)) tasks.push(loadReferenceChoices(field, { connectionId, market }, { live: false }).then(choices => apply({ [field]: choices.labels })))
     }
-    if (present.has('descriptionThemeId')) tasks.push(loadReferenceChoices('descriptionThemeId')
+    if (present.has('descriptionThemeId')) tasks.push(loadReferenceChoices('descriptionThemeId', {}, { live: false })
       .then(choices => apply({ descriptionThemeId: choices.labels })))
     if (present.has('productType') && channel === 'AMAZON') tasks.push(read(`listing-wizard/product-types?${new URLSearchParams({ channel, marketplace: market })}`, abort.signal)
       .then(body => apply({ productType: Object.fromEntries((body.items ?? []).map((item: { productType: string; displayName: string }) => [item.productType, item.displayName])) })))
@@ -83,7 +83,9 @@ export function useReferenceNames<T extends Sheet>(sheet: T | null, channel: str
           tasks.push(read(`categories/reference-labels?${nameQuery}`, abort.signal).then(body => apply(body.labels ?? {})))
         }
         if (present.has('merchant_shipping_group') || present.has('shippingTemplate')) {
-          tasks.push(loadReferenceChoices('merchant_shipping_group', { market, productType, connectionId })
+          // 🔴 A PAGE LOAD, not a gesture: cache-only (LX.6 / R-LX-4). Names that are not cached
+          // leave the raw template ID visible; the cell editor's own live read fills them in.
+          tasks.push(loadReferenceChoices('merchant_shipping_group', { market, productType, connectionId }, { live: false })
             .then(choices => apply({ merchant_shipping_group: choices.labels, shippingTemplate: choices.labels })))
         }
       }

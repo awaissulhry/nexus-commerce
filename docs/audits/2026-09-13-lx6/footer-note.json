@@ -1,0 +1,196 @@
+{
+  "at": "2026-09-13T04:52:02.381Z",
+  "database": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "scopes": [
+    {
+      "scope": "EBAY·IT·it",
+      "columns": 51,
+      "rowMeasured": {
+        "id": "cmokmy0jf0003pm0ppnu1b2yy",
+        "sku": "GALE-JACKET-BLACK-MEN-3XL"
+      },
+      "affectsAllChannelsCells": 1,
+      "flagged": [
+        {
+          "key": "sku",
+          "editable": false,
+          "writable": false,
+          "writeTarget": "master",
+          "writeVerb": "master"
+        }
+      ],
+      "crossChannelColumnCount": 0,
+      "footerNoteRenders": false
+    },
+    {
+      "scope": "AMAZON·DE·de",
+      "columns": 165,
+      "rowMeasured": {
+        "id": "cmokmy0jf0003pm0ppnu1b2yy",
+        "sku": "GALE-JACKET-BLACK-MEN-3XL"
+      },
+      "affectsAllChannelsCells": 2,
+      "flagged": [
+        {
+          "key": "sku",
+          "editable": false,
+          "writable": false,
+          "writeTarget": "master",
+          "writeVerb": "master"
+        },
+        {
+          "key": "keywords",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        }
+      ],
+      "crossChannelColumnCount": 1,
+      "footerNoteRenders": true
+    },
+    {
+      "scope": "AMAZON·IT·it",
+      "columns": 163,
+      "rowMeasured": {
+        "id": "cmokmy0jf0003pm0ppnu1b2yy",
+        "sku": "GALE-JACKET-BLACK-MEN-3XL"
+      },
+      "affectsAllChannelsCells": 2,
+      "flagged": [
+        {
+          "key": "sku",
+          "editable": false,
+          "writable": false,
+          "writeTarget": "master",
+          "writeVerb": "master"
+        },
+        {
+          "key": "keywords",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        }
+      ],
+      "crossChannelColumnCount": 1,
+      "footerNoteRenders": true
+    },
+    {
+      "scope": "AMAZON·BE·nl",
+      "columns": 164,
+      "rowMeasured": {
+        "id": "cmokmy0jf0003pm0ppnu1b2yy",
+        "sku": "GALE-JACKET-BLACK-MEN-3XL"
+      },
+      "affectsAllChannelsCells": 14,
+      "flagged": [
+        {
+          "key": "sku",
+          "editable": false,
+          "writable": false,
+          "writeTarget": "master",
+          "writeVerb": "master"
+        },
+        {
+          "key": "name",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "description",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_1",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_2",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_3",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_4",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_5",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_6",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_7",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_8",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_9",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "bulletPoints_10",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        },
+        {
+          "key": "keywords",
+          "editable": true,
+          "writable": true,
+          "writeTarget": "channelListing",
+          "writeVerb": "channel"
+        }
+      ],
+      "crossChannelColumnCount": 13,
+      "footerNoteRenders": true
+    }
+  ],
+  "transportAttempts": []
+}

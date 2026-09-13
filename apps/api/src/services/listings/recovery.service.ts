@@ -38,6 +38,7 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import { prisma } from '@nexus/database'
+import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
 import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
 import { logger } from '../../utils/logger.js'
 
@@ -48,10 +49,7 @@ export type RecoveryAction =
   | 'NEW_ASIN_SAME_SKU'
   | 'FULL_RESET'
 
-export interface RecoveryRequest {
-  productId: string
-  channel: string
-  marketplace: string
+export interface RecoveryRequest extends ListingCoordinate {
   action: RecoveryAction
   /** Required for SAME_ASIN_NEW_SKU + FULL_RESET. New SKU the operator
    *  wants on the recreated listing. Must be unique across Product.sku. */
@@ -88,6 +86,7 @@ const SHOPIFY_LIKE = new Set(['SHOPIFY', 'WOOCOMMERCE', 'ETSY'])
 export async function previewRecovery(
   req: RecoveryRequest,
 ): Promise<RecoveryPreview> {
+  whereCoordinate(req)
   const product = await prisma.product.findUnique({
     where: { id: req.productId },
     select: { sku: true },
@@ -95,11 +94,7 @@ export async function previewRecovery(
   if (!product) throw new Error(`Product ${req.productId} not found`)
 
   const listing = await prisma.channelListing.findFirst({
-    where: {
-      productId: req.productId,
-      channel: req.channel,
-      marketplace: req.marketplace,
-    },
+    where: whereCoordinate(req),
     select: { externalListingId: true, listingStatus: true },
   })
 
@@ -300,7 +295,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       // env, not a per-row column. Falls back across the two legacy
       // names.
       const sellerId =
-        (await getAmazonSellerId())
+        (req.channelConnectionId ? await getAmazonSellerId(req.channelConnectionId) : null)
       if (!sellerId) {
         throw new Error(
           'AMAZON_SELLER_ID / AMAZON_MERCHANT_ID is not set — cannot call SP-API.',
@@ -320,9 +315,9 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
         sku: preview.before.sku,
         marketplaceId: mp.marketplaceId,
       })
-      if (!deleteResult.success) {
+      if (!deleteResult.success || deleteResult.dryRun) {
         throw new Error(
-          `Delete failed: ${deleteResult.error ?? 'unknown error'}`,
+          `Delete failed: ${deleteResult.error ?? (deleteResult.dryRun ? 'AMAZON_RECOVERY_DRY_RUN: no lifecycle change' : 'unknown error')}`,
         )
       }
       if (deleteResult.submissionId) submissionIds.push(deleteResult.submissionId)
@@ -332,11 +327,7 @@ export async function executeRecovery(req: RecoveryRequest): Promise<{
       // around for the wizard to re-publish against. Mark it ENDED so
       // the operator + the publish path know it's not live.
       await prisma.channelListing.updateMany({
-        where: {
-          productId: req.productId,
-          channel: 'AMAZON',
-          marketplace: req.marketplace,
-        },
+        where: whereCoordinate(req),
         data: {
           listingStatus: 'ENDED',
           isPublished: false,

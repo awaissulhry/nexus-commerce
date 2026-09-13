@@ -70,7 +70,15 @@ export function parseProjection(body: unknown): ProjectionPage {
   if (!Array.isArray(mapping) || !Array.isArray(targetOptions) || !Array.isArray(children)) throw incomplete()
   if (typeof (body as { freeform?: unknown }).freeform !== 'boolean') throw incomplete()
   if (!isObject(split) || (split.mode !== 'single' && split.mode !== 'per-axis') || !Array.isArray(split.listings) || typeof split.creatable !== 'boolean') throw incomplete()
-  if (locked !== null && (!isObject(locked) || !str(locked.reason) || !Array.isArray(locked.lockedAxisKeys))) throw incomplete()
+  /* VT.2c — `setChangeIs` and `orderChangeAllowed` are VALIDATED, not read as possibly-undefined:
+     the dock decides whether a reorder may be saved from `orderChangeAllowed`, and a missing boolean
+     would silently become `false` — refusing the one commit eBay allows on a live listing. Producer:
+     `variationLockFor` (VT.1b), served on every coordinate with a lock. */
+  if (locked !== null && (
+    !isObject(locked) || !str(locked.reason) || !Array.isArray(locked.lockedAxisKeys)
+    || typeof locked.orderChangeAllowed !== 'boolean'
+    || (locked.setChangeIs !== 'relist' && locked.setChangeIs !== 'new-parent' && locked.setChangeIs !== 'in-place')
+  )) throw incomplete()
   for (const row of children) {
     const c = row as Partial<ProjectionChild>
     if (!isObject(row) || !str(c.id ?? null) || !str(c.sku ?? null) || typeof c.included !== 'boolean' || !isObject(c.values) || !isObject(c.listing)) throw incomplete()
@@ -114,14 +122,17 @@ export function liveSource(coord: ProjectionCoordinateInput): ProjectionSource {
         signal: AbortSignal.timeout(30_000),
       })
       const parsed = await readBody(res)
+      // VT.4 — the server's `error` code, relayed so a caller can BRANCH (`axes_locked` opens the dry-run
+      // plan, design §3.5) instead of matching on the sentence, which is copy and may be reworded.
+      const code = isObject(parsed) ? str(parsed.error) ?? undefined : undefined
       if (res.status === 409) {
         try {
-          return { ok: false, conflict: true, current: parseProjection(isObject(parsed) ? parsed.current : null), reason: reasonOf(parsed, refused) }
+          return { ok: false, conflict: true, current: parseProjection(isObject(parsed) ? parsed.current : null), reason: reasonOf(parsed, refused), ...(code ? { code } : {}) }
         } catch {
-          return { ok: false, conflict: false, reason: `${reasonOf(parsed, refused)} Reload this page to see the current mapping.` }
+          return { ok: false, conflict: false, reason: `${reasonOf(parsed, refused)} Reload this page to see the current mapping.`, ...(code ? { code } : {}) }
         }
       }
-      if (!res.ok) return { ok: false, conflict: false, reason: reasonOf(parsed, refused) }
+      if (!res.ok) return { ok: false, conflict: false, reason: reasonOf(parsed, refused), ...(code ? { code } : {}) }
       const next = isObject(parsed) && typeof parsed.version === 'number' ? parsed.version : null
       /* 🔴 A write's RESPONSE is not what it wrote (reference_claims_must_match_their_measurement).
          Without a version back, the next write has no token to guard with — so this is a failure
@@ -145,7 +156,16 @@ export function liveSource(coord: ProjectionCoordinateInput): ProjectionSource {
       return parseProjection(parsed)
     },
     saveMapping(expectedVersion: number, draft: ProjectionDraft) {
-      return patch('', { expectedVersion, mapping: draft.mapping.filter(entry => entry.target !== null), split: draft.split, ...(draft.presentationOrder ? { presentationOrder: draft.presentationOrder } : {}) }, 'The mapping could not be saved.')
+      return patch('', {
+        expectedVersion,
+        mapping: draft.mapping.filter(entry => entry.target !== null),
+        split: draft.split,
+        ...(draft.presentationOrder ? { presentationOrder: draft.presentationOrder } : {}),
+        /* R-VT-9 — AMAZON only, and only when the dock's theme picker actually moved. `undefined` means
+           "this draft never touched a theme" and the key stays OUT of the body: the route reads an explicit
+           `null` as "clear the theme", so sending one on every save would wipe an override on a reorder. */
+        ...(draft.theme !== undefined ? { theme: draft.theme } : {}),
+      }, 'The mapping could not be saved.')
     },
     setIncluded(expectedVersion: number, changes) {
       return patch('/children', { expectedVersion, changes }, 'The change could not be saved.')

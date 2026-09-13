@@ -41,6 +41,7 @@ import { loadAmazonSpec, loadAmazonEnglishLabels, loadEbaySpec, clearChannelSpec
 import { englishLeafLabel } from '../sheet-columns.service.js'
 import {
   getMappingForMarketplace,
+  getMappingForMarketplaceWithWarnings,
   getRulesFor,
   MarketplaceNotFoundError,
   type FieldMappingRule,
@@ -112,6 +113,12 @@ export interface FieldCatalogue {
   masterLocalizableKeys?: string[]
   mappingToken: string
   mappingVersion: number
+  /**
+   * VT.1b / R-VT-2 (a) — stored keys this read did not recognise, named. Empty = everything was recognised. A
+   * non-empty list is NOT a failure: the rules are all served (that is the whole point of the change), and this is how
+   * the operator finds out that something in the document needs attention.
+   */
+  mappingWarnings: string[]
   channel: string
   marketplace: string
   /** The channel category whose field set this is (Amazon: the productType). */
@@ -208,8 +215,16 @@ export async function getFieldCatalogue(input: {
   const productType = channel === 'SHOPIFY' ? null : input.productType?.trim() || null
 
   let mapping: MarketplaceSchemaMapping
+  // VT.1b / R-VT-2 (a) — the read SAYS what it could not recognise. A stored key the validator does not know is now
+  // served rather than fatal, so the only way an operator learns it is there is for the read to name it.
+  let mappingWarnings: string[] = []
   try {
-    mapping = input.mappingSnapshot ?? await getMappingForMarketplace(channel, marketplace)
+    if (input.mappingSnapshot) mapping = input.mappingSnapshot
+    else {
+      const read = await getMappingForMarketplaceWithWarnings(channel, marketplace)
+      mapping = read.mapping
+      mappingWarnings = read.warnings
+    }
   } catch (err) {
     if (err instanceof MarketplaceNotFoundError) throw err
     throw err
@@ -356,7 +371,7 @@ export async function getFieldCatalogue(input: {
   const catalogue: FieldCatalogue = {
     masterSourceKeys: [...masterKeys, 'title', 'sku'],
     masterLocalizableKeys: customAttributes.filter(a => a.localizable).map(a => a.code),
-    mappingToken: mappingToken(mapping), mappingVersion: mapping.version,
+    mappingToken: mappingToken(mapping), mappingVersion: mapping.version, mappingWarnings,
     channel,
     marketplace,
     productType,

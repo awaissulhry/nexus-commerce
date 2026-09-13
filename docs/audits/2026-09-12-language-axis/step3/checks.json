@@ -1,0 +1,41 @@
+{
+  "measuredAt": "2026-09-12T06:43:08.889673+00:00",
+  "productionRailwayExitCode": 1,
+  "shadowGateChildExitCode": 2,
+  "gate": "HOLD awaiting Q-LX3-1 review",
+  "runtimeReadersSwitched": false,
+  "migrations": 0,
+  "providerCalls": 0,
+  "businessDataWrites": 0,
+  "tests": {
+    "api-tests": {
+      "files": 5,
+      "total": 102,
+      "passed": 102,
+      "failed": 0,
+      "exitCode": 0
+    },
+    "web-tests": {
+      "files": 2,
+      "total": 55,
+      "passed": 55,
+      "failed": 0,
+      "exitCode": 0
+    }
+  },
+  "typecheck": {
+    "apiFiles": 6,
+    "webFiles": 1,
+    "apiAndWebExitCode": 0,
+    "sharedDirectDeclarationCompileExitCode": 0,
+    "scopedSharedHarnessDiagnostic": "TS2688 missing node type definition from temporary tsconfig; the same file compiled directly with explicit node typeRoots, exit 0."
+  },
+  "sharedSdkDiagnostics": {
+    "status": "Recorded, not fixed, as instructed",
+    "file": "apps/api/src/lib/amazon-sp-client.ts",
+    "priorEvidence": "../step2/shared-type-diagnostics.json",
+    "currentHashUnchanged": true
+  },
+  "ledgerLine": 39177,
+  "formalRecordAt": "2026-09-12T06:46:13.959649+00:00"
+}

@@ -1,0 +1,329 @@
+{
+  "at": "2026-09-12T23:03:00.099Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "identity": {
+    "database": "nexus_development",
+    "read_only": "on"
+  },
+  "family": [
+    {
+      "id": "cmokmy0qb000kpm0p06pmx2vt",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0qp000lpm0p2yxw35ku",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0m9000apm0pm52rd77m",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0pk000ipm0pi8nl7pbn",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0og000fpm0pdwckcnq0",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0p6000hpm0ptee51htd",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0k70005pm0puvz2ucxu",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0n4000cpm0ptkjitr0f",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0ky0007pm0p3vj7q0mh",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0lc0008pm0p2thzmlqq",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0o1000epm0pca79fbbf",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0py000jpm0pc2jcd5ul",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0lr0009pm0p9yxk7ho0",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0jf0003pm0ppnu1b2yy",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy2ir005bpm0p0sm1rxx8",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0jt0004pm0p0gaufo1b",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0kl0006pm0p9auaundx",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0mm000bpm0pm7k7eke4",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0ni000dpm0p2xvcpkma",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy0ot000gpm0p4z5vwnoo",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": null
+    },
+    {
+      "id": "cmokmy3a40078pm0p1fvnu523",
+      "sku": "GALE-JACKET",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "familyId": "cmtny43jv002jnjfbb6hnijqx"
+    }
+  ],
+  "fixture": {
+    "rootId": "cmokmy3a40078pm0p1fvnu523",
+    "childId": "cmokmy0lr0009pm0p9yxk7ho0",
+    "accountId": "cmothu9bo0000nz01asw6wx8j",
+    "userId": "lx4_gate_da778dba-6b1b-4912-a05b-dad2ba810e47"
+  },
+  "loads": [
+    {
+      "loadedAt": "2026-09-12T23:02:59.025Z",
+      "ms": 551,
+      "rows": 21,
+      "schemaAge": [
+        {
+          "productType": "OUTERWEAR",
+          "fetchedAt": "2026-09-12T14:52:54.095Z"
+        }
+      ]
+    },
+    {
+      "loadedAt": "2026-09-12T23:02:59.576Z",
+      "ms": 246,
+      "rows": 21,
+      "schemaAge": [
+        {
+          "productType": "OUTERWEAR",
+          "fetchedAt": "2026-09-12T14:52:54.095Z"
+        }
+      ]
+    },
+    {
+      "loadedAt": "2026-09-12T23:02:59.822Z",
+      "ms": 240,
+      "rows": 21,
+      "schemaAge": [
+        {
+          "productType": "OUTERWEAR",
+          "fetchedAt": "2026-09-12T14:52:54.095Z"
+        }
+      ]
+    }
+  ],
+  "languageValues": {
+    "cmokmy0lr0009pm0p9yxk7ho0": {
+      "title": {
+        "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "tier": "source",
+        "language": "it",
+        "requested": "de",
+        "provenance": {
+          "member": "inherited",
+          "from": "Italian · source"
+        },
+        "ownerId": "cmokmy0lr0009pm0p9yxk7ho0"
+      },
+      "description": {
+        "value": null,
+        "tier": "computed",
+        "language": "it",
+        "requested": "de",
+        "provenance": {
+          "member": "inherited",
+          "from": null
+        }
+      },
+      "readiness": {
+        "state": "blocked",
+        "pct": 0,
+        "computedAt": "2026-09-12T21:39:28.458Z"
+      },
+      "fallsBackToSource": true
+    },
+    "cmokmy3a40078pm0p1fvnu523": {
+      "title": {
+        "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "tier": "source",
+        "language": "it",
+        "requested": "de",
+        "provenance": {
+          "member": "inherited",
+          "from": "Italian · source"
+        },
+        "ownerId": "cmokmy3a40078pm0p1fvnu523"
+      },
+      "description": {
+        "value": null,
+        "tier": "computed",
+        "language": "it",
+        "requested": "de",
+        "provenance": {
+          "member": "inherited",
+          "from": null
+        }
+      },
+      "readiness": {
+        "state": "blocked",
+        "pct": 0,
+        "computedAt": "2026-09-12T21:39:28.458Z"
+      },
+      "fallsBackToSource": true
+    }
+  },
+  "belgiumRows": [
+    {
+      "id": "cmtywrd3y0062njz94tw146hx",
+      "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "channel": "AMAZON",
+      "marketplace": "BE",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "accountName": "Amazon · BE",
+      "aliasKey": "",
+      "locale": "fr",
+      "state": "blocked",
+      "pct": null,
+      "computedAt": "2026-09-12T21:39:28.458Z",
+      "familyId": null,
+      "issues": [
+        {
+          "field": "productType",
+          "label": "Channel requirements",
+          "kind": "missing",
+          "message": "Requirements for OUTERWEAR on Amazon · BE are unavailable. Readiness cannot be verified until the category schema is loaded."
+        }
+      ],
+      "editorHref": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=fr&tab=errors&market=BE&account=cmothu9bo0000nz01asw6wx8j"
+    },
+    {
+      "id": "cmtywrd3y005hnjz9u6t17ow2",
+      "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "channel": "AMAZON",
+      "marketplace": "BE",
+      "accountId": "cmothu9bo0000nz01asw6wx8j",
+      "accountName": "Amazon · BE",
+      "aliasKey": "",
+      "locale": "nl",
+      "state": "blocked",
+      "pct": null,
+      "computedAt": "2026-09-12T21:39:28.458Z",
+      "familyId": null,
+      "issues": [
+        {
+          "field": "productType",
+          "label": "Channel requirements",
+          "kind": "missing",
+          "message": "Requirements for OUTERWEAR on Amazon · BE are unavailable. Readiness cannot be verified until the category schema is loaded."
+        }
+      ],
+      "editorHref": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=nl&tab=errors&market=BE&account=cmothu9bo0000nz01asw6wx8j"
+    }
+  ],
+  "translationPreview": {
+    "token": "7fbe86cc0cd082a383e7b7ea935ca95b1a5d99257f48d772843df3107290ed57",
+    "language": "de",
+    "fields": [
+      "title"
+    ],
+    "total": 1,
+    "getDraft": 1,
+    "alreadyHave": 0,
+    "skipped": 0,
+    "reach": "Lands on the shared German text. Every listing that follows it inherits on approval.",
+    "destinations": [
+      "AMAZON · DE (de)",
+      "EBAY · DE (de)"
+    ],
+    "estimates": [
+      {
+        "provider": "gemini",
+        "model": "gemini-2.5-flash",
+        "usd": 0.0001795,
+        "inputTokens": 215,
+        "outputTokens": 46
+      },
+      {
+        "provider": "anthropic",
+        "model": "claude-haiku-4-5-20251001",
+        "usd": 0.000445,
+        "inputTokens": 215,
+        "outputTokens": 46
+      }
+    ],
+    "generationEnabled": false,
+    "gate": "AI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI."
+  },
+  "transports": [],
+  "gateways": []
+}

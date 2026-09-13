@@ -248,7 +248,7 @@
   transform: rotate(-90deg);
 }
 .nds-ag-ws .nds-tree-chev:hover { color: var(--nds-primary); background: var(--nds-surface-hover); }
-.nds-ag-ws .nds-tree-chev:focus-visible { outline: none; box-shadow: var(--nds-focus-ring); color: var(--nds-primary); }
+.nds-ag-ws .nds-tree-chev:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; box-shadow: var(--nds-focus-ring); color: var(--nds-primary); }
 .nds-ag-ws .nds-tree-chev.on { transform: rotate(0deg); color: var(--nds-text-2); }
 .nds-ag-ws .nds-tree-chev.is-leaf { cursor: default; pointer-events: none; }
 .nds-ag-ws .nds-tree-chev.busy { color: var(--nds-primary); animation: nds-tree-spin .9s linear infinite; }

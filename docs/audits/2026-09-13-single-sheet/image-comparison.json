@@ -1,0 +1,16 @@
+[
+  {
+    "theme": "light",
+    "width": 1280,
+    "height": 800,
+    "changedPixels": 0,
+    "totalPixels": 1024000
+  },
+  {
+    "theme": "-dark",
+    "width": 1280,
+    "height": 800,
+    "changedPixels": 0,
+    "totalPixels": 1024000
+  }
+]

@@ -48,3 +48,11 @@ it('follows the canonical price even when an old override remains stored', async
   await syncNativeShopifyOffer({ ...item, syncType: 'PRICE_UPDATE' })
   expect(state.price).toBe('19.50')
 })
+
+it.each([{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD', 'WITHDRAWN', 'ENDED', 'DISCONTINUED', 'RELEASED'].map(presenceIntent => ({ presenceIntent }))])('refuses locked native Shopify price and stock pushes %j', async lock => {
+  Object.assign(state.listing, lock)
+  for (const syncType of ['PRICE_UPDATE', 'QUANTITY_UPDATE', 'CONTENT_UPDATE']) {
+    await expect(syncNativeShopifyOffer({ ...item, syncType })).rejects.toMatchObject({ code: expect.stringMatching(/^PUSH_/) })
+  }
+  expect(state.writes).toEqual([])
+})

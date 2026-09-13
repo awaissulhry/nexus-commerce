@@ -1,0 +1,34 @@
+Source-derived inventory; /usr/bin/grep -rn siteIdForMarket( apps/api/src; tests excluded.
+Positive control: declaration exists.
+31 matches including declaration
+apps/api/src/routes/ebay-flat-file.routes.ts:2323:              const parityGot = await callTradingApi('GetItem', parityXml, { oauthToken: token, siteId: siteIdForMarket(mp) })
+apps/api/src/routes/ebay-flat-file.routes.ts:2975:        const res = await callTradingApi('GetItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+apps/api/src/routes/ebay-description-push.routes.ts:41:      siteIdForMarket(mp)
+apps/api/src/routes/ebay-description-push.routes.ts:78:        siteIdForMarket(marketplace)
+apps/api/src/services/ebay-itemid-relink.service.ts:160:      siteId: siteIdForMarket(marketplace),
+apps/api/src/services/ebay-presentation-publication.service.ts:56:      const got = await callTradingApi('GetItem', buildGetItemDescriptionXml(itemId), { oauthToken, siteId: siteIdForMarket(destination.marketplace) })
+apps/api/src/services/ebay-presentation-publication.service.ts:104:        const ctx = { oauthToken, siteId: siteIdForMarket(target.destination.marketplace) }
+apps/api/src/services/ebay-variation-relabel.service.ts:107:      siteId: siteIdForMarket(market),
+apps/api/src/services/ebay-variation-relabel.service.ts:227:  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/ebay-variation-relabel.service.ts:318:    siteId: siteIdForMarket(market),
+apps/api/src/services/images/ebay-shared-image-publish.service.ts:306:    const siteId = siteIdForMarket(target.marketplace === 'UK' ? 'UK' : target.marketplace)
+apps/api/src/services/images/ebay-live-images.service.ts:185:      siteId: siteIdForMarket(marketplace),
+apps/api/src/services/ebay-variation-add.service.ts:115:  const got = await callTradingApi('GetItem', getXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/ebay-variation-add.service.ts:156:      siteId: siteIdForMarket(market),
+apps/api/src/services/ebay-axes-convert.service.ts:122:  const siteId = siteIdForMarket(marketplace)
+apps/api/src/services/ebay-label-guard.service.ts:186:        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+apps/api/src/services/ebay-label-guard.service.ts:195:        { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+apps/api/src/services/ebay-variation-order-apply.service.ts:166:  const siteId = siteIdForMarket(market)
+apps/api/src/services/ebay-trading-api.service.ts:28:export function siteIdForMarket(market: string): string {
+apps/api/src/services/ebay-trading-api.service.ts:299:  const siteId = siteIdForMarket(ctx.market)
+apps/api/src/services/ebay-trading-api.service.ts:310:  const siteId = siteIdForMarket(ctx.market)
+apps/api/src/services/ebay-trading-api.service.ts:330:  const siteId = siteIdForMarket(ctx.market)
+apps/api/src/services/ebay-trading-api.service.ts:404:  const siteId = siteIdForMarket(ctx.market)
+apps/api/src/services/ebay-trading-api.service.ts:417:  const siteId = siteIdForMarket(ctx.market)
+apps/api/src/services/ebay-shared-listing-push.service.ts:306:          { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/ebay-shared-listing-push.service.ts:542:        { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/ebay-description-push.service.ts:205:  const siteId = siteIdForMarket(marketplace) // throws on unknown market — before any work
+apps/api/src/services/ebay-flat-file-delete.service.ts:194:      await callTradingApi('ReviseFixedPriceItem', xml, { oauthToken: token, siteId: siteIdForMarket(marketplace) })
+apps/api/src/services/ebay-membership-reconcile.service.ts:185:  const res = await callTradingApi('GetItem', xml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/ebay-membership-reconcile.service.ts:324:      await callTradingApi('ReviseFixedPriceItem', reviseXml, { oauthToken: ctx.oauthToken, siteId: siteIdForMarket(market) })
+apps/api/src/services/channel-delist.service.ts:190:    siteId = siteIdForMarket(job.targetRegion)

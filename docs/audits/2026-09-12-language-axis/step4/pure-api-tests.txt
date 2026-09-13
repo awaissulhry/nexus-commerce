@@ -1,0 +1,1061 @@
+
+> @nexus/api@1.0.0 test
+> vitest run src/services/pim/content-resolver.vitest.test.ts src/services/pim/content-read.vitest.test.ts src/services/pim/content-language.vitest.test.ts src/services/pim/write-routing.vitest.test.ts src/services/pim/market-languages.vitest.test.ts src/services/pim/market-language-payloads.vitest.test.ts --reporter=default --reporter=json --outputFile.json=../../docs/audits/2026-09-12-language-axis/step4/pure-api-tests.json
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api
+
+ ✓ src/services/pim/content-language.vitest.test.ts (18 tests) 3ms
+ ✓ src/services/pim/market-languages.vitest.test.ts (10 tests) 5ms
+stdout | src/services/pim/write-routing.vitest.test.ts
+◇ injected env (12) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (28) from ../../.env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+
+ ✓ src/services/pim/content-resolver.vitest.test.ts (28 tests) 16ms
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+{"timestamp":"2026-09-12T13:27:05.577Z","level":"error","message":"Queue error","context":{"error":""}}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+ ✓ src/services/pim/write-routing.vitest.test.ts (10 tests) 2ms
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+{"timestamp":"2026-09-12T13:27:05.634Z","level":"error","message":"Queue error","context":{"error":""}}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+{"timestamp":"2026-09-12T13:27:05.736Z","level":"error","message":"Queue error","context":{"error":""}}
+
+ ❯ src/services/pim/content-read.vitest.test.ts (10 tests | 2 failed) 24ms
+     ✓ uses the same parent translation in attributes, global, API and explicit mapping paths 10ms
+     ✓ keeps [] in both top-level API lists and fields metadata 0ms
+     ✓ coverage cannot count non-empty Italian source as German translation 0ms
+     ✓ AI translation targeting reads missing from language, even when the fallback is non-empty 0ms
+     ✓ mapping transformations retain actual source language, including custom expression dependencies 2ms
+     × ETSY reads canonical product/listing content with hydrated market authority 6ms
+     × SHOPIFY reads canonical product/listing content with hydrated market authority 2ms
+     ✓ catalogue transfer treats source fallback as untranslated, and keeps an explicit clear distinct 0ms
+     ✓ an explicit language mapping path retains its exact account/listing pin context 0ms
+     ✓ normalizes media collection/caption addresses without changing legacy JSON 2ms
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+AggregateError: 
+    at internalConnectMultiple (node:net:1193:18)
+    at internalConnectMultiple (node:net:1269:5)
+    at internalConnectMultiple (node:net:1269:5)
+    at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+    at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+  code: 'EPERM',
+  [errors]: [
+    Error: connect EPERM ::1:6379 - Local (:::0)
+        at internalConnectMultiple (node:net:1265:16)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '::1',
+      port: 6379
+    },
+    Error: connect EPERM 127.0.0.1:6379 - Local (0.0.0.0:0)
+        at internalConnectMultiple (node:net:1265:16)
+        at internalConnectMultiple (node:net:1269:5)
+        at defaultTriggerAsyncIdScope (node:internal/async_hooks:473:12)
+        at GetAddrInfoReqWrap.emitLookup [as callback] (node:net:1611:7)
+        at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:133:8) {
+      errno: -1,
+      code: 'EPERM',
+      syscall: 'connect',
+      address: '127.0.0.1',
+      port: 6379
+    }
+  ]
+}
+
+stderr | src/services/pim/market-language-payloads.vitest.test.ts
+{"timestamp":"2026-09-12T13:27:05.889Z","level":"error","message":"Queue error","context":{"error":""}}
+
+ ✓ src/services/pim/market-language-payloads.vitest.test.ts (5 tests) 4ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/pim/content-read.vitest.test.ts > LX.3 switched reader integration > ETSY reads canonical product/listing content with hydrated market authority
+AssertionError: expected { value: 'Deutscher Titel', …(12) } to match object { value: 'Following snapshot', …(3) }
+(11 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "drift": true,
+-   "follows": true,
++   "drift": undefined,
++   "follows": undefined,
+    "needsTranslation": false,
+-   "value": "Following snapshot",
++   "value": "Deutscher Titel",
+  }
+
+ ❯ src/services/pim/content-read.vitest.test.ts:61:81
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/services/pim/content-read.vitest.test.ts > LX.3 switched reader integration > SHOPIFY reads canonical product/listing content with hydrated market authority
+AssertionError: expected { state: 'stored', …(1) } to deeply equal { state: 'stored', …(1) }
+
+- Expected
++ Received
+
+  {
+    "state": "stored",
+-   "value": "Following snapshot",
++   "value": "Deutscher Titel",
+  }
+
+ ❯ src/services/pim/content-read.vitest.test.ts:62:115
+     60|       platformAttributes: { _etsyInformationLocales: { de: { title: 'R…
+     61|     if (channel === 'ETSY') expect(etsyContentState(listing, 'de-DE', …
+     62|     else expect(informationContentState(listing, shopifyProductSpec().…
+       |                                                                                                                   ^
+     63|   })
+     64|   it('catalogue transfer treats source fallback as untranslated, and k…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 5 passed (6)
+      Tests  2 failed | 79 passed (81)
+   Start at  15:27:05
+   Duration  1.03s (transform 1.30s, setup 0ms, import 2.16s, tests 55ms, environment 0ms)
+
+JSON report written to /Users/awais/nexus-commerce/docs/audits/2026-09-12-language-axis/step4/pure-api-tests.json

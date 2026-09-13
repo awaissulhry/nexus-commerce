@@ -1,3 +1,5 @@
+import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
+export { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 /**
  * SCT.6 — per-market Amazon offer CLOSE / REOPEN.
@@ -26,20 +28,19 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  */
 
 import prisma from '../db.js'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { detectEuIntentConflict, EU_GUARD_REMEDY } from './amazon-eu-quantity-guard.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { MARKETPLACE_ID_MAP } from './amazon/flat-file.service.js'
 import { logger } from '../utils/logger.js'
 
-export interface MarketOfferTarget {
-  productId: string
-  marketplace: string
-}
+export interface MarketOfferTarget extends Omit<ListingCoordinate, 'channel'> {}
 
 export interface MarketOfferRowResult {
   productId: string
   sku: string | null
   marketplace: string
-  action: 'CLOSED' | 'REOPENED' | 'SKIPPED_FBA' | 'SKIPPED_ALREADY' | 'SKIPPED_NOT_CLOSED' | 'SKIPPED_NO_LISTING' | 'FAILED'
+  action: 'DRY_RUN' | 'CLOSED' | 'REOPENED' | 'SKIPPED_FBA' | 'SKIPPED_ALREADY' | 'SKIPPED_NOT_CLOSED' | 'SKIPPED_NO_LISTING' | 'FAILED'
   detail?: string
 }
 
@@ -54,19 +55,12 @@ export interface MarketOfferResult {
   remaining?: number
 }
 
-const sellerId = async () => (await getAmazonSellerId())
-
-function isFbaRow(cl: { fulfillmentMethod: string | null; product: { fulfillmentMethod: string | null } | null }): boolean {
-  // Fail-closed: ANY FBA signal refuses the close/reopen. Amazon owns FBA
-  // logistics end-to-end — these offers are never ours to close.
-  return cl.fulfillmentMethod === 'FBA' || cl.product?.fulfillmentMethod === 'FBA'
-}
 
 async function loadRow(t: MarketOfferTarget) {
   return prisma.channelListing.findFirst({
-    where: { productId: t.productId, channel: 'AMAZON', marketplace: t.marketplace },
+    where: whereCoordinate({ ...t, channel: 'AMAZON' }),
     select: {
-      id: true, productId: true, marketplace: true, fulfillmentMethod: true,
+      id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, fulfillmentMethod: true,
       offerClosedAt: true, offerCloseSnapshot: true, price: true,
       platformAttributes: true, followMasterQuantity: true, quantityOverride: true, syncPaused: true,
       product: { select: { sku: true, fulfillmentMethod: true, productType: true } },
@@ -87,8 +81,8 @@ export async function closeMarketOffers(opts: {
   reason?: string
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
-  const seller = await sellerId()
-  if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
+  // Validate the whole batch before the first side effect.
+  opts.targets.forEach(t => whereCoordinate({ ...t, channel: 'AMAZON' }))
 
   let processed = 0
   for (const t of opts.targets) {
@@ -101,7 +95,7 @@ export async function closeMarketOffers(opts: {
         processed++
         continue
       }
-      if (isFbaRow(cl)) {
+      if (isFbaCoordinate(cl)) {
         // Owner rule: FBA is Amazon-managed — never close it.
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
         result.skippedFba++
@@ -114,6 +108,9 @@ export async function closeMarketOffers(opts: {
         processed++
         continue
       }
+      if (!t.channelConnectionId) throw new Error('AMAZON_OFFER_ACCOUNT_REQUIRED')
+      const seller = await getAmazonSellerId(t.channelConnectionId)
+      if (!seller) throw new Error('AMAZON_SELLER_ID not configured for coordinate account')
       const marketplaceId = MARKETPLACE_ID_MAP[t.marketplace.toUpperCase()]
       if (!marketplaceId) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: `unknown marketplace ${t.marketplace}` })
@@ -174,11 +171,17 @@ export async function closeMarketOffers(opts: {
         continue
       }
 
-      // 3 — persist the closed state + cancel racing quantity pushes.
+      if (res.dryRun) {
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'DRY_RUN', detail: 'Preview only; offer state unchanged.' })
+        result.unchanged++; processed++; continue
+      }
+
+      // 3 — persist only an acknowledged close; skip_offer consumes offerActive.
       await prisma.channelListing.update({
-        where: { id: cl.id },
+        where: { id: cl.id, ...whereCoordinate({ ...t, channel: 'AMAZON' }) },
         data: {
           offerClosedAt: new Date(),
+          offerActive: false,
           offerClosedBy: opts.actor,
           offerCloseReason: opts.reason ?? null,
           offerCloseSnapshot: {
@@ -197,7 +200,7 @@ export async function closeMarketOffers(opts: {
         where: { channelListingId: cl.id, syncStatus: 'PENDING' },
         data: { syncStatus: 'CANCELLED', errorMessage: 'market offer closed (SCT.6)' },
       })
-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: res.dryRun ? 'dry-run' : undefined })
+      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: undefined })
       result.updated++
       processed++
     } catch (e) {
@@ -217,8 +220,8 @@ export async function reopenMarketOffers(opts: {
   actor: string
 }): Promise<MarketOfferResult> {
   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
-  const seller = await sellerId()
-  if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
+  // Validate the whole batch before the first side effect.
+  opts.targets.forEach(t => whereCoordinate({ ...t, channel: 'AMAZON' }))
 
   let processed = 0
   for (const t of opts.targets) {
@@ -231,7 +234,7 @@ export async function reopenMarketOffers(opts: {
         processed++
         continue
       }
-      if (isFbaRow(cl)) {
+      if (isFbaCoordinate(cl)) {
         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
         result.skippedFba++
         processed++
@@ -243,6 +246,9 @@ export async function reopenMarketOffers(opts: {
         processed++
         continue
       }
+      if (!t.channelConnectionId) throw new Error('AMAZON_OFFER_ACCOUNT_REQUIRED')
+      const seller = await getAmazonSellerId(t.channelConnectionId)
+      if (!seller) throw new Error('AMAZON_SELLER_ID not configured for coordinate account')
       const marketplaceId = MARKETPLACE_ID_MAP[t.marketplace.toUpperCase()]
       const snap = cl.offerCloseSnapshot as {
         purchasableOffer?: Array<Record<string, unknown>>
@@ -260,6 +266,21 @@ export async function reopenMarketOffers(opts: {
         continue
       }
 
+      // Reopening forces FOLLOW and queues quantity. Check the shared number
+      // for this account/alias before either the patch or any local mutation.
+      const euRows = await prisma.channelListing.findMany({
+        where: { productId: t.productId, channel: 'AMAZON', channelConnectionId: t.channelConnectionId, aliasKey: t.aliasKey },
+        include: { product: { select: { fulfillmentMethod: true } } },
+      })
+      const conflict = detectEuIntentConflict(euRows.map(r => ({
+        marketplace: r.marketplace, quantity: r.quantity,
+        followMasterQuantity: r.id === cl.id ? true : r.followMasterQuantity,
+        quantityOverride: r.id === cl.id ? null : r.quantityOverride,
+        syncPaused: r.id === cl.id ? false : r.syncPaused,
+        isFba: isFbaCoordinate(r), offerClosed: r.id === cl.id ? false : !!r.offerClosedAt,
+      })))
+      if (conflict.conflict) throw new Error(`AMAZON_EU_QUANTITY_CONFLICT: ${conflict.detail}. ${EU_GUARD_REMEDY}`)
+
       // Replay the verbatim offer (op:replace also creates it when absent).
       const res = await amazonSpApiClient.patchPurchasableOffer({
         sellerId: seller, sku, marketplaceId, productType, op: 'replace', value: offerValue,
@@ -271,11 +292,17 @@ export async function reopenMarketOffers(opts: {
         continue
       }
 
-      // Rejoin the pool: Follow + fresh push so quantity flows immediately.
+      if (res.dryRun) {
+        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'DRY_RUN', detail: 'Preview only; offer state unchanged.' })
+        result.unchanged++; processed++; continue
+      }
+
+      // Rejoin the pool only after the acknowledged patch and the EU guard.
       await prisma.channelListing.update({
-        where: { id: cl.id },
+        where: { id: cl.id, ...whereCoordinate({ ...t, channel: 'AMAZON' }) },
         data: {
           offerClosedAt: null,
+          offerActive: true,
           offerClosedBy: null,
           offerCloseReason: null,
           // snapshot kept for audit/history — cheap and occasionally useful.
@@ -298,7 +325,7 @@ export async function reopenMarketOffers(opts: {
           payload: { source: 'SCT6_REOPEN', productId: cl.productId, marketplace: cl.marketplace, actor: opts.actor },
         },
       })
-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: res.dryRun ? 'dry-run' : undefined })
+      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined })
       result.updated++
       processed++
     } catch (e) {
@@ -313,8 +340,8 @@ export async function reopenMarketOffers(opts: {
   return result
 }
 
-/** SCT.6 belt helper — is this (productId, marketplace) closed? Used by every
- *  Amazon write stack so nothing can silently resurrect a closed offer. */
+/** Conservative product/market refusal belt for legacy push callers. This may
+ * refuse a sibling account; it is never an authorization predicate for a write. */
 export async function closedMarketSet(productIds: string[]): Promise<Set<string>> {
   if (productIds.length === 0) return new Set()
   const rows = await prisma.channelListing.findMany({

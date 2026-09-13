@@ -620,7 +620,7 @@
   background: var(--nds-surface-hover);
 }
 .nds-prefs-grouphd:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -2px;
 }
 .nds-prefs-grouphd-text {
@@ -724,7 +724,7 @@
   white-space: nowrap;
 }
 .nds-prefs-group-label:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
 .nds-prefs-orderbtns {
@@ -785,7 +785,7 @@
   text-decoration: underline;
 }
 .nds-prefs-findall:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 2px;
 }
 .nds-prefs-nomatch {
@@ -862,7 +862,7 @@
   color: var(--nds-danger-text);
 }
 .nds-prefs-x:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -1px;
 }
 /* The lock control sits between the label and the ✕. Same resting colour as the ✕
@@ -888,7 +888,7 @@
   color: var(--nds-primary);
 }
 .nds-prefs-lockbtn:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -1px;
 }
 /* ── The CHOOSING half (columnControl="checkbox") ───────────────────────────
@@ -1102,10 +1102,10 @@
   padding: 0;
   line-height: 1;
 }
-.nds-colcust-row .grip button:hover:not(:disabled) {
+.nds-colcust-row .grip button:hover:not(:is(:disabled, [aria-disabled="true"])) {
   color: var(--nds-text);
 }
-.nds-colcust-row .grip button:disabled {
+.nds-colcust-row .grip button:is(:disabled, [aria-disabled="true"]) {
   color: var(--nds-text-disabled);
   cursor: default;
 }
@@ -1195,7 +1195,7 @@
   border: none; border-radius: var(--nds-radius-sm); background: none; color: var(--nds-text-muted); cursor: pointer;
 }
 .nds-prefs-add:hover { color: var(--nds-primary); }
-.nds-prefs-add:focus-visible, .nds-prefs-chip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
+.nds-prefs-add:focus-visible, .nds-prefs-chip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -1px; }
 
 
 /* ── DetailHeader: the `dense` page-band form (PES.1) ────────────── */
@@ -1370,6 +1370,8 @@
   gap: 8px;
   flex: none;
 }
+/* A held chip has a tooltip wrapper; it keeps the same unshrinking slot as its button. */
+.nds-scopebar-chips > .h10-tipwrap { flex: none; max-width: none; }
 .nds-scope {
   display: inline-flex;
   align-items: center;
@@ -1388,7 +1390,7 @@
   cursor: pointer;
   transition: color 0.12s ease, background-color 0.12s ease, border-color 0.12s ease;
 }
-.nds-scope:hover:not(:disabled) {
+.nds-scope:hover:not(:is(:disabled, [aria-disabled="true"])) {
   background: var(--nds-surface-hover);
   color: var(--nds-text);
 }
@@ -1401,13 +1403,14 @@
   color: var(--nds-text-link);
   font-weight: 700;
 }
-.nds-scope:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.nds-scope:is(:disabled, [aria-disabled="true"]) {
+  color: var(--nds-text);
+  cursor: default;
 }
 .nds-scope:focus-visible {
-  outline: 2px solid var(--nds-text-link);
-  outline-offset: 2px;
+  outline: 2px solid var(--nds-text);
+  /* The chip track scrolls: keep the perimeter inside its padding-box clip. */
+  outline-offset: -3px;
 }
 .nds-scope.add {
   padding: 0 8px;
@@ -1573,7 +1576,7 @@
 .nds-secondary-nav-link[aria-current='page'] { color: var(--nds-text); background: var(--nds-primary-soft); font-weight: var(--nds-font-weight-semibold); }
 .nds-secondary-nav-link:hover, .nds-secondary-nav-group-label.disclosure:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
 .nds-secondary-nav-link[aria-current='page']:hover { background: var(--nds-primary-soft); text-decoration: underline; }
-.nds-secondary-nav-link:focus-visible, .nds-secondary-nav-group-label.disclosure:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-secondary-nav-link:focus-visible, .nds-secondary-nav-group-label.disclosure:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-secondary-nav-icon, .nds-secondary-nav-link > .nds-tag { flex: none; }
 .nds-secondary-nav-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 719px) {

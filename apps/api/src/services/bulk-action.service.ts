@@ -1,3 +1,4 @@
+import { requireTranslationGeneration, previewCatalogTranslation } from './pim/catalog-translate.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
@@ -281,6 +282,7 @@ export class BulkActionService {
    * Initializes job with PENDING status and calculates total items to process
    */
   async createJob(input: CreateJobInput): Promise<BulkActionJob> {
+    if (input.actionType === 'AI_TRANSLATE_PRODUCT') requireTranslationGeneration()
     try {
       // Audit-fix #3 — MARKETPLACE_OVERRIDE_UPDATE writes to ChannelListing
       // rows; without `channel` the filter spans every channel (could blast
@@ -1573,6 +1575,7 @@ export class BulkActionService {
     sampleSize = 10,
   ): Promise<{
     affectedCount: number;
+    translation?: import('@nexus/shared/products-grid').CatalogTranslatePreview;
     sampleItems: Array<{
       id: string;
       sku: string | null;
@@ -1582,6 +1585,12 @@ export class BulkActionService {
       status: 'processed' | 'skipped';
     }>;
   }> {
+    if (input.actionType === 'AI_TRANSLATE_PRODUCT') {
+      const payload = input.actionPayload as any
+      if (!payload?.scope) throw new Error('Use Translate from the catalogue or readiness page to preview the current filter.')
+      const preview = await previewCatalogTranslation({ scope: payload.scope, language: payload.language ?? payload.targetLanguages?.[0], fields: payload.fields ?? ['title'] }, input.createdBy ?? null)
+      return { affectedCount: preview.total, sampleItems: [], translation: preview }
+    }
     const target = ACTION_ENTITY[input.actionType];
 
     // ── Affected count (no DB write, no item load) ────────────────
@@ -2653,92 +2662,7 @@ export class BulkActionService {
     item: Product,
     payload: Record<string, any>,
   ): Promise<{ status: 'processed' | 'skipped' }> {
-    const { translateProductCopy } = await import('./ai/translate.service.js');
-    const targetLanguages = Array.isArray(payload.targetLanguages)
-      ? (payload.targetLanguages as unknown[])
-          .filter((l): l is string => typeof l === 'string')
-          .map((l) => l.trim().toLowerCase())
-          .filter((l) => /^[a-z]{2}$/.test(l))
-      : [];
-    if (targetLanguages.length === 0) {
-      throw new Error(
-        'AI_TRANSLATE_PRODUCT: payload.targetLanguages required (ISO 639-1 lowercase)',
-      );
-    }
-    const fields = Array.isArray(payload.fields)
-      ? (payload.fields as unknown[]).filter(
-          (f): f is 'name' | 'description' | 'bulletPoints' =>
-            f === 'name' || f === 'description' || f === 'bulletPoints',
-        )
-      : (['name', 'description', 'bulletPoints'] as ('name' | 'description' | 'bulletPoints')[]);
-    if (fields.length === 0) {
-      throw new Error('AI_TRANSLATE_PRODUCT: payload.fields must be non-empty');
-    }
-    const skipReviewed = payload.skipReviewed !== false;
-    const product = await this.prisma.product.findUnique({
-      where: { id: item.id },
-    });
-    if (!product) {
-      throw new Error(`Product not found: ${item.id}`);
-    }
-    const hasAny =
-      (fields.includes('name') && !!product.name) ||
-      (fields.includes('description') && !!product.description) ||
-      (fields.includes('bulletPoints') &&
-        Array.isArray(product.bulletPoints) &&
-        product.bulletPoints.length > 0);
-    if (!hasAny) return { status: 'skipped' };
-
-    let didWriteAny = false;
-    for (const language of targetLanguages) {
-      if (skipReviewed) {
-        const existing = await this.prisma.productTranslation.findUnique({
-          where: {
-            productId_language: workspaceKey({ productId: product.id, language }),
-          },
-        });
-        if (existing?.reviewedAt) continue;
-      }
-      const translated = await translateProductCopy({
-        source: {
-          name: product.name,
-          description: product.description,
-          bulletPoints: product.bulletPoints,
-        },
-        targetLanguage: language,
-        fields,
-        brand: product.brand,
-        productType: product.productType ?? null,
-        productId: product.id,
-        feature: 'bulk-translate',
-      });
-      await this.prisma.productTranslation.upsert({
-        where: {
-          productId_language: workspaceKey({ productId: product.id, language }),
-        },
-        create: {
-          productId: product.id,
-          language,
-          name: translated.name,
-          description: translated.description,
-          bulletPoints: translated.bulletPoints ?? [],
-          source: translated.source,
-          sourceModel: translated.sourceModel,
-        },
-        update: {
-          name: translated.name,
-          description: translated.description,
-          bulletPoints: translated.bulletPoints ?? [],
-          source: translated.source,
-          sourceModel: translated.sourceModel,
-          // Reset reviewedAt — fresh AI output is unreviewed
-          // regardless of whether a prior review existed.
-          reviewedAt: null,
-        },
-      });
-      didWriteAny = true;
-    }
-    return { status: didWriteAny ? 'processed' : 'skipped' };
+    return requireTranslationGeneration();
   }
 
   // ── Operation handlers ──────────────────────────────────────────────

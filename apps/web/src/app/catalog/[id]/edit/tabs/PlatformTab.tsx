@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger'
 import OfferCard from './OfferCard'
 import ChannelListingImageUploader from '@/components/catalog/ChannelListingImageUploader'
 import { Listbox } from '@/design-system/components/Listbox'
+import { setVariationMappingTarget, variationMappingTarget } from '@nexus/shared/variation-mapping'
 
 interface ChannelListing {
   id: string
@@ -23,7 +24,8 @@ interface ChannelListing {
   isPublished: boolean
   useCustomImages?: boolean
   variationTheme?: string
-  variationMapping?: Record<string, any>
+  /** R-VT-13: either shape — the ORDERED `{axes:[…]}` a mapping save writes, or the flat legacy map. */
+  variationMapping?: unknown
   offers: any[]
   images: any[]
 }
@@ -188,15 +190,18 @@ function PlatformTabComponent({
     })
   }, [activeListing, handleListingUpdate])
 
+  /**
+   * 🔴 R-VT-13 (VT.F2) — one axis at a time, WITHOUT dropping the delivery order. This used to spread the stored
+   * object and add the edited key, which (a) read nothing at all from the ORDERED shape a mapping save now
+   * writes, and (b) would have replaced it with a flat map — losing the order the Shopify publisher delivers as
+   * its buyer-facing option order. `setVariationMappingTarget` keeps every other axis and its position, and an
+   * emptied field removes that axis rather than storing an empty target.
+   */
   const handleVariationMappingChange = useCallback((masterAttr: string, mappedValue: string) => {
     if (!activeListing) return
-    const currentMapping = activeListing.variationMapping || {}
     handleListingUpdate({
       ...activeListing,
-      variationMapping: {
-        ...currentMapping,
-        [masterAttr]: mappedValue,
-      },
+      variationMapping: setVariationMappingTarget(activeListing.variationMapping, masterAttr, mappedValue),
     })
   }, [activeListing, handleListingUpdate])
 
@@ -494,7 +499,7 @@ function PlatformTabComponent({
                                 </label>
                                 <input
                                   type="text"
-                                  value={activeListing.variationMapping?.Size || ''}
+                                  value={variationMappingTarget(activeListing.variationMapping, 'Size') ?? ''}
                                   onChange={(e) => handleVariationMappingChange('Size', e.target.value)}
                                   placeholder="e.g., Size, Apparel_Size, Shoe_Size"
                                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -514,7 +519,7 @@ function PlatformTabComponent({
                                 </label>
                                 <input
                                   type="text"
-                                  value={activeListing.variationMapping?.Color || ''}
+                                  value={variationMappingTarget(activeListing.variationMapping, 'Color') ?? ''}
                                   onChange={(e) => handleVariationMappingChange('Color', e.target.value)}
                                   placeholder="e.g., Color, ColorMap, ProductColor"
                                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -533,7 +538,7 @@ function PlatformTabComponent({
                                 </label>
                                 <input
                                   type="text"
-                                  value={activeListing.variationMapping?.Style || ''}
+                                  value={variationMappingTarget(activeListing.variationMapping, 'Style') ?? ''}
                                   onChange={(e) => handleVariationMappingChange('Style', e.target.value)}
                                   placeholder="e.g., Style, StyleType, ProductStyle"
                                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -553,7 +558,7 @@ function PlatformTabComponent({
                                 </label>
                                 <input
                                   type="text"
-                                  value={activeListing.variationMapping?.Material || ''}
+                                  value={variationMappingTarget(activeListing.variationMapping, 'Material') ?? ''}
                                   onChange={(e) => handleVariationMappingChange('Material', e.target.value)}
                                   placeholder="e.g., Material, MaterialType, Fabric"
                                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

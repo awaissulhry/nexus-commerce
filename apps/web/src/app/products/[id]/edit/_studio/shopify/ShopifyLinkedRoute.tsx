@@ -10,7 +10,8 @@ export function ShopifyLinkedRoute({ view }: { view: 'family' | 'content' }) {
   if (!accountId) return <EmptyState title="Choose a Shopify account" description="Select the connected store to manage its family and custom content." />
   const query = new URLSearchParams({ accountId, market: 'GLOBAL', ...(listingId ? { listingId } : {}), ...(locale ? { locale } : {}) })
   const path = `/api/products/${encodeURIComponent(product.id)}/shopify-linked?${query}`
-  return <ShopifyLinkedWorkspace key={path} path={path} accountLabel={accounts.find(a => a.id === accountId)?.label ?? 'Shopify'} view={view} />
+  const selectedAccount = accounts.find(a => a.id === accountId)
+  return <ShopifyLinkedWorkspace key={path} path={path} accountLabel={selectedAccount?.label == null ? 'Account label not reported' : selectedAccount.label} view={view} />
 }
 export function ShopifyFamilyTab() { return <ShopifyLinkedRoute view="family" /> }
 export function ShopifyMetafieldsTab() { return <ShopifyLinkedRoute view="content" /> }

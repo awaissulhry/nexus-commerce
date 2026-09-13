@@ -14,7 +14,7 @@ import { prisma } from '@nexus/database'
 import { redis } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 import { variationSyncProcessor } from '../services/variation-sync-processor.service.js'
-import OutboundSyncService, { computeFailureDisposition } from '../services/outbound-sync.service.js'
+import OutboundSyncService, { computeFailureDisposition, completedSyncQueueData } from '../services/outbound-sync.service.js'
 import { dispatchChannelDelist, applyDelistResultToQueue } from '../services/channel-delist.service.js'
 import { calculateTargetPrice } from '../services/repricer.service.js'
 import { productEventService } from '../services/product-event.service.js'
@@ -37,7 +37,15 @@ export function initializeBullMQWorker() {
   })
 
   // Event listeners
-  worker.on('completed', (job) => {
+  worker.on('completed', (job, result) => {
+    if (result?.lifecycle) {
+      logger.debug('Lifecycle attempt completed', { queueId: job.data.queueId, status: result.status })
+      return // The lifecycle branch counts real acknowledgements only.
+    }
+    if (result?.status === 'SKIPPED') {
+      logger.debug('Sync attempt skipped', { queueId: job.data.queueId })
+      return
+    }
     logger.debug('✅ Job completed', {
       jobId: job.id,
       queueId: job.data.queueId,
@@ -84,7 +92,7 @@ export function initializeBullMQWorker() {
  *   syncType: string
  * }
  */
-async function processOutboundSyncJob(job: Job) {
+export async function processOutboundSyncJob(job: Job) {
   const { queueId, productId, channelListingId, targetChannel, syncType } = job.data
 
   logger.info('⚙️ Processing sync job', {
@@ -118,7 +126,7 @@ async function processOutboundSyncJob(job: Job) {
         reason: 'User cancelled during grace period',
       })
       cancelledCount++
-      return { status: 'CANCELLED', queueId }
+      return { status: 'CANCELLED', queueId, ...((queueRecord.syncType === 'UNPUBLISH_LISTING' || queueRecord.syncType === 'DELETE_LISTING') ? { lifecycle: true } : {}) }
     }
 
     // Verify status is still PENDING
@@ -127,7 +135,7 @@ async function processOutboundSyncJob(job: Job) {
         queueId,
         currentStatus: queueRecord.syncStatus,
       })
-      return { status: 'SKIPPED', queueId, reason: 'Not in PENDING status' }
+      return { status: 'SKIPPED', queueId, reason: 'Not in PENDING status', ...((queueRecord.syncType === 'UNPUBLISH_LISTING' || queueRecord.syncType === 'DELETE_LISTING') ? { lifecycle: true } : {}) }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -138,24 +146,39 @@ async function processOutboundSyncJob(job: Job) {
     // every downstream check (publishing controls, pricing recompute,
     // VARIATION_SYNC routing) and go straight to the channel adapter
     // using only the data on the OutboundSyncQueue row itself.
-    if (syncType === 'UNPUBLISH_LISTING' || syncType === 'DELETE_LISTING') {
+    if (queueRecord.syncType === 'UNPUBLISH_LISTING' || queueRecord.syncType === 'DELETE_LISTING') {
+      // BullMQ delays are advisory; enforce the stored grace/retry hold and
+      // atomically compete with cancellation/the cron on this lifecycle row.
+      const now = new Date()
+      if (queueRecord.holdUntil && queueRecord.holdUntil > now) {
+        return { status: 'SKIPPED', queueId, lifecycle: true, reason: 'Still within grace window' }
+      }
+      const claimed = await prisma.outboundSyncQueue.updateMany({
+        where: { id: queueId, syncStatus: 'PENDING', OR: [{ holdUntil: null }, { holdUntil: { lte: now } }] },
+        data: { syncStatus: 'IN_PROGRESS' },
+      })
+      if (!claimed.count) return { status: 'SKIPPED', queueId, lifecycle: true, reason: 'Lost dispatch claim' }
       const result = await dispatchChannelDelist({
         queueId,
         productId: queueRecord.productId,
         channelListingId: queueRecord.channelListingId,
-        targetChannel: targetChannel as string,
+        targetChannel: queueRecord.targetChannel,
         targetRegion: queueRecord.targetRegion,
         externalListingId: queueRecord.externalListingId,
-        syncType,
+        syncType: queueRecord.syncType,
         payload: queueRecord.payload,
       })
       await applyDelistResultToQueue(queueId, result)
+      if (result.dryRun) return { status: 'SKIPPED', queueId, lifecycle: true, result }
+      if (result.outcome === 'UNKNOWN') {
+        return { status: 'UNKNOWN', queueId, lifecycle: true, result }
+      }
       if (result.success) {
         successCount++
-        return { status: 'SUCCESS', queueId, result }
+        return { status: 'SUCCESS', queueId, lifecycle: true, result }
       }
       failureCount++
-      return { status: 'FAILED', queueId, result }
+      return { status: 'FAILED', queueId, lifecycle: true, result }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -309,12 +332,11 @@ async function processOutboundSyncJob(job: Job) {
     // UPDATE QUEUE RECORD
     // ─────────────────────────────────────────────────────────────────────
     if (syncResult.success) {
+      const completion = completedSyncQueueData(syncResult)
       await prisma.outboundSyncQueue.update({
         where: { id: queueId },
         data: {
-          // PD.3 — a dry-run/sandbox no-op published nothing; don't show it green.
-          syncStatus: syncResult.dryRun ? 'SKIPPED' : 'SUCCESS',
-          syncedAt: new Date(),
+          ...completion,
           payload: {
             ...(queueRecord.payload as any),
             processedBy: 'BullMQ',
@@ -323,7 +345,7 @@ async function processOutboundSyncJob(job: Job) {
         },
       })
 
-      logger.info('✅ Sync completed successfully', {
+      logger.info(completion.syncStatus === 'SKIPPED' ? 'Sync skipped; nothing sent' : '✅ Sync completed successfully', {
         queueId,
         productId,
         targetChannel,
@@ -331,7 +353,7 @@ async function processOutboundSyncJob(job: Job) {
       })
 
       processedCount++
-      return { status: 'SUCCESS', queueId, result: syncResult }
+      return { status: completion.syncStatus, queueId, result: syncResult }
     } else {
       // AS.1 — episode-class failures (circuit open / rate limited / debounced /
       // auth outage) must not consume the retry budget on this path either

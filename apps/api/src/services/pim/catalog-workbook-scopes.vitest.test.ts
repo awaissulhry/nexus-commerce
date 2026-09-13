@@ -28,7 +28,7 @@ describe('workbook template destination safety', () => {
   it('includes canonical marketplace languages even when omitted by the client and a legacy database default differs', async () => {
     const buffer = await catalogWorkbookTemplate({ market: 'IT', familyId: 'jackets', locales: [' EN-GB ', 'en-gb'], channels: [destination, { ...destination, marketplace: 'DE' }] })
     const book = new ExcelJS.Workbook(); await book.xlsx.load(buffer as never)
-    expect(book.worksheets.filter(s => s.name.startsWith('Content ')).map(s => s.name)).toEqual(['Content en-gb', 'Content it', 'Content de'])
+    expect(book.worksheets.filter(s => s.name.startsWith('Content ')).map(s => s.name)).toEqual(['Content en', 'Content de'])
     expect(book.getWorksheet('Nexus workbook')!.getSheetValues().flat()).toContain('AMAZON IT 1')
   })
   it('rejects the same destination despite different key order, whitespace or channel case before reading the database', async () => {
@@ -48,6 +48,6 @@ describe('workbook template destination safety', () => {
     for (const bad of [null, { ...destination, category: 123 }]) await expect(catalogWorkbookTemplate({ market: 'IT', familyId: 'jackets', channels: [bad as never] })).rejects.toThrow('Each destination needs')
   })
   it('counts automatically included languages toward the limit', async () => {
-    await expect(catalogWorkbookTemplate({ market: 'IT', familyId: 'jackets', locales: Array.from({ length: 30 }, (_, i) => `en-x${i}`), channels: [destination] })).rejects.toThrow('including the languages')
+    await expect(catalogWorkbookTemplate({ market: 'IT', familyId: 'jackets', locales: Array.from({ length: 30 }, (_, i) => `q${String.fromCharCode(97 + Math.floor(i / 26))}${String.fromCharCode(97 + i % 26)}`), channels: [{ ...destination, marketplace: 'DE' }] })).rejects.toThrow('including the languages')
   })
 })

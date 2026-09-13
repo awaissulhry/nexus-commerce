@@ -1,0 +1,62 @@
+--- /Users/awais/nexus-commerce/apps/api/src/routes/marketplaces.routes.ts
++++ /Users/awais/nexus-commerce/apps/api/src/routes/marketplaces.routes.ts
+@@ -1,3 +1,5 @@
++import { assertPushAllowed } from '@nexus/shared/push-lock'
++import { readPushControls } from '../services/listing-push-controls.js'
+ import { buildAmazonContentAttributes, type AmazonContentInput } from '../services/pim/amazon-content-payload.js'
+ import { resolvePublishContent, publishContentIssues, requireReviewedContent } from '../services/pim/publish-review-gate.js'
+ import { configuredAmazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+@@ -964,6 +966,12 @@
+         ])
+         if (!product) return reply.code(404).send({ error: `Product ${id} not found` })
+ 
++        const pushControls = await readPushControls({ channel, productIds: [id], allowAbsent: true })
++        for (const current of pushControls) {
++          const refusal = assertPushAllowed(current)
++          if (refusal) return reply.code(409).send({ ok: false, status: 'REFUSED', message: refusal.sentence, refusal })
++        }
++
+         // Resolve values: listing override first, fall back to master product
+         const resolvedTitle = listing?.title ?? product.name
+         const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
+--- /Users/awais/nexus-commerce/apps/api/src/routes/ebay-flat-file.routes.ts
++++ /Users/awais/nexus-commerce/apps/api/src/routes/ebay-flat-file.routes.ts
+@@ -1,3 +1,5 @@
++import { assertPushAllowed } from '@nexus/shared/push-lock'
++import { readPushControls } from '../services/listing-push-controls.js'
+ import { WorkspaceCache } from '../lib/workspace-cache.js'
+ import { workspaceKey } from '@nexus/database/workspace-context'
+ /**
+@@ -1848,6 +1850,18 @@
+     const deactivateRows = rows.filter((r) => actionOf(r) === 'deactivate' && r._shared !== true);
+     const endRows = rows.filter((r) => actionOf(r) === 'end' && r._shared !== true);
+     const pushableRows = rows.filter((r) => !['skip', 'deactivate', 'end'].includes(actionOf(r)));
++    // Preflight ordinary pushes before any direct REST/group write. Local action
++    // rows retain their lifecycle path; they are not ordinary price/stock pushes.
++    for (const row of pushableRows) {
++      if (row._shared === true) continue;
++      const controls = await readPushControls({ channel: 'EBAY', skus: [String(row.sku ?? '')],
++        productIds: row._productId ? [String(row._productId)] : [], allowAbsent: true });
++      for (const listing of controls) {
++        const refusal = assertPushAllowed(listing);
++        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
++      }
++    }
++
+ 
+     const families = new Map<string, typeof rows>();
+     for (const row of pushableRows) {
+@@ -3340,6 +3354,13 @@
+             continue;
+           }
+ 
++          const controls = await readPushControls({ channel: 'EBAY', productIds: [productId] });
++          const refusal = controls.map(assertPushAllowed).find(Boolean);
++          if (refusal) {
++            results.push({ productId, market: mpUpper, status: 'REFUSED', message: `${refusal.code}: ${refusal.sentence}` });
++            continue;
++          }
++
+           const lang = toListingLanguage(mpUpper);
+           const publishHeaders = {
+             Authorization: `Bearer ${token}`,

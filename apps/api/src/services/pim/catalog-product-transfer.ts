@@ -1,3 +1,5 @@
+import { normalizeLanguage } from './content-language.js'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
 import type { Prisma } from '@prisma/client'
 import { TRANSFER_CHANNELS, type ProductTransferBoundary, ProductTransferOptions, ProductTransferSelection, TransferRow } from '@nexus/shared/catalog-transfer'
@@ -31,12 +33,12 @@ export async function productTransferOptions(productId: string): Promise<Product
     prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: { in: TRANSFER_CHANNELS } }, select: listingIdentity, orderBy: { id: 'asc' }, take: 5001 }),
     Promise.all(TRANSFER_CHANNELS.map(channel => listActiveConnections(channel))).then(accounts => accounts.flat()),
     prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, name: true, language: true, languages: true }, orderBy: { code: 'asc' } }),
-    prisma.product.findMany({ where: { id: { in: products.map(p => p.id) } }, select: { localizedContent: true } }),
+    prisma.product.findMany({ where: { id: { in: products.map(p => p.id) } }, select: { translations: { select: { language: true } } } }),
     prisma.productListingAlias.findMany({ where: { productId: rootId }, select: { id: true, label: true, status: true } }),
     prisma.product.findUnique({ where: { id: rootId }, select: { familyId: true } }),
   ])
   if (listings.length > 5000) throw new Error('Use Catalog import & export for groups larger than 5,000 listings')
-  const locales = [...new Set([...content.flatMap(p => Object.keys(p.localizedContent ?? {})), ...markets.flatMap(m => marketLanguages(m.channel, m.code, [m]))])].filter(validLocale).sort()
+  const locales = [...new Set([PRIMARY_CONTENT_LOCALE, ...content.flatMap(p => p.translations.map(row => normalizeLanguage(row.language))), ...markets.flatMap(m => marketLanguages(m.channel, m.code, [m]))])].filter(validLocale).sort()
   const aliasById = new Map(aliases.map(a => [a.id, a]))
   return { productId, rootId, products, locales, familyId: root?.familyId ?? null,
     listings: listings.filter(l => !l.aliasKey || aliasById.get(l.aliasKey)?.status === 'ACTIVE').map(l => ({ id: l.id, productId: l.productId, channel: l.channel, accountId: l.channelConnectionId ?? '', marketplace: l.marketplace, aliasKey: l.aliasKey,
@@ -53,7 +55,7 @@ function ids(value: unknown, name: string, max: number) {
 
 export async function resolveProductTransferBoundary(productId: string, input: ProductTransferSelection): Promise<ProductTransferBoundary> {
   if (!input || typeof input.includeShared !== 'boolean') throw new Error('Select shared details or existing listings')
-  const productIds = ids(input.productIds, 'products', 500), listingIds = ids(input.listingIds, 'listings', 5000), locales = ids(input.locales, 'languages', 100)
+  const productIds = ids(input.productIds, 'products', 500), listingIds = ids(input.listingIds, 'listings', 5000), locales = [...new Set(ids(input.locales, 'languages', 100).map(normalizeLanguage))]
   if (!productIds.length || !input.includeShared && !listingIds.length) throw new Error('Select at least one product and a data destination')
   if (!input.includeShared && locales.length) throw new Error('Shared languages require shared product details')
   const options = await productTransferOptions(productId)
@@ -77,7 +79,7 @@ export function assertProductTransferRows(boundary: ProductTransferBoundary, row
     if (!products.has(row.sku)) throw new TransferConflict(`${row.sku}: this SKU is outside the selected products`)
     if (row.entity === 'Products') {
       if (!boundary.includeShared || row.channel || row.accountId || row.marketplace || row.aliasKey || row.locale && !boundary.locales.includes(row.locale)) throw new TransferConflict(`${row.sku}: shared details or this language are outside the selected scope`)
-    } else if (row.locale || !listings.has(listingKey(row))) throw new TransferConflict(`${row.sku}: this account, marketplace or listing is outside the selected scope`)
+    } else if (!listings.has(listingKey(row))) throw new TransferConflict(`${row.sku}: this account, marketplace or listing is outside the selected scope`)
   }
 }
 

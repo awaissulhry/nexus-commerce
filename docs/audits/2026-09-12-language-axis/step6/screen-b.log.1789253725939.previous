@@ -1,0 +1,23 @@
+{"step":"b","scope":"master","market":"IT","language":"it","width":1440,"theme":"light","rows":21,"columns":8,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information"}
+{"step":"b","scope":"master","market":"IT","language":"it","width":1440,"theme":"dark","rows":21,"columns":8,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information"}
+{"step":"b","scope":"master","market":"IT","language":"it","width":1728,"theme":"light","rows":21,"columns":11,"marks":42,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information"}
+{"step":"b","scope":"master","market":"IT","language":"it","width":1728,"theme":"dark","rows":21,"columns":11,"marks":42,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information"}
+{"step":"b","scope":"AMAZON","market":"DE","language":"de","width":1440,"theme":"light","rows":21,"columns":10,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j"}
+{"step":"b","scope":"AMAZON","market":"DE","language":"de","width":1440,"theme":"dark","rows":21,"columns":10,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j"}
+{"step":"b","scope":"AMAZON","market":"DE","language":"de","width":1728,"theme":"light","rows":21,"columns":11,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j"}
+{"step":"b","scope":"AMAZON","market":"DE","language":"de","width":1728,"theme":"dark","rows":21,"columns":11,"marks":0,"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j"}
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j","documentWidth":1440,"viewport":1440,"rows":[],"headers":[{"id":"ag-Grid-SelectionColumn","text":"                     "},{"id":"ag-Grid-AutoColumn","text":"    Product            "}],"marks":[],"scopeBar":"EditingShared productAmazoneBayShopifyEtsyBE · BelgiumDutchFrench","text":"Skip to main content\nN\n⌘\nK\nLanguage axis editor gate\nHome\nProducts\nListings\nStock\nInbound\nOutbound\nReplenishment\nPurchase Orders\nSuppliers\nCarriers\nReturns\nOrders\nPricing\nInsights\nAdvertising\nCalendar\nContent\nReviews\nAgent Fleet\nInbox\nSync Logs\nProducts\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nGALE-JACKET\nB0F7J163XJ\nActive\nParent\nNexus draft autosave\nEDITING\nShared product\nAmazon\neBay\nShopify\nEtsy\nBE · Belgium\nDutch\nFrench\nLoading information…\nAll attributes\nCustomise\nExport\nImport\nProduct"}
+    at file:///Users/awais/nexus-commerce/docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs:80:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v25.9.0

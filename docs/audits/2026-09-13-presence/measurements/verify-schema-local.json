@@ -1,0 +1,1806 @@
+{
+  "label": "local",
+  "host": "127.0.0.1:55439/nexus_development",
+  "at": "2026-09-13T18:44:48.779Z",
+  "queries": [
+    {
+      "name": "columns",
+      "sql": "SELECT table_name,column_name,data_type,is_nullable,column_default,datetime_precision FROM information_schema.columns WHERE table_schema='public' AND table_name IN ('ChannelListing','ListingIdentity') ORDER BY table_name,ordinal_position",
+      "at": "2026-09-13T18:44:48.799Z",
+      "rows": [
+        {
+          "table_name": "ChannelListing",
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "productId",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "stockBuffer",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelMarket",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channel",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "region",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "externalListingId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "externalParentId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "platformProductId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "title",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "description",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "price",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "salePrice",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "pricingRule",
+          "data_type": "USER-DEFINED",
+          "is_nullable": "NO",
+          "column_default": "'FIXED'::\"PricingRuleType\"",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "priceAdjustmentPercent",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "quantity",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "platformAttributes",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "variationTheme",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "variationMapping",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "listingStatus",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'DRAFT'::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lastSyncedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lastSyncStatus",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lastSyncError",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncRetryCount",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "0",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncFromMaster",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncLocked",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "isPublished",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterTitle",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterDescription",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterPrice",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterQuantity",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterImages",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "followMasterBulletPoints",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "masterTitle",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "masterDescription",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "masterPrice",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "masterQuantity",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "masterBulletPoints",
+          "data_type": "ARRAY",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "titleOverride",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "descriptionOverride",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "priceOverride",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "quantityOverride",
+          "data_type": "integer",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "bulletPointsOverride",
+          "data_type": "ARRAY",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncStatus",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'IDLE'::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncRetryLastAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "validationStatus",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'VALID'::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "validationErrors",
+          "data_type": "ARRAY",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lastOverrideAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lastOverrideBy",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "createdAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "NO",
+          "column_default": "CURRENT_TIMESTAMP",
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "updatedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "marketplace",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "'DEFAULT'::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "version",
+          "data_type": "integer",
+          "is_nullable": "NO",
+          "column_default": "1",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "estimatedFbaFee",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "referralFeePercent",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "lowestCompetitorPrice",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "competitorFetchedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "feeFetchedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "bestOfferFloor",
+          "data_type": "numeric",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "offerActive",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "true",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "overrideData",
+          "data_type": "jsonb",
+          "is_nullable": "NO",
+          "column_default": "'{}'::jsonb",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "fulfillmentMethod",
+          "data_type": "USER-DEFINED",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "flatFileSnapshot",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "syncPaused",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "sourceLocationCodes",
+          "data_type": "ARRAY",
+          "is_nullable": "NO",
+          "column_default": "ARRAY[]::text[]",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "offerClosedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "offerClosedBy",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "offerCloseReason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "offerCloseSnapshot",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelConnectionId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "aliasId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "aliasKey",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "''::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "workspaceId",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "variationExcluded",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "salePriceStart",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 0
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "salePriceEnd",
+          "data_type": "date",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 0
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceIntent",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceIntentAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceIntentBy",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceIntentReason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceEffectiveFrom",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "presenceUntil",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelFact",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelFactAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelFactVia",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "channelFactDetail",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "endedAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "endedBy",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "endedReason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ChannelListing",
+          "column_name": "saleStopId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "workspaceId",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "id",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "productId",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "sku",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "channel",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "marketplace",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "channelConnectionId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "aliasKey",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": "''::text",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "externalListingId",
+          "data_type": "text",
+          "is_nullable": "NO",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "externalParentId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "fulfillmentMethod",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "offerSku",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "firstSeenAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "NO",
+          "column_default": "CURRENT_TIMESTAMP",
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "lastSeenAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "NO",
+          "column_default": "CURRENT_TIMESTAMP",
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "retiredAt",
+          "data_type": "timestamp without time zone",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": 3
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "retiredReason",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "retiredBy",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "doNotRecreate",
+          "data_type": "boolean",
+          "is_nullable": "NO",
+          "column_default": "false",
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "lastSnapshotId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "retiredSnapshot",
+          "data_type": "jsonb",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        },
+        {
+          "table_name": "ListingIdentity",
+          "column_name": "supersededByExternalListingId",
+          "data_type": "text",
+          "is_nullable": "YES",
+          "column_default": null,
+          "datetime_precision": null
+        }
+      ]
+    },
+    {
+      "name": "policies",
+      "sql": "SELECT c.relname,c.relrowsecurity,c.relforcerowsecurity,p.polname,p.polcmd,ARRAY(SELECT rolname::text FROM pg_roles WHERE oid=ANY(p.polroles)) roles,pg_get_expr(p.polqual,p.polrelid) using_clause,pg_get_expr(p.polwithcheck,p.polrelid) check_clause FROM pg_class c LEFT JOIN pg_policy p ON p.polrelid=c.oid WHERE c.relnamespace='public'::regnamespace AND c.relname='ListingIdentity'",
+      "at": "2026-09-13T18:44:48.800Z",
+      "rows": [
+        {
+          "relname": "ListingIdentity",
+          "relrowsecurity": true,
+          "relforcerowsecurity": true,
+          "polname": "nexus_workspace_isolation",
+          "polcmd": "*",
+          "roles": [
+            "nexus_workspace_runtime"
+          ],
+          "using_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))",
+          "check_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))"
+        }
+      ]
+    },
+    {
+      "name": "role",
+      "sql": "SELECT rolname FROM pg_roles WHERE rolname='nexus_workspace_runtime'",
+      "at": "2026-09-13T18:44:48.801Z",
+      "rows": [
+        {
+          "rolname": "nexus_workspace_runtime"
+        }
+      ]
+    },
+    {
+      "name": "grants",
+      "sql": "SELECT privilege,has_table_privilege('nexus_workspace_runtime','\"ListingIdentity\"',privilege) allowed FROM unnest(ARRAY['SELECT','INSERT','UPDATE','DELETE']) privilege",
+      "at": "2026-09-13T18:44:48.801Z",
+      "rows": [
+        {
+          "privilege": "SELECT",
+          "allowed": true
+        },
+        {
+          "privilege": "INSERT",
+          "allowed": true
+        },
+        {
+          "privilege": "UPDATE",
+          "allowed": true
+        },
+        {
+          "privilege": "DELETE",
+          "allowed": true
+        }
+      ]
+    },
+    {
+      "name": "indexes",
+      "sql": "SELECT i.indisunique,i.indisvalid,i.indnullsnotdistinct,ARRAY(SELECT a.attname::text FROM unnest(i.indkey) WITH ORDINALITY k(attnum,ord) JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=k.attnum ORDER BY k.ord) columns,pg_get_indexdef(i.indexrelid) definition FROM pg_index i JOIN pg_class c ON c.oid=i.indrelid WHERE c.relnamespace='public'::regnamespace AND c.relname='ListingIdentity'",
+      "at": "2026-09-13T18:44:48.802Z",
+      "rows": [
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "id"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_pkey\" ON public.\"ListingIdentity\" USING btree (id)"
+        },
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey",
+            "externalListingId"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_coordinate_external_key\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\", \"externalListingId\")"
+        },
+        {
+          "indisunique": false,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "productId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey"
+          ],
+          "definition": "CREATE INDEX \"ListingIdentity_product_coordinate_idx\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", \"productId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\")"
+        }
+      ]
+    },
+    {
+      "name": "identity foreign keys",
+      "sql": "SELECT conname FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid WHERE c.relnamespace='public'::regnamespace AND c.relname='ListingIdentity' AND con.contype='f'",
+      "at": "2026-09-13T18:44:48.803Z",
+      "rows": []
+    },
+    {
+      "name": "positive-control",
+      "sql": "SELECT version FROM \"Product\" WHERE id='cmokmy3a40078pm0p1fvnu523'",
+      "at": "2026-09-13T18:44:48.804Z",
+      "rows": [
+        {
+          "version": 59
+        }
+      ]
+    },
+    {
+      "name": "no-backfill",
+      "sql": "SELECT (SELECT count(*)::int FROM \"ListingIdentity\") identity_rows,(SELECT count(*)::int FROM \"ChannelListing\" WHERE \"presenceIntent\" IS NOT NULL OR \"presenceIntentAt\" IS NOT NULL OR \"presenceIntentBy\" IS NOT NULL OR \"presenceIntentReason\" IS NOT NULL OR \"presenceEffectiveFrom\" IS NOT NULL OR \"presenceUntil\" IS NOT NULL OR \"channelFact\" IS NOT NULL OR \"channelFactAt\" IS NOT NULL OR \"channelFactVia\" IS NOT NULL OR \"channelFactDetail\" IS NOT NULL OR \"endedAt\" IS NOT NULL OR \"endedBy\" IS NOT NULL OR \"endedReason\" IS NOT NULL OR \"saleStopId\" IS NOT NULL) stated_listing_rows",
+      "at": "2026-09-13T18:44:48.806Z",
+      "rows": [
+        {
+          "identity_rows": 0,
+          "stated_listing_rows": 0
+        }
+      ]
+    },
+    {
+      "name": "runtime workspace discovery",
+      "sql": "SELECT id FROM \"Workspace\" WHERE status='active' ORDER BY id LIMIT 1",
+      "at": "2026-09-13T18:44:48.807Z",
+      "rows": [
+        {
+          "id": "nexus_legacy_workspace"
+        }
+      ]
+    },
+    {
+      "name": "runtime access",
+      "sql": "SELECT current_user role,current_setting('nexus.workspace_id',true) workspace_setting,(SELECT count(*)::int FROM \"ListingIdentity\") identities,(SELECT count(*)::int FROM \"Product\") product_control",
+      "at": "2026-09-13T18:44:48.809Z",
+      "rows": [
+        {
+          "role": "nexus_workspace_runtime",
+          "workspace_setting": "nexus_legacy_workspace",
+          "identities": 0,
+          "product_control": 355
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "ChannelListing.presenceIntent",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceIntent",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.presenceIntentAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceIntentAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ChannelListing.presenceIntentBy",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceIntentBy",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.presenceIntentReason",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceIntentReason",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.presenceEffectiveFrom",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceEffectiveFrom",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ChannelListing.presenceUntil",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "presenceUntil",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ChannelListing.channelFact",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "channelFact",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.channelFactAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "channelFactAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ChannelListing.channelFactVia",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "channelFactVia",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.channelFactDetail",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "channelFactDetail",
+        "data_type": "jsonb",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.endedAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "endedAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ChannelListing.endedBy",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "endedBy",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.endedReason",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "endedReason",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ChannelListing.saleStopId",
+      "pass": true,
+      "detail": {
+        "table_name": "ChannelListing",
+        "column_name": "saleStopId",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity exact fields",
+      "pass": true,
+      "detail": [
+        "workspaceId",
+        "id",
+        "productId",
+        "sku",
+        "channel",
+        "marketplace",
+        "channelConnectionId",
+        "aliasKey",
+        "externalListingId",
+        "externalParentId",
+        "fulfillmentMethod",
+        "offerSku",
+        "firstSeenAt",
+        "lastSeenAt",
+        "retiredAt",
+        "retiredReason",
+        "retiredBy",
+        "doNotRecreate",
+        "lastSnapshotId",
+        "retiredSnapshot",
+        "supersededByExternalListingId"
+      ]
+    },
+    {
+      "name": "ListingIdentity.workspaceId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "workspaceId",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": "NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)",
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.id",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "id",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.productId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "productId",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.sku",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "sku",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.channel",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "channel",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.marketplace",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "marketplace",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.channelConnectionId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "channelConnectionId",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.aliasKey",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "aliasKey",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": "''::text",
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.externalListingId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "externalListingId",
+        "data_type": "text",
+        "is_nullable": "NO",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.externalParentId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "externalParentId",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.fulfillmentMethod",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "fulfillmentMethod",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.offerSku",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "offerSku",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.firstSeenAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "firstSeenAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "NO",
+        "column_default": "CURRENT_TIMESTAMP",
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ListingIdentity.lastSeenAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "lastSeenAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "NO",
+        "column_default": "CURRENT_TIMESTAMP",
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ListingIdentity.retiredAt",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "retiredAt",
+        "data_type": "timestamp without time zone",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": 3
+      }
+    },
+    {
+      "name": "ListingIdentity.retiredReason",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "retiredReason",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.retiredBy",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "retiredBy",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.doNotRecreate",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "doNotRecreate",
+        "data_type": "boolean",
+        "is_nullable": "NO",
+        "column_default": "false",
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.lastSnapshotId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "lastSnapshotId",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.retiredSnapshot",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "retiredSnapshot",
+        "data_type": "jsonb",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "ListingIdentity.supersededByExternalListingId",
+      "pass": true,
+      "detail": {
+        "table_name": "ListingIdentity",
+        "column_name": "supersededByExternalListingId",
+        "data_type": "text",
+        "is_nullable": "YES",
+        "column_default": null,
+        "datetime_precision": null
+      }
+    },
+    {
+      "name": "workspace default",
+      "pass": true,
+      "detail": "NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)"
+    },
+    {
+      "name": "alias default",
+      "pass": true,
+      "detail": "''::text"
+    },
+    {
+      "name": "recreate default",
+      "pass": true,
+      "detail": "false"
+    },
+    {
+      "name": "firstSeenAt registration default",
+      "pass": true,
+      "detail": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "lastSeenAt registration default",
+      "pass": true,
+      "detail": "CURRENT_TIMESTAMP"
+    },
+    {
+      "name": "id has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "productId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "sku has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "channel has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "marketplace has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "channelConnectionId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "externalListingId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "externalParentId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "fulfillmentMethod has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "offerSku has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "retiredAt has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "retiredReason has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "retiredBy has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "lastSnapshotId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "retiredSnapshot has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "supersededByExternalListingId has no invented default",
+      "pass": true,
+      "detail": null
+    },
+    {
+      "name": "RLS ENABLE + FORCE + policy",
+      "pass": true,
+      "detail": [
+        {
+          "relname": "ListingIdentity",
+          "relrowsecurity": true,
+          "relforcerowsecurity": true,
+          "polname": "nexus_workspace_isolation",
+          "polcmd": "*",
+          "roles": [
+            "nexus_workspace_runtime"
+          ],
+          "using_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))",
+          "check_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))"
+        }
+      ]
+    },
+    {
+      "name": "policy retains workspace and active-membership predicates",
+      "pass": true,
+      "detail": {
+        "relname": "ListingIdentity",
+        "relrowsecurity": true,
+        "relforcerowsecurity": true,
+        "polname": "nexus_workspace_isolation",
+        "polcmd": "*",
+        "roles": [
+          "nexus_workspace_runtime"
+        ],
+        "using_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))",
+        "check_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))"
+      }
+    },
+    {
+      "name": "no additional permissive identity policy",
+      "pass": true,
+      "detail": [
+        {
+          "relname": "ListingIdentity",
+          "relrowsecurity": true,
+          "relforcerowsecurity": true,
+          "polname": "nexus_workspace_isolation",
+          "polcmd": "*",
+          "roles": [
+            "nexus_workspace_runtime"
+          ],
+          "using_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))",
+          "check_clause": "((\"workspaceId\" = NULLIF(current_setting('nexus.workspace_id'::text, true), ''::text)) AND (EXISTS ( SELECT 1\n   FROM \"Workspace\" w\n  WHERE ((w.id = \"ListingIdentity\".\"workspaceId\") AND (w.status = 'active'::text) AND ((NULLIF(current_setting('nexus.actor_id'::text, true), ''::text) IS NULL) OR (EXISTS ( SELECT 1\n           FROM (\"WorkspaceMembership\" m\n             JOIN \"UserProfile\" u ON ((u.id = m.\"userId\")))\n          WHERE ((m.\"workspaceId\" = w.id) AND (m.\"userId\" = current_setting('nexus.actor_id'::text, true)) AND (m.status = 'active'::text) AND (u.status = 'active'::text)))))))))"
+        }
+      ]
+    },
+    {
+      "name": "runtime grants",
+      "pass": true,
+      "detail": [
+        {
+          "privilege": "SELECT",
+          "allowed": true
+        },
+        {
+          "privilege": "INSERT",
+          "allowed": true
+        },
+        {
+          "privilege": "UPDATE",
+          "allowed": true
+        },
+        {
+          "privilege": "DELETE",
+          "allowed": true
+        }
+      ]
+    },
+    {
+      "name": "coordinate identity unique index",
+      "pass": true,
+      "detail": [
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "id"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_pkey\" ON public.\"ListingIdentity\" USING btree (id)"
+        },
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey",
+            "externalListingId"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_coordinate_external_key\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\", \"externalListingId\")"
+        },
+        {
+          "indisunique": false,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "productId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey"
+          ],
+          "definition": "CREATE INDEX \"ListingIdentity_product_coordinate_idx\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", \"productId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\")"
+        }
+      ]
+    },
+    {
+      "name": "product coordinate read index",
+      "pass": true,
+      "detail": [
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "id"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_pkey\" ON public.\"ListingIdentity\" USING btree (id)"
+        },
+        {
+          "indisunique": true,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey",
+            "externalListingId"
+          ],
+          "definition": "CREATE UNIQUE INDEX \"ListingIdentity_coordinate_external_key\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\", \"externalListingId\")"
+        },
+        {
+          "indisunique": false,
+          "indisvalid": true,
+          "indnullsnotdistinct": false,
+          "columns": [
+            "workspaceId",
+            "productId",
+            "channel",
+            "marketplace",
+            "channelConnectionId",
+            "aliasKey"
+          ],
+          "definition": "CREATE INDEX \"ListingIdentity_product_coordinate_idx\" ON public.\"ListingIdentity\" USING btree (\"workspaceId\", \"productId\", channel, marketplace, \"channelConnectionId\", \"aliasKey\")"
+        }
+      ]
+    },
+    {
+      "name": "identity survives product purge: no foreign keys",
+      "pass": true,
+      "detail": []
+    },
+    {
+      "name": "GALE positive control",
+      "pass": true,
+      "detail": [
+        {
+          "version": 59
+        }
+      ]
+    },
+    {
+      "name": "no backfill at apply verification",
+      "pass": true,
+      "detail": [
+        {
+          "identity_rows": 0,
+          "stated_listing_rows": 0
+        }
+      ]
+    },
+    {
+      "name": "runtime workspace exists",
+      "pass": true,
+      "detail": {
+        "id": "nexus_legacy_workspace"
+      }
+    },
+    {
+      "name": "runtime SELECT actually permitted",
+      "pass": true,
+      "detail": [
+        {
+          "role": "nexus_workspace_runtime",
+          "workspace_setting": "nexus_legacy_workspace",
+          "identities": 0,
+          "product_control": 355
+        }
+      ]
+    }
+  ],
+  "rolledBack": true
+}

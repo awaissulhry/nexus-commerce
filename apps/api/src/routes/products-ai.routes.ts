@@ -1,4 +1,5 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
+import { contentAddress, sharedContentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { applyProductBulkEdits } from '../services/products/bulk-edit.service.js'
 /**
  * F4 — bulk AI content generation for /products grid.
  *
@@ -11,10 +12,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  * prompts are identical), and either writes the result back to
  * Product columns immediately or returns a dry-run preview.
  *
- * Writes go through PATCH /api/products/bulk's same code path
- * conceptually — direct prisma.product.update for fields that don't
- * cascade (description, bulletPoints, keywords). Title is written
- * to Product.name only when explicitly requested.
+ * Writes use the addressed bulk writer and its shared-language cascade.
+ * Generated text remains unreviewed and creates no content publication queue.
  *
  * Returns 503 when GEMINI_API_KEY isn't set so the client can show
  * a helpful message instead of hanging.
@@ -39,6 +38,7 @@ import {
 import { auditLogService } from '../services/audit-log.service.js'
 import { logUsage } from '../services/ai/usage-logger.service.js'
 import {
+  getPrimaryLanguage,
   isPrimaryLanguage,
   languageForMarketplace,
 } from '../services/products/translation-resolver.service.js'
@@ -58,6 +58,7 @@ const MAX_PRODUCTS_PER_CALL = 50
 const service = new ListingContentService()
 
 interface BulkGenerateBody {
+  contentAddress?: ContentAddress
   productIds?: string[]
   fields?: string[]
   marketplace?: string
@@ -125,6 +126,42 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
 
+      /**
+       * 🔴 LX.FIN (R-LX-25) — the write address is DERIVED FROM THE MARKETPLACE THIS REQUEST NAMED,
+       * not demanded from the caller, and an address the caller does send must AGREE with it.
+       *
+       * Measured on 2026-09-13: `contentAddress(body.contentAddress, 'Content')` refused every write
+       * through this route with **400 "Content needs a ContentAddress before it can be saved."**,
+       * because not one of its FOUR writing callers sent one — `products/_lenses/TranslationsLens.tsx`,
+       * `products/_modals/AiBulkGenerateModal.tsx` and two calls in `products/drafts/DraftsClient.tsx`
+       * (`MasterDataTab.tsx` and the Amazon cockpit's `AutoFillCard.tsx` pass `dryRun: true` and were
+       * never affected). Four AI-fill verbs, inert since the router landed, each showing the operator
+       * only "HTTP 400".
+       *
+       * Design §6's rule is that a content write must never INFER its destination from the current
+       * value. It does not require the destination to arrive twice: this route is already handed the
+       * marketplace explicitly and already derives the language from it for the write it performs
+       * (`languageForMarketplace(marketplace, 'AMAZON')`, the `writeToMaster` branch below). Making each
+       * client re-derive that same language would be a second answer to "which language does this
+       * marketplace write in" on five pages (`reference_two_column_builders_drift`), and a client whose
+       * copy drifted by one row would write German text under an Italian address.
+       *
+       * So: ONE derivation, the server's; `content-bulk-write.ts:27-30` still verifies the address
+       * against the `marketplaceContexts` locale, so the check the refusal existed for is unchanged. A
+       * caller that sends an address explicitly is not ignored — it is COMPARED, and a mismatch is a
+       * 400 that names both, which is how a page that thinks it is writing German to a German market
+       * finds out it is not (`reference_api_accepts_a_flag_it_ignores`).
+       */
+      const targetLanguage = dryRun ? null : await languageForMarketplace(marketplace, 'AMAZON')
+      const writeAddress = targetLanguage === null ? null : sharedContentAddress(targetLanguage, getPrimaryLanguage())
+      if (writeAddress && body.contentAddress !== undefined) {
+        const sent = contentAddress(body.contentAddress, 'Content')
+        if (JSON.stringify(sent) !== JSON.stringify(writeAddress)) {
+          return reply.code(400).send({
+            error: `${marketplace} writes ${targetLanguage} content, so this generation needs the address ${JSON.stringify(writeAddress)} — it was sent ${JSON.stringify(sent)}.`,
+          })
+        }
+      }
       // Pre-fetch all products in one query so the loop only does AI
       // work + (if writing) one update per product.
       const products = await prisma.product.findMany({
@@ -254,7 +291,9 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
             // to the Product master row (existing behaviour). Otherwise
             // upsert a ProductTranslation row keyed on (productId,
             // language) so the master keeps its primary-language content.
-            const targetLang = await languageForMarketplace(marketplace, 'AMAZON')
+            /* Derived once, above, with the address it implies — so the language this write is
+               addressed with and the language it is audited as can never be two different answers. */
+            const targetLang = targetLanguage ?? await languageForMarketplace(marketplace, 'AMAZON')
             const writeToMaster = isPrimaryLanguage(targetLang)
 
             const titleVal =
@@ -275,52 +314,12 @@ const productsAiRoutes: FastifyPluginAsync = async (fastify) => {
             if (bulletsVal !== undefined) written.push('bullets')
             if (keywordsVal !== undefined) written.push('keywords')
 
-            if (writeToMaster) {
-              const updateData: Record<string, unknown> = {
-                version: { increment: 1 },
-              }
-              if (titleVal !== undefined) updateData.name = titleVal
-              if (descVal !== undefined) updateData.description = descVal
-              if (bulletsVal !== undefined) updateData.bulletPoints = bulletsVal
-              if (keywordsVal !== undefined) updateData.keywords = keywordsVal
-              if (Object.keys(updateData).length > 1) {
-                await prisma.product.update({ where: { id }, data: updateData })
-              }
-            } else if (written.length > 0) {
-              // Non-primary language → upsert ProductTranslation. Each
-              // requested field overrides; unrequested fields leave the
-              // existing translation row untouched.
-              const data: Record<string, unknown> = {}
-              if (titleVal !== undefined) data.name = titleVal
-              if (descVal !== undefined) data.description = descVal
-              if (bulletsVal !== undefined) data.bulletPoints = bulletsVal
-              if (keywordsVal !== undefined) data.keywords = keywordsVal
-              const aiSource =
-                generated.metadata.provider === 'anthropic'
-                  ? 'ai-anthropic'
-                  : 'ai-gemini'
-              await prisma.productTranslation.upsert({
-                where: {
-                  productId_language: workspaceKey({ productId: id, language: targetLang }),
-                },
-                create: {
-                  productId: id,
-                  language: targetLang,
-                  name: typeof titleVal === 'string' ? titleVal : null,
-                  description: typeof descVal === 'string' ? descVal : null,
-                  bulletPoints: Array.isArray(bulletsVal) ? bulletsVal : [],
-                  keywords: Array.isArray(keywordsVal) ? keywordsVal : [],
-                  source: aiSource,
-                  sourceModel: generated.metadata.model,
-                  reviewedAt: null, // AI-generated; needs operator review
-                },
-                update: {
-                  ...data,
-                  source: aiSource,
-                  sourceModel: generated.metadata.model,
-                  reviewedAt: null, // re-AIing wipes prior review
-                },
-              })
+            if (written.length) {
+              const values = { name: titleVal, description: descVal, bulletPoints: bulletsVal, keywords: keywordsVal }
+              const saved = await applyProductBulkEdits({ changes: Object.entries(values).filter(([,value]) => value !== undefined).map(([field,value]) => ({ id, field, value, contentAddress: writeAddress ?? undefined, contentState: 'draft' as const })),
+                marketplaceContexts: [{ marketplace, locale: targetLang } as any] },
+                { formulaCascade: false, userId: (request as any).authUser?.id, ip: request.ip, logger: request.log })
+              if (saved.errors?.length) throw new Error(saved.errors[0].error)
             }
 
             if (written.length > 0) {

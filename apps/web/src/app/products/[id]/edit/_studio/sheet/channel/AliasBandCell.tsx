@@ -63,8 +63,8 @@ export interface AliasBandCellParams {
 }
 
 /** Everything the 240px band cannot show, in one sentence the whole band carries as its title. */
-function bandTitle(s: AliasSummary | undefined, label: string, status: string, state: ReadinessState | undefined, pct: number | null): string {
-  const bits = [label, `Listing ${status.toLowerCase()}`]
+export function bandTitle(s: AliasSummary | undefined, label: string, status: string | null, state: ReadinessState | undefined, pct: number | null): string {
+  const bits = [label, status == null ? 'Listing status not reported' : `Listing ${status.toLowerCase()}`]
   if (s?.alias.externalListingId) bits.push(`Listing ${s.alias.externalListingId}`)
   bits.push(s?.isUnadoptedShell
     ? 'No variations and no stock behind it yet'
@@ -129,7 +129,7 @@ export const AliasBandCell = memo(function AliasBandCell(
   const s = p.summary
   const alias = s?.alias
   const label = alias?.label || row.name || row.sku
-  const status = alias?.listingStatus ?? 'NOT LISTED'
+  const status = alias?.listingStatus ?? null
   const pct = s?.percent ?? null
   /* 🔴 THE BAND IS MASTER'S PARENT ROW (Owner, 2026-09-05, from two screenshots: "the parent row is
      actually quite different in the Amazon and eBay scope than it is in the master scope"). Measured

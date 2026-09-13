@@ -1,0 +1,24 @@
+{
+  "at": "2026-09-12T14:39:16.456Z",
+  "phase": "master-german",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "restored": [
+    {
+      "table": "ProductTranslation",
+      "id": "cmtyhqbam0001njp4xmk78f34",
+      "action": "removed rehearsal-created row"
+    },
+    {
+      "table": "Product",
+      "id": "cmokmy0lr0009pm0p9yxk7ho0",
+      "fields": [
+        "version",
+        "updatedAt"
+      ],
+      "action": "restored baseline values"
+    }
+  ],
+  "auditRows": "retained as rehearsal history"
+}

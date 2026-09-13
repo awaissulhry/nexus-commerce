@@ -47,6 +47,23 @@ export { GridTextFloatingFilter, GridNumberRangeFloatingFilter, GridSetFloatingF
 // The action registry (ruling #113): the TYPE and its adapters are the DS's; the definitions are each lane's.
 export { actionsFor, isRunnable, requiresTypedConfirm, validateImpact, sameScope, ROW, SELECTION, contextOf, AVAILABLE, HIDDEN, disabled, type GridAction, type ActionScope, type ContextAxis, type ActionAvailability, type ActionImpact, type ActionResult, type ActionInvalidation, type ConfirmLevel } from './actions/registry'
 export { PARAMETERISED_VERB_ORDER } from './actions/registry'
+// MX.G (2026-09-13) — the Matrix's eleven verbs, declared once, and the registry adapter that runs them.
+export {
+  matrixActions, matrixGridActions, matrixImpact, matrixImpactTitle,
+  MATRIX_PARENT_ONLY_REASON, MATRIX_NO_INVENTORY_REASON, MATRIX_NO_PRICE_REASON, MATRIX_NO_PRICE_PERMISSION_REASON, MATRIX_NO_FAILURE_REASON, MATRIX_NO_SOURCE_COORDINATE_REASON,
+  type MatrixVerbField, type MatrixVerbSpec, type MatrixActionsContext, type MatrixVerbHost, type MatrixVerbCollected,
+} from './actions/matrixActions'
+// The engine's declaration of the Matrix shapes (parity-gated against the wire contract). Explicit,
+// not `export *`: the contract's cell INTERFACES (`FulfilmentCell`, `PriceCell`, `SaleCell`) share
+// their names with the renderer COMPONENTS above, and a star export would be TS2308-ambiguous. The
+// interfaces are reachable by deep import (`@/design-system/grid/matrix/contract`).
+export {
+  MATRIX_CELL_KINDS, INVENTORY_CELL_KINDS, WRITABLE_CELL_KINDS, MATRIX_CELL_LABELS, MATRIX_CELL_WIDTHS, MATRIX_VERB_LABELS,
+  type MatrixCellKind, type MatrixCells, type MatrixCoordinate, type MatrixCopy, type CoordinateKey, type CoordinateKind,
+  type ListingState, type FulfilmentMethod, type SyncKind, type SyncMode, type QueueState, type PriceSource,
+  type MatrixWriteCell, type MatrixWritableKind, type MatrixVerbId, type MatrixVerbTarget,
+  type VerbPreview, type VerbChange, type VerbRefusal, type RefusalKind,
+} from './matrix/contract'
 // The SEQUENCE a verb runs in, and the two React pieces around it. Exported from the barrel so a
 // lane never has a reason to re-implement the preflight → validate → confirm → run rules: two
 // copies of `validateImpact` is how a type-to-confirm becomes a click on exactly one surface.
@@ -88,3 +105,8 @@ export { exportGridCsv, gridCsvRows, gridCsvSourceFromApi, GridExportRefused, ty
 export { sheetFilterFor } from './filters/sheetFilterFor'
 
 export { useGridLifetime } from './hooks/useGridLifetime'
+
+export { intentMeta, factMeta, verdictMeta, presenceVerdict, presenceLine, PRESENCE_INTENTS, CHANNEL_FACTS, PRESENCE_VERDICTS, type Presence, type PresenceIntent, type ChannelFact, type PresenceVerdict, type PresenceMeta } from './renderers/presence'
+export { CellSaveMark, type CellSaveMarkProps } from './renderers/CellSaveMark'
+export { SheetStatuses, type SheetStatus, type SheetStatusesProps } from './toolbars/SheetStatus'
+export { frictionFor, requiresAcknowledgement, reversalSentence, validateAction, type Reach, type Fidelity, type ActionReversal, type ActionSubject, type ActionFinding, type ActionRefusal, type ActionHandoff, type ActionReview } from './actions/registry'

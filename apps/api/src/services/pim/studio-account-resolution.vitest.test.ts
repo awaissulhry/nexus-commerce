@@ -6,10 +6,13 @@ vi.mock('../../db.js', () => ({ default: {
   product: { findFirst: async () => ({ id: 'p', parentId: null }), findMany: async () => [product] },
   channelListing: { findMany: mocks.listings }, productListingAlias: { findMany: mocks.aliases },
   fieldLinkGroup: { findMany: async () => [] }, cellFormula: { findMany: mocks.formulas },
+  // LX.F R-LX-13 — the LX reach read (`studio-sheet.service.ts:1058`).
+  marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: async () => [{ channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' }] },
 } }))
 vi.mock('../connection-resolver.service.js', () => ({ isPrimaryChannelConnection: mocks.primary }))
 vi.mock('./studio-columns.js', () => ({ getStudioColumns: async () => ({ locale: 'it',
-  coordinates: [{ channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true }],
+  // LX.F R-LX-13 — LX's `contentListing` refuses a coordinate without its market languages.
+  coordinates: [{ channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true, languages: ['it'] }],
   columns: [{ key: 'material', label: 'Material', group: 'content', kind: 'text', scope: 'global', storage: 'categoryAttributes', requiredBy: [], editable: true, defaultVisible: true, writeField: 'attr_material',
     channels: { 'Amazon · IT': { key: 'material', attribute: 'material', path: [] } } }],
 }) }))
@@ -25,7 +28,7 @@ beforeEach(() => {
   mocks.resolve.mockResolvedValue({ byProduct: {}, categoryByProduct: {}, missingProductIds: [] })
   mocks.aliases.mockImplementation(async ({ where }) => ['a', 'b', null].map((account, index) => ({ id: `alias-${account}`, channelConnectionId: account, label: String(account), position: index + 1, status: 'ACTIVE' }))
     .filter(alias => !Object.hasOwn(where, 'channelConnectionId') || alias.channelConnectionId === where.channelConnectionId))
-  mocks.listings.mockImplementation(async ({ where }) => ['a', 'b', null].map(account => ({ id: `listing-${account}`, productId: 'p', aliasId: null, channelConnectionId: account, overrideData: { material: `Material ${account}` }, platformAttributes: {} }))
+  mocks.listings.mockImplementation(async ({ where }) => ['a', 'b', null].map(account => ({ id: `listing-${account}`, productId: 'p', aliasId: null, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: account, overrideData: { material: `Material ${account}` }, platformAttributes: {}, translations: [] }))
     .filter(listing => !Object.hasOwn(where, 'channelConnectionId') || listing.channelConnectionId === where.channelConnectionId))
 })
 

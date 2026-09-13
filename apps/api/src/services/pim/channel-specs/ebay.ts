@@ -133,7 +133,11 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('fulfillmentPolicyId', 'Regola di spedizione', 'Shipping policy', { kind: 'text', channelStore: pa('fulfillmentPolicyId') }),
     listing('descriptionThemeId', 'Tema della descrizione', 'Description theme', { kind: 'text', channelStore: pa('descriptionThemeId') }),
     listing('sharedSkuListing', 'Inserzione a SKU condiviso', 'Shared-SKU listing', { kind: 'boolean', channelStore: pa('sharedSkuListing') }),
-    listing('variationTheme', 'Tema delle varianti', 'Variation theme', { kind: 'text', channelStore: { kind: 'listingColumn', column: 'variationTheme' }, helpText: 'How the variation axes report to eBay (ChannelListing.variationTheme).' }),
+    // VT.1 (2026-09-13, D-VT3): the SHEET no longer serves this as a raw column - the engine-owned Variation
+    // theme column does, and the exclusion lives in `sheet-columns.service.ts` where the sheet is built. The spec
+    // still declares the field because the mapping engine's field catalogue reads this walk too (dropping it here
+    // put "Category requirement validation is unavailable" on every Amazon cell when the same was tried there).
+    listing('variationTheme', 'Tema delle varianti', 'Variation theme', { kind: 'text', channelStore: { kind: 'listingColumn', column: 'variationTheme' }, helpText: 'How the variation axes report to eBay (ChannelListing.variationTheme). Edited through the Variation theme column, which serves this store with the site aspects and the relist warning.' }),
   ]
   for (const f of listingFields) {
     f.group = LISTING_GROUPS[GROUP_FOR_LISTING_FIELD[f.key]] ?? LISTING_GROUP

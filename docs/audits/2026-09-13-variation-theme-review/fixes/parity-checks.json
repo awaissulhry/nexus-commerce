@@ -1,0 +1,62 @@
+[
+  {
+    "channel": "AMAZON",
+    "market": "IT",
+    "statusOk": true,
+    "versionEqual": true,
+    "themeEqual": true,
+    "mappingEqual": true,
+    "collisionEqual": true,
+    "source": "derived",
+    "candidateState": "ok",
+    "candidateCount": 50
+  },
+  {
+    "channel": "AMAZON",
+    "market": "DE",
+    "statusOk": true,
+    "versionEqual": true,
+    "themeEqual": true,
+    "mappingEqual": true,
+    "collisionEqual": true,
+    "source": "derived",
+    "candidateState": "ok",
+    "candidateCount": 50
+  },
+  {
+    "channel": "EBAY",
+    "market": "IT",
+    "statusOk": true,
+    "versionEqual": true,
+    "themeEqual": true,
+    "mappingEqual": true,
+    "collisionEqual": true,
+    "source": "override",
+    "candidateState": "ok",
+    "candidateCount": 3
+  },
+  {
+    "channel": "SHOPIFY",
+    "market": "GLOBAL",
+    "statusOk": true,
+    "versionEqual": true,
+    "themeEqual": true,
+    "mappingEqual": true,
+    "collisionEqual": true,
+    "source": "derived",
+    "candidateState": "freeform",
+    "candidateCount": 0
+  },
+  {
+    "channel": "ETSY",
+    "market": "GLOBAL",
+    "statusOk": true,
+    "versionEqual": true,
+    "themeEqual": true,
+    "mappingEqual": true,
+    "collisionEqual": true,
+    "source": "derived",
+    "candidateState": "unavailable",
+    "candidateCount": 0
+  }
+]

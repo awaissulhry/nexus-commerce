@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   cellIndexKey,
+  projectDrafts,
   displayValue,
   groupByColumn,
   indexDrafts,
@@ -197,4 +198,15 @@ describe('the sheet overlay shape (PES.2 contract)', () => {
     })
     expect(d.violations?.map((v) => v.message)).toEqual(['not in the list'])
   })
+})
+
+it('projects draft language onto view keys before indexing and grouping', () => {
+  const projected = projectDrafts([
+    draft({ id: 'de', columnKey: 'name', locale: 'de-DE' }),
+    draft({ id: 'fr', columnKey: 'name', locale: 'fr' }),
+    draft({ id: 'es', columnKey: 'name', locale: 'es' }),
+  ], ['name@de','name@fr'])
+  expect(projected.map(d => [d.id,d.columnKey,d.writeField])).toEqual([['de','name@de','name'],['fr','name@fr','name']])
+  expect(indexDrafts(projected).size).toBe(2)
+  expect(groupByColumn(projected).map(group => group.columnKey)).toEqual(['name@de','name@fr'])
 })

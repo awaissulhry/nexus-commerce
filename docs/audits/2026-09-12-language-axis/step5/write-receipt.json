@@ -1,0 +1,844 @@
+{
+  "at": "2026-09-12T21:43:15.848Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "writeMs": 4260,
+  "delayedReadMs": 8187,
+  "productVersion": [
+    1,
+    2
+  ],
+  "translationVersion": [
+    0,
+    1
+  ],
+  "index": {
+    "before": {
+      "id": "cmtywrd3p001znjz9i7dystfz",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+      "label": "Shared product",
+      "state": "blocked",
+      "market": null,
+      "aliasId": null,
+      "channel": null,
+      "missing": [
+        {
+          "field": "name",
+          "label": "Name",
+          "reason": "Name is required by Master",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "gpsr_safety_attestation",
+          "label": "Gpsr safety attestation",
+          "reason": "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "name",
+          "label": "Name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "description",
+          "label": "Description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "bulletPoints",
+          "label": "Bullet points",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "keywords",
+          "label": "Search keywords",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fabric_type",
+          "label": "Fabric composition",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "care_instructions",
+          "label": "Care instructions",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "battery__cell_composition_other_than_listed",
+          "label": "Battery cell composition other than listed",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fur",
+          "label": "Fur",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "inner",
+          "label": "Inner",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "safety_data_sheet_url",
+          "label": "Safety data sheet url",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "athlete",
+          "label": "Athlete",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "band",
+          "label": "Band",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "climate_suitability",
+          "label": "Climate suitability",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "closure",
+          "label": "Closure",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "coat_weather_protection",
+          "label": "Coat weather protection",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "collar_style",
+          "label": "Collar style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "collection_item",
+          "label": "Collection item",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "color__standardized_values",
+          "label": "Color standardized values",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "configuration",
+          "label": "Configuration",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "cup",
+          "label": "Cup",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "customer_package_type",
+          "label": "Customer package type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "department",
+          "label": "Department",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "edition",
+          "label": "Edition",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "embellishment_feature",
+          "label": "Embellishment feature",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fabric_wash",
+          "label": "Fabric wash",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fit_to_size_sentiment",
+          "label": "Fit to size sentiment",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "flavor",
+          "label": "Flavor",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "front_style",
+          "label": "Front style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "grip",
+          "label": "Grip",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "hand_orientation",
+          "label": "Hand orientation",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_length_description",
+          "label": "Item length description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_shape",
+          "label": "Item shape",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_type_name",
+          "label": "Item type name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "league_name",
+          "label": "League name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "leg",
+          "label": "Leg",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lens__color",
+          "label": "Lens color",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lifestyle",
+          "label": "Lifestyle",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lining_description",
+          "label": "Lining description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "manufacturer_warranty",
+          "label": "Manufacturer warranty",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "metal_type",
+          "label": "Metal type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "model_name",
+          "label": "Model name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "outer",
+          "label": "Outer",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pattern",
+          "label": "Pattern",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pattern_type",
+          "label": "Pattern type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "platform_for_display",
+          "label": "Platform for display",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pocket_description",
+          "label": "Pocket description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "product_expiration_type",
+          "label": "Product expiration type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "ring",
+          "label": "Ring",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "rise__style",
+          "label": "Rise style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "scent",
+          "label": "Scent",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "seasons",
+          "label": "Seasons",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "sleeve__type",
+          "label": "Sleeve type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "special_feature",
+          "label": "Special feature",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "special_size_type",
+          "label": "Special size type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "specific_uses_for_product",
+          "label": "Specific uses for product",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "sport_type",
+          "label": "Sport type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "style",
+          "label": "Style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "subject_character",
+          "label": "Subject character",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "team_name",
+          "label": "Team name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "temperature_rating",
+          "label": "Temperature rating",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "theme",
+          "label": "Theme",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "title_differentiation",
+          "label": "Title differentiation",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "waist__style",
+          "label": "Waist style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "weave_type",
+          "label": "Weave type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        }
+      ],
+      "language": "de",
+      "accountId": null,
+      "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "computedAt": "2026-09-12T21:39:28.458",
+      "workspaceId": "nexus_legacy_workspace",
+      "mappingRules": null,
+      "coordinateKey": "[null,null,null,null]",
+      "requiredTotal": 1,
+      "requiredFilled": 0
+    },
+    "after": {
+      "id": "cmtywvyzl0023nj131a6sxzs8",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+      "label": "Shared product",
+      "state": "warn",
+      "market": null,
+      "aliasId": null,
+      "channel": null,
+      "missing": [
+        {
+          "field": "gpsr_safety_attestation",
+          "label": "Gpsr safety attestation",
+          "reason": "GPSR: no safety documentation — either set the safety attestation to Sì (product needs no warnings) or attach compliance media / a safety data sheet URL",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "description",
+          "label": "Description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "bulletPoints",
+          "label": "Bullet points",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "keywords",
+          "label": "Search keywords",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fabric_type",
+          "label": "Fabric composition",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "care_instructions",
+          "label": "Care instructions",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "battery__cell_composition_other_than_listed",
+          "label": "Battery cell composition other than listed",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fur",
+          "label": "Fur",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "inner",
+          "label": "Inner",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "safety_data_sheet_url",
+          "label": "Safety data sheet url",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "athlete",
+          "label": "Athlete",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "band",
+          "label": "Band",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "climate_suitability",
+          "label": "Climate suitability",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "closure",
+          "label": "Closure",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "coat_weather_protection",
+          "label": "Coat weather protection",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "collar_style",
+          "label": "Collar style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "collection_item",
+          "label": "Collection item",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "color__standardized_values",
+          "label": "Color standardized values",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "configuration",
+          "label": "Configuration",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "cup",
+          "label": "Cup",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "customer_package_type",
+          "label": "Customer package type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "department",
+          "label": "Department",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "edition",
+          "label": "Edition",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "embellishment_feature",
+          "label": "Embellishment feature",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fabric_wash",
+          "label": "Fabric wash",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "fit_to_size_sentiment",
+          "label": "Fit to size sentiment",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "flavor",
+          "label": "Flavor",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "front_style",
+          "label": "Front style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "grip",
+          "label": "Grip",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "hand_orientation",
+          "label": "Hand orientation",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_length_description",
+          "label": "Item length description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_shape",
+          "label": "Item shape",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "item_type_name",
+          "label": "Item type name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "league_name",
+          "label": "League name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "leg",
+          "label": "Leg",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lens__color",
+          "label": "Lens color",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lifestyle",
+          "label": "Lifestyle",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "lining_description",
+          "label": "Lining description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "manufacturer_warranty",
+          "label": "Manufacturer warranty",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "metal_type",
+          "label": "Metal type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "model_name",
+          "label": "Model name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "outer",
+          "label": "Outer",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pattern",
+          "label": "Pattern",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pattern_type",
+          "label": "Pattern type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "platform_for_display",
+          "label": "Platform for display",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "pocket_description",
+          "label": "Pocket description",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "product_expiration_type",
+          "label": "Product expiration type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "ring",
+          "label": "Ring",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "rise__style",
+          "label": "Rise style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "scent",
+          "label": "Scent",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "seasons",
+          "label": "Seasons",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "sleeve__type",
+          "label": "Sleeve type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "special_feature",
+          "label": "Special feature",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "special_size_type",
+          "label": "Special size type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "specific_uses_for_product",
+          "label": "Specific uses for product",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "sport_type",
+          "label": "Sport type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "style",
+          "label": "Style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "subject_character",
+          "label": "Subject character",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "team_name",
+          "label": "Team name",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "temperature_rating",
+          "label": "Temperature rating",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "theme",
+          "label": "Theme",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "title_differentiation",
+          "label": "Title differentiation",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "waist__style",
+          "label": "Waist style",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        },
+        {
+          "field": "weave_type",
+          "label": "Weave type",
+          "reason": "de content is missing; showing it fallback.",
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0"
+        }
+      ],
+      "language": "de",
+      "accountId": null,
+      "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "computedAt": "2026-09-12T21:43:03.49",
+      "workspaceId": "nexus_legacy_workspace",
+      "mappingRules": null,
+      "coordinateKey": "[null,null,null,null]",
+      "requiredTotal": 1,
+      "requiredFilled": 1
+    }
+  },
+  "providerGatewaysBlocked": [],
+  "transportAttempts": []
+}

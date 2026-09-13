@@ -1,20 +1,19 @@
 'use client'
 
-import Link from '@/lib/workspaces/Link'
+import { useState } from 'react'
+import { Send } from 'lucide-react'
 import { Button } from '@/design-system/primitives'
 import { useStudioProduct, useStudioScope } from './contracts'
-import { MASTER_SCOPE } from './types'
+import { PublishDialog } from './publication/PublishDialog'
 
-/** Exact destinations stay in their account-aware Information review. The legacy
- * creation wizard does not accept a bound account/listing and cannot take this handoff. */
+/** Publishing is available on every studio tab and keeps the selected destination. */
 export function PublishMenu() {
   const product = useStudioProduct()
-  const { scope, tab, destination, setTab } = useStudioScope()
-  if (scope !== MASTER_SCOPE && tab === 'sheet') return null
-  if (scope !== MASTER_SCOPE) return <Button size="sm" variant="secondary" disabled={destination.status !== 'ready'} onClick={() => setTab('sheet')}>
-    Review listing information
-  </Button>
-  return <Button asChild size="sm" variant="secondary">
-    <Link href={`/products/${product.id}/list-wizard`}>Choose listing destinations</Link>
-  </Button>
+  const { canChangeEditor } = useStudioScope()
+  const [open, setOpen] = useState(false)
+  const [unsavedEditor, setUnsavedEditor] = useState(false)
+  return <>
+    <Button size="sm" variant="primary" disabled={!!product.deletedAt} onClick={() => { setUnsavedEditor(canChangeEditor?.() === false); setOpen(true) }}><Send size={14} aria-hidden />Publish</Button>
+    {open && <PublishDialog unsavedEditor={unsavedEditor} onClose={() => setOpen(false)} />}
+  </>
 }

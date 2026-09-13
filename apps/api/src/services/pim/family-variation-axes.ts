@@ -63,6 +63,8 @@ export async function updateFamilyVariationAxes(productId: string, change: AxisC
       variationAxes: change.axes, version: { increment: 1 },
     } })
     if (result.count !== 1) throw new ProductRelationshipError('This family changed. Reload axes and try again.')
+    // An open coordinate editor was based on the previous shared axis set. Invalidate its CAS token too.
+    await tx.channelListing.updateMany({ where: { productId }, data: { version: { increment: 1 } } })
     const { productEventService } = await import('../product-event.service.js')
     await productEventService.emitTx(tx, { aggregateId: productId, aggregateType: 'Product', eventType: 'PRODUCT_UPDATED',
       data: { variationAxes: change.axes, previousVariationAxes: parent.variationAxes }, metadata: { source: 'OPERATOR' } })

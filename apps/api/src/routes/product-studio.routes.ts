@@ -1,3 +1,4 @@
+import type {} from '@fastify/multipart'
 import { InformationLocaleError } from '../services/pim/information-locale.js'
 import { getInformationSheet } from '../services/pim/information-sheet.js'
 /**
@@ -109,6 +110,26 @@ function missingMarket(reply: any, q: Record<string, unknown>) {
 }
 
 const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
+  fastify.post<{ Params: { id: string } }>('/products/:id/studio-publication/preview', async (request, reply) => {
+    try {
+      const { publicationScope } = await import('../services/pim/studio-publication-plan.js')
+      const { previewStudioPublication } = await import('../services/pim/studio-publication.service.js')
+      return await previewStudioPublication(request.params.id, publicationScope(request.body), request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
+  fastify.post<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId/submit', async (request, reply) => {
+    try {
+      const { submitStudioPublication } = await import('../services/pim/studio-publication.service.js')
+      return await submitStudioPublication(request.params.id, request.params.reviewId, request.body, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
+  fastify.get<{ Params: { id: string; reviewId: string } }>('/products/:id/studio-publication/:reviewId', async (request, reply) => {
+    try {
+      const { studioPublicationResult } = await import('../services/pim/studio-publication.service.js')
+      reply.header('Cache-Control', 'no-store')
+      return await studioPublicationResult(request.params.id, request.params.reviewId, request.authUser?.id ?? null)
+    } catch (error) { return sendError(reply, error, request.log, { productId: request.params.id }) }
+  })
   await (await import('./variant-transfer.routes.js')).registerVariantTransfer(fastify)
   for (const view of ['activity', 'performance'] as const) {
     fastify.get(`/products/:id/studio/${view}`, async (request, reply) => {
@@ -202,12 +223,18 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string }
     const q = request.query as Record<string, unknown>
     if (!requireCoordinate(reply, q)) return reply
-    const body = (request.body ?? {}) as { expectedVersion?: unknown; mapping?: unknown; theme?: unknown; presentationOrder?: unknown }
+    const body = (request.body ?? {}) as { expectedVersion?: unknown; mapping?: unknown; theme?: unknown; presentationOrder?: unknown; reset?: unknown }
     if (!Number.isSafeInteger(body.expectedVersion)) {
       return reply.code(400).send({ error: 'bad_projection_request', message: 'An observed listing version is required.' })
     }
     if (body.mapping !== undefined && !Array.isArray(body.mapping)) {
       return reply.code(400).send({ error: 'bad_projection_request', message: 'mapping must be the WHOLE list of mapped axes — an axis left out of it is unmapped.' })
+    }
+    // VT.1 — `reset: true` is the ONLY accepted value. `false` would be a second way to say "do nothing", and a
+    // caller that sent it would reasonably expect the override to survive; naming the refusal is cheaper than
+    // guessing which of the two they meant (`docs/vt1-contracts.md` §3.3).
+    if (body.reset !== undefined && body.reset !== true) {
+      return reply.code(400).send({ error: 'bad_projection_request', message: 'reset must be true. Omit it to keep this coordinate\'s override.' })
     }
     try {
       const { writeProjectionMapping } = await import('../services/pim/family-projection.service.js')
@@ -216,6 +243,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         expectedVersion: body.expectedVersion as number,
         ...(body.mapping !== undefined ? { mapping: body.mapping as Array<{ axisKey: string; target: string; order?: number }> } : {}),
         ...(body.theme !== undefined ? { theme: body.theme === null ? null : String(body.theme) } : {}),
+        ...(body.reset === true ? { reset: true } : {}),
         ...(body.presentationOrder !== undefined ? { presentationOrder: body.presentationOrder as import('../services/pim/family-projection.service.js').MappingWriteInput['presentationOrder'] } : {}),
         userId: (request as typeof request & { authUser?: { id: string } }).authUser?.id ?? null,
       })
@@ -244,6 +272,51 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         expectedVersion: body.expectedVersion as number,
         changes: body.changes as Array<{ id: string; included: boolean }>,
       })
+    } catch (err) { return sendError(reply, err, request.log, { id }) }
+  })
+
+  /**
+   * VT.4 — the DRY-RUN theme-change plan (D-VT6 / VX D8, `docs/2026-09-12-variation-projection-design.md` §9).
+   *
+   * 🔴 `dryRun: true` is the ONLY accepted value, and there is no executor behind this route. It is a POST and
+   * not a GET because the plan is computed FOR a proposed change the client states in the body (the target
+   * theme or axis set) and is CAS-checked against the version the operator saw — a GET with that in the query
+   * would be cacheable and would read as a resource. It writes nothing: no listing row, no queue row, no
+   * provider call. Compare `family/generate` below, which takes `dryRun: false` as a real commit; this one
+   * refuses it by name so a client that copied that shape cannot execute anything.
+   *
+   * Additive: no existing handler is touched, and the refusals ride on the same duck-typed `sendError` mapper.
+   */
+  fastify.post('/products/:id/studio/projection/theme-change', async (request, reply) => {
+    const { id } = request.params as { id: string }
+    const q = request.query as Record<string, unknown>
+    if (!requireCoordinate(reply, q)) return reply
+    const body = (request.body ?? {}) as { expectedVersion?: unknown; kind?: unknown; theme?: unknown; mapping?: unknown; dryRun?: unknown; reset?: unknown }
+    if (body.dryRun !== true) {
+      return reply.code(400).send({
+        error: 'bad_projection_request',
+        message: 'dryRun must be true. There is no live theme-change executor in this programme — the plan is what this endpoint returns.',
+      })
+    }
+    if (!Number.isSafeInteger(body.expectedVersion)) {
+      return reply.code(400).send({ error: 'bad_projection_request', message: 'An observed listing version is required.' })
+    }
+    if (body.mapping !== undefined && !Array.isArray(body.mapping)) {
+      return reply.code(400).send({ error: 'bad_projection_request', message: 'mapping must be the WHOLE list of mapped axes — an axis left out of it is unmapped.' })
+    }
+    try {
+      const { buildThemeChangePlan } = await import('../services/pim/theme-change.service.js')
+      const plan = await buildThemeChangePlan({
+        ...projectionInput(id, q),
+        expectedVersion: body.expectedVersion as number,
+        dryRun: true,
+        ...(body.kind !== undefined ? { kind: String(body.kind) } : {}),
+        ...(body.reset === true ? { reset: true } : {}),
+        ...(body.theme !== undefined ? { theme: body.theme === null ? null : String(body.theme) } : {}),
+        ...(body.mapping !== undefined ? { mapping: body.mapping as Array<{ axisKey: string; target: string; order?: number }> } : {}),
+      })
+      reply.header('Server-Timing', `theme-change;dur=${plan.meta.tookMs}`)
+      return plan
     } catch (err) { return sendError(reply, err, request.log, { id }) }
   })
 
@@ -403,6 +476,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
         market,
         channel,
         locale: q.locale ? String(q.locale) : undefined,
+        locales: q.locales !== undefined ? String(q.locales).split(',').filter(Boolean) : undefined,
       })
       // The read reports its own duration, so a slow scope is visible rather
       // than being felt as "the grid is laggy".
@@ -553,7 +627,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
           const refusals = new Map<string, string>()
           const groups = new Map<string, typeof candidates>()
           for (const c of candidates) {
-            const k = `${c.scope.kind}:${c.scope.channel ?? ''}:${c.scope.marketplace ?? ''}`
+            const k = `${c.scope.kind}:${c.scope.channel ?? ''}:${c.scope.marketplace ?? ''}:${c.scope.locale ?? ''}`
             groups.set(k, [...(groups.get(k) ?? []), c])
           }
           for (const group of groups.values()) {
@@ -565,16 +639,16 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
                 // The WRITE field (`attr_x`), never the sheet key — the write path only knows the
                 // sheet key for the core fields; it answers with the field it was told.
                 changes: group.map((c) => ({
-                  id: c.productId, field: c.writeField, value: c.value,
+                  id: c.productId, field: c.writeField, value: c.value, contentAddress: c.contentAddress,
                   ...(gs.kind === 'channel' ? { target: 'channel' } : {}),
                 })),
                 ...(gs.kind === 'channel' && gs.channel && gs.marketplace
-                  ? { marketplaceContexts: [{ channel: gs.channel, marketplace: gs.marketplace, aliasKey: '' }] }
-                  : { marketplaceContexts: [{ marketplace: market }] }),
+                  ? { marketplaceContexts: [{ channel: gs.channel, marketplace: gs.marketplace, locale: gs.locale ?? undefined, aliasKey: '' }] }
+                  : { marketplaceContexts: [{ marketplace: market, locale: gs.locale ?? undefined }] }),
               },
             })
             const body = res.json() as { errors?: { id: string; field: string; error: string }[] }
-            for (const e of body.errors ?? []) refusals.set(`${e.id}:${e.field}`, e.error)
+            for (const e of body.errors ?? []) refusals.set(`${e.id}:${e.field}@${gs.locale ?? ''}`, e.error)
           }
           return refusals
         },
@@ -699,12 +773,13 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
    */
   const jobWriters = (
     id: string,
-    storedScope: { kind: string; channel: string | null; marketplace: string | null } | null,
+    storedScope: { kind: string; channel: string | null; marketplace: string | null; locale?: string | null } | null,
     storedMarket: string | null,
   ) => {
-    let sheet: Awaited<ReturnType<typeof getStudioSheet>> | null = null
-    const loadSheet = async () => {
-      if (sheet) return sheet
+    const sheets = new Map<string, Awaited<ReturnType<typeof getStudioSheet>>>()
+    const loadSheet = async (locale = storedScope?.locale ?? undefined) => {
+      const cached = sheets.get(locale ?? '')
+      if (cached) return cached
       // The MARKET, not the coordinate's marketplace: a master scope has no
       // marketplace at all, so reading the market off `scope` yields '' and the
       // rebuild throws `unknown_market` — which is exactly the failure that
@@ -713,29 +788,31 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       if (!market) {
         throw new Error('This job has no stored market — it predates the stored-coordinate contract and cannot be applied.')
       }
-      sheet = await getStudioSheet({
+      const sheet = await getStudioSheet({
         productId: id,
+        locale,
         scope: (storedScope?.kind ?? 'master') as StudioScopeKind,
         market,
         ...(storedScope?.channel ? { channel: storedScope.channel } : {}),
       })
+      sheets.set(locale ?? '', sheet)
       return sheet
     }
     return {
       // Runs BEFORE the job is marked RUNNING (#600.1).
       preflight: async () => { await loadSheet() },
-      currentOf: async (cell: { productId: string; fieldKey: string }) => {
-        const sh = await loadSheet()
+      currentOf: async (cell: { productId: string; fieldKey: string; scope?: { locale?: string | null } }) => {
+        const sh = await loadSheet(cell.scope?.locale ?? undefined)
         return sh.rows.find((r) => r.id === cell.productId)?.values?.[cell.fieldKey]?.value ?? null
       },
-      writeCells: async (cells: { productId: string; fieldKey: string; writeField?: string; after: unknown; scope: { kind: string; channel: string | null; marketplace: string | null } }[]) => {
+      writeCells: async (cells: { productId: string; fieldKey: string; writeField?: string; after: unknown; contentAddress?: import('@nexus/shared/content-language').ContentAddress; scope: { kind: string; channel: string | null; marketplace: string | null; locale?: string | null } }[]) => {
         const errors: { productId: string; fieldKey: string; error: string }[] = []
         // The write path is told the WRITE field and answers with it; the outcome names the SHEET key.
         const sentField = (c: { fieldKey: string; writeField?: string }) => c.writeField ?? c.fieldKey
         let applied = 0
         const groups = new Map<string, typeof cells>()
         for (const c of cells) {
-          const k = `${c.scope.kind}:${c.scope.channel ?? ''}:${c.scope.marketplace ?? ''}`
+          const k = `${c.scope.kind}:${c.scope.channel ?? ''}:${c.scope.marketplace ?? ''}:${c.scope.locale ?? ''}`
           groups.set(k, [...(groups.get(k) ?? []), c])
         }
         for (const group of groups.values()) {
@@ -744,14 +821,12 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
             method: 'PATCH', url: '/api/products/bulk',
             payload: {
               changes: group.map((c) => ({
-                id: c.productId, field: sentField(c), value: c.after,
+                id: c.productId, field: sentField(c), value: c.after, contentAddress: c.contentAddress,
                 ...(sc.kind === 'channel' ? { target: 'channel' } : {}),
               })),
               ...(sc.kind === 'channel' && sc.channel && sc.marketplace
-                ? { marketplaceContexts: [{ channel: sc.channel, marketplace: sc.marketplace, aliasKey: '' }] }
-                : sc.marketplace
-                  ? { marketplaceContexts: [{ marketplace: sc.marketplace }] }
-                  : {}),
+                ? { marketplaceContexts: [{ channel: sc.channel, marketplace: sc.marketplace, locale: sc.locale ?? undefined, aliasKey: '' }] }
+                : { marketplaceContexts: [{ marketplace: storedMarket ?? sc.marketplace, locale: sc.locale ?? undefined }] }),
             },
           })
           const body = res.json() as { updated?: number; errors?: { id: string; field: string; error: string }[] }

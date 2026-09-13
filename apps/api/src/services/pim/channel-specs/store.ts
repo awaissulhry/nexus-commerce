@@ -1,3 +1,4 @@
+import { normalizeLanguage } from '../content-language.js'
 import { informationRegistry, nativeTranslationKeys, shopifyMappingFieldKey } from '@nexus/shared/shopify-information'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 import type { ChannelFieldSpec, ChannelGroup, ChannelSpec, ChannelStore } from './types.js'
@@ -19,10 +20,11 @@ const descriptionStore = column('description', 'followMasterDescription')
 /** The information sheet and mapping catalogue consume the same native/live registry. */
 export function shopifyProductSpec(schema: ShopifyStoreSchema | null = null, accountId?: string | null, locale?: string): ChannelSpec {
   if (schema && !accountId) throw new Error('A Shopify definition requires its connected store identity.')
-  if (locale) locale = schema?.locales.find(l => l.locale.toLowerCase() === locale!.toLowerCase())?.locale ?? locale.toLowerCase()
-  const primaryLocale = schema?.locales.find(l => l.primary)?.locale
+  if (locale) locale = normalizeLanguage(locale)
+  const primaryTag = schema?.locales.find(l => l.primary)?.locale
+  const primaryLocale = primaryTag ? normalizeLanguage(primaryTag) : undefined
   const translationLocale = locale && locale !== 'und' && primaryLocale && locale !== primaryLocale ? locale : null
-  if (translationLocale && !schema?.locales.some(l => l.locale === translationLocale)) throw new Error('This language is not enabled in the selected Shopify store.')
+  if (translationLocale && !schema?.locales.some(l => normalizeLanguage(l.locale) === translationLocale)) throw new Error('This language is not enabled in the selected Shopify store.')
   const native: Record<string, Partial<ChannelFieldSpec>> = {
     title: { masterKey: 'name', requirement: 'required', channelStore: titleStore },
     descriptionHtml: { masterKey: 'description', channelStore: descriptionStore },

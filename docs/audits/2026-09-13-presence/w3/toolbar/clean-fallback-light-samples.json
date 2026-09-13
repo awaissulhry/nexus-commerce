@@ -1,0 +1,29 @@
+[
+  {
+    "bands": [
+      {
+        "bottom": 105,
+        "class": "nds-workspace-subheader",
+        "height": 49,
+        "left": 66,
+        "right": 1440,
+        "top": 56,
+        "width": 1374,
+        "x": 66,
+        "y": 56
+      },
+      {
+        "bottom": 145,
+        "class": "nds-scopebar nds-workspace-scope",
+        "height": 40,
+        "left": 66,
+        "right": 1440,
+        "top": 105,
+        "width": 1374,
+        "x": 66,
+        "y": 105
+      }
+    ],
+    "theme": "light"
+  }
+]

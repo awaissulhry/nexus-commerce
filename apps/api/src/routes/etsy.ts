@@ -1,21 +1,17 @@
 /**
  * Etsy API Routes
+ * Etsy presence is READ-ONLY through Wave 4 by decision D9.
  * Handles listing sync, inventory sync, and order management
  */
 
 import type { FastifyInstance } from "fastify";
-import prisma from "../db.js";
+import { assertRequestPermission } from "../lib/auth/request-permission.js";
 import { EstySyncService } from "../services/sync/etsy-sync.service.js";
 import { ConfigManager } from "../utils/config.js";
 import type { EtsyConfig } from "../types/marketplace.js";
 
 interface SyncListingsBody {
   limit?: number;
-}
-
-interface SyncInventoryBody {
-  variantId: string;
-  quantity: number;
 }
 
 interface SyncOrdersBody {
@@ -44,7 +40,9 @@ export async function estyRoutes(app: FastifyInstance) {
    * POST /etsy/sync/listings
    * Sync all listings from Etsy to Nexus
    */
-  app.post<{ Body: SyncListingsBody }>("/etsy/sync/listings", async (request, reply) => {
+  app.post<{ Body: SyncListingsBody }>("/etsy/sync/listings", {
+    preHandler: async (request) => assertRequestPermission(request, "products.edit"),
+  }, async (request, reply) => {
     try {
       const { limit = 100 } = request.body;
 
@@ -82,55 +80,12 @@ export async function estyRoutes(app: FastifyInstance) {
   });
 
   /**
-   * POST /etsy/sync/inventory/to-etsy
-   * Sync inventory from Nexus to Etsy
-   */
-  app.post<{ Body: SyncInventoryBody }>(
-    "/etsy/sync/inventory/to-etsy",
-    async (request, reply) => {
-      try {
-        const { variantId, quantity } = request.body;
-
-        if (!variantId || quantity === undefined) {
-          return reply.status(400).send({
-            success: false,
-            error: "Missing required fields: variantId, quantity",
-          });
-        }
-
-        // Get Etsy config
-        const config = ConfigManager.getConfig("ETSY") as EtsyConfig;
-        if (!config) {
-          return reply.status(400).send({
-            success: false,
-            error: "Etsy is not configured",
-          });
-        }
-
-        const syncService = new EstySyncService(config);
-        await syncService.syncInventoryToEtsy(variantId, quantity);
-
-        return reply.send({
-          success: true,
-          message: `Inventory synced to Etsy: variant ${variantId} = ${quantity}`,
-        });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        console.error("[EstyRoutes] Inventory sync to Etsy failed:", message);
-        return reply.status(500).send({
-          success: false,
-          error: message,
-        });
-      }
-    }
-  );
-
-  /**
    * POST /etsy/sync/inventory/from-etsy
    * Sync inventory from Etsy to Nexus
    */
   app.post<{ Body: { productId: string } }>(
     "/etsy/sync/inventory/from-etsy",
+    { preHandler: async (request) => assertRequestPermission(request, "inventory.adjust") },
     async (request, reply) => {
       try {
         const { productId } = request.body;
@@ -178,7 +133,9 @@ export async function estyRoutes(app: FastifyInstance) {
    * POST /etsy/sync/orders
    * Sync orders from Etsy to Nexus
    */
-  app.post<{ Body: SyncOrdersBody }>("/etsy/sync/orders", async (request, reply) => {
+  app.post<{ Body: SyncOrdersBody }>("/etsy/sync/orders", {
+    preHandler: async (request) => assertRequestPermission(request, "orders.edit"),
+  }, async (request, reply) => {
     try {
       const { limit = 100 } = request.body;
 
@@ -219,6 +176,7 @@ export async function estyRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { orderId: string }; Body: UpdateOrderStatusBody }>(
     "/etsy/orders/:orderId/status",
+    { preHandler: async (request) => assertRequestPermission(request, "products.publish") },
     async (request, reply) => {
       try {
         const { orderId } = request.params;
@@ -264,6 +222,7 @@ export async function estyRoutes(app: FastifyInstance) {
    */
   app.post<{ Params: { orderId: string }; Body: AddFulfillmentNoteBody }>(
     "/etsy/orders/:orderId/fulfillment",
+    { preHandler: async (request) => assertRequestPermission(request, "products.publish") },
     async (request, reply) => {
       try {
         const { orderId } = request.params;

@@ -35,6 +35,8 @@ describe('LX.2 real builders, no publish rehearsal', () => {
   ])('$market / $tag agrees across outbound-sync, marketplaces and syndication', async ({ market, language, tag, resolved }) => {
     const content = { title: `Title ${resolved}`, description: `Description ${resolved}`, bulletPoints: ['One', 'Two'], language }
     const patch = await buildAmazonListingPatch(content, market, 'OUTERWEAR')
+    // syncToAmazon passes the provider marketplace ID into this same builder.
+    expect(await buildAmazonListingPatch(content, resolveAmazonMarketplaceId(market), 'OUTERWEAR')).toEqual(patch)
     const outbound = Object.fromEntries(patch.patches.map((p: any) => [p.path.replace('/attributes/', ''), p.value])) as Record<string, any[]>
     const route = await buildMarketplaceAmazonAttributes({ ...content, marketplace: market, marketplaceId: resolveAmazonMarketplaceId(market), attributes: {} })
     for (const built of [outbound, route]) {
@@ -44,7 +46,7 @@ describe('LX.2 real builders, no publish rehearsal', () => {
       }
       // Deliberately wrong first entry catches the old BE first-entry fallback.
       const payload = { attributes: { item_name: [{ value: 'Wrong language', language_tag: 'it_IT' }, ...built.item_name] } }
-      expect(extractLocaleTitle(payload, market, resolved)).toBe(content.title)
+      expect(extractLocaleTitle({ id: 'p', name: 'Source' }, { id: 'l', productId: 'p', channel: 'AMAZON', marketplace: market, title: content.title, followMasterTitle: false, platformAttributes: payload }, [resolved])).toBe(content.title)
     }
   })
   it('refuses a Belgian language outside the configured row before building outbound content', async () => {

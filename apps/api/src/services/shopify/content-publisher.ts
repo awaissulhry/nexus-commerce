@@ -188,6 +188,40 @@ export function mapRemoteVariants(variants: ContentVariant[], remote: ShopifyRem
   return ids
 }
 
+/**
+ * 🔴 VT.4 — EXTRACTED VERBATIM from `publishContent`'s body (2026-09-13). Same expression, same output;
+ * `publishContent` now calls it instead of inlining it.
+ *
+ * Why: the dry-run `shopify-in-place` theme-change plan (`services/pim/theme-change.service.ts`, VX §9 / D8)
+ * has to show the operator the option list a re-theme would send, and the ONE thing this codebase already
+ * knows about Shopify options is this expression. Composing it a second time inside the plan would be the
+ * "second composer" the design forbids (VX §8). `theme-change.vitest.test.ts` pins plan ≡ this function.
+ *
+ * Measured, and stated so the plan does not overclaim: `productOptionsCreate`, `productOptionUpdate` and
+ * `productOptionsDelete` do **not exist anywhere in this codebase** (0 occurrences outside the web design
+ * mock's fixture strings). The plan therefore NAMES those three mutations and their constraints as steps,
+ * and the only payload it can pin against live code is this option list — which is what the `productSet`
+ * publish actually sends.
+ *
+ * `'Title'` / `'Default Title'` are Shopify's own names for the single implicit option a product with no
+ * axes carries; they are not a Nexus label and are not translated.
+ */
+export function shopifyOptionAxes(axes: string[]): string[] {
+  return axes.length ? axes : ['Title']
+}
+
+export function buildShopifyProductOptions(
+  axes: string[],
+  variants: Array<{ options: Record<string, string> }>,
+  optionNames: Record<string, string> = {},
+): Array<{ name: string; position: number; values: Array<{ name: string }> }> {
+  return shopifyOptionAxes(axes).map((name, index) => ({
+    name: optionNames[name] ?? name,
+    position: index + 1,
+    values: [...new Set(variants.map(v => axes.length ? v.options[name] : 'Default Title'))].map(name => ({ name })),
+  }))
+}
+
 export interface PublishContentInput { identity: string; title: string; description: string; vendor: string; productType: string; tags?: string[]; content: ShopifyContent; variants: ContentVariant[]; locationId: string; remote: ShopifyRemoteProduct | null; confirmActive?: boolean; managedMediaIds?: string[]; reconcileGallery?: boolean; galleryOperation?: ContentGalleryOperation }
 export async function publishContent(gql: ShopifyGraphql, input: PublishContentInput, checkpoint: (patch: Record<string, unknown>) => Promise<void>) {
   const { content, variants, remote } = input
@@ -215,13 +249,13 @@ export async function publishContent(gql: ShopifyGraphql, input: PublishContentI
   const ordered = [...new Set([...family.assetIds, ...resolved.flatMap(r => r.content.assetIds)])].map(id => mediaIds[id])
   const files = [...new Set([...ordered, ...(remote?.media.nodes.map(m => m.id) ?? [])])].map(id => ({ id }))
   if (files.length > 250) throw new Error('The combined existing and assigned media exceed Shopify’s 250 product-media limit. Review unused media before syncing.')
-  const axes = content.axes.length ? content.axes : ['Title']
-  const productOptions = axes.map((name, index) => ({ name, position: index + 1, values: [...new Set(variants.map(v => content.axes.length ? v.options[name] : 'Default Title'))].map(name => ({ name })) }))
+  const axes = shopifyOptionAxes(content.axes)
+  const productOptions = buildShopifyProductOptions(content.axes, variants, content.optionNames)
   if (remote && hash(await readRemoteProduct(gql, remote.id)) !== hash(remote)) throw new Error('The Shopify product changed while preparing images and entries. Refresh the review before synchronising.')
   // Metafields are written separately: preserve unrelated merchant/app fields.
   const productSet = { title: input.title, descriptionHtml: input.description, vendor: input.vendor, productType: input.productType, ...(Array.isArray(input.tags) ? { tags: input.tags } : {}), ...(!remote ? { status: 'DRAFT', templateSuffix: 'nexus' } : {}), productOptions, files,
     variants: resolved.map(({ variant: v, content: r }) => ({ ...(variantIds[v.id] ? { id: variantIds[v.id] } : { inventoryPolicy: 'DENY', inventoryItem: { tracked: true } }), sku: v.sku, price: v.price, ...(v.compareAtPrice !== undefined ? { compareAtPrice: v.compareAtPrice } : {}),
-      ...(!variantIds[v.id] ? { inventoryQuantities: [{ locationId: input.locationId, name: 'available', quantity: v.stock }] } : {}), optionValues: axes.map(optionName => ({ optionName, name: content.axes.length ? v.options[optionName] : 'Default Title' })), ...(r.featuredId ? { file: { id: mediaIds[r.featuredId] } } : {}),
+      ...(!variantIds[v.id] ? { inventoryQuantities: [{ locationId: input.locationId, name: 'available', quantity: v.stock }] } : {}), optionValues: axes.map(optionName => ({ optionName: content.optionNames?.[optionName] ?? optionName, name: content.axes.length ? v.options[optionName] : 'Default Title' })), ...(r.featuredId ? { file: { id: mediaIds[r.featuredId] } } : {}),
     })) }
   const result = checked((await gql(`mutation NexusProductSet($input:ProductSetInput!,$identifier:ProductSetIdentifiers) { productSet(input:$input,identifier:$identifier,synchronous:true) { product { id } userErrors { field message } } }`, { input: productSet, identifier: remote ? { id: remote.id } : { customId: { namespace: 'nexus', key: 'family_id', value: input.identity } } })).productSet, 'Synchronise native variants')
   const productId: string = result.product?.id
@@ -300,7 +334,7 @@ export async function publishContent(gql: ShopifyGraphql, input: PublishContentI
   for (const v of variants) {
     const actual = verified.variants.nodes.find(r => r.id === savedIds[v.id])
     const expected = resolveShopifyContent(content, v)
-    if (!actual || actual.sku !== v.sku || Number(actual.price) !== Number(v.price) || (v.compareAtPrice !== undefined && Number(actual.compareAtPrice) !== Number(v.compareAtPrice)) || content.axes.some(axis => !actual.selectedOptions.some(o => o.name === axis && o.value === v.options[axis])) || (expected.featuredId ? actual.media.nodes[0]?.id !== mediaIds[expected.featuredId] : actual.media.nodes.length > 0)) throw new Error(`Shopify readback differs for ${v.sku}. The publication is not verified.`)
+    if (!actual || actual.sku !== v.sku || Number(actual.price) !== Number(v.price) || (v.compareAtPrice !== undefined && Number(actual.compareAtPrice) !== Number(v.compareAtPrice)) || content.axes.some(axis => !actual.selectedOptions.some(o => o.name === (content.optionNames?.[axis] ?? axis) && o.value === v.options[axis])) || (expected.featuredId ? actual.media.nodes[0]?.id !== mediaIds[expected.featuredId] : actual.media.nodes.length > 0)) throw new Error(`Shopify readback differs for ${v.sku}. The publication is not verified.`)
     const check = await gql(`query NexusVariantReadback($id:ID!,$location:ID!) { productVariant(id:$id) { metafield(namespace:"nexus",key:"resolved") { value } inventoryItem { inventoryLevel(locationId:$location) { quantities(names:["available"]) { name quantity } } } } }`, { id: actual.id, location: input.locationId })
     if (check.productVariant?.metafield?.value !== JSON.stringify(manifest(expected)) || check.productVariant?.inventoryItem.inventoryLevel?.quantities[0]?.quantity !== v.stock) throw new Error(`Gallery or inventory readback differs for ${v.sku}.`)
   }

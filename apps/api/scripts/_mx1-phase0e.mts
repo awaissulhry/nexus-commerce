@@ -1,0 +1,6 @@
+const { PrismaClient } = await import('@prisma/client')
+const p = new PrismaClient({ datasources: { db: { url: process.argv[2] } } })
+console.log(JSON.stringify(await p.$queryRawUnsafe(`SELECT sku, "variantAttributes", "categoryAttributes"->'variations' v FROM "Product" WHERE sku IN ('GALE-JACKET-BLACK-MEN-XS','GALE-JACKET-BLACK-MEN-XXS','GALE-JACKET-BLACK-MEN-S') ORDER BY sku`)))
+console.log('root axes:', JSON.stringify(await p.$queryRawUnsafe(`SELECT "variationAxes", "basePrice" FROM "Product" WHERE id='cmokmy3a40078pm0p1fvnu523'`)))
+console.log('parent listing prices:', JSON.stringify(await p.$queryRawUnsafe(`SELECT channel, marketplace, price, "priceOverride", "followMasterPrice" FROM "ChannelListing" WHERE "productId"='cmokmy3a40078pm0p1fvnu523' ORDER BY channel, marketplace`)))
+await p.$disconnect()

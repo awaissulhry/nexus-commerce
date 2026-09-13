@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T12:50:29.345Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "args": [
+    "migrate",
+    "resolve",
+    "--applied",
+    "20260912_lx4_channel_listing_translations",
+    "--schema",
+    "/Users/awais/nexus-commerce/packages/database/prisma/schema.prisma"
+  ],
+  "status": 0,
+  "stdout": "Prisma schema loaded from packages/database/prisma/schema.prisma\nDatasource \"db\": PostgreSQL database \"nexus_development\", schema \"public\" at \"127.0.0.1:55439\"\n\nMigration 20260912_lx4_channel_listing_translations marked as applied.\n\n",
+  "stderr": "Environment variables loaded from .env\n┌─────────────────────────────────────────────────────────┐\n│  Update available 6.19.3 -> 8.0.0-rc.13                 │\n│                                                         │\n│  This is a major update - please follow the guide at    │\n│  https://pris.ly/d/major-version-upgrade                │\n│                                                         │\n│  Run the following to update                            │\n│    npm i --save-dev prisma@latest                       │\n│    npm i @prisma/client@latest                          │\n└─────────────────────────────────────────────────────────┘\n"
+}

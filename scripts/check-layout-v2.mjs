@@ -112,6 +112,19 @@ const STAMP_FILES = [
   'apps/web/src/app/products/[id]/edit/_studio/drawer/StudioDock.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/master/MasterSheet.tsx',
   'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheet.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetSurface.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetTab.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useProductSheetInteraction.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGeometry.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetPreferences.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGridBindings.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetChips.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/sheetChips.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetSaveStatus.ts',
+  'apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetRows.ts',
   // 🔴 ADDED 2026-09-02 (#684). These two decide WHICH COLUMNS EXIST and in WHAT ORDER, so every
   // §9.1 number depends on them — and neither was on the stamp. `views.ts` was innocent when I
   // checked (06:14:05, older than the reading it would have invalidated), but I know that only
@@ -263,6 +276,13 @@ const VARIANTS_STATES = [
   { label: 'shared product', url: `${BASE}/products/${PRODUCT}/edit/studio?tab=variants` },
   { label: 'eBay·IT projection', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=EBAY&market=IT&locale=it&tab=variants` },
 ]
+/* MX.P — the Matrix page's two states: every coordinate (master), and the same page narrowed by the
+   scope bar to one channel's groups. The Matrix has NO page band (design 2026-09-13 Revision: chrome is
+   top bar · subheader · scope bar · toolbar · strip · header), which the probe asserts as an ABSENCE. */
+const MATRIX_STATES = [
+  { label: 'every coordinate', url: `${BASE}/products/${PRODUCT}/edit/studio?tab=matrix` },
+  { label: 'Amazon·DE filtered', url: `${BASE}/products/${PRODUCT}/edit/studio?scope=AMAZON&market=DE&locale=de&tab=matrix` },
+]
 /**
  * §9.1's coordinates. `want` is the scope chip that MUST be lit, or the reading abstains.
  *
@@ -378,8 +398,8 @@ const ONLY = (process.env.LAYOUT_ONLY ?? '').trim()
  * label-does-not-match-behaviour shape that made the first version of this flag print skips it never
  * performed. A typo is silent; a refusal is not.
  */
-if (ONLY && !['9.1', '5.4', 'variants'].includes(ONLY)) {
-  console.error(`❌ LAYOUT_ONLY="${ONLY}" is not a block name. Use 9.1 (the §9.1 matrix), 5.4 (the reveal) or variants (the §2 variants band budget), or unset it for the full suite. Refusing rather than silently running everything.`)
+if (ONLY && !['9.1', '5.4', 'variants', 'matrix'].includes(ONLY)) {
+  console.error(`❌ LAYOUT_ONLY="${ONLY}" is not a block name. Use 9.1 (the §9.1 matrix), 5.4 (the reveal), variants (the §2 variants band budget) or matrix (the Matrix page's band budget), or unset it for the full suite. Refusing rather than silently running everything.`)
   process.exit(2)
 }
 const FOCUS_91 = ONLY === '9.1'
@@ -390,15 +410,17 @@ const FOCUS_54 = ONLY === '5.4'
    itself into `measured`, so a focused run that asserts nothing still reports that it asserted
    nothing. */
 const FOCUS_VP = ONLY === 'variants'
-const FOCUSED = FOCUS_91 || FOCUS_54 || FOCUS_VP
+/* MX.P — `LAYOUT_ONLY=matrix` runs the Matrix page's band budget ALONE, for the same reason as `variants`. */
+const FOCUS_MX = ONLY === 'matrix'
+const FOCUSED = FOCUS_91 || FOCUS_54 || FOCUS_VP || FOCUS_MX
 /** Anything that runs while FOCUS_91 is set records itself here, so the banner cannot lie unnoticed. */
 const focusRan = []
 const focusGuard = (name) => { if (FOCUS_91) focusRan.push(name) }
-const SKIPPED_BLOCKS = FOCUS_VP
+const SKIPPED_BLOCKS = FOCUS_VP || FOCUS_MX
   ? ['§2/§3/§4/§6/§7 band + chrome probe (both drawer states)', '§5.3 drawer geometry',
      '§9.1 required-columns-fit (all coordinates) + the pinned-band readings',
      '§5.4 reveal (verb path) + the phantom-column witness', '§5.4 reveal (URL path)',
-     '§7 DS popovers', '§7 right-edge popup']
+     '§7 DS popovers', '§7 right-edge popup', FOCUS_MX ? 'the §2 variants band budget' : 'the Matrix band budget']
   : FOCUS_91
     ? ['§2/§3/§4/§6/§7 band + chrome probe (both drawer states)', '§5.3 drawer geometry',
        '§5.4 reveal (verb path) + the phantom-column witness', '§5.4 reveal (URL path)', '§7 DS popovers', '§7 right-edge popup']
@@ -468,6 +490,79 @@ const VARIANTS_BANDS = {
   footer: 36,         // `.nds-grid-sheet-status`
   dock: 420,          // the mapping dock, in-flow flex sibling
   identity: 380,      // the identity column
+}
+
+/**
+ * MX.P — the MATRIX band budget (`docs/2026-09-13-matrix-page-design.md` Revision; `docs/mx-prompts.md`
+ * § MX.P): top 56 · subheader 49 · scope 40 · toolbar 40 · strip 30 · header 28 · rows 36 · footer 36 ·
+ * identity 380. No page band. Same discipline as `VARIANTS_BANDS`: every check returns its MEASURED value,
+ * and one that finds nothing says NOT MEASURED.
+ */
+const MATRIX_BANDS = {
+  subheader: 49, scopeBar: 40, toolbar: 40, groupStrip: 30, agHeader: 28, row: 36, footer: 36, identity: 380,
+}
+
+const matrixProbe = ({ B }) => {
+  const R = (el) => { const b = el.getBoundingClientRect(); return { x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.width), h: Math.round(b.height) } }
+  const q = (s) => document.querySelector(s)
+  const checks = []
+  const band = (id, sec, sel, want, tol = 0) => {
+    const el = q(sel)
+    if (!el) { checks.push({ id, sec, expected: String(want), measured: `NOT MEASURED — nothing matched \`${sel}\``, ok: false, note: 'probe defect or an unbuilt surface — confirm the selector before filing this against a lane' }); return null }
+    const m = R(el)
+    checks.push({ id, sec, expected: `${want}${tol ? ` (±${tol})` : ''}`, measured: String(m.h), ok: Math.abs(m.h - want) <= tol })
+    return m
+  }
+  const vp = q('.ag-grid-viewport.ag-layout-normal')
+  const rows = document.querySelectorAll('.ag-row').length
+  if (!vp || rows === 0) return { ABORT: 'no rendered rows — the Matrix grid did not load, or is still loading', vp: !!vp, rows }
+  const surface = q('[data-matrix-surface]')
+  if (!surface) return { ABORT: 'no `[data-matrix-surface]` — this is not the Matrix page' }
+
+  band('matrix-subheader-h', 'MX', '.nds-workspace-subheader', B.subheader, 1)
+  band('matrix-scopebar-h', 'MX', '.nds-scopebar', B.scopeBar)
+  band('matrix-footer-h', 'MX', '.nds-grid-sheet-status', B.footer)
+  band('matrix-ag-header-h', 'MX', '.ag-header-row-column', B.agHeader, 1)
+  /* NO page band on the Matrix — an absence, asserted with the toolbar as its witness. */
+  const pageband = q('.nds-pageband')
+  checks.push({ id: 'matrix-no-pageband', sec: 'MX', expected: 'no .nds-pageband (the Matrix has no page band)', measured: pageband ? `present, ${R(pageband).h}px` : 'absent', ok: !pageband })
+  const tb = q('.nds-grid-sheet .nds-toolbar')
+  if (!tb) {
+    checks.push({ id: 'matrix-toolbar-h', sec: 'MX', expected: String(B.toolbar), measured: 'NOT MEASURED — nothing matched `.nds-grid-sheet .nds-toolbar`', ok: false })
+  } else {
+    /* 🔴 The BOX is the band. Measured 2026-09-13 on the Matrix AND on the Variants page alike: the DS
+       toolbar is a `box-sizing: border-box` element of `min-height: var(--nds-toolbar-h)` = 40 with its
+       1px rule INSIDE that 40 (content 39 + rule 1), which is the same reading the census gate makes
+       (`toolbarH >= 40`). Asserting "40 of content + a rule" (the variants block's phrasing) is a
+       41px band nobody renders — a copied assertion, not a measured one. The rule is reported. */
+    const rule = Math.round(parseFloat(getComputedStyle(tb).borderBottomWidth) || 0)
+    const box = Math.round(R(tb).h)
+    checks.push({ id: 'matrix-toolbar-h', sec: 'MX', expected: `${B.toolbar} (the box, ${rule}px rule inside)`, measured: `${box} (content ${box - rule} + rule ${rule})`, ok: box === B.toolbar })
+    /* A WRAP puts a child a full control-row lower. The count span is a 19px block sitting 4px below
+       the 28px controls' top on every sheet — distinct `top`s, one row. Tops are clustered within half
+       a control height so a 4px baseline offset is one row and a 28px+ drop is two. */
+    const tops = [...tb.children].filter((c) => c.getBoundingClientRect().height > 0).map((c) => Math.round(c.getBoundingClientRect().top)).sort((a, b) => a - b)
+    const rows = tops.reduce((acc, t) => (acc.length && t - acc[acc.length - 1] < 14 ? acc : [...acc, t]), [])
+    checks.push({ id: 'matrix-toolbar-wrap', sec: 'MX', expected: 'one row', measured: `${rows.length} row(s) of controls (child tops ${[...new Set(tops)].join(', ')})`, ok: rows.length <= 1, note: rows.length > 1 ? 'the bar WRAPPED: a child sits a full row lower' : undefined })
+    /* The Matrix HAS views (D-MX8) — the opposite of the Variants page's §1.5 absence. */
+    const views = [...tb.querySelectorAll('button')].filter((b) => /everything|inventory|pricing|listings|custom \(|^view$/i.test((b.innerText || '').replace(/\s+/g, ' ').trim()))
+    checks.push({ id: 'matrix-views-trigger', sec: 'MX/D-MX8', expected: 'a views trigger (Everything · Inventory · Pricing · Listings + saved views)', measured: views.length ? views.map((b) => `"${(b.innerText || '').trim()}"`).join(', ') : 'none', ok: views.length > 0 })
+  }
+  const strip = q('.ag-header-row-group')
+  if (!strip) checks.push({ id: 'matrix-group-strip-h', sec: 'MX', expected: String(B.groupStrip), measured: 'NOT MEASURED — no `.ag-header-row-group`; the Matrix requires the column-group strip', ok: false })
+  else checks.push({ id: 'matrix-group-strip-h', sec: 'MX', expected: String(B.groupStrip), measured: String(R(strip).h), ok: R(strip).h === B.groupStrip })
+  const rowHs = [...new Set([...document.querySelectorAll('.ag-row')].map((r) => Math.round(r.getBoundingClientRect().height)))].sort((a, b) => a - b)
+  checks.push({ id: 'matrix-row-h', sec: 'MX', expected: `${B.row} on every row`, measured: `${rowHs.join(' · ')} across ${rows} rows`, ok: rowHs.length === 1 && rowHs[0] === B.row })
+  const idCell = q('.ag-row .ag-cell[col-id="identity"]') || q('.ag-header-cell[col-id="identity"]')
+  if (!idCell) checks.push({ id: 'matrix-identity-w', sec: 'MX', expected: String(B.identity), measured: 'NOT MEASURED — no cell with col-id `identity`', ok: false })
+  else checks.push({ id: 'matrix-identity-w', sec: 'MX', expected: String(B.identity), measured: String(R(idCell).w), ok: R(idCell).w === B.identity })
+  /* Every group id is `grp-` prefixed (AG's one namespace for columns and groups) — read, not asserted. */
+  const groups = [...document.querySelectorAll('.ag-header-group-cell[col-id]')].map((g) => g.getAttribute('col-id'))
+  checks.push({ id: 'matrix-groups', sec: 'MX', expected: 'every group id grp-*', measured: `${groups.length} groups: ${groups.slice(0, 6).join(', ')}${groups.length > 6 ? ', …' : ''}`, ok: groups.length > 0 && groups.every((g) => /^grp-/.test(g)) })
+  const source = surface.getAttribute('data-matrix-source')
+  const banner = q('.nds-matrix-banner')
+  checks.push({ id: 'matrix-preview-banner', sec: 'MX/rule 7', expected: 'banner on screen iff source=preview', measured: `source=${source} · banner ${banner ? 'present' : 'absent'}`, ok: (source === 'preview') === !!banner })
+  return { checks, rows, viewport: `${innerWidth}×${innerHeight}` }
 }
 
 const variantsProbe = ({ B }) => {
@@ -1839,7 +1934,7 @@ for (const vpSize of VIEWPORTS) {
    * was noise — it failed whenever §5.3 failed, and dragged three extra rows into the failure list
    * for one defect.
    */
-  for (const sc of (FOCUS_54 || FOCUS_VP ? [] : SCOPES)) {
+  for (const sc of (FOCUS_54 || FOCUS_VP || FOCUS_MX ? [] : SCOPES)) {
     const { keys: REQ, why: reqWhy } = await requiredFor(sc)
     if (!REQ?.length) {
       const message = `${vpSize.w}×${vpSize.h} ${sc.label}: required fit NOT MEASURED — ${reqWhy ?? 'no required keys'}; no fallback denominator`
@@ -1894,7 +1989,7 @@ for (const vpSize of VIEWPORTS) {
   }
 
   // §5.4 — the reveal, and the phantom-column witness for #249's scroll pad.
-  if (!FOCUS_91 && !FOCUS_VP) try {
+  if (!FOCUS_91 && !FOCUS_VP && !FOCUS_MX) try {
     focusGuard('§5.4 reveal (verb path)')
     await page.goto(STUDIO, { waitUntil: 'domcontentloaded' })
     await page.waitForFunction(() => document.querySelectorAll('.ag-row').length > 0, null, { timeout: 30000 })
@@ -1917,7 +2012,7 @@ for (const vpSize of VIEWPORTS) {
   }
 
   // §5.4 via the URL path — the cold `?rec=&cell=` case, baselined pre-fix (#289).
-  if (!FOCUS_91 && !FOCUS_VP) try {
+  if (!FOCUS_91 && !FOCUS_VP && !FOCUS_MX) try {
     focusGuard('§5.4 reveal (URL path)')
     // Read the row id from a CLEAN sheet: the previous check leaves the page on a `?rec=` URL, and
     // at 1280 that produced `ABSTAIN — no row id` from my own navigation rather than from the page.
@@ -2038,6 +2133,74 @@ for (const vpSize of VIEWPORTS) {
       } catch (e) {
         const line = `${vpSize.w}×${vpSize.h} variants · ${st.label}: NOT MEASURED — ${e.message.split('\n')[0]}${thrown.length ? ` · the page also threw: ${thrown[0].slice(0, 120)}` : failedRequests.length ? ` · ${failedRequests.length} request(s) had failed` : ''}`
         console.log(`   ·  §2 ${line}`)
+        failures.push(line)
+      } finally {
+        page.off('pageerror', onPageError)
+        page.off('console', onConsole)
+      }
+    }
+  }
+
+  /* ── MX.P: the Matrix band budget, at every viewport ─────────────────────────────────────────
+     Two states (every coordinate; Amazon·DE filtered), each measured against the Matrix's own budget.
+     Counts itself into `measured`, like the variants block, for the same reason. */
+  if (!FOCUSED || FOCUS_MX) {
+    for (const st of MATRIX_STATES) {
+      const thrown = []
+      const failedRequests = []
+      const consoleErrors = []
+      const onPageError = (e) => thrown.push(String(e.message ?? e).split('\n')[0])
+      const onConsole = (m) => {
+        if (m.type() !== 'error') return
+        const t = m.text().split('\n')[0]
+        if (/Failed to load resource|net::ERR_|ERR_FAILED/i.test(t)) failedRequests.push(t)
+        else consoleErrors.push(t)
+      }
+      page.on('pageerror', onPageError)
+      page.on('console', onConsole)
+      try {
+        await page.goto(st.url, { waitUntil: 'domcontentloaded' })
+        const ready = await page.waitForFunction(() => document.querySelectorAll('.ag-row').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
+        if (!ready) {
+          const boundary = await page.evaluate(() => /Application error|client-side exception|Unhandled Runtime Error/i.test(document.body?.innerText ?? '')).catch(() => false)
+          const why = thrown.length ? `the page THREW — ${thrown.length} uncaught error(s), first: ${thrown[0].slice(0, 160)}`
+            : boundary ? 'the page rendered an error boundary with no error captured on this listener'
+              : failedRequests.length ? `the page did not throw; ${failedRequests.length} REQUEST(S) FAILED, first: ${failedRequests[0].slice(0, 160)} — its data did not arrive`
+                : consoleErrors.length ? `no throw, no failed request, but ${consoleErrors.length} console error(s), first: ${consoleErrors[0].slice(0, 160)}`
+                  : `no rows within ${ROWS_MS}ms, nothing thrown, no failed request — a slow load, or the surface is not built yet`
+          const line = `${vpSize.w}×${vpSize.h} matrix · ${st.label}: NOT MEASURED — ${why}`
+          console.log(`   ·  MX ${line}`)
+          failures.push(line)
+          continue
+        }
+        if (thrown.length || failedRequests.length || consoleErrors.length) {
+          const bits = []
+          if (thrown.length) bits.push(`${thrown.length} UNCAUGHT: ${thrown[0].slice(0, 100)}`)
+          if (failedRequests.length) bits.push(`${failedRequests.length} failed request(s): ${failedRequests[0].slice(0, 100)}`)
+          if (consoleErrors.length) bits.push(`${consoleErrors.length} console error(s): ${consoleErrors[0].slice(0, 100)}`)
+          console.log(`   ·  MX ${vpSize.w}×${vpSize.h} matrix · ${st.label}: rendered · ${bits.join(' · ')}`)
+        }
+        await page.waitForFunction(() => {
+          const v = document.querySelector('.ag-grid-viewport.ag-layout-normal')
+          if (!v) return false
+          const now = `${v.scrollWidth}x${v.clientHeight}x${document.querySelectorAll('.ag-row').length}`
+          const w = window
+          if (w.__mxLast === now) { w.__mxStable = (w.__mxStable || 0) + 1 } else { w.__mxLast = now; w.__mxStable = 0 }
+          return w.__mxStable >= 3
+        }, null, { timeout: 20000, polling: 250 }).catch(() => {})
+        const out = await page.evaluate(matrixProbe, { B: MATRIX_BANDS })
+        if (out.ABORT) { failures.push(`${vpSize.w}×${vpSize.h} matrix · ${st.label}: NOT MEASURED — ${out.ABORT}`); continue }
+        measured++
+        console.log(`\n── ${out.viewport} · matrix · ${st.label} · ${out.rows} rows`)
+        for (const c of out.checks) {
+          if (c.ok === null) { console.log(`   ·  ${c.sec} ${c.id}: ${c.measured}`); continue }
+          console.log(`   ${c.ok ? '✅' : '❌'} ${c.sec} ${c.id}: expected ${c.expected}, measured ${c.measured}`)
+          if (c.note) console.log(`        ${c.note}`)
+          if (!c.ok) failures.push(`${out.viewport} matrix · ${st.label} — ${c.sec} ${c.id}: expected ${c.expected}, measured ${c.measured}`)
+        }
+      } catch (e) {
+        const line = `${vpSize.w}×${vpSize.h} matrix · ${st.label}: NOT MEASURED — ${e.message.split('\n')[0]}`
+        console.log(`   ·  MX ${line}`)
         failures.push(line)
       } finally {
         page.off('pageerror', onPageError)

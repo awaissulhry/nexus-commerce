@@ -1,0 +1,113 @@
+{
+  "alerts": [],
+  "bands": [
+    {
+      "class": "nds-workspace-subheader",
+      "height": 49,
+      "padding": "0px",
+      "y": 56
+    },
+    {
+      "class": "nds-scopebar nds-workspace-scope",
+      "height": 40,
+      "padding": "0px 16px",
+      "y": 105
+    },
+    {
+      "class": "nds-pageband",
+      "height": 40,
+      "padding": "0px 16px",
+      "y": 145
+    },
+    {
+      "class": "nds-toolbar",
+      "height": 40,
+      "padding": "0px 6px",
+      "y": 186
+    },
+    {
+      "class": "ag-header ag-pivot-off ag-header-allow-overflow",
+      "height": 59,
+      "padding": "0px",
+      "y": 289.671875
+    },
+    {
+      "class": "ag-header-row ag-header-row-group ag-focus-managed",
+      "height": 30,
+      "padding": "0px",
+      "y": 289.671875
+    },
+    {
+      "class": "ag-header-row ag-header-row-column ag-header-row-not-first ag-focus-managed",
+      "height": 28,
+      "padding": "0px",
+      "y": 319.671875
+    },
+    {
+      "class": "nds-grid-footstrip nds-grid-sheet-status",
+      "height": 36,
+      "padding": "0px 128px 0px 16px",
+      "y": 855
+    }
+  ],
+  "controls": [
+    {
+      "height": 28,
+      "text": " Add axis"
+    },
+    {
+      "height": 28,
+      "text": "Generate combinations"
+    },
+    {
+      "height": 28,
+      "text": "Add variant "
+    },
+    {
+      "height": 28,
+      "text": " Missing axis values0"
+    },
+    {
+      "height": 28,
+      "text": " Duplicate combinations0"
+    },
+    {
+      "height": 28,
+      "text": " Excluded somewhere"
+    },
+    {
+      "height": 28,
+      "text": "Customise"
+    },
+    {
+      "height": 28,
+      "text": "Export"
+    },
+    {
+      "height": 28,
+      "text": "Import"
+    },
+    {
+      "height": 28,
+      "text": ""
+    }
+  ],
+  "identity": [
+    380,
+    380
+  ],
+  "rows": [
+    36
+  ],
+  "theme": "light",
+  "viewport": {
+    "height": 900,
+    "width": 1440
+  },
+  "banners": [
+    {
+      "height": 63.671875,
+      "text": "The channel projections could not be readFailed to fetch — the axes below are still live; the channel columns are empty because nothing answered, not because this family is on no channel.Try again"
+    }
+  ]
+}

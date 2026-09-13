@@ -1,4 +1,5 @@
 import prisma from '../../db.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { shopifyAdmin, assertShopifyResult as checked } from './admin-client.js'
 import { toGid } from './content-publisher.js'
 import { object, digest } from './content-workspace.service.js'
@@ -8,7 +9,9 @@ import { computeAvailableToPublish } from '../available-to-publish.service.js'
 /** Activated native families use named accounts and exact IDs; SKU searches never choose a variant. */
 export async function syncNativeShopifyOffer(item: any) {
   const listing = await prisma.channelListing.findUnique({ where: { id: item.channelListing.id } })
-  if (!listing || listing.productId !== item.product.id || !listing.channelConnectionId || listing.syncPaused || listing.syncLocked || !listing.isPublished) throw new Error('The Shopify offer is unavailable, unpublished or paused.')
+  const refusal = assertPushAllowed(listing)
+  if (refusal) throw Object.assign(new Error(refusal.sentence), { code: refusal.code, refusal })
+  if (!listing || listing.productId !== item.product.id || !listing.channelConnectionId || listing.syncLocked || !listing.isPublished) throw new Error('The Shopify offer is unavailable, unpublished or paused.')
   const mapping = object(listing.platformAttributes)
   if (!mapping.nexusFamilyId) throw new Error('The native Shopify mapping is incomplete. Review the family synchronisation.')
   if (item.syncType === 'CONTENT_UPDATE') {

@@ -14,7 +14,7 @@ vi.mock('../db.js', () => {
       },
       outboundSyncQueue: { update: vi.fn(async () => ({})), findUnique: vi.fn(), findMany: vi.fn() },
       stockLevel: { findMany: vi.fn(async () => []) },
-      channelListing: { findUnique: vi.fn(async () => null) },
+      channelListing: { findUnique: vi.fn(async () => null), findMany: vi.fn(async () => []) },
     },
   }
 })

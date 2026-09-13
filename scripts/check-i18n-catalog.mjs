@@ -8,9 +8,9 @@
 //
 // Three checks:
 //
-// 1. Catalog parity — every key in en.json must exist in it.json
-//    and vice-versa. (Operators on Italian fall back to English
-//    when a key is missing — ugly + non-obvious.)
+// 1. Catalog parity, except the finite D22 English fallback list.
+//    Every other key must exist in both catalogs; deliberate fallbacks
+//    are reported separately and require an English source.
 //
 // 2. t() literal refs — every t('foo.bar.baz') call across
 //    apps/web/src/ must resolve to a key that exists in en.json.
@@ -49,11 +49,32 @@ const fail = (msg) => {
 }
 const pass = (msg) => console.log(`✓ ${msg}`)
 
+// D22: these changed lifecycle sentences deliberately use visible English until translated.
+// This finite set is not a general exemption for missing translations.
+const intentionalEnglishFallbacks = new Set([
+  'products.hardDelete.body',
+  'products.hardDelete.preflightError',
+  'products.hardDelete.channelAction.note',
+  'products.hardDelete.channelAction.unpublish.label',
+  'products.hardDelete.channelAction.unpublish.body',
+  'products.hardDelete.channelAction.delete.label',
+  'products.hardDelete.channelAction.delete.body',
+  'products.hardDelete.channelAction.none.body',
+  'products.hardDelete.submit.unpublish',
+  'products.hardDelete.submit.delete',
+])
+const missingTranslations = (source, translated, deliberate) => [...source].filter(key => !translated.has(key) && !deliberate.has(key))
+const control = missingTranslations(new Set(['translated', 'deliberate', 'unexpected']), new Set(['translated']), new Set(['deliberate']))
+if (control.length !== 1 || control[0] !== 'unexpected') throw new Error('Translation fallback control failed')
+pass('fallback control: deliberate English accepted; unrelated missing translation rejected')
+for (const key of intentionalEnglishFallbacks) if (!enKeys.has(key)) fail(`Stale English fallback declaration: ${key}`)
+
 // ── Check 1: parity ─────────────────────────────────────────────
-const missingInIt = [...enKeys].filter((k) => !itKeys.has(k))
+const deliberateMissing = [...intentionalEnglishFallbacks].filter(key => !itKeys.has(key))
+const missingInIt = missingTranslations(enKeys, itKeys, intentionalEnglishFallbacks)
 const missingInEn = [...itKeys].filter((k) => !enKeys.has(k))
 if (missingInIt.length === 0 && missingInEn.length === 0) {
-  pass(`catalog parity (${enKeys.size} keys both sides)`)
+  pass(`catalog parity (${enKeys.size - deliberateMissing.length} keys both sides; ${deliberateMissing.length} intentional English fallbacks)`)
 } else {
   if (missingInIt.length > 0) {
     fail(`${missingInIt.length} keys in en.json missing from it.json:`)

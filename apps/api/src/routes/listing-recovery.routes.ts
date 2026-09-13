@@ -15,8 +15,8 @@
  *   Last 20 ListingRecoveryEvent rows for a product. Renders the
  *   "previous recoveries" history strip on the recovery page.
  *
- * No auth gate yet — this is solo-tenant. When auth lands, restrict
- * to operators with `listings.recover` permission.
+ * Presence D18: /recover folds into History in Wave 5.
+ * Explicit operator guards enforce independently of the global RBAC mode.
  */
 
 import type { FastifyPluginAsync } from 'fastify'
@@ -27,6 +27,7 @@ import {
   type RecoveryRequest,
 } from '../services/listings/recovery.service.js'
 import prisma from '../db.js'
+import { assertRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 
 const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{
@@ -34,12 +35,16 @@ const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
     Body: {
       channel: string
       marketplace: string
+      channelConnectionId: string | null
+      aliasKey: string
       action: RecoveryAction
       newSku?: string
     }
-  }>('/products/:id/recover/preview', async (request, reply) => {
+  }>('/products/:id/recover/preview', {
+    preHandler: async (request) => assertRequestPermission(request, 'products.view'),
+  }, async (request, reply) => {
     const { id } = request.params
-    const { channel, marketplace, action, newSku } = request.body
+    const { channel, marketplace, channelConnectionId, aliasKey, action, newSku } = request.body
     if (!channel || !marketplace || !action) {
       return reply.status(400).send({
         error: 'channel, marketplace, action are required',
@@ -50,6 +55,8 @@ const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
         productId: id,
         channel,
         marketplace,
+        channelConnectionId,
+        aliasKey,
         action,
         newSku,
       })
@@ -65,12 +72,16 @@ const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
     Body: {
       channel: string
       marketplace: string
+      channelConnectionId: string | null
+      aliasKey: string
       action: RecoveryAction
       newSku?: string
     }
-  }>('/products/:id/recover', async (request, reply) => {
+  }>('/products/:id/recover', {
+    preHandler: async (request) => assertRequestPermission(request, 'products.delete'),
+  }, async (request, reply) => {
     const { id } = request.params
-    const { channel, marketplace, action, newSku } = request.body
+    const { channel, marketplace, channelConnectionId, aliasKey, action, newSku } = request.body
     if (!channel || !marketplace || !action) {
       return reply.status(400).send({
         error: 'channel, marketplace, action are required',
@@ -81,10 +92,11 @@ const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
         productId: id,
         channel,
         marketplace,
+        channelConnectionId,
+        aliasKey,
         action,
         newSku,
-        // TODO: thread real user identity once auth is wired.
-        initiatedBy: undefined,
+        initiatedBy: requestUserId(request),
       }
       const result = await executeRecovery(req)
       return reply.send({ recovery: result })
@@ -96,6 +108,7 @@ const listingRecoveryRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get<{ Params: { id: string } }>(
     '/products/:id/recover/events',
+    { preHandler: async (request) => assertRequestPermission(request, 'products.view') },
     async (request, reply) => {
       const { id } = request.params
       const events = await prisma.listingRecoveryEvent.findMany({

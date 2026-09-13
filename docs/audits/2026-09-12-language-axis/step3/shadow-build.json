@@ -1,0 +1,100 @@
+{
+  "builtAt": "2026-09-12T06:39:03.935Z",
+  "files": [
+    {
+      "file": "apps/api/src/services/pim/channel-field-map.ts",
+      "sha256": "c22e340054b7e18d1a2767466c4f016e2247b37207400ef7da3102be0e4f7827"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-field-gate.ts",
+      "sha256": "ac36cc101955b64ed470dee985fbf10981611e668a4212bfbcc516f28958b57a"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-locale.ts",
+      "sha256": "89bc20e717a38efe54fd311dbf9a1f9a6498c651dd92dbc149581c7f91775941"
+    },
+    {
+      "file": "apps/api/src/services/pim/variant-attribute-keys.ts",
+      "sha256": "355b983b2d84ffc45a61836455159b8620c8c6d931fbe9d98397fab8e4855487"
+    },
+    {
+      "file": "apps/api/src/services/pim/attribute-resolver.ts",
+      "sha256": "5bc5135b38621a2b537fb95282f5333c138d9179f5de872180880157b21a9d5e"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-language.ts",
+      "sha256": "f3ae69bc3a23decbf2ad922602ed564d868886ff5ca306c5937f047b6991dab9"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-resolver.ts",
+      "sha256": "fd24c0e3da8040bff7cf15a2d1cdedcc64f873c12ac34adf225a9a721da46856"
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages.ts",
+      "sha256": "21aa2ce58cad65cfa27bac6907cbf06e4c1fedb46797db2b495435163755cb6b"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-values.ts",
+      "sha256": "f9272caaefe9a99baf5c7ef18ccd438c0fa72378df162d9b0bb3ff2f83cb6ad5"
+    },
+    {
+      "file": "apps/api/src/services/etsy/information-content.ts",
+      "sha256": "c566fe4280181fef882f3a7a7ea438e52711a0509d421a34af0dbad5aa47ab81"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/expr.ts",
+      "sha256": "9bbe688e4ef7aaf37f8ff9a20f44c21525bbb228c07577290fea492c7b336926"
+    },
+    {
+      "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+      "sha256": "3c95fe1e65c448f7e27baff581b8539a7ee6b56b9e97896fa05c91e2d5fb7663"
+    },
+    {
+      "file": "apps/api/src/services/pim/global-content.ts",
+      "sha256": "06e2138845fa92451cae9ace2e0305172e5abdce490f97f4c793fe6b392c2206"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy-listing-schema.ts",
+      "sha256": "a57203d214d1c58c2effbc30b3874fcf49844e78c9f29d1008c89b749a60c97e"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/types.ts",
+      "sha256": "79cada11b7f5e96da5915422858292954b4a74fe3c9b5ad0110ef23f2a72a361"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy.ts",
+      "sha256": "79fe65af2041b4558976ca5599be9d8b37e2515f065a60b74bbc30adf43fa140"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/store.ts",
+      "sha256": "78b8917e447d67044d9f7022b6bffc0ab83a210caaa1d18b0463f480abc588c4"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-inheritance.ts",
+      "sha256": "b50b3952866bc298172b806ab4afafde962c399e78a21038f6ee7da12ae7a5c4"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-state-guard.ts",
+      "sha256": "8db02507ba338dd60fc1986ab2bb3c22c25d5746d9ba1d93aba97ccdcf69a2f0"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-value-mutation.ts",
+      "sha256": "9554508b30dced1838422c24b21f6db1cdbc5cf13b0eb3d1708d725edd4b0ba0"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-resolver-shadow.ts",
+      "sha256": "922a05028eb05dbc30992c4d40cb1ab0986b92b17ebae6e07c2020589a1a1efa"
+    },
+    {
+      "file": "apps/api/src/routes/listings-syndication.routes.ts",
+      "sha256": "902bc58103cf1cb32711e2cabe7d71e8ad440bfac4ee22ee75d629d75c118f61"
+    },
+    {
+      "file": "apps/api/src/services/products/translation-resolver.service.ts",
+      "sha256": "aeb960d99da3807db7a499cf8368a3be3eeba00a28f2e8a9741f6a85a1b64c64"
+    }
+  ],
+  "extractedHelperSha256": "48e10aceb308e52093ea4f3212dc269292f4df4744ab6a02b70abeb518afd4dd",
+  "bundleSha256": "d99c16617866b755ce384d06b4ba2eb7e7b9bb3a604f2efc6a88687d34bd0e02",
+  "runtimeDatabase": "throwing stub; loaded-row marketLanguages overload only"
+}

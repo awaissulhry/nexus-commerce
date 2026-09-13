@@ -1,5 +1,4 @@
 import { marketLanguages } from '../pim/market-languages.js'
-import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * H.10 — resolve a product's content for a target language.
  *
@@ -27,7 +26,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 import type { PrismaClient } from '@prisma/client'
 
 import { PRIMARY_CONTENT_LOCALE, CONTENT_COLUMNS } from '../pim/content-locale.js'
-import { resolveAttributes } from '../pim/attribute-resolver.js'
+import { resolveContentAttributes, contentWireValue } from '../pim/content-read.js'
+import { normalizeLanguage } from '../pim/content-language.js'
 const PRIMARY_LANGUAGE = PRIMARY_CONTENT_LOCALE
 
 export { marketplaceForLanguage } from '../pim/market-languages.js'
@@ -42,7 +42,7 @@ export function getPrimaryLanguage(): string {
 }
 
 export function isPrimaryLanguage(language: string): boolean {
-  return language.toLowerCase() === PRIMARY_LANGUAGE
+  return normalizeLanguage(language) === PRIMARY_LANGUAGE
 }
 
 export interface ResolvedProductContent {
@@ -63,14 +63,18 @@ export interface ResolvedProductContent {
 }
 
 const CONTENT_SELECT = {
+  workspaceId: true,
   id: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true,
-  localizedContent: true, categoryAttributes: true, variantAttributes: true, translations: true,
+  categoryAttributes: true, variantAttributes: true, translations: true,
   parent: { include: { translations: true } },
 } as const
 
-function resolvedContent(product: any, language: string): ResolvedProductContent {
-  const resolved = resolveAttributes({ product, parent: product.parent ?? null, locale: language })
-  const fields: Record<string, import('../pim/attribute-resolver.js').ResolvedValue> = Object.fromEntries(Object.entries(CONTENT_COLUMNS).map(([key, column]) => [column, resolved[key] ?? { value: null, source: 'default', inheritedFrom: null, requestedLocale: language, translationState: 'missing' }]))
+export function resolvedContent(product: any, language: string): ResolvedProductContent {
+  language = normalizeLanguage(language)
+  const resolved = resolveContentAttributes({ product, parent: product.parent ?? null, requested: language })
+  const fields = Object.fromEntries(Object.entries(CONTENT_COLUMNS).map(([key, column]) => [column, {
+    ...resolved[key], value: contentWireValue(resolved[key].value, ['bulletPoints', 'keywords'].includes(key) ? 'list' : undefined),
+  }]))
   return {
     name: String(fields.name?.value ?? ''),
     description: fields.description?.value as string | null ?? null,
@@ -82,7 +86,7 @@ function resolvedContent(product: any, language: string): ResolvedProductContent
 
 export async function resolveProductContent(prisma: PrismaClient, productId: string, language: string): Promise<ResolvedProductContent | null> {
   const product = await prisma.product.findUnique({ where: { id: productId }, select: CONTENT_SELECT })
-  return product ? resolvedContent(product, language.toLowerCase()) : null
+  return product ? resolvedContent(product, normalizeLanguage(language)) : null
 }
 
 /** Both historical and current callers use the same per-field locale contract. */
@@ -90,6 +94,6 @@ export async function resolveProductContentBatch(prisma: PrismaClient, productId
   const result = new Map<string, ResolvedProductContent>()
   if (!productIds.length) return result
   const products = await prisma.product.findMany({ where: { id: { in: productIds } }, select: CONTENT_SELECT })
-  for (const product of products) result.set(product.id, resolvedContent(product, language.toLowerCase()))
+  for (const product of products) result.set(product.id, resolvedContent(product, normalizeLanguage(language)))
   return result
 }

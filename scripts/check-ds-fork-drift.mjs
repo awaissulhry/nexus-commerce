@@ -55,6 +55,18 @@ const walk = (dir, base = dir, out = []) => {
   return out
 }
 
+const requiredMirrors = [
+  'grid/editors/AxesPanelEditor.tsx', 'grid/renderers/variationTheme.tsx', 'grid/editors/sheetWriter.ts', 'grid/editors/sheetColumn.ts', 'grid/editors/shapeColumn.ts', 'grid/theme/grid.css',
+  // MX.G (2026-09-13) — the Matrix cell kinds: the engine contract, the rules, the renderers, the sale editor, the column builder, the verbs, the barrels they surface through.
+  'grid/matrix/contract.ts', 'grid/renderers/matrixCells.ts', 'grid/renderers/MatrixCellViews.tsx', 'grid/renderers/projection.ts', 'grid/renderers/index.ts',
+  'grid/editors/SaleCellEditor.tsx', 'grid/editors/matrixColumn.ts', 'grid/editors/index.ts', 'grid/actions/matrixActions.ts', 'grid/actions/registry.ts',
+]
+const missingMirrors = requiredMirrors.filter(file => !existsSync(join(WEB, file)) || !existsSync(join(FACTORY, file)))
+if (missingMirrors.length) {
+  console.error('Missing required design-system counterparts:', missingMirrors.join(', '))
+  process.exit(1)
+}
+
 const shared = walk(WEB).filter((f) => existsSync(join(FACTORY, f))).sort()
 const differing = shared.filter(
   (f) => readFileSync(join(WEB, f), 'utf8') !== readFileSync(join(FACTORY, f), 'utf8'),

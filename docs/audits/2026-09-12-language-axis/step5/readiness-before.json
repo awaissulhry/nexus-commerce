@@ -1,0 +1,11 @@
+{
+  "start": "2026-09-12T21:10:42.444Z",
+  "finish": "2026-09-12T21:10:47.921Z",
+  "command": "node docs/audits/2026-09-12-language-axis/step5/readiness-gate.mjs before",
+  "base": "http://localhost:3000",
+  "api": "http://localhost:8091",
+  "exitCode": 0,
+  "diagnostic": "before",
+  "log": "readiness-before.log",
+  "sha256": "6915d1cadfe0776fd29f0964f3db9eb3c623ed71a0a8398ff8d7d1f2bc18e14a"
+}

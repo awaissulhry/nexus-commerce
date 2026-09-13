@@ -1,0 +1,3881 @@
+{
+  "scope": {
+    "kind": "channel",
+    "channel": "ETSY",
+    "marketplace": "GLOBAL",
+    "label": "Etsy \u00b7 GLOBAL",
+    "connectionId": "etsy",
+    "locale": "en"
+  },
+  "family": {
+    "id": "store-demo",
+    "sku": "TRAVEL-BAG",
+    "name": "Canvas travel bag",
+    "productType": null,
+    "variationAxes": [],
+    "axes": []
+  },
+  "columns": [
+    {
+      "key": "__productRole",
+      "label": "Product role",
+      "width": 135,
+      "helpText": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+      "writeField": "attr___productRole",
+      "group": "Product relationships",
+      "groupKey": "master:relationships",
+      "kind": "text",
+      "storage": "column",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": false,
+      "defaultVisible": true,
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": false,
+      "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+      "formulaWritable": false,
+      "axis": false
+    },
+    {
+      "key": "__parentSku",
+      "label": "Parent SKU",
+      "width": 220,
+      "helpText": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+      "writeField": "attr___parentSku",
+      "group": "Product relationships",
+      "groupKey": "master:relationships",
+      "kind": "text",
+      "storage": "column",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": false,
+      "defaultVisible": true,
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": false,
+      "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+      "formulaWritable": false,
+      "axis": false
+    },
+    {
+      "key": "sku",
+      "writeField": "sku",
+      "label": "SKU",
+      "group": "Identity",
+      "groupKey": "master:identity",
+      "kind": "text",
+      "storage": "column",
+      "scope": "per_variant",
+      "requiredBy": [],
+      "editable": false,
+      "width": 220,
+      "helpText": "Unique product identifier; not editable in bulk",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "writeVerb": "master",
+      "writeTarget": "master",
+      "affectsAllChannels": true,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": false
+    },
+    {
+      "key": "name",
+      "writeField": "attr_name",
+      "label": "Title",
+      "group": "Content",
+      "groupKey": "ETSY:content",
+      "kind": "longtext",
+      "storage": "column",
+      "scope": "global",
+      "validation": {
+        "pattern": "^(?!.*%.*%)(?!.*:.*:)(?!.*&.*&)(?!.*\\+.*\\+)[\\p{L}\\p{Nd}\\p{P}\\p{Sm}\\p{Zs}\u2122\u00a9\u00ae]+$"
+      },
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "maxLength": 140,
+      "capFrom": "Etsy \u00b7 GLOBAL",
+      "editable": true,
+      "width": 220,
+      "helpText": "Up to 140 characters. %, :, & and + may each appear only once.",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "title",
+          "attribute": "title",
+          "path": [],
+          "label": "Title",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "maxLength": 140,
+          "store": {
+            "kind": "listingColumn",
+            "column": "title",
+            "followFlag": "followMasterTitle"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "title",
+              "attribute": "title",
+              "path": [],
+              "label": "Title",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "maxLength": 140,
+              "store": {
+                "kind": "listingColumn",
+                "column": "title",
+                "followFlag": "followMasterTitle"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "description",
+      "writeField": "attr_description",
+      "label": "Description",
+      "group": "Content",
+      "groupKey": "ETSY:content",
+      "kind": "longtext",
+      "storage": "localizedContent",
+      "scope": "global",
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 110,
+      "helpText": "Product description. Supports HTML formatting for listings.",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "description",
+          "attribute": "description",
+          "path": [],
+          "label": "Description",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "listingColumn",
+            "column": "description",
+            "followFlag": "followMasterDescription"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "description",
+              "attribute": "description",
+              "path": [],
+              "label": "Description",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "listingColumn",
+                "column": "description",
+                "followFlag": "followMasterDescription"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "materials",
+      "writeField": "attr_materials",
+      "label": "Materials",
+      "group": "Content",
+      "groupKey": "ETSY:content",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "pattern": "^[\\p{L}\\p{Nd}\\p{Zs}]+$"
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "Materials used to make this item. Use letters, numbers and spaces.",
+      "defaultVisible": true,
+      "shape": "list",
+      "cardinality": {
+        "min": 0,
+        "max": null
+      },
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "materials",
+          "attribute": "materials",
+          "path": [],
+          "label": "Materials",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": null
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "materials"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "materials",
+              "attribute": "materials",
+              "path": [],
+              "label": "Materials",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": null
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "materials"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "taxonomy_id",
+      "writeField": "attr_taxonomy_id",
+      "label": "Category ID",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 1,
+        "multipleOf": 1
+      },
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 100,
+      "helpText": "Etsy seller taxonomy category ID. Category-specific properties must also be checked before publishing.",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "taxonomy_id",
+          "attribute": "taxonomy_id",
+          "path": [],
+          "label": "Category ID",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "taxonomy_id"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "taxonomy_id",
+              "attribute": "taxonomy_id",
+              "path": [],
+              "label": "Category ID",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "taxonomy_id"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "is_supply",
+      "writeField": "attr_is_supply",
+      "label": "Craft supply",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "boolean",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 90,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "is_supply",
+          "attribute": "is_supply",
+          "path": [],
+          "label": "Craft supply",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "is_supply"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "is_supply",
+              "attribute": "is_supply",
+              "path": [],
+              "label": "Craft supply",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "is_supply"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "when_made",
+      "writeField": "attr_when_made",
+      "label": "When made",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "select",
+      "storage": "listing",
+      "scope": "global",
+      "options": [
+        "made_to_order",
+        "2020_2026",
+        "2010_2019",
+        "2007_2009",
+        "before_2007",
+        "2000_2006",
+        "1990s",
+        "1980s",
+        "1970s",
+        "1960s",
+        "1950s",
+        "1940s",
+        "1930s",
+        "1920s",
+        "1910s",
+        "1900s",
+        "1800s",
+        "1700s",
+        "before_1700"
+      ],
+      "optionLabels": {
+        "made_to_order": "Made to order",
+        "2020_2026": "2020\u20132026",
+        "2010_2019": "2010\u20132019",
+        "2007_2009": "2007\u20132009",
+        "before_2007": "Before 2007",
+        "2000_2006": "2000\u20132006",
+        "before_1700": "Before 1700"
+      },
+      "mode": "strict",
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 130,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "when_made",
+          "attribute": "when_made",
+          "path": [],
+          "label": "When made",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "options": [
+            "made_to_order",
+            "2020_2026",
+            "2010_2019",
+            "2007_2009",
+            "before_2007",
+            "2000_2006",
+            "1990s",
+            "1980s",
+            "1970s",
+            "1960s",
+            "1950s",
+            "1940s",
+            "1930s",
+            "1920s",
+            "1910s",
+            "1900s",
+            "1800s",
+            "1700s",
+            "before_1700"
+          ],
+          "mode": "strict",
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "when_made"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "when_made",
+              "attribute": "when_made",
+              "path": [],
+              "label": "When made",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "options": [
+                "made_to_order",
+                "2020_2026",
+                "2010_2019",
+                "2007_2009",
+                "before_2007",
+                "2000_2006",
+                "1990s",
+                "1980s",
+                "1970s",
+                "1960s",
+                "1950s",
+                "1940s",
+                "1930s",
+                "1920s",
+                "1910s",
+                "1900s",
+                "1800s",
+                "1700s",
+                "before_1700"
+              ],
+              "mode": "strict",
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "when_made"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "who_made",
+      "writeField": "attr_who_made",
+      "label": "Who made it",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "select",
+      "storage": "listing",
+      "scope": "global",
+      "options": [
+        "i_did",
+        "someone_else",
+        "collective"
+      ],
+      "optionLabels": {
+        "i_did": "I did",
+        "someone_else": "Someone else",
+        "collective": "A member of my shop"
+      },
+      "mode": "strict",
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 130,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "who_made",
+          "attribute": "who_made",
+          "path": [],
+          "label": "Who made it",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "options": [
+            "i_did",
+            "someone_else",
+            "collective"
+          ],
+          "mode": "strict",
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "who_made"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "who_made",
+              "attribute": "who_made",
+              "path": [],
+              "label": "Who made it",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "options": [
+                "i_did",
+                "someone_else",
+                "collective"
+              ],
+              "mode": "strict",
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "who_made"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "type",
+      "writeField": "attr_type",
+      "label": "Listing type",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "select",
+      "storage": "listing",
+      "scope": "global",
+      "options": [
+        "physical",
+        "download",
+        "both"
+      ],
+      "optionLabels": {
+        "physical": "Physical item",
+        "download": "Digital download",
+        "both": "Physical and digital"
+      },
+      "mode": "strict",
+      "requiredBy": [],
+      "editable": true,
+      "width": 130,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "type",
+          "attribute": "type",
+          "path": [],
+          "label": "Listing type",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "options": [
+            "physical",
+            "download",
+            "both"
+          ],
+          "mode": "strict",
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "type"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "type",
+              "attribute": "type",
+              "path": [],
+              "label": "Listing type",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "options": [
+                "physical",
+                "download",
+                "both"
+              ],
+              "mode": "strict",
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "type"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "production_partner_ids",
+      "writeField": "attr_production_partner_ids",
+      "label": "Production partner IDs",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 1,
+        "multipleOf": 1,
+        "uniqueItems": true
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "defaultVisible": false,
+      "shape": "list",
+      "cardinality": {
+        "min": 0,
+        "max": null
+      },
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "production_partner_ids",
+          "attribute": "production_partner_ids",
+          "path": [],
+          "label": "Production partner IDs",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": null
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "production_partner_ids"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "production_partner_ids",
+              "attribute": "production_partner_ids",
+              "path": [],
+              "label": "Production partner IDs",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": null
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "production_partner_ids"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "shop_section_id",
+      "writeField": "attr_shop_section_id",
+      "label": "Shop section ID",
+      "group": "Classification",
+      "groupKey": "ETSY:classification",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 1,
+        "multipleOf": 1
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "shop_section_id",
+          "attribute": "shop_section_id",
+          "path": [],
+          "label": "Shop section ID",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "shop_section_id"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "shop_section_id",
+              "attribute": "shop_section_id",
+              "path": [],
+              "label": "Shop section ID",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "shop_section_id"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "tags",
+      "writeField": "attr_tags",
+      "label": "Tags",
+      "group": "Search",
+      "groupKey": "ETSY:search",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "uniqueItems": true,
+        "pattern": "^[\\p{L}\\p{Nd}\\p{Zs}\u2122\u00a9\u00ae][\\p{L}\\p{Nd}\\p{Zs}\\-'\u2122\u00a9\u00ae]*$"
+      },
+      "requiredBy": [],
+      "maxLength": 20,
+      "capFrom": "Etsy \u00b7 GLOBAL",
+      "editable": true,
+      "width": 160,
+      "helpText": "Up to 13 tags, with up to 20 characters in each.",
+      "defaultVisible": false,
+      "shape": "list",
+      "cardinality": {
+        "min": 0,
+        "max": 13
+      },
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "tags",
+          "attribute": "tags",
+          "path": [],
+          "label": "Tags",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 13
+          },
+          "maxLength": 20,
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "tags"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "tags",
+              "attribute": "tags",
+              "path": [],
+              "label": "Tags",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 13
+              },
+              "maxLength": 20,
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "tags"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "price",
+      "writeField": "attr_price",
+      "label": "Price",
+      "group": "Offer",
+      "groupKey": "ETSY:offer",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "exclusiveMinimum": 0
+      },
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "price",
+          "attribute": "price",
+          "path": [],
+          "label": "Price",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "listingColumn",
+            "column": "price",
+            "followFlag": "followMasterPrice"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "price",
+              "attribute": "price",
+              "path": [],
+              "label": "Price",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "listingColumn",
+                "column": "price",
+                "followFlag": "followMasterPrice"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "quantity",
+      "writeField": "attr_quantity",
+      "label": "Quantity",
+      "group": "Offer",
+      "groupKey": "ETSY:offer",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 0,
+        "multipleOf": 1
+      },
+      "requiredBy": [
+        "Etsy \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "quantity",
+          "attribute": "quantity",
+          "path": [],
+          "label": "Quantity",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "listingColumn",
+            "column": "quantity",
+            "followFlag": "followMasterQuantity"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "quantity",
+              "attribute": "quantity",
+              "path": [],
+              "label": "Quantity",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "listingColumn",
+                "column": "quantity",
+                "followFlag": "followMasterQuantity"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_dimensions_unit",
+      "writeField": "attr_item_dimensions_unit",
+      "label": "Dimension unit",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "select",
+      "storage": "listing",
+      "scope": "global",
+      "options": [
+        "in",
+        "ft",
+        "mm",
+        "cm",
+        "m",
+        "yd",
+        "inches"
+      ],
+      "mode": "strict",
+      "requiredBy": [],
+      "editable": true,
+      "width": 130,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_dimensions_unit",
+          "attribute": "item_dimensions_unit",
+          "path": [],
+          "label": "Dimension unit",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "options": [
+            "in",
+            "ft",
+            "mm",
+            "cm",
+            "m",
+            "yd",
+            "inches"
+          ],
+          "mode": "strict",
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_dimensions_unit"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_dimensions_unit",
+              "attribute": "item_dimensions_unit",
+              "path": [],
+              "label": "Dimension unit",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "options": [
+                "in",
+                "ft",
+                "mm",
+                "cm",
+                "m",
+                "yd",
+                "inches"
+              ],
+              "mode": "strict",
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_dimensions_unit"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_height",
+      "writeField": "attr_item_height",
+      "label": "Item height",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "exclusiveMinimum": 0
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_height",
+          "attribute": "item_height",
+          "path": [],
+          "label": "Item height",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_height"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_height",
+              "attribute": "item_height",
+              "path": [],
+              "label": "Item height",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_height"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_length",
+      "writeField": "attr_item_length",
+      "label": "Item length",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "exclusiveMinimum": 0
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_length",
+          "attribute": "item_length",
+          "path": [],
+          "label": "Item length",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_length"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_length",
+              "attribute": "item_length",
+              "path": [],
+              "label": "Item length",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_length"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_weight",
+      "writeField": "attr_item_weight",
+      "label": "Item weight",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "exclusiveMinimum": 0
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_weight",
+          "attribute": "item_weight",
+          "path": [],
+          "label": "Item weight",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_weight"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_weight",
+              "attribute": "item_weight",
+              "path": [],
+              "label": "Item weight",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_weight"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_width",
+      "writeField": "attr_item_width",
+      "label": "Item width",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "exclusiveMinimum": 0
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_width",
+          "attribute": "item_width",
+          "path": [],
+          "label": "Item width",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_width"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_width",
+              "attribute": "item_width",
+              "path": [],
+              "label": "Item width",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_width"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "shipping_profile_id",
+      "writeField": "attr_shipping_profile_id",
+      "label": "Shipping profile ID",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 1,
+        "multipleOf": 1
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "shipping_profile_id",
+          "attribute": "shipping_profile_id",
+          "path": [],
+          "label": "Shipping profile ID",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "shipping_profile_id"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "shipping_profile_id",
+              "attribute": "shipping_profile_id",
+              "path": [],
+              "label": "Shipping profile ID",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "shipping_profile_id"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "item_weight_unit",
+      "writeField": "attr_item_weight_unit",
+      "label": "Weight unit",
+      "group": "Shipping",
+      "groupKey": "ETSY:shipping",
+      "kind": "select",
+      "storage": "listing",
+      "scope": "global",
+      "options": [
+        "oz",
+        "lb",
+        "g",
+        "kg"
+      ],
+      "mode": "strict",
+      "requiredBy": [],
+      "editable": true,
+      "width": 130,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "item_weight_unit",
+          "attribute": "item_weight_unit",
+          "path": [],
+          "label": "Weight unit",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "options": [
+            "oz",
+            "lb",
+            "g",
+            "kg"
+          ],
+          "mode": "strict",
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "item_weight_unit"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "item_weight_unit",
+              "attribute": "item_weight_unit",
+              "path": [],
+              "label": "Weight unit",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "options": [
+                "oz",
+                "lb",
+                "g",
+                "kg"
+              ],
+              "mode": "strict",
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "item_weight_unit"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "should_auto_renew",
+      "writeField": "attr_should_auto_renew",
+      "label": "Automatic renewal",
+      "group": "Policies",
+      "groupKey": "ETSY:policies",
+      "kind": "boolean",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 90,
+      "helpText": "Renewal preference saved in Nexus. Publishing and renewal are separate channel actions.",
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "should_auto_renew",
+          "attribute": "should_auto_renew",
+          "path": [],
+          "label": "Automatic renewal",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "should_auto_renew"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "should_auto_renew",
+              "attribute": "should_auto_renew",
+              "path": [],
+              "label": "Automatic renewal",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "should_auto_renew"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "return_policy_id",
+      "writeField": "attr_return_policy_id",
+      "label": "Return policy ID",
+      "group": "Policies",
+      "groupKey": "ETSY:policies",
+      "kind": "number",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "minimum": 1,
+        "multipleOf": 1
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 100,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "return_policy_id",
+          "attribute": "return_policy_id",
+          "path": [],
+          "label": "Return policy ID",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "return_policy_id"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "return_policy_id",
+              "attribute": "return_policy_id",
+              "path": [],
+              "label": "Return policy ID",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "return_policy_id"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "is_taxable",
+      "writeField": "attr_is_taxable",
+      "label": "Taxable",
+      "group": "Policies",
+      "groupKey": "ETSY:policies",
+      "kind": "boolean",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 90,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Etsy \u00b7 GLOBAL": {
+          "key": "is_taxable",
+          "attribute": "is_taxable",
+          "path": [],
+          "label": "Taxable",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "is_taxable"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "is_taxable",
+              "attribute": "is_taxable",
+              "path": [],
+              "label": "Taxable",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "is_taxable"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    }
+  ],
+  "groups": [
+    {
+      "key": "master:relationships",
+      "label": "Product relationships",
+      "channelLabel": null,
+      "order": -1
+    },
+    {
+      "key": "master:identity",
+      "label": "Identity",
+      "channelLabel": null,
+      "order": 0
+    },
+    {
+      "key": "ETSY:content",
+      "label": "Content",
+      "channelLabel": null,
+      "order": 1
+    },
+    {
+      "key": "ETSY:classification",
+      "label": "Classification",
+      "channelLabel": null,
+      "order": 2
+    },
+    {
+      "key": "ETSY:search",
+      "label": "Search",
+      "channelLabel": null,
+      "order": 3
+    },
+    {
+      "key": "ETSY:offer",
+      "label": "Offer",
+      "channelLabel": null,
+      "order": 4
+    },
+    {
+      "key": "ETSY:shipping",
+      "label": "Shipping",
+      "channelLabel": null,
+      "order": 5
+    },
+    {
+      "key": "ETSY:policies",
+      "label": "Policies",
+      "channelLabel": null,
+      "order": 6
+    }
+  ],
+  "aliases": [
+    {
+      "id": null,
+      "label": "Primary",
+      "position": 0,
+      "status": "ACTIVE",
+      "externalListingId": null,
+      "listingStatus": "DRAFT",
+      "isPublished": false,
+      "readiness": {
+        "percent": 50,
+        "state": "missing",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 3
+      },
+      "rowIds": [
+        "store-demo",
+        "store-child-1",
+        "store-child-2"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "store-demo",
+      "sku": "TRAVEL-BAG",
+      "name": "Canvas travel bag",
+      "parentId": null,
+      "productRole": "parent",
+      "parentSku": null,
+      "isParent": true,
+      "rowKind": "parent",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 0,
+      "childCount": 2,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "materials": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_materials",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "taxonomy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_taxonomy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_supply": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_supply",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "when_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_when_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "who_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_who_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "production_partner_ids": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_production_partner_ids",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shop_section_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shop_section_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "price": {
+          "value": 45,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_price",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "quantity": {
+          "value": 4,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_quantity",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_dimensions_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_dimensions_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_height": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_height",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_length": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_length",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_width": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_width",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shipping_profile_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shipping_profile_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "should_auto_renew": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_should_auto_renew",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "return_policy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_return_policy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_taxable": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_taxable",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Parent",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": null,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        }
+      },
+      "listing": {
+        "id": "etsy-listing-0",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "missing",
+        "issues": [
+          {
+            "key": "taxonomy_id",
+            "label": "Category ID",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "is_supply",
+            "label": "Craft supply",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "when_made",
+            "label": "When made",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "who_made",
+            "label": "Who made it",
+            "message": "Required for this listing",
+            "severity": "error"
+          }
+        ]
+      },
+      "completeness": {
+        "overall": {
+          "filled": 3,
+          "total": 23,
+          "pct": 13
+        },
+        "required": {
+          "filled": 4,
+          "total": 8,
+          "missing": [
+            {
+              "key": "taxonomy_id",
+              "label": "Category ID"
+            },
+            {
+              "key": "is_supply",
+              "label": "Craft supply"
+            },
+            {
+              "key": "when_made",
+              "label": "When made"
+            },
+            {
+              "key": "who_made",
+              "label": "Who made it"
+            }
+          ]
+        },
+        "byGroup": [
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 1
+          },
+          {
+            "group": "Offer",
+            "filled": 2,
+            "total": 2
+          },
+          {
+            "group": "Shipping",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Policies",
+            "filled": 0,
+            "total": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "store-child-1",
+      "sku": "TRAVEL-BAG-1",
+      "name": "Canvas travel bag",
+      "parentId": "store-demo",
+      "productRole": "child",
+      "parentSku": "TRAVEL-BAG",
+      "isParent": false,
+      "rowKind": "variant",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 105,
+      "childCount": 0,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG-1",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "materials": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_materials",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "taxonomy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_taxonomy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_supply": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_supply",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "when_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_when_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "who_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_who_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "production_partner_ids": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_production_partner_ids",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shop_section_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shop_section_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "price": {
+          "value": 45,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_price",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "quantity": {
+          "value": 4,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_quantity",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_dimensions_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_dimensions_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_height": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_height",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_length": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_length",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_width": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_width",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shipping_profile_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shipping_profile_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "should_auto_renew": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_should_auto_renew",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "return_policy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_return_policy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_taxable": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_taxable",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Child",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        }
+      },
+      "listing": {
+        "id": "etsy-listing-1",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "missing",
+        "issues": [
+          {
+            "key": "taxonomy_id",
+            "label": "Category ID",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "is_supply",
+            "label": "Craft supply",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "when_made",
+            "label": "When made",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "who_made",
+            "label": "Who made it",
+            "message": "Required for this listing",
+            "severity": "error"
+          }
+        ]
+      },
+      "completeness": {
+        "overall": {
+          "filled": 4,
+          "total": 24,
+          "pct": 17
+        },
+        "required": {
+          "filled": 4,
+          "total": 8,
+          "missing": [
+            {
+              "key": "taxonomy_id",
+              "label": "Category ID"
+            },
+            {
+              "key": "is_supply",
+              "label": "Craft supply"
+            },
+            {
+              "key": "when_made",
+              "label": "When made"
+            },
+            {
+              "key": "who_made",
+              "label": "Who made it"
+            }
+          ]
+        },
+        "byGroup": [
+          {
+            "group": "Identity",
+            "filled": 1,
+            "total": 1
+          },
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 1
+          },
+          {
+            "group": "Offer",
+            "filled": 2,
+            "total": 2
+          },
+          {
+            "group": "Shipping",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Policies",
+            "filled": 0,
+            "total": 3
+          }
+        ]
+      }
+    },
+    {
+      "id": "store-child-2",
+      "sku": "TRAVEL-BAG-2",
+      "name": "Canvas travel bag",
+      "parentId": "store-demo",
+      "productRole": "child",
+      "parentSku": "TRAVEL-BAG",
+      "isParent": false,
+      "rowKind": "variant",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 105,
+      "childCount": 0,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG-2",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "materials": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_materials",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "taxonomy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_taxonomy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_supply": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_supply",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "when_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_when_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "who_made": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_who_made",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "production_partner_ids": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_production_partner_ids",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shop_section_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shop_section_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "price": {
+          "value": 45,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_price",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "quantity": {
+          "value": 4,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_quantity",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_dimensions_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_dimensions_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_height": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_height",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_length": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_length",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_width": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_width",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "shipping_profile_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shipping_profile_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "item_weight_unit": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_item_weight_unit",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "should_auto_renew": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_should_auto_renew",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "return_policy_id": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_return_policy_id",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "is_taxable": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_is_taxable",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Child",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        }
+      },
+      "listing": {
+        "id": "etsy-listing-2",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "missing",
+        "issues": [
+          {
+            "key": "taxonomy_id",
+            "label": "Category ID",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "is_supply",
+            "label": "Craft supply",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "when_made",
+            "label": "When made",
+            "message": "Required for this listing",
+            "severity": "error"
+          },
+          {
+            "key": "who_made",
+            "label": "Who made it",
+            "message": "Required for this listing",
+            "severity": "error"
+          }
+        ]
+      },
+      "completeness": {
+        "overall": {
+          "filled": 4,
+          "total": 24,
+          "pct": 17
+        },
+        "required": {
+          "filled": 4,
+          "total": 8,
+          "missing": [
+            {
+              "key": "taxonomy_id",
+              "label": "Category ID"
+            },
+            {
+              "key": "is_supply",
+              "label": "Craft supply"
+            },
+            {
+              "key": "when_made",
+              "label": "When made"
+            },
+            {
+              "key": "who_made",
+              "label": "Who made it"
+            }
+          ]
+        },
+        "byGroup": [
+          {
+            "group": "Identity",
+            "filled": 1,
+            "total": 1
+          },
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 1
+          },
+          {
+            "group": "Offer",
+            "filled": 2,
+            "total": 2
+          },
+          {
+            "group": "Shipping",
+            "filled": 0,
+            "total": 7
+          },
+          {
+            "group": "Policies",
+            "filled": 0,
+            "total": 3
+          }
+        ]
+      }
+    }
+  ],
+  "counts": {
+    "total": 78,
+    "filled": 15,
+    "empty": 0,
+    "notWritable": 9,
+    "pinned": 0,
+    "mapped": 0
+  },
+  "schema": {
+    "marketplace": "GLOBAL",
+    "locale": "en",
+    "productTypes": []
+  },
+  "meta": {
+    "schemaMissing": [],
+    "schemaAge": [],
+    "droppedKeys": [
+      "brand",
+      "manufacturer",
+      "status",
+      "productType",
+      "basePrice",
+      "costPrice",
+      "minMargin",
+      "minPrice",
+      "maxPrice",
+      "buyBoxPrice",
+      "competitorPrice",
+      "totalStock",
+      "lowStockThreshold",
+      "fulfillmentChannel",
+      "shippingTemplate",
+      "upc",
+      "ean",
+      "gtin",
+      "amazonAsin",
+      "parentAsin",
+      "ebayItemId",
+      "weightValue",
+      "weightUnit",
+      "dimLength",
+      "dimWidth",
+      "dimHeight",
+      "dimUnit",
+      "armorType",
+      "ceCertification",
+      "waterproofRating",
+      "bulletPoints",
+      "keywords"
+    ],
+    "availableMarkets": [],
+    "coverage": [
+      {
+        "coordinate": "Etsy \u00b7 GLOBAL",
+        "channel": "ETSY",
+        "category": "*",
+        "declared": 23,
+        "columns": 23,
+        "fetchedAt": null,
+        "unrecognised": []
+      }
+    ],
+    "mapping": null
+  }
+}

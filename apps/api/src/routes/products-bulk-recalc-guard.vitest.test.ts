@@ -33,8 +33,8 @@ const $transaction = vi.fn()
 const cellFormulaFindMany = vi.fn()
 const formulaAccountAccess = vi.fn()
 
-vi.mock('../db.js', () => ({
-  default: {
+vi.mock('../db.js', () => {
+  const client = {
     product: {
       findMany: (...a: unknown[]) => productFindMany(...a),
       findUnique: (...a: unknown[]) => productFindUnique(...a),
@@ -49,15 +49,22 @@ vi.mock('../db.js', () => ({
     },
     cellFormula: { findMany: (...a: unknown[]) => cellFormulaFindMany(...a) },
     bulkOperation: { create: (...a: unknown[]) => bulkOperationCreate(...a) },
-    $transaction: (...a: unknown[]) => $transaction(...a),
+    // Execute the outer interactive transaction; the spy measures its statement batches.
+    $transaction: (work: any, ...args: unknown[]): any => typeof work === 'function' ? work(client) : $transaction(work, ...args),
     $executeRaw: (...a: unknown[]) => executeRaw(...a),
-  },
-}))
+  }
+  return { default: client }
+})
 vi.mock('../services/connection-resolver.service.js', () => ({
   primaryConnectionIds: async () => new Map<string, string | null>(),
   resolveConnection: async ({ accountId }: { accountId: string }) => ({ id: accountId, channelType: 'EBAY', isActive: true }),
   isPrimaryChannelConnection: (...args: unknown[]) => formulaAccountAccess(...args),
 }))
+// Readiness production has its own PostgreSQL regressions; isolate that derived refresh here.
+vi.mock('../services/product-event.service.js', () => ({ productEventService: { emitMany: async () => [], emitManyTx: async () => [] } }))
+vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { writeMany: async () => [] } }))
+vi.mock('../services/product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: async () => [] } }))
+vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: async () => {} }))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),
@@ -128,7 +135,7 @@ describe('the bulk route READS the formula-cascade header', () => {
   })
   it('WITHOUT the header: the cascade runs exactly once, for the fields written', async () => {
     const res = await patch()
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ success: true, updated: 1 })
     expect(reevaluate).toHaveBeenCalledTimes(1)
     expect(reevaluate.mock.calls[0][0]).toMatchObject({
@@ -139,7 +146,7 @@ describe('the bulk route READS the formula-cascade header', () => {
 
   it('WITH the header: no cascade at all — and the write still happens', async () => {
     const res = await patch({ 'x-nexus-formula-cascade': '1' })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     // The guard must skip the CASCADE, not the write. A guard that also
     // skipped the write would make every formula-driven value silently vanish.
     expect(res.json()).toMatchObject({ success: true, updated: 1 })
@@ -151,14 +158,14 @@ describe('the bulk route READS the formula-cascade header', () => {
     // above and silently stop cascading for any caller that sent the header
     // with any other value.
     const res = await patch({ 'x-nexus-formula-cascade': '0' })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect(reevaluate).toHaveBeenCalledTimes(1)
   })
 
   it('a product carrying NO formula is not walked at all', async () => {
     cellFormulaFindMany.mockResolvedValue([])
     const res = await patch()
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect(reevaluate).not.toHaveBeenCalled()
   })
 
@@ -166,7 +173,7 @@ describe('the bulk route READS the formula-cascade header', () => {
     // The INNER, per-product catch: one product's walk failing.
     reevaluate.mockRejectedValue(new Error('boom'))
     const res = await patch()
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ success: true, updated: 1 })
   })
 
@@ -193,7 +200,7 @@ describe('the bulk route READS the formula-cascade header', () => {
         { id: OTHER, field: 'manufacturer', value: 'XAVIA RACING' },
       ] },
     })
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     // BOTH were attempted — the second is the assertion that matters.
     expect(reevaluate).toHaveBeenCalledTimes(2)
     expect(reevaluate.mock.calls.map((c) => c[0].productId).sort()).toEqual([OTHER, PRODUCT_ID].sort())
@@ -212,7 +219,7 @@ describe('the bulk route READS the formula-cascade header', () => {
     // at this branch survives the test above, which is how the gap was found.
     cellFormulaFindMany.mockRejectedValue(new Error('db down'))
     const res = await patch()
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ success: true, updated: 1 })
     // Not swallowed either: a stale dependent cell behind a "saved" response
     // is the failure this reports rather than hides.
@@ -226,7 +233,7 @@ describe('formula expression and value share a transaction', () => {
     const mutation = { __stmt: 'formula.upsert' }
     const context = { productId: PRODUCT_ID, writeField: 'manufacturer', operations: () => [mutation] }
     const res = await withFormulaWrite(context, token => patch({ 'x-nexus-formula-cascade': '1', 'x-nexus-formula-write': token }))
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect($transaction.mock.calls[0][0]).toContain(mutation)
     expect($transaction.mock.calls[0][0]).toContainEqual({ __stmt: 'product.update' })
   })
@@ -235,7 +242,7 @@ describe('formula expression and value share a transaction', () => {
     productFindMany.mockResolvedValue([{ id: PRODUCT_ID, manufacturer: 'XAVIA RACING', version: 26, categoryAttributes: {} }])
     const mutation = { __stmt: 'formula.upsert' }
     const res = await withFormulaWrite({ productId: PRODUCT_ID, writeField: 'manufacturer', operations: () => [mutation] }, token => patch({ 'x-nexus-formula-cascade': '1', 'x-nexus-formula-write': token }))
-    expect(res.statusCode).toBe(200)
+    expect(res.statusCode, res.body).toBe(200)
     expect($transaction.mock.calls[0][0]).toContain(mutation)
   })
 })

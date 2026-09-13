@@ -5,7 +5,7 @@
  * segment nested under it, and it draws the OLD page's shape — a max-width form column with a
  * thirteen-tab strip. Without this file the studio flashes a skeleton of the page it replaces.
  *
- * The shape drawn here is the frame's: three fixed bands over one full-height body.
+ * The shape drawn here is the frame's: two fixed bands over one full-height body.
  */
 
 import { Skeleton } from '@/design-system/primitives'
@@ -26,12 +26,6 @@ export default function ProductStudioLoading() {
           <Skeleton width={92} height={28} radius="999px" />
           <Skeleton width={104} height={28} radius="999px" />
           <Skeleton width={86} height={28} radius="999px" />
-        </div>
-        <div className={styles.skelTabs}>
-          <Skeleton width={46} height={12} />
-          <Skeleton width={54} height={12} />
-          <Skeleton width={96} height={12} />
-          <Skeleton width={58} height={12} />
         </div>
       </div>
       <div className={styles.body}>

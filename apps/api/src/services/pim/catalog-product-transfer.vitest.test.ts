@@ -9,7 +9,11 @@ import { importTestStore, fixtureColumns, fixtureFields } from './catalog-transf
 const state = vi.hoisted(() => ({ store: null as unknown as ReturnType<typeof importTestStore> }))
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_, key) => state.store.db[key as string] }) }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
-vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: async () => ({ columns: fixtureColumns }), clearSheetColumnCache: vi.fn() }))
+// LX.F R-LX-13 — LX.5's readiness producer asks this module for the coordinate
+// set (`readiness-index.service.ts` → `coordinatesFor`), so the mock must export it.
+vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: async () => ({ columns: fixtureColumns }), clearSheetColumnCache: vi.fn(),
+  coordinatesFor: (market: string, markets: { channel: string; code: string; languages?: string[] }[] = []) =>
+    markets.filter(m => m.code === market).map(m => ({ channel: m.channel, marketplace: m.code, label: `${m.channel} · ${m.code}`, inMarket: true, languages: m.languages ?? ['it'] })) }))
 vi.mock('./mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: vi.fn(async () => ({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } })), clearFieldCatalogueCache: vi.fn() }))
 vi.mock('./mapping/category-mapping.service.js', async importOriginal => ({ ...await importOriginal<object>(), resolveCategoriesForProducts: vi.fn(async ({ productIds }: { productIds: string[] }) => Object.fromEntries(productIds.map(id => [id, { channelCategoryId: 'COAT' }]))) }))
 import routes from '../../routes/catalog-transfer.routes.js'
@@ -36,6 +40,24 @@ afterAll(() => app.close())
 const shared = (productIds = ['p1']): ProductTransferSelection => ({ productIds, includeShared: true, listingIds: [], locales: ['it'] })
 const channel = (): ProductTransferSelection => ({ productIds: ['p1'], includeShared: false, listingIds: ['p1-account-a'], locales: [] })
 const row = (overrides: Partial<TransferRow> = {}): TransferRow => ({ row: 2, entity: 'Products', sku: '000001', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Changed title', version: 3, ...overrides })
+/**
+ * LX.F2 R-LX-21 — the editor workbook has had TWO header rows since LX.19: row 1 the human
+ * LABELS (`Title`, `Material`), row 2 the machine keys in the `key@channel:market:locale`
+ * grammar (`item_name@amazon:IT:it`), and the data from row 3. Locale-bearing content also
+ * moved onto its own sheet per language (`AMAZON IT 1` for the language-independent
+ * attributes, `AMAZON IT it 2` for the text). Every arm below used to read row 1 as the key
+ * row and write row 2, so it either found no sheet at all or edited the key row — measured:
+ * `sheet` undefined, `col('item_name')` = -1, and exceljs throwing
+ * "-1 is out of bounds". These three helpers DERIVE the position from the workbook instead of
+ * repeating a coordinate (`reference_a_list_of_members_is_a_set_claim`), so the next grammar
+ * change is a one-line fix here rather than in nine places.
+ */
+const KEY_ROW = 2, FIRST_DATA_ROW = 3
+const keyRow = (sheet: ExcelJS.Worksheet) => sheet.getRow(KEY_ROW).values as any[]
+const hasKey = (value: unknown, key: string) => String(value ?? '') === key || String(value ?? '').startsWith(`${key}@`)
+const sheetWithKey = (book: ExcelJS.Workbook, key: string) => book.worksheets.find(s => keyRow(s).some(v => hasKey(v, key)))!
+const colOf = (sheet: ExcelJS.Worksheet, key: string) => keyRow(sheet).findIndex(v => hasKey(v, key))
+
 const url = '/api/catalog-transfer/products/p1'
 const getJob = async (id: string) => (await app.inject(`/api/catalog-transfer/jobs/${id}`)).json()
 const review = async (id: string) => { let job: any; await vi.waitFor(async () => { job = await getJob(id); expect(['QUEUED', 'INVALID', 'FAILED']).toContain(job.state) }); return job }
@@ -129,16 +151,22 @@ it('exports and edits one wide channel workbook, saving only that SKU, account, 
   const unchanged = await upload(channel(), bytes), unchangedJob = await review(unchanged.json().jobId)
   expect(unchangedJob.counts).toMatchObject({ changed: 0, refused: 0 })
   const book = new ExcelJS.Workbook(); await book.xlsx.load(bytes as never)
-  const sheet = book.worksheets.find(s => (s.getRow(1).values as any[]).includes('item_name'))!
-  const col = (name: string) => (sheet.getRow(1).values as any[]).indexOf(name)
-  sheet.getCell(2, col('item_name')).value = 'Scoped Italy title'; sheet.getCell(2, col('action:item_name')).value = 'SET'
+  const sheet = sheetWithKey(book, 'item_name')
+  const col = (name: string) => colOf(sheet, name)
+  sheet.getCell(FIRST_DATA_ROW, col('item_name')).value = 'Scoped Italy title'; sheet.getCell(FIRST_DATA_ROW, col('action:item_name')).value = 'SET'
   const response = await upload(channel(), Buffer.from(await book.xlsx.writeBuffer())), job = await review(response.json().jobId)
   expect(job.state).toBe('QUEUED'); expect(job.counts.changed).toBe(1)
   expect(job.boundary.listings.map((l: any) => l.id)).toEqual(['p1-account-a'])
   expect((await app.inject({ url: `/api/catalog-transfer/jobs/${job.jobId}`, headers: { 'x-fixture-actor': 'other' } })).statusCode).toBe(404)
   expect((await apply(job.jobId, job.reviewToken)).statusCode).toBe(202)
   await vi.waitFor(async () => expect((await getJob(job.jobId)).state).toBe('COMPLETED'))
-  expect(state.store.data.channelListing.get('p1-account-a')).toMatchObject({ title: 'Scoped Italy title', followMasterTitle: false, overrideData: { material: 'Protected cotton' } })
+  // LX.F2 R-LX-21 — a channel TEXT override is a `ChannelListingTranslation` PIN since LX.3,
+  // for that coordinate's own language. The legacy `ChannelListing.title` column and
+  // `followMasterTitle` are no longer the destination, and both are asserted to have kept
+  // their prior values so a silent return to the legacy store fails here.
+  expect(state.store.data.channelListing.get('p1-account-a')).toMatchObject({ title: 'Sync snapshot', followMasterTitle: true, overrideData: { material: 'Protected cotton' } })
+  expect([...state.store.data.channelListingTranslation.values()].filter((t: any) => t.channelListingId === 'p1-account-a').map((t: any) => ({ language: t.language, name: t.name })))
+    .toEqual([{ language: 'it', name: 'Scoped Italy title' }])
   expect([...state.store.data.product.values()]).toEqual(before)
   expect([...state.store.data.channelListing.values()].filter(l => l.id !== 'p1-account-a')).toEqual(other)
 })
@@ -198,11 +226,11 @@ it('round-trips and saves sorted and filtered named aliases independently of the
   const unchanged = await upload(selection, bytes), noChanges = await review(unchanged.json().jobId)
   expect(noChanges.counts).toMatchObject({ changed: 0, refused: 0 })
   const book = new ExcelJS.Workbook(); await book.xlsx.load(bytes as never)
-  const sheet = book.worksheets.find(s => (s.getRow(1).values as any[]).includes('item_name'))!
-  const col = (name: string) => (sheet.getRow(1).values as any[]).indexOf(name)
+  const sheet = sheetWithKey(book, 'item_name')
+  const col = (name: string) => colOf(sheet, name)
   const labels: string[] = []
   sheet.eachRow((r, i) => {
-    if (i === 1) return
+    if (i < FIRST_DATA_ROW) return
     const key = r.getCell(col('aliasKey')).text
     labels.push(r.getCell(col('listing')).text)
     if (key) r.getCell(col('item_name')).value = `${key} title`
@@ -210,25 +238,33 @@ it('round-trips and saves sorted and filtered named aliases independently of the
   expect(labels).toEqual(expect.arrayContaining(['Primary listing', 'Summer listing', 'Outlet listing']))
   // A header sort moves entire rows, including the hidden alias identity/version.
   // Filtering hides a row; it is not an instruction to omit that row's changes.
-  const sorted = sheet.getRows(2, sheet.rowCount - 1)!.map(r => (r.values as any[]).slice()).sort((a, b) => String(a[col('listing')]).localeCompare(String(b[col('listing')])))
-  sorted.forEach((values, i) => { sheet.getRow(i + 2).values = values })
-  expect(sheet.getCell(2, col('aliasKey')).text).toBe('outlet')
-  sheet.getRow(2).hidden = true
-  expect(sheet.views[0]).toMatchObject({ state: 'frozen', xSplit: 2, ySplit: 1 })
-  expect(sheet.autoFilter).toBe(`A1:${sheet.getColumn(sheet.columnCount).letter}4`)
+  const sorted = sheet.getRows(FIRST_DATA_ROW, sheet.rowCount - KEY_ROW)!.map(r => (r.values as any[]).slice()).sort((a, b) => String(a[col('listing')]).localeCompare(String(b[col('listing')])))
+  sorted.forEach((values, i) => { sheet.getRow(i + FIRST_DATA_ROW).values = values })
+  expect(sheet.getCell(FIRST_DATA_ROW, col('aliasKey')).text).toBe('outlet')
+  sheet.getRow(FIRST_DATA_ROW).hidden = true
+  // The freeze and the filter follow the two header rows and the four identity columns.
+  expect(sheet.views[0]).toMatchObject({ state: 'frozen', xSplit: 4, ySplit: KEY_ROW })
+  expect(sheet.autoFilter).toBe(`A${KEY_ROW}:${sheet.getColumn(sheet.columnCount).letter}${sheet.rowCount}`)
   const uploaded = await upload(selection, Buffer.from(await book.xlsx.writeBuffer())), job = await review(uploaded.json().jobId)
   expect(job.counts).toMatchObject({ changed: 2, listingsAffected: 2, productsAffected: 0, refused: 0 })
   expect((await app.inject(`/api/catalog-transfer/jobs/${job.jobId}/outcomes?status=CHANGED`)).json().total).toBe(2)
   const filtered = (await app.inject(`/api/catalog-transfer/jobs/${job.jobId}/outcomes?status=CHANGED&sku=000001&destination=${encodeURIComponent(JSON.stringify(['AMAZON', 'account-a', 'IT', 'summer']))}`)).json()
   expect(filtered.total).toBe(1)
-  expect(filtered.rows[0].cells.find((c: any) => c.field === 'item_name').effectiveAfter).toMatchObject({ value: 'summer title', source: 'Listing override' })
+  // LX.F2 R-LX-21 — the provenance word comes from the LX tier vocabulary now ("<language> ·
+  // pin"), not the pre-LX "Listing override": the value is the same, its ADDRESS is what
+  // changed. Asserted verbatim so the wording cannot drift silently.
+  expect(filtered.rows[0].cells.find((c: any) => c.field === 'item_name').effectiveAfter).toMatchObject({ value: 'summer title', source: 'it · pin' })
   expect((await app.inject(`${url}/options`)).json().recentJobs.some((j: any) => j.id === job.jobId)).toBe(true)
   expect((await app.inject({ url: `${url}/options`, headers: { 'x-fixture-actor': 'other' } })).json().recentJobs).toEqual([])
   await apply(job.jobId, job.reviewToken)
   await vi.waitFor(async () => expect((await getJob(job.jobId)).state).toBe('COMPLETED'))
-  expect(state.store.data.channelListing.get('p1-summer')!.title).toBe('summer title')
+  // LX.F2 R-LX-21 — both alias overrides land on their coordinate's PIN tier (LX.3); the
+  // legacy `ChannelListing.title` column keeps its prior value on both, which is asserted so
+  // the two stores cannot swap traffic unnoticed.
   expect((await getJob(job.jobId)).receipt).toEqual({ saved: 2, unchanged: 1, failed: 0, excluded: 0, unprocessed: 0 })
-  expect(state.store.data.channelListing.get('p1-outlet')!.title).toBe('outlet title')
+  expect(['p1-summer', 'p1-outlet'].map(id => state.store.data.channelListing.get(id)!.title)).toEqual(['Sync snapshot', 'Sync snapshot'])
+  expect([...state.store.data.channelListingTranslation.values()].filter((t: any) => ['p1-summer', 'p1-outlet'].includes(t.channelListingId)).map((t: any) => ({ listing: t.channelListingId, language: t.language, name: t.name })))
+    .toEqual(expect.arrayContaining([{ listing: 'p1-summer', language: 'it', name: 'summer title' }, { listing: 'p1-outlet', language: 'it', name: 'outlet title' }]))
   expect([...state.store.data.channelListing.values()].filter(l => !selection.listingIds.slice(1).includes(l.id))).toEqual(before)
   const audits = state.store.data.auditLog.size
   await apply(job.jobId, job.reviewToken)
@@ -238,12 +274,12 @@ it('round-trips and saves sorted and filtered named aliases independently of the
 it('preserves a deleted value unless the workbook explicitly requests clearing', async () => {
   state.store.data.product.get('p1')!.description = 'Keep this description'
   const bytes = await exported(shared()), book = new ExcelJS.Workbook(); await book.xlsx.load(bytes as never)
-  const sheet = book.worksheets.find(s => s.name === 'Products')!
-  const col = (name: string) => (sheet.getRow(1).values as any[]).indexOf(name)
-  sheet.getCell(2, col('description')).value = null
+  const sheet = sheetWithKey(book, 'description')
+  const col = (name: string) => colOf(sheet, name)
+  sheet.getCell(FIRST_DATA_ROW, col('description')).value = null
   const keep = await upload(shared(), Buffer.from(await book.xlsx.writeBuffer()))
   expect((await review(keep.json().jobId)).counts).toMatchObject({ changed: 0, refused: 0 })
-  sheet.getCell(2, col('action:description')).value = 'INHERIT'
+  sheet.getCell(FIRST_DATA_ROW, col('action:description')).value = 'INHERIT'
   const inherit = await upload(shared(), Buffer.from(await book.xlsx.writeBuffer()))
   expect((await review(inherit.json().jobId)).counts).toMatchObject({ changed: 1, refused: 0 })
 })
@@ -252,8 +288,8 @@ it('refuses missing versions in both older and new product workbooks', async () 
   const legacy = await uploadRows(shared(), [row({ version: undefined })])
   expect((await review(legacy.json().jobId)).state).toBe('INVALID')
   const bytes = await exported(shared()), book = new ExcelJS.Workbook(); await book.xlsx.load(bytes as never)
-  const sheet = book.getWorksheet('Products')!
-  sheet.getCell(2, (sheet.getRow(1).values as any[]).indexOf('version')).value = null
+  const sheet = sheetWithKey(book, 'version')
+  sheet.getCell(FIRST_DATA_ROW, colOf(sheet, 'version')).value = null
   const broken = await upload(shared(), Buffer.from(await book.xlsx.writeBuffer()))
   expect((await review(broken.json().jobId)).state).toBe('INVALID')
 })
@@ -319,7 +355,10 @@ it('maps supplier columns directly to named existing listings and refuses destin
   expect(outside.statusCode).toBe(409)
   await apply(job.jobId, job.reviewToken)
   await vi.waitFor(async () => expect((await getJob(job.jobId)).state).toBe('COMPLETED'))
-  expect(state.store.data.channelListing.get('p1-summer')!.title).toBe('Summer coat')
+  // LX.F2 R-LX-21 — the supplier column lands on the PIN tier for the coordinate's language.
+  expect(state.store.data.channelListing.get('p1-summer')!.title).toBe('Sync snapshot')
+  expect([...state.store.data.channelListingTranslation.values()].filter((t: any) => t.channelListingId === 'p1-summer').map((t: any) => ({ language: t.language, name: t.name })))
+    .toEqual([{ language: 'it', name: 'Summer coat' }])
   expect(state.store.data.channelListing.get('p1-account-a')).toEqual(original)
 })
 
@@ -347,8 +386,8 @@ it('inspects and previews a complete two-part editing export once, with exact fi
     const scope = { sheet: 'Products', entity: 'Products' as const, channel: '', accountId: '', marketplace: '', locale: '', category: '', fields: [{ field: 'name', label: 'Title', type: 'text' }], rows: [row({ sku, value: `Original ${Number(sku)}` })] }
     const bytes = await writeEditorWorkbook([scope], boundary, 'owner'), book = new ExcelJS.Workbook()
     await book.xlsx.load(bytes as never)
-    const sheet = book.getWorksheet('Products')!, column = (sheet.getRow(1).values as any[]).indexOf('name')
-    sheet.getCell(2, column).value = `Edited ${sku}`
+    const sheet = sheetWithKey(book, 'name'), column = colOf(sheet, 'name')
+    sheet.getCell(FIRST_DATA_ROW, column).value = `Edited ${sku}`
     zip.file(filename, Buffer.from(await book.xlsx.writeBuffer())); files.push({ filename, attributeRows: 1 })
   }
   zip.file('manifest.json', JSON.stringify({ purpose: 'editing', files }))

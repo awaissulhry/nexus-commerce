@@ -276,7 +276,7 @@ export function ImageViewer({
                 <ul className={styles.uses}>
                   {usedIn.slice(0, 12).map((l) => (
                     <li key={l.id}>
-                      {l.platform ?? 'Master'}
+                      {l.platform == null ? 'Channel not recorded' : l.platform}
                       {l.marketplace ? ` · ${l.marketplace}` : ''}
                       {l.amazonSlot ? ` · ${l.amazonSlot}` : ` · position ${l.position}`}
                       {l.variantGroupValue ? ` · ${l.variantGroupValue}` : ''}

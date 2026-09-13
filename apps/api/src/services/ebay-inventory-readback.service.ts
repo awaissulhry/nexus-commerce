@@ -228,7 +228,7 @@ export interface TradingMismatch {
  *  each listing has its OWN quantity on eBay. Keying observations by bare SKU
  *  let one listing's reading overwrite another's (216 SKUs affected): phantom
  *  mismatches + mis-targeted heals. Owner-observed 2026-07-20. */
-export const obsKey = (itemId: string, sku: string): string => `${itemId} ${sku}`
+export const obsKey = (itemId: string, sku: string): string => `${itemId}\u001f${sku}`
 
 /** Pure diff — exported for tests. Each membership entry is compared against
  *  ITS OWN listing's observation (obsKey). `intendedByProduct` only contains

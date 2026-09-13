@@ -1,3 +1,5 @@
+import { normalizeLanguage } from './pim/content-language.js'
+import { languageTag } from './pim/market-languages.js'
 /**
  * MC.8.9 — A+ Content submission to Amazon SP-API.
  *
@@ -54,9 +56,7 @@ export interface SubmissionRequest {
 }
 
 // Map our locale codes (BCP 47) to Amazon's underscore form.
-function amazonLocale(locale: string): string {
-  return locale.replace('-', '_')
-}
+
 
 // Amazon module-type registry. Maps our internal type names to the
 // SP-API contentModuleType + the wrapper key the API expects under
@@ -166,7 +166,7 @@ export function buildSubmissionRequest(
   const contentDocument = {
     name: doc.name,
     contentType: 'EBC',
-    locale: amazonLocale(doc.locale),
+    locale: languageTag(normalizeLanguage(doc.locale), doc.marketplace),
     contentModuleList,
   }
 
@@ -176,7 +176,7 @@ export function buildSubmissionRequest(
     // build from our id + a timestamp suffix so retries don't collide.
     contentReferenceKey: `${doc.id}-${Date.now()}`,
     marketplace: doc.marketplace,
-    locale: doc.locale,
+    locale: normalizeLanguage(doc.locale),
   }
 }
 

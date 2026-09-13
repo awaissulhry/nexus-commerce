@@ -462,18 +462,23 @@ export const PAGE_COMMANDS: Command[] = [
     keywords: 'stock atp reservation movement location',
   },
   {
+    /**
+     * LX.16 — the Locales tab is retired (design §8, Owner decision D6: once the studio's Languages
+     * view is on screen). The capability did not go away, so neither does the way to reach it: this
+     * command now opens the SAME product in the studio's Languages view instead of a tab that no
+     * longer exists. Removing the command outright would have left the operator on a page with no
+     * route to translations at all.
+     */
     id: 'page-products-edit-goto-locales',
-    label: 'Jump to Locales (translations)',
+    label: 'Jump to Languages (translations, in the studio)',
     icon: Globe,
-    run: () =>
-      window.dispatchEvent(
-        new CustomEvent('nexus:products-edit:goto-tab', {
-          detail: { tab: 'locales' },
-        }),
-      ),
+    run: () => {
+      const id = location.pathname.split('/')[2]
+      if (id) location.assign(`/products/${id}/edit/studio?tab=information`)
+    },
     group: 'On this page',
     contextPath: /^\/products\/[^/]+\/edit(\?|$)/,
-    keywords: 'translation language italian german french spanish lingue traduzioni akeneo',
+    keywords: 'translation language italian german french spanish lingue traduzioni akeneo locales',
   },
   {
     id: 'page-products-edit-goto-workflow',

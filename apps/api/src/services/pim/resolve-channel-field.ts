@@ -37,6 +37,9 @@
  * the richer `provenance`/`needsTranslation` ride alongside.
  */
 
+import { contentField, contentPathAddress, resolveContentPath, translationMissing, type ContentProduct } from './content-resolver.js'
+import { contentAttribute } from './content-read.js'
+import { normalizeLanguage } from './content-language.js'
 import type { ResolvedAttributes, ValueSource } from './attribute-resolver.js'
 import type { FieldMappingRule, TransformOp } from './schema-mapping.service.js'
 import { evaluateExpr, exprDependencies } from './mapping/expr.js'
@@ -71,11 +74,26 @@ export function isPresent(v: unknown): boolean {
 export function resolveSourcePath(
   path: string,
   resolved: Record<string, unknown>,
-  product: { localizedContent: unknown; categoryAttributes: unknown; variantAttributes: unknown },
+  product: { localizedContent?: unknown; categoryAttributes?: unknown; variantAttributes?: unknown; [key: string]: any },
   locale: string,
 ): unknown {
   if (!path || typeof path !== 'string') return null
+  locale = normalizeLanguage(locale)
   const substituted = path.replace(/\{locale\}/g, locale)
+  const field = substituted.startsWith('localizedContent.') ? substituted.split('.')[2] : undefined
+  const address = contentPathAddress(path, locale, field ? [field] : [])
+  if (address) {
+    // The flat map already carries the listing/parent result for this address.
+    // An explicit different-language source is resolved afresh from hydrated rows.
+    let value: unknown = address.requested === locale && Object.prototype.hasOwnProperty.call(resolved, address.field)
+      ? resolved[address.field]
+      : resolveContentPath({ product: product as ContentProduct, parent: product.parent, path,
+          listing: product.contentListing, localizableKeys: field ? [field] : [], address: { requested: locale, ...(product.contentListing ? { coordinate: product.contentListing.coordinate } : {}) } })?.value ?? null
+    if (address.requested === locale && Object.prototype.hasOwnProperty.call(resolved, address.field)) {
+      for (const key of address.tail) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[key] ?? null : null
+    }
+    return value
+  }
 
   // Single-segment paths read straight from the resolved map.
   if (!substituted.includes('.')) {
@@ -91,9 +109,6 @@ export function resolveSourcePath(
 
   let cursor: unknown
   switch (root) {
-    case 'localizedContent':
-      cursor = product.localizedContent
-      break
     case 'categoryAttributes':
       // Attribute-bag paths still follow the parent/variant cascade. Reading the raw
       // child bag here discarded inherited Master facts for otherwise valid mappings.
@@ -497,7 +512,7 @@ export interface ResolveChannelFieldInput {
    *  resolveChannelField flattens this for path resolution and reads the
    *  provenance to detect per-coordinate overrides. */
   resolvedAttrs: ResolvedAttributes
-  product: { localizedContent: unknown; categoryAttributes: unknown; variantAttributes: unknown }
+  product: { localizedContent?: unknown; categoryAttributes?: unknown; variantAttributes?: unknown; [key: string]: any }
   locale: string
   /** Link-group membership for this coordinate+field, or null. */
   link?: FieldLinkMembership | null
@@ -510,6 +525,7 @@ export interface ResolveChannelFieldInput {
 }
 
 export interface ResolvedChannelField {
+  content?: import('./content-resolver.js').ResolvedContent
   fieldKey: string
   value: unknown
   source: ChannelFieldSource
@@ -525,6 +541,10 @@ export interface ResolvedChannelField {
   /** Cross-language TRANSLATE member whose translation isn't pinned yet —
    *  the FM.5 propagation step fills it. */
   needsTranslation: boolean
+  language?: string
+  requested?: string
+  follows?: boolean
+  drift?: boolean
   requestedLocale?: string
   effectiveLocale?: string
   translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
@@ -550,7 +570,7 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
 
   // 1. rule.source → fallback → transforms (the legacy value formula).
   const sourceRaw = resolveSourcePath(rule.source, flat, product, locale)
-  const sourceKey = rule.source.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]
+  const sourceKey = contentPathAddress(rule.source, locale, Object.keys(resolvedAttrs))?.field ?? rule.source.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]
   warnings.push(...(resolvedAttrs[sourceKey]?.warnings ?? []))
   let value: unknown = sourceRaw
   let usedFallback = false
@@ -590,10 +610,15 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
 
   // 3. Cross-language translate flag (linked TRANSLATE, different langs).
   const effectivePath = (usedFallback ? rule.fallback! : rule.source).replace(/\{locale\}/g, locale)
-  const localizedPath = /^localizedContent\.([^.]+)\./.exec(effectivePath)
-  const resolvedSource = resolvedAttrs[effectivePath.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]]
-  let effectiveLocale = localizedPath?.[1] ?? resolvedSource?.effectiveLocale
-  let translationState = effectiveLocale && effectiveLocale.toLowerCase() !== locale.toLowerCase() ? 'fallback' : resolvedSource?.translationState
+  const address = contentPathAddress(effectivePath, locale, Object.keys(resolvedAttrs).filter(key => resolvedAttrs[key].language))
+  const pathHit = address && address.requested !== normalizeLanguage(locale)
+    ? resolveContentPath({ product: product as ContentProduct, parent: product.parent, path: effectivePath,
+        listing: product.contentListing, localizableKeys: [address.field], address: { requested: locale, ...(product.contentListing ? { coordinate: product.contentListing.coordinate } : {}) } }) : null
+  const resolvedSource = pathHit ? contentAttribute(pathHit, product.id, product.parentId)
+    : resolvedAttrs[address?.field ?? effectivePath.replace(/^(categoryAttributes|variantAttributes)\./, '').split('.')[0]]
+  let contentSource = resolvedSource?.content
+  let effectiveLocale = resolvedSource?.language
+  let translationState = effectiveLocale && translationMissing({ language: effectiveLocale }, locale) ? 'fallback' : resolvedSource?.translationState
   const dependencies = new Set<string>()
   const visited = new Set<string>()
   const collect = (expression: string) => {
@@ -610,24 +635,14 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
   for (const dependency of dependencies) {
     const hit = resolvedAttrs[dependency.replace(/^(categoryAttributes|variantAttributes)\./, '').replace(/^localizedContent\.[^.]+\./, '')]
     if (hit?.translationState === 'fallback' || hit?.translationState === 'outdated') {
+      contentSource = hit.content
       effectiveLocale = hit.effectiveLocale; translationState = hit.translationState
       warnings.push(`Mapping uses ${dependency} with ${hit.translationState} content for ${locale}.`)
     }
   }
-  let needsTranslation = isPresent(value) && (translationState === 'fallback' || translationState === 'outdated')
-  if (link && isPresent(value)) {
-    needsTranslation ||=
-      link.translatePolicy === 'TRANSLATE' &&
-      !!link.targetLanguage &&
-      !!link.sourceLanguage &&
-      link.targetLanguage.toLowerCase() !== link.sourceLanguage.toLowerCase()
-  }
-  // An explicit `translate` transform op flags the field for translation
-  // regardless of link membership; the FM.5 executor resolves the target
-  // language per coordinate and skips same-language no-ops.
-  if (!needsTranslation && isPresent(value) && (rule.transforms ?? []).some((t) => t.type === 'translate')) {
-    needsTranslation = true
-  }
+  // Missing translation is a language fact, independent of value emptiness or review state.
+  // Links/transforms do not relabel untranslated source text as the destination language.
+  const needsTranslation = !!effectiveLocale && translationMissing({ language: effectiveLocale }, locale)
 
   // 4. Provenance precedence (does not change the value).
   let source: ChannelFieldSource
@@ -652,12 +667,15 @@ export function resolveChannelField(input: ResolveChannelFieldInput): ResolvedCh
     fieldKey,
     value: value ?? null,
     source,
+    ...(contentSource ? { content: { ...contentSource, value: value ?? null, tier: 'computed' as const,
+      language: effectiveLocale ?? contentSource.language, requested: normalizeLanguage(locale),
+      provenance: { member: 'mapped' as const, from: contentSource.provenance.from } } } : {}),
     raw: sourceRaw,
     appliedTransforms: applied,
     warnings,
     required: rule.required === true,
     legacySource,
     needsTranslation,
-    ...(effectiveLocale ? { requestedLocale: locale, effectiveLocale, translationState: translationState ?? 'current' } : {}),
+    ...(effectiveLocale ? { language: effectiveLocale, requested: normalizeLanguage(locale), follows: resolvedSource?.follows, drift: resolvedSource?.drift, requestedLocale: normalizeLanguage(locale), effectiveLocale, translationState: translationState ?? 'current' } : {}),
   }
 }

@@ -30,7 +30,7 @@ describe('Product media locale and scope contract', () => {
   })
   it('requires the exact channel account and listing, supports future channels and canonicalizes language tags', () => {
     const query = { scope: 'FUTURE_STORE', market: 'CA', locale: 'fr-ca', accountId: 'store-2', listingId: 'listing-2' }
-    expect(productMediaQuerySchema.parse(query).locale).toBe('fr-CA')
+    expect(productMediaQuerySchema.parse(query).locale).toBe('fr')
     expect(productMediaQuerySchema.safeParse({ ...query, accountId: undefined }).success).toBe(false)
     expect(productMediaQuerySchema.safeParse({ ...query, listingId: undefined }).success).toBe(false)
     expect(productMediaQuerySchema.safeParse({ ...query, scope: 'MASTER' }).success).toBe(false)

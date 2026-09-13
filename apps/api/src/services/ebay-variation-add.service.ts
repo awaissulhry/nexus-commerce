@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Add variations to a LIVE eBay listing (2026-07-18).
@@ -107,6 +109,11 @@ export async function addVariationsToListing(
   candidates: NewVariationInput[],
   ctx: { oauthToken: string },
 ): Promise<AddVariationsResult> {
+  const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId], skus: candidates.map(candidate => candidate.sku) })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const market = marketplace.toUpperCase()
   const getXml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents">

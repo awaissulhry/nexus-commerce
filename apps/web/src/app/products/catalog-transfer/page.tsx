@@ -29,6 +29,7 @@ export default function CatalogTransferPage() {
   const [workbookSetup, setWorkbookSetup] = useState<WorkbookSetup>({ destinations: [], extras: [], regionalLanguages: '' })
   const [format, setFormat] = useState('catalog'), [file, setFile] = useState<File | null>(null), [url, setUrl] = useState('')
   const [source, setSource] = useState<SourceInspection | null>(null), [mapping, setMapping] = useState<SourceMapping | null>(null), [jobId, setJobId] = useState('')
+  const [blankPolicy, setBlankPolicy] = useState<'ignore' | 'clear'>('ignore')
   const [accountId, setAccountId] = useState(''), [skus, setSkus] = useState(''), [purpose, setPurpose] = useState('editing'), [exportMarkets, setExportMarkets] = useState('all')
   useEffect(() => {
     const abort = new AbortController()
@@ -53,7 +54,7 @@ export default function CatalogTransferPage() {
   const preview = () => run(async () => {
     let result: TransferJob
     if (source && mapping) result = await transferApi('catalog-transfer/source/preview', { sourceId: source.sourceId, inputHash: source.hash, mapping: { ...mapping, market, mode } })
-    else { if (!file) return; const body = new FormData(); body.append('file', file); body.append('market', market); body.append('mode', mode); body.append('format', format); if (format === 'amazon') { body.append('accountId', accountId); body.append('familyId', familyId) } result = await transferApi('catalog-transfer/preview', body) }
+    else { if (!file) return; const body = new FormData(); body.append('file', file); body.append('market', market); body.append('mode', mode); body.append('format', format); body.append('blankPolicy', blankPolicy); if (format === 'amazon') { body.append('accountId', accountId); body.append('familyId', familyId) } result = await transferApi('catalog-transfer/preview', body) }
     showJob(result.jobId)
   })
   return <div className={styles.workspace}>
@@ -79,6 +80,7 @@ export default function CatalogTransferPage() {
           <Field label="What should this file do?" hint="This applies to both products and listing destinations. You will review new records and changes before saving."><Listbox options={[{ value: 'update', label: 'Update existing products and listings only' }, { value: 'create', label: 'Create new products and listings only' }, { value: 'upsert', label: 'Create new records and update existing ones' }]} value={mode} onChange={v => setMode(v as TransferMode)} disabled={busy} width="100%" /></Field>
           {!source ? <>
             <Field label="File type"><Listbox value={format} options={[{ value: 'catalog', label: 'Nexus workbook — columns map automatically' }, { value: 'amazon', label: 'Amazon template — columns map automatically' }, { value: 'source', label: 'Supplier or other file — choose column mappings' }]} onChange={v => { setFormat(v); setFile(null); setUrl(''); if (!market && v !== 'amazon') setMarket(options.markets.some(m => m.code === 'IT') ? 'IT' : options.markets[0]?.code ?? '') }} disabled={busy} width="100%" /></Field>
+            {format === 'catalog' && <Field label="Blank cells" hint="Applies independently to each language sheet in a Nexus workbook. Omitted columns preserve their values; explicit SET, CLEAR and INHERIT actions take precedence."><Listbox value={blankPolicy} onChange={value => setBlankPolicy(value as 'ignore' | 'clear')} options={[{ value: 'ignore', label: 'Ignore — preserve existing values' }, { value: 'clear', label: 'Clear — remove values in present columns' }]} disabled={busy} /></Field>}
             {format === 'amazon' && <>
               <Field label="Destination Amazon account" hint="Choose the seller account this file belongs to."><Listbox options={options.accounts.filter(a => a.channelType === 'AMAZON').map(a => ({ value: a.id, label: a.displayName ?? a.id }))} value={accountId} onChange={id => { setAccountId(id); if (!destinationMarkets(options, id).some(m => m.code === market)) setMarket('') }} disabled={busy} width="100%" /></Field>
               <Field label="Amazon marketplace" hint="The file’s marketplace and language must match this destination."><Listbox options={destinationMarkets(options, accountId).map(m => ({ value: m.code, label: m.name }))} value={market} onChange={setMarket} disabled={busy || !accountId} width="100%" /></Field>
@@ -92,7 +94,7 @@ export default function CatalogTransferPage() {
             <SourceMappingEditor source={source} mapping={{ ...mapping, market, mode }} onChange={setMapping} options={options} familyId={familyId} disabled={busy} />
             <div className={styles.actions}><Button disabled={busy} onClick={() => { setSource(null); setMapping(null) }}>Choose another source</Button><Button variant="primary" disabled={busy || !mapping.skuColumn || !mapping.bindings.length || mapping.bindings.some(b => !b.field)} onClick={preview}>{busy ? 'Preparing review…' : 'Preview mapped import'}</Button></div>
           </>}
-          <p className={styles.secondary}>Blank cells and omitted columns preserve data. Use SET, CLEAR or INHERIT explicitly. Pricing, inventory and marketplace publication have separate workflows.</p>
+          <p className={styles.secondary}>Omitted columns preserve data. Nexus workbook blanks follow the selected policy per language; explicit SET, CLEAR or INHERIT actions take precedence. Pricing, inventory and marketplace publication have separate workflows.</p>
         </div></Card> : <Card header={<h2>Choose what your export contains</h2>}><div className={styles.stack}>
           <Field label="Export purpose"><Listbox options={[{ value: 'editing', label: 'Edit and re-import — exact accounts and overrides' }, { value: 'effective', label: 'Review effective listings — table data only' }]} value={purpose} onChange={setPurpose} disabled={busy} width="100%" /></Field>
           <Field label="Listing marketplaces" hint="Shared translations are included in every editing export. Each listing keeps its own account, marketplace, category and version."><Listbox options={[{ value: 'all', label: 'All marketplaces for the selected products' }, { value: 'current', label: `Only ${market}` }]} value={exportMarkets} onChange={setExportMarkets} disabled={busy} width="100%" /></Field>

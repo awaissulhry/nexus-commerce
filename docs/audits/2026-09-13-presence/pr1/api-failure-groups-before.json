@@ -1,0 +1,880 @@
+{
+  "src/routes/cell-formula-audit-ip.vitest.test.ts": [
+    {
+      "test": "#764 the formula audit row carries the request IP > a pin records the caller's ip, as the bulk path does",
+      "reason": "AssertionError: expected 404 to be 200 // Object.is equality\n\n- Expected\n+ Received\n\n- 200\n+ 404"
+    },
+    {
+      "test": "#764 the formula audit row carries the request IP > SENSITIVITY: the ip comes from the REQUEST, not a constant",
+      "reason": "AssertionError: expected 404 to be 200 // Object.is equality\n\n- Expected\n+ Received\n\n- 200\n+ 404"
+    }
+  ],
+  "src/routes/cell-formula-delete.vitest.test.ts": [
+    {
+      "test": "#763 a DELETE that deletes nothing must not answer 200 > happy path: a matching coordinate pins and answers 200",
+      "reason": "AssertionError: expected 404 to be 200 // Object.is equality\n\n- Expected\n+ Received\n\n- 200\n+ 404"
+    }
+  ],
+  "src/routes/cell-formula-preview-parity.vitest.test.ts": [
+    {
+      "test": "#782 preview parity \u2014 the option check runs on both scopes > channel Amazon\u00b7IT > a value INSIDE the list previews ok",
+      "reason": "AssertionError: expected undefined to be true // Object.is equality\n\n- Expected:\ntrue\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "#782 preview parity \u2014 the option check runs on both scopes > channel Amazon\u00b7IT > a value OUTSIDE the list is REFUSED, with the allowed set as data",
+      "reason": "AssertionError: expected undefined to be false // Object.is equality\n\n- Expected:\nfalse\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "#782 preview parity \u2014 the option check runs on both scopes > channel Amazon\u00b7IT > a NON-SELECT column has no list, so nothing is refused",
+      "reason": "AssertionError: expected undefined to be true // Object.is equality\n\n- Expected:\ntrue\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "#782 preview parity \u2014 the option check runs on both scopes > channel Amazon\u00b7IT > the preview returns the value as it would be STORED, not as typed",
+      "reason": "AssertionError: expected undefined to be true // Object.is equality\n\n- Expected:\ntrue\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "#782 the refusal names the field the way the HEADER does > channel scope: the SHEET COLUMN label, not the catalogue label",
+      "reason": "AssertionError: expected 'Cannot read properties of undefined (\u2026' to contain 'Are batteries included?'\n\nExpected: \"Are batteries included?\"\nReceived: \"Cannot read properties of undefined (reading 'findFirst')\"\n\n \u276f src/routes/cell-formula-preview-parity.vitest.test.ts:125:21\n    123|   it('channel scope: the SHEET COLUMN label, not the catalogue label',\u2026"
+    },
+    {
+      "test": "#782 the refusal names the field the way the HEADER does > channel scope: the OPTIONS keep the labels the cell list shows",
+      "reason": "AssertionError: expected 'Cannot read properties of undefined (\u2026' to contain 'No, S\u00ec'\n\nExpected: \"No, S\u00ec\"\nReceived: \"Cannot read properties of undefined (reading 'findFirst')\"\n\n \u276f src/routes/cell-formula-preview-parity.vitest.test.ts:134:21\n    132|     // Both halves in one sentence, which is the whole point of the sp\u2026"
+    }
+  ],
+  "src/routes/products-bulk-noop.vitest.test.ts": [
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify dimension without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify money without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify boolean without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify list.single_line_text_field without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify single_line_text_field without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify single_line_text_field without coercion in the exact listing/locale",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify single_line_text_field without coercion in the exact listing/locale",
+      "reason": "AssertionError: expected [] to match object { updated: 1, \u2026(1) }\n\n- Expected:\n{\n  \"updated\": 1,\n  \"versionOf\": \"channelListing\",\n}"
+    },
+    {
+      "test": "Shopify and Etsy store information saves > persists Shopify single_line_text_field without coercion in the exact listing/locale",
+      "reason": "AssertionError: expected 200 to be 400 // Object.is equality\n\n- Expected\n+ Received\n\n- 400\n+ 200"
+    },
+    {
+      "test": "Shopify and Etsy store information saves > saves SHOPIFY title to the selected account and leaves shared content alone",
+      "reason": ""
+    },
+    {
+      "test": "Shopify and Etsy store information saves > saves ETSY title to the selected account and leaves shared content alone",
+      "reason": "AssertionError: expected [] to match object { updated: 1, \u2026(1) }\n\n- Expected:\n{\n  \"updated\": 1,\n  \"versionOf\": \"channelListing\",\n}"
+    },
+    {
+      "test": "reference writes use authoritative choices > resolves a long pasted name before applying the stored-ID length cap",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: 1, errors: [], \u2026(1) }\n\n- Expected:\n{\n  \"errors\": [],\n  \"normalizedChanges\": [\n    {"
+    },
+    {
+      "test": "reference writes use authoritative choices > refuses ambiguous, inactive, unknown and non-text values before mutation",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: +0, errors: [ \u2026(1) ] }\n\n- Expected:\n{\n  \"errors\": [\n    ObjectContaining {\n      \"error\": StringContaining \"more than one\","
+    },
+    {
+      "test": "reference writes use authoritative choices > preserves a stored retired ID without requiring a lookup and treats its active name as a no-op",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: +0, errors: [] }\n\n- Expected:\n{\n  \"errors\": [],\n  \"wouldUpdate\": 0,\n}"
+    },
+    {
+      "test": "reference writes use authoritative choices > keeps clear and inherit usable when choices cannot be loaded",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: 1, errors: [] }\n\n- Expected:\n{\n  \"errors\": [],\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses basePrice=12.345 before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses weightValue=0.1234 before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses totalStock=1.9 before any write",
+      "reason": ""
+    },
+    {
+      "test": "attribute edit loss prevention > refuses totalStock=\"12items\" before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses ebay_price=12.345 before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses ebay_quantity=1.9 before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > refuses amazon_bulletPoints=[{\"value\":\"must not stringify\"}] before any write",
+      "reason": ""
+    },
+    {
+      "test": "attribute edit loss prevention > refuses amazon_bulletPoints=\"must not clear\" before any write",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [\n    ObjectContaining {"
+    },
+    {
+      "test": "attribute edit loss prevention > accepts a child override for a legacy field saved only on its parent",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1, \u2026(1) }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"errors\": [],\n  \"wouldUpdate\": 1,"
+    },
+    {
+      "test": "requested account resolution before bulk writes > does not resolve unrelated channels for a Shared edit",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ [] ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:351:32\n    349|     const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'm\u2026\n    350|     expect(result.statusCode).toBe(200)"
+    },
+    {
+      "test": "requested account resolution before bulk writes > writes the explicitly selected account without consulting that channel\u2019s primary",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ [] ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:364:32\n    362|       marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', ac\u2026\n    363|     expect(result.statusCode, result.body).toBe(200)"
+    },
+    {
+      "test": "requested account resolution before bulk writes > refuses conflicting explicit/implicit account contexts: [{\"channel\":\"AMAZON\",\"marketplace\":\"IT\",\"accountId\":\"account-a\"},{\"channel\":\"AMAZON\",\"marketplace\":\"DE\",\"accountId\":\"account-b\"}]",
+      "reason": ""
+    },
+    {
+      "test": "requested account resolution before bulk writes > refuses conflicting explicit/implicit account contexts: [{\"channel\":\"AMAZON\",\"marketplace\":\"IT\",\"accountId\":\"account-b\"},{\"channel\":\"AMAZON\",\"marketplace\":\"DE\"}]",
+      "reason": "AssertionError: expected 200 to be 400 // Object.is equality\n\n- Expected\n+ Received\n\n- 400\n+ 200"
+    },
+    {
+      "test": "requested account resolution before bulk writes > rejects a named account from another channel before any write",
+      "reason": "AssertionError: expected 200 to be 400 // Object.is equality\n\n- Expected\n+ Received\n\n- 400\n+ 200"
+    },
+    {
+      "test": "requested account resolution before bulk writes > rejects a stale alias from a different account before any write",
+      "reason": "AssertionError: expected 200 to be 409 // Object.is equality\n\n- Expected\n+ Received\n\n- 409\n+ 200"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > a null -> \"\" cell with expectedVersion is unchanged: no version spent, no job row",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: +0, \u2026(1) }\n\n- Expected:\n{\n  \"success\": true,\n  \"unchanged\": 1,\n  \"updated\": 0,"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > a real change alongside the same fixture still survives validation",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > the same no-op cell WITHOUT expectedVersion is not filtered \u2014 the bound is a bound",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(1) a STALE token on a no-op returns the ROW's version, not the echoed token",
+      "reason": "AssertionError: expected [] to match object { updated: +0, unchanged: 1, \u2026(1) }\n\n- Expected:\n{\n  \"unchanged\": 1,\n  \"updated\": 0,\n  \"versionOf\": \"product\","
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(1) the version handed back is the one that then works",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(1) a CHANNEL-only no-op answers with the LISTING version, not the product's",
+      "reason": "AssertionError: expected [] to match object { updated: +0, unchanged: 1, \u2026(1) }\n\n- Expected:\n{\n  \"unchanged\": 1,\n  \"updated\": 0,\n  \"versionOf\": \"channelListing\","
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689 a same-value MAPPED channel field (amazon_title) is now a no-op",
+      "reason": "AssertionError: expected [] to match object { updated: +0, unchanged: 1, \u2026(2) }\n\n- Expected:\n{\n  \"currentVersion\": 19,\n  \"unchanged\": 1,\n  \"updated\": 0,"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689 a REAL amazon_title change still writes",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(2) an unreadable If-Match is a 400, not a silent drop",
+      "reason": "AssertionError: expected 200 to be 400 // Object.is equality\n\n- Expected\n+ Received\n\n- 400\n+ 200"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(2) a STRING expectedVersion is a 400",
+      "reason": "AssertionError: expected 200 to be 400 // Object.is equality\n\n- Expected\n+ Received\n\n- 400\n+ 200"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #689(2) an explicit NULL expectedVersion is ABSENT, not malformed",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #700 a mapped channel field is CAS'd against the LISTING, not the product",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #693 CONTROL: a master column with target omitted still CASes the product",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #693 CONTROL: brand + target \"channel\" still WRITES the master column",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #700 a STALE-CLIENT payload (product version, target master) 409s naming the LISTING",
+      "reason": "AssertionError: expected 500 to be 409 // Object.is equality\n\n- Expected\n+ Received\n\n- 409\n+ 500"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #700 two consecutive mapped edits: the second uses the version the first returned",
+      "reason": "AssertionError: expected undefined to be 20 // Object.is equality\n\n- Expected:\n20\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #703 a mapped write under alias-2 targets the ALIAS listing, never the primary",
+      "reason": "AssertionError: expected [] to include 'alias-2'\n \u276f src/routes/products-bulk-noop.vitest.test.ts:724:25\n    722|         ?.where?.productId_channel_marketplace?.aliasKey,\n    723|     )\n    724|     expect(upsertWhere).toContain('alias-2')\n       |                         ^\n    725|     expect(upsertWhere).not.toContain('')"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > #703 CONTROL: the PRIMARY alias (\"\") is unchanged",
+      "reason": "AssertionError: expected [] to include ''\n \u276f src/routes/products-bulk-noop.vitest.test.ts:761:25\n    759|         ?.where?.productId_channel_marketplace?.aliasKey,\n    760|     )\n    761|     expect(upsertWhere).toContain('')\n       |                         ^\n    762|     expect(upsertWhere).not.toContain('alias-2')"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > P10 the audit row records the token the request carried",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:779:33\n    777|     })\n    778|     expect(res.statusCode).toBe(200)"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > P10 a TOKENLESS request records null, not a missing field",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:792:33\n    790|     })\n    791|     expect(res.statusCode).toBe(200)"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > SENSITIVITY: the same \"\" PATCH against a NON-null stored value is a real change",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: 1 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 1,\n}"
+    },
+    {
+      "test": "#675 \u2014 the equality pass, bounded to expectedVersion > dry run reflects the no-op filter, so a preview cannot promise a write it would skip",
+      "reason": "AssertionError: expected [] to match object { dryRun: true, wouldUpdate: +0 }\n\n- Expected:\n{\n  \"dryRun\": true,\n  \"wouldUpdate\": 0,\n}"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > removes a JSON override containing null instead of pinning null or skipping the write",
+      "reason": ""
+    },
+    {
+      "test": "channel inheritance reset and account isolation > removes a JSON override containing false instead of pinning null or skipping the write",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: 1, \u2026(1) }\n\n- Expected:\n{\n  \"success\": true,\n  \"updated\": 1,\n  \"versionOf\": \"channelListing\","
+    },
+    {
+      "test": "channel inheritance reset and account isolation > clearing an inherited JSON value creates an explicit null override",
+      "reason": "AssertionError: expected [] to match object { updated: 1 }\n\n- Expected:\n{\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > restores amazon_title follow flags and removes old aliases on the requested account",
+      "reason": ""
+    },
+    {
+      "test": "channel inheritance reset and account isolation > restores ebay_price follow flags and removes old aliases on the requested account",
+      "reason": ""
+    },
+    {
+      "test": "channel inheritance reset and account isolation > restores amazon_bulletPoints follow flags and removes old aliases on the requested account",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:889:34\n    887|     const update = column === 'bulletPoints' ? { bulletPointsOverride:\u2026\n    888|       : { [column]: null, [`${column}Override`]: null, [`followMaster$\u2026"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > reset on a platform path preserves unrelated settings and distinguishes absence from null",
+      "reason": ""
+    },
+    {
+      "test": "channel inheritance reset and account isolation > set on a platform path preserves unrelated settings and distinguishes absence from null",
+      "reason": "TypeError: Cannot read properties of undefined (reading '1')\n \u276f src/routes/products-bulk-noop.vitest.test.ts:905:25\n    903|       expect(res.statusCode, res.body).toBe(200)\n    904|       const sql = executeRaw.mock.calls.find(call => call[0].join('').\u2026\n    905|       expect(JSON.parse(sql[1])).toEqual({ settings: { retained: 'yes'\u2026\n       |                         ^\n    906|       expect(sql).toContainEqual([key, `attr_${key}`])"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > seeds a slot using follow/presence rules (follow=false)",
+      "reason": ""
+    },
+    {
+      "test": "channel inheritance reset and account isolation > seeds a slot using follow/presence rules (follow=true)",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:927:34\n    925|     category.mockRestore()\n    926|     expect(res.statusCode, res.body).toBe(200)"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > refuses both halves of a whole-list reset mixed with a slot edit",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: +0, errors: [ \u2026(2) ] }\n\n- Expected:\n{\n  \"errors\": [\n    ObjectContaining {\n      \"error\": StringContaining \"separately\","
+    },
+    {
+      "test": "channel inheritance reset and account isolation > does not broadcast one listing\u2019s slot siblings into another market",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: +0, errors: [ \u2026(1) ] }\n\n- Expected:\n{\n  \"errors\": [\n    ObjectContaining {\n      \"error\": StringContaining \"one channel\","
+    },
+    {
+      "test": "channel inheritance reset and account isolation > guards a platform snapshot without a client token and reports a stale snapshot as 409",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/routes/products-bulk-noop.vitest.test.ts:957:36\n    955|       $transaction.mockRejectedValueOnce(Object.assign(new Error('snap\u2026\n    956|       const res = await patch({ changes: [{ id: PRODUCT_ID, field: `at\u2026"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > verifies a listing once before applying a paste across column and JSON stores",
+      "reason": "AssertionError: expected undefined to be { __stmt: 'guard' } // Object.is equality\n\n- Expected:\n{\n  \"__stmt\": \"guard\",\n}"
+    },
+    {
+      "test": "channel inheritance reset and account isolation > refuses a single-slot reset rather than silently discarding other list overrides",
+      "reason": "AssertionError: expected [] to match object { wouldUpdate: +0, errors: [ \u2026(1) ] }\n\n- Expected:\n{\n  \"errors\": [\n    ObjectContaining {\n      \"error\": StringContaining \"whole list\","
+    },
+    {
+      "test": "provenance is part of the no-op decision > pinning the current title breaks inheritance even when the synced text matches",
+      "reason": "AssertionError: expected [] to match object { updated: 1 }\n\n- Expected:\n{\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "provenance is part of the no-op decision > does not infer that every target is unchanged from the first listing",
+      "reason": "AssertionError: expected [] to deeply equal [ 'IT', 'DE' ]\n\n- Expected\n+ Received\n\n- [\n-   \"IT\","
+    }
+  ],
+  "src/routes/products-bulk-recalc-guard.vitest.test.ts": [
+    {
+      "test": "the bulk route READS the formula-cascade header > recalculates only the edited account coordinate: account-a",
+      "reason": ""
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > recalculates only the edited account coordinate: account-b",
+      "reason": "AssertionError: expected [] to match object { updated: 1 }\n\n- Expected:\n{\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > WITHOUT the header: the cascade runs exactly once, for the fields written",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: 1 }\n\n- Expected:\n{\n  \"success\": true,\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > WITH the header: no cascade at all \u2014 and the write still happens",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: 1 }\n\n- Expected:\n{\n  \"success\": true,\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > the flag is read as a VALUE, not a presence: \"0\" still cascades",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called 1 times, but got 0 times\n \u276f src/routes/products-bulk-recalc-guard.vitest.test.ts:155:24\n    153|     const res = await patch({ 'x-nexus-formula-cascade': '0' })\n    154|     expect(res.statusCode).toBe(200)\n    155|     expect(reevaluate).toHaveBeenCalledTimes(1)\n       |                        ^\n    156|   })"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > a cascade that THROWS still answers 200 \u2014 the write is already committed",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: 1 }\n\n- Expected:\n{\n  \"success\": true,\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > one product's cascade failing does not stop the NEXT product's",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called 2 times, but got 0 times\n \u276f src/routes/products-bulk-recalc-guard.vitest.test.ts:198:24\n    196|     expect(res.statusCode).toBe(200)\n    197|     // BOTH were attempted \u2014 the second is the assertion that matters.\n    198|     expect(reevaluate).toHaveBeenCalledTimes(2)\n       |                        ^\n    199|     expect(reevaluate.mock.calls.map((c) => c[0].productId).sort()).to\u2026"
+    },
+    {
+      "test": "the bulk route READS the formula-cascade header > the PASS ITSELF failing still answers 200, and SAYS so",
+      "reason": "AssertionError: expected [] to match object { success: true, updated: 1 }\n\n- Expected:\n{\n  \"success\": true,\n  \"updated\": 1,\n}"
+    },
+    {
+      "test": "formula expression and value share a transaction > includes formula storage with the field write",
+      "reason": "AssertionError: expected [ undefined ] to include { __stmt: 'formula.upsert' }\n \u276f src/routes/products-bulk-recalc-guard.vitest.test.ts:230:43\n    228|     const res = await withFormulaWrite(context, token => patch({ 'x-ne\u2026\n    229|     expect(res.statusCode).toBe(200)\n    230|     expect($transaction.mock.calls[0][0]).toContain(mutation)\n       |                                           ^\n    231|     expect($transaction.mock.calls[0][0]).toContainEqual({ __stmt: 'pr\u2026"
+    },
+    {
+      "test": "formula expression and value share a transaction > does not discard a changed expression when its result equals the current value",
+      "reason": "AssertionError: expected [ undefined ] to include { __stmt: 'formula.upsert' }\n \u276f src/routes/products-bulk-recalc-guard.vitest.test.ts:239:43\n\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[71/206]\u23af"
+    }
+  ],
+  "src/services/ebay-family-axes.destination.vitest.test.ts": [
+    {
+      "test": "listing-specific family grouping > uses the selected alias theme ahead of the family default",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'length')\n \u276f Module.resolveFamilyAxes src/services/ebay-family-axes.service.ts:238:42\n\n \u276f src/services/ebay-family-axes.destination.vitest.test.ts:23:5\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[72/206]\u23af"
+    },
+    {
+      "test": "listing-specific family grouping > inherits the family theme only when the listing has no override",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'length')\n \u276f Module.resolveFamilyAxes src/services/ebay-family-axes.service.ts:238:42\n\n \u276f src/services/ebay-family-axes.destination.vitest.test.ts:30:5\n\n\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af\u23af[73/206]\u23af"
+    }
+  ],
+  "src/services/ebay-presentation-workflow.vitest.test.ts": [
+    {
+      "test": "product presentation destination workflow > reads real family axes and canonical rules; writes/reset exactly one listing with legacy per-property compatibility",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > refuses missing product coordinates and unobserved account writes",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > uses only the selected live membership, including shared SKUs outside the product tree",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > resolves conflicts per property and restores current inherited values from legacy overrides",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > rejects stale observed saves, transaction races, and newly joined family values",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > uses the real Trading adapter payload in canonical preview order, exact ItemID and account token; retry is idempotent",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > invalidates rule, family membership and theme changes after review before any marketplace write",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > checkpoints partial failures and retries only the failed destination",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > recovers an expired attempt whose marketplace write succeeded before its checkpoint",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > never stamps newer local content after the reviewed payload was submitted",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > previews/publishes the selected theme and description without assigning a shared definition, with read-back and scoped staleness",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > keeps Inventory-managed review excluded and refuses an actual unreviewed full Inventory push of a new product order",
+      "reason": "Error: No content languages configured for EBAY/IT.\n \u276f read src/services/pim/market-languages.ts:27:45\n     25|     // faults: without a status they surfaced as 500s (measured: `PATCH\n     26|     // /products/:id/global` answered 500 \"No Amazon marketplace is co\u2026\n     27|     if (!values.length) throw Object.assign(new Error(`No content lang\u2026\n       |                                             ^\n     28|     return [...new Set(values.map(normalizeLanguage))]"
+    },
+    {
+      "test": "product presentation destination workflow > exposes exact-account usage/staleness and durable review routes through the registered plugins",
+      "reason": "AssertionError: expected 400 to be 200 // Object.is equality\n\n- Expected\n+ Received\n\n- 200\n+ 400"
+    }
+  ],
+  "src/services/ebay-shared-listing-push.routing.vitest.test.ts": [
+    {
+      "test": "Phase 4 shared-SKU routing contract > publishes a flagged family via the injected addFixedPriceItem and writes one membership per variant",
+      "reason": "AssertionError: expected 'ERROR' to be 'CREATED' // Object.is equality\n\nExpected: \"CREATED\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.routing.vitest.test.ts:42:31\n     40|     const results = await pushSharedListings(familyRows, { oauthToken:\u2026"
+    },
+    {
+      "test": "Phase 4 shared-SKU routing contract > applies capToFbm-shaped capQty to each variant quantity",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ 'p1', 'SHARED-M', 9, 'IT' ]\n\nNumber of calls: 0\n\n \u276f src/services/ebay-shared-listing-push.routing.vitest.test.ts:58:20\n     56|     // requested 9 \u2192 capped 3 on both variants\n     57|     expect(db.created.every((m) => m.lastQtyPushed === 3)).toBe(true)"
+    }
+  ],
+  "src/services/ebay-shared-listing-push.service.vitest.test.ts": [
+    {
+      "test": "createSharedListing > creates the listing and one membership per variant",
+      "reason": "AssertionError: expected 'ERROR' to be 'CREATED' // Object.is equality\n\nExpected: \"CREATED\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:109:24\n    107|     const addFn = vi.fn(async () => ({ itemId: '110556677' }))"
+    },
+    {
+      "test": "createSharedListing > is idempotent: skips creation when a membership already exists",
+      "reason": "AssertionError: expected 'ERROR' to be 'SKIPPED_EXISTS' // Object.is equality\n\nExpected: \"SKIPPED_EXISTS\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:124:24\n    122|     const addFn = vi.fn(async () => ({ itemId: 'NEW' }))"
+    },
+    {
+      "test": "createSharedListing > adopt belt: a row carrying a live ItemID never re-lists (no eBay call)",
+      "reason": "AssertionError: expected 'ERROR' to be 'SKIPPED_EXISTS' // Object.is equality\n\nExpected: \"SKIPPED_EXISTS\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:136:24\n    134|     const liveParent = { ...parent, it_item_id: '257584954808' }"
+    },
+    {
+      "test": "createSharedListing > adopt belt: variant-level ItemID also blocks re-listing",
+      "reason": "AssertionError: expected 'ERROR' to be 'SKIPPED_EXISTS' // Object.is equality\n\nExpected: \"SKIPPED_EXISTS\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:148:24\n    146|     const liveVariants = [{ ...variants[0], ebay_item_id: '25656420351\u2026"
+    },
+    {
+      "test": "createSharedListing > I1: resolves productId by SKU, not array index, for each membership",
+      "reason": "AssertionError: expected undefined to be 'pid-M' // Object.is equality\n\n- Expected:\n\"pid-M\"\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "createSharedListing > T2: backfills productId via SKU lookup when _productId is absent, and stores price",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called 1 times, but got 0 times\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:178:29\n    176|     // Structural: memberships are written inside a single $transactio\u2026\n    177|     // Guards against a regression that drops $transaction (create run\u2026\n    178|     expect(db.$transaction).toHaveBeenCalledTimes(1)\n       |                             ^\n    179|     expect((db.$transaction as any).mock.calls[0][0]).toHaveLength(2)"
+    },
+    {
+      "test": "createSharedListing > returns ERROR (no throw) when the eBay call fails",
+      "reason": "AssertionError: expected '__vite_ssr_import_0__.default.channel\u2026' to match /Bad category/\n\n- Expected:\n/Bad category/\n\n+ Received:\n\"__vite_ssr_import_0__.default.channelListing.findMany is not a function\""
+    },
+    {
+      "test": "createSharedListing > I4: rejects (ERROR) a null/absent price BEFORE the eBay push \u2014 no Decimal(0) membership",
+      "reason": "AssertionError: expected '__vite_ssr_import_0__.default.channel\u2026' to match /price/i\n\n- Expected:\n/price/i\n\n+ Received:\n\"__vite_ssr_import_0__.default.channelListing.findMany is not a function\""
+    },
+    {
+      "test": "createSharedListing > I4: a variant WITH a price is stored as a Prisma.Decimal",
+      "reason": "AssertionError: expected 'ERROR' to be 'CREATED' // Object.is equality\n\nExpected: \"CREATED\"\nReceived: \"ERROR\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:227:24\n    225|     const addFn = vi.fn(async () => ({ itemId: '424242' }))"
+    },
+    {
+      "test": "pushSharedListings > groups rows into families and creates one listing per family",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "incident #38 \u2014 DB-truth creation gate > refuses to create a listing whose parentSku is a VARIANT in the catalog tree",
+      "reason": "AssertionError: expected '__vite_ssr_import_0__.default.channel\u2026' to contain 'VARIANT of family \"AIREON\"'\n\nExpected: \"VARIANT of family \"AIREON\"\"\nReceived: \"__vite_ssr_import_0__.default.channelListing.findMany is not a function\"\n\n \u276f src/services/ebay-shared-listing-push.service.vitest.test.ts:348:25\n    346|     )"
+    }
+  ],
+  "src/services/workspace.vitest.test.ts": [
+    {
+      "test": "business profile boundaries with PostgreSQL > assigns through a function owner without RLS bypass and restores the source scope inside the same transaction",
+      "reason": "PrismaClientKnownRequestError: \nInvalid `prisma.$queryRaw()` invocation:\n\n\nRaw query failed. Code: `42501`. Message: `ERROR: permission denied for table SellerReferenceLabel`\n \u276f ei.handleRequestError ../../node_modules/@prisma/client/src/runtime/RequestHandler.ts:228:12\n \u276f ei.handleAndLogRequestError ../../node_modules/@prisma/client/src/runtime/RequestHandler.ts:174:11"
+    }
+  ],
+  "src/services/__tests__/pim-apply-mapping.test.ts": [
+    {
+      "test": "applyCatalogCascade > translates only the needed language with the changed source text",
+      "reason": "Error: title needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > writes BOTH localizedContent and ProductTranslation for the translated language",
+      "reason": "Error: title needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > enqueues one push per content coordinate, skips the price field",
+      "reason": "Error: title needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > rides the holdUntil grace window and enqueues BullMQ after commit",
+      "reason": "Error: title needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > applyGrace=false \u2192 no hold window",
+      "reason": "Error: title needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > does not collapse different accounts and aliases on the same market",
+      "reason": "Error: color needs a ContentAddress before it can be saved.\n \u276f fail ../../packages/shared/content-language.ts:12:44\n \u276f contentAddress ../../packages/shared/content-language.ts:13:51\n \u276f Module.applyCatalogCascade src/services/pim/apply-mapping.service.ts:113:19\n    111| ): Promise<ApplyCascadeResult> {\n    112|   const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'\n    113|   const address = contentAddress(input.contentAddress, fieldLabel)"
+    },
+    {
+      "test": "applyCatalogCascade > rejects an ambiguous account before entering the write transaction",
+      "reason": "AssertionError: expected [Function] to throw error including 'exact listing' but got 'color needs a ContentAddress before i\u2026'\n\nExpected: \"exact listing\"\nReceived: \"color needs a ContentAddress before it can be saved.\"\n\n \u276f src/services/__tests__/pim-apply-mapping.test.ts:183:86"
+    },
+    {
+      "test": "applyCatalogCascade > writes nothing when translation fails",
+      "reason": "AssertionError: expected [Function] to throw error including 'Translation is pending' but got 'title needs a ContentAddress before i\u2026'\n\nExpected: \"Translation is pending\"\nReceived: \"title needs a ContentAddress before it can be saved.\"\n\n \u276f src/services/__tests__/pim-apply-mapping.test.ts:188:89\n    186|   it('writes nothing when translation fails', async () => {"
+    }
+  ],
+  "src/services/__tests__/pim-attribute-resolver.test.ts": [
+    {
+      "test": "resolveAttributes \u2014 standalone product > returns empty result when product has nothing set",
+      "reason": "AssertionError: expected [ 'title', 'description', \u2026(2) ] to have a length of +0 but got 4\n\n- Expected\n+ Received\n\n- 0\n+ 4"
+    },
+    {
+      "test": "resolveAttributes \u2014 locale fallback > uses requested locale when present",
+      "reason": "AssertionError: expected null to be 'Tuta da Pista' // Object.is equality\n\n- Expected:\n\"Tuta da Pista\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveAttributes \u2014 locale fallback > falls back to en when requested locale is missing",
+      "reason": "AssertionError: expected null to be 'Racing Suit' // Object.is equality\n\n- Expected:\n\"Racing Suit\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveAttributes \u2014 locale fallback > per-key locale fallback \u2014 partial it content fills gaps from en",
+      "reason": "AssertionError: expected null to be 'Tuta da Pista' // Object.is equality\n\n- Expected:\n\"Tuta da Pista\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveAttributes \u2014 locale fallback > defaults to en when no locale specified",
+      "reason": "AssertionError: expected null to be 'Racing Suit' // Object.is equality\n\n- Expected:\n\"Racing Suit\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveAttributes \u2014 channel overrideData > channel override beats master value",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 channel overrideData > channel override coexists with non-overridden master keys",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 SSOT explicit overrides > respects followMasterTitle=true: titleOverride is ignored, master wins",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 SSOT explicit overrides > followMasterTitle=false: titleOverride wins with channelExplicit source",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 SSOT explicit overrides > followMasterPrice=false with priceOverride=999 returns 999 channelExplicit",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 SSOT explicit overrides > followMasterPrice=false but priceOverride=null falls back to direct .price column",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 SSOT explicit overrides > followMaster flag absent defaults to TRUE (mirrors schema default)",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 null vs absent > explicit null in overrideData overrides master to null (not the same as absent)",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 null vs absent > absent key in overrideData leaves master value intact",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributesFlat > strips provenance and returns plain key\u2192value map",
+      "reason": "AssertionError: expected { material: 'Cowhide', \u2026(5) } to deeply equal { material: 'Cowhide', armor: 'CE2' }\n\n- Expected\n+ Received\n\n  {\n    \"armor\": \"CE2\","
+    },
+    {
+      "test": "resolveAttributesBySource > filters to only the requested origin sources",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 full stack > master \u2192 variant \u2192 channelOverride \u2192 channelExplicit all compose",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > synthesizes title from Product.name when localizedContent is empty",
+      "reason": "AssertionError: expected { content: { \u2026(6) }, \u2026(12) } to deeply equal { value: 'Racing Suit', \u2026(5) }\n\n- Expected\n+ Received\n\n  {\n+   \"content\": {"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > JSONB localizedContent.en wins over synthesized Product.name",
+      "reason": "AssertionError: expected 'Old name' to be 'New JSONB Title' // Object.is equality\n\nExpected: \"New JSONB Title\"\nReceived: \"Old name\"\n\n \u276f src/services/__tests__/pim-attribute-resolver.test.ts:457:32\n    455|     const result = resolveAttributes({ product, parent: null })"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > does NOT synthesize when synthesize=false (strict JSONB-only mode)",
+      "reason": "AssertionError: expected { content: { \u2026(6) }, \u2026(12) } to be undefined\n\n- Expected:\nundefined\n\n+ Received:\n{"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > variant column synthesis overrides parent column synthesis",
+      "reason": "AssertionError: expected 'v1' to be 'v1:name' // Object.is equality\n\nExpected: \"v1:name\"\nReceived: \"v1\"\n\n \u276f src/services/__tests__/pim-attribute-resolver.test.ts:487:40\n    485|"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > variant column synthesis beats parent JSONB localizedContent",
+      "reason": "AssertionError: expected 'v1' to be 'v1:name' // Object.is equality\n\nExpected: \"v1:name\"\nReceived: \"v1\"\n\n \u276f src/services/__tests__/pim-attribute-resolver.test.ts:503:40\n    501|     expect(result.title.value).toBe('Variant Specific Name')"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > empty array on bulletPoints does NOT synthesize (treated as no data)",
+      "reason": "AssertionError: expected { \u2026(13) } to be undefined\n\n- Expected:\nundefined\n\n+ Received:\n{"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > null/undefined columns do not synthesize",
+      "reason": "AssertionError: expected { \u2026(13) } to be undefined\n\n- Expected:\nundefined\n\n+ Received:\n{"
+    },
+    {
+      "test": "resolveAttributes \u2014 synthesis from legacy columns > channel override beats variant-column synthesis",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    }
+  ],
+  "src/services/__tests__/pim-mapping-propagation.test.ts": [
+    {
+      "test": "buildCoordinateEntries > flags needsTranslation for a cross-language linked field even when the master value is unchanged",
+      "reason": "AssertionError: expected [] to have a length of 1 but got +0\n\n- Expected\n+ Received\n\n- 1\n+ 0"
+    }
+  ],
+  "src/services/__tests__/pim-resolve-channel-field.test.ts": [
+    {
+      "test": "resolveSourcePath > substitutes {locale} and walks raw product for multi-segment paths",
+      "reason": "AssertionError: expected null to be 'Ciao' // Object.is equality\n\n- Expected:\n\"Ciao\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveChannelField \u2014 provenance > fallback when source is absent but fallback resolves",
+      "reason": "AssertionError: expected null to be 'Backup' // Object.is equality\n\n- Expected:\n\"Backup\"\n\n+ Received:\nnull"
+    },
+    {
+      "test": "resolveChannelField \u2014 needsTranslation > flags a cross-language TRANSLATE member",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "resolveChannelField \u2014 FM.3 integration > a translate op forces needsTranslation even without a link group",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    }
+  ],
+  "src/services/__tests__/pim-resolver-shadow.test.ts": [
+    {
+      "test": "shadowCompareProductRead \u2014 SSOT fields > skips SSOT compare when followMaster flags are all true (default)",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "shadowCompareProductRead \u2014 SSOT fields > reports zero mismatch when followMasterPrice=false and resolver picks priceOverride correctly",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "shadowCompareProductRead \u2014 SSOT fields > reports zero mismatch when followMasterTitle=false and titleOverride is set",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "shadowCompareProductRead \u2014 SSOT fields > reports zero mismatch when followMasterPrice=false but priceOverride null falls back to .price",
+      "reason": "Error: Content listing reads require a coordinate and hydrated Marketplace.languages.\n \u276f contentListing src/services/pim/content-read.ts:20:43\n     18|   } : undefined)\n     19|   const ordered = languages ?? listing.languages\n     20|   if (!address || !ordered?.length) throw new Error('Content listing r\u2026\n       |                                           ^\n     21|   return { id: listing.id, productId: listing.productId ?? product.id,\u2026"
+    },
+    {
+      "test": "shadowCompareProductRead \u2014 synthesized keys (A.4) > zero mismatch when JSONB localizedContent.en wins over synthesized column",
+      "reason": "AssertionError: expected 0 to be greater than or equal to 1\n \u276f src/services/__tests__/pim-resolver-shadow.test.ts:362:22\n    360|     // as both_present_differ \u2014 it's a real signal that JSONB has dive\u2026\n    361|     // column. Operator can decide whether to backfill or not. Recordi\u2026\n    362|     expect(recorded).toBeGreaterThanOrEqual(1)\n       |                      ^\n    363|"
+    }
+  ],
+  "src/services/__tests__/pim-sheet-columns.test.ts": [
+    {
+      "test": "attribute scope audit > preserves every 'AMAZON' schema field while removing unrelated master controls",
+      "reason": "AssertionError: expected [ 'batteries_included', \u2026(24) ] to deeply equal [ 'batteries_included', \u2026(25) ]\n\n- Expected\n+ Received\n\n@@ -22,7 +22,6 @@\n    \"material\","
+    },
+    {
+      "test": "attribute scope audit > preserves every 'EBAY' schema field while removing unrelated master controls",
+      "reason": "AssertionError: expected [ 'aspect_Adatto a', \u2026(46) ] to deeply equal [ 'aspect_Adatto a', \u2026(47) ]\n\n- Expected\n+ Received\n\n@@ -42,9 +42,8 @@\n    \"quantity\","
+    },
+    {
+      "test": "attribute scope audit > distinguishes every numbered image location without changing its write address",
+      "reason": "AssertionError: expected [ 'Variation theme', \u2026(3) ] to deeply equal [ 'Other image URL 1', \u2026(2) ]\n\n- Expected\n+ Received\n\n  [\n+   \"Variation theme\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 caps, requirement, lists (MS.1 rules kept) > takes the TIGHTEST cap across coordinates and records who set it",
+      "reason": "AssertionError: expected [ \u2026(2) ] to have a length of 1 but got 2\n\n- Expected\n+ Received\n\n- 1\n+ 2"
+    },
+    {
+      "test": "buildSheetColumns \u2014 caps, requirement, lists (MS.1 rules kept) > keeps a cap of 0/null from wiping a real cap",
+      "reason": "AssertionError: expected undefined to be 100 // Object.is equality\n\n- Expected:\n100\n\n+ Received:\nundefined"
+    },
+    {
+      "test": "buildSheetColumns \u2014 caps, requirement, lists (MS.1 rules kept) > unions options across channels and carries deprecated ones as a warning, never a block",
+      "reason": "AssertionError: expected undefined to deeply equal [ 'Cotone', 'Nylon', 'Poliestere' ]\n\n- Expected:\n[\n  \"Cotone\",\n  \"Nylon\",\n  \"Poliestere\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > a field that lives ONLY on the listing is a channel-scope column, never a master one",
+      "reason": "AssertionError: expected [ 'variation_theme' ] to deeply equal []\n\n- Expected\n+ Received\n\n- []\n+ ["
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > the static amazon_*/ebay_* registry placeholders are gone \u2014 no dead \"no backing column yet\" columns",
+      "reason": "AssertionError: expected [ 'variation_theme', 'name' ] to deeply equal [ 'name' ]\n\n- Expected\n+ Received\n\n  [\n+   \"variation_theme\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > joins the same attribute across channels by normalised key (Amazon material \u2261 eBay Materiale)",
+      "reason": "AssertionError: expected [ \u2026(2) ] to have a length of 1 but got 2\n\n- Expected\n+ Received\n\n- 1\n+ 2"
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > an Amazon-only attribute carries the product types that define and require it",
+      "reason": "AssertionError: expected undefined to deeply equal [ 'OUTERWEAR', 'GLOVES' ]\n\n- Expected:\n[\n  \"OUTERWEAR\",\n  \"GLOVES\",\n]"
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > retains internal product attributes on Master even when no channel declares them",
+      "reason": "AssertionError: expected [ 'armorType', 'material', \u2026(1) ] to deeply equal [ 'armorType', 'material' ]\n\n- Expected\n+ Received\n\n  [\n    \"armorType\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 the channel spec is the SOURCE (AM.1) > never drops the master's own shape (columns, content, price) for lack of a channel schema",
+      "reason": "AssertionError: expected [ 'basePrice', 'description', \u2026(2) ] to deeply equal [ 'basePrice', 'description', 'sku' ]\n\n- Expected\n+ Received\n\n  [\n    \"basePrice\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 shapes (AM.1) > a list the channel caps at ONE item is a scalar for the sheet; the channel fact keeps the truth",
+      "reason": "AssertionError: expected 'axes' to be 'scalar' // Object.is equality\n\nExpected: \"scalar\"\nReceived: \"axes\"\n\n \u276f src/services/__tests__/pim-sheet-columns.test.ts:451:30\n    449|       coordinates: [AMAZON_IT],"
+    },
+    {
+      "test": "buildSheetColumns \u2014 shapes (AM.1) > a measure is ONE column carrying its unit list",
+      "reason": "AssertionError: expected 'axes' to be 'measure' // Object.is equality\n\nExpected: \"measure\"\nReceived: \"axes\"\n\n \u276f src/services/__tests__/pim-sheet-columns.test.ts:474:30\n    472|       coordinates: [AMAZON_IT],"
+    },
+    {
+      "test": "buildSheetColumns \u2014 shapes (AM.1) > a compound leaf keeps its `parent__leaf` key and reads \"Parent \u00b7 Leaf\" in English",
+      "reason": "AssertionError: expected 'variation_theme' to be 'fulfillment_availability__quantity' // Object.is equality\n\nExpected: \"fulfillment_availability__quantity\"\nReceived: \"variation_theme\"\n\n \u276f src/services/__tests__/pim-sheet-columns.test.ts:486:28\n    484|       englishLabels: new Map([['fulfillment_availability', 'Fulfillmen\u2026"
+    },
+    {
+      "test": "buildSheetColumns \u2014 scope, kind, groups, order > treats identifiers as per_variant whatever the schema says",
+      "reason": "AssertionError: expected 'global' to be 'per_variant' // Object.is equality\n\nExpected: \"per_variant\"\nReceived: \"global\"\n\n \u276f src/services/__tests__/pim-sheet-columns.test.ts:522:30\n    520|   it('treats identifiers as per_variant whatever the schema says', () \u2026"
+    },
+    {
+      "test": "buildSheetColumns \u2014 scope, kind, groups, order > a text field with options becomes a select",
+      "reason": "AssertionError: expected 'variationTheme' to be 'select' // Object.is equality\n\nExpected: \"select\"\nReceived: \"variationTheme\"\n\n \u276f src/services/__tests__/pim-sheet-columns.test.ts:558:29\n    556|   it('a text field with options becomes a select', () => {"
+    },
+    {
+      "test": "buildSheetColumns \u2014 scope, kind, groups, order > orders product details before offers regardless of schema order; required fields and slots stay together",
+      "reason": "AssertionError: expected [ 'variation_theme', 'name', \u2026(6) ] to deeply equal [ 'name', 'zeta', 'alpha', \u2026(4) ]\n\n- Expected\n+ Received\n\n@@ -1,6 +1,7 @@\n  ["
+    },
+    {
+      "test": "buildSheetColumns \u2014 scope, kind, groups, order > group labels can change without altering slot identity, storage, requirements or channel mapping",
+      "reason": "AssertionError: expected [ 'master:identity', \u2026(2) ] to deeply equal [ 'AMAZON:details', 'AMAZON:details' ]\n\n- Expected\n+ Received\n\n  [\n+   \"master:identity\","
+    },
+    {
+      "test": "buildSheetColumns \u2014 scope, kind, groups, order > namespaces equal Amazon and eBay group keys and supplies groups for ungrouped fields",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    }
+  ],
+  "src/services/__tests__/pim-sheet-rows.test.ts": [
+    {
+      "test": "completenessFor > counts evaluated conditional requirements while preserving applicability and fallback semantics",
+      "reason": "AssertionError: expected { filled: 1, total: 1, missing: [] } to match object { total: 1, filled: +0, \u2026(1) }\n\n- Expected\n+ Received\n\n  {\n-   \"filled\": 0,"
+    }
+  ],
+  "src/services/etsy/information-content.vitest.test.ts": [
+    {
+      "test": "marks imported language fallback and keeps explicit empty translation drafts independent",
+      "reason": "Error: Listing content requires its hydrated product and translations.\n \u276f listingContentState src/services/pim/content-read.ts:52:31\n     50| /** Store readers require the same hydrated product and market authori\u2026\n     51| export function listingContentState(listing: Row, requested: string, f\u2026\n     52|   if (!listing.product) throw new Error('Listing content requires its \u2026\n       |                               ^\n     53|   const owner = listing.product"
+    }
+  ],
+  "src/services/ai/enrichment/cell-key.vitest.test.ts": [
+    {
+      "test": "encodeCellKey / decodeCellKey > keeps an alias and a locale distinguishable in the same key",
+      "reason": "Error: Invalid content language: 2\n \u276f normalizeLanguage ../../packages/shared/content-language.ts:50:45\n \u276f encodeCellKey src/services/ai/enrichment/cell-key.ts:76:28\n     74|     marketplace: input.marketplace ?? null,\n     75|     aliasId: input.aliasId ?? null,\n     76|     locale: input.locale ? normalizeLanguage(input.locale) : null,\n       |                            ^"
+    }
+  ],
+  "src/services/pim/information-database.vitest.test.ts": [
+    {
+      "test": "saves Shopify native and typed definition drafts to exact product/variant owners on additional-account aliases",
+      "reason": "AssertionError: expected [ \u2026(3) ] to deeply equal []\n\n- Expected\n+ Received\n\n- []\n+ ["
+    }
+  ],
+  "src/services/pim/market-languages-guard.vitest.test.ts": [
+    {
+      "test": "LX.2 market language guard > scans tracked and untracked API sources, naming every Owner exemption",
+      "reason": "AssertionError: expected [ Array(1) ] to deeply equal [ Array(1) ]\n\n- Expected\n+ Received\n\n  [\n-   \"services/ebay-variation-push.service.ts:454: market to language map; the only authority is Marketplace.languages\","
+    }
+  ],
+  "src/services/pim/studio-account-resolution.vitest.test.ts": [
+    {
+      "test": "channel sheet account isolation > keeps the effective value and its supplying rule together for each account and listing",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "channel sheet account isolation > reads only the selected account\u2019s rows, aliases and mapping inputs: a",
+      "reason": ""
+    },
+    {
+      "test": "channel sheet account isolation > reads only the selected account\u2019s rows, aliases and mapping inputs: b",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "channel sheet account isolation > preserves the null destination across stored values and mapping enrichment",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "channel sheet account isolation > attaches primary-account formula metadata only to that account\u2019s primary listing",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    }
+  ],
+  "src/services/pim/studio-channel-provenance.vitest.test.ts": [
+    {
+      "test": "stored channel provenance without mapping enrichment > keeps empty overrides pinned in the JSON and platform stores",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "stored channel provenance without mapping enrichment > shows Master for an empty legacy bullet array, and PINNED EMPTY for an authored clear",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "stored channel provenance without mapping enrichment > restoring inheritance uses Master and ignores the previous bullet snapshot",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    },
+    {
+      "test": "unavailable channel requirements > cannot report 100% readiness from the two fallback identity columns",
+      "reason": "TypeError: default.marketplace.findUnique is not a function\n \u276f getMappingForMarketplaceWithWarnings src/services/pim/schema-mapping.service.ts:604:40\n    602|   code: string,\n    603| ): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {\n    604|   const row = await prisma.marketplace.findUnique({\n       |                                        ^\n    605|     where: { channel_code: workspaceKey({ channel, code }) },"
+    }
+  ],
+  "src/services/shopify/channel-sheet.vitest.test.ts": [
+    {
+      "test": "Shopify behind the common channel sheet > saves exact owner intent without a Shopify mutation and preserves the first baseline",
+      "reason": "AssertionError: expected undefined to deeply equal [ ObjectContaining{\u2026} ]\n\n- Expected:\n[\n  ObjectContaining {\n    \"nextValue\": \"Second title\",\n    \"ownerId\": \"gid://shopify/Product/10\","
+    },
+    {
+      "test": "Shopify behind the common channel sheet > retains a conflicting cell while saving a different valid cell",
+      "reason": "TypeError: Cannot read properties of undefined (reading 'nextValue')\n \u276f src/services/shopify/channel-sheet.vitest.test.ts:111:79\n    109|     const result = await saveShopifySheetCells('family', scope, { cell\u2026\n    110|     expect(result.ok).toBe(false); expect(result.cells.title.ok).toBe(\u2026\n    111|     expect(s.workspace.draft.nativeEdits.find((e: any) => e.field === \u2026\n       |                                                                               ^\n    112|   })"
+    },
+    {
+      "test": "Shopify behind the common channel sheet > isolates locale tokens and preserves primary-language intent when clearing a translation",
+      "reason": "AssertionError: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "Shopify behind the common channel sheet > keeps equal-value pins and saved overrides after pending synchronization commands clear",
+      "reason": "AssertionError: expected undefined to deeply equal []\n\n- Expected:\n[]\n\n+ Received:\nundefined"
+    }
+  ],
+  "src/services/shopify/listing-information-plan.vitest.test.ts": [
+    {
+      "test": "Channel sheet schema, storage and publication validation > requires a category before creation and defers inherited existing categories to the remote plan",
+      "reason": "AssertionError: expected [Function] to throw error including 'category' but got 'Shopify content requires hydrated pro\u2026'\n\nExpected: \"category\"\nReceived: \"Shopify content requires hydrated product translations.\"\n\n \u276f src/services/shopify/listing-information-plan.vitest.test.ts:13:88\n     11|     const field = shopifyProductSpec(constrained, 'store-a').fields.fi\u2026"
+    },
+    {
+      "test": "Channel sheet schema, storage and publication validation > isolates base and translated fields while keeping native shared fields read-only in another language",
+      "reason": "AssertionError: expected [Function] to not throw an error but 'Error: Shopify content requires hydra\u2026' was thrown\n\n- Expected:\nundefined\n\n+ Received:\n\"Error: Shopify content requires hydrated product translations.\""
+    },
+    {
+      "test": "Channel sheet schema, storage and publication validation > fails invalid saved values before any resource creation and respects translation permissions",
+      "reason": "AssertionError: expected [Function] to throw error including 'one line' but got 'Shopify content requires hydrated pro\u2026'\n\nExpected: \"one line\"\nReceived: \"Shopify content requires hydrated product translations.\"\n\n \u276f src/services/shopify/listing-information-plan.vitest.test.ts:46:85\n     44|     const field = shopifyProductSpec(schema, 'store-a').fields.find(f \u2026"
+    }
+  ],
+  "src/services/pim/mapping/cell-formula-set-audit.vitest.test.ts": [
+    {
+      "test": "atomic literal replacement and undo > removes the previous formula inside the value transaction, including a same-value edit",
+      "reason": "AssertionError: expected \"vi.fn()\" to be called with arguments: [ ObjectContaining{\u2026} ]\n\nNumber of calls: 0\n\n \u276f src/services/pim/mapping/cell-formula-set-audit.vitest.test.ts:163:25\n    161|     expect(writer).toHaveBeenCalledWith(expect.objectContaining({ valu\u2026\n    162|     expect(formulaDeleteMany).toHaveBeenCalledTimes(1)"
+    },
+    {
+      "test": "atomic literal replacement and undo > detects a changed formula even when its last good value stayed the same",
+      "reason": "AssertionError: promise resolved \"{ ok: true, value: 20, cascaded: [] }\" instead of rejecting\n\n- Expected\n+ Received\n\n- Error {\n-   \"message\": \"rejected promise\","
+    }
+  ],
+  "src/services/pim/mapping/formula-database.vitest.test.ts": [
+    {
+      "test": "formula recovery through the real product API and PostgreSQL > refuses legacy content formulas before changing inherited products or channel snapshots",
+      "reason": "AssertionError: expected { productId: 'two', ok: true, \u2026(10) } to match object { ok: false, \u2026(1) }\n(10 matching properties omitted from actual)\n\n- Expected\n+ Received\n\n  {"
+    },
+    {
+      "test": "formula recovery through the real product API and PostgreSQL > applies and undoes a channel title without touching another alias or the master",
+      "reason": "AssertionError: {\"productId\":\"one\",\"ok\":false,\"error\":\"Title needs a choice: Edit the shared Italian or Pin on Amazon \u00b7 IT \u00b7 it.\",\"value\":null,\"before\":\"Synced title\",\"expectedState\":\"50f7192d458b769963bcd1af8183375a0c67f664623e741ae1207bb6930445cf\",\"dependsOn\":[],\"warnings\":[],\"unknownRefs\":[],\"errorPos\":null,\"sourceLabel\":\"AMAZON \u00b7 IT \u00b7 it\",\"fieldLabel\":\"Title\"}: expected false to be true // Object.is equality\n\n- Expected\n+ Received\n\n- true\n+ false"
+    },
+    {
+      "test": "formula recovery through the real product API and PostgreSQL > refuses retired localized formula writes without changing native or other language values",
+      "reason": "AssertionError: expected { ok: true, error: null, \u2026(9) } to match object { ok: false, \u2026(1) }\n(9 matching properties omitted from actual)\n\n- Expected\n+ Received\n\n  {"
+    },
+    {
+      "test": "formula recovery through the real product API and PostgreSQL > keeps two accounts, three listings and two languages independent through formula save and reload",
+      "reason": "AssertionError: {\"scope\":\"channel\",\"channel\":\"ETSY\",\"marketplace\":\"GLOBAL\",\"market\":\"GLOBAL\",\"channelConnectionId\":\"etsy-a\",\"aliasKey\":\"\",\"locale\":\"en\",\"fieldKey\":\"name\"}: {\"error\":\"Title needs a ContentAddress before it can be saved.\"}: expected undefined to be true // Object.is equality\n\n- Expected:\ntrue\n\n+ Received:\nundefined"
+    }
+  ]
+}

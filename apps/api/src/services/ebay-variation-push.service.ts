@@ -1,4 +1,6 @@
+import { loadStoredVariationProjection } from './pim/stored-variation-projection.js'
 import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
+import { assertListingContentReviewed } from './pim/publish-review-gate.js'
 /**
  * eBay variation-group push — shared Inventory-API publisher.
  *
@@ -6,10 +8,12 @@ import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-cons
  * the eBay flat-file page and the per-product Images tab publish through ONE proven
  * code path. No logic changes vs the original at extraction time.
  */
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from '../db.js'
 import { ebayAccountService } from './ebay-account.service.js'
 import { syncActivatedListings } from './listing-activation-sync.service.js'
 import { parseThemeAxes, AXIS_SYNONYM_GROUPS, axisSynonymKey, storedPresentationValues } from './ebay-theme-axes.js'
+import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
 import { clampImageSets, EBAY_VARIATION_IMAGE_MAX } from './images/ebay-image-axis.pure.js'
 import { validateVariationFamily } from './ebay-variation-preflight.js'
 import { Prisma } from '@nexus/database'
@@ -551,12 +555,13 @@ async function saveLastPublishedAxes(
   mp: string,
   marketplaceId: string,
   axisNames: string[],
+  connectionId: string,
 ): Promise<void> {
   if (!parentSku || axisNames.length === 0) return
   try {
     const listing = await prisma.channelListing.findFirst({
-      where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp },
-      select: { id: true, platformAttributes: true },
+      where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp, channelConnectionId: connectionId, aliasKey: '' },
+      select: { id: true, version: true, platformAttributes: true },
     })
     if (!listing) return
     const pa = (listing.platformAttributes ?? {}) as Record<string, unknown>
@@ -564,9 +569,9 @@ async function saveLastPublishedAxes(
     const prev = existing[marketplaceId]
     // Idempotent — skip the write when the stored axes already match.
     if (Array.isArray(prev) && prev.length === axisNames.length && prev.every((v, i) => v === axisNames[i])) return
-    await prisma.channelListing.update({
-      where: { id: listing.id },
-      data: { platformAttributes: { ...pa, __lastPublishedAxes: { ...existing, [marketplaceId]: axisNames } } },
+    await prisma.channelListing.updateMany({
+      where: { id: listing.id, version: listing.version },
+      data: { version: { increment: 1 }, platformAttributes: { ...pa, __lastPublishedAxes: { ...existing, [marketplaceId]: axisNames } } },
     })
   } catch { /* non-fatal */ }
 }
@@ -788,7 +793,23 @@ export async function pushVariationGroup(
   },
 ): Promise<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[]> {
   const results: { sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string; itemId?: string }[] = []
+  // All account-matching markets participate: this publisher can also touch
+  // sibling-market offers. Stored controls, never incoming cells, own the lock.
+  const pushSkus = rows.map(row => String(row.sku ?? '')).filter(Boolean)
+  const pushProductIds = rows.map(row => String(row._productId ?? '')).filter(Boolean)
+  const pushControls = await prisma.channelListing.findMany({ where: {
+    channel: 'EBAY', channelConnectionId: connectionId,
+    product: { OR: [{ sku: { in: pushSkus } }, { id: { in: pushProductIds } }] },
+  } })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
+  }
   await assertLegacyPresentationPublishAllowed({ sku: String((rows.find(r => r._isParent) ?? rows[0])?.sku ?? ''), marketplace: mp, accountId: connectionId })
+  // D7 / R-LX-7 — the one review verdict, beside the presentation one. The group
+  // title/description this push sends are resolved content; an unreviewed machine
+  // draft must not reach eBay any more than it reaches an Amazon payload.
+  await assertListingContentReviewed({ sku: String((rows.find(r => r._isParent) ?? rows[0])?.sku ?? ''), channel: 'EBAY', marketplace: mp, accountId: connectionId })
 
   // EFX P5 — cap consistency. eBay allows at most 12 pictures per variation in
   // a multiple-variation listing (Inventory API "Managing images"; same cap as
@@ -868,7 +889,7 @@ export async function pushVariationGroup(
     const skus = rows.map((r) => r.sku as string).filter(Boolean)
     const prods = await prisma.product.findMany({
       where: { sku: { in: skus } },
-      select: { sku: true, parentId: true, brand: true, variationTheme: true },
+      select: { id: true, sku: true, parentId: true, brand: true, variationTheme: true, variationAxes: true },
     })
     for (const p of prods) {
       if (p.brand) brandBySku.set(p.sku, p.brand)
@@ -880,7 +901,7 @@ export async function pushVariationGroup(
       ?? null
     if (parentSku) {
       const pl = await prisma.channelListing.findFirst({
-        where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp },
+        where: { product: { sku: parentSku }, channel: 'EBAY', marketplace: mp, channelConnectionId: connectionId, aliasKey: '' },
         select: { platformAttributes: true },
       })
       const pa = (pl?.platformAttributes ?? {}) as Record<string, unknown>
@@ -901,15 +922,25 @@ export async function pushVariationGroup(
         ? (lastAxesForMarket as unknown[]).filter((s): s is string => typeof s === 'string')
         : undefined
     }
-    // EFX D2 — theme wins; else the parent's stored _variationAxes; else LEGACY.
-    const themeAxes = parseThemeAxes(parentThemeRaw)
-    declaredAxes = themeAxes.length > 0
-      ? themeAxes
-      : storedAxisOrder.length > 0
-        ? storedAxisOrder.slice()
-        : null
+    // VT.1 (2026-09-13, VX D1/M3) — ONE declared-axis rule for every reader: the COORDINATE's stored
+    // `_variationAxes` when non-empty, else `Product.variationTheme`, else LEGACY discovery. This replaces EFX D2's
+    // product-first chain, which disagreed with `ebay-family-axes.service.ts` on the one family where both stores
+    // are set. Measured over all 38 eBay parent listing rows on the local catalogue: this push's declared axes are
+    // **byte-identical on 38 of 38** (the two rows that carry both stores agree, 35 carry only the product theme,
+    // one carries neither) — the flip changes what WINS in future, not what ships today.
+        // `storedAxisOrder` IS `pa._variationAxes` filtered to strings a few lines up, read in the block that owns `pa`;
+    // passing it keeps ONE read of that store rather than a second one with its own filter.
+    const family = prods.find(p => p.sku === parentSku && p.parentId === null)
+    if (family?.variationAxes.length) {
+      const { cell } = await loadStoredVariationProjection({ productId: family.id, channel: 'EBAY', market: mp, accountId: connectionId, aliasKey: '' })
+      const invalid = cell.axes.find(a => a.included && a.unbound)
+      if (invalid || cell.candidates?.state === 'unavailable') throw new Error(invalid?.unbound?.reason ?? cell.candidates?.unavailableReason)
+      declaredAxes = cell.axes.filter(a => a.included).map(a => a.familyKey)
+      storedAxisOrder = declaredAxes
+      nameLabels = Object.fromEntries(cell.axes.filter(a => a.included).map(a => [a.familyKey, a.channelName]))
+    } else declaredAxes = ebayDeclaredAxes({ _variationAxes: storedAxisOrder }, parentThemeRaw)
   } catch (err) {
-    console.warn('[ebay-push] brand/label fetch failed — proceeding without renames', err)
+    throw new Error(`Could not resolve the eBay variation projection: ${err instanceof Error ? err.message : String(err)}`)
   }
   const nmLabel = (a: string) => nameLabels[a] || a
   const vlLabel = (a: string, v: string) => valueLabels[a]?.[v] || v
@@ -1994,7 +2025,7 @@ export async function pushVariationGroup(
   // Reached only past the publish-failure early-return above, so it captures a real
   // publish. Merge-only into the parent listing's platformAttributes (never clobbers
   // __offerIds); fire-and-forget like saveOfferIds — server metadata, not sent to eBay.
-  void saveLastPublishedAxes(parentRow.sku as string, mp, marketplaceId, specifications.map(s => s.name))
+  void saveLastPublishedAxes(parentRow.sku as string, mp, marketplaceId, specifications.map(s => s.name), connectionId)
 
   // Re-publishing an already-active listing returns no listingId in the publish body.
   // Fall back to GET offer for the first variant — the offer's listing.listingId is
@@ -2135,6 +2166,19 @@ export async function pushOffersOnly(
   marketplaceId: string,
   capToFbm: (pid: string | undefined, sku: string, requested: number, market?: string) => number,
 ): Promise<Array<{ sku: string; market: string; status: 'PUSHED' | 'ERROR'; message: string }>> {
+  // All account-matching markets participate: this publisher can also touch
+  // sibling-market offers. Stored controls, never incoming cells, own the lock.
+  const pushSkus = rows.map(row => String(row.sku ?? '')).filter(Boolean)
+  const pushProductIds = rows.map(row => String(row._productId ?? '')).filter(Boolean)
+  const pushControls = await prisma.channelListing.findMany({ where: {
+    channel: 'EBAY', channelConnectionId: connectionId,
+    product: { OR: [{ sku: { in: pushSkus } }, { id: { in: pushProductIds } }] },
+  } })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: `${refusal.code}: ${refusal.sentence}` }))
+  }
+  if (!pushControls.length) return rows.map(input => ({ sku: String(input.sku ?? ''), market: mp, status: 'ERROR' as const, message: 'PUSH_CONTROL_UNAVAILABLE: No stored eBay listing controls were found.' }))
   const region = mp === 'UK' ? 'GB' : mp
   const currency = mp === 'UK' ? 'GBP' : 'EUR'
   const headers = {

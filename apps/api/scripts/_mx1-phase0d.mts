@@ -1,0 +1,6 @@
+const { PrismaClient } = await import('@prisma/client')
+const p = new PrismaClient({ datasources: { db: { url: process.argv[2] } } })
+console.log('fulfillment_channel_code enum per market:', JSON.stringify(await p.$queryRawUnsafe(`SELECT DISTINCT marketplace, "schemaDefinition"->'properties'->'fulfillment_availability'->'items'->'properties'->'fulfillment_channel_code'->'enum' e FROM "CategorySchema" WHERE channel='AMAZON' AND "productType"='OUTERWEAR' AND "isActive" ORDER BY marketplace`)))
+console.log('vp2 migration rows:', JSON.stringify(await p.$queryRawUnsafe(`SELECT migration_name FROM _prisma_migrations WHERE migration_name ILIKE '%vp2%' OR migration_name ILIKE '%excluded%'`)))
+console.log('GALE parent listing _axisValueOrder:', JSON.stringify(await p.$queryRawUnsafe(`SELECT channel, marketplace, "platformAttributes"->'_axisValueOrder' o FROM "ChannelListing" WHERE "productId"='cmokmy3a40078pm0p1fvnu523' AND "platformAttributes" ? '_axisValueOrder'`)))
+await p.$disconnect()

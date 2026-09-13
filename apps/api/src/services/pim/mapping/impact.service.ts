@@ -6,6 +6,7 @@ import { getMappingForMarketplace, mergeRulesIntoMapping, removeRulesFromMapping
 import { resolveBatch } from './resolve-batch.service.js'
 import { mappingInputToken } from './review-inputs.js'
 import { expressionDraft, changedFields, validateReviewMapping, type ExpressionChange, type CategoryChange } from './review-draft.js'
+import type { StoredVariationRule } from '../variation-rule-store.js'
 import { type MappingRow } from './category-mapping.service.js'
 import { languageForMarketplace } from '../../products/translation-resolver.service.js'
 import { mappingToken, MappingConflict } from './revision-token.js'
@@ -25,6 +26,12 @@ interface ImpactPayload {
   restoreRevision?: { id: string; version: number }
   presentationChange?: { id: string; rule: PresentationRule | null };
   inputToken?: string; expression?: ExpressionChange; categoryChange?: CategoryChange
+  /**
+   * VT.1b — a variation RULE change (VX §11.1). It changes no field rule, so `changes` stays empty and the scan
+   * counts nothing; its blast radius is families, answered by `simulateVariationRule` and carried here so the review
+   * screen shows the same two numbers the dry run showed.
+   */
+  variationChange?: { categoryId: string | null; rule: StoredVariationRule | null; follow: number; wouldCollide: number }
   inputModels?: Record<string, string>
   shopifySchemaRevisions?: Record<string, string>
   categoryBefore?: MappingRow[]; categoryAfter?: MappingRow[]
@@ -39,9 +46,11 @@ export async function createMappingImpact(input: { channel: string; market: stri
   expression?: ExpressionChange; categoryChange?: CategoryChange; restoreRevisionId?: string;
   presentationChange?: { id: string; rule: PresentationRule | null };
   clone?: { channel: string; market: string; token: string; addTranslate?: boolean }
+  /** VT.1b — one variation rule for one category (or channel-wide when `categoryId` is null). */
+  variationChange?: { categoryId: string | null; rule: StoredVariationRule | null }
 }) {
-  if ([input.expression, input.categoryChange, input.clone, input.changes, input.presentationChange, input.restoreRevisionId].filter(v => v !== undefined).length !== 1) throw new InvalidMappingError(['Choose one kind of change per review'])
-  const specialized = !!(input.expression || input.categoryChange || input.clone || input.presentationChange || input.restoreRevisionId)
+  if ([input.expression, input.categoryChange, input.clone, input.changes, input.presentationChange, input.restoreRevisionId, input.variationChange].filter(v => v !== undefined).length !== 1) throw new InvalidMappingError(['Choose one kind of change per review'])
+  const specialized = !!(input.expression || input.categoryChange || input.clone || input.presentationChange || input.restoreRevisionId || input.variationChange)
   input.changes ??= []
   if (!specialized && (!Array.isArray(input.changes) || !input.changes.length || input.changes.length > 500)) throw new InvalidMappingError(['Choose between 1 and 500 field rules'])
   const keys = new Set<string>()
@@ -56,7 +65,20 @@ export async function createMappingImpact(input: { channel: string; market: stri
   if (!input.expectedToken || input.expectedToken !== token) throw new MappingConflict()
   const inputModels: Record<string, string> = {}
   const inputToken = await mappingInputToken(input.channel, input.market, prisma, (model, token) => { inputModels[model] = token })
-  const category = input.category?.trim() || null
+  /**
+   * 🔴 VT.F item A7 (VT.3b's REQUEST) — a category-scoped VARIATION rule must name its category.
+   *
+   * `variationChange` carries the category in its OWN block (`variationChange.categoryId`) and the
+   * `/variations/:categoryId` route never also passed `category`, so `payload.category` was null and the
+   * review drawer printed **"All marketplace categories"** for a rule that touches exactly one
+   * (`ImpactReview.tsx:45`). An operator reading that sentence would be approving a blast radius an order
+   * of magnitude wider than the change. VT.3b measured it live on Amazon·DE·OUTERWEAR: `8 follow · 0
+   * override · 0 collide`, one category, one sentence claiming all of them.
+   *
+   * Derived HERE rather than in the route, so a second caller of the variations kind cannot reintroduce it,
+   * and `input.category` still wins when a caller states one (it is the field-rule path's own scope).
+   */
+  const category = input.category?.trim() || input.variationChange?.categoryId?.trim() || null
   let after = mergeRulesIntoMapping(removeRulesFromMapping(before, input.changes.filter(c => !c.rule).map(c => c.fieldKey), category),
     input.changes.filter((c): c is { fieldKey: string; rule: FieldMappingRule } => c.rule !== null), category)
   let categoryBefore: MappingRow[] | undefined, categoryAfter: MappingRow[] | undefined
@@ -81,6 +103,19 @@ export async function createMappingImpact(input: { channel: string; market: stri
   if (input.expression) {
     after = expressionDraft(before, input.expression)
     input.changes = changedFields(before, after)
+  }
+  // VT.1b — the variation rule draft. It touches no field rule, so `changes` stays EMPTY on purpose: `changedFields`
+  // would list every field of the marketplace as "unchanged" work for the scan to do, and the scan has nothing to say
+  // about a variation rule. The blast radius that matters is computed by the one simulation and carried on the payload.
+  let variationRadius: { follow: number; wouldCollide: number } | undefined
+  if (input.variationChange) {
+    const { draftVariationRule, simulateVariationRule } = await import('../variation-rule-view.service.js')
+    const drafted = draftVariationRule(before, input.variationChange.categoryId, input.variationChange.rule, input.userId)
+    if (drafted.errors.length) throw new InvalidMappingError(drafted.errors)
+    after = drafted.mapping
+    input.changes = []
+    const simulated = await simulateVariationRule({ channel: input.channel, market: input.market, categoryId: input.variationChange.categoryId, rule: input.variationChange.rule })
+    variationRadius = { follow: simulated.follow, wouldCollide: simulated.wouldCollide }
   }
   if (input.clone) {
     if (input.clone.channel !== input.channel || input.clone.market === input.market) throw new InvalidMappingError(['Clone into a different market of the same channel'])
@@ -166,7 +201,8 @@ export async function createMappingImpact(input: { channel: string; market: stri
   const cutoff = new Date().toISOString()
   const total = await prisma.product.count({ where: { deletedAt: null, createdAt: { lte: new Date(cutoff) } } })
   const payload: ImpactPayload = { kind: KIND, channel: input.channel, market: input.market, category, changes: input.changes, before, after, token, shopifySchemaRevisions, taxonomySnapshotId, taxonomySchemaId,
-    cursor: null, cutoff, inputToken, inputModels, restoreRevision, expression: input.expression, categoryChange: input.categoryChange, categoryBefore, categoryAfter, cloneSource, presentationChange: input.presentationChange, allFields: specialized && !input.presentationChange, counts: { scanned: 0, matchedProducts: 0, affectedListings: 0, changed: 0, preservedOverrides: 0, invalid: 0, introducedInvalid: 0, excluded: 0 } }
+    cursor: null, cutoff, inputToken, inputModels, restoreRevision, expression: input.expression, categoryChange: input.categoryChange,
+    ...(input.variationChange ? { variationChange: { ...input.variationChange, ...variationRadius! } } : {}), categoryBefore, categoryAfter, cloneSource, presentationChange: input.presentationChange, allFields: specialized && !input.presentationChange, counts: { scanned: 0, matchedProducts: 0, affectedListings: 0, changed: 0, preservedOverrides: 0, invalid: 0, introducedInvalid: 0, excluded: 0 } }
   const job = await prisma.bulkOperation.create({ data: { userId: input.userId, productCount: total, changeCount: input.changes.length,
     status: 'MAPPING_SCANNING', changes: json(payload), total, processed: 0, expiresAt: new Date(Date.now() + LEASE) } })
   void runMappingImpact(job.id).catch(() => {})
@@ -310,7 +346,7 @@ export async function readMappingImpact(jobId: string, userId: string | null, pa
   return { jobId, state: job.status, total: job.total, processed: job.processed, counts: payload.counts,
     channel: payload.channel, market: payload.market, category: payload.category, version: payload.before.version, token: payload.token,
     futureProducts: true, operation: 'standing-rule', publication: 'separate', createdAt: payload.cutoff, expiresAt: job.expiresAt,
-    inputPolicy: 'Any resolution-input change requires a new review; activation reads inputs in a serializable transaction. Future products resolve the active rule on read.', restoreRevision: payload.restoreRevision, expression: payload.expression, categoryChange: payload.categoryChange, cloneSource: payload.cloneSource, presentationChange: payload.presentationChange, changes: payload.changes, rows: (chunks[0]?.changes as { rows?: unknown[] } | undefined)?.rows ?? [], page, pages: chunkCount, errors: job.errors }
+    inputPolicy: 'Any resolution-input change requires a new review; activation reads inputs in a serializable transaction. Future products resolve the active rule on read.', restoreRevision: payload.restoreRevision, expression: payload.expression, categoryChange: payload.categoryChange, variationChange: payload.variationChange, cloneSource: payload.cloneSource, presentationChange: payload.presentationChange, changes: payload.changes, rows: (chunks[0]?.changes as { rows?: unknown[] } | undefined)?.rows ?? [], page, pages: chunkCount, errors: job.errors }
 }
 
 export async function activateMappingImpact(jobId: string, userId: string | null) {

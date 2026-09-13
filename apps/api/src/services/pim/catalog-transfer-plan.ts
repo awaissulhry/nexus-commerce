@@ -1,3 +1,7 @@
+import { channelContentField, channelContentState, transferContentAddress, planContentWrite, type TransferContentWrite } from './catalog-transfer-content.js'
+import { marketLanguages } from './market-languages.js'
+import { contentField, isLocalizableContent, resolveContent, translationMissing } from './content-resolver.js'
+import { normalizeLanguage } from './content-language.js'
 import { createHash } from 'node:crypto'
 import { transferCategoryField, transferIsStore, transferCanonical, transferTargetKey, type TransferCell, type TransferIssue, type TransferMode, type TransferRow } from '@nexus/shared/catalog-transfer'
 import { columnApplies, productRoleOf } from '@nexus/shared/master-sheet'
@@ -35,7 +39,7 @@ export interface TransferContext {
   families: { id: string; code: string; label: string }[]
   categories: { id: string; isActive: boolean }[]
   accounts: { id: string; channelType: string; marketplace: string | null; isActive?: boolean }[]
-  markets: { channel: string; code: string }[]
+  markets: { channel: string; code: string; language?: string; languages?: string[] }[]
   aliases?: { id: string; productId: string; channel: string; marketplace: string; channelConnectionId: string | null; status: string }[]
   categoryDefaults?: Record<string, string | null>
   parentsWithChildren?: Set<string>
@@ -46,6 +50,8 @@ export interface TransferTarget {
   identity: TransferRow
   before: ValueRecord | null
   patch: ValueRecord
+  contentWrites?: TransferContentWrite[]
+  contentFields?: Record<string, string>
   parentSku?: string | null
   categories?: { categoryId: string; isPrimary: boolean }[]
   cells: TransferCell[]
@@ -84,14 +90,36 @@ export function transferContracts(market: string, options: { allowIncompleteSche
 }
 
 const ownMaster = (product: ValueRecord, col: SheetColumn, locale: string) => {
-  if (locale) return jsonRecord(jsonRecord(product.localizedContent)[locale])[col.key === 'name' ? 'title' : col.key]
+  if (locale) {
+    const requested = normalizeLanguage(locale)
+    const resolved = resolveContent({ product: product as any, parent: product.parent as any, field: col.key, localizableKeys: [col.key], address: { requested } })
+    return translationMissing(resolved, requested) || resolved.ownerId !== product.id ? undefined : resolved.value
+  }
   const value = col.storage === 'categoryAttributes' ? jsonRecord(product.categoryAttributes)[col.key] : product[col.key === 'title' ? 'name' : col.key]
   return col.kind === 'number' && value !== null && value !== undefined ? Number(value) : value
 }
-export function masterTransferState(product: ValueRecord, col: SheetColumn, locale = '') {
+/**
+ * R-LX-8 (on LX.R's P1-8) — three states, not two, for a localized cell:
+ *   stored     the product's OWN translation row
+ *   inherited  + `value` + `from`: the family's text, owned by the parent. The
+ *              value is present and the ownership is stated, so an export of the
+ *              child alone can no longer lose its German title silently, and an
+ *              import can decide whether to materialise it.
+ *   inherited  + `value: null`: genuinely untranslated (a source-language
+ *              fallback is displayable but is NOT a translation — LX.5).
+ * Never `stored` for a parent's row, never `null` when the text exists.
+ */
+export function masterTransferState(product: ValueRecord, col: SheetColumn, locale = ''): { state: 'stored' | 'inherited'; value: unknown; from?: string } {
+  if (locale) {
+    const requested = normalizeLanguage(locale)
+    const resolved = resolveContent({ product: product as any, parent: product.parent as any, field: col.key, localizableKeys: [col.key], address: { requested } })
+    if (translationMissing(resolved, requested)) return { state: 'inherited', value: null }
+    if (resolved.ownerId && resolved.ownerId !== product.id) return { state: 'inherited', value: resolved.value ?? null, from: resolved.ownerId }
+    return { state: 'stored', value: resolved.value ?? null }
+  }
   const value = ownMaster(product, col, locale)
   // Native nullable columns do not store a separate inheritance marker; the resolver falls back.
-  const inherited = value === undefined || !locale && col.storage !== 'categoryAttributes' && (value === null || value === '')
+  const inherited = value === undefined || col.storage !== 'categoryAttributes' && (value === null || value === '')
   return { state: inherited ? 'inherited' as const : 'stored' as const, value: value ?? null }
 }
 
@@ -112,7 +140,22 @@ function cell(row: TransferRow, before: { state: 'stored' | 'inherited'; value: 
     verdict: before.state === state && transferCanonical(before.value) === transferCanonical(after) ? 'unchanged' : 'changed' }
 }
 
-export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode, context: TransferContext, contracts: TransferContracts, policy?: SourceMapping['policy']): Promise<TransferPlan> {
+/**
+ * LX.F2 R-LX-21 (F-LX-4) — `options.revalidateDeclaredVersion` is FALSE on the two APPLY
+ * paths. The workbook's `version` column is an EXPORT-FRESHNESS check and it belongs to the
+ * preview, which still makes it. Re-making it while applying refuses a job because of the
+ * job's OWN earlier target: a shared-content write cascades onto every listing that follows
+ * the shared text and bumps its `version` (`master-content.service.ts:137`), so one workbook
+ * carrying a shared `name` AND a channel `item_name` could never apply — target 1 succeeded
+ * and targets 2 and 3 answered "The exported version no longer matches this record", measured
+ * on `catalog-transfer-http.vitest.test.ts` ("applies one wide workbook to independent
+ * languages, accounts and marketplaces"). The apply keeps its own guards: the rebuilt plan
+ * must still produce a byte-identical patch and contract hash, the target snapshot must still
+ * match (`listingConflictSnapshot`), and the write is a compare-and-set on the freshly read
+ * `version` + `updatedAt`. The preview keeps the check (a re-uploaded stale workbook still
+ * reads INVALID).
+ */
+export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode, context: TransferContext, contracts: TransferContracts, policy?: SourceMapping['policy'], options?: { revalidateDeclaredVersion?: boolean }): Promise<TransferPlan> {
   const resolveReference = contracts.reference ?? createReferenceResolver()
   const issues: TransferIssue[] = [], warnings = new Set<string>(), targets: TransferTarget[] = []
   const exclusions: SourceExclusion[] = []
@@ -176,7 +219,10 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
     if (!isProduct && !existingProduct && !productRows.has(first.sku)) { error(first, 'Create the shared product in Products before adding its listings'); continue }
     if (!isProduct && !before && !group.some(r => r.entity === 'Listings')) { error(first, 'Declare a new listing in Listings before supplying overrides'); continue }
     const versions = [...new Set(group.filter(r => r.version !== undefined).map(r => r.version))]
-    if (versions.length > 1 || versions.length && versions[0] !== before?.version) { error(first, 'The exported version no longer matches this record. Export again before applying edits.'); continue }
+    // Two declared versions for ONE record is a malformed workbook, not staleness, so that arm
+    // fires on every path — apply included. The staleness arm obeys
+    // `revalidateDeclaredVersion` (LX.F2 R-LX-21, reasoned at the signature).
+    if (versions.length > 1 || (options?.revalidateDeclaredVersion !== false && versions.length && versions[0] !== before?.version)) { error(first, 'The exported version no longer matches this record. Export again before applying edits.'); continue }
     const target: TransferTarget = { key, identity: first, before: before ? clone(before) : null, patch: {}, rows: group, cells: [], contractHash: '', create: !before }
     const formulaKeys = new Map<string, string[]>()
     try {
@@ -221,17 +267,27 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (!col) { error(row, 'This attribute is not declared by the selected family'); continue }
           const old = masterTransferState(working, col, row.locale)
           if (preserve(row, old.state === 'stored')) continue
-          let value = row.action === 'SET' ? row.value : null
-          if (row.action === 'INHERIT' && old.state !== 'inherited' && !row.locale && col.storage !== 'categoryAttributes' && !existingProduct?.parentId && !target.parentSku) { error(row, 'A root product has no parent value to inherit; use CLEAR for an optional field'); continue }
+          // R-LX-8 — an INHERITED language value now travels WITH its text (see
+          // `masterTransferState`). If its owner is not in this transfer the target
+          // has nothing to inherit from, so the text is materialised onto the child;
+          // when the parent IS in the transfer set the child keeps inheriting,
+          // exactly as exported. Every branch below reads this effective action, so
+          // nothing changes for a row that carries no inherited text.
+          const inheritedOwnerSku = row.locale && row.action === 'INHERIT' && row.value !== undefined && row.value !== null
+            ? [...context.products.values()].find(p => p.id === existingProduct?.parentId)?.sku ?? target.parentSku ?? null
+            : null
+          const action = inheritedOwnerSku && !productRows.has(inheritedOwnerSku) ? 'SET' as const : row.action
+          let value = action === 'SET' ? row.value : null
+          if (action === 'INHERIT' && old.state !== 'inherited' && !row.locale && col.storage !== 'categoryAttributes' && !existingProduct?.parentId && !target.parentSku) { error(row, 'A root product has no parent value to inherit; use CLEAR for an optional field'); continue }
           // Native fields that have no distinct clear marker must not claim to suppress a parent.
-          if (row.action === 'CLEAR' && !row.locale && col.storage !== 'categoryAttributes' && (existingProduct?.parentId || target.parentSku)) { error(row, 'This native field falls back to its parent when empty. Use INHERIT to make that choice explicit.'); continue }
-          const state = row.action === 'INHERIT' ? 'inherited' : 'stored'
+          if (action === 'CLEAR' && !row.locale && col.storage !== 'categoryAttributes' && (existingProduct?.parentId || target.parentSku)) { error(row, 'This native field falls back to its parent when empty. Use INHERIT to make that choice explicit.'); continue }
+          const state = action === 'INHERIT' ? 'inherited' : 'stored'
           const unchanged = cell(row, old, value, state).verdict === 'unchanged'
           if (MANAGED_FIELDS.has(col.key)) { if (!unchanged) error(row, 'Manage this field in its dedicated pricing, inventory or product workflow'); else target.cells.push(cell(row, old, value, state)); continue }
           if ((!col.editable || !columnApplies(col, { isParent: existingProduct?.isParent ?? false, productType: null, familyId })) && !unchanged) { error(row, 'This attribute is read-only or does not apply to this product'); continue }
           if (row.locale && !CONTENT.has(col.key) && col.storage !== 'localizedContent') { error(row, 'This attribute is not localized; leave locale empty'); continue }
           if (!row.locale && col.storage === 'localizedContent' && !CONTENT.has(col.key)) { error(row, 'This attribute needs a locale, such as it or en'); continue }
-          if (!unchanged && row.action === 'SET') {
+          if (!unchanged && action === 'SET') {
             const checked = coerceForShape(col, value)
             if (checked.ok === false) { error(row, checked.error); continue }
             value = checked.value
@@ -244,14 +300,11 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           const changed = cell(row, old, value, state)
           target.cells.push(changed)
           if (changed.verdict === 'unchanged') continue
-          if (row.locale) {
-            const content = clone(jsonRecord(working.localizedContent)), locale = clone(jsonRecord(content[row.locale]))
-            const key = col.key === 'name' ? 'title' : col.key
-            if (row.action === 'INHERIT') delete locale[key]; else locale[key] = value
-            content[row.locale] = locale; target.patch.localizedContent = working.localizedContent = content
+          if (isLocalizableContent(col.key, col.storage) && (before || row.locale)) {
+            planContentWrite(target.contentWrites ??= [], transferContentAddress(row), contentField(col.key), action, value)
           } else if (col.storage === 'categoryAttributes') {
             const bag = clone(jsonRecord(working.categoryAttributes))
-            if (row.action === 'INHERIT') delete bag[col.key]; else bag[col.key] = value
+            if (action === 'INHERIT') delete bag[col.key]; else bag[col.key] = value
             target.patch.categoryAttributes = working.categoryAttributes = bag
           } else target.patch[col.key === 'title' ? 'name' : col.key] = value
         }
@@ -296,6 +349,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
         target.contractHash = fingerprint([category, contract.fields])
         const working = clone(before ?? { overrideData: {}, platformAttributes: {} })
         const resolvedFields = new Set<string>()
+        const languageRows = context.markets.filter(m => m.channel === first.channel && m.code === first.marketplace)
+        const languages = group.some(row => contract.fields.some(f => (f.fieldKey === row.field || f.sheetKey === row.field) && channelContentField(f))) ? marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] }))) : []
         for (const row of group) {
           if (row.entity === 'Listings' && row.field === categoryKey) {
             if (row.action === 'CLEAR' && !transferIsStore(first.channel)) { error(row, 'A listing category cannot be cleared; use INHERIT when a category mapping is configured'); continue }
@@ -317,11 +372,17 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (row.entity !== 'Overrides') { error(row, `Listings accepts ${categoryKey}; put channel attribute values in Overrides`); continue }
           const field = contract.fields.find(f => f.fieldKey === row.field || f.sheetKey === row.field)
           if (!field) { error(row, 'This attribute is not declared by the listing category'); continue }
-          if (resolvedFields.has(field.fieldKey)) { error(row, 'Duplicate attribute: these two keys resolve to the same channel field'); continue }
-          resolvedFields.add(field.fieldKey)
+          const textField = channelContentField(field)
+          if (textField) (target.contentFields ??= {})[row.field] = textField
+          if (row.locale && !textField) { error(row, 'This channel attribute does not vary by language; use the facts sheet'); continue }
+          const destination = textField ? transferContentAddress(row, languages) : null
+          const address = destination?.tier === 'pin' ? destination : null
+          const fieldIdentity = JSON.stringify([field.fieldKey, address?.language ?? ''])
+          if (resolvedFields.has(fieldIdentity)) { error(row, 'Duplicate attribute: these two keys resolve to the same channel field'); continue }
+          resolvedFields.add(fieldIdentity)
           if (field.fieldKey === categoryKey || field.sheetKey === categoryKey) { error(row, 'Set the listing category in Listings'); continue }
           const keys = [...new Set([field.fieldKey, field.sheetKey].filter((s): s is string => !!s))]
-          const old = storedChannelState(working, field.channelStore, keys)
+          const old = textField && address && existingProduct ? channelContentState(existingProduct, working, textField, address.language, languages) : storedChannelState(working, field.channelStore, keys)
           if (preserve(row, old.state === 'stored')) continue
           const state = row.action === 'INHERIT' ? 'inherited' : 'stored'
           let value = row.action === 'SET' ? row.value : null
@@ -339,8 +400,11 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           const changed = cell(row, old, value, state)
           target.cells.push(changed)
           if (changed.verdict === 'changed') {
-            const patch = channelValuePatch(working, field.channelStore, keys, row.action, value)
-            Object.assign(target.patch, patch); Object.assign(working, patch)
+            if (textField && address) planContentWrite(target.contentWrites ??= [], address, textField, row.action, value)
+            else {
+              const patch = channelValuePatch(working, field.channelStore, keys, row.action, value)
+              Object.assign(target.patch, patch); Object.assign(working, patch)
+            }
           }
         }
       }

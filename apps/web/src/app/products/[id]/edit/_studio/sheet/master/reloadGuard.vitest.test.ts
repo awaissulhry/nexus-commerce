@@ -62,11 +62,11 @@ describe('reloadImpact — what Reload asks before discarding typing', () => {
  * discarded work for months while every unit test in this file would have passed.
  */
 describe('the sheet actually asks', () => {
-  const src = readFileSync(join(__dirname, 'MasterSheet.tsx'), 'utf8')
+  const src = readFileSync(join(__dirname, 'useMasterSheetAdapter.tsx'), 'utf8')
 
   it('🔴 the toolbar\'s Reload goes through the guard, not straight to reload()', () => {
-    expect(src).toMatch(/onReload=\{onReload\}/)
-    expect(src).not.toMatch(/onReload=\{reload\}/)
+    expect(src).toMatch(/onReload:\s*onReload\b/)
+    expect(src).not.toMatch(/onReload:\s*reload\b/)
   })
 
   it('🔴 a confirmed reload DISCARDS before re-reading — marks cannot outlive their values', () => {
@@ -100,12 +100,12 @@ describe('the save clock is stamped on a landing, never on a keystroke', () => {
    * comment, met here from the other side: a check that FAILS on prose rather than passing on it.
    */
   const strip = (t: string) => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-  const src = strip(readFileSync(join(__dirname, 'MasterSheet.tsx'), 'utf8'))
+  const src = strip(readFileSync(join(__dirname, 'useMasterSheetAdapter.tsx'), 'utf8'))
 
   it('🔴 onCellValueChanged does NOT stamp the clock — it only queues the write', () => {
     const at = src.indexOf('const onCellValueChanged =')
     if (at === -1) throw new Error('onCellValueChanged is gone — this guard cannot check it')
-    const body = src.slice(at, src.indexOf('const onSelectionChanged', at))
+    const body = src.slice(at, src.indexOf('const { preferences', at))
     expect(body).toContain('writer.set(')
     // The regression: `setLastSavedAt(new Date().toISOString())` immediately after `writer.set()`,
     // so the footer said "Saved HH:MM" before the request had left and went on saying it when the

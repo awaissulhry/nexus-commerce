@@ -2,15 +2,24 @@ import { describe, expect, it } from 'vitest'
 
 import { exportKeyFor, exportSuffix, fileValueFor, formOf, formulaKeyFor, LIST_SEPARATOR } from './sheetExport'
 
+/**
+ * LX.F P2-13 / F3 — these four expectations move to the ONE grammar
+ * (`@nexus/shared/content-header`, which the API's `languageHeader` and its parser
+ * already used): the channel segment is lower-case and a channel scope always emits the
+ * third part, even when it is empty. Both spellings parse to the same coordinate, so no
+ * existing file changes meaning — the point is that there is now one writer. The fourth
+ * divergence was the real defect and it is covered by the arm added below: a master scope
+ * with a language used to write `title`, which round-tripped onto the Italian SOURCE.
+ */
 describe('exportKeyFor — D15.2 keys, the import’s own vocabulary', () => {
   it('a master key is the bare key', () => {
     expect(exportKeyFor('brand', { kind: 'master' })).toBe('brand')
   })
   it('a channel key carries the coordinate as key@CHANNEL:MARKET:locale', () => {
-    expect(exportKeyFor('brand', { kind: 'channel', channel: 'amazon', marketplace: 'it', locale: 'IT' })).toBe('brand@AMAZON:IT:it')
+    expect(exportKeyFor('brand', { kind: 'channel', channel: 'amazon', marketplace: 'it', locale: 'IT' })).toBe('brand@amazon:IT:it')
   })
   it('a channel key without a locale omits the third part — the parser accepts both', () => {
-    expect(exportKeyFor('brand', { kind: 'channel', channel: 'EBAY', marketplace: 'IT' })).toBe('brand@EBAY:IT')
+    expect(exportKeyFor('brand', { kind: 'channel', channel: 'EBAY', marketplace: 'IT' })).toBe('brand@ebay:IT:')
   })
   it('🔴 a channel scope with no channel or market falls back to the bare key rather than writing "@:"', () => {
     expect(exportKeyFor('brand', { kind: 'channel', channel: null, marketplace: 'IT' })).toBe('brand')
@@ -20,7 +29,7 @@ describe('exportKeyFor — D15.2 keys, the import’s own vocabulary', () => {
 describe('declared FORMS — a separator is a rendering claim the file must declare', () => {
   it('a list key reads key[] and a measure key reads key[measure], before the coordinate', () => {
     expect(exportKeyFor('keywords', { kind: 'master' }, 'list')).toBe('keywords[]')
-    expect(exportKeyFor('item_weight', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'it' }, 'measure')).toBe('item_weight[measure]@AMAZON:IT:it')
+    expect(exportKeyFor('item_weight', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'it' }, 'measure')).toBe('item_weight[measure]@amazon:IT:it')
     expect(exportKeyFor('brand', { kind: 'master' }, null)).toBe('brand')
   })
   it('a list is written as its items joined by the declared separator; a comma inside ONE item survives', () => {
@@ -51,7 +60,7 @@ describe('formulaKeyFor — D15.8, the coordinate stays outside the suffix so th
     expect(formulaKeyFor('brand', { kind: 'master' })).toBe('brand.formula')
   })
   it('channel', () => {
-    expect(formulaKeyFor('brand', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'it' })).toBe('brand.formula@AMAZON:IT:it')
+    expect(formulaKeyFor('brand', { kind: 'channel', channel: 'AMAZON', marketplace: 'IT', locale: 'it' })).toBe('brand.formula@amazon:IT:it')
   })
 })
 
@@ -66,4 +75,11 @@ describe('exportSuffix — the file says which columns it holds', () => {
     expect(exportSuffix('view', null)).toBe('view')
     expect(exportSuffix('view', '   ')).toBe('view')
   })
+})
+
+it('LX.F P2-13 — a master export keeps the pressed language, instead of landing on the source', () => {
+  expect(exportKeyFor('title', { kind: 'master', locale: 'de' })).toBe('title@de')
+  expect(exportKeyFor('title', { kind: 'master', locale: 'de-DE' })).toBe('title@de')
+  // POSITIVE CONTROL: with no language pressed the master key is still bare.
+  expect(exportKeyFor('title', { kind: 'master' })).toBe('title')
 })

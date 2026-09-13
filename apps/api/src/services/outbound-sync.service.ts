@@ -1,7 +1,13 @@
+import { buildAmazonContentAttributes, type AmazonContentInput } from './pim/amazon-content-payload.js'
+import { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
+import { assertPushAllowed, type PushLockListing } from '@nexus/shared/push-lock'
+import { readSaleWindows } from './pim/sale-window.js' // MX.1 (D-MX4) — the stored sale window a price push must carry
+import { assertListingContentReviewed, PUBLISH_CONTENT_FIELDS } from './pim/publish-review-gate.js'
 import { marketLanguages, languageTag } from './pim/market-languages.js'
 import { assertInformationLocale } from './pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import prisma from "../db.js";
+import { DELIST_OPERATOR_COPY } from './delist-error-codes.js';
 import { logger } from "../utils/logger.js";
 import { amazonSpApiClient } from "../clients/amazon-sp-api.client.js";
 import {
@@ -291,19 +297,22 @@ export async function buildAmazonListingPatch(
   marketplaceCode: string,
   productType: string,
   fulfillmentMethod?: string | null,
+  content?: Omit<AmazonContentInput, 'marketplace' | 'marketplaceId'>,
 ): Promise<Record<string, any>> {
   const rawCode = (marketplaceCode || "IT").toUpperCase();
   const code = Object.entries(AMAZON_MARKETPLACE_IDS).find(([, id]) => id === rawCode)?.[0] ?? rawCode;
   const marketplaceId = resolveAmazonMarketplaceId(code);
   const hasContent = !!(payload.title || payload.description || payload.bulletPoints?.length);
-  const languages = hasContent ? await marketLanguages('AMAZON', code) : [];
+  const languages = hasContent && !content ? await marketLanguages('AMAZON', code) : [];
   const language = payload.language ?? languages[0];
-  if (hasContent) assertInformationLocale('AMAZON', language, languages);
-  const language_tag = hasContent ? languageTag(language, code) : undefined;
+  if (hasContent && !content) assertInformationLocale('AMAZON', language, languages);
+  const language_tag = hasContent && !content ? languageTag(language, code) : undefined;
   const currency = code === "UK" || code === "GB" ? "GBP" : "EUR";
   const isFba = String(fulfillmentMethod ?? "").toUpperCase() === "FBA";
   const attrs: Record<string, any> = {};
 
+  if (content) Object.assign(attrs, await buildAmazonContentAttributes({ ...content, marketplace: code, marketplaceId }));
+  else {
   if (payload.title) {
     attrs.item_name = [{ value: String(payload.title), marketplace_id: marketplaceId, language_tag }];
   }
@@ -314,8 +323,18 @@ export async function buildAmazonListingPatch(
   if (Array.isArray(bullets) && bullets.length > 0) {
     attrs.bullet_point = bullets.filter(Boolean).map((b: any) => ({ value: String(b), marketplace_id: marketplaceId, language_tag }));
   }
+  }
   if (payload.price !== undefined) {
-    attrs.purchasable_offer = [{ currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId }];
+    const offer: Record<string, any> = { currency, our_price: [{ schedule: [{ value_with_tax: payload.price }] }], marketplace_id: marketplaceId };
+    // MX.1 (D-MX4) — the sale rides the SAME purchasable_offer instance as our_price, so the one `op:replace` this
+    // builder emits carries both and a price push never wipes the sale (report 19 §5.9). Shape = the cached
+    // Listings-Items JSON schema (`discounted_price[].schedule[]{ start_at, end_at, value_with_tax }`, all three
+    // REQUIRED; measured on IT/UK/DE, MX.1 phase 0(c)) — NOT the feed's `sale_price` with `start_at:[{value}]`. A sale
+    // without both dates is never emitted: Amazon would reject the schedule entry.
+    if (payload.salePrice != null && payload.salePriceStart && payload.salePriceEnd) {
+      offer.discounted_price = [{ schedule: [{ start_at: String(payload.salePriceStart), end_at: String(payload.salePriceEnd), value_with_tax: Number(payload.salePrice) }] }];
+    }
+    attrs.purchasable_offer = [offer];
   }
   // B2 — FBA stock is owned by Amazon. Pushing a merchant fulfillment_availability
   // (DEFAULT channel) for an FBA SKU flips the offer to FBM and overwrites Amazon's
@@ -348,22 +367,7 @@ export async function buildAmazonListingPatch(
  * FBA-default product (benign, recoverable); avoided cost = flipping an FBA offer to
  * "Venduto e spedito da …" (catastrophic). Pure + testable.
  */
-export function isFbaListing(
-  listing: { fulfillmentMethod?: string | null; platformAttributes?: any } | null | undefined,
-  product: { fulfillmentMethod?: string | null } | null | undefined,
-  evidence?: { fbaStockQty?: number | null; hasActiveFbaOffer?: boolean | null },
-): boolean {
-  const faChannel = String(
-    (listing?.platformAttributes as any)?.fulfillment_availability?.[0]?.fulfillment_channel_code ?? "",
-  ).toUpperCase();
-  return (
-    listing?.fulfillmentMethod === "FBA" ||
-    faChannel.startsWith("AMAZON") ||
-    String(product?.fulfillmentMethod ?? "").toUpperCase() === "FBA" ||
-    (evidence?.fbaStockQty != null && evidence.fbaStockQty > 0) ||
-    evidence?.hasActiveFbaOffer === true
-  );
-}
+export { isFbaCoordinate as isFbaListing } from "../lib/amazon-fulfillment.js";
 
 /**
  * B3 — map a master CONTENT_UPDATE payload to a Shopify Admin API product
@@ -462,6 +466,18 @@ interface ProcessingStats {
   failed: number;
   skipped: number;
   errors: Array<{ queueId: string; error: string }>;
+}
+
+/** W1.9: a completed attempt may have sent nothing. All queue writers agree. */
+export function completedSyncQueueData(result: Pick<SyncResult, 'status' | 'dryRun' | 'message' | 'errorCode'>) {
+  const skipped = result.dryRun === true || result.status === 'SKIPPED' || result.status === 'NOT_SENT';
+  return {
+    syncStatus: skipped ? 'SKIPPED' as const : 'SUCCESS' as const,
+    syncedAt: skipped ? null : new Date(),
+    errorCode: skipped ? result.errorCode ?? (result.dryRun ? 'DELIST_DRY_RUN' : 'OUTBOUND_NOT_SENT') : null,
+    errorMessage: skipped ? result.message || DELIST_OPERATOR_COPY.OUTBOUND_NOT_SENT : null,
+    nextRetryAt: null,
+  };
 }
 
 // ── Outbound Sync Service ────────────────────────────────────────────────
@@ -604,10 +620,54 @@ export class OutboundSyncService {
   }
 
   /** A2.1 — route one queue item to the right channel sync method. */
+  private async pushLockListings(queueItem: any, channel: string): Promise<PushLockListing[]> {
+    if (queueItem.channelListingId) {
+      const listing = await prisma.channelListing.findUnique({ where: { id: queueItem.channelListingId } });
+      return listing ? [listing] : [];
+    }
+    const productId = queueItem.productId ?? queueItem.product?.id ?? queueItem.payload?.productId;
+    const itemId = channel === 'EBAY' && queueItem.payload?.pushVia === 'TRADING'
+      ? queueItem.payload?.itemId ?? queueItem.externalListingId : null;
+    if (!productId && !itemId) return [];
+    const region = queueItem.targetRegion ?? queueItem.payload?.market ?? queueItem.payload?.marketplace;
+    const markets = region === 'GB' || region === 'UK' ? ['GB', 'UK'] : region ? [region] : null;
+    return prisma.channelListing.findMany({ where: {
+      channel,
+      ...(itemId ? { externalListingId: itemId } : { productId }),
+      ...(markets ? { marketplace: { in: markets } } : {}),
+      ...(queueItem.payload?.channelConnectionId ? { channelConnectionId: queueItem.payload.channelConnectionId } : {}),
+      // A shared ItemID writes every member: any held coordinate must hold it.
+      ...(!itemId && queueItem.payload?.aliasKey !== undefined ? { aliasKey: queueItem.payload.aliasKey } : {}),
+    } });
+  }
+
   private async dispatchSync(item: any): Promise<SyncResult> {
+    // Presence W1.2 / D10 / SHOP-P4: the legacy dispatcher has no lifecycle
+    // implementation. Refuse before content preparation or any update path.
+    if (item.syncType === 'UNPUBLISH_LISTING' || item.syncType === 'DELETE_LISTING') {
+      const { DELIST_OPERATOR_COPY } = await import('./delist-error-codes.js');
+      const error = DELIST_OPERATOR_COPY.LIFECYCLE_DISPATCH_REFUSED;
+      return { success: false, queueId: item.id, channel: item.targetChannel,
+        status: 'FAILED', message: error, error, errorCode: 'LIFECYCLE_DISPATCH_REFUSED', retryable: false };
+    }
+
     if (item.payload?.source === 'FM_CATALOG_CASCADE') {
       const { prepareMappingDispatch } = await import('./pim/mapping/prepare-dispatch.js');
       item = await prepareMappingDispatch(item);
+    }
+    // D7 / R-LX-7 — the ONE review verdict, at the point every channel
+    // converges. Only the Amazon branch consulted it before, so an unreviewed
+    // machine draft that reached this queue published live on eBay, Shopify and
+    // Woo. A text-free payload (price/quantity/image) is untouched, and the
+    // refusal is terminal (retryable: false) because a retry cannot review copy.
+    const contentFields = PUBLISH_CONTENT_FIELDS.filter(field => item.payload?.[field] !== undefined);
+    if (contentFields.length) {
+      try {
+        await assertListingContentReviewed({ productId: item.productId, channel: item.targetChannel, listingId: item.channelListingId, fields: contentFields });
+      } catch (error: any) {
+        if (error?.code !== 'content_review_required') throw error;
+        return { success: false, queueId: item.id, channel: item.targetChannel, status: "FAILED", message: error.message, error: error.message, errorCode: "CONTENT_REVIEW_REQUIRED", retryable: false };
+      }
     }
     switch (item.targetChannel) {
       case "AMAZON": return this.syncToAmazon(item);
@@ -739,23 +799,21 @@ export class OutboundSyncService {
           );
 
           if (result.success) {
-            // Mark as successful
+            const completion = completedSyncQueueData(result);
             await prisma.outboundSyncQueue.update({
               where: { id: item.id },
-              data: {
-                // PD.3 — a dry-run/sandbox no-op must not show as green SUCCESS.
-                syncStatus: result.dryRun ? "SKIPPED" : "SUCCESS",
-                syncedAt: new Date(),
-              },
+              data: completion,
             });
-            stats.succeeded++;
+            if (completion.syncStatus === 'SKIPPED') stats.skipped++;
+            else stats.succeeded++;
           } else {
             // Handle retry logic
-            await this.handleSyncFailure(item, result.error || "Unknown error", {
+            const outcome = await this.handleSyncFailure(item, result.error || "Unknown error", {
               errorCode: result.errorCode,
               retryable: result.retryable,
             });
-            stats.failed++;
+            if (outcome === 'UNKNOWN') stats.skipped++;
+            else stats.failed++;
             stats.errors.push({
               queueId: item.id,
               error: result.error || "Unknown error",
@@ -819,21 +877,20 @@ export class OutboundSyncService {
           );
 
           if (result.success) {
+            const completion = completedSyncQueueData(result);
             await prisma.outboundSyncQueue.update({
               where: { id: item.id },
-              data: {
-                // PD.3 — a dry-run/sandbox no-op must not show as green SUCCESS.
-                syncStatus: result.dryRun ? "SKIPPED" : "SUCCESS",
-                syncedAt: new Date(),
-              },
+              data: completion,
             });
-            stats.succeeded++;
+            if (completion.syncStatus === 'SKIPPED') stats.skipped++;
+            else stats.succeeded++;
           } else {
-            await this.handleSyncFailure(item, result.error || "Unknown error", {
+            const outcome = await this.handleSyncFailure(item, result.error || "Unknown error", {
               errorCode: result.errorCode,
               retryable: result.retryable,
             });
-            stats.failed++;
+            if (outcome === 'UNKNOWN') stats.skipped++;
+            else stats.failed++;
             stats.errors.push({
               queueId: item.id,
               error: result.error || "Unknown error",
@@ -872,6 +929,12 @@ export class OutboundSyncService {
    * to enable real updates.
    */
   private async syncToAmazon(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'AMAZON'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'AMAZON',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const marketplaceId =
@@ -889,20 +952,17 @@ export class OutboundSyncService {
       cl = await prisma.channelListing
         .findUnique({
           where: { id: queueItem.channelListingId },
-          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true },
+          select: { platformAttributes: true, fulfillmentMethod: true, quantity: true, stockBuffer: true, marketplace: true, syncPaused: true, offerClosedAt: true, salePrice: true },
         })
         .catch(() => null);
     }
-    // SC.1 — a paused listing (or a policy-paused channel-market) sends
-    // NOTHING until resumed. Dispatch re-checks at send time so a pause set
-    // after enqueue still holds.
-    if (cl?.syncPaused) {
-      return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Listing sync is PAUSED (Sync Control)", error: "sync-paused" };
-    }
-    // SCT.6 — a CLOSED market offer receives NO pushes of any kind. Reopen is
-    // the only way back; a stray queue row must never resurrect the offer.
-    if ((cl as { offerClosedAt?: Date | null } | null)?.offerClosedAt) {
-      return { success: false, queueId, channel: "AMAZON", status: "SKIPPED", message: "Market offer is CLOSED (Sync Control) — no pushes until Reopen", error: "market-offer-closed" };
+    // MX.1 (D-MX4) — a PRICE push that carries no sale (a legacy producer) takes the listing's STORED sale + window, so
+    // `buildAmazonListingPatch`'s `op:replace` on purchasable_offer re-emits it instead of wiping it (report 19 §5.9).
+    if (payload.price !== undefined && payload.salePrice === undefined && cl && queueItem.channelListingId && cl.salePrice != null) {
+      try {
+        const window = (await readSaleWindows(prisma as never, [queueItem.channelListingId])).get(queueItem.channelListingId);
+        if (window?.start && window?.end) { payload.salePrice = Number(cl.salePrice); payload.salePriceStart = window.start; payload.salePriceEnd = window.end; }
+      } catch { /* a database without the window columns pushes the price alone — the sale cannot be scheduled there */ }
     }
     try {
       const scp = policyFor(await loadChannelPolicies(), 'AMAZON', cl?.marketplace ?? marketplaceId);
@@ -1042,7 +1102,17 @@ export class OutboundSyncService {
         })
       }
     }
-    const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM");
+    const hasContent = payload.title !== undefined || payload.description !== undefined || payload.bulletPoints !== undefined || payload.keywords !== undefined;
+    let content: Omit<AmazonContentInput, 'marketplace' | 'marketplaceId'> | undefined;
+    if (hasContent) {
+      const owner = await prisma.product.findUniqueOrThrow({ where: { id: product.id }, include: { translations: true, parent: { include: { translations: true } } } });
+      const listing = queueItem.channelListingId
+        ? await prisma.channelListing.findUniqueOrThrow({ where: { id: queueItem.channelListingId }, include: { translations: true } }) : null;
+      if (!listing) throw new Error('Content sync needs an exact listing coordinate before publishing.');
+      content = { product: owner as any, parent: owner.parent as any, listing,
+        fields: ['title', 'description', 'bulletPoints', 'keywords'].filter(field => payload[field] !== undefined) };
+    }
+    const amazonPayload = await buildAmazonListingPatch(payload, marketplaceId, productType, isFba ? "FBA" : "FBM", content);
 
     // B2 — an FBA quantity-only update yields zero patches (we never touch Amazon's
     // FBA stock). Don't submit an empty patch — return a terminal, no-retry skip.
@@ -1052,9 +1122,11 @@ export class OutboundSyncService {
         queueId,
         channel: "AMAZON",
         status: "SKIPPED",
+        errorCode: 'AMAZON_EMPTY_PATCH_NOT_SENT',
+        retryable: false,
         message: isFba
-          ? "Skipped — FBA quantity is managed by Amazon (no merchant-qty push)"
-          : "Skipped — empty patch (nothing to push)",
+          ? "Amazon manages the FBA quantity. Nothing was sent to the channel."
+          : DELIST_OPERATOR_COPY.AMAZON_EMPTY_PATCH_NOT_SENT,
       };
     }
 
@@ -1113,6 +1185,12 @@ export class OutboundSyncService {
    * (same flags as the wizard publish path, C.7).
    */
   private async syncToEbay(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'EBAY'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'EBAY',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
     // Phase 3 — shared-SKU Trading-API quantity fan-out. These rows have no
     // ChannelListing and must use ReviseInventoryStatus (multi-listing shared
     // SKU), NOT the Inventory-API GET-merge-PUT path below.
@@ -1131,30 +1209,31 @@ export class OutboundSyncService {
     // buffer) so the auto-sync path can never oversell — same pool maths as the
     // flat-file manual push (capToFbm). Only triggers on overshoot; FBA-backed
     // (MCF) eBay listings draw the Amazon pool, so they're left to the MCF path.
-    if (payload.quantity !== undefined && product?.id) {
-      const [whRows, cl] = await Promise.all([
-        prisma.stockLevel.findMany({
-          where: { productId: product.id, location: { type: "WAREHOUSE" } },
-          select: { available: true },
-        }),
-        queueItem.channelListingId
-          ? prisma.channelListing.findUnique({
-              where: { id: queueItem.channelListingId },
-              select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true },
-            })
-          : Promise.resolve(null),
-      ]);
-      // SC.1 — pause guard (listing + channel-market policy), re-checked at
-      // dispatch time like the Amazon lane.
-      if ((cl as { syncPaused?: boolean } | null)?.syncPaused) {
-        return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Listing sync is PAUSED (Sync Control)", error: "sync-paused" };
+    // MX.1 / Add 4(c) — the pause gates run for EVERY payload, BEFORE the quantity branch. They sat inside
+    // `if (payload.quantity !== undefined …)`, so a content FULL_SYNC (no quantity) on a PAUSED eBay listing passed
+    // both gates and reached the mode gate (report 28 §5.2) — the Amazon lane checks all of its gates unconditionally
+    // and is the shape this now mirrors. Pinned by `outbound-sync.ebay-pause-gate.vitest.test.ts`.
+    const cl = queueItem.channelListingId
+      ? await prisma.channelListing
+          .findUnique({
+            where: { id: queueItem.channelListingId },
+            select: { stockBuffer: true, fulfillmentMethod: true, quantity: true, marketplace: true, syncPaused: true },
+          })
+          .catch(() => null)
+      : null;
+    // SC.1 — pause guard (listing + channel-market policy), re-checked at
+    // dispatch time like the Amazon lane.
+    try {
+      const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? 'IT');
+      if (scp?.pushesPaused) {
+        return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
       }
-      try {
-        const scp = policyFor(await loadChannelPolicies(), 'EBAY', (cl as { marketplace?: string } | null)?.marketplace ?? 'IT');
-        if (scp?.pushesPaused) {
-          return { success: false, queueId, channel: "EBAY", status: "SKIPPED", message: "Channel-market pushes PAUSED (Sync Control policy)", error: "sync-paused-policy" };
-        }
-      } catch { /* fail-open */ }
+    } catch { /* fail-open */ }
+    if (payload.quantity !== undefined && product?.id) {
+      const whRows = await prisma.stockLevel.findMany({
+        where: { productId: product.id, location: { type: "WAREHOUSE" } },
+        select: { available: true },
+      });
       // P1 — base the eBay push on the CURRENT listing quantity, then apply the
       // warehouse cap below. Kill-switch: NEXUS_SYNC_ORDERING_V2=0.
       if (process.env.NEXUS_SYNC_ORDERING_V2 !== '0' && cl && payload.quantity !== undefined) {
@@ -1555,6 +1634,12 @@ export class OutboundSyncService {
    * connection + circuit + rate-limit + dry-run scaffolding from syncToEbay.
    */
   private async syncSharedTradingQuantity(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'EBAY'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'EBAY',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
     const { payload, id: queueId } = queueItem;
     const itemId: string = payload?.itemId ?? queueItem.externalListingId ?? "";
     const market: string = payload?.market ?? "IT";
@@ -1845,6 +1930,12 @@ export class OutboundSyncService {
    * the NOT_IMPLEMENTED gate from C.8.
    */
   private async syncToShopify(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'SHOPIFY'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'SHOPIFY',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
     const { product, payload, channelListing, id: queueId, syncType } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
 
@@ -2146,6 +2237,12 @@ export class OutboundSyncService {
    * until Wave 6 / C.19 wires the real REST adapter.
    */
   private async syncToWoocommerce(queueItem: any): Promise<SyncResult> {
+    const pushRefusal = (await this.pushLockListings(queueItem, 'WOOCOMMERCE'))
+      .map(listing => assertPushAllowed(listing)).find(Boolean);
+    if (pushRefusal) return { success: false, queueId: queueItem.id, channel: 'WOOCOMMERCE',
+      status: 'SKIPPED', message: pushRefusal.sentence, error: pushRefusal.sentence,
+      errorCode: pushRefusal.code, retryable: false };
+
     const { product, payload, id: queueId } = queueItem;
     const sku = product?.sku ?? queueItem.externalListingId ?? "(unknown sku)";
     const wooPayload = this.constructWoocommercePayload(payload);
@@ -2181,7 +2278,24 @@ export class OutboundSyncService {
     queueItem: any,
     errorMessage: string,
     opts?: { errorCode?: string; retryable?: boolean },
-  ): Promise<void> {
+  ): Promise<'UNKNOWN' | void> {
+    if (opts?.errorCode === 'LIFECYCLE_DISPATCH_REFUSED'
+      && ['UNPUBLISH_LISTING', 'DELETE_LISTING'].includes(queueItem.syncType)
+      && queueItem.payload?.delistOutcome === 'UNKNOWN') {
+      // This drain cannot attempt a lifecycle write. Its refusal cannot change
+      // what an earlier channel attempt did, or consume another channel retry.
+      await prisma.outboundSyncQueue.update({
+        where: { id: queueItem.id },
+        data: {
+          syncStatus: 'SKIPPED', syncedAt: null, nextRetryAt: null,
+          isDead: true, diedAt: new Date(),
+          errorCode: queueItem.errorCode ?? 'LIFECYCLE_DISPATCH_REFUSED',
+          errorMessage: `${queueItem.errorMessage ?? 'The outcome of the earlier channel attempt is unknown.'} ${errorMessage}`,
+          payload: { ...queueItem.payload, delistDispatchErrorCode: opts.errorCode, delistDispatchError: errorMessage },
+        },
+      });
+      return 'UNKNOWN';
+    }
     const disposition = computeFailureDisposition(queueItem, errorMessage, opts);
 
     if (disposition.kind === "deferral") {

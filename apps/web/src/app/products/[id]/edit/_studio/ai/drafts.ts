@@ -6,6 +6,7 @@
  * that is a list renders beside one that is a string.
  */
 import type { AiDraft, AiDraftViolation } from './types'
+import { normalizeLanguage } from '@nexus/shared/content-language'
 
 /** How the sheet addresses a cell: the row is a product, the column is the sheet column key. */
 export interface CellRef {
@@ -185,4 +186,14 @@ export function splitViolations(v: AiDraftViolation[] | null): {
 export function measure(value: unknown): { chars: number; bytes: number } {
   const s = displayValue(value)
   return { chars: s.length, bytes: new TextEncoder().encode(s).length }
+}
+
+/** Project stored draft addresses onto the selected sheet columns without mixing languages. */
+export function projectDrafts(drafts: AiDraft[], columnKeys: readonly string[]): AiDraft[] {
+  const keys = new Set(columnKeys)
+  return drafts.flatMap(draft => {
+    const qualified = draft.locale ? `${draft.columnKey}@${normalizeLanguage(draft.locale)}` : null
+    const columnKey = qualified && keys.has(qualified) ? qualified : keys.has(draft.columnKey) ? draft.columnKey : null
+    return columnKey ? [{ ...draft, columnKey }] : []
+  })
 }

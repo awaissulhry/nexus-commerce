@@ -7,6 +7,8 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * Builds Amazon SP-API payloads and submits them to production.
  */
 
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { closedMarketSet } from './amazon-market-offer.service.js'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js';
 import { amazonMapperService } from './amazon-mapper.service.js';
@@ -59,6 +61,9 @@ export class VariationSyncProcessor {
         throw new Error(`ChannelListing not found: ${channelListingId}`);
       }
 
+      const parentRefusal = assertPushAllowed(channelListing)
+      if (parentRefusal) throw new Error(`${parentRefusal.code}: ${parentRefusal.sentence}`)
+
       if (!channelListing.variationTheme) {
         throw new Error(
           `ChannelListing has no variation theme: ${channelListingId}`
@@ -91,6 +96,18 @@ export class VariationSyncProcessor {
       const sellerId = (await getAmazonSellerId());
       if (!sellerId) {
         throw new Error('AMAZON_SELLER_ID not configured in environment');
+      }
+
+      // Preflight the whole stored coordinate family before the first parent write.
+      const controls = await prisma.channelListing.findMany({ where: {
+        channel: 'AMAZON', marketplace: channelListing.marketplace,
+        channelConnectionId: channelListing.channelConnectionId, aliasKey: channelListing.aliasKey,
+        product: { OR: [{ id: productId }, { parentId: productId }, { sku: { in: variationPayload.items.map(item => item.sku) } }] },
+      } })
+      const closed = await closedMarketSet([productId, ...controls.map(row => row.productId)])
+      for (const row of [channelListing, ...controls]) {
+        const refusal = assertPushAllowed({ ...row, offerClosedAt: row.offerClosedAt ?? (closed.has(`${row.productId}|${row.marketplace}`) ? 'closed' : null) })
+        if (refusal) throw new Error(`${refusal.code}: ${refusal.sentence}`)
       }
 
       // Submit each item (parent + children) to SP-API

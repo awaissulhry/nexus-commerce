@@ -243,3 +243,7 @@
 }
 
 .cs-cell-details p { margin: 0; }
+
+/* Domain empty-contract message occupies only the otherwise blank field body. */
+.cs-sheet-body { position: relative; display: flex; flex: 1; min-height: 0; }
+.cs-contract-empty { position: absolute; inset-block: var(--nds-space-48) 0; right: 0; display: grid; place-items: center; }

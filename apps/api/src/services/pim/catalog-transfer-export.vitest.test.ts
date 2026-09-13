@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../db.js', () => ({ default: { product: { findMany: vi.fn() }, productFamily: { findMany: vi.fn(), findUnique: vi.fn() }, channelListing: { findMany: vi.fn() } } }))
+vi.mock('../../db.js', () => ({ default: { product: { findMany: vi.fn() }, productFamily: { findMany: vi.fn(), findUnique: vi.fn() }, channelListing: { findMany: vi.fn() }, marketplace: { findMany: vi.fn() } } }))
 vi.mock('./catalog-transfer-plan.js', () => ({
   MANAGED_FIELDS: new Set(),
   managedChannelField: () => false,
@@ -28,6 +28,7 @@ import { writeTransferDownload } from './catalog-transfer-download.js'
 const selection = Array.from({ length: 601 }, (_, i) => ({ id: `id-${i}`, sku: `SKU-${i}`, name: `Name ${i}`, version: i, familyId: 'jackets', parent: null, categories: [], localizedContent: {} }))
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(prisma.marketplace.findMany).mockResolvedValue(['AMAZON', 'SHOPIFY', 'ETSY'].flatMap(channel => ['IT', 'GLOBAL'].map(code => ({ channel, code, languages: ['it'], language: 'it' }))) as never)
   vi.mocked(prisma.productFamily.findMany).mockResolvedValue([{ id: 'jackets', code: 'jackets' }] as never)
   vi.mocked(prisma.channelListing.findMany).mockResolvedValue([])
   vi.mocked(prisma.product.findMany).mockImplementation(async (args: any) => args.select ? selection : selection.filter(p => args.where.id.in.includes(p.id)) as any)

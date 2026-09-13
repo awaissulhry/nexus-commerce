@@ -1,0 +1,41 @@
+{
+  "computed": "0px 6px",
+  "errors": [],
+  "rules": [
+    {
+      "active": true,
+      "padding": "14px 16px",
+      "paddingBlock": "",
+      "paddingInline": "",
+      "selector": ".nds-gridcard .nds-toolbar"
+    },
+    {
+      "active": true,
+      "padding": "0px 6px",
+      "paddingBlock": "",
+      "paddingInline": "",
+      "selector": ".nds-grid-sheet .nds-toolbar"
+    },
+    {
+      "active": false,
+      "padding": "",
+      "paddingBlock": "6px",
+      "paddingInline": "",
+      "selector": ".nds-grid-sheet .nds-toolbar"
+    },
+    {
+      "active": true,
+      "padding": "",
+      "paddingBlock": "0px",
+      "paddingInline": "var(--nds-space-6)",
+      "selector": ".nds-gridcard.nds-grid-sheet .nds-toolbar"
+    },
+    {
+      "active": false,
+      "padding": "",
+      "paddingBlock": "var(--nds-space-6)",
+      "paddingInline": "",
+      "selector": ".nds-gridcard.nds-grid-sheet .nds-toolbar"
+    }
+  ]
+}

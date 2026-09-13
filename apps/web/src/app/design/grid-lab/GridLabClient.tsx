@@ -41,6 +41,7 @@ import { DataGrid as AgDataGrid } from '@/design-system/grid/datagrid'
 import { MasterSheet } from '@/app/products/_sheet/MasterSheet'
 import { GridModuleCatalog } from './GridModuleCatalog'
 import { GdsScenarios } from './GdsScenarios'
+import { MatrixScenario } from './MatrixScenario'
 import { GridFeatureLab } from './GridFeatureLab'
 import { DataGridParityTab, WorkspaceParityTab } from './parity/ParityTabs'
 import type { ParityEngines } from './parity/engines'
@@ -58,13 +59,14 @@ const ENGINES: ParityEngines = {
   agDataGrid: AgDataGrid,
 }
 
-type LabTab = 'workspace' | 'datagrid' | 'features' | 'gds' | 'sheet' | 'modules'
+type LabTab = 'workspace' | 'datagrid' | 'features' | 'gds' | 'sheet' | 'matrix' | 'modules'
 const TABS: ReadonlyArray<readonly [LabTab, string]> = [
   ['workspace', 'Workspace parity'],
   ['datagrid', 'DataGrid parity'],
   ['features', 'Enterprise features'],
   ['gds', 'GDS scenarios'],
   ['sheet', 'Master sheet'],
+  ['matrix', 'Matrix cells'],
   ['modules', 'Modules'],
 ]
 const isTab = (t: string | null): t is LabTab => TABS.some(([id]) => id === t)
@@ -123,6 +125,24 @@ export function GridLabClient({ initialScenario = 'all', initialTab }: { initial
         </header>
         <TabBar tab={tab} onTab={setTab} />
         <MasterSheet market="IT" height={720} />
+      </main>
+    )
+  }
+
+  /* MX.G — `?tab=matrix`: the eight Matrix cell kinds in every §3.4 state, from the page's own
+     preview fixture, outside the shell so both themes can be measured. */
+  if (tab === 'matrix') {
+    return (
+      <main style={{ padding: 24, display: 'grid', gap: 20, background: 'var(--nds-bg)', minHeight: '100vh', alignContent: 'start' }}>
+        <header style={{ display: 'grid', gap: 6 }}>
+          <h1 className="text-3xl font-heading" style={{ margin: 0, color: 'var(--nds-text)' }}>Matrix cells — the eight kinds, every state</h1>
+          <p className="text-md" style={{ margin: 0, maxWidth: 900, color: 'var(--nds-text-2)' }}>
+            The engine&rsquo;s Matrix cell kinds (<code>design-system/grid/matrix</code>) on a six-row fixture, with the real write
+            path into the page&rsquo;s in-memory store. <code>docs/2026-09-13-matrix-page-design.md</code> §3.4.
+          </p>
+        </header>
+        <TabBar tab={tab} onTab={setTab} />
+        <MatrixScenario />
       </main>
     )
   }

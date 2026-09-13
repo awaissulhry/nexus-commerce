@@ -43,6 +43,15 @@ function page() {
   return { columns, scope: { channel: 'SHOPIFY', connectionId: 'store-a' }, rows: [{ id: 'family', sku: 'NEXUS', name: 'Shared title', aliasId: 'alias-a', parentId: null, version: 5, values, listing: { id: 'listing-a', version: 7 }, readiness: { state: 'ready', issues: [] } }, { id: 'child', sku: 'S', aliasId: 'alias-a', parentId: 'family', version: 2, values, listing: { id: 'variant-listing', version: 2 } }] } as any
 }
 describe('Shopify behind the common channel sheet', () => {
+  it.each(['ACTIVE', 'ARCHIVED', 'DRAFT'])('carries raw %s only in fact detail and uses the stored status vocabulary', status => {
+    s.snapshot.rows[0].values.status = status
+    const rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema,
+      [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }], 'alias-a')
+    expect(rows[0].listing).toMatchObject({
+      listingStatus: status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE',
+      isPublished: status === 'ACTIVE', channelFactDetail: { shopifyStatus: status }, offerActiveHonoured: false,
+    })
+  })
   it('keeps exact Nexus rows and shared mappings, then overlays saved listing intent', () => {
     const identities = [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }, { id: 'variant-listing', productId: 'child', externalListingId: '10', platformAttributes: { variantId: '11' } }]
     let rows = projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')

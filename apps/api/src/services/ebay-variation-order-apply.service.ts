@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { mappingToken, MappingConflict } from './pim/mapping/revision-token.js'
 /**
  * Variation ORDER on live eBay listings — without a full publish.
@@ -162,6 +164,13 @@ export async function applyVariationOrderToListing(
   ctx: { oauthToken: string },
   opts?: { dryRun?: boolean; expectedLiveToken?: string; beforeWrite?: () => Promise<void> },
 ): Promise<ApplyOrderListingResult> {
+  if (opts?.dryRun !== true) {
+    const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
+  }
   const market = marketplace.toUpperCase()
   const siteId = siteIdForMarket(market)
   const getXml = `<?xml version="1.0" encoding="utf-8"?>

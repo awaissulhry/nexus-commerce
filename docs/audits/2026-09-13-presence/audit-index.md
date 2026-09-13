@@ -1,0 +1,221 @@
+<!-- Index of the audit findings (group → [severity/status/channel/kind] title). Full text: audit-full.md beside this file; the artifact is the original. -->
+
+# What the sweep itself missed — Three critics read the whole roster afterwards and were asked what nobody had said. The first one reframed the other 180 findings.
+
+## The design critic (8) [critic]
+- [critical/missed] There is no Listings surface — the listing exists only as a field of a variant row, so lifecycle has nowhere to attach
+- [critical/missed] The coordinate is ambient, per-browser and frequently absent from the URL — the worst possible targeting model for irreversible external verbs
+- [high/missed] The page has one meter and it measures readiness — there is no state axis for what is live right now, so lifecycle has nothing to act on or report to
+- [high/missed] Autosave direct manipulation is the wrong interaction model for external irreversible acts — and the right model (a staged queue) already exists in the backend with a read-only window onto it
+- [high/missed] Reversibility and reach are not in the action vocabulary — so every lane states them in prose, and prose is exactly where every lie in the roster lives
+- [high/missed] CH.1's "one flat ⋯, never a button" was written for a page with no destructive verbs and will actively degrade lifecycle when it lands
+- [high/missed] The scope model is single-valued, so the plural intents that dominate lifecycle work cannot even be STATED — only decomposed into N visits with no aggregate and no atomicity
+- [medium/missed] The IA already reserved the slot for a listing object, and the DS already shipped the affordance — both are wired to a spreadsheet instead
+
+## The methodology critic (8) [critic]
+- [critical/missed] The two global auth/tenancy preHandlers were never opened — and the destructive lifecycle routes carry no in-file guard at all
+- [high/missed] 104 vitest files inside _studio/ and not one probe opened a test — the lane's own claim ledger and every fixture is unread
+- [high/missed] Nothing was executed: no gate, no typecheck, no browser — so every pixel, contrast, focus and clipping finding is a source-derived prediction
+- [high/missed] The legacy edit/tabs/ tree — 24 tabs plus two cockpits — was dismissed as 'not imported' and never enumerated as a capability source
+- [high/missed] The restore / recover family — the only existing 'put it back' — was cited once in passing and never audited as a surface
+- [high/missed] Per-market economics — price, listed quantity, business policies, replication — audited only for lifecycle side effects, never for whether the studio can do them
+- [medium/missed] No viewport below 1440 was ever measured, and the studio's one responsive mechanism has zero consumers
+- [medium/missed] GOOGLE, META and TIKTOK are first-class SyncChannel members and no probe touched them — the studio will mint a scope chip for any of them
+
+## The operations critic (8) [critic]
+- [critical/missed] Product recall / safety stop-sale: the recall track exists and cannot stop a single listing — and there is no "stop selling everywhere, keep everything" verb at all
+- [high/missed] Relaunch under a new SKU keeping the ASIN and reviews: SKU is read-only in the studio, the two mechanisms that exist live on legacy pages, and a rename from anywhere else silently orphans every live listing
+- [high/missed] Moving a listing from one account to another (agency handover, entity change, consolidating two eBay accounts) has no writer anywhere — and disconnecting the old account makes those listings unreachable in the studio
+- [high/missed] Selling privileges suspended on a marketplace, or a market you have exited: SP-API participation status is measured and stored, and the studio's market model throws it away
+- [high/missed] The studio's own delete verb has no operational preflight — the one that checks open orders, bundles and FBA stock exists and is called only by the /products page
+- [high/missed] Reopening a market after a season replays last season's price verbatim — no margin, floor or promo-window revalidation on the one reversible relist path in the codebase
+- [medium/missed] The fulfilment dimension of a listing is invisible: "withdraw the merchant offer, keep FBA" (or the reverse when units strand) cannot be expressed anywhere in the studio
+- [medium/missed] Supplier discontinues mid-season: there is no end-of-life state, no sell-through-then-end, and at zero stock the studio cannot say whether the eBay listing is still up
+
+# The question you asked — Removing a product from one market or one channel, and putting it back. Five probes were aimed directly at this.
+- [critical/verified/AMAZON/correctness risk] The Amazon delist adapter sends the ASIN where SP-API requires the seller SKU — the only backend a studio "remove from this market" button could call deletes the wrong key
+- [critical/verified/ALL/ux defect] The studio's only per-market off-switch tells the operator "Buyers stop seeing this offer" — it is refused on every live listing, and when it does run it reaches no channel at all
+- [high/verified/AMAZON/missing capability] The exact reversible per-market capability the Owner asked for is already built (SCT.6 close/reopen) — the studio has no path to it and cannot even see it, so a closed market renders as "live · ACTIVE · selling"
+- [high/verified/EBAY/data integrity risk] The studio's only per-variant channel removal is a local-only flag, and its copy — "the record is kept, so <ItemID> is not lost" — reads as a takedown while the variation stays buyable
+- [high/verified/ALL/missing capability] The per-account and per-alias dimension is unreachable and, where it exists, one-way: alias archive has no UI, no un-archive writer exists at all, and every off-switch endpoint hardcodes the primary account and the empty alias key
+- [high/verified/ALL/missing scenario] The Owner's dead end, verbatim: Delete child refuses with "Resolve that listing before deleting its local record" and the studio contains no verb — anywhere — that can resolve it
+- [critical/verified/ALL/data integrity risk] The "delete it from the channel too" option silently does nothing: the delist queue rows are destroyed by FK cascade inside the same transaction that creates them
+- [critical/verified/ALL/correctness risk] Both the hard-delete preflight and the delist cascade key liveness on listingStatus, which the studio's own code documents as the wrong test — live ASINs and ItemIDs are orphaned with no warning
+- [critical/verified/ALL/missing capability] There is no permanent-removal verb of any kind in the studio: two DELETE calls exist in the whole tree, neither of them removes a listing from a channel or a market
+- [critical/verified/EBAY/data integrity risk] A permanent removal captures nothing: the marketplace id is nulled, the snapshot/override/offer history cascades away, and the one field designed to remember the old listing has zero code behind it
+- [high/verified/ALL/design inconsistency] The only permanent-delete UI in the product area is legacy Tailwind, sits on a different page from the studio, and violates the DS's own type-to-confirm rule by asking the operator to type "DELETE"
+- [medium/verified/ALL/ux defect] "Delete child…" renders identically to "Open record" in both of the studio's menus — both DS menu adapters drop GridAction.danger, contradicting the registry's own promise
+- [high/verified/AMAZON/missing capability] A multi-language market (Amazon BE: nl + fr) has no content-language control on Amazon/eBay scopes — the second language is unreachable, and the studio actively wipes a pinned one
+- [critical/verified/ALL/data integrity risk] Removing a product from one market hard-deletes the coordinate row, destroying all per-market content and its own snapshots — a later restore starts from an empty DRAFT
+- [critical/verified/AMAZON/missing capability] The scope bar names a market but offers no verb that acts on it; the one reversible per-market removal (SCT.6 close/reopen) lives on another page, and the obvious workaround — zeroing quantity — is the documented storewide incident
+- [high/verified/AMAZON/ux defect] A market whose Amazon offer is closed still reads 'live' and 'Offer: selling' in the studio — the studio has no vocabulary for a closed market
+- [critical/verified/ALL/data integrity risk] Per-market removal is scoped to (product, channel, marketplace) only — it wipes every account and every listing alias in that market, including coordinates the operator was not looking at
+- [medium/verified/ALL/correctness risk] The remembered market is one global key and is restored without checking the scope serves it, so a deep link to a channel lands the operator on Shared product behind a banner
+- [critical/verified/EBAY/missing capability] There is no way to end ONE listing of a multi-listing coordinate — the only removal paths delete every alias on the market and end every ItemID
+- [high/verified/EBAY/data integrity risk] Archive is the only alias-removal API: it is unwired, unreversible, and leaves the eBay listing live and selling while hiding it from the sheet
+- [critical/verified/ALL/missing scenario] No alias can ever become the primary listing, and every relist/publish/recovery path is primary-only or alias-blind — recovery nulls the siblings' ASINs
+- [high/refuted/EBAY/missing capability] Adopting an EBAY_LISTING_SHELL was designed into the schema and never implemented — duplicates keep being minted as phantom parent products
+- [high/verified/ALL/data integrity risk] Channel discovery can never create an alias: every reconciled listing is written onto aliasKey '' and the recon table is keyed by SKU, so a second live listing is merged away or overwrites the first
+- [high/refuted/EBAY/correctness risk] eBay status reconcile stamps one SKU-level status onto every listing row of that SKU, so the alias band reports an ended listing as live (and a live one as removed)
+- [critical/verified/ALL/correctness risk] Unticking a live variant says "Excluded" but the size stays on sale — the write never leaves the database
+- [critical/verified/ALL/missing capability] Exclude→include is a one-way ratchet: a re-included variant is permanently frozen out of every push, and no studio control can undo it
+- [high/verified/ALL/missing capability] "Retire a colourway permanently" is a dead end: Delete child refuses on any external id, and no studio verb can ever clear one
+- [high/verified/ALL/data integrity risk] Add child's confirmation promises "created as a draft with channel sync disabled" — false on the copy-from-sibling path, which clones unpaused listing rows the stock cascade will push
+- [high/verified/ALL/design inconsistency] Creating a listing alias is a one-way door that permanently freezes a product's family structure, and the studio has no way back
+- [high/verified/AMAZON/data integrity risk] Splitting or merging a live family is a local-only rename of the parentage; the channel keeps the old variation family and nothing reconciles it
+
+# Channel by channel — One expert per sales channel, comparing what the platform actually permits against what the code does.
+- [critical/verified/AMAZON/correctness risk] Every Amazon delist calls SP-API DELETE with the ASIN in the SKU slot — the offer is never removed, and the queue reports success
+- [critical/verified/AMAZON/data integrity risk] 'Remove from Amazon IT' deletes the local row first, discards the SP-API result, and reports success from the local delete alone
+- [high/refuted/AMAZON/ux defect] The studio's Amazon 'Pause offer' confirmation promises buyers stop seeing the offer; nothing is sent to Amazon
+- [high/verified/AMAZON/missing scenario] The only correct per-market Amazon close/reopen exists and the studio can neither reach it nor see its result — a closed market still reads ACTIVE / selling
+- [high/verified/AMAZON/missing scenario] The row-level Amazon removal path bypasses the codebase's own FBA stranded-inventory warning
+- [medium/verified/AMAZON/missing capability] A suppressed Amazon listing is invisible in the studio: Needs attention lists Suppressions as a 'dormant source' while a populated table and a live per-product endpoint sit behind it
+- [critical/verified/EBAY/correctness risk] eBay UK can never be delisted: region 'GB' throws in siteIdForMarket and the queue row dies non-retryable
+- [critical/verified/EBAY/ux defect] 'Unpublish (recommended)' promises a reversible pause; on eBay it is an irreversible EndFixedPriceItem and the local listing record is destroyed
+- [critical/verified/EBAY/data integrity risk] Binning one variation child ends the whole shared-ItemID eBay listing — the two guards that exist in the eBay delete service are absent from the delist cascade
+- [critical/verified/EBAY/correctness risk] A delist that could not even see the item is reported as SUCCESS — the 'already ended' matcher swallows 'Item cannot be accessed' and 'Invalid item'
+- [high/refuted/EBAY/missing capability] No reversible per-market eBay end exists anywhere, and the eBay primitive that would give one (quantity 0 / out-of-stock) is implemented but never exposed
+- [high/refuted/EBAY/data integrity risk] The eBay ItemID is erased on end and hard-deleted on remove, with no capture anywhere — a relist can only be reconciled by retyping the new ItemID in a legacy editor outside the studio
+- [critical/verified/SHOPIFY/correctness risk] Shopify "unpublish" sends a double-wrapped REST body — the product is never set to draft, and the job reports success
+- [critical/verified/SHOPIFY/data integrity risk] Every Shopify listing the studio creates keeps listingStatus "DRAFT", so it is invisible to the only delist cascade — deleting the product leaves a live storefront listing and destroys its only identity record
+- [high/verified/SHOPIFY/missing capability] "Remove from one market" cannot be expressed for Shopify at all: one seeded GLOBAL marketplace, and Shopify Markets (per-market publishing, per-market pricing) is unmodeled end to end
+- [high/verified/SHOPIFY/design inconsistency] ARCHIVED — Shopify's own reversible "off sale, keep everything" state — is never used by the delist path; the operator's exact request is an untitled cell in a sheet, not a verb
+- [critical/verified/SHOPIFY/missing scenario] A Shopify delete destroys the handle, SEO, variant ids, translations and publication memberships with no snapshot anywhere, and there is no relist verb to put them back
+- [high/verified/SHOPIFY/ux defect] The Shopify review that gates the real write shows sales-channel and status changes as raw values and publication GIDs inside a collapsed Disclosure, with no danger tone and no confirmation
+- [critical/verified/ETSY/correctness risk] Hard delete counts the Etsy listing in the warning, then silently skips it — the product is purged locally while the Etsy listing stays live and sellable
+- [high/verified/ETSY/missing capability] Etsy has no deactivate / reactivate / renew verb anywhere, while the Etsy sheet's own help text tells the operator those actions exist
+- [high/verified/ETSY/missing scenario] Etsy is a first-class studio scope with a full editable sheet, but the studio's only publish entry point cannot target Etsy at all
+- [high/verified/ETSY/data integrity risk] The SyncChannel enum has no ETSY value, so no Etsy job of any kind can ever be written to the single outbound delivery queue
+- [medium/verified/ETSY/data integrity risk] The only Etsy listing importer writes master Product columns and never a ChannelListing, so the Etsy "Listing status" column can never show a value and a sync would overwrite master content
+- [medium/verified/ETSY/ux defect] The studio refuses to link an Etsy listing on a false premise — Etsy listing URLs need no shop domain, and the same repo builds them
+- [critical/verified/WOOCOMMERCE/data integrity risk] A WooCommerce-synced product has no ChannelListing row, so every delete preflight reports zero channel listings and the store keeps selling it forever
+- [critical/verified/WOOCOMMERCE/correctness risk] bulk-hard-delete enqueues WooCommerce delist jobs the dispatcher refuses, and the queue row is cascade-deleted before the worker can even record the failure
+- [high/verified/WOOCOMMERCE/missing capability] The studio can never scope to WooCommerce, because nothing in the repo can create a WooCommerce ChannelConnection — while the WooCommerce cron actively syncs the store
+- [high/verified/WOOCOMMERCE/correctness risk] A WooCommerce channel sheet would be structurally empty and report itself as merely 'no required attributes', not as unimplemented — the dangerous-green shape readiness.service.ts itself names
+- [medium/verified/WOOCOMMERCE/missing capability] WooCommerceService has no product create, update or delete method at all — there is nothing for a delist or relist adapter to call
+- [medium/verified/WOOCOMMERCE/design inconsistency] The studio's content-language control is gated on a hardcoded ['SHOPIFY','ETSY'] list, so a WooCommerce scope would be the one webstore with no language switcher
+
+# What a takedown touches — Stock, ads, compliance, accountability, and what happens when a channel says no.
+- [critical/refuted/ALL/correctness risk] The master sheet's always-visible Stock cell fires a real multi-channel quantity push with no confirmation and only a client-side undo
+- [critical/refuted/ALL/data integrity risk] Drawer restore writes Product.totalStock directly, bypassing the stock ledger and the cascade, while its confirmation claims the write reaches every channel
+- [critical/verified/ALL/data integrity risk] Delete child enumerates the listings it destroys but never the stock ledger, open reservations or order links it also destroys
+- [high/verified/AMAZON/missing capability] The FBA stranded-units warning exists in the Amazon flat-file preflight and nowhere in the studio, and no endpoint exposes the fact the studio would need to raise it
+- [critical/verified/AMAZON/correctness risk] Per-market Amazon removal commits the local delete before the SP-API call and swallows its failure, leaving a live offer with no row to cascade stock to
+- [high/verified/ALL/ux defect] "Pause offer" promises buyers stop seeing the offer, but offerActive is read by nothing on eBay, Shopify or WooCommerce and by Amazon only at the next flat-file submit
+- [critical/verified/AMAZON/correctness risk] A price push RE-CREATES a closed Amazon market offer — the one guard that exists is on the other code path
+- [critical/verified/AMAZON/data integrity risk] Hard-deleting a product orphans its Amazon ads ENABLED, and the guard built to catch exactly this then reports the campaign "ok"
+- [high/verified/AMAZON/correctness risk] Ending a listing on ONE market never flags its campaign: the readiness check silently falls back to a sibling market's listing and buy box
+- [high/verified/EBAY/data integrity risk] eBay's end-listing path leaves isPublished true, so the only lifecycle guard in the sync worker lets price pushes through to a listing whose ItemID was erased
+- [high/verified/ALL/data integrity risk] Promotions and pricing snapshots are written to ended listings, and the price-history timeline records a promo that started on a listing nobody can buy
+- [high/verified/AMAZON/ux defect] The studio reports a closed Amazon market as "Offer: selling", and its Ads tab is a scope-blind read-only total with no lever
+- [critical/verified/ALL/missing capability] The compliance rules engine (expired CE certificate, hazmat, missing EU responsible person) never runs in the studio — the sheet calls a listing with an expired CE certificate "ready"
+- [high/verified/AMAZON/missing scenario] Changing brand or GTIN on a LIVE Amazon listing is silently accepted in the studio — the warning that exists is wired only to the flat-file editor
+- [high/verified/AMAZON/correctness risk] Amazon Ireland is hard-coded as a non-GPSR market, and the studio's GPSR gate covers 8 of the 17 EU markets the compliance engine recognises
+- [critical/verified/EBAY/data integrity risk] eBay EU listings get no GPSR readiness in the studio, and the publish path silently strips the GPSR container and still reports LIVE
+- [critical/verified/ALL/data integrity risk] "Stop selling in this market" deactivates the Marketplace row: the studio hides the coordinate entirely while the listings stay live and the sync worker keeps pushing to them
+- [high/verified/AMAZON/ux defect] Changing the Amazon product type or primary category of a LIVE listing is a plain cell edit / a reassuring modal — no live-listing impact, no confirmation, and no path back if Amazon refuses
+- [critical/verified/ALL/data integrity risk] The only channel-lifecycle destructive endpoint stamps its audit rows with the literal string 'default-user'
+- [critical/verified/ALL/data integrity risk] Per-market and per-channel removal writes no audit row and no product event at all — the destructive verbs the Owner is asking for already exist and are entirely unrecorded
+- [high/verified/ALL/correctness risk] `products.delete` is a grantable permission that no route requires: ending live listings needs only `products.edit`
+- [high/verified/ALL/correctness risk] An API key satisfies any permission in its coarse family and is granted it verbatim, so `products:write` can end every live listing on 200 products with no session, no CSRF, no MFA and no actor
+- [high/verified/AMAZON/data integrity risk] The two lifecycle paths that DO keep a record write a false actor — recovery reads as 'triggered by automation', offer-close as 'sync-control'
+- [high/verified/ALL/missing capability] The studio can never show the history of a lifecycle action: Activity reads the event store, lifecycle writes the audit log, and the one studio surface that reads the audit log is disabled
+- [critical/verified/ALL/data integrity risk] The whole-product channel cascade deletes its own queue rows inside the same transaction, so no delist ever runs — and nothing anywhere records that
+- [critical/verified/AMAZON/correctness risk] "Unpublish (recommended) — keeps the listing record so you can republish later" performs an irreversible Amazon SKU delete and keeps no record
+- [critical/verified/EBAY/data integrity risk] eBay delist always uses the PRIMARY account, and "item cannot be accessed" — the error a wrong account produces — is classified as success
+- [high/verified/ALL/correctness risk] A failed delist is parked PENDING with no retry schedule, then re-routed through the UPDATE path, where it finishes as a green SUCCESS having sent nothing
+- [high/verified/ALL/missing capability] The studio's Errors & Sync console is read-only — an operator can see a dead write but cannot retry, cancel or requeue it, though the API and two other pages already can
+- [high/refuted/ALL/missing capability] Nothing compares our listing state with the channel's, so every silent failure above stays silent — and the studio shows no reconciliation at all
+- [critical/verified/ALL/data integrity risk] Switching market/scope orphans in-flight autosaves: the header, the ledger and the leave guard are all per-coordinate
+- [high/verified/ALL/correctness risk] A 409 leaves the operator two options — lose their own edit or silently clobber the other writer's — because nothing ever shows the stored value
+- [critical/verified/ALL/data integrity risk] An unreachable write plus a listing row that changed identity locks the row out of saving forever, under a false "Connection lost" message
+- [high/verified/ALL/missing capability] The studio's live pipe refreshes only the readiness score, so the ScopeBar updates while the grid beneath it silently goes stale
+- [high/refuted/ALL/data integrity risk] No lifecycle or destructive verb flushes the pending autosave first — a record restore can be silently undone by the keystroke that preceded it
+- [medium/verified/ALL/design inconsistency] The scope bar's readiness pill is overwritten by transient save state, so one refused keystroke reads as "this channel is blocked"
+- [critical/verified/AMAZON/correctness risk] A scheduled or bulk "take it down" (STATUS → INACTIVE) sends Amazon an EMPTY patch and records the push as SUCCESS — the offer stays buyable
+- [high/verified/ALL/missing scenario] The studio has no date-based lifecycle scheduling at all; its one scheduling surface is behind a hardcoded `false` and is fired by a cron that is off
+- [high/verified/EBAY/design inconsistency] The channel sheet collects a multi-row selection and counts it twice, but mounts no selection bar — the DS BulkActionBar is master-only, so no channel verb can ever act on a selection
+- [high/refuted/ALL/missing capability] "End this brand / this supplier on eBay DE" is not expressible anywhere: the bulk engine has no lifecycle action type, and the only delist producer requires the products to be in the bin first and is whole-product
+- [high/verified/AMAZON/data integrity risk] The one correct, reversible, bulk-capable per-market take-down already exists — and the studio cannot see it, so a CLOSED Amazon market still reads "live" on every studio surface
+- [medium/verified/ALL/ux defect] Undoing a bulk take-down silently under-restores: rollback re-runs the master status cascade, which skips every ENDED/ERROR listing, and the skipped list exists only in the audit log
+- [critical/verified/AMAZON/data integrity risk] "Remove from Amazon <market>" reports unconditional success and hard-deletes the only copy of the listing's state
+- [critical/verified/AMAZON/correctness risk] A deliberately removed Amazon listing comes straight back in the flat file — the eBay guard for exactly this incident has no Amazon equivalent
+- [critical/verified/ALL/missing capability] The per-market "end this listing" IS expressible in an import file — but it only writes Nexus, never the channel, and no UI can reach it
+- [critical/verified/AMAZON/data integrity risk] Typing record_action=delete and pressing Save ends the listing in Nexus only — and Nexus then stops pushing stock to an offer that is still live on Amazon
+- [high/verified/ALL/ux defect] The editing workbook round trip is blind to listing state: an ENDED listing is offered as an editing destination exactly like a live one
+- [medium/refuted/ALL/design inconsistency] The studio's own CSV round trip is dead code with live claims: the coordinate-stamped export it documents is 409'd by the endpoint, and the one CSV the drawer hands the operator is rejected on upload
+- [critical/verified/ALL/correctness risk] The green "Live" verdict ignores listingStatus entirely — a SUPPRESSED, REMOVED or ERROR listing renders as "Already published on this channel"
+- [critical/verified/AMAZON/data integrity risk] A market whose Amazon offer was deliberately closed (SCT.6) is invisible to the studio — `offerClosedAt` is never read and the drawer prints "Offer: selling"
+- [high/verified/EBAY/correctness risk] "Not listed" is an affirmative claim about the marketplace derived from the absence of a local row — and a shipped path deletes that row while the channel listing survives
+- [high/verified/ALL/missing capability] The sheet shows state with no "as of" — freshness exists only in the drawer, and the channel sheet's own type mirror drops it
+- [high/verified/EBAY/correctness risk] The delete-child confirmation tells an operator an ended listing was "never published to the channel"
+- [medium/verified/ALL/ux defect] When readiness cannot be measured the alias band renders nothing at all — the carefully written "not measured" sentence is unreachable
+- [high/verified/ALL/correctness risk] A revoked account makes the whole channel vanish from the studio — the live listing becomes invisible and the deep link blames the market
+- [high/verified/ALL/missing capability] An expired grant renders as a perfectly healthy channel: the studio drops every connection-health field it already fetched and tests only isActive
+- [high/verified/data integrity risk] A binned product opens as a normal, "Active" product: its 404 is misread as "the studio route is not deployed" and the sheet silently falls back to the legacy read, showing an empty grid
+- [high/verified/ALL/ux defect] `marketplacesFailed` is computed, threaded through three components and then thrown away — a connections-API blip renders as "this product sells on no channel"
+- [high/verified/ALL/design inconsistency] A listing imported from a channel but never published is simultaneously "Ready" and "a marketplace listing you must resolve" — and the refusal drops the findings that would name the ItemID
+- [medium/verified/ALL/ux defect] A product with no listing on a coordinate reads "Not listed · 1 listing", and the channel scope offers no way to create one
+
+# The experience — Design-system conformance, accessibility, and the toolbar you flagged.
+- [critical/refuted/ALL/correctness risk] The cross-channel write acknowledgement is rendered inside a 40px no-wrap bar with flex-basis:100% — the one warning that an eBay edit rewrites Amazon lands off-screen, and the held edit never saves
+- [high/refuted/ALL/ux defect] The sheet toolbar overflows horizontally into an invisible scroll region instead of collapsing; the ⋯ overflow that CH.1 made the only home for the scope verbs is the first thing to leave the screen
+- [high/verified/ALL/design inconsistency] Three adjacent chips print “N columns” for three different quantities, and the number shown is never the number the chip computed or the number it filters to
+- [high/verified/ALL/design inconsistency] `trailing` is documented “status only, never a control” and both callers put a modal-opening verb there — and the same schema fact is a dead Pill on master and a live Button on channel
+- [medium/verified/ALL/ux defect] Saving a view replaces the Views trigger with an Input and two buttons inside the no-wrap bar, shoving every action control further off-screen
+- [medium/refuted/ALL/design inconsistency] One bar is doing three jobs, and the guard that would have caught it can only ever measure the bar in its empty state
+- [high/verified/ALL/design inconsistency] 213px of chrome sits above the first data row; the only mechanism that reclaims any of it returns 16px and never fires for a normal product
+- [medium/verified/ALL/ux defect] Row count, selection count and autosave state are each rendered twice — once at the top of the sheet card and once at the bottom, 213px apart, from two independent sources and two aria-live regions
+- [high/verified/ALL/data integrity risk] On Amazon and eBay scopes the content language is invisible and uncontrollable, and a round trip through a channel chip silently discards the operator's chosen master language — the next master edit then writes into a different language record
+- [high/verified/ALL/ux defect] On the shared-product scope the market is not rendered anywhere, yet the channel chips report readiness computed for that hidden market
+- [medium/verified/ALL/ux defect] The route skeleton draws three bands totalling 129px against the real frame's two bands totalling 89px, so the sheet jumps 40px upward on every studio load — in a file whose comment promises it does not
+- [medium/verified/ALL/design inconsistency] The collapsed header hides the product's status pill and keeps the SKU — the exact inverse of what its own rule says it does, and of what an operator needs while scrolling
+- [high/verified/ALL/ux defect] Jumping to a channel via the navigation drawer carries the content language across; on Amazon/eBay that replaces the whole surface with a banner the operator has no control to satisfy
+- [high/verified/ALL/design inconsistency] The market governs where every channel task lands but is invisible on the Shared product scope, and a navigation jump changes it silently and does not remember it
+- [high/verified/ALL/correctness risk] A studio URL is not a durable address of a coordinate: when the operator sits on their remembered market, ?market= never enters the URL and the recipient's own localStorage silently re-resolves it
+- [medium/verified/ALL/a11y defect] The same destination appears twice in the navigation drawer under two names and both are marked aria-current='page'; and the 'THIS PRODUCT' group label is false because its items re-project by scope
+- [medium/verified/ALL/ux defect] An open record survives a task change into tabs that cannot render it, and the drawer's close button then walks the operator to a different task instead of closing
+- [medium/verified/ALL/ux defect] A channel chip for a market that channel does not serve is mute and fully clickable — no dot, no state word, no tooltip, not disabled — contradicting the rule stated in the studio's own source
+- [critical/verified/ALL/data integrity risk] The channel delist the operator authorised is destroyed by the same transaction that deletes the product — it never reaches Amazon or eBay
+- [critical/verified/AMAZON/ux defect] "Unpublish (recommended)" is the pre-selected default and promises republishability that Amazon cannot deliver — the adapter performs a hard SP-API delete
+- [high/verified/ALL/design inconsistency] The app's most destructive verb is gated by typing the literal word DELETE, pre-shown in the input's own placeholder — the exact anti-pattern the design system forbids
+- [high/verified/ALL/correctness risk] A refused channel verb shows the operator a developer diagnostic instead of the reason the lane wrote — and delist will inherit the same shape
+- [high/refuted/ALL/missing capability] ActionImpact cannot express reversibility, so "end this listing on Amazon IT" and "permanently delete this offer" would render as the identical dialog
+- [high/verified/ALL/design inconsistency] A destructive verb's danger flag is dropped by both DS menu adapters, and there is no DS confirmation at all for a verb raised outside a grid
+- [critical/verified/ALL/ux defect] "Unpublish (recommended)" promises three things the code does not do — it is an irreversible Amazon delete described as a pause
+- [high/verified/ALL/design inconsistency] "Live" has three incompatible definitions in three adjacent studio surfaces, and the drawer prints the raw database status string next to them
+- [high/verified/AMAZON/correctness risk] Three different off-switches are described with two words, and the one the studio cannot see makes it report "Offer — selling" for an offer that is closed
+- [high/verified/ALL/ux defect] The Delete-child refusal instructs the operator to "resolve" a listing — a verb no control in the product implements — and the sibling refusal claims demoting "removes" a parent, which it does not
+- [medium/verified/ALL/design inconsistency] One verb carries four names inside the channel sheet, and which name you see depends on the channel and on whether the item is disabled
+- [critical/refuted/EBAY/data integrity risk] The one per-market removal an operator can actually reach calls itself "Remove from eBay IT", reassures that everything stays in Nexus, and silently destroys the ItemID, the overrides and the snapshot with no relist path
+- [medium/verified/ALL/design inconsistency] Four studio popup cell editors bypass the DS editorBox() sizing contract and hardcode widths up to 620px
+- [high/verified/ALL/ux defect] GridAction.danger is dropped by every menu surface — 'Delete child…' renders identically to 'Open record'
+- [medium/verified/ALL/a11y defect] The DS menu adapter puts a disabled verb's reason in a hover-only tooltip, against the DS's own written rule — while the lane's hand-rolled adapter does it correctly
+- [high/verified/ALL/design inconsistency] Five ad-hoc confirmation dialogs in the studio, and the same 'discard unsaved edits' verb gets three different button treatments across the three channel media workspaces
+- [medium/verified/ALL/design inconsistency] window.confirm() is used as the discard guard inside a DS Modal and as the studio's leave guard
+- [low/verified/ALL/design inconsistency] A grid-theme-private class (.nds-addvar-field) is used as a generic field wrapper in four studio files, beside 88 uses of the DS Field component in the same tree
+- [critical/verified/ALL/a11y defect] The DS primary Button has no visible keyboard focus — so the Confirm button on the permanent-delete dialog is the one control that never shows focus
+- [high/verified/ALL/a11y defect] A refused verb's reason rides `title` on a disabled menu item that the Menu's own keyboard navigation skips — the Owner's dead end has no keyboard-reachable explanation
+- [high/verified/ALL/a11y defect] Every provenance mark in the sheet is `aria-hidden`, so "inherited / pinned / AI-drafted / formula refused" reaches assistive tech as nothing — while every neighbouring cell mark in the same file is exposed
+- [high/verified/ALL/a11y defect] `--nds-danger` and `--nds-warning` are fill tokens used as body text in all three surfaces that report a refusal — 3.76–4.05:1, under AA in both themes, while the text tiers minted for exactly this sit unused
+- [high/verified/ALL/a11y defect] "Still waiting — this change is not confirmed" is drawn as an 8% amber wash at 1.10:1 with no ring and no glyph, in a grid whose adjacent rule declares "never colour alone"
+- [high/verified/ALL/design inconsistency] `GridAction.danger` is discarded by both menu adapters, so "Delete child…" renders byte-identical to "Open record" in the row ⋯ and the right-click menu
+- [high/verified/ALL/correctness risk] A failed connections/marketplaces read renders as "this product sells nowhere" — marketplacesFailed is computed, threaded through three files, then thrown away
+- [high/verified/AMAZON/correctness risk] Needs attention prints "nothing recorded on this coordinate yet" about three data sources it never reads — on every coordinate, including when its own read failed
+- [medium/verified/ALL/ux defect] Export and Import blocked by permission report themselves as still loading — or say nothing at all
+- [high/verified/ALL/ux defect] Family verbs run with no in-flight feedback on the grid surfaces — the same verbs show a busy state in the drawer
+- [medium/verified/design inconsistency] "Needs attention" is offered on the master scope and answers with an unstyled paragraph; the code comment asserting it is not offered is false
+- [medium/verified/ETSY/ux defect] The Media tab on a non-Amazon/eBay/Shopify channel shows internal roadmap copy, a docs path, and an unmeasured claim about the wrong channel
+- [high/refuted/ALL/design inconsistency] The studio sheet renders at the DS default `spacious` density — 60px rows, 46px header, 56px thumbnails — where the approved layout, the code's own comments and the layout-v2 gate all specify 36px rows and a 32px thumbnail
+- [high/verified/ALL/ux defect] Performance, Activity and Needs attention render inside an `overflow: hidden` panel with no scroll container of their own — content below the fold is clipped, with no scrollbar
+- [medium/verified/ALL/design inconsistency] Four content-left edges across one product — frame bands 16px, tab panels 24px, Shopify workspaces 16px via a different mechanism, sheet toolbar 6px — and `--nds-gutter-content`, the token minted to prevent exactly this, has zero consumers
+- [medium/verified/ux defect] The route skeleton draws 129px of chrome where the live frame draws 90px — the page jumps 39px the moment data lands, which is precisely what the skeleton's own comment says it exists to prevent
+- [medium/verified/ALL/design inconsistency] The sheet toolbar band has two competing padding rules at identical specificity — `0 6px` and `14px 16px` — and which one applies is decided by stylesheet import order, not by a decision
+- [medium/verified/ALL/design inconsistency] The record drawer cancels the DS drawer's padding with a hardcoded negative margin, then re-insets its own content at 14px — so inside one 520px panel the title sits at 18px and everything beneath it at 14px, and a DS change to `.nds-drawer-b` silently breaks the panel
+- [high/verified/ALL/design inconsistency] Channel scope counts a selection it gives no verbs to — master has a selection bar, the channel sheets have none
+- [high/verified/ALL/data integrity risk] 'Delete' means 'recycle bin, restorable' on /products and /products/next, and 'permanent, no bin, no undo' in the studio — and the studio asks for less confirmation than for its reversible verbs
+- [high/verified/ALL/correctness risk] Money is rendered four different ways inside the studio and none matches the benchmark; the record drawer stamps '€' on every market, including GBP and USD ones
+- [medium/verified/ALL/ux defect] 'Export' means opposite things on the two rebuilt surfaces — the studio's toolbar Export opens a workbook wizard, and the CSV of what is on screen is three levels down inside it
+- [medium/verified/ALL/correctness risk] The studio pipes live listing events but refreshes only its readiness chips — the grid beside them keeps showing pre-sync values with no staleness signal, while every peer grid refetches and shows a Live pill
+- [high/verified/ALL/missing capability] The studio→wizard handoff drops the coordinate the operator is standing on, and the bound-destination surface that would carry it lives in the studio tree with no entry point

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "guard",
+    "cmd": "npm",
+    "args": [
+      "test",
+      "--prefix",
+      "apps/api",
+      "--",
+      "src/services/pim/market-languages-guard.vitest.test.ts"
+    ],
+    "startedAt": "2026-09-12T07:49:15.939Z",
+    "finishedAt": "2026-09-12T07:49:18.532Z",
+    "load": " 9:49  13 users, load averages: 6.00 5.97 5.60\n",
+    "exitCode": 0,
+    "output": "\n> @nexus/api@1.0.0 test\n> vitest run src/services/pim/market-languages-guard.vitest.test.ts\n\n\n RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api\n\n{\n  \"guard\": \"LX.2\",\n  \"scanned\": 1482,\n  \"exempt\": [\n    \"services/amazon/flat-file-coerce-ai.ts\",\n    \"services/amazon/flat-file-coerce.ts\",\n    \"services/amazon/flat-file-hydrate.service.ts\",\n    \"services/amazon/flat-file-mapping-ai.ts\",\n    \"services/amazon/flat-file-mapping.ts\",\n    \"services/amazon/flat-file-merge.ts\",\n    \"services/amazon/flat-file-propagate.service.ts\",\n    \"services/amazon/flat-file-pull-preview.service.ts\",\n    \"services/amazon/flat-file-pull.service.ts\",\n    \"services/amazon/flat-file-schema-walk.ts\",\n    \"services/amazon/flat-file-verify-live.service.ts\",\n    \"services/amazon/flat-file.service.ts\",\n    \"services/channel-batch/amazon-batch-feed.service.ts\"\n  ],\n  \"violations\": []\n}\n\n Test Files  1 passed (1)\n      Tests  2 passed (2)\n   Start at  09:49:16\n   Duration  2.23s (transform 78ms, setup 0ms, import 194ms, tests 1.93s, environment 0ms)\n\n"
+  },
+  {
+    "name": "shared",
+    "cmd": "npm",
+    "args": [
+      "test",
+      "--prefix",
+      "packages/shared",
+      "--",
+      "product-media.vitest.test.ts"
+    ],
+    "startedAt": "2026-09-12T07:49:18.539Z",
+    "finishedAt": "2026-09-12T07:49:18.975Z",
+    "load": " 9:49  13 users, load averages: 6.24 6.02 5.62\n",
+    "exitCode": 0,
+    "output": "\n> @nexus/shared@1.0.0 test\n> vitest run product-media.vitest.test.ts\n\n\n RUN  v4.1.5 /Users/awais/nexus-commerce/packages/shared\n\n\n Test Files  1 passed (1)\n      Tests  5 passed (5)\n   Start at  09:49:18\n   Duration  139ms (transform 22ms, setup 0ms, import 45ms, tests 4ms, environment 0ms)\n\n"
+  },
+  {
+    "name": "shared-types",
+    "cmd": "node_modules/.bin/tsc",
+    "args": [
+      "packages/shared/content-language.ts",
+      "packages/shared/product-media.ts",
+      "--noEmit",
+      "--skipLibCheck",
+      "--target",
+      "es2022",
+      "--module",
+      "nodenext",
+      "--moduleResolution",
+      "nodenext",
+      "--strict",
+      "--types",
+      "node",
+      "--typeRoots",
+      "node_modules/@types"
+    ],
+    "startedAt": "2026-09-12T07:49:18.980Z",
+    "finishedAt": "2026-09-12T07:49:19.386Z",
+    "load": " 9:49  13 users, load averages: 6.24 6.02 5.62\n",
+    "exitCode": 0,
+    "output": ""
+  },
+  {
+    "name": "api-types",
+    "cmd": "node",
+    "args": [
+      "docs/audits/2026-09-12-language-axis/step3-switch/typecheck.mjs"
+    ],
+    "startedAt": "2026-09-12T07:49:19.392Z",
+    "finishedAt": "2026-09-12T07:49:25.856Z",
+    "load": " 9:49  13 users, load averages: 6.24 6.02 5.62\n",
+    "exitCode": 0,
+    "output": "✓ apps/api: 70 file(s) given + 0 ambient + transitive imports — clean in 6.4s\n\n  scope: the files given and everything they IMPORT — not their consumers.\n  An exported-signature change can be green here and break a caller; for that, run the\n  workspace's own `npm run typecheck`.\n\n"
+  }
+]

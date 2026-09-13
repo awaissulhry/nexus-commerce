@@ -1,0 +1,14 @@
+✗ apps/api: 5 error(s) across 6 file(s) in 6.4s
+apps/api/src/services/master-content.service.ts(163,110): error TS2322: Type 'string' is not assignable to type 'SyncChannel'.
+apps/api/src/services/pim/content-bulk-write.ts(37,56): error TS2345: Argument of type '{ aliasId?: unknown; accountId?: string; channel: SheetChannel; market: string; }' is not assignable to parameter of type 'ContentCoordinate'.
+  Types of property 'aliasId' are incompatible.
+    Type 'unknown' is not assignable to type 'string'.
+apps/api/src/services/pim/content-bulk-write.ts(39,139): error TS2322: Type '{ coordinate?: { aliasId?: unknown; accountId?: string; channel: SheetChannel; market: string; }; requested: string; }' is not assignable to type '{ requested: string; coordinate?: ContentCoordinate; }'.
+  The types of 'coordinate.aliasId' are incompatible between these types.
+    Type 'unknown' is not assignable to type 'string'.
+apps/api/src/services/pim/content-bulk-write.ts(40,71): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+apps/api/src/services/pim/translation-write.ts(53,39): error TS2345: Argument of type '{ parent: { aPlusContent: JsonValue; name: string; workspaceId: string; id: string; sku: string; basePrice: Decimal; totalStock: number; lowStockThreshold: number; amazonAsin: string; ... 82 more ...; updatedAt: Date; }; } & { ...; }' is not assignable to parameter of type 'ContentProduct'.
+  Types of property 'categoryAttributes' are incompatible.
+    Type 'JsonValue' is not assignable to type 'Bag'.
+      Type 'string' is not assignable to type 'Bag'.
+✓ apps/web: 2 file(s) given + 1 ambient + transitive imports — clean in 3.3s

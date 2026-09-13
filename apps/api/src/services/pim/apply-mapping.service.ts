@@ -1,3 +1,6 @@
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { inDatabaseTransaction } from '../../lib/database-context.js'
+import { writeTranslation } from './translation-write.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * FM.6 — catalog cascade apply engine.
@@ -97,6 +100,7 @@ export function toAuditString(v: unknown): string | null {
 export async function applyCatalogCascade(
   input: {
     productId: string
+    contentAddress?: ContentAddress
     changes: Record<string, unknown>
     channels?: string[]
     markets?: string[]
@@ -105,6 +109,9 @@ export async function applyCatalogCascade(
   },
   ctx: ApplyCascadeContext = {},
 ): Promise<ApplyCascadeResult> {
+  const fieldLabel = Object.keys(input.changes)[0] ?? 'Content'
+  const address = contentAddress(input.contentAddress, fieldLabel)
+  if (address.tier === 'pin') throw Object.assign(new Error(`${fieldLabel} is pinned. Choose a shared content address before applying a catalogue cascade.`), { statusCode: 400 })
   const plan = await planMappingPropagation({
     productId: input.productId,
     changes: input.changes,
@@ -205,46 +212,19 @@ export async function applyCatalogCascade(
   let auditedFields = 0
   let queuedCoordinates = 0
 
-  await prisma.$transaction(async (tx) => {
+  await inDatabaseTransaction(prisma, async () => {
+    const tx = prisma
     // Guard the product once before any translation or queue writes.
     if (plan.productVersion !== undefined) {
       const guarded = await tx.product.updateMany({ where: { id: input.productId, version: plan.productVersion, updatedAt: plan.productUpdatedAt },
         data: { version: { increment: 1 } } })
       if (guarded.count !== 1) throw new Error('Product changed during propagation. Reload and try again.')
     }
-    // 1. Translations — both stores, in sync.
-    for (const [lang, content] of Object.entries(translatedByLang)) {
-      const prod = await tx.product.findUnique({ where: { id: input.productId }, select: { localizedContent: true } })
-      const localized = ((prod?.localizedContent as Record<string, Record<string, unknown>> | null) ?? {})
-      const langSlice = { ...(localized[lang] ?? {}) }
-      if (content.title != null) langSlice.title = content.title
-      if (content.description != null) langSlice.description = content.description
-      await tx.product.update({
-        where: { id: input.productId },
-        data: {
-          localizedContent: { ...localized, [lang]: langSlice } as unknown as Prisma.InputJsonValue,
-          version: { increment: 1 },
-        },
-      })
-      await tx.productTranslation.upsert({
-        where: { productId_language: workspaceKey({ productId: input.productId, language: lang }) },
-        create: {
-          productId: input.productId,
-          language: lang,
-          name: content.title ?? null,
-          description: content.description ?? null,
-          source: translateMeta?.source ?? 'ai-gemini',
-          sourceModel: translateMeta?.sourceModel ?? 'gemini-2.0-flash',
-          reviewedAt: null,
-        },
-        update: {
-          ...(content.title != null ? { name: content.title } : {}),
-          ...(content.description != null ? { description: content.description } : {}),
-          source: translateMeta?.source ?? 'ai-gemini',
-          sourceModel: translateMeta?.sourceModel ?? 'gemini-2.0-flash',
-          reviewedAt: null,
-        },
-      })
+    // Generated text stays an unreviewed shared-language draft. The common
+    // writer owns CAS, audit and same-language following intent for every caller.
+    for (const [language, content] of Object.entries(translatedByLang)) {
+      await writeTranslation({ productId: input.productId, locale: language, address: { tier: 'language', language },
+        values: { ...content, sourceModel: translateMeta?.sourceModel }, state: 'draft', userId: ctx.actor })
     }
 
     // 2. Per-coordinate push + audit.
@@ -258,7 +238,7 @@ export async function applyCatalogCascade(
         if (guarded.count !== 1) throw new Error('Listing changed during propagation. Reload and try again.')
       }
       const fields: Record<string, unknown> = {}
-      for (const e of entries) {
+      for (const e of entries.filter(entry => !entry.flags.needsTranslation)) {
         const value = payloadValueFor(e, translatedByLang)
         fields[e.fieldKey] = value
         await tx.channelListingOverride.create({
@@ -275,6 +255,7 @@ export async function applyCatalogCascade(
         auditedFields++
       }
 
+      if (!Object.keys(fields).length) continue
       const payload = {
         source: 'FM_CATALOG_CASCADE',
         productId: input.productId,
@@ -327,7 +308,7 @@ export async function applyCatalogCascade(
       })
       queuedCoordinates++
     }
-  }, { isolationLevel: 'Serializable', timeout: 30_000 })
+  })
 
   // 3. BullMQ enqueue AFTER commit — DB row is the source of truth; a
   // failed enqueue just waits for the next cron drain.

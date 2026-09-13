@@ -1,0 +1,24 @@
+{
+  "at": "2026-09-12T14:47:04.704Z",
+  "phase": "channel-pin",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "restored": [
+    {
+      "table": "ChannelListingTranslation",
+      "id": "cmtyi0r9i0006njcw0cz3trjj",
+      "action": "removed rehearsal-created row"
+    },
+    {
+      "table": "ChannelListing",
+      "id": "cmp00tsac0037s101ijg2of6x",
+      "fields": [
+        "version",
+        "updatedAt"
+      ],
+      "action": "restored baseline values"
+    }
+  ],
+  "auditRows": "retained as rehearsal history"
+}

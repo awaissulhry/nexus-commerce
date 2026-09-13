@@ -14,6 +14,7 @@
  * (DS.2 measured STRIP_GREW 0 for all kinds), so the strip does not move under an edit.
  */
 import { useEffect, useState } from 'react'
+import { useStudioDiscovery } from '../contracts'
 
 import { GridSheetNote, SHEET_SHORTCUT_HINT } from '@/design-system/grid'
 import { Button } from '@/design-system/primitives'
@@ -66,6 +67,7 @@ function SavedLayoutNote({ retry }: { retry: () => Promise<unknown> }) {
 
 export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRefused, lastSavedAt, layoutRecovery }: SheetFooterNoteProps) {
   const hint = useSheetShortcutHint(lastSavedAt)
+  const discovery = useStudioDiscovery()
   if (offline) {
     return (
       <GridSheetNote kind="offline" title="A write did not reach the server. The sheet is re-reading the row to find out whether it saved; nothing you have typed is lost.">
@@ -80,6 +82,12 @@ export function SheetFooterNote({ offline, refused, showRefusedOnly, onToggleRef
       <GridSheetNote kind="refusal" count={refused} noun="cell" lead={showRefusedOnly ? 'showing only the affected rows' : undefined} onShow={onToggleRefused} />
     )
   }
+  if (discovery?.note) return <span className="nds-grid-sheet-noteslot">
+    <GridSheetNote kind="provenance" title={discovery.note}>{discovery.note}</GridSheetNote>
+    {discovery.failed && discovery.retry && <Button inline variant="link" disabled={discovery.retrying} onClick={() => void discovery.retry?.()}>
+      {discovery.retrying ? 'Retrying…' : 'Retry channel availability'}
+    </Button>}
+  </span>
   if (layoutRecovery) return <SavedLayoutNote retry={layoutRecovery.retry} />
   return (
     <span className="nds-grid-sheet-noteslot">

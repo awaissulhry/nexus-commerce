@@ -197,8 +197,9 @@ export const cssVars: ReadonlyArray<CssVar> = [
   // already read them with no fallback — `styles/tokens.css` (--nds-pill-warning-fg, in :root),
   // `styles/components.css:847` and `styles/primitives.css:956` — so in light each declaration was
   // invalid at computed-value time and the colour fell through to inherit. Hub #687/P2.
-  { name: '--nds-success-text', value: '#146034' },
-  { name: '--nds-warning-text', value: '#6d3f10' },
+  // PR.6: derived on cell, hover, child, primary-soft and danger-soft grounds, not on a plain panel alone.
+  { name: '--nds-success-text', value: '#0b4b28' },
+  { name: '--nds-warning-text', value: '#653a0f' },
   { name: '--nds-info-soft', value: 'var(--nds-blue-100)' },
   { name: '--nds-info-text-light', value: '#10457f' },
   { name: '--nds-info-text', value: 'var(--nds-info-text-light)' },
@@ -220,11 +221,11 @@ export const cssVars: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-warning-bg', value: 'var(--nds-amber-soft)' },
   { name: '--nds-pill-neutral-fg', value: 'var(--nds-text-2)' },
   { name: '--nds-pill-neutral-bg', value: 'var(--nds-grey-100)' },
-  { name: '--nds-danger-text', value: '#9c2f2a' },
+  { name: '--nds-danger-text', value: '#7d2621' },
   // Provenance marks (D-#533/#563) — semantic, because a palette step is not where a theme lives.
   // Light was never the defect; these keep the shipped values. Dark is in the .dark list below.
   { name: '--nds-prov-ai-fg', value: '#6d28d9' },
-  { name: '--nds-prov-formula-fg', value: '#0e7490' },
+  { name: '--nds-prov-formula-fg', value: '#094b5e' },
   { name: '--nds-prov-inherited-fg', value: '#1a60c4' },
   // NOT --nds-danger-strong: `.dark` overrides that to #f79289 while --nds-danger-soft stays
   // light, so the dark danger pill was #f79289 on #fde8e8 — 1.9:1, illegible. --nds-danger-text
@@ -394,13 +395,13 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   { name: '--nds-pill-neutral-bg', value: '#26323f' },   // text-2 on it 6.32
   { name: '--nds-success-soft', value: '#173a2c' },      // success-strong on it 8.14
   { name: '--nds-danger-soft', value: '#3a1c1c' },       // danger-strong on it 6.92
-  { name: '--nds-danger-text', value: '#ef9c93' },       // on surface 7.14
+  { name: '--nds-danger-text', value: '#f3b7b0' },       // PR.6: >=7.05 across the full declared-ground matrix
   // App chrome in dark (D-#540): the page is #14223a and this ground was #18263b — 1.05:1.
   { name: '--nds-chrome-bg', value: '#1e3050' },
   // Provenance marks in dark (D-#533/#563). The light values are dark by construction, so on
   // #18263b they measured 2.14 / 2.00 / 2.55 — the failure a semantic token exists to prevent.
   { name: '--nds-prov-ai-fg', value: '#c4b5fd' },
-  { name: '--nds-prov-formula-fg', value: '#22d3ee' },
+  { name: '--nds-prov-formula-fg', value: '#39d8f0' },
   { name: '--nds-prov-inherited-fg', value: '#93c5fd' },
   { name: '--nds-targeting-auto', value: '#7fd4b0' },    // text-inverse on it 9.05
   { name: '--nds-targeting-manual', value: '#c9a86a' },  // text-inverse on it 7.04
@@ -412,7 +413,7 @@ export const cssVarsDark: ReadonlyArray<CssVar> = [
   // dark canvas — so -text aliases to it. --nds-stale-text follows --nds-warning-text and needs
   // no entry of its own.
   { name: '--nds-success-text', value: 'var(--nds-success-strong)' },   // 8.14 on success-soft
-  { name: '--nds-warning-text', value: 'var(--nds-warning-strong)' },   // 7.24 on warning-soft
+  { name: '--nds-warning-text', value: '#f2bc79' },   // PR.6: pending cell over hover ground >=7.07
   // warning-soft had no dark value, so a "warning" surface rendered a LIGHT amber wash on a dark
   // canvas — a contrast PASS that is still a visual bug, and the reason a ratio check alone is
   // not enough.

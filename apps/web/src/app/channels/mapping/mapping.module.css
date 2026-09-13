@@ -455,3 +455,148 @@
 }
 
 .categoryEntry { display: flex; gap: var(--nds-space-6); padding: var(--nds-space-8); }
+
+/* ── VT.3 · the Variations group (design §3.7 · VX §11.1 · canvas artboard 6) ─────────────── */
+/* Geometry taken from the artboard, token by token, not hex by hex:
+     group header  44px · padding 0 16px · `--nds-border` below · `--nds-surface-raised` (#f7f9fb)
+     each row      min-height 40px · padding 6px 16px · gap 14px · `--nds-border-subtle` (#e6e9ee)
+     label column  140px · 12.5px / 600 · `--nds-text-strong` (#3a4452 — the artboard's own value)
+     card          1px `--nds-border` · `--nds-radius-xl` (10px — the artboard's radius)
+   TWO deliberate departures from the artboard's hexes, both for contrast, both on this page's own
+   documented rule (see this file's header): the hint tier is `--nds-text-muted` (4.86:1) not
+   `#7e8796` (`--nds-text-3`, the 3.10:1 ICON tier the artboard drew reading text in), and the
+   unreviewed count is `--nds-amber-text` (#9a6700) not `#c2410c`, which is the warning colour the
+   rest of this page already uses (`.prio_requiredIfRelevant`, `.warnMark`). */
+
+.varGroup {
+  flex: none;
+  margin: 0 16px 20px;
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.varHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 16px 0 6px;
+  border-bottom: 1px solid var(--nds-border);
+  background: var(--nds-surface-raised);
+  flex-wrap: wrap;
+}
+
+.varHeadTitle {
+  font-size: var(--nds-font-size-base);
+  font-weight: 700;
+  color: var(--nds-text);
+}
+
+.varHeadScope {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+.varHeadCounts {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+.varHeadCounts b {
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.varBody { display: flex; flex-direction: column; min-width: 0; }
+
+.varRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 40px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.varRow:last-child { border-bottom: 0; }
+
+.varRowLabel {
+  width: 140px;
+  flex: none;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.varRowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  /* The canvas draws 10px here. 8px is a deliberate 2px departure, and it buys 6px across the Rule
+     row's three gaps — which is what takes AMAZON·DE·OUTERWEAR's live Rule row from 3.34px over its
+     834px main (one elided sentence) to 2.66px under it (nothing elided). The `.varHint` ellipsis
+     below stays as the graceful fallback for a longer category name; this stops it firing on the
+     catalogue's own widest live coordinate. */
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.varSentence {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+}
+
+.varSentence b { color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+
+/* Two classes, not one: `.varSentence b` above is (0,1,1) and a bare `.varWarnNumber` is (0,1,0),
+   so the sentence's own bold rule won and the unreviewed count rendered in --nds-text. Measured on
+   screen 2026-09-13 — rgb(28,37,48) where the warning tone was intended. */
+.varSentence .varWarnNumber { color: var(--nds-amber-text); }
+
+.varHint {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-muted);
+  /* `flex: 1 1 0` rather than the default `0 1 auto`, and it is load-bearing, not cosmetic.
+     A wrap-enabled flex line breaks on an item's HYPOTHETICAL main size (its content width), so a
+     shrinkable-but-auto-basis hint still forces a second line; with a zero basis the hint never
+     causes the break and absorbs the leftover instead, ellipsising by exactly the overflow.
+     Measured live on AMAZON·DE·OUTERWEAR at a 1440 content width: the Rule row's four children came
+     to 807.34px + 3×10px gaps = 837.34 against a main of 834 — over by 3.34px, which cost the row a
+     whole second line (69.84 vs 41). The full sentence stays reachable through the element's
+     `title`, and every other width keeps the row at 41. */
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A radio and the control it qualifies read as one choice, so they stay on one baseline and never
+   wrap between themselves — only between whole choices. */
+.varChoice { display: inline-flex; align-items: center; gap: 8px; }
+
+.varFoot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border-top: 1px solid var(--nds-border);
+  background: var(--nds-surface-raised);
+}
+
+/* `.nds-btn.quiet` is the DS's borderless button and it takes its colour from the container by
+   design ("Pass a tone by setting `color` on the container", primitives.css:907-911). The canvas
+   draws its three quiet buttons — the group's own disclosure, `Write a rule for …`, `Open value
+   maps` — at #3a4452, so the container states it once here rather than each button restating it.
+   The DS's `ghost` was the wrong variant for them: it carries a 1px --nds-primary-ghost-border and
+   link-blue text (measured on screen: rgb(207,224,251) / rgb(26,96,196)), which the canvas does not
+   draw. `List` and `Preview payload` stay on the default bordered variant, which the canvas does. */
+.varHead, .varRowMain { color: var(--nds-text-strong); }

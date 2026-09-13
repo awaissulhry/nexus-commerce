@@ -12,7 +12,7 @@ import { amazonSpecFromDefinition } from '../pim/channel-specs/amazon.js'
 import { ebaySpecFromCache } from '../pim/channel-specs/ebay.js'
 import { resolveWriteRouting } from '../pim/studio-sheet.service.js'
 import {
-  buildSheetColumns,
+  buildSheetColumns as buildAllSheetColumns,
   coordinatesFor,
   normaliseKey,
   SLOT_COLUMNS_MAX,
@@ -20,6 +20,14 @@ import {
 } from '../pim/sheet-columns.service.js'
 import type { FieldDefinition } from '../pim/field-registry.service.js'
 import type { ChannelFieldSpec, ChannelSpec } from '../pim/channel-specs/types.js'
+
+// This suite covers schema field merging. The engine's separate variation control is
+// covered by studio-sheet-axis.vitest.test.ts and is independent of these field fixtures.
+const buildSheetColumns = (input: Parameters<typeof buildAllSheetColumns>[0]) => {
+  const result = buildAllSheetColumns(input)
+  return { ...result, columns: result.columns.filter(c => c.kind !== 'variationTheme'),
+    groups: result.groups.filter(g => result.columns.some(c => c.kind !== 'variationTheme' && c.groupKey === g.key)) }
+}
 
 const AMAZON_IT: SheetCoordinate = { channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true }
 const EBAY_IT: SheetCoordinate = { channel: 'EBAY', marketplace: 'IT', label: 'eBay · IT', inMarket: true }
@@ -81,7 +89,7 @@ describe('attribute scope audit', () => {
   it.each(specs)('preserves every $coordinate.channel schema field while removing unrelated master controls', ({ coordinate, spec }) => {
     const result = buildSheetColumns({ fields: masterFields, specs: [{ coordinate, spec }], coordinates: [coordinate], scopeKind: 'channel' })
     const covered = new Set(result.columns.flatMap((c) => Object.values(c.channels ?? {}).map((f) => f.attribute)))
-    expect([...covered].sort()).toEqual(Object.keys(spec.coverage).sort())
+    expect([...covered].sort()).toEqual(Object.keys(spec.coverage).filter(key => !['variation_theme', 'variationTheme'].includes(key)).sort())
     expect(result.columns.filter((c) => !c.channels).map((c) => c.key)).toEqual(['sku'])
     for (const column of result.columns.filter((c) => c.key !== 'sku')) {
       expect(resolveWriteRouting(column, coordinate, null).affectsAllChannels, column.key).toBe(false)

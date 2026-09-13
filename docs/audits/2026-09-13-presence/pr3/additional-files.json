@@ -1,0 +1,54 @@
+[
+  {
+    "path": "apps/api/src/lib/listing-coordinate.ts",
+    "sha256": "117bdda75e5690ffb48058a7e9dc68c7120cb73abace7388e4f1f01bd3c356bc"
+  },
+  {
+    "path": "apps/api/src/lib/amazon-fulfillment.ts",
+    "sha256": "ffffa2c22a56c0aabbe942374310e42c9694e3e73cd89f978bd38608d653617b"
+  },
+  {
+    "path": "apps/api/src/lib/listing-coordinate.vitest.test.ts",
+    "sha256": "b9a23c757c1cc890a0bbe4f5dac52491e80be878107fd84f4c10b5d335cb91d3"
+  },
+  {
+    "path": "apps/api/src/lib/listing-coordinate.local.vitest.test.ts",
+    "sha256": "8f6ea13d062c79b529905743540b6e4fe1045a4735628d3d79bd3ff865b1fb95"
+  },
+  {
+    "path": "apps/api/src/lib/listing-coordinate-sites.local.vitest.test.ts",
+    "sha256": "105e947ca33022dacf0e0ba06dd5d4393e947365b14229b467b09f841ac83b1d"
+  },
+  {
+    "path": "apps/api/src/test-support/presence-local.ts",
+    "sha256": "816c8e6b060cc00ec7898c0a8926908a06d557ba52e27506bdb197a8f2641d49"
+  },
+  {
+    "path": "apps/api/src/services/market-offer-availability.service.ts",
+    "sha256": "895eb4ee99dde8d04bc2d3cbdc64adcfde413c537c0d78147da75f16d8d7a4cf"
+  },
+  {
+    "path": "apps/api/src/services/amazon-market-offer.presence.vitest.test.ts",
+    "sha256": "b9b664ce1413092d17d393fb942b801ec48eab333af9cc53df80c75b7b4b5130"
+  },
+  {
+    "path": "apps/api/src/services/amazon-mapper.presence.vitest.test.ts",
+    "sha256": "a538826e41c4ced55d3ac527aba56c90981d1bd2d907d676a25a02a6cf53caef"
+  },
+  {
+    "path": "apps/api/src/services/ebay-label-guard.presence.vitest.test.ts",
+    "sha256": "1608bab15ecc56e0da0b72075af0f58906ecd22e4d8af3491fccd9d61800f7c1"
+  },
+  {
+    "path": "apps/api/src/routes/marketplaces.presence.vitest.test.ts",
+    "sha256": "121fbf724d517158a75ccacb01a0493d778beca1dcdd8c7d7a19468a29302593"
+  },
+  {
+    "path": "apps/api/src/services/amazon/amazon-flat-file-remove.service.vitest.test.ts",
+    "sha256": "00f728b71c622aa774eaa344ebedb6fa96580c498cd9032ca9fd92c7d8cea165"
+  },
+  {
+    "path": "apps/api/src/services/ebay-flat-file-delete.service.vitest.test.ts",
+    "sha256": "817113dd97ec90b5175f2f04cc52796f3e4be30246a15aa4ebd401c00b548f1f"
+  }
+]

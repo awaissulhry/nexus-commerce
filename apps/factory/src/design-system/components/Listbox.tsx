@@ -79,6 +79,20 @@ export interface ListboxProps {
   /** render `emptyLabel` greyed — a placeholder ("Select a Portfolio") rather than a real
    *  default ("All"). Same distinction the ads filter bar has always drawn. */
   emptyIsPlaceholder?: boolean
+  /**
+   * Where the option panel is portalled. Default `document.body`, which is right for a page.
+   *
+   * 🔴 R-VT-8 (orchestrator, on VT.2c's measurement) — inside an **AG Grid popup editor** it is wrong:
+   * the panel lands outside the popup's DOM, so clicking an option is a click OUTSIDE the editor and the
+   * edit ends before `onChange` can report. VT.2c measured it on the variation-theme cell's target
+   * control. The fix belongs in the DS and not in the page, so the host names its own container here and
+   * the panel stays a child of the popup. Positioning is unaffected: `usePopoverPosition` returns
+   * `position: fixed` viewport coordinates, which do not depend on the portal parent (no transformed
+   * ancestor is introduced — AG positions its popup with `left`/`top`).
+   *
+   * `null` / `undefined` = `document.body`, so every existing call site is unchanged.
+   */
+  portalTo?: Element | null
 }
 
 /** Past this many options a picker gets a search box without being asked. */
@@ -91,7 +105,7 @@ export interface ListboxProps {
  * banned from native selects; this is what they migrate to.
  */
 export function Listbox({ size = 'md', options, value, onChange, placeholder = 'Select…', ariaLabel, id, 'aria-describedby': describedBy, className, disabled,
-  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false }: ListboxProps) {
+  width, searchable, searchPlaceholder = 'Search…', emptyLabel, emptyIsPlaceholder = false, portalTo }: ListboxProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -123,7 +137,9 @@ export function Listbox({ size = 'md', options, value, onChange, placeholder = '
             searchPlaceholder={searchPlaceholder}
             emptyLabel={emptyLabel}
           />,
-          document.body,
+          /* R-VT-8: the host's container when it named one — an AG popup editor must keep the panel
+             inside itself. `document.body` otherwise, which is every page call site. */
+          portalTo ?? document.body,
         )
       )}
     </div>

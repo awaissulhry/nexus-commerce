@@ -1,3 +1,5 @@
+import { normalizeLanguage } from '../pim/content-language.js'
+import { SCOPE_STATES } from '../pim/readiness-model.js'
 /**
  * The products grid's server contract — AG Grid's own request in, the list query out.
  *
@@ -12,6 +14,7 @@
  */
 import {
   AGG_FUNCS,
+  catalogLanguageColumn,
   GRID_FILTER_COLUMNS,
   GRID_GROUP_COLUMNS,
   GRID_VALUE_COLUMNS,
@@ -70,7 +73,7 @@ export const GRID_SORT_FIELD: Readonly<Record<string, string>> = {
  */
 export const VARIATION_PREVIEW_CAP = 10
 
-const EMPTY_CONTEXT = { stock: [], fulfillment: [], families: [], workflowStages: [], missingChannels: [] }
+const EMPTY_CONTEXT = { stock: [], fulfillment: [], families: [], workflowStages: [], missingChannels: [], variationMapping: [] }
 
 /** A number filter's bounds as the list's min/max strings; `null` bounds are "no bound". */
 const numberBounds = (m: Extract<GridFilterModelEntry, { filterType: 'number' }>): { min?: string; max?: string } => {
@@ -97,6 +100,7 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
     includeSales: 'true',
     salesDays: String(Math.min(Math.max(Number(ctx?.salesDays ?? 90) || 90, 1), 365)),
   }
+  if (ctx?.language) q.language = normalizeLanguage(ctx.language)
   const list = (key: keyof ProductListQuery, values: readonly string[]) => {
     if (values.length) (q as Record<string, string>)[key] = values.join(',')
   }
@@ -110,6 +114,12 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
   // ── sort: the grid's sort model, applied at every level ──────────────────────────────────
   const sorts: string[] = []
   for (const s of req.sortModel ?? []) {
+    const languageColumn = catalogLanguageColumn(s.colId)
+    if (languageColumn && languageColumn.language === q.language) {
+      if (!q.languageSort) q.languageSort = { field: languageColumn.field, direction: s.sort === 'desc' ? 'desc' : 'asc' }
+      else unsupported.push(`sort:${s.colId}:multiple-language-sorts`)
+      continue
+    }
     const field = GRID_SORT_FIELD[s.colId]
     if (!field) { unsupported.push(`sort:${s.colId}`); continue }
     sorts.push(`${field}:${s.sort === 'desc' ? 'desc' : 'asc'}`)
@@ -165,6 +175,14 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
     return m && m.filterType === 'set' ? m.values.filter((v) => typeof v === 'string') : []
   }
   for (const [colId, m] of Object.entries(fm)) {
+    const languageColumn = catalogLanguageColumn(colId)
+    if (languageColumn && languageColumn.language === q.language && m.filterType === 'set') {
+      if (languageColumn.field === 'readiness' && m.values.every(v => (SCOPE_STATES as readonly string[]).includes(v))) { q.languageStates = m.values; continue }
+      // LX.F P2-16 — the empty selection is the FALLBACK field's own state, never a
+      // write to the readiness predicate. Its old correctness depended on
+      // `catalog-language.ts` short-circuiting an empty `languageStates`, one file away.
+      if (languageColumn.field === 'fallback' && m.values.every(v => ['true', 'false'].includes(v))) { if (!m.values.length) q.languageFallback = 'none'; else if (m.values.length === 1) q.languageFallback = m.values[0] === 'true'; continue }
+    }
     const kind = (GRID_FILTER_COLUMNS as Record<string, string>)[colId]
     if (!kind) { unsupported.push(`filter:${colId}`); continue }
     if (m.filterType !== kind) { unsupported.push(`filter:${colId}:${m.filterType}`); continue }
@@ -206,6 +224,32 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
   list('stockLevels', tile === 'out-of-stock' ? ['out'] : cf.stock)
   list('fulfillment', cf.fulfillment)
   list('missingChannels', cf.missingChannels)
+  /**
+   * VT.4b — the `Variation mapping` dimension. `list()` joins with commas and
+   * `restrictVariationMapping` splits on `[|,]`, so the grid's array and the URL's pipe-separated
+   * `?variationMapping=derived|collides` reach the SAME predicate with no translation table.
+   *
+   * An unsupported word is reported in `unsupported` exactly as an unknown tag or stage is, so the page can
+   * say what it could not apply instead of narrowing to nothing without a reason.
+   */
+  {
+    /**
+     * 🔴 The WHOLE list is passed through, unknown words included, and only REPORTED here.
+     *
+     * Measured 2026-09-13 before this line was written this way: filtering the unknown words out locally left
+     * `good` empty, so `list()` wrote no parameter, so the filter was INACTIVE and the grid answered **31 rows**
+     * — while `GET /api/products?variationMapping=teleport` answered **0**. Two paths, two answers, and the
+     * grid's was the dangerous one: it WIDENED silently for a word an operator typed. `restrictVariationMapping`
+     * is the single arbiter and already has the right rule ("an ACTIVE filter with no matching value returns
+     * `[]`… narrow to nothing visibly, not widen to everything silently"), so it gets the raw words and this
+     * block only names what it will drop.
+     */
+    const known = new Set(['derived', 'rule', 'overridden', 'unset', 'collides'])
+    for (const value of cf.variationMapping ?? []) {
+      if (!known.has(value)) unsupported.push(`variation-mapping:${value}`)
+    }
+    list('variationMapping', cf.variationMapping ?? [])
+  }
   const familyIds: string[] = []
   for (const code of cf.families) {
     if (code === 'null') { familyIds.push('null'); continue }

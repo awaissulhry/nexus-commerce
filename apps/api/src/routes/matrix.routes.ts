@@ -8,6 +8,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { assertRequestPermission } from '../lib/auth/request-permission.js'
 
 
 /**
@@ -138,7 +139,7 @@ async function updateChannelListing(request: FastifyRequest, reply: FastifyReply
     logger.info('Updating channel listing', { productId: id, listingId })
 
     const updated = await (prisma as any).channelListing.update({
-      where: { id: listingId },
+      where: { id: listingId, productId: id },
       data: {
         title: body.title,
         description: body.description,
@@ -164,65 +165,6 @@ async function updateChannelListing(request: FastifyRequest, reply: FastifyReply
       error: error instanceof Error ? error.message : String(error),
     })
     return reply.status(500).send({ error: 'Failed to update channel listing' })
-  }
-}
-
-/**
- * PUT /api/products/:id/matrix/offer/:offerId
- * Update an offer
- */
-async function updateOffer(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { id, offerId } = request.params as { id: string; offerId: string }
-    const body = request.body as any
-
-    logger.info('Updating offer', { productId: id, offerId })
-
-    const updated = await (prisma as any).offer.update({
-      where: { id: offerId },
-      data: {
-        fulfillmentMethod: body.fulfillmentMethod,
-        sku: body.sku,
-        price: body.price,
-        quantity: body.quantity,
-        leadTime: body.leadTime,
-        minPrice: body.minPrice,
-        maxPrice: body.maxPrice,
-        costPrice: body.costPrice,
-      },
-    })
-
-    logger.info('Offer updated', { offerId })
-    return reply.send(updated)
-  } catch (error) {
-    logger.error('Error updating offer', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return reply.status(500).send({ error: 'Failed to update offer' })
-  }
-}
-
-/**
- * DELETE /api/products/:id/matrix/offer/:offerId
- * Delete an offer
- */
-async function deleteOffer(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { id, offerId } = request.params as { id: string; offerId: string }
-
-    logger.info('Deleting offer', { productId: id, offerId })
-
-    await (prisma as any).offer.delete({
-      where: { id: offerId },
-    })
-
-    logger.info('Offer deleted', { offerId })
-    return reply.send({ success: true })
-  } catch (error) {
-    logger.error('Error deleting offer', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return reply.status(500).send({ error: 'Failed to delete offer' })
   }
 }
 
@@ -268,46 +210,11 @@ async function createChannelListing(request: FastifyRequest, reply: FastifyReply
   }
 }
 
-/**
- * POST /api/products/:id/matrix/offer
- * Create a new offer
- */
-async function createOffer(request: FastifyRequest, reply: FastifyReply) {
-  try {
-    const { id } = request.params as { id: string }
-    const body = request.body as any
-
-    logger.info('Creating offer', { productId: id })
-
-    const offer = await (prisma as any).offer.create({
-      data: {
-        channelListingId: body.channelListingId,
-        fulfillmentMethod: body.fulfillmentMethod,
-        sku: body.sku,
-        price: body.price,
-        quantity: body.quantity,
-        leadTime: body.leadTime || 1,
-        minPrice: body.minPrice,
-        maxPrice: body.maxPrice,
-        costPrice: body.costPrice,
-      },
-    })
-
-    logger.info('Offer created', { offerId: offer.id })
-    return reply.status(201).send(offer)
-  } catch (error) {
-    logger.error('Error creating offer', {
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return reply.status(500).send({ error: 'Failed to create offer' })
-  }
-}
-
+// Presence D24: legacy Offer writers retired; use the studio Matrix write door.
 export async function matrixRoutes(fastify: FastifyInstance) {
   fastify.get('/api/products/:id/matrix', getProductMatrix)
   fastify.post('/api/products/:id/matrix/channel-listing', createChannelListing)
-  fastify.put('/api/products/:id/matrix/channel-listing/:listingId', updateChannelListing)
-  fastify.post('/api/products/:id/matrix/offer', createOffer)
-  fastify.put('/api/products/:id/matrix/offer/:offerId', updateOffer)
-  fastify.delete('/api/products/:id/matrix/offer/:offerId', deleteOffer)
+  fastify.put('/api/products/:id/matrix/channel-listing/:listingId', {
+    preHandler: async (request) => assertRequestPermission(request, 'products.edit'),
+  }, updateChannelListing)
 }

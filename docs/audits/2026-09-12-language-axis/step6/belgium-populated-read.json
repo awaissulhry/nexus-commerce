@@ -1,0 +1,184 @@
+[
+  {
+    "locale": "nl",
+    "status": 200,
+    "columns": 164,
+    "missing": [],
+    "rows": 21,
+    "fields": [
+      "name",
+      "description",
+      "bulletPoints_1",
+      "bulletPoints_2",
+      "bulletPoints_3",
+      "bulletPoints_4",
+      "bulletPoints_5",
+      "bulletPoints_6",
+      "bulletPoints_7",
+      "bulletPoints_8",
+      "bulletPoints_9",
+      "bulletPoints_10",
+      "keywords"
+    ],
+    "sample": {
+      "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "source": "masterColumn",
+      "inheritedFrom": "cmokmy3a40078pm0p1fvnu523",
+      "inherited": true,
+      "tier": "computed",
+      "language": "it",
+      "requested": "nl",
+      "provenance": {
+        "member": "mapped",
+        "from": "Italian · source"
+      },
+      "mapped": {
+        "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "derived": true,
+        "sourceOwner": null,
+        "status": "mapped",
+        "provenance": "catalogRule",
+        "sourcePath": "title",
+        "fallbackPath": "name",
+        "usesExpression": false,
+        "legacySource": "source",
+        "appliedTransforms": [],
+        "warnings": [
+          "Showing it fallback; nl content is missing."
+        ],
+        "errors": [
+          "Showing it fallback; nl content is missing."
+        ],
+        "mappingErrors": [],
+        "autoCorrected": null,
+        "requiredByRule": true,
+        "overLimit": null
+      },
+      "layer": "master",
+      "pinned": false,
+      "follows": true,
+      "editable": true,
+      "linkGroupId": null,
+      "writeField": "name",
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": true,
+      "writable": true,
+      "writeBlockedReason": null,
+      "contentAddress": null,
+      "contentAcknowledgement": {
+        "shared": {
+          "label": "Write the shared Dutch (new)",
+          "address": {
+            "tier": "language",
+            "language": "nl"
+          }
+        },
+        "pin": {
+          "label": "Pin on Amazon · BE · nl",
+          "address": {
+            "tier": "pin",
+            "language": "nl",
+            "coordinate": {
+              "channel": "AMAZON",
+              "market": "BE",
+              "accountId": "cmothu9bo0000nz01asw6wx8j"
+            }
+          }
+        },
+        "reach": []
+      }
+    }
+  },
+  {
+    "locale": "fr",
+    "status": 200,
+    "columns": 164,
+    "missing": [],
+    "rows": 21,
+    "fields": [
+      "name",
+      "description",
+      "bulletPoints_1",
+      "bulletPoints_2",
+      "bulletPoints_3",
+      "bulletPoints_4",
+      "bulletPoints_5",
+      "bulletPoints_6",
+      "bulletPoints_7",
+      "bulletPoints_8",
+      "bulletPoints_9",
+      "bulletPoints_10",
+      "keywords"
+    ],
+    "sample": {
+      "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+      "source": "masterColumn",
+      "inheritedFrom": "cmokmy3a40078pm0p1fvnu523",
+      "inherited": true,
+      "tier": "computed",
+      "language": "it",
+      "requested": "fr",
+      "provenance": {
+        "member": "mapped",
+        "from": "Italian · source"
+      },
+      "mapped": {
+        "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "derived": true,
+        "sourceOwner": null,
+        "status": "mapped",
+        "provenance": "catalogRule",
+        "sourcePath": "title",
+        "fallbackPath": "name",
+        "usesExpression": false,
+        "legacySource": "source",
+        "appliedTransforms": [],
+        "warnings": [
+          "Showing it fallback; fr content is missing."
+        ],
+        "errors": [
+          "Showing it fallback; fr content is missing."
+        ],
+        "mappingErrors": [],
+        "autoCorrected": null,
+        "requiredByRule": true,
+        "overLimit": null
+      },
+      "layer": "master",
+      "pinned": false,
+      "follows": true,
+      "editable": true,
+      "linkGroupId": null,
+      "writeField": "name",
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": true,
+      "writable": true,
+      "writeBlockedReason": null,
+      "contentAddress": null,
+      "contentAcknowledgement": {
+        "shared": {
+          "label": "Write the shared French (new)",
+          "address": {
+            "tier": "language",
+            "language": "fr"
+          }
+        },
+        "pin": {
+          "label": "Pin on Amazon · BE · fr",
+          "address": {
+            "tier": "pin",
+            "language": "fr",
+            "coordinate": {
+              "channel": "AMAZON",
+              "market": "BE",
+              "accountId": "cmothu9bo0000nz01asw6wx8j"
+            }
+          }
+        },
+        "reach": []
+      }
+    }
+  }
+]

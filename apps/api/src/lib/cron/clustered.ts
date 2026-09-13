@@ -44,6 +44,18 @@ export type ScheduledTask = ReturnType<typeof nodeCron.schedule>
  *  the shortest schedule (1 minute) so the next tick is always contestable. */
 const LOCK_TTL_MS = 50_000
 
+/**
+ * LX.F P3-26 — a job whose RUN outlives the default claim can say so.
+ *
+ * The 50 s default is right for minute-schedules: the next tick must be
+ * contestable. It is wrong for a long daily job — the readiness reconcile measured
+ * **714 rows in 4,087 ms for one family**, so 37 root families is ≈150 s and the
+ * claim expired two thirds of the way through. Nothing doubles today (the next tick
+ * is 24 h away) but a move to a shorter schedule would silently run it twice, so the
+ * TTL belongs to the job, with a ceiling that keeps it shorter than its own period.
+ */
+export type ClusteredOptions = Parameters<typeof nodeCron.schedule>[2] & { lockTtlMs?: number }
+
 /** Registrations seen per (file, expression), so two identical jobs in one
  *  file get distinct keys. Deterministic: every replica loads the same modules
  *  in the same order, so the same job gets the same index everywhere. */
@@ -86,7 +98,7 @@ export function jobIdFor(file: string, expression: string, index: number): strin
  *
  * Returns TRUE on any Redis failure — see the fail-open note in the header.
  */
-async function claimTick(jobId: string): Promise<boolean> {
+async function claimTick(jobId: string, ttlMs = LOCK_TTL_MS): Promise<boolean> {
   let redis
   try {
     const queue = await import('../queue.js')
@@ -96,7 +108,7 @@ async function claimTick(jobId: string): Promise<boolean> {
   }
   try {
     const key = tickLockKey(jobId, Date.now())
-    const result = await redis.set(key, process.pid.toString(), 'PX', LOCK_TTL_MS, 'NX')
+    const result = await redis.set(key, process.pid.toString(), 'PX', ttlMs, 'NX')
     return result === 'OK'
   } catch (error) {
     logger.warn('clustered cron: lock unavailable, running the tick anyway', {
@@ -114,7 +126,7 @@ async function claimTick(jobId: string): Promise<boolean> {
 function schedule(
   expression: string,
   handler: (...args: never[]) => void | Promise<void>,
-  options?: Parameters<typeof nodeCron.schedule>[2],
+  options?: ClusteredOptions,
   platform = false,
 ): ScheduledTask {
   const file = callerFile()
@@ -147,7 +159,7 @@ function schedule(
         } while (after)
         return
       }
-      if (!(await claimTick(jobId))) {
+      if (!(await claimTick(jobId, options?.lockTtlMs))) {
         // Another replica has this minute. Not an error, and not worth a log
         // line 117 times a minute.
         return

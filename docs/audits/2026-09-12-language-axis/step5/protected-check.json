@@ -1,0 +1,102 @@
+{
+  "at": "2026-09-12T21:59:57.767594+00:00",
+  "baseline": "Step 4 closing receipt 2026-09-12T21:08:25.332854+00:00",
+  "files": [
+    {
+      "file": "apps/api/src/services/amazon/flat-file-coerce.ts",
+      "before": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+      "after": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-propagate.service.ts",
+      "before": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+      "after": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-pull.service.ts",
+      "before": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+      "after": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping-ai.ts",
+      "before": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+      "after": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-pull-preview.service.ts",
+      "before": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+      "after": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+      "before": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+      "after": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file.service.ts",
+      "before": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+      "after": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping.ts",
+      "before": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+      "after": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-merge.ts",
+      "before": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+      "after": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-hydrate.service.ts",
+      "before": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+      "after": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-coerce-ai.ts",
+      "before": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+      "after": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-verify-live.service.ts",
+      "before": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+      "after": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/services/channel-batch/amazon-batch-feed.service.ts",
+      "before": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+      "after": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/lib/amazon-sp-client.vitest.test.ts",
+      "before": "eae879974c47f650d98cb5f56af5062efa9cff9d077b894a08c972c377fad88f",
+      "after": "eae879974c47f650d98cb5f56af5062efa9cff9d077b894a08c972c377fad88f",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/lib/amazon-sp-client.lifecycle.vitest.test.ts",
+      "before": "7d85da9326586254be345056437e924917a8e4a037a6b8e0b7f77bff0b78843a",
+      "after": "7d85da9326586254be345056437e924917a8e4a037a6b8e0b7f77bff0b78843a",
+      "unchanged": true
+    },
+    {
+      "file": "apps/api/src/lib/amazon-sp-client.ts",
+      "before": "04f846753ee2bcd76934ab3a99deda52529509f651aa3d38e3acb2c91511af35",
+      "after": "04f846753ee2bcd76934ab3a99deda52529509f651aa3d38e3acb2c91511af35",
+      "unchanged": true
+    }
+  ]
+}

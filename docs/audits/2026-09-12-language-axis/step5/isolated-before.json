@@ -1,0 +1,295 @@
+{
+  "phase": "before",
+  "at": "2026-09-12T21:22:21.899Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "readOnly": true,
+  "rolledBack": true,
+  "providerGatewaysBlocked": [
+    {
+      "gateway": "shopifyAdmin",
+      "at": "2026-09-12T21:22:20.692Z"
+    },
+    {
+      "gateway": "shopifyAdmin",
+      "at": "2026-09-12T21:22:21.299Z"
+    },
+    {
+      "gateway": "shopifyAdmin",
+      "at": "2026-09-12T21:22:21.659Z"
+    }
+  ],
+  "transportAttempts": [],
+  "measurements": [
+    {
+      "wallMs": 754.9,
+      "serverTiming": "readiness;dur=700",
+      "body": {
+        "market": "DE",
+        "locale": "de",
+        "scopes": [
+          {
+            "id": "master",
+            "label": "Master",
+            "required": {
+              "filled": 0,
+              "total": 21
+            },
+            "pct": 0,
+            "state": "blocked",
+            "note": "0 of 21 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": null
+          },
+          {
+            "id": "AMAZON",
+            "label": "Amazon · DE",
+            "required": {
+              "filled": 224,
+              "total": 611
+            },
+            "pct": 37,
+            "state": "blocked",
+            "note": "224 of 611 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": 67
+          },
+          {
+            "id": "EBAY",
+            "label": "eBay · DE",
+            "required": {
+              "filled": 105,
+              "total": 105
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: EBAY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          },
+          {
+            "id": "SHOPIFY",
+            "label": "Shopify · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Provider schema unavailable in the local cache-only readiness harness."
+          },
+          {
+            "id": "WOOCOMMERCE",
+            "label": "WooCommerce · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Choose an account for WOOCOMMERCE · GLOBAL."
+          },
+          {
+            "id": "ETSY",
+            "label": "Etsy · GLOBAL",
+            "required": {
+              "filled": 42,
+              "total": 168
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: ETSY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          }
+        ],
+        "computedAt": "2026-09-12T21:22:21.165Z"
+      }
+    },
+    {
+      "wallMs": 387.4,
+      "serverTiming": "readiness;dur=381",
+      "body": {
+        "market": "DE",
+        "locale": "de",
+        "scopes": [
+          {
+            "id": "master",
+            "label": "Master",
+            "required": {
+              "filled": 0,
+              "total": 21
+            },
+            "pct": 0,
+            "state": "blocked",
+            "note": "0 of 21 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": null
+          },
+          {
+            "id": "AMAZON",
+            "label": "Amazon · DE",
+            "required": {
+              "filled": 224,
+              "total": 611
+            },
+            "pct": 37,
+            "state": "blocked",
+            "note": "224 of 611 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": 67
+          },
+          {
+            "id": "EBAY",
+            "label": "eBay · DE",
+            "required": {
+              "filled": 105,
+              "total": 105
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: EBAY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          },
+          {
+            "id": "SHOPIFY",
+            "label": "Shopify · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Provider schema unavailable in the local cache-only readiness harness."
+          },
+          {
+            "id": "WOOCOMMERCE",
+            "label": "WooCommerce · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Choose an account for WOOCOMMERCE · GLOBAL."
+          },
+          {
+            "id": "ETSY",
+            "label": "Etsy · GLOBAL",
+            "required": {
+              "filled": 42,
+              "total": 168
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: ETSY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          }
+        ],
+        "computedAt": "2026-09-12T21:22:21.554Z"
+      }
+    },
+    {
+      "wallMs": 342.9,
+      "serverTiming": "readiness;dur=338",
+      "body": {
+        "market": "DE",
+        "locale": "de",
+        "scopes": [
+          {
+            "id": "master",
+            "label": "Master",
+            "required": {
+              "filled": 0,
+              "total": 21
+            },
+            "pct": 0,
+            "state": "blocked",
+            "note": "0 of 21 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": null
+          },
+          {
+            "id": "AMAZON",
+            "label": "Amazon · DE",
+            "required": {
+              "filled": 224,
+              "total": 611
+            },
+            "pct": 37,
+            "state": "blocked",
+            "note": "224 of 611 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.",
+            "aliasCount": 0,
+            "mappingRules": 67
+          },
+          {
+            "id": "EBAY",
+            "label": "eBay · DE",
+            "required": {
+              "filled": 105,
+              "total": 105
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: EBAY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          },
+          {
+            "id": "SHOPIFY",
+            "label": "Shopify · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Provider schema unavailable in the local cache-only readiness harness."
+          },
+          {
+            "id": "WOOCOMMERCE",
+            "label": "WooCommerce · GLOBAL",
+            "pct": null,
+            "required": {
+              "filled": 0,
+              "total": 0
+            },
+            "state": "absent",
+            "aliasCount": 0,
+            "mappingRules": null,
+            "note": "Choose an account for WOOCOMMERCE · GLOBAL."
+          },
+          {
+            "id": "ETSY",
+            "label": "Etsy · GLOBAL",
+            "required": {
+              "filled": 42,
+              "total": 168
+            },
+            "pct": null,
+            "state": "blocked",
+            "note": "Category metadata is incomplete: ETSY:*",
+            "aliasCount": 0,
+            "mappingRules": 0
+          }
+        ],
+        "computedAt": "2026-09-12T21:22:21.898Z"
+      }
+    }
+  ]
+}

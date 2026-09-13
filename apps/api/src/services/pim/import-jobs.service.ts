@@ -34,6 +34,7 @@ export type WireVerdict = 'written' | 'refused' | 'unchanged'
 
 /** One stored cell. Coordinates are COMPONENTS (D15.13.3) — never a composed id. */
 export interface StoredCell {
+  contentAddress?: DiffCell['contentAddress']
   restoreIntent?: 'set' | 'reset'
   productId: string
   aliasKey: string
@@ -105,7 +106,7 @@ export async function storePreview(input: {
 }): Promise<{ jobId: string; expiresAt: Date }> {
   const { default: prisma } = await import('../../db.js')
   const stored: StoredCell[] = input.cells.map((c) => ({
-    productId: c.rowId, aliasKey: c.aliasKey, fieldKey: c.fieldKey, writeField: c.writeField, scope: c.scope,
+    productId: c.rowId, aliasKey: c.aliasKey, fieldKey: c.fieldKey, writeField: c.writeField, scope: c.scope, contentAddress: c.contentAddress,
     verdict: c.verdict, pins: c.pins, before: c.before, after: c.after,
     ...(c.restoreIntent ? { restoreIntent: c.restoreIntent } : {}),
     ...(c.reason ? { reason: c.reason } : {}),

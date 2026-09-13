@@ -1,3 +1,4 @@
+import { normalizeLanguage } from '../pim/content-language.js'
 /**
  * W11.2 — Product SEO regeneration via the LLM provider.
  *
@@ -122,11 +123,7 @@ function clip(s: string | undefined, max: number): string | null {
 export async function regenerateProductSeo(
   input: SeoRegenInput,
 ): Promise<SeoRegenResult> {
-  if (!LOCALE_RE.test(input.locale)) {
-    throw new Error(
-      `locale must be BCP 47 lowercase (e.g. "en", "it", "de-de"); got "${input.locale}"`,
-    )
-  }
+  input = { ...input, locale: normalizeLanguage(input.locale) }
   if (!input.source.name || !input.source.name.trim()) {
     throw new Error('source.name is required')
   }

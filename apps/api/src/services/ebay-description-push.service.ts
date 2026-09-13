@@ -31,6 +31,7 @@
  *   • callTradingApi's real-API gate applies: without NEXUS_EBAY_REAL_API the
  *     call is a dry-run in dev and a hard refusal in production.
  */
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { createHash } from 'node:crypto'
 import type { PrismaClient } from '@prisma/client'
 import { callTradingApi, siteIdForMarket, escapeXml } from './ebay-trading-api.service.js'
@@ -376,6 +377,17 @@ export async function pushDescriptions(
         }
 
         try {
+          // ItemID can be shared across local rows. Any matching lock refuses the
+          // revise; failed/absent controls are not interpreted as permission.
+          const controls = await prisma.channelListing.findMany({ where: {
+            channel: 'EBAY', externalListingId: itemId,
+            marketplace: { in: marketplace === 'UK' || marketplace === 'GB' ? ['UK', 'GB'] : [marketplace] },
+          } })
+          if (!controls.length) throw new Error('PUSH_CONTROL_UNAVAILABLE: No stored listing controls were found for this eBay ItemID.')
+          for (const row of controls) {
+            const refusal = assertPushAllowed(row)
+            if (refusal) throw new Error(`${refusal.code}: ${refusal.sentence}`)
+          }
           const res = await callTradingApi(
             'ReviseFixedPriceItem',
             buildDescriptionReviseXml(itemId, rendered.html),

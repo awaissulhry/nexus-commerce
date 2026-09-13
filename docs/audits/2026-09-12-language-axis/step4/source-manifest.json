@@ -1,0 +1,387 @@
+[
+  {
+    "file": "packages/database/prisma/schema.prisma",
+    "mtime": "2026-09-12T12:24:07.445312+00:00",
+    "sha256": "b4e46f92788bd19aa296720056488abdb5bdbd07da38885274e9eb0882d5595d",
+    "beforeSha256": "fc514d0c26cd3b2fc7f3e5eea792a3ce5d91f420ce4671178bbfde75824cf209",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/workspaces/scoped-keys.json",
+    "mtime": "2026-09-12T12:24:07.446807+00:00",
+    "sha256": "f83ba5b36c3123e4a0ed6f629efb4ce4f4944f2fc6dbf386018de19d2329d38b",
+    "beforeSha256": "a021e4af8a0e19da2735232f874db8fbac268494b2d43d665c24088ac1e9e522",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/workspaces/model-ownership.json",
+    "mtime": "2026-09-12T12:24:30.741002+00:00",
+    "sha256": "d09e960c5db9fe3813fffca08bf4a8b23402fc4bc02ba6b9137a4e4d973d0b23",
+    "beforeSha256": "5f71dcc3fc71559c71e3f9101dd612a6d3aaeb0cc3eb24ab64064dba30a058bb",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/prisma/migrations/20260912_lx4_channel_listing_translations/migration.sql",
+    "mtime": "2026-09-12T12:50:03.968633+00:00",
+    "sha256": "1ce46b3a34aaf43563554e2033c5f224cf38d8f963b75d43018e4892b234046b",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "packages/shared/content-language.ts",
+    "mtime": "2026-09-12T13:05:07.257520+00:00",
+    "sha256": "aacf680aba8a8734105549d426aa693108da0d26e9ca72e74b2330b8abe0b762",
+    "beforeSha256": "df137ef90a11a29fb1abceceaa0fe7aec4ed51013a7f517efc96c102e4f9cb2e",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-resolver.ts",
+    "mtime": "2026-09-12T15:09:29.643093+00:00",
+    "sha256": "919c88cdbc4813855b033eefb9990111a2ecde8a4a8e4d12df0c990e25e484cb",
+    "beforeSha256": "a6f28b76872a68dfea9dc177ebcf25c905aa909cf394bc7f6884032f17fc6803",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/translation-write.ts",
+    "mtime": "2026-09-12T13:20:56.680435+00:00",
+    "sha256": "b06aec3974deea7ab99615cc276c97fe2f2c810f00e38cc7d404613da0536c05",
+    "beforeSha256": "a9b2f4a23310b95c52b6b98f42985a980936e8facd4aca6d60fcf56328e5738a",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/master-content.service.ts",
+    "mtime": "2026-09-12T13:40:47.641922+00:00",
+    "sha256": "ca3d08607e475466a1ad1e864746ae975b396ee7cb112d291108fa95225ca749",
+    "beforeSha256": "b67995d0ca570f46ae44683ee02af151117a6ed8e8c1ffc00c9a3172d518a298",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-write.ts",
+    "mtime": "2026-09-12T13:00:45.897274+00:00",
+    "sha256": "e4f4bc83ef1c1e6bc6aa6c0e68e94f22cb7d54861999b37337da68670eeea4e7",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-write.vitest.test.ts",
+    "mtime": "2026-09-12T14:50:41.250889+00:00",
+    "sha256": "e2f2c5e636927abe98207a6dc88b35ea3a06119b460e0c8faa083b91e0f81804",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/products/bulk-edit.service.ts",
+    "mtime": "2026-09-12T15:09:29.646305+00:00",
+    "sha256": "64fd5d9a6f58705bd11471f66f9e14517307bbf2e24832cf3547d99db30dccc0",
+    "beforeSha256": "b3f168582538ac49085e019f51efd4509be703237bd4c8cf89b76155a1dd1903",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+    "mtime": "2026-09-12T15:09:29.644191+00:00",
+    "sha256": "38bafaca2d3f1b1f03e9363805f135029193e5e95b5087b4b8053101febaff47",
+    "beforeSha256": "9e39fca32f60ddab270625f1c6ebeb8ded364f83707e874a471f2b174cb0b71c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-bulk-write.ts",
+    "mtime": "2026-09-12T13:40:47.641287+00:00",
+    "sha256": "1d562dec970de64f7c20b7d001060cb05d7c67a4480648d936bbf057ff81b66b",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/routes/product-translations.routes.ts",
+    "mtime": "2026-09-12T13:40:47.644041+00:00",
+    "sha256": "37ee1adf66493d45de0d0ffae097a027d0cc5643b32829809af8c8a55cf7a954",
+    "beforeSha256": "60f3c73e97feddb86ed5fca68df7ca475b60de39ecd625bee1214ab0293307e7",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/pim-global.routes.ts",
+    "mtime": "2026-09-12T13:40:47.643740+00:00",
+    "sha256": "fddb6078f9aa626c1e46ac617c3eb8bebac71cb771bfbcf423962944a5d62f33",
+    "beforeSha256": "ae1358e14e40166bc780254383289a27fc7799daa38529b07827ad549761b5de",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/masterWrite.ts",
+    "mtime": "2026-09-12T13:42:05.069621+00:00",
+    "sha256": "016b3097917d8f1a5824c2d033a843336bcbe4dda4d289c7da7b1981ff350f39",
+    "beforeSha256": "b3595919025bc425ab18dbae9fecb6173150e6887bbb7e6e298672fabedb1914",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts",
+    "mtime": "2026-09-12T13:05:07.258326+00:00",
+    "sha256": "1ce40f41e00b5365335e340eb68e55bdcadd6bc21d2134e7a32c893ed216d6e1",
+    "beforeSha256": "f6108769702be0e0c1abbc637868c3da85c1c562a0ef6a9676820eb9c9f5e2f3",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts",
+    "mtime": "2026-09-12T13:05:07.257890+00:00",
+    "sha256": "aea8872084a2822d16298edbe1caba225c0745af1f8e66df8ad85337e5adc97b",
+    "beforeSha256": "0a61c8beaaa8860d22d6a59030017b369690b00b96fcb74d26e22c1e00736a48",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheet.ts",
+    "mtime": "2026-09-12T14:41:09.512505+00:00",
+    "sha256": "275c0811e0d63df0d142e868a4cee29c65c1c16e9b1b4045dc00682de0d3b07b",
+    "beforeSha256": "239cf389af1e7d653a3ab9b790be843f57a0cb73c496e5a55fef327ec58b8fb9",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+    "mtime": "2026-09-12T14:56:18.535077+00:00",
+    "sha256": "edfca7625c3f9cba9734d0c9cbbd845b76c7cbf1d313cce0058c8c56cb74a468",
+    "beforeSha256": "1346084e3acc1a782fabd876ad7b08c3130f8d69cb9554540afb3750411b743a",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/rows.ts",
+    "mtime": "2026-09-12T13:05:59.111387+00:00",
+    "sha256": "ce43ac327f0f35e7d18fbb089665b57e6935ce330ab9ec6155d4787625acddbb",
+    "beforeSha256": "1982f117db52fd26ee2eda66d6c6ddacab127284e9303062db820a1a3002107c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/content-write.vitest.test.ts",
+    "mtime": "2026-09-12T14:46:44.119800+00:00",
+    "sha256": "8e9af0b7ed68ee55f737070aea8033725f33295d2da145b04c0fcdebd2fdc419",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+    "mtime": "2026-09-12T13:10:43.083427+00:00",
+    "sha256": "f40036de8a9d8c1aa01d175471a3811e1d301d4e0e23c1e3eecb0d9d884e0209",
+    "beforeSha256": "157ccecb2a3c9f36f2eef43c875aacdba020521cfd73049f8c4882432bf2ef36",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/cell-formula.service.ts",
+    "mtime": "2026-09-12T15:09:29.645135+00:00",
+    "sha256": "09e9a4029bd9248c4ca1324794673e9dfa5b290b50995e473037d4ffc415c533",
+    "beforeSha256": "026e61457b1db185335a0189da2d88ab2fe4955e543c3d62dc02cae3b5d83ebb",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping-simulate.service.ts",
+    "mtime": "2026-09-12T13:10:43.098191+00:00",
+    "sha256": "a51f6ecfa0c19aa67895297832c8950f7cc7850a7cdfa203011fe6193cb8110a",
+    "beforeSha256": "59c8f472af3cbb87caa78330b892d9a38b21d98e93effa7029c12eacdfbcbcd0",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-rows.service.ts",
+    "mtime": "2026-09-12T13:10:43.102660+00:00",
+    "sha256": "733a792f5f83738a7690ae32c05fc6c6f5cb422e593af26dd016112e064301d6",
+    "beforeSha256": "219379510b71a412aed4dcfd012f5e5598803c5126082d109049fc983ed3e007",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/shopify/content-workspace.service.ts",
+    "mtime": "2026-09-12T13:10:43.104592+00:00",
+    "sha256": "36d7921690ec704643deac06a42c28f7a2e5ef454827a75420e684ad9e9c0225",
+    "beforeSha256": "8c469f36aac0cf6566cb6ea0253ca2b4bdbb9978f7d3caee60a9b52579933f10",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/listings-syndication.routes.ts",
+    "mtime": "2026-09-12T13:10:43.123693+00:00",
+    "sha256": "165c7a7798e9b315ed848faf3760a611122b97f33885a1d47880cf33a4b8fbc2",
+    "beforeSha256": "57500e1024fa67da9a1ef1e0077e1c245c526d4a5b6f69cda802b4e8e0a5cad8",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/apply-mapping.service.ts",
+    "mtime": "2026-09-12T15:04:29.315887+00:00",
+    "sha256": "fd159c6d7b1bcd29515a95f5c53ffe68f71069ef3bd3a7ec4a4e9c63d7104029",
+    "beforeSha256": "141ee815a5386d3d9fccec6d2dffc5ad5e39d445b6917f31f16e6b11a312426e",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/cell-formula.routes.ts",
+    "mtime": "2026-09-12T13:14:56.045219+00:00",
+    "sha256": "c4e042f6fd93d6c314d15362b08db23296b68c5c3ecfeb717d93a29718f42ea0",
+    "beforeSha256": "65c4dadf2758bb95f45ad292a60fda523a61f623929a154acd6028fd27a6d841",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/formula-storage.ts",
+    "mtime": "2026-09-12T15:09:29.646919+00:00",
+    "sha256": "c6b2bc28e89f0bf73ecbf82c7af8b89f18ccfd937bf4fc88c55a0178d433c549",
+    "beforeSha256": "3dbb4e8ea36520d41eff2ec00a119f612c6bc81ea2387c6615a5f11c0c8f5922",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/useCellFormulas.ts",
+    "mtime": "2026-09-12T13:14:56.043383+00:00",
+    "sha256": "fc294465b161da8592cda7256c296a242976b06dbfb1d767aab208b8242d6b3f",
+    "beforeSha256": "799ad6694da3834088841714e737609b897278a3670e8c540ba16f844595c533",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/MasterSheet.tsx",
+    "mtime": "2026-09-12T13:14:56.044376+00:00",
+    "sha256": "77bf64fbdeec5ed5f4d33173d62087763a1f7128563f755397eb0afe8ff114cd",
+    "beforeSha256": "2479bd8fa5d6d9e7ae81c290d8da2d8f93e5d342a266f3e75fe1c86c83b03cb3",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/mapping-propagation.routes.ts",
+    "mtime": "2026-09-12T13:20:56.681896+00:00",
+    "sha256": "47bd1dc53ecf0e6d840d8f674e80e08f18b0fbcf183db1ac4c966bd6e7e5c06e",
+    "beforeSha256": "433568161a38bef4bbb977edd927ad7b050a669591fdf707e9275aae8904a9c3",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/shopify/channel-sheet.service.ts",
+    "mtime": "2026-09-12T13:23:28.901333+00:00",
+    "sha256": "87cdc6c7d35bd3fd8bbe1b2532bd85ac0f1dede68ea13f837ace51aaa6327ca5",
+    "beforeSha256": "6eb13c285d38d5260d5fca2d2bcdaa4eca7459d3d2a008991f25f3fa28348d4f",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/shopify/channelSheetWriter.ts",
+    "mtime": "2026-09-12T13:23:28.900906+00:00",
+    "sha256": "64460d547e5a41d120a7bafd6ece2d4ec222cabad2ca1568a548f24b32303571",
+    "beforeSha256": "9b8ed284bc4aea3d7a33386a0844bf19ad553ab6da5304d7e458d0db0e24a4d9",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/products-ai.routes.ts",
+    "mtime": "2026-09-12T14:45:38.861721+00:00",
+    "sha256": "ee8887ec0094c5794c28a84b6f42b49aa8698f756b549d1627b3b98fbd749fcf",
+    "beforeSha256": "dcdbe7c715eec45b8abaf7362fe4ffd0f72daa00836d0491978ab288d22cfa6d",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/routes/products.routes.ts",
+    "mtime": "2026-09-12T14:45:38.862003+00:00",
+    "sha256": "1024f59e0cc0a0636409540b5058907d16937e645c3adcf5ad8c15a2be3328fa",
+    "beforeSha256": "b197f7cf0e2152c3aa91450aa34b75295cdd146acf7b05263b262322ec0e1c14",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/content-wire.vitest.test.ts",
+    "mtime": "2026-09-12T15:05:26.921795+00:00",
+    "sha256": "e73cdf92d412372cec5b738c8c58fc873901eea014a32922787313e0b94aa0fb",
+    "beforeSha256": "5a0f965fcaeac75c92a4d91f76fc7afcbc65b41c56a2abb045a7585025b4f5a9",
+    "kind": "changed"
+  },
+  {
+    "file": "scripts/check-editor-open.mjs",
+    "mtime": "2026-09-12T20:49:46.407207+00:00",
+    "sha256": "a5f5d218ef8af1ec24ece461f2db526efdaf3046c92e892c7e29a6c45b8525b8",
+    "beforeSha256": "9dae76d50c0b874150f327bd4ded140751a960e7daaca1ba33fa5ce5983bb033",
+    "kind": "changed"
+  },
+  {
+    "file": "docs/2026-09-03-cell-editing-contract.md",
+    "mtime": "2026-09-12T20:49:46.407636+00:00",
+    "sha256": "2693962a24442ff39f8048c8c3fe4fe09fa8aafb42b50579ffc877b8e75babbb",
+    "beforeSha256": "43362e1715f7d34d11b39bc36e7339f42d1e2ac93f5cfd9ba96c560611b66e45",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-specs/index.ts",
+    "mtime": "2026-09-12T19:08:48.470870+00:00",
+    "sha256": "a7ecaeb3dd0937812134082f48d8de63c3e652fa67969aca085feb54f9063a8a",
+    "beforeSha256": "059a539f423a6759ff6c35c647d06539f4b97b69b0f07c7946b0e7daa8838f09",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-specs/cache-first.vitest.test.ts",
+    "mtime": "2026-09-12T19:09:09.360462+00:00",
+    "sha256": "77965d3847b6c8221433ecc901976dd06d878a4760dbe4ded20ddf2b9fba4a29",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "scripts/studio-browser-auth.mjs",
+    "mtime": "2026-09-12T19:17:29.157166+00:00",
+    "sha256": "3b8c7a7986b3ab46b55cd8aa059600678e2c08b1918daa62daef36d98ce5d0ab",
+    "beforeSha256": "d320ef7529a2b7d2803a4e12d667cb15b39e4c0810eeb2958d5030c3f724555b",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/design-system/components/SourceIndicator.tsx",
+    "mtime": "2026-09-12T20:33:11.944063+00:00",
+    "sha256": "04479681fa70cca108b49729b2f6fc29b6aaae83757a5960cc25305c4483da2b",
+    "beforeSha256": "bd0969dd508c408ebc7aac74e67e143f5371b57fd927ff5ba1955b0b81162a4c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/factory/src/design-system/components/SourceIndicator.tsx",
+    "mtime": "2026-09-12T20:33:11.945323+00:00",
+    "sha256": "04479681fa70cca108b49729b2f6fc29b6aaae83757a5960cc25305c4483da2b",
+    "beforeSha256": "bd0969dd508c408ebc7aac74e67e143f5371b57fd927ff5ba1955b0b81162a4c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx",
+    "mtime": "2026-09-12T19:59:08.428044+00:00",
+    "sha256": "eca8d4f069bf9e49864797f449edfd8f24ccf9a112db4f42e6b6cf84a555dd3c",
+    "beforeSha256": "158b769eb1dcc8a8a9efa4789d92dd31f43183db9dfadb855f000ae96c4ddb27",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/design-system/grid/theme/grid.css",
+    "mtime": "2026-09-12T19:59:08.426178+00:00",
+    "sha256": "b754bab7329cf0e7328a487ff7deb34d1aec7d4d6f84119c7bd3b4aea24f4e17",
+    "beforeSha256": "fc3f20f50bb98629adb81c34a3fd160612522f2012a8ee37c7dcc2eeac4aba3c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/factory/src/design-system/grid/theme/grid.css",
+    "mtime": "2026-09-12T19:59:08.427306+00:00",
+    "sha256": "b754bab7329cf0e7328a487ff7deb34d1aec7d4d6f84119c7bd3b4aea24f4e17",
+    "beforeSha256": "fc3f20f50bb98629adb81c34a3fd160612522f2012a8ee37c7dcc2eeac4aba3c",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/design-system/catalog/README.md",
+    "mtime": "2026-09-12T20:33:11.944452+00:00",
+    "sha256": "08178f9e348e9f312238a0972a564481f8df35dd07e9bafcbb1b0f12165e3020",
+    "beforeSha256": "e76b896e14717bcc48692e96255f966d42f37592404789b6ffeee6b696528503",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/factory/src/design-system/catalog/README.md",
+    "mtime": "2026-09-12T20:33:11.945501+00:00",
+    "sha256": "158c358780c69ff22f6ff885dd101172961911f99a530b13b4da8b01359aa9d6",
+    "beforeSha256": "5bed663b3bf3f0527e61af11d600e80d7931ec356493b49ecbc3daeab547997e",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/design-system/CHANGELOG.md",
+    "mtime": "2026-09-12T20:33:11.944943+00:00",
+    "sha256": "3440eaf8862b9518a7a6f62133b1c19cd34328e2d00a517bbbec5bfded86a041",
+    "beforeSha256": "1847b46614580c3043a8ad160dae449cc8c92a42891d39b3695c5c96d3250bb3",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/factory/src/design-system/CHANGELOG.md",
+    "mtime": "2026-09-12T20:33:11.945679+00:00",
+    "sha256": "05d8a40463a23db2a9d2c3e582c452fe5afac8119b2dadac3c5df10a56150732",
+    "beforeSha256": "20fab7158772d78ae68572ebd5ba39a4f1495ee39e4b26a4fdf84b32400acda1",
+    "kind": "changed"
+  },
+  {
+    "file": ".claude/DS-GAPS.md",
+    "mtime": "2026-09-12T20:33:11.946435+00:00",
+    "sha256": "5f3281851d18a9c9b7e415bfe9a93eadc630f11ddbfa26df09a080921886a77b",
+    "beforeSha256": "8d6fa98aea8a0c6b238ac8ad7ab0034a36dc07fed5f2a0448261faef37d7ad46",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/design-system/catalog/TokenCatalog.tsx",
+    "mtime": "2026-09-12T19:59:35.151674+00:00",
+    "sha256": "9782b59c0f7aa3a28107ebf4cf387d84801dcdf26b173b5e76335895789505bb",
+    "beforeSha256": "f09f7d7192312a3298bd054d95feefd6cf9ba030281717d7f5fe7b89e4acca76",
+    "kind": "changed"
+  }
+]

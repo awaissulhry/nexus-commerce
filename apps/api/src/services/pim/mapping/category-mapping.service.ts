@@ -1,3 +1,4 @@
+import { categorySchemaMarkets } from '../../categories/category-schema-coordinate.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * PES.6.4 — category mapping: our taxonomy ↔ the channel's.
@@ -452,7 +453,10 @@ export async function listChannelCategories(input: {
   const channel = input.channel.toUpperCase()
   const [rows, mapping] = await Promise.all([
       prisma.categorySchema.findMany({
-          where: { channel, marketplace: channel === 'EBAY' ? { in: [input.marketplace, `EBAY_${input.marketplace}`] } : input.marketplace, isActive: true },
+          // LX.F2 R-LX-20 — one authority, and no per-channel branch at the call site: the helper
+          // answers a one-element list for a non-eBay channel. This branch also composed
+          // `EBAY_EBAY_IT` for a caller already holding the prefixed spelling.
+          where: { channel, marketplace: { in: categorySchemaMarkets(channel, input.marketplace) }, isActive: true },
           select: { productType: true },
           distinct: ['productType'],
           orderBy: { productType: 'asc' },

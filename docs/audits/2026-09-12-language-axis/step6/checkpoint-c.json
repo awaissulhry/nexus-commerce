@@ -1,0 +1,580 @@
+{
+  "at": "2026-09-13T00:51:33.904197+00:00",
+  "status": "Step 6 item(c) awaits Owner Q-LX6-1; items(d)-(h) not started",
+  "screenGate": {
+    "start": "2026-09-13T00:47:23.154Z",
+    "finish": "2026-09-13T00:48:41.877Z",
+    "command": "node docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs c",
+    "base": "http://localhost:3000",
+    "api": "http://localhost:8091",
+    "exitCode": 0,
+    "diagnostic": "c",
+    "log": "screen-c.log",
+    "sha256": "cb625e9a6219e18778787f0c4100f72a54123a6c468809a4c955bf2f066ab0b0"
+  },
+  "screenReadings": 20,
+  "imagesVisuallyInspected": [
+    "screen-c-master-IT-it-1440-light.png",
+    "screen-c-master-IT-it-1440-dark.png",
+    "screen-c-master-IT-it-1728-light.png",
+    "screen-c-master-IT-it-1728-dark.png",
+    "screen-c-AMAZON-DE-de-1440-light.png",
+    "screen-c-AMAZON-DE-de-1440-dark.png",
+    "screen-c-AMAZON-DE-de-1728-light.png",
+    "screen-c-AMAZON-DE-de-1728-dark.png",
+    "screen-c-AMAZON-BE-nl-1440-light.png",
+    "screen-c-AMAZON-BE-nl-1440-dark.png",
+    "screen-c-AMAZON-BE-nl-1728-light.png",
+    "screen-c-AMAZON-BE-nl-1728-dark.png",
+    "screen-c-AMAZON-BE-fr-1440-light.png",
+    "screen-c-AMAZON-BE-fr-1440-dark.png",
+    "screen-c-AMAZON-BE-fr-1728-light.png",
+    "screen-c-AMAZON-BE-fr-1728-dark.png",
+    "screen-c-EBAY-IT-it-1440-light.png",
+    "screen-c-EBAY-IT-it-1440-dark.png",
+    "screen-c-EBAY-IT-it-1728-light.png",
+    "screen-c-EBAY-IT-it-1728-dark.png"
+  ],
+  "providerGatewayAttempts": 0,
+  "providerTransportAttempts": 0,
+  "pageErrors": [],
+  "protected": [
+    {
+      "path": "apps/web/src/app/design/language-axis/fixtures.ts",
+      "sha256": "adb46c737439dba3bda2a84475e0a84d00c5d74d1b226713ae355ce691d2fa5a",
+      "unchanged": true
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/LanguageAxisClient.tsx",
+      "sha256": "5ec6a73dc8d09f190c3ea5f9b031b7385e965c8ab055b790db9cc413fc8f8d36",
+      "unchanged": true
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/language-axis.module.css",
+      "sha256": "96b8046b8ad31e4717c6a8d0e9e668ed343bb1e62b046db81886b6a178003ea4",
+      "unchanged": true
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/page.tsx",
+      "sha256": "95b4cfae68db482a2255066797e5f19a6d33e23c4d945ec648ea17c29de8a0a7",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-format.vitest.test.ts",
+      "sha256": "7c8e224edc2fc17c82372b0434255ccd24300fac27b5dfc3fae9ab38f0079ad2",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce.ts",
+      "sha256": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-propagate.service.ts",
+      "sha256": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-roundtrip.vitest.test.ts",
+      "sha256": "81283819e665874d8429630c239ab002294c4088d820c91f112d24177601c7f5",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx-schema.vitest.test.ts",
+      "sha256": "dd989b3bf7b69ae3e7ac428802c3564d356f0480228454673d6653e3fdc0e14e",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-pull.service.ts",
+      "sha256": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+      "sha256": "1c8264c4c1e6b518f9fe53e977e4a03979d69a7ffaa42c3d5b0cc15e35845e4b",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-verify-live.vitest.test.ts",
+      "sha256": "4833e19c092b72343f67430bee7c2b7a2c51a80266c7176cbb17a057b07617fd",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce.vitest.test.ts",
+      "sha256": "8573a9860c4c579c9e746a6b8f4e47b2dfa742269f822c57d34b98258f370d80",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-export.vitest.test.ts",
+      "sha256": "1398d0debc0be590e84d53da43c90079e122eee5efd7f70b7029a3b2cf3772c0",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-union-manifest.vitest.test.ts",
+      "sha256": "c874b0c1d47d0caac9ab8e9872b7743004b05f949de1cff39a337d84866f5de4",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping-ai.ts",
+      "sha256": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-pull-preview.service.ts",
+      "sha256": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+      "sha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file.service.ts",
+      "sha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping.ts",
+      "sha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-merge.ts",
+      "sha256": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-schema-walk.vitest.test.ts",
+      "sha256": "58725803964641c9f7aa141552abd6bc0021780a0e9378af9c9c4c3c870150eb",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-merge.vitest.test.ts",
+      "sha256": "f9e28d68820195ad624ec27a65211ab4ee233d8256013348e59b95cd20cb2f7b",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-hydrate.service.ts",
+      "sha256": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file.browse-nodes.vitest.test.ts",
+      "sha256": "93db6d3a882232236ddabe57cb7bd9d819be93ad0ce38a5759ad36ebee66e0c7",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce-ai.ts",
+      "sha256": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-feedops.vitest.test.ts",
+      "sha256": "d61d5e70c7aa35c14bacc8bf14563c65ffce2cdcc1a084eb7817d69fa06e5c27",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping.vitest.test.ts",
+      "sha256": "9a0dd07ebaa5768592163b1d9f96826fd2708ed9974a9c097c03e253f85c0a5c",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-verify-live.service.ts",
+      "sha256": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-create.vitest.test.ts",
+      "sha256": "da0f42275661de6a2359fc0781a9f90da65f9022ccd2812656fed7b93e7f3bf2",
+      "unchanged": true
+    },
+    {
+      "path": "apps/api/src/services/channel-batch/amazon-batch-feed.service.ts",
+      "sha256": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+      "unchanged": true
+    }
+  ],
+  "files": [
+    {
+      "path": "packages/shared/cell-provenance.ts",
+      "mtime": "2026-09-12T22:12:49.159671+00:00",
+      "sha256": "17df0d85a7a926c641b87d97519a7c1795d126aa6590bbf3cfba359a39392648"
+    },
+    {
+      "path": "apps/api/src/services/pim/content-resolver.ts",
+      "mtime": "2026-09-12T22:12:49.159917+00:00",
+      "sha256": "c3c60b084e0c8a8ba3d676a7d4c45316a99652cc73c25c696c3b145b38dd56f1"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/renderers/provenance.ts",
+      "mtime": "2026-09-12T22:15:58.049039+00:00",
+      "sha256": "f0fba2c9e23b5fed426bce0ad94ba7b47997225ac70d386eed08964ab14d6231"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/renderers/provenanceMark.tsx",
+      "mtime": "2026-09-12T22:12:49.160660+00:00",
+      "sha256": "5952ef43a93c7ff9e274d2ce420899e6d0dfdd708a7fafdae274ffedb818944d"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/renderers/index.ts",
+      "mtime": "2026-09-12T22:12:49.160886+00:00",
+      "sha256": "1373ed6afdd015b3386d03bc5f7fcdbcae037c533b9b4e539bb6a372e988e329"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/renderers/provenanceLanguage.vitest.test.ts",
+      "mtime": "2026-09-12T22:15:20.236367+00:00",
+      "sha256": "94f92f482781aabb1631fc99f333a3c4f41f0db74ad5efa1ad9ef4433f95b303"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/theme/grid.css",
+      "mtime": "2026-09-12T23:42:36.464827+00:00",
+      "sha256": "bfe7abe7dfa17ced5eb9ff19b98968ad50aad886aa6fbb5f6594e3d3360b47c5"
+    },
+    {
+      "path": "apps/web/src/design-system/CHANGELOG.md",
+      "mtime": "2026-09-13T00:32:33.263721+00:00",
+      "sha256": "f9499e281f221ccdbd7191ea15a1c6a5ac89fb1cd6c1ea49327801c73d0cbe29"
+    },
+    {
+      "path": "apps/web/src/design-system/catalog/README.md",
+      "mtime": "2026-09-13T00:32:33.263603+00:00",
+      "sha256": "d4e2098707c788b9d942d70c99a70df58664882cdf33b2ed7ceea471b9e35396"
+    },
+    {
+      "path": "apps/factory/src/design-system/grid/renderers/provenance.ts",
+      "mtime": "2026-09-12T22:15:58.049304+00:00",
+      "sha256": "f0fba2c9e23b5fed426bce0ad94ba7b47997225ac70d386eed08964ab14d6231"
+    },
+    {
+      "path": "apps/factory/src/design-system/grid/renderers/provenanceMark.tsx",
+      "mtime": "2026-09-12T22:13:34.960624+00:00",
+      "sha256": "5952ef43a93c7ff9e274d2ce420899e6d0dfdd708a7fafdae274ffedb818944d"
+    },
+    {
+      "path": "apps/factory/src/design-system/grid/renderers/index.ts",
+      "mtime": "2026-09-12T22:13:34.960864+00:00",
+      "sha256": "b85f2b4a9672d9a956ebf7d3ec765d48e34f85dee1c5a9b351d21bf2159416a7"
+    },
+    {
+      "path": "apps/factory/src/design-system/grid/theme/grid.css",
+      "mtime": "2026-09-12T23:42:36.465261+00:00",
+      "sha256": "bfe7abe7dfa17ced5eb9ff19b98968ad50aad886aa6fbb5f6594e3d3360b47c5"
+    },
+    {
+      "path": "apps/factory/src/design-system/CHANGELOG.md",
+      "mtime": "2026-09-13T00:32:33.263945+00:00",
+      "sha256": "479d8e7b0800943eae0f6c13c6904ffe448220614f06a40c17a84411f5ed33d0"
+    },
+    {
+      "path": "apps/factory/src/design-system/catalog/README.md",
+      "mtime": "2026-09-13T00:32:33.263829+00:00",
+      "sha256": "f4effd1030ea4403250e09f1f4be8fb650fe3e088ff1930056afa170a394647a"
+    },
+    {
+      "path": ".claude/DS-GAPS.md",
+      "mtime": "2026-09-13T00:51:33.930943+00:00",
+      "sha256": "7a43244b132bcdd3b751f01e929678bfc0095e33493ad4c309cd3a94fb4d6a6d"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+      "mtime": "2026-09-13T00:46:06.110431+00:00",
+      "sha256": "f894d30d90641e2ad3d830afb92beec5e7b0cf7241afcf4dd3228dceabf524f5"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/channelColumns.tsx",
+      "mtime": "2026-09-12T22:14:17.131266+00:00",
+      "sha256": "c52fb545324bb0e06af2ef520b4bacd41bd928e174bfb08dc3aaa9c9d22f3638"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/channelColumns.vitest.test.ts",
+      "mtime": "2026-09-12T22:15:20.237930+00:00",
+      "sha256": "7138b65bb4552eced8c4196032a34cd59bee4b54055fdb0fd9855f1687a11dbb"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/content-wire.vitest.test.ts",
+      "mtime": "2026-09-12T22:34:20.170734+00:00",
+      "sha256": "f32fab97244c9cf127d3631efdaf5177963b0bdddeeeb70d2bf5d11338224d65"
+    },
+    {
+      "path": "apps/api/src/services/pim/sheet-columns.service.ts",
+      "mtime": "2026-09-12T23:14:47.910575+00:00",
+      "sha256": "e0e196eb5aa12446432edc4d74fa00c09e28bf31bd0b138ec32de6d1d5767b67"
+    },
+    {
+      "path": "apps/api/src/services/pim/sheet-columns-cache.vitest.test.ts",
+      "mtime": "2026-09-12T22:19:15.076725+00:00",
+      "sha256": "01a3836c9e79da4f36f2f4adad304f98e888dd7686f5e7917a64b4ae51f4bf57"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/scopes.ts",
+      "mtime": "2026-09-12T22:46:21.122868+00:00",
+      "sha256": "78d5756aaf0ed5263e17f9fc029dc3c2cc24a5c232495c13cb3c15df4967b583"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/scopes.vitest.test.ts",
+      "mtime": "2026-09-12T22:46:51.525443+00:00",
+      "sha256": "1f2b6ed0984ce27f18918469265d415e038eacd23a1e4a7fbc39a0f34138afda"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx",
+      "mtime": "2026-09-12T23:02:16.529077+00:00",
+      "sha256": "ab579c2350f6daa8fedf763fc39c1f73f8852922bdd6d65f48cdc090b332bb7a"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/StudioClient.tsx",
+      "mtime": "2026-09-12T22:46:21.123704+00:00",
+      "sha256": "dac58d5487253a1121571b59c2e91d024e070ca70703b779f053315f59be23ad"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/StudioLoader.tsx",
+      "mtime": "2026-09-12T22:46:21.123999+00:00",
+      "sha256": "9c04b8087f7d83180e671bf7e806bbfdcb228f3038c0ffd8c8ff2ba669478e39"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/studio-data.ts",
+      "mtime": "2026-09-12T22:46:21.123298+00:00",
+      "sha256": "1119e15b805bb39ad18d48990bec80b6791e4aa39a3e8dd1fee69d0c0d917c8f"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+      "mtime": "2026-09-12T23:14:47.910292+00:00",
+      "sha256": "88731ba315a2ae7c14c18212509764247e875be8609a4aa70eb90c3887e58c55"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/studio.module.css",
+      "mtime": "2026-09-12T22:46:21.126256+00:00",
+      "sha256": "88b9c9611a156f2aa3c04b62a745ec91ea334382f69707a5158043f40cdcad0a"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/studio/page.tsx",
+      "mtime": "2026-09-12T22:46:21.124276+00:00",
+      "sha256": "713cdd28222355a063ea78ea2ed05fac7b52adcfed48090fa592dd7cee256d5a"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx",
+      "mtime": "2026-09-12T22:46:21.126886+00:00",
+      "sha256": "0c4d7f35504377a683b3359c3e49feb3343541dc36d7bf770d33b1291817fca8"
+    },
+    {
+      "path": "apps/web/src/app/products/ebay-flat-file/presentation-test/PresentationFixture.tsx",
+      "mtime": "2026-09-12T22:46:21.124555+00:00",
+      "sha256": "3d828d9462a9b3c59c2b784b6d3b92eb59f8944d6d835356a0355c70b5d3fd34"
+    },
+    {
+      "path": "apps/api/src/routes/product-studio.routes.ts",
+      "mtime": "2026-09-12T23:17:03.355501+00:00",
+      "sha256": "8f2636c5fbba0e7946daa100f07f40469e7eee2c513bd6eebaa6144e7789aec1"
+    },
+    {
+      "path": "apps/api/src/services/pim/information-sheet.ts",
+      "mtime": "2026-09-12T23:14:47.911298+00:00",
+      "sha256": "d4196b2dc39f906de12ed2dc2e3422c9c8624fbca49ad97e25a43751fff10f80"
+    },
+    {
+      "path": "apps/api/src/services/pim/information-sheet.vitest.test.ts",
+      "mtime": "2026-09-11T21:38:17.232608+00:00",
+      "sha256": "3c2de10f82c8b3ac67d977abde0006cec4b9b2d435cc36f228c6d0a1d6d74999"
+    },
+    {
+      "path": "apps/api/src/services/pim/studio-sheet.service.ts",
+      "mtime": "2026-09-12T23:14:47.911119+00:00",
+      "sha256": "e33eee16f12706bd1bf7fda273f75c8654cb4a9c79cebdb00a8484962dd7fc13"
+    },
+    {
+      "path": "apps/api/src/services/pim/language-sheet.ts",
+      "mtime": "2026-09-13T00:41:09.520851+00:00",
+      "sha256": "63ad1cb12f2e4445955e5489f0785ab2c577b889595e8a0a7d4b75741aef74fd"
+    },
+    {
+      "path": "apps/api/src/services/pim/language-sheet.vitest.test.ts",
+      "mtime": "2026-09-13T00:41:09.521299+00:00",
+      "sha256": "17e2b57ffbfa82267afe117cc5ceb03d56093d2cd64f0ba4d2e322d09511b4ca"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts",
+      "mtime": "2026-09-12T23:14:47.910677+00:00",
+      "sha256": "e4ab919e3033773c6325e4ea70d3565d5d9f0b79ffd54351e0411b25b539a429"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts",
+      "mtime": "2026-09-12T23:14:47.910821+00:00",
+      "sha256": "703d7fa3f38bb80189ff66398fd3d1f726ba69bbce58161e7b4e068dda895004"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheet.ts",
+      "mtime": "2026-09-12T23:02:16.529203+00:00",
+      "sha256": "9ce9605638b24cf2911ad8de09f095da27b12bd555de8756b54600945bdf6e0b"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/MasterSheet.tsx",
+      "mtime": "2026-09-13T00:46:06.110047+00:00",
+      "sha256": "654d1e0f51d3c63d0c390aaa9737f34cb69db66d68e5f44f9b1242b14e5d6ea2"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/masterWrite.ts",
+      "mtime": "2026-09-12T23:07:59.486665+00:00",
+      "sha256": "88fc34e768d37a62700b77150db6ec4a906919629c053b426629f5f325167671"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheet.ts",
+      "mtime": "2026-09-12T23:07:59.486955+00:00",
+      "sha256": "d49b692f6ccd3a6806f8b68765e4d46c3657518c0b22e008e133fa1e251a0f38"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/views.ts",
+      "mtime": "2026-09-12T23:14:47.911219+00:00",
+      "sha256": "9d8ae3670822a0426f7c08f0aeee601855f40bbf3ada3e0197b6fdcfc8740f96"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetColumns.ts",
+      "mtime": "2026-09-12T23:42:36.464172+00:00",
+      "sha256": "e7bbc26991418216f93a5161e176a4c19390327b1c4cc2ef22b3b6c141f35cf3"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/languages.ts",
+      "mtime": "2026-09-13T00:28:47.397697+00:00",
+      "sha256": "2840f4cc9dc66fbf2f03aa84a357075f6c1883cfc3a7f3e299bec3e9158ce566"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/languages.vitest.test.ts",
+      "mtime": "2026-09-13T00:46:06.110739+00:00",
+      "sha256": "694abbaff348f09e0df3efeeed0c59fba95bcde96c1c63eac651e3b918ac135b"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/buildSheetColumns.tsx",
+      "mtime": "2026-09-12T23:42:36.608889+00:00",
+      "sha256": "c28d4fe3117514e84bc022e777b9914034cad9144b27fb42624eb254e9b53e12"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx",
+      "mtime": "2026-09-13T00:28:47.649453+00:00",
+      "sha256": "d885f945b4a74ff652685f34731f6fb7859cf511edbb0c9556f8c0e14711b3d0"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/views.vitest.test.ts",
+      "mtime": "2026-09-12T23:13:15.365228+00:00",
+      "sha256": "f36e2cc0bf5b7921e3c00f50549912ef8ddedb55a99e5d8c706040b5b042dea7"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+      "mtime": "2026-09-12T23:05:28.973871+00:00",
+      "sha256": "eaf800af46a38897e0ae7230e253ab5c9c0660b4fc9f43d7078183a83848764a"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/useAiDraftLayer.ts",
+      "mtime": "2026-09-12T23:05:28.974265+00:00",
+      "sha256": "13f689f61149491cadffdea3974eb314db438dc81b39a10af831252e4ada7bc4"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/useLanguageChips.ts",
+      "mtime": "2026-09-12T23:41:49.357283+00:00",
+      "sha256": "6ddd77ca826df7bb8e8893e5008ef678b0aabc489178fc7343ed4f176dbf245b"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/languageChips.ts",
+      "mtime": "2026-09-13T00:46:06.109453+00:00",
+      "sha256": "c1f2760e4acb1326c4c794964cd964301d393d96615eedab06ebc6e870e51804"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/languageWrites.ts",
+      "mtime": "2026-09-12T23:09:10.368516+00:00",
+      "sha256": "3c704d527700fc7221068f7de85a205861a5560c2298bc57caf997ff31d29cfc"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/buildSheetColumns.vitest.test.ts",
+      "mtime": "2026-09-13T00:34:50.813495+00:00",
+      "sha256": "f22d2695e85519e3f3f3f9aa50b7d7b2f782eb53fb061facf69b836c0ee1d4f3"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/languageWrites.vitest.test.ts",
+      "mtime": "2026-09-12T23:10:28.078289+00:00",
+      "sha256": "6b49150ff3d2e01f9eafdd0c3674079741715d92239b8ebef34a9a4927e3d760"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/masterWrite.vitest.test.ts",
+      "mtime": "2026-09-12T23:13:15.365600+00:00",
+      "sha256": "bdf25fcf010a58da9ce1fa36567d68fda12e8d9a92c281f08cc2222974e82923"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/SheetToolbar.tsx",
+      "mtime": "2026-09-13T00:46:06.109653+00:00",
+      "sha256": "6d3c23dc258de316574f90293f4a7b3fe51463b4036834156ba34a96a698c08f"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/useCellFormulas.ts",
+      "mtime": "2026-09-13T00:34:09.059414+00:00",
+      "sha256": "6a03750a2cef6ad7872cc6b68078166e6433f10b11afb95f190d430bedfb4091"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/formulaColumns.ts",
+      "mtime": "2026-09-13T00:34:09.057049+00:00",
+      "sha256": "7c596dda6cd4a3c6bc33fdaafa2eacaf53c9bf2540989254f183942b309f7b7e"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/formulaColumns.vitest.test.ts",
+      "mtime": "2026-09-13T00:32:33.262109+00:00",
+      "sha256": "0b7b0941e1611882d495b4464e7acff6c6f6ed4cf73741e78c1834a313eae5a5"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/FormulaBulkDialog.tsx",
+      "mtime": "2026-09-13T00:31:22.535563+00:00",
+      "sha256": "fd941b71b28cdf1b02dccf00d70d5e69ae223255eb6153a272382b57a8c8b9b3"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/api.ts",
+      "mtime": "2026-09-13T00:31:22.536131+00:00",
+      "sha256": "12e9a612a21a2676eda905d61fce1a67a42dea618207f2fbffda746597345bad"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/api.vitest.test.ts",
+      "mtime": "2026-09-13T00:32:33.262647+00:00",
+      "sha256": "f49130f8aeb6273c48d8e53ae22df45d5ba3e0869b94240609dbbdb136c4ebc3"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/useAiDrafts.ts",
+      "mtime": "2026-09-13T00:31:22.537016+00:00",
+      "sha256": "c6ce2ebdefd62b102297b0ed2fbbf70474b13f299b1fe841315518f6ba8805bd"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/drafts.ts",
+      "mtime": "2026-09-13T00:31:22.536538+00:00",
+      "sha256": "8daef20547d1c2ceccfff75c77a8e80f54a96def9c55a12e8fb0939513800cbf"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/ai/drafts.vitest.test.ts",
+      "mtime": "2026-09-13T00:32:33.263052+00:00",
+      "sha256": "9202eda1b455bbdef7dd81c633a53d91ace16a85f2a0113bf93ede64804c7bb4"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx",
+      "mtime": "2026-09-13T00:28:47.718558+00:00",
+      "sha256": "1e793d07894c08af69957d7b1ea66f5d1d6036c861872f7cf5cfcda36e95a1dd"
+    },
+    {
+      "path": "apps/web/src/design-system/grid/editors/FormulaCellEditor.vitest.test.ts",
+      "mtime": "2026-09-13T00:32:33.262296+00:00",
+      "sha256": "47f32806bd50ba3931a76235659ffc7b9d2726e1810bc919ef2e236028e13079"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/drawer/formulaCandidates.ts",
+      "mtime": "2026-09-13T00:34:09.057531+00:00",
+      "sha256": "b8b927b05b0e6abc1b213a3fbe9285b83fdc3fa9ebf7cf4917ac161a985fe93e"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/drawer/formulaCandidates.vitest.test.ts",
+      "mtime": "2026-09-13T00:34:09.059112+00:00",
+      "sha256": "5e8bbd2bf964a5a072532cb9ec3832f592323da213ac3bff928a6e9a192ae533"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/drawer/panes/RecordPane.tsx",
+      "mtime": "2026-09-13T00:34:50.813083+00:00",
+      "sha256": "b4e9911d50ec3ad9c9d26c5fbfae33e38db961db9506b766e5e58419ffcc1a1f"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/drawer/fields/FormulaField.tsx",
+      "mtime": "2026-09-13T00:34:09.058996+00:00",
+      "sha256": "c95ec828eaac52f9dfab6db8e9ffe728468220148432b10b69d40af48ad49901"
+    }
+  ]
+}

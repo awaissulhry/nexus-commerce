@@ -1,0 +1,714 @@
+{
+  "at": "2026-09-13T17:28:11.540685+00:00",
+  "note": "Transport candidates are not all listing pushes. Dirty and listed is suspect; clean and listed is baseline. No file reset or baseline changed. PR.4 reopened the programme-wide gate; PR.3 owns the concrete label-guard request.",
+  "count": 141,
+  "dirtyListed": 37,
+  "cleanListed": 104,
+  "findings": [
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:164 getGrantlessToken -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:501 submitListingPayload -> fetchWithRetry",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:647 patchListingPrice -> fetchWithRetry",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:772 patchPurchasableOffer -> fetchWithRetry",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:843 putListingsItem -> fetchWithRetry",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:1133 deleteListingsItem -> request",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/clients/amazon-sp-api.client.ts:1417 submitListingPayloadBatch -> submitListingPayload",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/jobs/cx3a-ads-credentials.job.ts:53 exchange -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/lib/amazon-sp-client.ts:37 getAmazonAccessToken -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/providers/ebay.provider.ts:95 reviseItemImages -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/providers/ebay.provider.ts:217 callTradingApi -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/amazon-ads-auth.routes.ts:212 amazonAdsAuthRoutes -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/amazon-cockpit-publish.routes.ts:215 amazonCockpitPublishRoutes -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/amazon-flat-file.routes.ts:124 amazonFlatFileRoutes -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/ebay-flat-file.routes.ts:95 ebayFlatFileRoutes -> fetch, fetch, fetch, fetch, fetch, fetch, fetch, fetch, fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/ebay-flat-file.routes.ts:1793 runApiPush -> fetch, fetch, fetch, fetch, fetch, fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/ebay-notification.routes.ts:54 callTradingApi -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/ebay-notification.routes.ts:101 ebayNotificationRoutes -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/marketplaces.routes.ts:86 marketplacesRoutes -> putListingsItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/routes/settings-webhooks.routes.ts:67 settingsWebhooksRoutes -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/advertising/ads-api-client.ts:212 getLwaToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/advertising/ads-debug-probe.service.ts:36 probeLwaToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/agents/tool-loop.service.ts:163 callClaude -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ai/embedding.service.ts:25 openAiEmbed -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ai/image-generation.service.ts:54 generateLifestyleImage -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ai/providers/anthropic.provider.ts:63 generate -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ai/providers/local.provider.ts:89 generate -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/alert-evaluator.service.ts:178 dispatch -> fetch, fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-market-offer.service.ts:78 closeMarketOffers -> patchPurchasableOffer",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-market-offer.service.ts:218 reopenMarketOffers -> patchPurchasableOffer",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-mcf.service.ts:475 createSpApiMcfAdapter -> request, request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-mcf.service.ts:481 createFulfillmentOrder -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-mcf.service.ts:537 cancelFulfillmentOrder -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-notifications-boot.service.ts:32 grantlessPost -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-notifications-boot.service.ts:54 ensureSubscriptionForType -> fetch, request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-notifications-boot.service.ts:177 setupAllAmazonNotifications -> fetch, fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/amazon-pushback/index.ts:146 submitShippingConfirmation -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/channel-batch/amazon-batch-feed.service.ts:226 submitAmazonListingsBatch -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/channel-batch/shopify-bulk-mutation.service.ts:84 gql -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/channel-batch/shopify-bulk-mutation.service.ts:159 submitShopifyBulkMutation -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/channel-delist.service.ts:115 delistAmazon -> deleteListingsItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/channel-delist.service.ts:177 delistEbay -> endFixedPriceItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/connectors/amazon-sp/self-authorization.ts:23 importAmazonEnvironmentAuthorization -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/connectors/ebay/client.ts:65 ebayAppToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/connectors/shopify/spec.ts:51 connectionData -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/oauth.service.ts:243 complete -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/token.service.ts:345 refreshOwned -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/cx/token.service.ts:570 revoke -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-auth.service.ts:129 exchangeCodeForToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-auth.service.ts:179 refreshAccessToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-auth.service.ts:390 revokeTokens -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-axes-convert.service.ts:117 convertListingAxesToItalian -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-category.service.ts:433 requestAccessToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-description-push.service.ts:199 pushDescriptions -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-feed.service.ts:147 createInventoryTask -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-feed.service.ts:191 uploadFeedFile -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-flat-file-delete.service.ts:175 tryRemoveVariationFromListing -> callTradingApi, reviseInventoryStatus",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-label-guard.service.ts:95 ensureListingLabels -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-marketing-dispatch.service.ts:40 postEbayMarketing -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-membership-reconcile.service.ts:166 reconcileMembershipsFromEbay -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-presentation-publication.service.ts:71 executePresentationPublication -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-pushback/index.ts:96 submitShippingFulfillment -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-shared-listing-push.service.ts:284 createSharedListing -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-trading-api.service.ts:240 callTradingApi -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-trading-api.service.ts:295 addFixedPriceItem -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-trading-api.service.ts:306 reviseInventoryStatus -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-trading-api.service.ts:413 reviseInventoryStatusBatch -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-trading-api.service.ts:452 endFixedPriceItem -> callTradingApi",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-add.service.ts:104 addVariationsToListing -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-order-apply.service.ts:157 applyVariationOrderToListing -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-push.service.ts:739 pushVariationGroup -> fetch, fetch, fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-push.service.ts:2146 pushOffersOnly -> fetch",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-relabel.service.ts:62 relabelListingToPoolSkus -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/ebay-variation-relabel.service.ts:218 adoptSkulessVariations -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/email/transport.ts:83 sendEmail -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/fba-inbound.service.ts:125 createInboundShipmentPlan -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/fba-restore.service.ts:58 restoreFbaListings -> submitListingPayload",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/feed/browse-node-predictor.service.ts:74 callHaiku -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/images/ebay-shared-image-publish.service.ts:220 publishEbaySharedListingImages -> callTradingApi",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/listing-wizard/amazon-publish.adapter.ts:107 publish -> putListingsItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/listing-wizard/amazon-publish.adapter.ts:164 gatedPut -> putListingsItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/listings/recovery.service.ts:223 executeRecovery -> deleteListingsItem",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketing/ebay-listing-index.service.ts:51 tradingCall -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:46 getAccessToken -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:163 updateInventory -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:268 updatePrice -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:414 createInventoryItem -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:491 createOffer -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:576 ensureMerchantLocation -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:650 updateVariantPrice -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/ebay.service.ts:794 publishOffer -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/etsy.service.ts:398 updateVariationQuantity -> request",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/etsy.service.ts:487 updateReceiptStatus -> request",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/marketplace.service.ts:133 updatePrice -> updateVariationPrice",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/marketplace.service.ts:228 updateInventory -> updateVariationStock",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/shopify-enhanced.service.ts:236 graphqlRequest -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:347 updateProductPrice -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:368 updateVariationPrice -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:390 updateProductStock -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:411 updateVariationStock -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:489 updateOrderStatus -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/marketplaces/woocommerce.service.ts:505 addOrderNote -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/monitoring/alert.service.ts:282 sendWebhookAlert -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/order-cancellation/channel-cancel.ts:72 cancelOnAmazon -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/order-cancellation/channel-cancel.ts:151 cancelOnEbay -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/refunds/refund-publisher.service.ts:279 publishEbayRefund -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/adapters/ebay-feedback.adapter.ts:43 respondToEbayFeedback -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/adapters/ebay-feedback.adapter.ts:118 fetchEbayFeedback -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/amazon-solicitations.service.ts:80 sendAmazonSolicitation -> request",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/review-action-handlers.ts:53 callAnthropic -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/review-reply.service.ts:95 draftReviewReply -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/review-spotlight.service.ts:176 aiBrief -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/reviews/sentiment-extraction.service.ts:278 extractSentiment -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/scheduled-export.service.ts:296 deliverWebhook -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sendcloud/client.ts:90 createParcel -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sendcloud/client.ts:125 voidParcel -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sendcloud/client.ts:390 requestPickup -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/admin-client.ts:7 shopifyAdmin -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/admin-client.ts:12 graphql -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/channel-sheet-media.ts:96 advanceSheetGallery -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/collection-content.service.ts:68 synchronizeCollectionContent -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/content-publisher.ts:60 ensureContentDefinitions -> gql, gql",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/content-publisher.ts:100 publishContentImages -> gql",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/content-publisher.ts:130 publishTranslations -> gql, gql",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/content-publisher.ts:159 publishMetaobjects -> gql",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/content-publisher.ts:226 publishContent -> gql, gql, gql, gql, gql, gql",
+      "gitStatus": " M",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-gateway.ts:124 applyNativeEdit -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-gateway.ts:158 advanceMediaOrder -> gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-inventory.ts:36 applyInformationInventory -> gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-media-membership.ts:28 applyMediaMembership -> gql, gql, gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-publications.ts:20 applyInformationPublications -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/information-translations.ts:71 applyInformationTranslation -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/linked-metaobjects.service.ts:19 saveLinkedEntry -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/linked-products.service.ts:219 applyLinkedBatch -> gql, gql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/media-library.service.ts:182 uploadShopifyFile -> graphql, fetch, graphql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/shopify/schema-sync.service.ts:17 ensureShopifySchemaSubscriptions -> graphql",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sync/woocommerce-sync.service.ts:277 syncInventoryToWooCommerce -> updateVariationStock",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sync-monitoring.service.ts:429 sendSlackAlert -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/sync-monitoring.service.ts:477 sendWebhookAlert -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/variation-sync-processor.service.ts:24 processVariationSync -> submitListingPayload",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    },
+    {
+      "source": "FAIL apps/api/src/services/webhook-dispatch.service.ts:114 deliverOne -> fetch",
+      "gitStatus": "clean",
+      "owner": "PR.4 inventory / respective live owner; outside PR.2 owned outbound-sync file"
+    }
+  ]
+}

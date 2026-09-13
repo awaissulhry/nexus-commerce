@@ -1,0 +1,291 @@
+{
+  "namedAxisRemoval": {
+    "storedMapping": [
+      "Color → Finish"
+    ],
+    "renderedAxes": [
+      {
+        "key": "color",
+        "target": "Finish",
+        "included": true
+      },
+      {
+        "key": "size",
+        "target": "Size",
+        "included": true
+      }
+    ],
+    "dropped": []
+  },
+  "ebayRule": {
+    "source": {
+      "kind": "rule",
+      "ruleLabel": "Only size",
+      "category": "test",
+      "label": "Follows rule Only size"
+    },
+    "delivered": [
+      "Colore",
+      "Taglia"
+    ]
+  },
+  "ebayExplicitNames": {
+    "stored": {
+      "Color": "Taglia",
+      "Size": "Colore"
+    },
+    "rendered": [
+      {
+        "axis": "Color",
+        "target": "Colore"
+      },
+      {
+        "axis": "Size",
+        "target": "Taglia"
+      }
+    ]
+  },
+  "limitAddList": {
+    "dropped": [
+      "style"
+    ],
+    "addable": []
+  },
+  "ebayScopedRemoval": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing",
+          "version": 1
+        },
+        "data": {
+          "platformAttributes": {
+            "_variationAxes": [
+              "Color",
+              "Size"
+            ],
+            "_axisNameLabels": {
+              "Color": "color"
+            }
+          },
+          "version": {
+            "increment": 1
+          }
+        }
+      },
+      {
+        "store": "product",
+        "where": {
+          "id": "parent",
+          "version": 1
+        },
+        "data": {
+          "variationTheme": "Color",
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color",
+    "finalOwnAxes": [
+      "Color",
+      "Size"
+    ]
+  },
+  "liveReset": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing",
+          "version": 1
+        },
+        "data": {
+          "variationTheme": null,
+          "variationMapping": null,
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color,Size",
+    "finalOwnAxes": null
+  },
+  "liveThemeChange": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing"
+        },
+        "data": {
+          "variationMapping": {
+            "axes": [
+              {
+                "axisKey": "Color",
+                "target": "color",
+                "order": 0
+              },
+              {
+                "axisKey": "Size",
+                "target": "size",
+                "order": 1
+              }
+            ]
+          },
+          "variationTheme": "SIZE/COLOR",
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color,Size",
+    "finalOwnAxes": null
+  },
+  "invalidTheme": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing"
+        },
+        "data": {
+          "variationMapping": {
+            "axes": [
+              {
+                "axisKey": "Color",
+                "target": "color",
+                "order": 0
+              },
+              {
+                "axisKey": "Size",
+                "target": "size",
+                "order": 1
+              }
+            ]
+          },
+          "variationTheme": "NOT_A_THEME",
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color,Size",
+    "finalOwnAxes": null
+  },
+  "unavailableSchemaTarget": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing"
+        },
+        "data": {
+          "variationMapping": {
+            "axes": [
+              {
+                "axisKey": "Color",
+                "target": "invented_attribute",
+                "order": 0
+              },
+              {
+                "axisKey": "Size",
+                "target": "size",
+                "order": 1
+              }
+            ]
+          },
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color,Size",
+    "finalOwnAxes": null
+  },
+  "concurrentSave": {
+    "outcome": "accepted",
+    "writes": [
+      {
+        "store": "listing",
+        "where": {
+          "id": "listing"
+        },
+        "data": {
+          "variationMapping": {
+            "axes": [
+              {
+                "axisKey": "Color",
+                "target": "color",
+                "order": 0
+              },
+              {
+                "axisKey": "Size",
+                "target": "size",
+                "order": 1
+              }
+            ]
+          },
+          "variationTheme": "SIZE/COLOR",
+          "version": {
+            "increment": 1
+          }
+        }
+      }
+    ],
+    "finalProductTheme": "Color,Size",
+    "finalOwnAxes": null
+  },
+  "positiveControls": {
+    "invalidTargetWithKnownSchema": {
+      "outcome": "refused",
+      "code": "bad_projection_request",
+      "message": "\"invented_attribute\" is not a option this coordinate offers.",
+      "writes": []
+    },
+    "ordinaryLiveSetChange": {
+      "outcome": "refused",
+      "code": "axes_locked",
+      "message": "live coordinate",
+      "writes": []
+    },
+    "ebayAtomicVersionGuard": {
+      "outcome": "refused",
+      "message": "CAS refused",
+      "writes": []
+    }
+  },
+  "ruleCollisionEstimate": {
+    "variants": [
+      {
+        "Color": "red",
+        "Size": "S"
+      },
+      {
+        "Color": "blue",
+        "Size": "M"
+      }
+    ],
+    "proposedAxes": [
+      "Color"
+    ],
+    "actualCollisionGroups": 0,
+    "simulated": {
+      "follow": 1,
+      "wouldCollide": 1,
+      "total": 1,
+      "override": 0
+    }
+  }
+}

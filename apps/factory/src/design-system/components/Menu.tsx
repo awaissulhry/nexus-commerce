@@ -4,11 +4,13 @@ import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type Mou
 import { createPortal } from 'react-dom'
 import { useClickAway } from './useClickAway'
 import { usePopoverPosition } from './usePopoverPosition'
+import type { Tone } from '../primitives/tone'
 
 export interface MenuItemDef {
   id: string
   label?: ReactNode
   icon?: ReactNode
+  tone?: Tone
   disabled?: boolean
   onSelect?: () => void
   /**
@@ -27,6 +29,8 @@ export interface MenuItemDef {
   /**
    * A second line under the label, for the reason an item is unavailable — or any note that
    * belongs to the item rather than to the menu.
+   * A disabled item with `description != null` stays keyboard reachable but cannot activate.
+   * A reasonless disabled item keeps its native disabled attribute and is skipped.
    *
    * 🔴 This is deliberately NOT a tooltip. A tooltip is hover-only: invisible to touch, invisible
    * to a keyboard user scanning the menu, and gone the moment the pointer moves. The whole point of
@@ -118,8 +122,8 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
   useEffect(() => {
     if (!open) return
     const panel = popRef.current
-    const selected = panel?.querySelector<HTMLElement>('[data-selected="true"]:not([disabled])')
-    const first = panel?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')
+    const selected = panel?.querySelector<HTMLElement>('[data-selected="true"]:not([disabled]):not([aria-disabled="true"])')
+    const first = panel?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled]):not([aria-disabled="true"])')
     ;(selected ?? first ?? panel)?.focus({ preventScroll: true })
   }, [open, popRef])
 
@@ -166,6 +170,7 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
                   role="menuitem"
                   tabIndex={-1}
                   data-selected={it.id === selectedId || undefined}
+                  data-tone={it.tone}
                   aria-current={it.id === selectedId ? 'page' : undefined}
                   className={it.description != null ? 'has-desc' : undefined}
                   href={it.href}
@@ -194,11 +199,13 @@ export function Menu({ label, items, align = 'left', triggerProps, className, op
                 role="menuitem"
                 tabIndex={-1}
                 data-selected={it.id === selectedId || undefined}
+                data-tone={it.tone}
                 className={it.description != null ? 'has-desc' : undefined}
                 title={it.title}
-                disabled={it.disabled}
+                disabled={it.disabled && it.description == null}
                 aria-disabled={it.disabled || undefined}
                 onClick={() => {
+                  if (it.disabled) return
                   setOpen(false)
                   trigger.current?.focus({ preventScroll: true })
                   it.onSelect?.()

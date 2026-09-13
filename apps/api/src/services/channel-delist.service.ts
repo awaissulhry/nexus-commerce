@@ -7,26 +7,9 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * DELETE_LISTING (best-effort remove from the channel catalog). Both
  * are enqueued by the /products bulk-hard-delete cascade (D.1).
  *
- * Per-channel behavior:
- *
- *   Amazon (SP-API Listings Items v2021-08-01):
- *     - Unpublish: PATCH availability_status (TODO — needs the client
- *       method; for now we fall back to DELETE with a logged note so
- *       the channel state still changes).
- *     - Delete: deleteListingsItem(sellerId, sku, marketplaceId).
- *       Seller offer is removed; catalog ASIN persists.
- *
- *   eBay (Trading API):
- *     - Unpublish + Delete: EndFixedPriceItem (relistable later via
- *       SellSimilarItem; "Delete" is more aspirational here since
- *       eBay doesn't truly delete listings — the listing record stays
- *       in seller history). Implementation pending W5.49b — for now
- *       returns SKIPPED with a TODO message; the queue row gets
- *       marked FAILED with a clear error so /sync-logs surfaces it.
- *
- *   Shopify (Admin REST + GraphQL):
- *     - Unpublish: productUpdate { status: DRAFT } via REST PUT.
- *     - Delete: existing deleteProduct() via REST DELETE.
+ * Amazon and eBay unpublish refuse until a reversible implementation exists.
+ * Shopify delist refuses both actions until the account-bound adapter lands.
+ * No adapter may perform a more destructive action than the caller requested.
  *
  * The OutboundSyncQueue row carries:
  *   - productId          (may be null after hard-delete cascade — that's OK)
@@ -35,20 +18,20 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  *   - targetRegion       (marketplace code, e.g. "IT", "DE")
  *   - externalListingId  (ASIN | eBay ItemID | Shopify product gid/number)
  *   - payload.channelAction ("unpublish" | "delete")
- *   - payload.externalParentId (Amazon parent ASIN, used to scope SKU lookup)
+ *   - payload.sellerSku (Offer.sku in scope, else Product.sku, captured at enqueue)
+ *   - payload.channelConnectionId / aliasKey (owning account and alias)
  *
  * Returns the shape the BullMQ worker already understands:
  *   { success: true } on a real change
  *   { success: false, error, retryable } on a failure
  */
 
-import { logger } from '../utils/logger.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
-import { ShopifyService } from './marketplaces/shopify.service.js'
 import { prisma } from '@nexus/database'
 import { endFixedPriceItem, siteIdForMarket } from './ebay-trading-api.service.js'
 import { ebayAuthService } from './ebay-auth.service.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
+import { DELIST_OPERATOR_COPY, type DelistErrorCode } from './delist-error-codes.js'
 
 export type ChannelAction = 'unpublish' | 'delete'
 
@@ -59,12 +42,17 @@ export interface ChannelDelistJob {
   targetChannel: string
   targetRegion: string | null
   externalListingId: string | null
+  /** Captured before the local product/listing is removed. Never an ASIN. */
+  sellerSku?: string | null
+  channelConnectionId?: string | null
   syncType: 'UNPUBLISH_LISTING' | 'DELETE_LISTING'
   payload: any
 }
 
 export interface ChannelDelistResult {
   success: boolean
+  outcome?: 'SUCCESS' | 'FAILURE' | 'REFUSED' | 'UNKNOWN' | 'NOT_SENT'
+  channelFact?: 'UNKNOWN' | 'REFUSED' | 'NOT_SELLING'
   error?: string
   errorCode?: string
   retryable?: boolean
@@ -83,7 +71,7 @@ const AMAZON_MARKETPLACE_IDS: Record<string, string> = {
 }
 
 function resolveAmazonMarketplaceId(region: string | null): string | null {
-  if (!region) return AMAZON_MARKETPLACE_IDS.IT  // sane default for Xavia
+  if (!region) return null
   const upper = region.toUpperCase()
   return AMAZON_MARKETPLACE_IDS[upper] ?? null
 }
@@ -94,13 +82,7 @@ export async function dispatchChannelDelist(
   const action: ChannelAction =
     job.syncType === 'UNPUBLISH_LISTING' ? 'unpublish' : 'delete'
 
-  if (!job.externalListingId) {
-    return {
-      success: false,
-      error: 'externalListingId is required for delist',
-      retryable: false,
-    }
-  }
+  if (!job.externalListingId) return delistRefusal('DELIST_NO_EXTERNAL_ID')
 
   switch (job.targetChannel) {
     case 'AMAZON':
@@ -110,17 +92,23 @@ export async function dispatchChannelDelist(
     case 'SHOPIFY':
       return delistShopify(job, action)
     case 'WOOCOMMERCE':
-      return {
-        success: false,
-        error: 'WooCommerce delist adapter not yet implemented',
-        retryable: false,
-      }
     default:
-      return {
-        success: false,
-        error: `Unknown channel: ${job.targetChannel}`,
-        retryable: false,
-      }
+      return delistRefusal('DELIST_UNSUPPORTED_CHANNEL')
+  }
+}
+
+function delistRefusal(errorCode: DelistErrorCode, detail?: string): ChannelDelistResult {
+  return {
+    success: false, outcome: 'REFUSED', channelFact: 'UNKNOWN', retryable: false,
+    errorCode, error: DELIST_OPERATOR_COPY[errorCode] + (detail ? ` ${detail}` : ''),
+  }
+}
+
+function unknownDelist(errorCode: DelistErrorCode, error: unknown, retryable = true): ChannelDelistResult {
+  const detail = error instanceof Error ? error.message : String(error)
+  return {
+    success: false, outcome: 'UNKNOWN', channelFact: retryable ? 'UNKNOWN' : 'REFUSED',
+    retryable, errorCode, error: `${DELIST_OPERATOR_COPY[errorCode]} ${detail}`,
   }
 }
 
@@ -128,52 +116,32 @@ async function delistAmazon(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
+  if (action === 'unpublish') return delistRefusal('AMAZON_UNPUBLISH_NOT_IMPLEMENTED')
+  if (!job.targetRegion) return delistRefusal('AMAZON_DELIST_NO_REGION')
   const marketplaceId = resolveAmazonMarketplaceId(job.targetRegion)
-  if (!marketplaceId) {
-    return {
-      success: false,
-      error: `Unknown Amazon marketplace for region ${job.targetRegion}`,
-      retryable: false,
-    }
+  if (!marketplaceId) return delistRefusal('AMAZON_DELIST_UNKNOWN_MARKET')
+  const sku = job.sellerSku === undefined ? job.payload?.sellerSku : job.sellerSku
+  if (typeof sku !== 'string' || !sku.trim()) return delistRefusal('AMAZON_DELIST_NO_SKU')
+  const accountId = job.channelConnectionId === undefined ? job.payload?.channelConnectionId : job.channelConnectionId
+  if (typeof accountId !== 'string' || !accountId) return delistRefusal('AMAZON_DELIST_NO_SELLER')
+  let sellerId: string
+  try {
+    sellerId = await getAmazonSellerId(accountId)
+  } catch (err) {
+    return delistRefusal('AMAZON_DELIST_NO_SELLER', err instanceof Error ? err.message : String(err))
   }
-  // externalListingId for Amazon is typically the SKU (since the
-  // Listings Items endpoint is keyed by SKU, not ASIN).
-  const sku = job.externalListingId!
-  const sellerId = (await getAmazonSellerId())
-  if (!sellerId) {
-    return {
-      success: false,
-      error: 'AMAZON_SELLER_ID env var not set',
-      retryable: false,
-    }
-  }
+  if (!sellerId) return delistRefusal('AMAZON_DELIST_NO_SELLER')
 
-  if (action === 'unpublish') {
-    // No first-class unpublish on SP-API; PATCH availability=DISCONTINUED
-    // would be ideal but isn't wired in the client yet. Fall back to
-    // delete for now and log so we can swap in PATCH later.
-    logger.warn('Amazon UNPUBLISH falling back to DELETE (PATCH client TODO)', {
-      sku,
-      marketplaceId,
-      queueId: job.queueId,
-    })
-  }
   try {
     const r = await amazonSpApiClient.deleteListingsItem({
       sellerId,
       sku,
       marketplaceId,
     })
-    if (!r.success) {
-      return {
-        success: false,
-        error: r.error ?? 'Amazon delete failed',
-        retryable: true,
-      }
-    }
-    return { success: true, submissionId: r.submissionId, dryRun: r.dryRun }
-  } catch (e: any) {
-    return { success: false, error: e?.message ?? String(e), retryable: true }
+    if (!r.success) return unknownDelist('AMAZON_DELIST_UNVERIFIED', r.error ?? 'No acknowledgement received')
+    return { success: true, outcome: r.dryRun ? 'NOT_SENT' : 'SUCCESS', submissionId: r.submissionId, dryRun: r.dryRun }
+  } catch (e: unknown) {
+    return unknownDelist('DELIST_TRANSPORT_UNKNOWN', e)
   }
 }
 
@@ -181,127 +149,87 @@ async function delistShopify(
   job: ChannelDelistJob,
   action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  const productId = job.externalListingId!
-  try {
-    const svc = new ShopifyService()
-    if (action === 'unpublish') {
-      // ShopifyService has updateProduct as a public method on some
-      // codepaths; if missing in this build, fall back to delete with
-      // a warning so the channel state still changes.
-      const svcAny = svc as any
-      if (typeof svcAny.updateProduct === 'function') {
-        await svcAny.updateProduct(productId, {
-          product: { id: Number(productId), status: 'draft' },
-        })
-        return { success: true }
-      }
-      logger.warn('Shopify UNPUBLISH falling back to DELETE (updateProduct missing)', {
-        productId,
-        queueId: job.queueId,
-      })
-    }
-    await svc.deleteProduct(productId)
-    return { success: true }
-  } catch (e: any) {
-    return { success: false, error: e?.message ?? String(e), retryable: true }
+  if (!(job.channelConnectionId === undefined ? job.payload?.channelConnectionId : job.channelConnectionId)) {
+    return delistRefusal('SHOPIFY_DELIST_NO_ACCOUNT')
   }
+  return delistRefusal('SHOPIFY_DELIST_NOT_IMPLEMENTED')
 }
 
-// ── eBay "already ended" idempotency helpers ──────────────────────────────
-
-/**
- * eBay Trading-API error message patterns that mean the listing is
- * already not live. Treating these as success keeps delist idempotent
- * (the goal — listing not live — is already met).
- *
- * Error codes + typical ShortMessage text we match against:
- *   291  "Item cannot be accessed" — item gone / seller doesn't own it
- *   219  "Listing validation error" variants incl. "Listing is not active"
- *   17   "Invalid item" / "Item not found"
- *   various: "auction already closed", "already ended", "not currently available"
- */
-const ALREADY_ENDED_PATTERNS: RegExp[] = [
+// Ownership/reachability prose never confirms absence. Check refusals FIRST,
+// including a response that contains both an ended phrase and an access error.
+export const ENDED_CONFIRMED = [
   /already ended/i,
   /already closed/i,
   /auction already closed/i,
+  /item has already been (deleted|removed)/i,
+]
+export const COULD_NOT_ASK = [
   /item cannot be accessed/i,
   /item (is )?not (active|available)/i,
   /listing (is )?not (active|available|found)/i,
   /item not found/i,
   /invalid item/i,
   /not currently available/i,
-  /item has already been (deleted|removed)/i,
 ]
-
-function isAlreadyEndedError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err)
-  return ALREADY_ENDED_PATTERNS.some((p) => p.test(msg))
-}
 
 // ── Real EndFixedPriceItem delist ─────────────────────────────────────────
 
 async function delistEbay(
   job: ChannelDelistJob,
-  _action: ChannelAction,
+  action: ChannelAction,
 ): Promise<ChannelDelistResult> {
-  // 1. ItemID guard
+  if (action === 'unpublish') return delistRefusal('EBAY_UNPUBLISH_NOT_IMPLEMENTED')
   const itemId = job.externalListingId
-  if (!itemId) {
-    return {
-      success: false,
-      error: 'no eBay ItemID on delist job',
-      errorCode: 'EBAY_DELIST_NO_ITEMID',
-      retryable: false,
-    }
-  }
+  if (!itemId) return delistRefusal('EBAY_DELIST_NO_ITEMID')
 
-  // 2. Resolve eBay connection + OAuth token (mirrors outbound-sync.service.ts auth path)
-  let oauthToken: string
+  // Resolve the market before auth so an unknown site never asks the operator
+  // to reconnect an otherwise valid account. Absence is not an Italian target.
+  if (!job.targetRegion) return delistRefusal('EBAY_DELIST_NO_REGION')
   let siteId: string
   try {
-    // MAP.3 — DECLARED.
-    const connection = await tryResolveConnection({ channel: 'EBAY', primary: true })
-    if (!connection) {
-      return {
-        success: false,
-        error: 'No active eBay connection found — link an eBay account in Settings',
-        errorCode: 'EBAY_DELIST_NO_CONNECTION',
-        retryable: false,
-      }
-    }
-    oauthToken = await ebayAuthService.getValidToken(connection.id)
-    // targetRegion may be null for legacy rows; default to IT (Xavia primary market)
-    siteId = siteIdForMarket(job.targetRegion ?? 'IT')
-  } catch (err: unknown) {
-    return {
-      success: false,
-      error: `eBay delist auth error: ${err instanceof Error ? err.message : String(err)}`,
-      errorCode: 'EBAY_DELIST_AUTH_ERROR',
-      retryable: false,
-    }
+    siteId = siteIdForMarket(job.targetRegion)
+  } catch {
+    return delistRefusal('EBAY_UNKNOWN_MARKET')
   }
 
-  // 3. Call EndFixedPriceItem — inherits NEXUS_EBAY_REAL_API gate from callTradingApi
+  // The producer captures the account on the exact ItemID/coordinate before
+  // deletion. The generic listing/item resolvers may default an unattributed
+  // row to the primary account, so a delist never uses those fallback forms.
+  const accountId = job.channelConnectionId === undefined ? job.payload?.channelConnectionId : job.channelConnectionId
+  if (typeof accountId !== 'string' || !accountId) return delistRefusal('EBAY_DELIST_NO_CONNECTION')
+  let oauthToken: string
   try {
-    await endFixedPriceItem({ itemId }, { oauthToken, siteId })
-    return { success: true }
+    const connection = await tryResolveConnection({ accountId })
+    if (!connection || connection.channelType !== 'EBAY') return delistRefusal('EBAY_DELIST_NO_CONNECTION')
+    oauthToken = await ebayAuthService.getValidToken(connection.id)
   } catch (err: unknown) {
-    // 4. Idempotency: already-ended listings are a success (goal = listing not live)
-    if (isAlreadyEndedError(err)) {
-      logger.info('ebay delist: item already ended (idempotent)', {
-        itemId,
-        marketplace: job.targetRegion,
-        error: err instanceof Error ? err.message : String(err),
-      })
-      return { success: true }
+    return delistRefusal('EBAY_DELIST_AUTH_ERROR', err instanceof Error ? err.message : String(err))
+  }
+
+  try {
+    const ack = await endFixedPriceItem({ itemId }, { oauthToken, siteId })
+    const dryRun = ack.itemId?.startsWith('DRYRUN-') === true
+    if (!['Success', 'Warning'].includes(ack.ack)) {
+      return unknownDelist('EBAY_DELIST_UNVERIFIED', `Acknowledgement: ${ack.ack}`)
     }
-    // 5. Genuine failures — retryable so the queue can re-attempt on transient errors
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : String(err),
-      errorCode: 'EBAY_DELIST_FAILED',
-      retryable: true,
+    return { success: true, outcome: dryRun ? 'NOT_SENT' : 'SUCCESS', dryRun }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (COULD_NOT_ASK.some(pattern => pattern.test(message))) {
+      return unknownDelist('EBAY_DELIST_COULD_NOT_ASK', err, false)
     }
+    if (ENDED_CONFIRMED.some(pattern => pattern.test(message))) {
+      return { success: true, outcome: 'SUCCESS', channelFact: 'NOT_SELLING' }
+    }
+    // A received negative acknowledgement is a failure; a lost response is
+    // UNKNOWN even when a retry budget is exhausted.
+    if (/^eBay EndFixedPriceItem Failure:/i.test(message)) {
+      return {
+        success: false, outcome: 'FAILURE', retryable: true,
+        errorCode: 'EBAY_DELIST_FAILED', error: `${DELIST_OPERATOR_COPY.EBAY_DELIST_FAILED} ${message}`,
+      }
+    }
+    return unknownDelist('DELIST_TRANSPORT_UNKNOWN', err)
   }
 }
 
@@ -314,30 +242,52 @@ export async function applyDelistResultToQueue(
   queueId: string,
   result: ChannelDelistResult,
 ): Promise<void> {
-  if (result.success) {
-    await prisma.outboundSyncQueue.update({
+  await prisma.$transaction(async tx => {
+    const row = await tx.outboundSyncQueue.findUnique({
       where: { id: queueId },
+      select: { retryCount: true, maxRetries: true, payload: true, syncStatus: true, channelListingId: true, productId: true, targetChannel: true, targetRegion: true, externalListingId: true },
+    })
+    if (!row || row.syncStatus === 'CANCELLED') return
+    const outcome = result.dryRun ? 'NOT_SENT' : result.outcome ?? (result.success ? 'SUCCESS' : 'REFUSED')
+    const unknown = outcome === 'UNKNOWN'
+    const newRetry = result.success ? row.retryCount : row.retryCount + 1
+    const exhausted = !result.retryable || newRetry >= row.maxRetries
+    const retryAt = result.retryable ? new Date(Date.now() + 60_000 * 2 ** Math.min(newRetry - 1, 6)) : null
+    const saved = await tx.outboundSyncQueue.updateMany({
+      where: { id: queueId, syncStatus: row.syncStatus },
       data: {
-        syncStatus: 'SUCCESS',
-        syncedAt: new Date(),
+        syncStatus: outcome === 'NOT_SENT' ? 'SKIPPED' : result.success ? 'SUCCESS'
+          : !exhausted ? 'PENDING' : unknown ? 'SKIPPED' : 'FAILED',
+        syncedAt: outcome === 'SUCCESS' ? new Date() : null,
+        errorMessage: result.dryRun ? DELIST_OPERATOR_COPY.DELIST_DRY_RUN : result.error ?? null,
+        errorCode: result.dryRun ? 'DELIST_DRY_RUN' : result.errorCode ?? null,
+        retryCount: newRetry,
+        holdUntil: retryAt,
+        nextRetryAt: exhausted ? null : retryAt,
+        isDead: !result.success && exhausted,
+        diedAt: !result.success && exhausted ? new Date() : null,
+        payload: {
+          ...(row.payload as Record<string, unknown>),
+          delistOutcome: outcome,
+          channelFact: result.channelFact ?? 'UNKNOWN',
+        },
       },
     })
-    return
-  }
-  const row = await prisma.outboundSyncQueue.findUnique({
-    where: { id: queueId },
-    select: { retryCount: true, maxRetries: true },
-  })
-  const newRetry = (row?.retryCount ?? 0) + 1
-  const exhausted = !result.retryable || newRetry >= (row?.maxRetries ?? 3)
-  await prisma.outboundSyncQueue.update({
-    where: { id: queueId },
-    data: {
-      syncStatus: exhausted ? 'FAILED' : 'PENDING',
-      errorMessage: result.error ?? 'Unknown delist error',
-      errorCode: result.errorCode,
-      retryCount: newRetry,
-      ...(exhausted ? { isDead: true, diedAt: new Date() } : {}),
-    },
+    if (!saved.count) return
+    const payload = row.payload as { channelListingId?: string; productId?: string; marketplace?: string; channelConnectionId?: string; aliasKey?: string; sellerSku?: string; actor?: string; coordinates?: Array<{ productId: string; channel: string; marketplace: string; channelConnectionId: string | null; aliasKey: string }> }
+    await tx.productEvent.create({ data: {
+      aggregateId: String(payload.channelListingId ?? row.channelListingId ?? queueId),
+      aggregateType: 'ChannelListing', eventType: 'CHANNEL_DELIST_OUTCOME',
+      data: {
+        queueId, productId: payload.productId ?? row.productId,
+        channel: row.targetChannel, marketplace: payload.marketplace ?? row.targetRegion,
+        channelConnectionId: payload.channelConnectionId ?? null, aliasKey: payload.aliasKey ?? null,
+        sellerSku: payload.sellerSku ?? null, externalListingId: row.externalListingId,
+        coordinates: payload.coordinates ?? null,
+        delistOutcome: outcome, channelFact: result.channelFact ?? 'UNKNOWN',
+        errorCode: result.errorCode ?? null, error: result.error ?? null,
+      },
+      metadata: { source: 'SYSTEM', userId: payload.actor ?? null },
+    } })
   })
 }

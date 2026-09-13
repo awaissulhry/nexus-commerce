@@ -1,0 +1,34 @@
+{
+  "wire-null-defaults": {
+    "exit": 0,
+    "load": 4.97
+  },
+  "presence-vocabulary": {
+    "exit": 1,
+    "load": 4.89
+  },
+  "i18n-catalog": {
+    "exit": 0,
+    "load": 4.89
+  },
+  "link-targets": {
+    "exit": 0,
+    "load": 4.89
+  },
+  "silent-disabled": {
+    "exit": 1,
+    "load": 4.89
+  },
+  "button-vocabulary": {
+    "exit": 0,
+    "load": 4.89
+  },
+  "help-cursor": {
+    "exit": 0,
+    "load": 4.89
+  },
+  "grid-kit-ratchet": {
+    "exit": 1,
+    "load": 4.89
+  }
+}

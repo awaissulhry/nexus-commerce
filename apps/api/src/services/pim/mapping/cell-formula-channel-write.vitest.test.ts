@@ -29,6 +29,9 @@ vi.mock('../../../db.js', () => ({
     product: { findUnique: (...a: unknown[]) => productFindUnique(...a), update: async () => ({}) },
     channelListing: { findFirst: (args: unknown) => listingFindFirst(args), update: async () => ({}) },
     cellFormula: { upsert: (...a: unknown[]) => formulaUpsert(...a), findMany: (...a: unknown[]) => formulaFindMany(...a) },
+    // LX.F R-LX-13 — `prepareCellFormula` asks the ONE authority for the
+    // coordinate's languages (`cell-formula.service.ts:369`) before resolving.
+    marketplace: { findFirst: async () => ({ languages: ['it'], language: 'it' }) },
   },
 }))
 vi.mock('../../audit-log.service.js', () => ({ auditLogService: { write: async () => {} } }))
@@ -114,12 +117,14 @@ describe('formula listing identity', () => {
     await setCellFormula({ ...coordinate, expr: '12' })
     expect(writer.mock.calls[0][0]).toMatchObject({ channelConnectionId: 'account-b', aliasKey })
     expect(formulaUpsert.mock.calls[0][0].where.productId_scope_channel_marketplace_locale_fieldKey).toMatchObject({ channelConnectionId: 'account-b', aliasKey })
-    expect(listingFindFirst).toHaveBeenCalledWith({ where: { productId: PID, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'account-b', aliasKey } })
+    // LX.F R-LX-13 — the read now includes the pin rows (`translations`), which is
+    // what makes one resolver answer a channel cell; the coordinate is unchanged.
+    expect(listingFindFirst).toHaveBeenCalledWith({ include: { translations: true }, where: { productId: PID, channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'account-b', aliasKey } })
   })
   it('reads the same primary account and alias targeted by its bulk writer', async () => {
     listingFindFirst.mockClear()
     await save('list_price')
-    expect(listingFindFirst).toHaveBeenCalledWith({ where: {
+    expect(listingFindFirst).toHaveBeenCalledWith({ include: { translations: true }, where: {
       productId: PID, channel: 'AMAZON', marketplace: 'IT', aliasKey: '', channelConnectionId: 'account-a',
     } })
   })

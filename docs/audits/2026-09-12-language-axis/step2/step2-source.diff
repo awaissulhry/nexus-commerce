@@ -119,7 +119,15 @@
              platform: c.platform,
              marketplaces: [c.marketplace],
              channelKeys: [channelKey],
-@@ -3605,7 +3583,7 @@
+@@ -2413,6 +2391,7 @@
+             orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+           })
+           const result = await listingContentService.generate({
++            channel: g.platform,
+             product: {
+               id: product.id,
+               sku: product.sku,
+@@ -3605,7 +3584,7 @@
          return reply.code(404).send({ error: `Product ${id} not found` })
        }
        const channelKey = `${channel}:${marketplace}`
@@ -128,7 +136,15 @@
        const variant =
          typeof request.body?.variant === 'number'
            ? Math.max(0, Math.min(4, request.body.variant))
-@@ -3862,11 +3840,11 @@
+@@ -3620,6 +3599,7 @@
+           orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+         })
+         const result = await listingContentService.generate({
++            channel: channel,
+           product: {
+             id: product.id,
+             sku: product.sku,
+@@ -3862,11 +3842,11 @@
            { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
          >()
          for (const c of channels) {
@@ -142,7 +158,15 @@
                platform: c.platform,
                marketplaces: [c.marketplace],
                channelKeys: [channelKey],
-@@ -5361,11 +5339,11 @@
+@@ -3948,6 +3928,7 @@
+               orderBy: [{ brand: 'desc' }, { preferred: 'asc' }],
+             })
+             const result = await listingContentService.generate({
++            channel: g.platform,
+               product: {
+                 id: product.id,
+                 sku: product.sku,
+@@ -5361,11 +5342,11 @@
            { language: string; platform: string; marketplaces: string[]; channelKeys: string[] }
          >()
          for (const c of channels) {
@@ -156,6 +180,16 @@
                platform: c.platform,
                marketplaces: [c.marketplace],
                channelKeys: [channelKey],
+@@ -5404,7 +5385,8 @@
+ 
+         for (const [groupKey, g] of groups) {
+           const representativeMarketplace = g.marketplaces[0]!
+-          const preview = listingContentService.previewCost({
++          const preview = await listingContentService.previewCost({
++            channel: g.platform,
+             product: {
+               id: product.id,
+               sku: product.sku,
 --- apps/api/src/routes/listings-syndication.routes.ts BEFORE
 +++ apps/api/src/routes/listings-syndication.routes.ts AFTER
 @@ -1,3 +1,4 @@
@@ -163,7 +197,16 @@
  import { amazonCredsConfigured, getAmazonSellerId } from '../lib/amazon-sp-client.js'
  import type { FastifyInstance } from 'fastify'
  import prisma from '../db.js'
-@@ -121,17 +122,13 @@
+@@ -21,6 +22,8 @@
+ import { fireOutboundJobs } from '../services/outbound-enqueue.js'
+ import { tryResolveConnection } from '../services/connection-resolver.service.js'
+ import { isManagedShopifyAttribute } from '../services/shopify/linked-state-guard.js'
++import { CONNECTION_PUBLIC_SELECT } from '../services/connection-resolver.service.js'
++import { connectionLabel } from '../services/connection-label.js'
+ 
+ // ─────────────────────────────────────────────────────────────────────
+ // SYNDICATION — universal /listings workspace endpoints
+@@ -121,17 +124,13 @@
  // Amazon stores it in attributes.item_name[].value keyed by language_tag.
  // eBay stores it directly as the listing title (l.title); return null here
  // so the frontend falls back to l.title for eBay.
@@ -183,7 +226,7 @@
    const match = langTag ? itemName.find((n: any) => n?.language_tag === langTag) : null
    const value = match?.value ?? itemName[0]?.value
    return typeof value === 'string' && value.length > 0 ? value.slice(0, 200) : null
-@@ -272,15 +269,15 @@
+@@ -272,15 +271,15 @@
            take: pageSize,
          }),
          prisma.marketplace.findMany({
@@ -202,7 +245,7 @@
          ])
        )
  
-@@ -371,12 +368,13 @@
+@@ -371,12 +370,13 @@
            createdAt: l.createdAt,
            currency: m?.currency ?? null,
            language: m?.language ?? null,
@@ -217,6 +260,24 @@
            product: (() => {
              const buckets = stockByProduct.get(l.productId) ?? { fba: 0, non: 0 }
              return {
+@@ -2898,12 +2898,16 @@
+         })
+       }
+ 
++      const circuitAccounts = trippedCircuits.length ? await prisma.channelConnection.findMany({ select: CONNECTION_PUBLIC_SELECT }) : []
+       return {
+         last24h,
+         last7d,
+         rollup30d,
+         recentFailures,
+-        trippedCircuits,
++        trippedCircuits: trippedCircuits.map((c) => {
++          const account = circuitAccounts.find((a) => a.channelType === c.channel && a.externalAccountId === c.sellerId)
++          return { ...c, sellerName: connectionLabel(account ?? { channelType: c.channel }).label }
++        }),
+         skuCoverage,
+         repeatAttempts,
+         dailyTrend: trendByChannel,
 --- apps/api/src/routes/marketing-automation.routes.ts BEFORE
 +++ apps/api/src/routes/marketing-automation.routes.ts AFTER
 @@ -313,8 +313,8 @@
@@ -252,29 +313,29 @@
 +  const language = input.language ?? languages[0]
 +  assertInformationLocale('AMAZON', language, languages)
 +  const tag = languageTag(language, input.marketplace)
-+const spAttrs: Record<string, unknown> = {
-+  ...input.attributes,
-+}
-+if (input.title) {
-+  spAttrs.item_name = [{ value: input.title, marketplace_id: input.marketplaceId, language_tag: tag }]
-+}
-+if (input.description) {
-+  spAttrs.product_description = [{ value: input.description, marketplace_id: input.marketplaceId, language_tag: tag }]
-+}
-+if (Array.isArray(input.bulletPoints) && input.bulletPoints.length > 0) {
-+  spAttrs.bullet_point = input.bulletPoints.map((b: string) => ({
-+    value: b,
-+    marketplace_id: input.marketplaceId,
-+    language_tag: tag,
-+  }))
-+}
-+if (input.price != null) {
-+  spAttrs.purchasable_offer = [{
-+    currency: 'EUR',
-+    our_price: [{ schedule: [{ value_with_tax: Number(input.price) }] }],
-+    marketplace_id: input.marketplaceId,
-+  }]
-+}
++  const spAttrs: Record<string, unknown> = {
++    ...input.attributes,
++  }
++  if (input.title) {
++    spAttrs.item_name = [{ value: input.title, marketplace_id: input.marketplaceId, language_tag: tag }]
++  }
++  if (input.description) {
++    spAttrs.product_description = [{ value: input.description, marketplace_id: input.marketplaceId, language_tag: tag }]
++  }
++  if (Array.isArray(input.bulletPoints) && input.bulletPoints.length > 0) {
++    spAttrs.bullet_point = input.bulletPoints.map((b: string) => ({
++      value: b,
++      marketplace_id: input.marketplaceId,
++      language_tag: tag,
++    }))
++  }
++  if (input.price != null) {
++    spAttrs.purchasable_offer = [{
++      currency: 'EUR',
++      our_price: [{ schedule: [{ value_with_tax: Number(input.price) }] }],
++      marketplace_id: input.marketplaceId,
++    }]
++  }
 +
 +  return spAttrs
 +}
@@ -490,6 +551,60 @@
  
    // What each target cell holds right now — the diff's left-hand side and the
    // baseline every staleness check is later made against.
+--- apps/api/src/services/amazon/value-translate.service.ts BEFORE
++++ apps/api/src/services/amazon/value-translate.service.ts AFTER
+@@ -1,3 +1,4 @@
++import { marketLanguages } from '../pim/market-languages.js'
+ /**
+  * Cross-market enum value translation for Amazon flat-file columns.
+  *
+@@ -53,16 +54,6 @@
+ 
+ // ── Language labels ────────────────────────────────────────────────────────
+ 
+-const MARKET_LANGUAGE: Record<string, string> = {
+-  IT: 'Italian',
+-  DE: 'German',
+-  FR: 'French',
+-  ES: 'Spanish',
+-  UK: 'English (UK)',
+-}
+-
+-const SOURCE_LANGUAGE: Record<string, string> = MARKET_LANGUAGE
+-
+ // ── Main service function ──────────────────────────────────────────────────
+ 
+ export async function translateEnumValues(
+@@ -70,7 +61,6 @@
+   input: ValueTranslateInput,
+ ): Promise<ValueTranslateResult> {
+   const { sourceMarket, productType, colId, colLabelEn, values, targetMarkets } = input
+-  const srcLang = SOURCE_LANGUAGE[sourceMarket.toUpperCase()] ?? sourceMarket
+ 
+   const result: ValueTranslateResult = {
+     colLabel: colLabelEn ?? colId,
+@@ -80,6 +70,11 @@
+   }
+ 
+   if (!values.length || !targetMarkets.length) return result
++
++  const languageRows = await prisma.marketplace.findMany({ where: { channel: 'AMAZON' }, select: { channel: true, code: true, language: true, languages: true } })
++  const labels = new Intl.DisplayNames(['en'], { type: 'language' })
++  const sourceLanguage = marketLanguages('AMAZON', sourceMarket, languageRows)[0]
++  const srcLang = labels.of(sourceLanguage) ?? sourceLanguage
+ 
+   // Load schemas for all target markets in parallel
+   const schemaRows = await prisma.categorySchema.findMany({
+@@ -141,7 +136,8 @@
+         return
+       }
+ 
+-      const tgtLang = MARKET_LANGUAGE[mp] ?? mp
++      const targetLanguage = marketLanguages('AMAZON', mp, languageRows)[0]
++      const tgtLang = labels.of(targetLanguage) ?? targetLanguage
+ 
+       const prompt = buildTranslationPrompt({
+         srcLang,
 --- apps/api/src/services/categories/marketplace-ids.ts BEFORE
 +++ apps/api/src/services/categories/marketplace-ids.ts AFTER
 @@ -1,3 +1,4 @@
@@ -540,6 +655,15 @@
          })) as AmazonProductTypeMeta
          labels = extractEnumLabels(await downloadAmazonSchema(envelope.schema))
        } catch {
+@@ -236,7 +237,7 @@
+   private async fetchAndCacheAmazon(query: SchemaQuery) {
+     if (!query.accountId && !(await this.amazon.isConfigured())) {
+       throw new Error(
+-        'Amazon SP-API not configured — set AMAZON_LWA_CLIENT_ID, AMAZON_LWA_CLIENT_SECRET, AMAZON_REFRESH_TOKEN',
++        'Connect or verify your Amazon Seller account in Settings → Channels.',
+       )
+     }
+ 
 @@ -252,7 +253,7 @@
          marketplaceIds: [marketplaceId],
          requirements: 'LISTING',
@@ -744,7 +868,15 @@
  import { workspaceKey } from '@nexus/database/workspace-context'
  /**
   * Step 9/10 — wizard state validation + Amazon listings payload
-@@ -135,27 +136,8 @@
+@@ -105,6 +106,7 @@
+ }
+ 
+ export interface ChannelPayloadEntry {
++  language?: string
+   channelKey: string
+   platform: string
+   marketplace: string
+@@ -135,27 +137,8 @@
    product?: { sku?: string }
  }
  
@@ -774,7 +906,16 @@
  }
  
  const MARKETPLACE_TO_CURRENCY: Record<string, string> = {
-@@ -983,6 +965,7 @@
+@@ -876,7 +859,7 @@
+         } else {
+           const message =
+             c.platform === 'AMAZON'
+-              ? 'Amazon SP-API not configured. Set AMAZON_SELLER_ID + AMAZON_REFRESH_TOKEN env vars on the API server.'
++              ? 'Connect or verify your Amazon Seller account in Settings → Channels.'
+               : c.platform === 'EBAY'
+                 ? 'No active eBay ChannelConnection — link an eBay account in Settings.'
+                 : `${c.platform} channel credentials not configured.`
+@@ -983,6 +966,7 @@
            children: { where: { deletedAt: null }, orderBy: { id: 'asc' }, select: { id: true, sku: true, basePrice: true, totalStock: true, variantAttributes: true } },
          } }) : null
  
@@ -782,7 +923,7 @@
      return wizard.channels.map((cRaw) => {
        const c = {
          platform: cRaw.platform.toUpperCase(),
-@@ -1010,7 +993,7 @@
+@@ -1010,7 +994,7 @@
            ...baseAttributes,
            ...channelAttrs,
          }
@@ -791,7 +932,15 @@
          const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
          const channelPricing = (slice as any).pricing ?? {}
          const effectivePrice =
-@@ -1096,7 +1079,7 @@
+@@ -1077,6 +1061,7 @@
+           channelKey,
+           platform: c.platform,
+           marketplace: c.marketplace,
++          language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
+           payload: ebayPayload,
+         }
+       }
+@@ -1096,7 +1081,7 @@
            ...baseAttributes,
            ...channelAttrs,
          }
@@ -800,7 +949,15 @@
          const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
          const channelPricing = (slice as any).pricing ?? {}
          const effectivePrice =
-@@ -1231,7 +1214,7 @@
+@@ -1186,6 +1171,7 @@
+           channelKey,
+           platform: c.platform,
+           marketplace: c.marketplace,
++          language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
+           payload: shopifyPayload,
+         }
+       }
+@@ -1231,7 +1217,7 @@
        const theme =
          ((slice as any).variations?.theme as string | undefined) ??
          (variations.commonTheme as string | undefined)
@@ -809,6 +966,14 @@
        const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
        const channelPricing = (slice as any).pricing ?? {}
        const effectivePrice =
+@@ -1388,6 +1374,7 @@
+         channelKey,
+         platform: c.platform,
+         marketplace: c.marketplace,
++        language: marketLanguages(c.platform, c.marketplace, languageRows)[0],
+         payload,
+         missingChildSkus:
+           childrenResolution.missingSkus.length > 0
 --- apps/api/src/services/outbound-sync.service.ts BEFORE
 +++ apps/api/src/services/outbound-sync.service.ts AFTER
 @@ -1,3 +1,5 @@
@@ -1054,11 +1219,14 @@
    if (localizedOnly && !templateLocale) throw new Error('Configure a marketplace language before creating this localized template')
    const rows: TransferRow[] = [
      { ...empty, field: 'family', value: family.code },
-@@ -178,7 +178,7 @@
+@@ -176,9 +176,8 @@
+   const contracts = transferContracts(input.market, { allowIncompleteSchema: true })
+   const families = await prisma.productFamily.findMany({ select: { id: true, code: true } })
    const workbookMeta = input.layout === 'wide' && !input.effective ? new WeakMap<TransferRow, { fields: WorkbookField[]; category: string; note?: string }>() : undefined
-   // Match resolveBatch's default locale. Some historical marketplace rows still have the
-   // database's default language="en", even for eBay Italy; that is not its publishing locale.
+-  // Match resolveBatch's default locale. Some historical marketplace rows still have the
+-  // database's default language="en", even for eBay Italy; that is not its publishing locale.
 -  const languages = workbookMeta ? new Map((await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, language: true } })).map(m => [JSON.stringify([m.channel, m.code]), m.code === 'GLOBAL' ? m.language : languageForMarketplace(m.code)])) : undefined
++  // Match resolveBatch’s default locale from the same channel-qualified authority.
 +  const languages = workbookMeta ? new Map((await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, language: true, languages: true } })).map(m => [JSON.stringify([m.channel, m.code]), marketLanguages(m.channel, m.code, [m])[0]])) : undefined
    async function* productRows() {
      for (let offset = 0; offset < selection.length; offset += 100) {
@@ -1083,6 +1251,48 @@
      const contract = await contracts.channel(c.channel, c.marketplace, c.category)
      const categoryKey = transferCategoryField(c.channel)
      scopes.push({ ...c, locale: '', sheet: `${c.channel} ${c.marketplace} ${i + 1}`, entity: 'Overrides',
+--- apps/api/src/services/pim/ebay-value-map.service.ts BEFORE
++++ apps/api/src/services/pim/ebay-value-map.service.ts AFTER
+@@ -1,3 +1,4 @@
++import { marketLanguages } from './market-languages.js'
+ /**
+  * VL.3 — eBay value-map seeder.
+  *
+@@ -25,22 +26,15 @@
+ import { upsertValueMap } from './value-map.service.js'
+ import { parseAiJson } from './mapping-suggest-ai.service.js'
+ 
+-const MARKET_LANG: Record<string, string> = {
+-  IT: 'Italian',
+-  DE: 'German',
+-  FR: 'French',
+-  ES: 'Spanish',
+-  UK: 'English',
+-  GB: 'English',
+-}
+ 
+ async function translateValuesToEnglish(
+   values: string[],
+   marketplace: string,
+   aspect: string,
+ ): Promise<Record<string, string>> {
+-  const lang = MARKET_LANG[marketplace.toUpperCase()] ?? marketplace
+-  if (lang === 'English') {
++  const language = (await marketLanguages('EBAY', marketplace))[0]
++  const lang = new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
++  if (language === 'en') {
+     // Already English — identity map (canonical == value).
+     const out: Record<string, string> = {}
+     for (const v of values) out[v] = v
+@@ -127,7 +121,7 @@
+     if (selectAspects.length === 0) continue
+     markets.add(l.marketplace)
+ 
+-    const isEnglish = MARKET_LANG[l.marketplace.toUpperCase()] === 'English'
++    const isEnglish = (await marketLanguages('EBAY', l.marketplace))[0] === 'en'
+     for (const a of selectAspects) {
+       aspects++
+       const attribute = `aspect_${a.englishName || a.name}`
 --- apps/api/src/services/pim/global-content.ts BEFORE
 +++ apps/api/src/services/pim/global-content.ts AFTER
 @@ -10,13 +10,13 @@
@@ -1442,7 +1652,50 @@
  /** Is this channel actually sold in this market? A chip outside its markets is disabled, not hidden. */
 --- apps/web/src/app/products/[id]/edit/_studio/scopes.vitest.test.ts BEFORE
 +++ apps/web/src/app/products/[id]/edit/_studio/scopes.vitest.test.ts AFTER
-@@ -171,6 +171,20 @@
+@@ -9,6 +9,8 @@
+  */
+ 
+ import { describe, expect, it } from 'vitest'
++import { readFileSync } from 'node:fs'
++import ts from 'typescript'
+ 
+ import {
+   channelLabel,
+@@ -42,6 +44,33 @@
+ 
+ const rows = flattenGrouped(GROUPED)
+ const options = deriveScopeOptions(rows)
++
++it('mirrors the optional ordered language array on every SheetCoordinate wire type', () => {
++  const root = new URL('../../../../../../../../', import.meta.url)
++  const paths = ['apps/api/src/services/pim/sheet-columns.service.ts',
++    'apps/web/src/app/products/_sheet/types.ts',
++    'apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts',
++    'apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts']
++  for (const path of paths) {
++    const file = ts.createSourceFile(path, readFileSync(new URL(path, root), 'utf8'), ts.ScriptTarget.Latest, true)
++    const coordinate = file.statements.find((node): node is ts.InterfaceDeclaration => ts.isInterfaceDeclaration(node) && node.name.text === 'SheetCoordinate')!
++    const property = coordinate.members.find(node => node.name?.getText(file) === 'languages') as ts.PropertySignature
++    expect(property, path).toBeDefined()
++    expect(property.questionToken, path).toBeDefined()
++    expect(property.type?.getText(file), path).toBe('string[]')
++  }
++})
++
++it('mirrors the wizard language metadata from its payload producer', () => {
++  const root = new URL('../../../../../../../../', import.meta.url)
++  for (const path of ['apps/api/src/services/listing-wizard/submission.service.ts', 'apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx']) {
++    const file = ts.createSourceFile(path, readFileSync(new URL(path, root), 'utf8'), ts.ScriptTarget.Latest, true)
++    const declaration = file.statements.find((node): node is ts.InterfaceDeclaration => ts.isInterfaceDeclaration(node) && node.name.text === 'ChannelPayloadEntry')!
++    const property = declaration.members.find(node => node.name?.getText(file) === 'language') as ts.PropertySignature
++    expect(property.questionToken, path).toBeDefined()
++    expect(property.type?.getText(file), path).toBe('string')
++  }
++})
+ 
+ describe('flattenGrouped', () => {
+   it('reads every row out of the grouped shape', () => {
+@@ -171,6 +200,20 @@
  })
  
  describe('defaultLocaleFor', () => {
@@ -1463,6 +1716,64 @@
    it('takes the market\'s own configured language', () => {
      expect(defaultLocaleFor('IT', rows)).toBe('it')
      expect(defaultLocaleFor('DE', rows)).toBe('de')
+--- apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx BEFORE
++++ apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx AFTER
+@@ -218,6 +218,7 @@
+ }
+ 
+ interface ChannelPayloadEntry {
++  language?: string
+   channelKey: string
+   platform: string
+   marketplace: string
+@@ -1043,6 +1044,7 @@
+           platform={report.platform}
+           marketplace={report.marketplace}
+           payload={payload.payload}
++          language={payload.language}
+         />
+       )}
+ 
+@@ -1216,20 +1218,17 @@
+   UK: 'GBP', GB: 'GBP', US: 'USD', CA: 'CAD', MX: 'MXN', AU: 'AUD', JP: 'JPY',
+   GLOBAL: 'EUR',
+ }
+-const MARKETPLACE_TO_LANGUAGE: Record<string, string> = {
+-  IT: 'it', DE: 'de', FR: 'fr', ES: 'es', NL: 'nl', SE: 'sv', PL: 'pl',
+-  UK: 'en', GB: 'en', US: 'en', CA: 'en', MX: 'es', AU: 'en', JP: 'ja',
+-  GLOBAL: 'en',
+-}
+ 
+ function ListingSummary({
+   platform,
+   marketplace,
+   payload,
++  language,
+ }: {
+   platform: string
+   marketplace: string
+   payload: any
++  language?: string
+ }) {
+   const mp = marketplace.toUpperCase()
+   const isAmazon = platform.toUpperCase() === 'AMAZON'
+@@ -1238,7 +1237,6 @@
+   if (!payload) return null
+ 
+   const currency = MARKETPLACE_TO_CURRENCY[mp] ?? '—'
+-  const language = MARKETPLACE_TO_LANGUAGE[mp] ?? '—'
+ 
+   // Amazon shape (from submission.service.ts AmazonListingPayload):
+   //   parentSku, children[{masterSku, channelSku, channelProductId,...}],
+@@ -1297,7 +1295,7 @@
+           />
+         )}
+         <SummaryField label="Currency" value={currency} />
+-        <SummaryField label="Language" value={language} />
++        <SummaryField label="Language" value={language ?? '—'} />
+       </div>
+ 
+       {/* Variation summary */}
 --- packages/database/prisma/schema.prisma BEFORE
 +++ packages/database/prisma/schema.prisma AFTER
 @@ -1946,6 +1946,8 @@
@@ -1474,3 +1785,195 @@
    domainUrl     String? // "amazon.it" | "ebay.de"
    isActive      Boolean @default(true)
  
+--- apps/web/src/app/products/_sheet/types.ts BEFORE
++++ apps/web/src/app/products/_sheet/types.ts AFTER
+@@ -12,6 +12,7 @@
+ export type ReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
+ 
+ export interface SheetCoordinate {
++  languages?: string[]
+   channel: SheetChannel
+   marketplace: string
+   label: string
+--- apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts BEFORE
++++ apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts AFTER
+@@ -285,6 +285,7 @@
+ }
+ 
+ export interface SheetCoordinate {
++  languages?: string[]
+   channel: string
+   marketplace: string
+   label: string
+--- apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts BEFORE
++++ apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts AFTER
+@@ -36,6 +36,7 @@
+ export type ReadinessState = RowReadinessState
+ 
+ export interface SheetCoordinate {
++  languages?: string[]
+   channel: SheetChannel
+   marketplace: string
+ }
+--- apps/api/src/services/ai/listing-content.service.ts BEFORE
++++ apps/api/src/services/ai/listing-content.service.ts AFTER
+@@ -1,3 +1,4 @@
++import { marketLanguages } from '../pim/market-languages.js'
+ /**
+  * Phase 5.5: Amazon-listing content generation.
+  *
+@@ -60,19 +61,6 @@
+   }
+ }
+ 
+-const LANGUAGE_FOR_MARKETPLACE: Record<string, string> = {
+-  IT: 'Italian',
+-  DE: 'German',
+-  FR: 'French',
+-  ES: 'Spanish',
+-  UK: 'British English (use UK spellings — colour, organise, …)',
+-  US: 'American English',
+-  NL: 'Dutch',
+-  SE: 'Swedish',
+-  PL: 'Polish',
+-  CA: 'Canadian English',
+-  MX: 'Mexican Spanish',
+-}
+ 
+ export type ContentField = 'title' | 'bullets' | 'description' | 'keywords'
+ 
+@@ -104,6 +92,7 @@
+ export interface GenerationParams {
+   product: ProductContext
+   marketplace: string
++  channel?: string
+   fields: ContentField[]
+   /** 0–4. Higher values nudge temperature so regenerations yield
+    *  visibly different copy. */
+@@ -389,18 +378,18 @@
+    * cost ~$X" before clicking Confirm.
+    *
+    * Returns zero-cost rows when the kill switch is on or no provider
+-   * is configured — the estimator is read-only and never throws.
++   * is configured — the estimator is read-only. An unconfigured marketplace is refused.
+    * Token estimation skews over for non-English content (4 chars/
+    * token heuristic), which is the safe direction for pre-flight
+    * forecasting.
+    */
+-  previewCost(params: GenerationParams): {
++  async previewCost(params: GenerationParams): Promise<{
+     estimatedCostUSD: number
+     callCount: number
+     provider: ProviderName | null
+     model: string | null
+     perField: Array<{ field: ContentField; estimatedCostUSD: number }>
+-  } {
++  }> {
+     if (isAiKillSwitchOn()) {
+       return {
+         estimatedCostUSD: 0,
+@@ -420,8 +409,8 @@
+         perField: [],
+       }
+     }
+-    const language =
+-      LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
++    const contentLanguage = (await marketLanguages(params.channel ?? 'AMAZON', params.marketplace))[0]
++    const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(contentLanguage) ?? contentLanguage
+     let total = 0
+     const perField: Array<{ field: ContentField; estimatedCostUSD: number }> = []
+     for (const f of params.fields) {
+@@ -452,8 +441,8 @@
+   }
+ 
+   async generate(params: GenerationParams): Promise<GenerationResult> {
+-    const language =
+-      LANGUAGE_FOR_MARKETPLACE[params.marketplace.toUpperCase()] ?? 'English'
++    const contentLanguage = (await marketLanguages(params.channel ?? 'AMAZON', params.marketplace))[0]
++    const language = new Intl.DisplayNames(['en'], { type: 'language' }).of(contentLanguage) ?? contentLanguage
+ 
+     // AI-1.2 — distinguish kill-switch ON from no-credentials so the
+     // wizard surfaces the right error to the operator. Both cases
+--- apps/api/src/services/listing-wizard/ebay-publish.adapter.ts BEFORE
++++ apps/api/src/services/listing-wizard/ebay-publish.adapter.ts AFTER
+@@ -1,3 +1,4 @@
++import { marketLanguages, languageTag } from '../pim/market-languages.js'
+ import { assertLegacyPresentationPublishAllowed } from '../ebay-presentation-consumer.service.js'
+ /**
+  * DD.4 — eBay publish adapter (Inventory API).
+@@ -436,7 +437,7 @@
+     // ("Invalid value for header Accept-Language") — every eBay publish died here.
+     // Set Accept-Language to the same marketplace locale (it-IT/de-DE/…). This one
+     // headers object is reused across the inventory/offer/publish steps.
+-    const acceptLang = contentLanguageFor(payload.marketplaceId)
++    const acceptLang = await contentLanguageFor(payload.marketplaceId)
+     const headers: Record<string, string> = {
+       Authorization: `Bearer ${token}`,
+       'Content-Type': 'application/json',
+@@ -748,19 +749,9 @@
+   }
+ }
+ 
+-const MARKETPLACE_LANG: Record<string, string> = {
+-  EBAY_IT: 'it-IT',
+-  EBAY_DE: 'de-DE',
+-  EBAY_FR: 'fr-FR',
+-  EBAY_ES: 'es-ES',
+-  EBAY_GB: 'en-GB',
+-  EBAY_US: 'en-US',
+-  EBAY_AU: 'en-AU',
+-  EBAY_CA: 'en-CA',
+-}
+-
+-function contentLanguageFor(marketplaceId: string): string {
+-  return MARKETPLACE_LANG[marketplaceId] ?? 'en-US'
++export async function contentLanguageFor(marketplaceId: string): Promise<string> {
++  const code = marketplaceId.replace(/^EBAY_/, '')
++  return languageTag((await marketLanguages('EBAY', code))[0], code).replace('_', '-')
+ }
+ 
+ const MARKETPLACE_HOST: Record<string, string> = {
+--- apps/api/src/routes/ebay-cockpit.routes.ts BEFORE
++++ apps/api/src/routes/ebay-cockpit.routes.ts AFTER
+@@ -1,3 +1,4 @@
++import { marketLanguages } from '../services/pim/market-languages.js'
+ /**
+  * eBay Listing Cockpit API
+  *
+@@ -1317,11 +1318,8 @@
+     const categoryId = (platform.categoryId as string | undefined) ?? null
+     const categoryName = (platform.categoryName as string | undefined) ?? null
+ 
+-    const LANG: Record<string, string> = {
+-      IT: 'Italian',  DE: 'German', FR: 'French',
+-      ES: 'Spanish',  UK: 'British English', US: 'American English',
+-    }
+-    const targetLang = LANG[marketplace.toUpperCase()] ?? 'English'
++    const language = (await marketLanguages('EBAY', marketplace))[0]
++    const targetLang = new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
+ 
+     if (operation === 'essentials') {
+       const currentTitle = (listing?.title ?? product.name ?? '').slice(0, 200)
+--- apps/api/src/services/pim/listing-readiness.vitest.test.ts BEFORE
++++ apps/api/src/services/pim/listing-readiness.vitest.test.ts AFTER
+@@ -25,8 +25,8 @@
+   vi.mocked(prisma.product.count).mockResolvedValue(1)
+   vi.mocked(prisma.product.findMany).mockResolvedValue([])
+   vi.mocked(prisma.channelListing.count).mockResolvedValue(1)
+-  vi.mocked(prisma.channelListing.findMany).mockImplementation(async () => listings as never)
+-  vi.mocked(prisma.marketplace.findMany).mockResolvedValue(['IT', 'DE'].map(code => ({ channel: 'AMAZON', code })) as never)
++  vi.mocked(prisma.channelListing.findMany).mockImplementation((async () => listings) as never)
++  vi.mocked(prisma.marketplace.findMany).mockResolvedValue(['IT', 'DE'].map(code => ({ channel: 'AMAZON', code, language: code.toLowerCase(), languages: [code.toLowerCase()] })) as never)
+   vi.mocked(resolveBatch).mockImplementation(async input => ({ channel: input.channel, marketplace: input.marketplace, locale: input.marketplace === 'IT' ? 'it' : 'de', catalogue: null, missingProductIds: [], products: input.productIds.map(id => resolved(id)) }))
+ })
+ describe('listing preparation review', () => {
+--- docs/catalog-redesign-sessions/session-02-presets-integration/submission-contract.patch BEFORE
++++ docs/catalog-redesign-sessions/session-02-presets-integration/submission-contract.patch AFTER
+@@ -39,6 +39,6 @@
+ +        : Object.prototype.hasOwnProperty.call(variations.themeByChannel ?? {}, channelKey)
+ +          ? variations.themeByChannel[channelKey]
+ +          : variations.commonTheme
+-       const groupKey = contentGroupKey(c.platform, c.marketplace)
++       const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
+        const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
+        const channelPricing = (slice as any).pricing ?? {}

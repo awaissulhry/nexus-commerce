@@ -1,0 +1,45 @@
+{
+  "at": "2026-09-12T21:43:24.603Z",
+  "delayedReadMs": 8149,
+  "restoredByValue": true,
+  "tables": [
+    {
+      "table": "Product",
+      "rows": 1,
+      "equal": true
+    },
+    {
+      "table": "ProductTranslation",
+      "rows": 1,
+      "equal": true
+    },
+    {
+      "table": "ChannelListing",
+      "rows": 8,
+      "equal": true
+    },
+    {
+      "table": "ChannelListingTranslation",
+      "rows": 0,
+      "equal": true
+    },
+    {
+      "table": "CellFormula",
+      "rows": 0,
+      "equal": true
+    },
+    {
+      "table": "OutboundSyncQueue",
+      "rows": 2,
+      "equal": true
+    },
+    {
+      "table": "ReadinessIndex",
+      "rows": 714,
+      "equal": true
+    }
+  ],
+  "audit": "Retained rehearsal history",
+  "providerGatewaysBlocked": [],
+  "transportAttempts": []
+}

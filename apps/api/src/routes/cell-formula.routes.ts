@@ -1,3 +1,6 @@
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { normalizeLanguage } from '../services/pim/content-language.js'
+import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { applyFormulaBatch, previewFormulaBatch, undoFormulaBatch, continueFormulaBatch, readFormulaOperation, listFormulaOperations, type FormulaBatchInput } from '../services/pim/mapping/formula-bulk.service.js'
 import { withFormulaWrite, formulaRequestHeaders, registerFormulaRequestContext, type FormulaWriteContext } from '../services/pim/mapping/formula-write-context.js'
 import { captureDatabaseContext } from '../lib/database-context.js'
@@ -85,7 +88,7 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       return reply.send(await previewCellFormula({ productId: b.productId, fieldKey: b.fieldKey, expr,
         scope: b.scope ?? (b.channel ? 'channel' : 'master'), channel: b.channel, marketplace: b.marketplace,
-        market: b.market ?? b.marketplace, locale: b.locale, channelConnectionId: b.channelConnectionId, aliasKey: b.aliasKey }))
+        market: b.market ?? b.marketplace, locale: b.locale ? normalizeLanguage(b.locale) : b.locale, channelConnectionId: b.channelConnectionId, aliasKey: b.aliasKey }))
     } catch (e) { return bad(reply, e) }
   })
 
@@ -99,12 +102,12 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
   // the 38-field master allow-list, `attr_*` with its registry check and
   // marketplace context, the mapped channel columns, the CAS, the audit row and
   // the BulkOperation. None of it is reimplemented here and none of it can drift.
-  setFormulaFieldWriter(async ({ productId, writeField, localizedField, value, scope, channel, marketplace, market, locale, channelConnectionId, aliasKey, atomic, expectedVersion, dryRun, updatedBy }) => {
+  setFormulaFieldWriter(async ({ contentAddress: address, contentAcknowledged, productId, writeField, localizedField, value, scope, channel, marketplace, market, locale, channelConnectionId, aliasKey, atomic, expectedVersion, dryRun, updatedBy }) => {
     const mkt = marketplace ?? market ?? null
     const context: FormulaWriteContext = { productId, writeField, operations: atomic, run: captureDatabaseContext(), userId: updatedBy }
     const res = await withFormulaWrite(context, token => fastify.inject({
       method: 'PATCH',
-      url: localizedField ? `/api/products/${encodeURIComponent(productId)}/global` : '/api/products/bulk',
+      url: '/api/products/bulk',
       // The bulk route recalculates dependent formulas after every write it
       // commits. This write IS that recalculation's own write, so it must not
       // start another walk: a nested pass would begin with an empty visited-set
@@ -113,12 +116,13 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
       // from the payload — an inference would silently start skipping real
       // operator writes the day the payload shape changed.
       headers: { ...formulaRequestHeaders(), 'x-nexus-formula-cascade': '1', 'x-nexus-formula-write': token },
-      payload: localizedField ? { expectedVersion, dryRun, patch: { [locale || 'it']: { [localizedField]: value } } } : {
+      payload: {
         expectedVersion,
         dryRun,
         changes: [
           {
             id: productId,
+            contentAddress: address, contentAcknowledged,
             field: writeField,
             value,
             ...(scope === 'channel' ? { target: 'channel' } : {}),
@@ -167,7 +171,7 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
       formulas: await cellFormulasForProducts({
         productIds: ids, scope: request.body?.scope,
         channel: request.body?.channel, marketplace: request.body?.marketplace,
-        locale: request.body?.locale, channelConnectionId: request.body?.channelConnectionId, aliasKey: request.body?.aliasKey,
+        locale: request.body?.locale ? normalizeLanguage(request.body?.locale) : request.body?.locale, channelConnectionId: request.body?.channelConnectionId, aliasKey: request.body?.aliasKey,
       }),
     })
   })
@@ -182,15 +186,18 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
        *  the same column key set the editor previewed it against. */
       market?: string | null
       expectedState?: string
+      contentAddress?: ContentAddress
+      contentAcknowledged?: boolean
     }
   }>('/pim/formulas/product/:productId', async (request, reply) => {
     const b = request.body ?? {}
     if (!b.fieldKey || !b.expr) return reply.status(400).send({ error: 'fieldKey and expr are required' })
     try {
       const result = await setCellFormula({
+        contentAddress: b.contentAddress, contentAcknowledged: b.contentAcknowledged,
         productId: request.params.productId, aliasKey: b.aliasKey, channelConnectionId: b.channelConnectionId,
         scope: b.scope ?? (b.channel ? 'channel' : 'master'),
-        channel: b.channel, marketplace: b.marketplace, locale: b.locale,
+        channel: b.channel, marketplace: b.marketplace, locale: b.locale ? normalizeLanguage(b.locale) : b.locale,
         market: b.market ?? b.marketplace ?? null,
         ip: request.ip ?? null,
         fieldKey: b.fieldKey,
@@ -211,7 +218,7 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.put<{ Params: { productId: string }; Body: {
     channelConnectionId?: string | null; aliasKey?: string | null;
     fieldKey: string; value: unknown; scope?: FormulaScope; channel?: string; marketplace?: string;
-    market?: string; locale?: string; expectedState?: string
+    market?: string; locale?: string; expectedState?: string; contentAddress?: ContentAddress; contentAcknowledged?: boolean
   } }>('/pim/formulas/product/:productId/value', async (request, reply) => {
     const b = request.body
     if (!b?.fieldKey || !Object.prototype.hasOwnProperty.call(b, 'value')) return reply.code(400).send({ error: 'fieldKey and value are required' })
@@ -263,7 +270,7 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
       const r = await pinOverFormula({
         productId: request.params.productId, aliasKey: q.aliasKey, channelConnectionId: q.channelConnectionId,
         scope,
-        channel: q.channel, marketplace: q.marketplace, locale: q.locale,
+        channel: q.channel, marketplace: q.marketplace, locale: q.locale ? normalizeLanguage(q.locale) : q.locale,
         fieldKey: q.fieldKey,
         userId: ((request as any).authUser?.id ?? (request as any).user?.id) ?? null,
         ip: request.ip ?? null,
@@ -364,7 +371,7 @@ const cellFormulaRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.send({
           values: await evaluateMasterRulesForProduct({
             productId: request.params.productId,
-            locale: request.query.locale,
+            locale: request.query.locale ? normalizeLanguage(request.query.locale) : request.query.locale,
             fieldKeys: request.query.fieldKeys?.split(',').map((s) => s.trim()).filter(Boolean),
           }),
         })

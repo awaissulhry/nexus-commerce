@@ -1,0 +1,39 @@
+{
+  "bands": [
+    {
+      "border": "1px",
+      "boxSizing": "border-box",
+      "class": "nds-workspace-subheader",
+      "rect": {
+        "bottom": 105,
+        "height": 49,
+        "left": 66,
+        "right": 1440,
+        "top": 56,
+        "width": 1374,
+        "x": 66,
+        "y": 56
+      }
+    },
+    {
+      "border": "1px",
+      "boxSizing": "border-box",
+      "class": "nds-scopebar nds-workspace-scope",
+      "rect": {
+        "bottom": 145,
+        "height": 40,
+        "left": 66,
+        "right": 1440,
+        "top": 105,
+        "width": 1374,
+        "x": 66,
+        "y": 105
+      }
+    }
+  ],
+  "theme": "inter_19d2945c-module__e4KC9a__variable space_grotesk_e8d41e02-module__b-qUWW__variable jetbrains_mono_858a281-module__48ca2W__variable",
+  "viewport": {
+    "height": 900,
+    "width": 1440
+  }
+}

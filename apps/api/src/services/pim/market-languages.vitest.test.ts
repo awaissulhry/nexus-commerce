@@ -52,3 +52,38 @@ describe('LX.2 ordered marketplace language authority', () => {
     expect(await marketplaceForLanguage('nl')).toBe('BE')
   })
 })
+
+describe('LX.F P2-17 — the refusal carries a 400, and its breadth is measured', () => {
+  it('is a 400, not whatever default the route applies', () => {
+    // It carried a `code` and no `statusCode`, so the refusal surfaced as whatever
+    // the route defaulted to (a 500 on the routes that map unknown errors).
+    try { assertInformationLocale('AMAZON', 'de', ['it']); throw new Error('did not refuse') }
+    catch (error) { expect(error).toMatchObject({ statusCode: 400, code: 'unsupported_information_locale' }) }
+    try { assertInformationLocale('AMAZON', 'not-a-language', ['it']); throw new Error('did not refuse') }
+    catch (error) { expect(error).toMatchObject({ statusCode: 400 }) }
+  })
+  it('covers the marketplace channels, and store channels are UNCHECKED for a measured reason', () => {
+    expect(() => assertInformationLocale('AMAZON', 'de', ['it'])).toThrow('it')
+    expect(() => assertInformationLocale('EBAY', 'de', ['it'])).toThrow('it')
+    // Dropping the allowlist (P2-17's proposal) refused three shipped store paths:
+    // for a STORE the vocabulary is the store's published locales, not the seeded
+    // `Marketplace.languages = ['en']` row. Pinned so the next lane sees the reason
+    // rather than the shape, and the Owner's question is in the source beside it.
+    expect(() => assertInformationLocale('SHOPIFY', 'de', ['en'])).not.toThrow()
+    expect(() => assertInformationLocale('ETSY', 'de', ['en'])).not.toThrow()
+  })
+  it('stays inert without a channel or without the authority (the two armed-but-empty calls)', () => {
+    expect(() => assertInformationLocale(undefined, 'de', ['en'])).not.toThrow()
+    expect(() => assertInformationLocale('AMAZON', 'de', undefined)).not.toThrow()
+  })
+})
+
+describe('LX.F P2-15 — one channel label, with a fallback instead of "Etsy"', () => {
+  it('names the four known channels and Title-Cases an unknown one', async () => {
+    const { channelLabel } = await import('@nexus/shared/channel-label')
+    expect(['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE', 'ETSY'].map(channelLabel)).toEqual(['Amazon', 'eBay', 'Shopify', 'WooCommerce', 'Etsy'])
+    // The arm that used to read "Etsy" on both sites in `studio-sheet.service.ts`.
+    expect(channelLabel('TIKTOK')).toBe('Tiktok')
+    expect(channelLabel('')).toBe('')
+  })
+})

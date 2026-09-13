@@ -1,4 +1,6 @@
 'use client'
+import { sheetReadFailure } from './sheetReadFailure'
+
 
 /**
  * PES.2 — the master sheet's data: one family, one market, and the ONE write path.
@@ -23,6 +25,7 @@ import { commitMasterRow } from './masterWrite'
 import { verifyContract, type StudioRow, type StudioSheet } from './types'
 
 export interface UseMasterSheetOptions {
+  locales?: string[] | null
   /** The product whose family this sheet edits. May be a parent or a child. */
   productId: string
   market: string
@@ -38,6 +41,12 @@ export interface UseMasterSheetOptions {
    * unconditionally writes a false time over a refused write.
    */
   onSettled?: (info: { rowId: string; ok: boolean; savedAt: string }) => void
+  /**
+   * R-VT-15 — the server REFUSED these cells, with its own sentence. Fired once per settled batch,
+   * never for a cell that got no answer (that is `unknown`, and it has its own sentence). The engine
+   * reports; the adapter says it, because the toast provider belongs to the route.
+   */
+  onRefused?: (refusals: ReadonlyArray<{ rowId: string; colId: string; reason?: string }>) => void
 }
 
 export interface MasterSheetState {
@@ -58,6 +67,7 @@ export interface MasterSheetState {
 
 export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
   const { productId, market, locale } = opts
+  const localesQuery = opts.locales ? `&locales=${encodeURIComponent(opts.locales.join(','))}` : ''
   const [sheet, setSheet] = useState<StudioSheet | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -116,7 +126,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           // stale the moment the route's param changes without a remount, and the reconcile would
           // then read a DIFFERENT product's sheet, never find the row, and retry forever behind an
           // outage banner for a server that is perfectly well. Read at call time, as `commit` does.
-          const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}`
+          const url = `${getBackendUrl()}/api/products/${productIdRef.current}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
           const res = await fetch(url, { credentials: 'include', cache: 'no-store', signal: AbortSignal.timeout(30_000) }).catch(() => null)
           if (!res?.ok) return null
           return recoverSheetRow(await res.json().catch(() => null), request, { channel: 'MASTER', market, locale })
@@ -138,9 +148,13 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
           optsRef.current.onSettled?.({ ...info, ok })
           if (ok && writer.pending === 0 && !tracker.hasUnconfirmedChanges) { quietRead.current = true; setNonce(n => n + 1) }
         },
+        // R-VT-15 — through `optsRef` like every other callback here, for the reason `readBack` gives:
+        // this memo's deps are `[tracker, commit, localesQuery]` and a callback in them would rebuild
+        // the writer and orphan its queue.
+        onRefused: (refusals) => optsRef.current.onRefused?.(refusals),
         onConflict: (rowId) => setConflicts((prev) => (prev.includes(rowId) ? prev : [...prev, rowId])),
       }),
-    [tracker, commit],
+    [tracker, commit, localesQuery],
   )
   /* 🔴 `arm()` in the BODY, not just `destroy()` in the cleanup. StrictMode runs mount → cleanup →
      mount, and `useMemo` hands back the SAME writer on the second mount because its deps did not
@@ -176,7 +190,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
      * lost debugging time to exactly this, and then so did I. The scope is derived server-side
      * from the presence of `channel`, so master sends neither `scope` nor `channel`.
      */
-    const studioUrl = `${backend}/api/products/${productId}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}`
+    const studioUrl = `${backend}/api/products/${productId}/studio/sheet?market=${encodeURIComponent(market)}&locale=${encodeURIComponent(locale)}${localesQuery}`
     const legacyUrl = `${backend}/api/products/sheet?market=${encodeURIComponent(market)}&parentIds=${encodeURIComponent(productId)}&limit=1`
 
     const load = async (): Promise<StudioSheet> => {
@@ -185,12 +199,9 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
         const body = (await studio.json()) as StudioSheet
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
-      // 404 = the studio route is not deployed yet. Anything else is a real failure and must not be
-      // dressed up as one: a 403 answered by silently adapting would hide a permissions problem.
-      if (studio && studio.status !== 404) {
-        const body = await studio.json().catch(() => null)
-        throw new Error(body?.message || body?.error || `Studio sheet refused (HTTP ${studio.status})`)
-      }
+      const failureBody: unknown = await studio?.json().catch(() => null)
+      const failure = sheetReadFailure(studio?.status ?? 0, failureBody)
+      if (!failure.fallback) throw new Error(failure.message)
       const res = await fetch(legacyUrl, { credentials: 'include', cache: 'no-store', signal })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`)
@@ -226,7 +237,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       })
 
     return () => { cancelled = true; abort.abort() }
-  }, [productId, market, locale, nonce, writer])
+  }, [productId, market, locale, localesQuery, nonce, writer])
 
   const reload = useCallback(() => setNonce((n) => n + 1), [])
   const refresh = useCallback(() => { quietRead.current = true; setNonce(n => n + 1) }, [])

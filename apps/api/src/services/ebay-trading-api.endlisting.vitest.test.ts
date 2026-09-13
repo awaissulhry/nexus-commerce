@@ -15,6 +15,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+vi.hoisted(() => { vi.stubGlobal('fetch', vi.fn(() => { throw new Error('Unexpected outbound fetch') })) })
+
 // ── Module mocks (must be declared before dynamic import) ─────────────────
 
 // Mock the Trading-API service: keep pure functions real, mock the
@@ -40,7 +42,7 @@ vi.mock('@nexus/database', () => ({
 // OLD query shape: the resolver reads the account set with findMany, so a
 // findFirst-only stub made the code correctly take its no-connection branch and
 // the test failed for a reason that had nothing to do with what it asserts.
-const mockResolveConnection = vi.fn(async () => ({ id: 'conn-1' }) as { id: string } | null)
+const mockResolveConnection = vi.fn(async () => ({ id: 'conn-1', channelType: 'EBAY' }) as { id: string; channelType: string } | null)
 vi.mock('./connection-resolver.service.js', () => ({
   resolveConnection: (...a: unknown[]) => mockResolveConnection(...(a as [])),
   tryResolveConnection: (...a: unknown[]) => mockResolveConnection(...(a as [])),
@@ -86,7 +88,7 @@ function makeEbayJob(overrides: Partial<{
     targetRegion: 'IT',
     externalListingId: '110556677',
     syncType: 'DELETE_LISTING' as const,
-    payload: { channelAction: 'delete' },
+    payload: { channelAction: 'delete', channelConnectionId: 'conn-1' },
     ...overrides,
   }
 }
@@ -180,7 +182,7 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
     await expect(promise).resolves.toMatchObject({ success: false })
   })
 
-  it('returns success:true (idempotent) when eBay signals item already ended (Item cannot be accessed)', async () => {
+  it('returns UNKNOWN/REFUSED when eBay cannot access the ItemID', async () => {
     setupAuth()
     mockEndFixedPriceItem.mockRejectedValue(
       new Error('eBay EndFixedPriceItem Failure: Item cannot be accessed'),
@@ -188,7 +190,7 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
 
     const result = await dispatchChannelDelist(makeEbayJob())
 
-    expect(result.success).toBe(true)
+    expect(result).toMatchObject({ success: false, outcome: 'UNKNOWN', channelFact: 'REFUSED', retryable: false })
   })
 
   it('returns success:true (idempotent) for "auction already closed" message', async () => {
@@ -213,7 +215,7 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
     expect(result.success).toBe(true)
   })
 
-  it('returns success:true (idempotent) for "invalid item" message', async () => {
+  it('returns UNKNOWN/REFUSED for an invalid ItemID', async () => {
     setupAuth()
     mockEndFixedPriceItem.mockRejectedValue(
       new Error('eBay EndFixedPriceItem Failure: Invalid item'),
@@ -221,7 +223,7 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
 
     const result = await dispatchChannelDelist(makeEbayJob())
 
-    expect(result.success).toBe(true)
+    expect(result).toMatchObject({ success: false, outcome: 'UNKNOWN', channelFact: 'REFUSED', retryable: false })
   })
 
   it('returns success:false, retryable:true on a genuine eBay error', async () => {
@@ -259,13 +261,11 @@ describe('delistEbay (via dispatchChannelDelist)', () => {
     expect(result.errorCode).toBe('EBAY_DELIST_AUTH_ERROR')
   })
 
-  it('uses IT siteId (101) as default when targetRegion is null', async () => {
+  it('refuses missing targetRegion without selecting an Italian account/site', async () => {
     setupAuth()
     mockEndFixedPriceItem.mockResolvedValue({ ack: 'Success', errors: [] })
 
-    await dispatchChannelDelist(makeEbayJob({ targetRegion: null }))
-
-    const [, ctx] = mockEndFixedPriceItem.mock.calls[0]
-    expect(ctx.siteId).toBe('101')
+    expect(await dispatchChannelDelist(makeEbayJob({ targetRegion: null }))).toMatchObject({ success: false, errorCode: 'EBAY_DELIST_NO_REGION' })
+    expect(mockEndFixedPriceItem).not.toHaveBeenCalled()
   })
 })

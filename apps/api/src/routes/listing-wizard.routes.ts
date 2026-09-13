@@ -2593,7 +2593,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
-      const validation = submissionService.validateMultiChannel(w, readiness)
+      const validation = await submissionService.validateCurrentMultiChannel(w, readiness)
       const payloads = await submissionService.composeMultiChannelPayloads(w)
       return {
         wizard: {
@@ -2690,7 +2690,7 @@ const listingWizardRoutes: FastifyPluginAsync = async (fastify) => {
         // MAP.3 — readiness, account-agnostic.
         EBAY: (await listActiveConnections('EBAY')).length > 0,
       }
-      const validation = submissionService.validateMultiChannel(w, readiness)
+      const validation = await submissionService.validateCurrentMultiChannel(w, readiness)
       if (!validation.allReady) {
         return reply.code(400).send({
           error: 'Wizard state has incomplete steps for some channels.',

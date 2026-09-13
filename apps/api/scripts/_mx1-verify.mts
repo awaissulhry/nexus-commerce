@@ -1,0 +1,14 @@
+/** MX.1 — SQL verification of the rehearsal's side effects on the fixture (SELECT only). */
+const { PrismaClient } = await import('@prisma/client')
+const p = new PrismaClient({ datasources: { db: { url: process.argv[2] } } })
+const q = <T = any>(s: string, ...a: unknown[]) => p.$queryRawUnsafe<T[]>(s, ...a)
+const j = (v: unknown) => JSON.stringify(v, (_k, x) => (typeof x === 'bigint' ? Number(x) : x instanceof Date ? x.toISOString() : x))
+const S = 'cmtzz15si0003nje7e8peoarx', M = 'cmtzz15st0007nje7orvv5sst', ROOT = 'cmtzz15s20001nje768z42poe'
+console.log('listings S/M:', j(await q(`SELECT c.sku, cl.channel, cl.marketplace, cl.version, cl.quantity, cl."quantityOverride" qo, cl."followMasterQuantity" fmq, cl."syncPaused" sp, cl."fulfillmentMethod" fm, cl."platformAttributes"->>'fulfillmentChannel' flat, cl."platformAttributes"->'fulfillment_availability'->0->>'fulfillment_channel_code' nested, cl.price, cl."priceOverride" po, cl."followMasterPrice" fmp, cl."salePrice" sale, to_char(cl."salePriceStart",'YYYY-MM-DD') ss, to_char(cl."salePriceEnd",'YYYY-MM-DD') se, cl."syncStatus" ss2, cl."lastSyncStatus" lss FROM "ChannelListing" cl JOIN "Product" c ON c.id=cl."productId" WHERE cl."productId" IN ($1,$2) ORDER BY c.sku, cl.channel, cl.marketplace`, S, M)))
+console.log('product flags:', j(await q(`SELECT sku, "fulfillmentMethod", version FROM "Product" WHERE id IN ($1,$2,$3) ORDER BY sku`, ROOT, S, M)))
+console.log('PriceChangeEvent:', j(await q(`SELECT sku, marketplace, "oldPrice", "newPrice", source, reason, actor, "changedAt" FROM "PriceChangeEvent" WHERE "productId" IN ($1,$2) ORDER BY "changedAt"`, S, M)))
+console.log('ChannelListingOverride:', j(await q(`SELECT o."fieldName", o."previousValue", o."newValue", o.reason, o."changedBy" FROM "ChannelListingOverride" o JOIN "ChannelListing" cl ON cl.id=o."channelListingId" WHERE cl."productId" IN ($1,$2) ORDER BY o."createdAt"`, S, M)))
+console.log('OutboundSyncQueue:', j(await q(`SELECT q."syncType", q."syncStatus", q.payload->>'source' src, q.payload->>'quantity' qty, q.payload->>'price' price, q.payload->>'salePrice' sale, q.payload->>'salePriceStart' ss, q."holdUntil" IS NOT NULL hold, q."errorMessage" err, cl.marketplace FROM "OutboundSyncQueue" q JOIN "ChannelListing" cl ON cl.id=q."channelListingId" WHERE q."productId" IN ($1,$2) ORDER BY q."createdAt"`, S, M)))
+console.log('SyncControlAudit:', j(await q(`SELECT actor, field, before, after, "scopeName" FROM "SyncControlAudit" WHERE "scopeName" LIKE 'MX-TEST-20260913%' ORDER BY "createdAt"`)))
+console.log('BulkOperation:', j(await q(`SELECT id, status, "changeCount", processed, changes->>'verb' verb, changes->>'phase' phase, "userId" FROM "BulkOperation" WHERE changes->>'kind'='studio-matrix-verb' AND changes->>'productId'=$1 ORDER BY "createdAt"`, ROOT)))
+await p.$disconnect()

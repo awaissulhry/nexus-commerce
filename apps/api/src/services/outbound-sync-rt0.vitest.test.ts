@@ -10,7 +10,7 @@
  *     never records a circuit outcome (one dead listing froze the whole
  *     marketplace lane for ~10 min per episode — 2026-07-19 incident).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const membershipUpdateMany = vi.fn().mockResolvedValue({ count: 24 })
 const connectionFindFirst = vi.fn().mockResolvedValue({ id: 'conn-1' })
@@ -20,8 +20,11 @@ const membershipAggregate = vi.fn().mockResolvedValue({ _max: { lastPushedAt: nu
 const membershipFindMany = vi.fn().mockResolvedValue([])
 const stockLevelFindMany = vi.fn().mockResolvedValue([])
 
+const outboundTrap = vi.hoisted(() => { const stub = vi.fn(() => { throw new Error('Unexpected outbound fetch') }); vi.stubGlobal('fetch', stub); return stub })
+vi.mock('../lib/queue.js', () => ({ outboundSyncQueue: null, addJobSafely: vi.fn(), readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('../db.js', () => ({
   default: {
+    channelListing: { findMany: vi.fn().mockResolvedValue([]) },
     sharedListingMembership: {
       updateMany: (...a: unknown[]) => membershipUpdateMany(...a),
       aggregate: (...a: unknown[]) => membershipAggregate(...a),
@@ -430,3 +433,5 @@ describe('SC.5-fix — debounce deferral survives a dropped errorCode', () => {
     expect(d.kind).toBe('deferral')
   })
 })
+
+afterEach(() => expect(outboundTrap).not.toHaveBeenCalled())

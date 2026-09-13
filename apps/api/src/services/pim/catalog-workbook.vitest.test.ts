@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { writeCatalogWorkbook, readCatalogWorkbook, type WorkbookScope } from './catalog-workbook.js'
+import { parseHeader } from './import-diff.service.js'
 import { readTransferFile } from './catalog-transfer-file.js'
 import { mapAmazonWorkbook } from './catalog-amazon-workbook.js'
 import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
@@ -9,7 +10,7 @@ import type { AmazonTemplateParse } from '../amazon/template-workbook.js'
 import { detectAmazonTemplate } from '../amazon/template-workbook.js'
 import type { TransferRow } from '@nexus/shared/catalog-transfer'
 
-const product: TransferRow = { row: 2, entity: 'Products', sku: '00001234', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Shared title', version: 7 }
+const product: TransferRow = { row: 3, entity: 'Products', sku: '00001234', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Shared title', version: 7 }
 const scopes = (): WorkbookScope[] => [
   { sheet: 'Products', entity: 'Products', channel: '', accountId: '', marketplace: '', locale: '', category: '',
     fields: [{ field: 'name', label: 'Name', type: 'text' }, { field: 'gtin', label: 'GTIN', type: 'text' }, { field: 'weightValue', label: 'Weight', type: 'number' }, { field: 'batteries', label: 'Batteries', type: 'boolean' }],
@@ -25,6 +26,7 @@ const scopes = (): WorkbookScope[] => [
       { ...product, entity: 'Overrides' as const, channel, accountId, marketplace, aliasKey: i === 2 ? 'secondary' : '', field: 'weight', value: { value: 1.6, unit: 'kilograms' } }],
   })),
 ]
+const headersOf = (sheet: ExcelJS.Worksheet) => (sheet.getRow(2).values as string[]).map(h => h?.replace(/@[^@]*$/, ''))
 const load = async (input = scopes()) => { const book = new ExcelJS.Workbook(); await book.xlsx.load(await writeCatalogWorkbook(input) as never); return book }
 describe('multi-language and multi-market catalog workbook', () => {
   it.each([false, true])('keeps channel attributes separate from workbook identity (editing=%s)', async editing => {
@@ -37,14 +39,14 @@ describe('multi-language and multi-market catalog workbook', () => {
     const book = new ExcelJS.Workbook()
     await book.xlsx.load(await writeCatalogWorkbook(data, editing, editing ? baseline : undefined) as never)
     const sheet = book.getWorksheet(data[0].sheet)!
-    const headers = sheet.getRow(1).values as string[]
+    const headers = headersOf(sheet)
     expect(new Set(headers.slice(1)).size).toBe(headers.length - 1)
-    expect(sheet.getCell(2, headers.indexOf('sku')).text).toBe(product.sku)
-    expect(sheet.getCell(2, headers.indexOf('value:sku')).text).toBe('channel sku')
+    expect(sheet.getCell(3, headers.indexOf('sku')).text).toBe(product.sku)
+    expect(sheet.getCell(3, headers.indexOf('value:sku')).text).toBe('channel sku')
     const parsed = readCatalogWorkbook(book, editing ? baseline : undefined)!
     expect(parsed.issues).toEqual([])
     expect(parsed.rows).toEqual(expect.arrayContaining(data[0].rows.map(row => expect.objectContaining(row))))
-    sheet.getCell(2, headers.indexOf('value:sku')).value = 'new channel SKU'
+    sheet.getCell(3, headers.indexOf('value:sku')).value = 'new channel SKU'
     const changed = readCatalogWorkbook(book, editing ? baseline : undefined)!
     expect(changed.issues).toEqual([])
     expect(changed.rows.find(row => row.field === 'sku')).toMatchObject({ sku: product.sku, aliasKey: '', version: 7, value: 'new channel SKU' })
@@ -68,7 +70,7 @@ describe('multi-language and multi-market catalog workbook', () => {
     expect(values.getCell('E3').text).toBe('Suggestions; custom values allowed')
     const cell = (sheetName: string) => {
       const sheet = book.getWorksheet(sheetName)!
-      return sheet.getCell(2, sheet.getRow(1).values.indexOf('color'))
+      return sheet.getCell(3, headersOf(sheet).indexOf('color'))
     }
     expect(book.definedNames.getRanges(cell('Products').dataValidation.formulae[0]).ranges).toEqual(["'Valid values'!$F$2:$AI$2"])
     expect(book.definedNames.getRanges(cell('Listing 0').dataValidation.formulae[0]).ranges).toEqual(["'Valid values'!$F$3:$G$3"])
@@ -94,11 +96,11 @@ describe('multi-language and multi-market catalog workbook', () => {
     expect(rows.find(r => r.getCell(3).text === 'colors')!.getCell(4).text).toBe('JSON list items')
     expect(rows.find(r => r.getCell(3).text === 'weightValue')!.getCell(6).text).toBe('"001.00"')
     expect(rows.find(r => r.getCell(3).text === 'weightValue')!.getCell(5).text).toBe('Check current rules in Nexus')
-    expect(sheet.getCell(2, sheet.getRow(1).values.indexOf('colors')).dataValidation).toBeUndefined()
+    expect(sheet.getCell(3, headersOf(sheet).indexOf('colors')).dataValidation).toBeUndefined()
     expect(readCatalogWorkbook(book, baseline)!.rows.map(({ source, ...r }) => r)).toEqual(expect.arrayContaining(data[0].rows))
     expect(book.worksheets.map(s => s.name).slice(0, 2)).toEqual(['Instructions', 'Products'])
     expect(book.getWorksheet('Nexus workbook')!.state).toBe('hidden')
-    expect(sheet.rowCount).toBe(2)
+    expect(sheet.rowCount).toBe(3)
   })
   it('still reads the original dictionary headers and refuses oversized choice rows without truncation', async () => {
     const book = await load([scopes()[0]]), dictionary = book.getWorksheet('Dictionary')!
@@ -114,12 +116,12 @@ describe('multi-language and multi-market catalog workbook', () => {
     data[0].rows.push({ ...product, field: 'description', value: text }, { ...product, field: 'color', value: 'red' })
     const baseline = { id: 'long-content', scopes: data }, bytes = await writeCatalogWorkbook(data, true, baseline), book = new ExcelJS.Workbook()
     await book.xlsx.load(bytes as never)
-    const sheet = book.getWorksheet('Products')!, cell = sheet.getCell(2, sheet.getRow(1).values.indexOf('description'))
-    expect(sheet.getRow(2).height).toBe(72)
+    const sheet = book.getWorksheet('Products')!, cell = sheet.getCell(3, headersOf(sheet).indexOf('description'))
+    expect(sheet.getRow(3).height).toBe(72)
     expect(cell.value).toBe(text)
     expect(cell.alignment.vertical).toBe('top')
-    expect(sheet.autoFilter).toBe(`A1:${sheet.getColumn(sheet.columnCount).letter}2`)
-    expect(sheet.views[0]).toMatchObject({ state: 'frozen', xSplit: 1, ySplit: 1 })
+    expect(sheet.autoFilter).toBe(`A2:${sheet.getColumn(sheet.columnCount).letter}3`)
+    expect(sheet.views[0]).toMatchObject({ state: 'frozen', xSplit: 2, ySplit: 2 })
     expect(readCatalogWorkbook(book, baseline)!.rows.find(r => r.field === 'description')!.value).toBe(text)
     const instructions = book.getWorksheet('Instructions')!.getSheetValues().flat().join(' ')
     expect(instructions).toContain('Hidden or filtered rows are still imported')
@@ -151,26 +153,26 @@ describe('multi-language and multi-market catalog workbook', () => {
   it('refuses spreadsheet formulas in an editing cell even when the cached result matches the baseline', async () => {
     const data = [scopes()[0]], baseline = { id: 'saved-export', scopes: data }, book = new ExcelJS.Workbook()
     await book.xlsx.load(await writeCatalogWorkbook(data, true, baseline) as never)
-    const sheet = book.getWorksheet('Products')!, column = (sheet.getRow(1).values as string[]).indexOf('weightValue')
-    sheet.getCell(2, column).value = { formula: '1-1', result: 0 }
+    const sheet = book.getWorksheet('Products')!, column = (headersOf(sheet)).indexOf('weightValue')
+    sheet.getCell(3, column).value = { formula: '1-1', result: 0 }
     expect(() => readCatalogWorkbook(book, baseline)).toThrow(/formula/i)
   })
   it('accepts native logical constants without trusting cached results and still refuses calculated or misplaced formulas', async () => {
     const data = [scopes()[0]], baseline = { id: 'logical-constants', scopes: data }, book = new ExcelJS.Workbook()
     await book.xlsx.load(await writeCatalogWorkbook(data, true, baseline) as never)
-    const sheet = book.getWorksheet('Products')!, col = (field: string) => sheet.getRow(1).values.indexOf(field)
+    const sheet = book.getWorksheet('Products')!, col = (field: string) => headersOf(sheet).indexOf(field)
     for (const [formula, result, expected] of [['FALSE()', undefined, false], ['TRUE()', false, true], ['FALSE()', true, false]] as const) {
-      sheet.getCell(2, col('batteries')).value = { formula, result }
+      sheet.getCell(3, col('batteries')).value = { formula, result }
       const reopened = new ExcelJS.Workbook(); await reopened.xlsx.load(await book.xlsx.writeBuffer() as never)
       expect(readCatalogWorkbook(reopened, baseline)!.rows.find(r => r.field === 'batteries')!.value).toBe(expected)
     }
     for (const formula of ['1=1', 'NOT(FALSE())', 'TRUE()+0', 'IF(A1,TRUE(),FALSE())']) {
-      sheet.getCell(2, col('batteries')).value = { formula, result: false }
+      sheet.getCell(3, col('batteries')).value = { formula, result: false }
       expect(() => readCatalogWorkbook(book, baseline)).toThrow(/formula/i)
     }
-    sheet.getCell(2, col('batteries')).value = false
+    sheet.getCell(3, col('batteries')).value = false
     for (const field of ['sku', 'action:batteries']) {
-      const cell = sheet.getCell(2, col(field)), before = cell.value
+      const cell = sheet.getCell(3, col(field)), before = cell.value
       cell.value = { formula: 'TRUE()', result: true }
       expect(() => readCatalogWorkbook(book, baseline)).toThrow(/formula/i)
       cell.value = before
@@ -180,7 +182,7 @@ describe('multi-language and multi-market catalog workbook', () => {
     data[0].fields.find(f => f.field === 'batteries')!.type = 'text'
     await book.xlsx.load(await writeCatalogWorkbook(data, true, baseline) as never)
     const legacy = book.getWorksheet('Products')!
-    legacy.getCell(2, legacy.getRow(1).values.indexOf('batteries')).value = { formula: 'FALSE()', result: false }
+    legacy.getCell(3, headersOf(legacy).indexOf('batteries')).value = { formula: 'FALSE()', result: false }
     expect(readCatalogWorkbook(book, baseline)!.rows.find(r => r.field === 'batteries')!.value).toBe(false)
   })
   it('round-trips every typed value, record version, locale, marketplace, account and alias', async () => {
@@ -191,21 +193,21 @@ describe('multi-language and multi-market catalog workbook', () => {
   })
   it('auto-maps populated cells and preserves blanks; CLEAR and INHERIT remain explicit', async () => {
     const book = await load([scopes()[0]]), sheet = book.getWorksheet('Products')!
-    const col = (name: string) => sheet.getRow(1).values.indexOf(name)
-    sheet.getCell(2, col('action:name')).value = ''
-    sheet.getCell(2, col('name')).value = 'Updated'
-    sheet.getCell(2, col('gtin')).value = null
-    sheet.getCell(2, col('action:gtin')).value = 'CLEAR'
-    sheet.getCell(2, col('weightValue')).value = null
-    sheet.getCell(2, col('action:weightValue')).value = 'INHERIT'
-    sheet.getCell(3, 1).value = 'ANOTHER-SKU'
+    const col = (name: string) => headersOf(sheet).indexOf(name)
+    sheet.getCell(3, col('action:name')).value = ''
+    sheet.getCell(3, col('name')).value = 'Updated'
+    sheet.getCell(3, col('gtin')).value = null
+    sheet.getCell(3, col('action:gtin')).value = 'CLEAR'
+    sheet.getCell(3, col('weightValue')).value = null
+    sheet.getCell(3, col('action:weightValue')).value = 'INHERIT'
+    sheet.getCell(4, 1).value = 'ANOTHER-SKU'
     const parsed = readCatalogWorkbook(book)!
     expect(parsed.issues).toEqual([])
     expect(parsed.rows.map(r => [r.field, r.action, r.value])).toEqual(expect.arrayContaining([['name', 'SET', 'Updated'], ['gtin', 'CLEAR', undefined], ['weightValue', 'INHERIT', undefined], ['batteries', 'SET', false]]))
   })
   it('refuses unknown columns, including data beyond the header, and undeclared sheets', async () => {
     const book = await load([scopes()[0]]), sheet = book.getWorksheet('Products')!
-    sheet.getCell(2, sheet.columnCount + 1).value = 'must not disappear'
+    sheet.getCell(3, sheet.columnCount + 1).value = 'must not disappear'
     expect(() => readCatalogWorkbook(book)).toThrow('headers')
     const other = await load([scopes()[0]]); other.addWorksheet('Forgotten data').addRow(['product'])
     expect(() => readCatalogWorkbook(other)).toThrow('no declared destination')
@@ -223,7 +225,7 @@ describe('multi-language and multi-market catalog workbook', () => {
   })
   it('refuses formula caches in import data while allowing calculation helpers', async () => {
     const book = await load([scopes()[0]]), sheet = book.getWorksheet('Products')!
-    sheet.getCell(2, sheet.getRow(1).values.indexOf('name')).value = { formula: '"fresh"', result: 'stale' }
+    sheet.getCell(3, headersOf(sheet).indexOf('name')).value = { formula: '"fresh"', result: 'stale' }
     expect(() => readCatalogWorkbook(book)).toThrow('paste verified formula results')
   })
   it('does not permit multiple sheets to write the same coordinate', async () => {

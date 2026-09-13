@@ -53,6 +53,16 @@ export const AMAZON_MASTER_LINKS: Record<string, { masterKey: string; channelSto
  * Amazon attributes whose store is a LISTING COLUMN rather than the bag (no master twin). The
  * variation theme was the registry's `amazon_variationTheme` placeholder; the schema's own
  * `variation_theme` (with Amazon's enum) is the column now, on the same store.
+ *
+ * VT.1 (2026-09-13, D-VT3): the SHEET no longer serves `variation_theme` as a raw column - the
+ * engine-owned Variation theme column does (`sheet-columns.service.ts:variationThemeColumn`), and the
+ * exclusion lives THERE, in the sheet's own build. This spec deliberately still DECLARES the property,
+ * because two other consumers read this walk and neither is the sheet: the mapping engine's field
+ * catalogue and `evaluateSchemaRequirements`. Measured when it was dropped from here instead: every
+ * cell on Amazon-IT gained the error "Category requirement validation is unavailable: / must have
+ * required property 'variation_theme'" and the payload grew 748,206 bytes (3,941,237 -> 4,689,443) on
+ * one family - the requirement validator's instance is built from THIS catalogue, so the property
+ * disappearing made the whole row's schema check unavailable.
  */
 export const AMAZON_LISTING_STORES: Record<string, ChannelStore> = {
   variation_theme: { kind: 'listingColumn', column: 'variationTheme' },

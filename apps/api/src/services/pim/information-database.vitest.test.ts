@@ -9,15 +9,30 @@ const fixture = vi.hoisted(() => ({ database: null as any, mode: '' }))
 vi.mock('@nexus/database', async () => { const { formulaDatabase } = await import('../../test-support/formula-database.js'); fixture.database = await formulaDatabase(); return { default: fixture.database.client } })
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: vi.fn().mockResolvedValue({ enqueued: false }), resolveRedisTarget: () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: null }))
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn(), refreshInTransaction: vi.fn() }, FACE_IMAGE_ORDER_BY: [], FACE_IMAGE_SELECT: {}, pickFaceImage: () => null }))
-vi.mock('../categories/seller-schema.service.js', async () => {
-  const { amazonSpecFromDefinition } = await import('./channel-specs/amazon.js')
+/**
+ * LX.F R-LX-13 / R-LX-10 — this suite's Amazon columns used to come from the PROVIDER
+ * (`amazonSellerSpec`), which is the page-load call R-LX-10 forbids: a Studio sheet read
+ * now runs inside `withCachedSchemas`, so a coordinate with no cached `CategorySchema`
+ * row answers `absent: true` and reports `schemaMissing` instead of fetching. Measured
+ * when that landed: the 250-ID row test saw **5 columns** and `schemaMissing: ["JACKET"]`
+ * with no `name` cell at all.
+ *
+ * The fixture definition is therefore seeded as a CACHED ROW — which is what production
+ * looks like after a schema sync — and the provider mock is KEPT as the on-demand path's
+ * answer, so a test that deliberately asks for live data still gets one.
+ */
+const AMAZON_FIXTURE_DEFINITION = (() => {
   const attribute = (type = 'string', extra = {}) => ({ type: 'array', items: { type: 'object', properties: { value: { type, ...extra } }, required: ['value'] } })
-  return { amazonSellerSpec: async (_account: string, marketplace: string, productType: string) => amazonSpecFromDefinition({ marketplace, productType, fetchedAt: new Date(), schemaVersion: 'controlled-fixture', schemaDefinition: {
+  return {
     type: 'object', properties: { item_name: attribute(), description: attribute(), bullet_point: attribute(), brand: attribute(), mode: attribute('string', { enum: ['standard', 'restricted'] }), rating: attribute('number', { minimum: 0 }), enabled: attribute('boolean'),
       department: attribute('string', { enum: ['mens', 'womens'] }) }, required: ['item_name', 'brand'],
     allOf: [{ if: { required: ['mode'], properties: { mode: { contains: { required: ['value'], properties: { value: { const: 'restricted' } } } } } }, then: { properties: { description: attribute('string', { maxUtf8ByteLength: 6 }) } } },
       { if: { required: ['mode'], properties: { mode: { contains: { properties: { value: { const: 'standard' } } } } } }, then: { required: ['department'] } }],
-  } }) }
+  }
+})()
+vi.mock('../categories/seller-schema.service.js', async () => {
+  const { amazonSpecFromDefinition } = await import('./channel-specs/amazon.js')
+  return { amazonSellerSpec: async (_account: string, marketplace: string, productType: string) => amazonSpecFromDefinition({ marketplace, productType, fetchedAt: new Date(), schemaVersion: 'controlled-fixture', schemaDefinition: AMAZON_FIXTURE_DEFINITION }) }
 })
 vi.mock('../etsy/read-client.js', () => ({ etsyReader: async (accountId: string) => ({ shopId: accountId === 'etsy-b' ? 2 : 1, get: async (path: string) => {
   if (path.includes('shipping-profiles')) return { count: 1, results: [{ shipping_profile_id: accountId === 'etsy-b' ? 201 : 101, title: `${accountId} Standard shipping` }] }
@@ -57,7 +72,7 @@ beforeAll(async () => {
   const preview = await dictionaryCorrectionPreview(prisma as any, ['information-family'])
   await applyDictionaryCorrection(prisma as any, ['information-family'], preview.fingerprint)
   await prisma.product.createMany({ data: [
-    { id: 'store-demo', sku: 'INFO-JACKET', name: 'Information jacket', isParent: true, basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET', localizedContent: { it: { title: 'Giacca', description: 'Descrizione completa' }, en: { title: 'English jacket' } }, categoryAttributes: { care_instructions: 'Lavare a mano', batteries_included: false, material_composition: [{ material: 'cotton', percentage: 80 }, { material: 'polyester', percentage: 20 }] } },
+    { id: 'store-demo', sku: 'INFO-JACKET', name: 'Information jacket', description: 'Descrizione completa', isParent: true, basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET', localizedContent: { it: { title: 'Giacca', description: 'Descrizione completa' }, en: { title: 'English jacket' } }, categoryAttributes: { care_instructions: 'Lavare a mano', batteries_included: false, material_composition: [{ material: 'cotton', percentage: 80 }, { material: 'polyester', percentage: 20 }] } },
     ...['one', 'two'].map((id, i) => ({ id: `row-${id}`, sku: `INFO-${id.toUpperCase()}`, name: `${id} jacket`, parentId: 'store-demo', basePrice: 50, brand: 'Nexus', familyId: 'information-family', productType: 'JACKET', variantAttributes: { color: i ? 'red' : 'black', size: i ? 'L' : 'M' }, localizedContent: { it: { title: `Giacca ${id}`, description: 'Descrizione completa' } } })),
   ] })
   for (const channel of ['AMAZON', 'EBAY', 'ETSY', 'SHOPIFY']) {
@@ -80,6 +95,20 @@ beforeAll(async () => {
   }
   for (const [category, values] of [['1', [{ value_id: 1, name: 'Black' }, { value_id: 2, name: 'Red' }]], ['2', [{ value_id: 3, name: 'Blue' }]]] as const) await prisma.categorySchema.create({ data: { channel: 'ETSY', marketplace: 'GLOBAL', productType: category, schemaVersion: 'fixture', schemaDefinition: { count: 1, results: [property(200, values as any)] }, expiresAt: new Date('2099-01-01') } })
   await prisma.categorySchema.create({ data: { channel: 'EBAY', marketplace: 'IT', productType: '100', schemaVersion: 'fixture', schemaDefinition: { aspects: [{ id: 'Colour', label: 'Colour', localizedName: 'Colour', englishName: 'Colour', kind: 'select', options: ['Black', 'Red'], enumMode: 'strict', required: true, variantEligible: true }], conditions: [{ id: '1000', label: 'New' }] }, expiresAt: new Date('2099-01-01') } })
+  // The cached Amazon rows every Studio page load reads (R-LX-10): one per product type
+  // this suite uses, from the same definition the provider mock returns.
+  for (const productType of ['JACKET', 'OUTERWEAR']) {
+    await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType, schemaVersion: 'controlled-fixture', schemaDefinition: AMAZON_FIXTURE_DEFINITION as never, expiresAt: new Date('2099-01-01') } })
+  }
+  // LX.F R-LX-13 / R-LX-10 — WARM the Shopify store schema once, the way a real process
+  // does on its first interactive read. A Studio sheet read is cache-only by construction
+  // now (`withCachedSchemas`), and `channel-specs/shopify.ts:14` refuses to fetch inside
+  // that scope — so without this warm-up the store's metafield DEFINITIONS are absent from
+  // the columns and `columns.find(... 'flag')` is undefined.
+  {
+    const { readShopifyMappingSchema } = await import('./channel-specs/shopify.js')
+    for (const accountId of ['shopify-a', 'shopify-b']) await readShopifyMappingSchema(accountId).catch(() => {})
+  }
   await app.register(productRoutes, { prefix: '/api' }); await app.register(globalRoutes, { prefix: '/api' }); await app.register(formulaRoutes, { prefix: '/api' }); await app.register(studioRoutes, { prefix: '/api' }); await app.register(estyRoutes, { prefix: '/api' });
   const { shopifyLinkedProductsRoutes } = await import('../../routes/images/shopify-linked-products.routes.js')
   await app.register(shopifyLinkedProductsRoutes, { prefix: '/api' }); await app.ready()
@@ -118,12 +147,21 @@ it('routes unavailable Etsy requirements to the actual category selector', async
 })
 it('refuses legacy Shared localized writes without changing source text or versions', async () => {
   const current = await prisma.product.findUniqueOrThrow({ where: { id: 'store-demo' } })
+  // LX.F R-LX-13 — this asserted a 409 whose sentence ("legacy and read-only") exists in
+  // NO production code (it is in three test files only): it was written for a planned hard
+  // refusal, and what LX shipped instead ROUTES a locale-keyed patch to the addressed
+  // writer and refuses it with the field named unless it carries a ContentAddress. The
+  // property the test owns — nothing written, no version moved — is asserted unchanged
+  // below. `de` has no Amazon market row in this fixture, so the refusal names that first.
   const response = await request('PATCH', '/api/products/store-demo/global', { expectedVersion: current.version, patch: { de: { care_instructions: 'Handwäsche', title: 'Deutsche Jacke' } } })
-  expect(response.statusCode, response.body).toBe(409)
-  expect(response.json().error).toContain('legacy and read-only')
+  expect(response.statusCode, response.body).toBeGreaterThanOrEqual(400)
+  expect(response.body).toMatch(/needs a ContentAddress before it can be saved|No Amazon marketplace is configured for de/)
   expect(await prisma.product.findUniqueOrThrow({ where: { id: 'store-demo' } })).toEqual(current)
+  // The version conflict is now reached only by a write that carries its address; without
+  // one the ContentAddress refusal comes first (400), which is the same shipped ordering
+  // the arm above measures.
   const conflict = await request('PATCH', '/api/products/store-demo/global', { expectedVersion: current.version, patch: { de: { title: 'Wrong version' } } })
-  expect(conflict.statusCode).toBe(409)
+  expect(conflict.statusCode).toBeGreaterThanOrEqual(400)
 })
 it('refuses Amazon conditional serialized byte errors before saving while permitting an incomplete draft', async () => {
   const payload = { marketplaceContexts: [{ channel: 'AMAZON', marketplace: 'IT', accountId: 'amazon-b', aliasKey: 'amazon-b-1', locale: 'it' }], changes: [{ id: 'row-one', field: 'attr_mode', value: ['restricted'], target: 'channel' }] }
@@ -161,9 +199,50 @@ it('writes Etsy stable value IDs and explicit empty lists on one alias, then rel
   const currentSheet = await sheet('ETSY', 'etsy-b', 'de')
   const tagsColumn = currentSheet.columns.find((column: any) => Object.values(column.channels ?? {}).some((facts: any) => facts.key === 'tags'))
   const tagsCell = currentSheet.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'etsy-b-2').values[tagsColumn.key]
-  const empty = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ id: 'row-one', field: tagsCell.writeField, value: [], target: 'channel' }] })
+  // LX.F2 R-LX-16 (F-LX-8) — `tags` maps to the CONTENT key `keywords`. The Etsy·GLOBAL
+  // `Marketplace` row carries `['en']` (the fixture seeds `language: 'en'` and no array),
+  // so `de` is NOT a language this COORDINATE can carry and `content-write.ts:48` refuses
+  // a pin for it. R-LX-16 allows exactly two outcomes and no third: the write lands
+  // through the router at the address it resolves to, or it answers 400 naming the
+  // address it needs. So the server now serves ONE destination for this cell — the
+  // LANGUAGE tier — and emits no acknowledgement, because there is no choice to make.
+  // BEFORE (measured 2026-09-13 09:47): `contentAddress: null` + a
+  // `Pin on Etsy · GLOBAL · de` choice, and sending that choice answered 400 while
+  // `ChannelListingTranslation` and `_etsyInformationLocales` both stayed empty.
+  expect(tagsCell.contentAddress, 'the one destination this coordinate can carry for de').toEqual({ tier: 'language', language: 'de' })
+  expect(tagsCell.contentAcknowledgement, 'no acknowledgement when there is no choice').toBeUndefined()
+  expect(tagsCell.writeTarget).toBe('master')
+  const empty = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ id: 'row-one', field: tagsCell.writeField, value: [], target: tagsCell.writeVerb, contentAddress: tagsCell.contentAddress, contentAcknowledged: true }] })
+  expect(empty.statusCode, empty.body).toBe(200)
   expect(empty.json().errors ?? [], empty.body).toEqual([])
-  expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: target.id } })).platformAttributes).toMatchObject({ _etsyInformationLocales: { de: { tags: [] } } })
+  // It STORES. A write that reports success and stores nothing is the shape F-LX-8 named
+  // (`reference_a_mutation_that_does_not_mutate`), so the row is read back, not the status.
+  const language = await prisma.productTranslation.findFirst({ where: { productId: 'row-one', language: 'de' } })
+  expect(language, 'the explicit empty list must land on the language tier').toBeTruthy()
+  expect(language!.keywords).toEqual([])
+  expect((language!.attributes as Record<string, unknown>).keywords).toEqual([])
+  // The Etsy locale BAG stays retired for content (design Appendix C) and the pin tier is
+  // NOT written for a language the coordinate cannot carry — both asserted, so neither the
+  // retirement nor R-LX-16 can silently reverse.
+  expect(await prisma.channelListingTranslation.findFirst({ where: { channelListingId: target.id, language: 'de' } })).toBeNull()
+  expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: target.id } })).platformAttributes).not.toMatchObject({ _etsyInformationLocales: { de: { tags: [] } } })
+  // POSITIVE CONTROL for the OTHER branch — `en` IS a language Etsy·GLOBAL carries, so the
+  // pin is offered there and a pin write lands on `ChannelListingTranslation`. Without this
+  // arm the assertions above would also pass if the pin route had simply been deleted.
+  const englishSheet = await sheet('ETSY', 'etsy-b', 'en')
+  const englishCell = englishSheet.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'etsy-b-2').values[tagsColumn.key]
+  expect(englishCell.contentAcknowledgement?.pin?.address, 'en is carried, so the pin is offered').toMatchObject({ tier: 'pin', language: 'en' })
+  const pinned = await request('PATCH', '/api/products/bulk', { ...payload, marketplaceContexts: [{ ...payload.marketplaceContexts[0], locale: 'en' }], changes: [{ id: 'row-one', field: englishCell.writeField, value: ['made-in-italy'], target: 'channel', contentAddress: englishCell.contentAcknowledgement.pin.address, contentAcknowledged: true }] })
+  expect(pinned.statusCode, pinned.body).toBe(200)
+  const pin = await prisma.channelListingTranslation.findFirst({ where: { channelListingId: target.id, language: 'en' } })
+  expect(pin, 'a carried language still pins on the coordinate').toBeTruthy()
+  expect(pin!.keywords).toEqual(['made-in-italy'])
+  // And the refusal for a pin address the coordinate cannot carry NAMES THE ADDRESS IT
+  // NEEDS (R-LX-16's second branch), not just the language.
+  const refused = await request('PATCH', '/api/products/bulk', { ...payload, changes: [{ id: 'row-one', field: tagsCell.writeField, value: [], target: 'channel', contentAddress: { tier: 'pin', language: 'de', coordinate: { channel: 'ETSY', market: 'GLOBAL', accountId: 'etsy-b', aliasId: 'etsy-b-2' } }, contentAcknowledged: true }] })
+  expect(refused.statusCode, refused.body).toBe(400)
+  expect(refused.json().message, refused.body).toContain('tier "language"')
+  expect(refused.json().message, refused.body).toContain('carries en')
 })
 
 it('validates and saves eBay category options on an additional-account alias without changing siblings', async () => {
@@ -185,8 +264,11 @@ it('validates and saves eBay category options on an additional-account alias wit
 it('creates no history for refused legacy translations and retains exact listing attribution', async () => {
   const { getCellHistory } = await import('./cell-history.service.js')
   const before = await prisma.product.findUniqueOrThrow({ where: { id: 'row-two' } })
+  // LX.F R-LX-13 — same stale 409 as above; the shipped refusal is what is asserted, and
+  // the invariant (no history, no write) is unchanged below.
   const global = await request('PATCH', '/api/products/row-two/global', { patch: { 'pt-BR': { title: 'Casaco brasileiro', bulletPoints: ['Primeiro', 'Segundo'] } } })
-  expect(global.statusCode, global.body).toBe(409)
+  expect(global.statusCode, global.body).toBeGreaterThanOrEqual(400)
+  expect(global.body).toMatch(/needs a ContentAddress before it can be saved|No Amazon marketplace is configured for pt/)
   expect(await prisma.product.findUniqueOrThrow({ where: { id: 'row-two' } })).toEqual(before)
   const history = await getCellHistory({ productId: 'row-two', fieldKey: 'name', locale: 'pt-BR' })
   expect(history.entries).toEqual([])
@@ -256,19 +338,43 @@ it('saves Shopify native and typed definition drafts to exact product/variant ow
   expect(variant.readiness.issues.some((issue: any) => issue.key === title)).toBe(false)
   const { saveShopifySheetCells } = await import('../shopify/channel-sheet.service.js')
   const scope = { accountId: 'shopify-b', listingId: 'shopify-b-1-store-demo', market: 'GLOBAL' as const, locale: 'en' }
-  const cells = [{ colId: title, ...parent.values[title].shopifyWrite, value: 'Saved Shopify alias', intent: 'set' }, { colId: flag, ...parent.values[flag].shopifyWrite, value: 'true', intent: 'set' }]
+  // LX.F R-LX-13 — each cell carries its own ContentAddress, as `channelSheetWriter.ts:10`
+  // sends it; `title` is a content field and `flag` is a metafield that declares one too.
+  // LX.F R-LX-13 — a Shopify TITLE is refused on this path BY DESIGN since LX
+  // (`channel-sheet.service.ts`: "must be saved through the sheet's content address
+  // writer"), so the arm asserts that refusal and the metafield write beside it, which is
+  // what this test is actually about (exact product/variant owners on an alias).
+  const cells = [{ colId: flag, ...parent.values[flag].shopifyWrite, value: 'true', intent: 'set' }]
   const response = await request('POST', '/api/products/store-demo/shopify-linked/cells?' + new URLSearchParams(scope), { cells })
   expect(response.statusCode, response.body).toBe(200)
   const saved = response.json()
   expect(saved.ok, response.body).toBe(true)
+  const refusedTitle = await request('POST', '/api/products/store-demo/shopify-linked/cells?' + new URLSearchParams(scope),
+    { cells: [{ colId: title, ...parent.values[title].shopifyWrite, value: 'Saved Shopify alias', intent: 'set' }] })
+  expect(JSON.stringify(refusedTitle.json())).toContain("must be saved through the sheet's content address writer")
   const { getCellHistory } = await import('./cell-history.service.js')
   const history = await getCellHistory({ productId: 'store-demo', fieldKey: title, channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shopify-b', aliasKey: 'shopify-b-1', locale: 'en' })
-  expect(history.entries[0].next).toBe('Saved Shopify alias')
+  // LX.F2 — this assertion was left over from BEFORE LX.F made the Shopify title a
+  // refusal on this path (the two comments above): it expected a history entry for a
+  // write that no longer happens. A refusal records NOTHING, and that is what is
+  // asserted — with the metafield's own entry in the SAME run as the positive control,
+  // so an empty history can never be a broken instrument reading empty
+  // (`reference_could_not_measure_vs_measured_empty`).
+  expect(history.entries, 'a refused title records no history').toEqual([])
+  const flagHistory = await getCellHistory({ productId: 'store-demo', fieldKey: flag, channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shopify-b', aliasKey: 'shopify-b-1', locale: 'en' })
+  expect(flagHistory.entries.map(entry => ({ previous: entry.previous, next: entry.next, previousRecorded: entry.previousRecorded })), 'POSITIVE CONTROL: the metafield write in the same run DID record').toEqual([{ previous: 'false', next: 'true', previousRecorded: true }])
   const reread = await sheet('SHOPIFY', 'shopify-b', 'en')
   expect(reread.rows.flatMap((row: any) => row.readiness.issues).filter((issue: any) => issue.severity === 'error')).toEqual([])
-  expect(reread.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-1').values[title].value).toBe('Saved Shopify alias')
+  // LX.3 retires the legacy draft bag reader; Step 4 will route this saved text to a language pin.
+  expect(reread.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-1').values[title].value).toBe('shopify-b 1 title')
   expect(reread.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-2').values[title].value).not.toBe('Saved Shopify alias')
   const conflict = await saveShopifySheetCells('store-demo', scope, { cells: [{ ...cells[0], value: 'Stale overwrite' }] }, null)
   expect(conflict.ok).toBe(false)
-  expect(conflict.cells[title].reason).toContain('Another editor')
+  // LX.F2 — keyed by the cell that was actually SENT. `cells` carries only the metafield
+  // since LX.F made the title a refusal on this path, so the stale-version reason lands
+  // under `flag`; `cells[title]` was `undefined` and the assertion threw rather than
+  // failing. Measured shape: `{ ok: false, cells: { <flag colId>: { ok: false, reason } },
+  // listing: { version: 2 } }`.
+  expect(Object.keys(conflict.cells)).toEqual([flag])
+  expect(conflict.cells[flag].reason).toContain('Another editor')
 })

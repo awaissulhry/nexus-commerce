@@ -1,0 +1,169 @@
+{
+  "time_utc": "2026-09-13T19:43:29.744994+00:00",
+  "host": "Awaiss-MBP.homenet.telecomitalia.it",
+  "cwd": "/Users/awais/nexus-commerce",
+  "load": [
+    4.5126953125,
+    4.1171875,
+    4.1103515625
+  ],
+  "scope": "Admission inspection only. No DB, HTTP, browser, compilation, test, or pre-push run.",
+  "ledger_sha256": "56e59e0afd574163304cb3a3399c31966b4d67514e8901fe3a9f0b3925930afd",
+  "ledger_lines": 50207,
+  "completion": {
+    "command": [
+      "/usr/bin/grep",
+      "-nE",
+      "^PR-GATE PR\\.[1-8] AT-WAVE-4",
+      "docs/pes-claims.md"
+    ],
+    "exit": 0,
+    "matches": [
+      "49509:PR-GATE PR.3 AT-WAVE-4 \u2014 2026-09-13T17:39:47.129222+00:00 \u2014 final clean run from apps/api, host127.0.0.1:55439/nexus_development, api tsc0 / vitest174-of174 in13files0 / route-prisma1 ATTRIBUTED to assets62\u219264,brand-story32\u219233,catalog-transfer0\u21922 (dirty\u2227listed; none PR.3; baseline unchanged). Local rehearsal old count2 ONLY, removed1/sibling1,8s read-back, sentinel listing0/product0, external fetch0. Evidence docs/audits/2026-09-13-presence/pr3/README.md + final.json + logs; table above. Extra label guard9/9; scratch old8fail/1pass proves refusal transport barrier. This is PR.3 completion, not repository-wide W1.5-PUSH or Wave4 channel authorization. No prod/channel writes; no commits; no flat-file editor edits.",
+      "49829:PR-GATE PR.3 AT-WAVE-4 \u2014 2026-09-13T18:39:25.961667+00:00 \u2014 original W1-COORD/W1.4/W1.6-OFFER/D24/rehearsal evidence retained; follow-up attribution now resolved to actual route-ratchet0. PR.3 stops with all its work complete; other lanes retain their claims.",
+      "50170:PR-GATE PR.6 AT-WAVE-4 \u2014 PR.6 \u2014 2026-09-13T19:14:23.823481+00:00 \u2014 items1\u20136 measured green, web tsc0, Factory tsc0, DS1366/1366 plus ModeNotches1/1, all17 gates0 in one final run; contrast and all assumptions/questions/requests above. Nothing committed. No outstanding PR.6 Owner question. STOP as \u00a7A.13; Owner launches PR.F."
+    ],
+    "stderr": ""
+  },
+  "positive_control": {
+    "command": [
+      "/usr/bin/grep",
+      "-nE",
+      "^PR-GATE W0-SEC DONE",
+      "docs/pes-claims.md"
+    ],
+    "exit": 0,
+    "matches": [
+      "48592:PR-GATE W0-SEC DONE \u2014 PR.1 Codex /root \u2014 2026-09-13T16:39:50.583399+00:00 \u2014 40/40 inject/manifest tests; api tsc 0; coverage 2685 routes, 0 UNMAPPED; D9 methods + D24 writers retired; real actor on guarded audits."
+    ],
+    "stderr": ""
+  },
+  "distinct_completed_lanes": [
+    "PR.3",
+    "PR.6"
+  ],
+  "missing_completed_lanes": [
+    "PR.1",
+    "PR.2",
+    "PR.4",
+    "PR.5",
+    "PR.7",
+    "PR.8"
+  ],
+  "missing_prerequisite_gates": [
+    "W2-SCHEMA-APPLIED",
+    "W2-READ",
+    "W3-API",
+    "W3-VOCAB",
+    "W3-SURFACE"
+  ],
+  "browser_start_count": 12,
+  "browser_finish_count": 15,
+  "open_browser_holds": {},
+  "historical_overlapping_starts": [
+    {
+      "line": 49937,
+      "script": "pr8-toolbar-final",
+      "already_open": {
+        "pr6-scope-positive": 49935
+      }
+    }
+  ],
+  "source_readings": {
+    "presence_registration_in_contract_route": {
+      "command": [
+        "/usr/bin/grep",
+        "-nE",
+        "/presence",
+        "apps/api/src/routes/product-studio.routes.ts"
+      ],
+      "exit": 1,
+      "matches": [],
+      "stderr": ""
+    },
+    "route_positive_control": {
+      "command": [
+        "/usr/bin/grep",
+        "-nE",
+        "fastify.get|studio",
+        "apps/api/src/routes/product-studio.routes.ts"
+      ],
+      "exit": 0,
+      "matches": [
+        "20: * for the sheet, the studio and bulk-ops alike.",
+        "32:} from '../services/pim/studio-sheet.service.js'",
+        "77:  // whole projection module into every studio request just to classify an error that usually is not thrown.",
+        "89:  log.error({ err, ...context }, '[studio] request failed')",
+        "90:  return reply.code(500).send({ error: 'studio_request_failed', message: err instanceof Error ? err.message : String(err) })",
+        "115:    fastify.get(`/products/:id/studio/${view}`, async (request, reply) => {",
+        "126:  fastify.get('/products/:id/studio/destination', async (request, reply) => {",
+        "134:  fastify.get('/products/:id/studio/variation-axes', async (request, reply) => {",
+        "142:  fastify.patch('/products/:id/studio/variation-axes', async (request, reply) => {",
+        "151:  // Four routes, all under `/api/products`, so RBAC is inherited exactly as every other studio route's is:",
+        "154:  fastify.get('/products/:id/studio/family', async (request, reply) => {",
+        "190:  fastify.get('/products/:id/studio/projection', async (request, reply) => {",
+        "202:  fastify.patch('/products/:id/studio/projection', async (request, reply) => {",
+        "237:  fastify.patch('/products/:id/studio/projection/children', async (request, reply) => {",
+        "270:  fastify.post('/products/:id/studio/projection/theme-change', async (request, reply) => {",
+        "308:  fastify.post('/products/:id/studio/family/generate', async (request, reply) => {",
+        "332:  fastify.get('/products/:id/studio/classification', async (request, reply) => {",
+        "337:  fastify.patch('/products/:id/studio/classification', async (request, reply) => {",
+        "344:   * #573 \u2014 ONE scope validator, used by `/studio/columns` AND `/studio/sheet`.",
+        "390:   * endpoints of the same contract: `/studio/sheet` returned the MASTER sheet",
+        "392:   * nearly filed a false finding), while `/studio/columns` inferred",
+        "408:  fastify.get('/products/:id/studio/columns', async (request, reply) => {",
+        "440:  fastify.get('/products/:id/studio/sheet', async (request, reply) => {",
+        "463:      reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)",
+        "475:  fastify.get('/products/:id/readiness', async (request, reply) => {",
+        "495:  fastify.get('/products/:id/studio/history', async (request, reply) => {",
+        "675:        // The web mirror (`_studio/import/contract.ts` `ImportUnmatchedColumn`) reads OBJECTS \u2014",
+        "697:  fastify.get('/products/:id/import/jobs/:jobId', async (request, reply) => {",
+        "702:      if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })",
+        "837:      if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })",
+        "863:      if (!loaded) return reply.code(404).send({ error: 'not_found', message: `No studio import job ${jobId}` })",
+        "917:  fastify.get('/products/:id/restore-points', async (request, reply) => {",
+        "927:  fastify.get('/products/:id/sync-queue', async (request, reply) => {",
+        "955:  fastify.get('/products/:id/listings/:listingId/snapshots', async (request, reply) => {"
+      ],
+      "stderr": ""
+    },
+    "listings_mount_in_contract_files": {
+      "command": [
+        "/usr/bin/grep",
+        "-nE",
+        "Listings|listings|Presence",
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx",
+        "apps/web/src/app/products/[id]/edit/_studio/navigation.tsx"
+      ],
+      "exit": 1,
+      "matches": [],
+      "stderr": ""
+    },
+    "mount_positive_control": {
+      "command": [
+        "/usr/bin/grep",
+        "-nE",
+        "matrix|StudioTabHost",
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx",
+        "apps/web/src/app/products/[id]/edit/_studio/navigation.tsx"
+      ],
+      "exit": 0,
+      "matches": [
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx:28:import { MatrixTab } from './matrix/MatrixTab'",
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx:45:  // (`docs/2026-09-13-matrix-page-design.md` Revision). The frame does not know what it looks like.",
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx:46:  matrix: MatrixTab,",
+        "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx:60:export function StudioTabHost() {",
+        "apps/web/src/app/products/[id]/edit/_studio/navigation.tsx:13:  matrix: 'Matrix',",
+        "apps/web/src/app/products/[id]/edit/_studio/navigation.tsx:29:  matrix: <LayoutGrid size={15} />,"
+      ],
+      "stderr": ""
+    },
+    "listings_directory_exists": false
+  },
+  "source_sha256": {
+    "apps/api/src/routes/product-studio.routes.ts": "1bbdfd062262e7a537227dede7ab9a3cd6e489a2bd54688a191eb2b629645481",
+    "apps/web/src/app/products/[id]/edit/_studio/StudioTabHost.tsx": "0dc9bccc731c2af05a316d5df75511efbf23b31ea46727b40c03a029834aa8e2",
+    "apps/web/src/app/products/[id]/edit/_studio/navigation.tsx": "d79bc1f65882c29d4465179558fba03a0284e5a67e9c1096e13f20428020cf70"
+  },
+  "exit": 1
+}

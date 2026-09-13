@@ -1,3 +1,4 @@
+import { languageEntry } from './pim/content-language.js'
 /**
  * MC.6.3 — Locale-specific overlay URL builder.
  *
@@ -53,16 +54,8 @@ export function pickOverlayForLocale(
   locale: string,
 ): AssetLocaleOverlay | null {
   if (!locale || overlays.length === 0) return null
-  const enabled = overlays.filter((o) => o.enabled)
-  const exact = enabled.find(
-    (o) => o.locale.toLowerCase() === locale.toLowerCase(),
-  )
-  if (exact) return exact
-  const primary = locale.split('-')[0]?.toLowerCase()
-  if (!primary) return null
-  return (
-    enabled.find((o) => o.locale.toLowerCase() === primary) ?? null
-  )
+  return languageEntry(overlays.filter(o => o.enabled).map(row => [row.locale, row] as const), locale) ?? null
+
 }
 
 /**

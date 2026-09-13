@@ -1140,8 +1140,8 @@ export class AmazonSpApiClient {
   }> {
     const { sellerId, sku, marketplaceId } = options
 
-    const mode = (process.env.AMAZON_PUBLISH_MODE ?? 'dry-run').toLowerCase()
-    if (mode === 'dry-run' || mode === 'dryrun') {
+    const mode = getAmazonPublishMode()
+    if (mode === 'gated' || mode === 'dry-run') {
       logger.info('SP-API deleteListingsItem (dry-run, no HTTP)', {
         sku,
         marketplaceId,

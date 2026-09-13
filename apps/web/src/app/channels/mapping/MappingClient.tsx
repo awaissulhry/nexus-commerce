@@ -48,6 +48,7 @@ import { AutoMapDrawer } from './_shared/AutoMapDrawer'
 import { productWorkspaceHref } from '@/app/_shared/product-workspace-href'
 import { HistoryDrawer } from './_shared/HistoryDrawer'
 import { CloneMappingDrawer } from './_shared/CloneMappingDrawer'
+import { VariationsGroup } from './_shared/VariationsGroup'
 
 type PreviewFilter = 'all' | 'errors' | 'empty' | 'hasValue'
 type StatusFilter = 'all' | 'mapped' | 'unmapped' | 'owned'
@@ -742,6 +743,19 @@ function MappingWorkspace() {
               </GridDensityProvider>
             )}
           </div>
+
+          {/* VT.3 — the Variations group: under the selected category, AFTER the field groups
+              (design §3.7, VX §11.1). It reads its own wire shape and owns its own state, so a
+              rule read cannot delay or fail the field set above it. */}
+          {template && (
+            <VariationsGroup
+              key={`${templateKey}:${category ?? 'default'}`}
+              channel={template.channel}
+              market={template.code}
+              category={category}
+              fixtureKey={search.get('variationsFixture')}
+            />
+          )}
         </section>
       </div>
 

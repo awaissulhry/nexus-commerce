@@ -1,0 +1,58 @@
+{
+  "at": "2026-09-13T18:37:39.651Z",
+  "database": "127.0.0.1:55439/nexus_development",
+  "marker": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a",
+  "galeVersion": 59,
+  "batch": {
+    "processed": 2,
+    "succeeded": 0,
+    "failed": 0,
+    "skipped": 2,
+    "errors": []
+  },
+  "bull": {
+    "status": "SKIPPED",
+    "queueId": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a-bull",
+    "result": {
+      "success": true,
+      "queueId": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a-bull",
+      "channel": "AMAZON",
+      "status": "SKIPPED",
+      "errorCode": "AMAZON_EMPTY_PATCH_NOT_SENT",
+      "retryable": false,
+      "message": "No supported Amazon changes were present. Nothing was sent to the channel."
+    }
+  },
+  "rows": [
+    {
+      "id": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a-pending",
+      "syncStatus": "SKIPPED",
+      "syncedAt": null,
+      "errorCode": "AMAZON_EMPTY_PATCH_NOT_SENT",
+      "errorMessage": "No supported Amazon changes were present. Nothing was sent to the channel.",
+      "nextRetryAt": null
+    },
+    {
+      "id": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a-retry",
+      "syncStatus": "SKIPPED",
+      "syncedAt": null,
+      "errorCode": "AMAZON_EMPTY_PATCH_NOT_SENT",
+      "errorMessage": "No supported Amazon changes were present. Nothing was sent to the channel.",
+      "nextRetryAt": null
+    },
+    {
+      "id": "PR2-NOT-SENT-04326b39-5189-473d-b4d0-24e5760c3a7a-bull",
+      "syncStatus": "SKIPPED",
+      "syncedAt": null,
+      "errorCode": "AMAZON_EMPTY_PATCH_NOT_SENT",
+      "errorMessage": "No supported Amazon changes were present. Nothing was sent to the channel.",
+      "nextRetryAt": null
+    }
+  ],
+  "outboundCalls": 0,
+  "publishCalls": 0,
+  "cleanup": {
+    "products": 0,
+    "queues": 0
+  }
+}

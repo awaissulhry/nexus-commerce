@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T23:48:51.967Z",
+  "identity": {
+    "database": "nexus_development",
+    "read_only": "on"
+  },
+  "total": 21,
+  "extra": [],
+  "originalChanges": [
+    {
+      "id": "cmokmy3a40078pm0p1fvnu523",
+      "fields": [
+        "version",
+        "updatedAt"
+      ]
+    }
+  ],
+  "audits": []
+}

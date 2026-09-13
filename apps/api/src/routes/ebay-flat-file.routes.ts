@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../services/listing-push-controls.js'
 import { WorkspaceCache } from '../lib/workspace-cache.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
@@ -1526,6 +1528,23 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
       return reply.code(400).send({ error: 'No valid target markets specified' });
     }
 
+    // Guard both feed and API publication before credentials or transport work.
+    // Skip and lifecycle actions retain their separate existing paths.
+    try {
+      for (const row of rows) {
+        const action = String(row.row_action ?? '').trim().toLowerCase();
+        if (row._shared === true || ['skip', 'deactivate', 'end'].includes(action)) continue;
+        const controls = await readPushControls({ channel: 'EBAY', skus: [String(row.sku ?? '')],
+          productIds: row._productId ? [String(row._productId)] : [], allowAbsent: true });
+        for (const listing of controls) {
+          const refusal = assertPushAllowed(listing);
+          if (refusal) return reply.code(409).send({ error: refusal.code, message: refusal.sentence, refusal });
+        }
+      }
+    } catch (error) {
+      return reply.code(503).send({ error: 'PUSH_CONTROL_UNAVAILABLE', message: error instanceof Error ? error.message : 'The stored listing controls could not be established.' });
+    }
+
     // Get eBay connection — connectionMetadata carries ebayPolicies (policy IDs +
     // merchantLocationKey) configured by the operator in account settings.
     // MAP.6 — DECLARED: no row in scope here names an account.
@@ -1848,6 +1867,16 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
     const deactivateRows = rows.filter((r) => actionOf(r) === 'deactivate' && r._shared !== true);
     const endRows = rows.filter((r) => actionOf(r) === 'end' && r._shared !== true);
     const pushableRows = rows.filter((r) => !['skip', 'deactivate', 'end'].includes(actionOf(r)));
+    // Re-read after the background handoff: a hold may have changed since acceptance.
+    for (const row of pushableRows) {
+      if (row._shared === true) continue;
+      const controls = await readPushControls({ channel: 'EBAY', skus: [String(row.sku ?? '')],
+        productIds: row._productId ? [String(row._productId)] : [], allowAbsent: true });
+      for (const listing of controls) {
+        const refusal = assertPushAllowed(listing);
+        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
+      }
+    }
 
     const families = new Map<string, typeof rows>();
     for (const row of pushableRows) {
@@ -3337,6 +3366,13 @@ export default async function ebayFlatFileRoutes(fastify: FastifyInstance) {
 
           if (!listing) {
             results.push({ productId, market: mpUpper, status: 'SKIPPED', message: 'No listing found' });
+            continue;
+          }
+
+          const controls = await readPushControls({ channel: 'EBAY', productIds: [productId] });
+          const refusal = controls.map(assertPushAllowed).find(Boolean);
+          if (refusal) {
+            results.push({ productId, market: mpUpper, status: 'REFUSED', message: `${refusal.code}: ${refusal.sentence}` });
             continue;
           }
 

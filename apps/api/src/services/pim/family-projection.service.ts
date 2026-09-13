@@ -1,4 +1,8 @@
+import { variationAxisValue, variationCollisionGroups, variationCollisionSummary } from './variation-collisions.js'
+import { loadVariationProjectionInput } from './variation-theme-facts.js'
+import { resolveVariationProjection, type VariationThemeCell } from './variation-rules.service.js'
 import { familyAccountId } from './family-account.js'
+import { orderedVariationMapping, parseVariationMapping, variationMappingOrder, variationMappingTarget } from '@nexus/shared/variation-mapping'
 import { resolveWorkspaceDestination } from './workspace-destination.js'
 import { completeAxisValueOrder } from './shared-variation-values.js'
 /**
@@ -19,7 +23,16 @@ import { completeAxisValueOrder } from './shared-variation-values.js'
  * whether a family member is INCLUDED on a coordinate.
  */
 import prisma from '../../db.js'
+// VT.1 — MOVED to a leaf so the SHEET can read the exclusion set without importing this module (which imports
+// `studio-sheet.service.ts`, so the import would close a cycle and hand back a half-built module). Re-exported here
+// because this module's existing callers import it from here.
+import { readExcludedListingIds } from './variation-excluded.js'
+export { readExcludedListingIds }
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
+import { marketplaceIdFor } from './variation-theme-segments.js'
+import { ebayDeclaredAxes, foldAvailability, lockedAxisKeysFrom, variationLockFor } from './variation-rules.service.js'
+import { loadAmazonThemeFacts, resolveVariationCategory } from './variation-theme-facts.js'
+import { addsForTheme, attributeTitle, bindSegmentToAttribute, classifyThemes, dropsForTheme, themeSegments } from './variation-theme-segments.js'
 import { ProductRelationshipError } from './product-relationship.service.js'
 import { readAxisValues, UnknownProductError, type StudioSheet } from './studio-sheet.service.js'
 import { getInformationSheet as getStudioSheet } from './information-sheet.js'
@@ -45,6 +58,15 @@ import {
  * carries BOTH its projection state and its row readiness, side by side, and nothing converts between them.
  */
 export type ProjectionState = 'listed' | 'draft' | 'excluded' | 'not_set_up' | 'needs_value'
+
+/** Honest-copy §3: exclusion is local; an existing identity may still sell. */
+export function excludedReason(hasRow: boolean, childExternalId: string | null | undefined, parentExternalId: string | null | undefined, coordinateLabel: string): string {
+  if (!hasRow) return 'No listing record on this coordinate. Tick it to create one as a draft.'
+  const id = childExternalId || parentExternalId
+  return id
+    ? `Excluded here. ${id} still offers this variant on ${coordinateLabel} until the listing is revised. No listing change has been sent, and stock updates for this record still go out.`
+    : 'Excluded from this listing. Nothing was ever sent for this variant.'
+}
 
 export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
 
@@ -395,14 +417,6 @@ type FamilyListing = {
  * on the safe side of that asymmetry, and they fold into typed client calls once the field is declared with
  * both databases migrated.
  */
-export async function readExcludedListingIds(listingIds: string[]): Promise<Set<string>> {
-  if (listingIds.length === 0) return new Set()
-  const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-    'SELECT "id" FROM "ChannelListing" WHERE "variationExcluded" = true AND "id" = ANY($1::text[])',
-    listingIds,
-  )
-  return new Set(rows.map((r) => r.id))
-}
 
 /**
  * Set or clear the flag on rows that already exist.
@@ -541,15 +555,15 @@ export async function getFamilyRead(productId: string, market: string, locale?: 
     if (!primary) {
       return {
         included: false, state: 'excluded', externalId: null, readiness: null, completeness: null,
-        reason: 'This variant has no listing record on this channel and market. Tick it to create one as a draft.',
+        reason: excludedReason(false, null, null, coordinateKey),
       }
     }
     if (excluded.has(primary.id)) {
       return {
         included: false, state: 'excluded', externalId: primary.externalListingId, readiness: null, completeness: null,
-        reason: primary.externalListingId
-          ? `Excluded from this listing. The record is kept, so ${primary.externalListingId} is not lost.`
-          : 'Excluded from this listing.',
+        reason: excludedReason(true, primary.externalListingId,
+          (byCoordinate.get(coordinateKey) ?? []).find(l => l.productId === root.id && l.aliasKey === primary.aliasKey)?.externalListingId,
+          coordinates.find(c => `${c.channel}:${c.marketplace}` === coordinateKey)?.label ?? coordinateKey),
       }
     }
     const { readiness, completeness } = readinessOf(memberId)
@@ -787,6 +801,7 @@ export interface ProjectionChild {
    * 🔴 Not an inheritable value: see `ProjectionAxisCell.inheritedValue`.
    */
   sharedAxisValues: Record<string, string>
+  projectedAxisValues?: Record<string, string>
   /**
    * Axes whose shared value cannot be trusted on THIS row, with the reason. Measured on GALE-JACKET: two
    * children have had their `categoryAttributes.variations` bag clobbered by a writer that left only
@@ -832,9 +847,11 @@ export interface ProjectionRead {
     /** VP.4 A3 — the dock's sub-line and the channel's own name in copy. */
     channelLabel: string
     accountLabel: string | null
+    category?: string | null
   }
   vocabulary: ProjectionVocabulary
   limits: ProjectionLimits
+  variation?: VariationThemeCell
   mapping: ProjectionMappingEntry[]
   axisColumns: Record<string, SheetColumn>
   /**
@@ -869,7 +886,13 @@ export interface ProjectionRead {
    * not look" is the could-not-measure / measured-empty confusion, one layer out from where VP.4's probe
    * caught it earlier the same day.
    */
-  targetOptionsState: 'ok' | 'freeform' | 'unavailable'
+  targetOptionsState: 'ok' | 'freeform' | 'unavailable' | 'no-theme'
+  /**
+   * R-VT-7 — why the list is empty, in the channel's own words, whenever it IS empty. `null` when it is not.
+   * The dock renders this instead of an empty Listbox; a reader never has to infer which of the four states
+   * an empty array meant.
+   */
+  targetOptionsReason: string | null
   /** The schemas the coordinate's column build could not read. Empty when everything resolved. */
   schemaMissing: string[]
   freeform: boolean
@@ -901,7 +924,28 @@ export interface ProjectionRead {
     creatable: boolean
     heldReason?: string
   }
-  locked: null | { reason: string; lockedAxisKeys: string[] }
+  /**
+   * VT.1b — the SAME lock the cell reports (`VariationThemeCell.locked`), plus `lockedAxisKeys`: which axes this
+   * coordinate has already published, which only eBay's `__lastPublishedAxes` can answer.
+   */
+  locked: null | {
+    reason: string
+    lockedAxisKeys: string[]
+    setChangeIs: 'relist' | 'new-parent' | 'in-place'
+    orderChangeAllowed: boolean
+    externalId: string | null
+  }
+  /**
+   * VT.4 — the collision report for the CURRENTLY STORED mapping (`docs/vt1-contracts.md` §3.5, which
+   * says this report is served "on GET and on the 400"; before this it was only on the 400, so the
+   * mapping dock had no way to show a collision until an operator had already tried to save one).
+   *
+   * `null` is NOT "no collisions": it is "there is nothing a collision could come from" — this
+   * coordinate drops no axis, or the read carries no children. `groups: []` with `unresolved: 0` is
+   * the measured zero. `collisionReportFor` is the ONE computation; this field and the PATCH's refusal
+   * are the same call with the same arguments.
+   */
+  collisions: CollisionReport | null
   parent: ProjectionParent
   children: ProjectionChild[]
   /**
@@ -923,9 +967,13 @@ export interface ProjectionRead {
 const ALIAS_HELD_REASON =
   'Listing split is unavailable until listing aliases are enabled.'
 
-/** eBay's marketplace id — the key `__lastPublishedAxes` is written under. */
-const marketplaceIdFor = (channel: string, market: string) =>
-  channel.toUpperCase() === 'EBAY' ? `EBAY_${market.toUpperCase()}` : market.toUpperCase()
+/**
+ * eBay's marketplace id — the key `__lastPublishedAxes` is written under.
+ *
+ * VT.1: the definition MOVED to `variation-theme-segments.ts` so the projection read and the variation resolver
+ * address that store through one rule. Re-exported here because callers of this module import it from here.
+ */
+export { marketplaceIdFor }
 
 /**
  * Which target options this coordinate offers, derived from the coordinate's OWN column set.
@@ -939,12 +987,50 @@ export function targetOptionsFrom(
   columns: SheetColumn[],
   coordinateLabel: string,
   themeOptions: string[],
+  /**
+   * R-VT-7 — AMAZON only: the cached product type's `properties`, so a segment is bound to a REAL attribute
+   * instead of being lowercased into one. Absent = no cached schema, which the caller turns into
+   * `targetOptionsState: 'unavailable'` rather than into an empty list that reads as "none exist".
+   */
+  amazonProperties?: Record<string, unknown>,
 ): TargetOption[] {
   const upper = channel.toUpperCase()
   if (upper === 'AMAZON') {
-    const segments = new Set<string>()
-    for (const option of themeOptions) for (const segment of option.split('/')) if (segment.trim()) segments.add(segment.trim())
-    return [...segments].sort().map((segment) => ({ code: segment.toLowerCase(), label: segment, columnKey: null, taken: false }))
+    /**
+     * 🔴 R-VT-7 (orchestrator, on VT.2c's measurement). This branch used to split `themeOptions` on `/` and
+     * lowercase each segment. Both halves were wrong after VT.1:
+     *
+     *  1. `themeOptions` came from the coordinate's own `variation_theme` SHEET COLUMN's `options` — and VT.1
+     *     RETIRED that raw column in favour of the engine-owned one, which carries no `options`. So the input
+     *     was `[]` on every Amazon coordinate from the moment VT.1 landed, and the output was `[]` with
+     *     `targetOptionsState: 'ok'` — "this channel offers no targets", stated confidently, on a channel that
+     *     offers two. VT.2c measured it on three coordinates (GALE·IT v87, GALE·DE v13, VX-TEST-3AX v5) and
+     *     could not run the dock reorder's 200 arm because of it.
+     *  2. `segment.toLowerCase()` is the `${axis}_name` convention T15 proved false: `COLOR_NAME` lowercases
+     *     to `color_name`, which is not an attribute of OUTERWEAR on any marketplace. The attribute comes from
+     *     the schema's `properties` through `bindSegmentToAttribute`, the same function the cell resolver uses.
+     *
+     * The list is now the bound attributes of the segments of the themes this product type actually declares,
+     * labelled with the attribute's own localized `title` (`Colore` / `Farbe`). A segment that binds to nothing
+     * is NOT offered as a target — offering it would let an operator map an axis onto an attribute Amazon would
+     * reject at publish time.
+     */
+    const properties = amazonProperties ?? {}
+    const seen = new Map<string, TargetOption>()
+    for (const theme of themeOptions) {
+      for (const segment of themeSegments(theme)) {
+        const bound = bindSegmentToAttribute(segment, properties)
+        if (!bound) continue
+        if (seen.has(bound.attribute)) continue
+        seen.set(bound.attribute, {
+          code: bound.attribute,
+          label: attributeTitle(bound.attribute, properties) ?? bound.attribute,
+          columnKey: null,
+          taken: false,
+        })
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.label.localeCompare(b.label))
   }
   if (isFreeformTarget(upper)) return []
   const out: TargetOption[] = []
@@ -960,6 +1046,55 @@ export function targetOptionsFrom(
     out.push({ code, label: channelSpec?.label ?? column.label ?? code, columnKey: column.key, taken: false })
   }
   return out
+}
+
+/**
+ * Why a coordinate's axis ORDER cannot be dragged here, in the channel's own terms. `''` = it can be.
+ *
+ * History, because the sentence this returns is the operator's only explanation: VT.F measured (2026-09-13,
+ * `VX-TEST-3AX` AMAZON·IT v6 → v7) that an order-only PATCH answered 200 and stored NOTHING on every channel
+ * but eBay, because `variationMapping` was a flat `{axisKey: target}` map. **R-VT-13 (VT.F2) made the column
+ * ORDERED**, so the storage half of that is gone; what remains is per channel and is stated here — eBay has its
+ * own guarded editor, Shopify's order is stored AND published, Amazon's is fixed by the theme, Etsy's is stored
+ * with no publisher to send it.
+ */
+export function orderHeldReason(channel: string, coordinateLabel: string): string {
+  const upper = String(channel ?? '').toUpperCase()
+  if (upper === 'EBAY') return ''
+  if (upper === 'AMAZON') {
+    return `Amazon's variation theme fixes the order of its segments, so the order cannot be changed on ${coordinateLabel}. Choose a different theme to change it.`
+  }
+  /**
+   * 🔴 R-VT-13 (VT.F2) — SHOPIFY is no longer held: the order is STORED (`{axes:[{…,order}]}`) and the publisher
+   * CONSUMES it. `shopifyAxisOrder()` orders a fresh content document's `axes` by it, and
+   * `content-publisher.ts` sends `optionValues` in that order, which is the order a buyer sees on the product
+   * page. So this channel returns `''` and `orderWritableHere` reports true.
+   */
+  if (upper === 'SHOPIFY') return ''
+  /**
+   * ETSY stores the order too, and nothing publishes it: there is no Etsy variation publish path in this
+   * codebase today (`marketplaces/etsy.service.ts` has no importer — measured, `/usr/bin/grep` for its module
+   * name across `apps/api/src` finds none). Saying "stored here, not sent yet" is the honest sentence; saying
+   * it is writable would promise a buyer-facing change nothing makes.
+   */
+  if (upper === 'ETSY') {
+    return `${coordinateLabel} stores this order, but nothing publishes an Etsy property order yet, so a reorder here is recorded and not sent.`
+  }
+  return `${coordinateLabel} stores this mapping without an order, so a reorder here would not reach the channel.`
+}
+
+/**
+ * Can an operator change the delivery ORDER on this coordinate, and is it the thing the channel delivers?
+ * The ONE predicate `getProjectionRead` answers `order.writableHere` with — never a second rule at the caller.
+ *
+ * eBay has its own guarded editor (a presentation-order token), so it answers `true` only when that editor
+ * answered. Shopify's order is stored by the mapping PATCH and consumed by its publisher, so it is writable
+ * here. Amazon's is fixed by the theme, and Etsy's is stored but unpublished — both hold, each with its sentence.
+ */
+export function orderWritableHere(channel: string, hasPresentation: boolean): boolean {
+  const upper = String(channel ?? '').toUpperCase()
+  if (upper === 'EBAY') return hasPresentation
+  return upper === 'SHOPIFY'
 }
 
 /**
@@ -980,11 +1115,10 @@ export function readStoredMapping(
   axes: FamilyAxis[],
 ): ProjectionMappingEntry[] {
   if (channel.toUpperCase() === 'EBAY') {
-    const declaredTheme = parseThemeAxes(source.product.variationTheme)
-    const storedOrder = Array.isArray(source.platformAttributes._variationAxes)
-      ? (source.platformAttributes._variationAxes as unknown[]).filter((v): v is string => typeof v === 'string')
-      : []
-    const order = declaredTheme.length > 0 ? declaredTheme : storedOrder
+    // VT.1 (VX D1/M3) — the THIRD reader of the declared set, now on the same rule as the push and the family-axes
+    // service: the coordinate's `_variationAxes` when non-empty, else `Product.variationTheme`. It used to prefer
+    // the product theme, so a coordinate given its own set displayed the family's instead.
+    const order = ebayDeclaredAxes(source.platformAttributes, source.product.variationTheme) ?? []
     const nameLabels = (source.platformAttributes._axisNameLabels ?? {}) as Record<string, string>
     return axes
       .map((axis) => {
@@ -995,11 +1129,28 @@ export function readStoredMapping(
       .sort((a, b) => a.order - b.order)
       .map((entry, index) => ({ ...entry, order: index }))
   }
-  const flat = (source.listing?.variationMapping ?? {}) as Record<string, unknown>
-  return axes.map((axis, index) => {
-    const raw = flat[axis.key] ?? flat[axis.storedKey]
-    return { axisKey: axis.key, axisLabel: axis.label, target: typeof raw === 'string' && raw.trim() ? raw : null, order: index }
+  /**
+   * 🔴 R-VT-13 (VT.F2) — `variationMapping` is now ORDERED (`{axes:[{axisKey,target,order}]}`) and the flat
+   * `{axisKey: target}` map every existing row carries is still read, by the ONE parser in
+   * `@nexus/shared/variation-mapping`. Before this, the order was re-derived from the FAMILY axis index here
+   * while the writer dropped it there, so an order-only PATCH answered 200 and stored nothing (VT.F measured
+   * v6 → v7 with the original order served back).
+   *
+   * Where the stored value carries an order, the axes come back in THAT order — the same rule the eBay branch
+   * above already used for `_variationAxes`, not a second one. An axis the mapping does not carry keeps its
+   * family position and trails the mapped block, exactly as eBay's `index >= 0 ? index : axes.length` does.
+   */
+  const stored = source.listing?.variationMapping ?? null
+  const shape = parseVariationMapping(stored).shape
+  const positioned = axes.map((axis, index) => {
+    const target = variationMappingTarget(stored, axis.key, axis.storedKey)
+    const storedOrder = shape === 'ordered' ? variationMappingOrder(stored, axis.key, axis.storedKey) : null
+    return { axisKey: axis.key, axisLabel: axis.label, target, order: storedOrder ?? (shape === 'ordered' ? axes.length + index : index) }
   })
+  if (shape !== 'ordered') return positioned
+  return positioned
+    .sort((a, b) => a.order - b.order)
+    .map((entry, index) => ({ ...entry, order: index }))
 }
 
 function storedAxisOrder(axis: FamilyAxis, listings: readonly FamilyListing[]): { from: string; codes: string[] } | null {
@@ -1015,6 +1166,14 @@ function storedAxisOrder(axis: FamilyAxis, listings: readonly FamilyListing[]): 
 }
 
 export async function getProjectionRead(input: ProjectionInput): Promise<ProjectionRead> {
+  return readProjection(input)
+}
+
+export async function previewProjectionMapping(input: MappingWriteInput): Promise<ProjectionRead> {
+  return readProjection(input, input)
+}
+
+async function readProjection(input: ProjectionInput, proposed?: MappingWriteInput): Promise<ProjectionRead> {
   const t0 = Date.now()
   const channel = input.channel.toUpperCase()
   const market = input.market.toUpperCase()
@@ -1080,24 +1239,98 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
   const columns = channelSheet?.columns ?? []
   const coordinateLabel = channelSheet?.scope?.label ?? `${channel} · ${market}`
 
-  const themeColumn = columns.find((c) => c.key === 'variation_theme')
-  const themeOptions = (themeColumn?.options ?? []) as string[]
-  const themeLabels = (themeColumn as unknown as { optionLabels?: Record<string, string> } | undefined)?.optionLabels ?? {}
+  /**
+   * 🔴 R-VT-7 — the theme enum comes from the CACHED SCHEMA, not from a sheet column.
+   *
+   * Before this, both the picker and `targetOptions` read `columns.find(key === 'variation_theme').options`.
+   * VT.1 retired that raw Amazon column and replaced it with the engine-owned structural one, which has no
+   * `options` — so from that commit on, every Amazon coordinate answered `theme.options: []` and
+   * `targetOptions: []`, and the empty picker and empty target Listbox both looked like facts about Amazon.
+   * `loadAmazonThemeFacts` is the ONE reader of `CategorySchema` for this fact (the cell resolver's own), it
+   * is cached per (marketplace × productType), it resolves the marketplace CODE through VT.1b's single
+   * authority, and it makes NO live SP-API call (T13).
+   */
+  const category = await resolveVariationCategory(channel, market, root.id, parentListing ? { ...parentListing, platformAttributes: parentListing.platformAttributes as Record<string, unknown> | null } : null)
+  const amazonThemeFacts = channel === 'AMAZON' ? await loadAmazonThemeFacts(market, category) : null
+  const amazonProperties = amazonThemeFacts?.facts.properties ?? {}
+  const themeOptions: string[] = channel === 'AMAZON'
+    ? (amazonThemeFacts?.facts.themes ?? [])
+    : []
+  /* The picker's labels are the BOUND attributes' own `title`s joined with ` / ` (design §3.2: `Colore /
+     Taglia` on IT, `Farbe / Größe` on DE) — never `enumNames`, which T17 measured as machine-cased. */
+  const themeLabels: Record<string, string> = {}
+  const themeDeprecated = new Set(amazonThemeFacts?.facts.deprecated ?? [])
+  for (const code of themeOptions) {
+    const labels = themeSegments(code).map((segment) => {
+      const bound = bindSegmentToAttribute(segment, amazonProperties)
+      return attributeTitle(bound?.attribute ?? null, amazonProperties) ?? bound?.attribute ?? segment
+    })
+    themeLabels[code] = labels.join(' / ') || code
+  }
+  /**
+   * The grouping the editor renders on both hosts: which candidate covers every family axis, which drops one,
+   * which adds one the family does not have. `classifyThemes` + `dropsForTheme`/`addsForTheme` are the cell
+   * resolver's own functions — the dock does not get a second opinion about what a theme costs.
+   */
+  const amazonWantedKeys = axes.map((axis) => canonicalVariantAxis(axis.key)).filter(Boolean)
+  const amazonThemeGrouping = new Map<string, { coversAll: boolean; drops: string[]; adds: string[] }>()
+  if (amazonThemeFacts) {
+    for (const t of classifyThemes(amazonThemeFacts.facts)) {
+      const drops = dropsForTheme(t.keys, amazonWantedKeys)
+      const adds = addsForTheme(t.keys, amazonWantedKeys)
+      amazonThemeGrouping.set(t.code, { coversAll: drops.length === 0 && adds.length === 0 && amazonWantedKeys.length > 0, drops, adds })
+    }
+  }
 
   const vocabulary = vocabularyFor(channel)
   const limits = limitsFor(channel, themeOptions)
-  const targetOptions = targetOptionsFrom(channel, columns, coordinateLabel, themeOptions)
+  const targetOptions = targetOptionsFrom(channel, columns, coordinateLabel, themeOptions, amazonProperties)
+  /**
+   * 🔴 The Amazon arm of R-VT-7's "an empty list carries its own state word". There are exactly three reasons
+   * an Amazon coordinate can offer no target, and each of them is a DIFFERENT thing to tell an operator:
+   * no cached schema (we could not look), a cached schema that declares no theme (nothing to look at), and a
+   * schema whose theme segments bind to no attribute of this product type (T15's `_NAME` family — the list is
+   * empty on purpose and naming a bogus `color_name` would be worse).
+   */
+  const amazonTargetState: { state: 'ok' | 'unavailable' | 'no-theme'; reason: string | null } | null =
+    channel !== 'AMAZON'
+      ? null
+      : !amazonThemeFacts
+        ? { state: 'unavailable', reason: `No cached schema for ${root.productType ?? 'this product type'} on ${market}, so its variation targets cannot be listed.` }
+        : themeOptions.length === 0
+          ? { state: 'no-theme', reason: `${root.productType ?? 'This product type'} declares no variation theme on ${market}, so it has no variation targets.` }
+          : targetOptions.length === 0
+            ? { state: 'unavailable', reason: `None of the ${themeOptions.length} themes on ${root.productType ?? 'this product type'} binds a segment to an attribute this product type declares.` }
+            : { state: 'ok', reason: null }
   const platformAttributes = (parentListing?.platformAttributes ?? {}) as Record<string, unknown>
 
-  const mapping = readStoredMapping(channel, { product: root, listing: parentListing, platformAttributes }, axes)
+  const projectionInput = await loadVariationProjectionInput({
+    coordinate: { channel, marketplace: market, label: coordinateLabel }, market, accountId: input.accountId ?? null, columns, categoriesByAlias: new Map([[aliasKey, category]]),
+    family: { rootId: root.id, familyAxes: declared, productVersion: root.version, productTheme: root.variationTheme, productType: root.productType, childIds: children.map(c => c.id),
+      variants: children.map(child => { const own = listings.find(l => l.productId === child.id && l.aliasKey === aliasKey); return { id: child.id, sku: child.sku, included: !!own && !excluded.has(own.id), axisValues: channelSheet.rows.find(r => r.id === child.id && (r.aliasId ?? '') === aliasKey)?.axisValues ?? {} } }) },
+    parentListings: new Map([[aliasKey, parentListing ? { ...parentListing, platformAttributes } : null]]),
+  }, aliasKey)
+  if (proposed && projectionInput.listing) {
+    const listing = projectionInput.listing
+    if (proposed.reset) {
+      listing.variationTheme = null; listing.variationMapping = null
+      const bag = { ...listing.platformAttributes }; delete bag._variationAxes; delete bag._axisNameLabels; bag._variationAxesMode = 'inherit'; listing.platformAttributes = bag
+    } else {
+      if (proposed.theme !== undefined) listing.variationTheme = proposed.theme
+      if (proposed.mapping !== undefined) {
+        listing.variationMapping = orderedVariationMapping(proposed.mapping)
+        if (channel === 'EBAY') listing.platformAttributes = { ...listing.platformAttributes, _variationAxesMode: 'override', _variationAxes: proposed.mapping.map(m => m.axisKey), _axisNameLabels: Object.fromEntries(proposed.mapping.map(m => [m.axisKey, m.target])) }
+      }
+    }
+  }
+  const variation = resolveVariationProjection(projectionInput)
+  const mapping: ProjectionMappingEntry[] = variation.axes.map((a, order) => ({ axisKey: axes.find(axis => canonicalVariantAxis(axis.key) === a.axisKey)?.key ?? a.familyKey, axisLabel: a.label, target: a.included ? a.target : null, order }))
   let presentation: Awaited<ReturnType<typeof readPresentationOrder>> | null = null
   let orderReason = ''
   if (channel === 'EBAY' && parentListing && input.includeOrder !== false) {
     try {
       presentation = await readPresentationOrder({ productId: root.id, marketplace: market, accountId: parentListing.channelConnectionId ?? undefined, aliasKey })
-      const order = presentation.axes.map(axis => axis.key)
-      mapping.sort((a, b) => order.indexOf(axisSynonymKey(a.axisKey)) - order.indexOf(axisSynonymKey(b.axisKey)))
-      mapping.forEach((entry, index) => { entry.order = index })
+      // Presentation order is reported separately; it does not rewrite the selected mapping.
     } catch (err) { orderReason = err instanceof Error ? err.message : String(err) }
   }
   const takenTargets = new Set(mapping.map((m) => m.target).filter((t): t is string => !!t))
@@ -1106,15 +1339,39 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
   // The lock: what this coordinate has ALREADY published. Never fabricated from the DECLARED axes — those
   // equal the current set by construction, so deriving the lock from them would make every coordinate look
   // locked, which is the same false-negative the eBay preflight documents for `priorPublishedAxisNames`.
-  const lastPublished = ((platformAttributes.__lastPublishedAxes ?? {}) as Record<string, unknown>)[marketplaceIdFor(channel, market)]
-  const lockedAxisKeys = Array.isArray(lastPublished)
-    ? (lastPublished as unknown[]).filter((v): v is string => typeof v === 'string')
-    : []
-  const locked = lockedAxisKeys.length > 0 && parentListing?.externalListingId
+  /* VT.F item A5 — ONE function for both hosts. This block was inline here and absent from the sheet
+     cell, so a per-axis lock existed in the dock and not in the cell; `lockedAxisKeys` is now on the cell
+     contract and both producers call `lockedAxisKeysFrom`. */
+  const lockedAxisKeys = lockedAxisKeysFrom(platformAttributes, channel, market)
+  // VT.1b item 3 (VT.4) — ONE definition of "locked", shared with the cell (`variationLockFor`). This used to derive it
+  // from `__lastPublishedAxes` ALONE, which only eBay's push writes — so GALE's live Amazon coordinates read UNLOCKED
+  // here and LOCKED on the cell: two answers to "may I change the set here" for the same ASIN. The cell's rule is the
+  // one `docs/vt1-contracts.md` §1 specifies (a published external id on a non-draft listing), so it decides both.
+  // `lockedAxisKeys` stays beside it because it is the extra fact only that store can answer — WHICH axes are already
+  // published — and this module's own write path reports it.
+  const sharedLock = variationLockFor({
+    coordinate: { channel, market },
+    family: { childIds: children.map((c) => c.id) },
+    listing: parentListing ? {
+      version: parentListing.version ?? 0,
+      variationTheme: parentListing.variationTheme ?? null,
+      variationMapping: null,
+      platformAttributes: (parentListing.platformAttributes ?? null) as Record<string, unknown> | null,
+      externalListingId: parentListing.externalListingId ?? null,
+      listingStatus: parentListing.listingStatus ?? null,
+    } : null,
+  })
+  const locked = sharedLock
     ? {
         lockedAxisKeys,
-        reason: `Item ${parentListing.externalListingId} is live with ${lockedAxisKeys.join(' and ')}. `
-          + `Adding or removing a ${vocabulary.axisNoun} relists it; reordering and adding values do not.`,
+        // eBay can say WHICH axes are published; every other channel can only say that the coordinate is live.
+        reason: lockedAxisKeys.length > 0
+          ? `Item ${parentListing!.externalListingId} is live with ${lockedAxisKeys.join(' and ')}. `
+            + `Adding or removing a ${vocabulary.axisNoun} relists it; reordering and adding values do not.`
+          : sharedLock.reason,
+        setChangeIs: sharedLock.setChangeIs,
+        orderChangeAllowed: sharedLock.orderChangeAllowed,
+        externalId: sharedLock.externalId,
       }
     : null
 
@@ -1217,7 +1474,7 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
       : missingMapped ? 'needs_value'
         : row?.externalListingId ? 'listed' : 'draft'
     const reason = isExcluded
-      ? (row ? 'Excluded from this listing. The record is kept.' : 'No listing record on this coordinate.')
+      ? excludedReason(!!row, row?.externalListingId, parentListing?.externalListingId, coordinateLabel)
       : missingMapped ? sheetRow?.readiness.issues.map(issue => issue.message).join(' ') || `Missing a value for a mapped ${vocabulary.axisNoun}.`
         : row?.externalListingId
           ? (row.isPublished ? 'Live on this channel.' : 'Live on this channel, with publishing turned off for this listing.')
@@ -1230,6 +1487,7 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
       imageInherited: sheetRow?.imageInherited ?? false,
       included: !isExcluded,
       sharedAxisValues: values,
+      projectedAxisValues: sheetRow?.axisValues ?? {},
       ...readinessOfRow(sheetRow as never, channelSheet?.meta?.schemaMissing ?? []),
       axisValuesSuspect: suspect,
       values: Object.fromEntries(axes.map((axis) => {
@@ -1297,39 +1555,83 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
     ? (connectionLabels.get(parentListing.channelConnectionId) ?? null)
     : null
 
-  return {
+  const read: ProjectionRead = {
     version: parentListing?.version ?? 0,
     coordinate: {
       channel, market,
       accountId: parentListing?.channelConnectionId ?? input.accountId ?? null,
       aliasKey, label: coordinateLabel,
       channelLabel: coordinateLabel.split(' · ')[0] ?? channel,
-      accountLabel,
+      accountLabel, category,
     },
     axes: axesOut,
     order: {
       axes: storedOrderAxes,
       valueOrder: storedValueOrder,
       editorUrl: '/api/ebay/cockpit/presentation-order',
-      writableHere: !!presentation,
-      reason: orderReason,
+      // R-VT-13: the real capability per channel, one predicate (eBay's editor · Shopify's stored+published order).
+      writableHere: orderWritableHere(channel, !!presentation),
+      /**
+       * 🔴 VT.F measured, on `VX-TEST-3AX` AMAZON·IT, that a reorder PATCH answered **200, bumped the version
+       * 6 → 7 and served the ORIGINAL order back** at 8 s: `writeProjectionMapping` stored a FLAT
+       * `{axisKey: target}` map and dropped `entry.order`, while `readStoredMapping` re-derived the order from
+       * the FAMILY axis index (`reference_api_accepts_a_flag_it_ignores`). VT.F stated the refusal per channel
+       * on the wire, because a held control must be rendered and say why (design §3.5).
+       *
+       * 🔴 **R-VT-13 (VT.F2) replaced that held reason with the real CAPABILITY.** `variationMapping` is now
+       * ORDERED, so the order is stored on every channel that has it, and `orderWritableHere` answers per
+       * coordinate: eBay through its own editor, **Shopify writable — its stored order is what the publisher
+       * sends as the buyer-facing option order** — Amazon still held (its theme fixes the segment order) and
+       * Etsy still held (stored, and nothing publishes an Etsy property order yet). An empty reason now means
+       * "you may drag it", which is what the web has always read it as.
+       */
+      reason: orderReason || orderHeldReason(channel, coordinateLabel),
       ...(presentation ? { token: presentation.token, resolvedAxes: presentation.axes } : {}),
     },
     vocabulary,
     axisColumns,
     limits,
     mapping,
-    targetOptions,
-    targetOptionsState: isFreeformTarget(channel)
+    variation,
+    targetOptions: channel === 'ETSY' || channel === 'EBAY' ? (variation.candidates?.items ?? []).map(item => ({ code: item.code, label: item.label, columnKey: targetOptions.find(option => option.code === item.code)?.columnKey ?? item.code, taken: mapping.some(m => m.target === item.code) })) : targetOptions,
+    /**
+     * 🔴 R-VT-7 — an EMPTY list carries its own state word, and `'ok'` is never one of them. Four different
+     * facts used to serialise as `[]` + `'ok'`: the channel offers none, the channel takes free names, the
+     * schema could not be read, and (after VT.1) "the code was reading a column that no longer exists".
+     */
+    targetOptionsState: variation.candidates?.state ?? amazonTargetState?.state ?? (isFreeformTarget(channel)
       ? 'freeform'
-      : (channelSheet?.meta?.schemaMissing?.length ?? 0) > 0 || !channelSheet ? 'unavailable' : 'ok',
+      : (channelSheet?.meta?.schemaMissing?.length ?? 0) > 0 || !channelSheet
+        ? 'unavailable'
+        : targetOptions.length === 0 ? 'unavailable' : 'ok'),
+    targetOptionsReason: variation.candidates?.unavailableReason ?? amazonTargetState?.reason ?? (isFreeformTarget(channel)
+      ? 'This channel takes any option name, so there is no list to choose from.'
+      : targetOptions.length === 0
+        ? ((channelSheet?.meta?.schemaMissing?.length ?? 0) > 0 || !channelSheet
+          ? `The column set for this coordinate could not be read (${(channelSheet?.meta?.schemaMissing ?? []).join(', ') || 'no sheet'}), so its variation targets cannot be listed.`
+          : 'This coordinate declares no variation-eligible specifics.')
+        : null),
     schemaMissing: channelSheet?.meta?.schemaMissing ?? [],
     freeform: isFreeformTarget(channel),
     // eBay's axis SET lives on `Product.variationTheme`, which is ONE record for every eBay market. Saying so
     // is the difference between an operator changing one market and changing all of them without knowing.
-    affectsAllMarkets: channel === 'EBAY',
+    affectsAllMarkets: false,
+    /**
+     * R-VT-9 — the dock's Amazon section carries the theme picker, so this block must be POPULATED and not an
+     * empty options array. `coversAll` / `drops` / `deprecated` come from `classifyThemes` + the family's own
+     * wanted keys, the same grouping the sheet cell's editor renders (`Covers every axis` · `Drops an axis` ·
+     * `Deprecated`), so the two hosts group the list identically.
+     */
     theme: channel === 'AMAZON'
-      ? { value: parentListing?.variationTheme ?? null, options: themeOptions.map((code) => ({ code, label: themeLabels[code] ?? code })) }
+      ? {
+          value: variation.theme?.code ?? null,
+          options: themeOptions.map((code) => ({
+            code,
+            label: themeLabels[code] ?? code,
+            deprecated: themeDeprecated.has(code),
+            ...(amazonThemeGrouping.get(code) ?? { coversAll: false, drops: [] as string[], adds: [] as string[] }),
+          })),
+        }
       : null,
     split: {
       mode: aliases.length > 0 ? 'per-axis' : 'single',
@@ -1371,7 +1673,13 @@ export async function getProjectionRead(input: ProjectionInput): Promise<Project
       mappingErrorRows: childState.filter((c) => c.listing.state === 'needs_value').length,
     },
     meta: { tookMs: Date.now() - t0, phases: { sheet: sheetMs } },
+    // Filled below: `collisionReportFor` takes the finished read, so it cannot be an initialiser here.
+    collisions: null,
   }
+  // VT.4 — the SAME function the PATCH refuses with, over the SAME stored mapping. One computation,
+  // two consumers: a number the dock shows and a number the refusal quotes cannot disagree.
+  read.collisions = collisionReportFor(read, mapping.filter((m) => m.target).map((m) => m.axisKey))
+  return read
 }
 
 export { axisValuesOf, buildFamilyAxes, setVariationExcluded, FAMILY_MEMBER_SELECT, LISTING_SELECT }
@@ -1399,145 +1707,155 @@ export class ProjectionRequestError extends Error {
   }
 }
 
+/**
+ * VX §6 / VT.1 — a mapping whose INCLUDED variants do not have distinct keys on the surviving axes.
+ *
+ * 400, not 409: the request is well formed and the world did not move; the mapping itself cannot be published,
+ * because two variants would arrive at the channel indistinguishable. Refusing it here is the difference between a
+ * named refusal and a listing whose variants silently collapse. `collisions` rides on the error so the editor can
+ * render the groups without a second round trip (the route's mapper forwards it verbatim).
+ */
+export class ProjectionCollisionError extends Error {
+  readonly code = 'collision_unresolved'
+  readonly statusCode = 400
+  constructor(message: string, readonly collisions: CollisionReport) {
+    super(message)
+    this.name = 'ProjectionCollisionError'
+  }
+}
+
+/** `docs/vt1-contracts.md` §3.5. */
+export interface CollisionReport {
+  groups: Array<{ key: string[]; members: Array<{ id: string; sku: string; droppedValues: Record<string, string> }> }>
+  unresolved: number
+  summary: string
+  resolvers: Array<{
+    kind: 'split' | 'fold' | 'exclude'
+    available: boolean
+    reason: string | null
+    /** `fold` only: the surviving axis whose cell the fold would write. Null when it cannot run. */
+    foldInto?: string | null
+  }>
+}
+
 export interface MappingWriteInput extends ProjectionInput {
   expectedVersion: number
   /** The WHOLE list. An axis absent from it is unmapped — a partial patch cannot express a removal. */
   mapping?: Array<{ axisKey: string; target: string; order?: number }>
   /** AMAZON only: the variation theme enum value. */
   theme?: string | null
+  /**
+   * VT.1 — clear THIS coordinate's override and fall back to the rule or the derivation (`docs/vt1-contracts.md`
+   * §3.3). Sent on its own: combining it with `theme`/`mapping` would be two intents in one request, and the
+   * result would depend on an order the caller never stated.
+   */
+  reset?: boolean
   presentationOrder?: { expectedToken: string; change: PresentationOrderChange }
   userId?: string | null
 }
 
+/** Compare the delivered bindings, including their order and the Amazon theme code. */
+export function projectionSignature(read: ProjectionRead): string {
+  return JSON.stringify([read.theme?.value ?? null, read.mapping.filter(m => m.target).map(m => [canonicalVariantAxis(m.axisKey), m.target])])
+}
+
+export function validateProjectionChange(current: ProjectionRead, proposed: ProjectionRead, requested: MappingWriteInput['mapping']): void {
+  if (current.version !== proposed.version) throw new ProjectionConflictError('version_conflict', 'This listing changed during review. Reload it.')
+  const signature = projectionSignature(current)
+  const changed = signature !== projectionSignature(proposed)
+  if (current.locked && changed) {
+    const bindings = (read: ProjectionRead) => JSON.stringify(read.mapping.filter(m => m.target).map(m => [canonicalVariantAxis(m.axisKey), m.target]).sort((a, b) => a[0]!.localeCompare(b[0]!)))
+    const onlyOrder = current.theme?.value === proposed.theme?.value && bindings(current) === bindings(proposed)
+    if (!onlyOrder || !current.locked.orderChangeAllowed) throw new ProjectionConflictError('axes_locked', current.locked.reason, { locked: current.locked, current })
+  }
+  if (proposed.targetOptionsState === 'unavailable' && (requested?.length || proposed.mapping.some(m => m.target))) throw new ProjectionRequestError(proposed.targetOptionsReason ?? 'Load the category schema before changing variations.')
+  if (proposed.theme?.value && !proposed.theme.options.some(t => t.code === proposed.theme!.value && !proposed.variation?.theme?.deprecated)) throw new ProjectionRequestError('Choose a current variation theme from this category schema.')
+  const unbound = proposed.variation?.axes.find(a => a.included && a.unbound)
+  if (unbound) throw new ProjectionRequestError(unbound.unbound!.reason)
+  if (requested && proposed.coordinate.channel === 'AMAZON') {
+    const delivered = proposed.mapping.filter(m => m.target)
+    if (requested.length !== delivered.length || requested.some(r => !delivered.some(m => canonicalVariantAxis(m.axisKey) === canonicalVariantAxis(r.axisKey) && m.target === r.target))) throw new ProjectionRequestError('Map exactly the attributes required by the selected Amazon theme.')
+  }
+  if (proposed.variation?.collisions === null) throw new ProjectionRequestError('Variant inclusion or values could not be evaluated. Reload before saving variations.')
+  if (proposed.collisions && proposed.collisions.unresolved > 0) throw new ProjectionCollisionError(proposed.collisions.summary, proposed.collisions)
+}
+
 export async function writeProjectionMapping(input: MappingWriteInput): Promise<ProjectionRead> {
-  const channel = input.channel.toUpperCase()
-  const market = input.market.toUpperCase()
+  const channel = input.channel.toUpperCase(), market = input.market.toUpperCase()
   const current = await getProjectionRead(input)
-  if (input.presentationOrder && (typeof input.presentationOrder.expectedToken !== 'string' || !input.presentationOrder.expectedToken || !input.presentationOrder.change)) throw new ProjectionRequestError('Reload the presentation order before saving.')
-  if (input.presentationOrder && channel !== 'EBAY') throw new ProjectionRequestError('Presentation order is supported on eBay.')
-
-  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) {
-    throw new ProjectionRequestError('An observed listing version is required.')
+  if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0) throw new ProjectionRequestError('An observed listing version is required.')
+  if (current.version !== input.expectedVersion) throw new ProjectionConflictError('version_conflict', 'This listing changed after you opened the mapping. Reload it.', { current })
+  if (input.reset && (input.theme !== undefined || input.mapping !== undefined || input.presentationOrder !== undefined)) throw new ProjectionRequestError('Send reset on its own.')
+  if (input.presentationOrder && (channel !== 'EBAY' || typeof input.presentationOrder.expectedToken !== 'string' || !input.presentationOrder.expectedToken || !input.presentationOrder.change)) throw new ProjectionRequestError('Reload the eBay presentation order before saving.')
+  let requested = input.reset ? undefined : input.mapping ?? current.mapping.filter(m => m.target).map((m, order) => ({ axisKey: m.axisKey, target: m.target!, order }))
+  if (requested) {
+    if (!Array.isArray(requested) || requested.some(e => !e || typeof e.axisKey !== 'string' || typeof e.target !== 'string' || !e.target.trim() || e.target !== e.target.trim() || (e.order !== undefined && (!Number.isSafeInteger(e.order) || e.order < 0)))) throw new ProjectionRequestError('Map each shared axis once to a nonempty channel name with a valid order.')
+    requested = requested.slice().sort((a, b) => (a.order ?? requested!.indexOf(a)) - (b.order ?? requested!.indexOf(b)))
+    const known = new Set(current.axes.map(a => canonicalVariantAxis(a.key)))
+    if (new Set(requested.map(e => canonicalVariantAxis(e.axisKey))).size !== requested.length || requested.some(e => !known.has(canonicalVariantAxis(e.axisKey)))) throw new ProjectionRequestError('Map each existing family axis at most once.')
+    if (current.limits.axes !== null && requested.length > current.limits.axes) throw new ProjectionRequestError(`This channel takes at most ${current.limits.axes} variation axes.`)
+    if (new Set(requested.map(e => e.target.toLocaleLowerCase())).size !== requested.length) throw new ProjectionRequestError('Each channel name can carry only one axis.')
+    if (channel === 'SHOPIFY' && requested.some(e => e.target.length > 255)) throw new ProjectionRequestError('Shopify option names must be 255 characters or fewer.')
+    if (!current.freeform && requested.some(e => !current.targetOptions.some(o => o.code === e.target))) throw new ProjectionRequestError(current.targetOptionsReason ?? 'Choose a variation target from the category schema.')
   }
-  if (current.version !== input.expectedVersion) {
-    throw new ProjectionConflictError('version_conflict', 'This listing changed after you opened the mapping. Reload it and review the change again.', { current })
-  }
-
-  const requested = input.mapping ?? current.mapping.filter((m) => m.target).map((m, i) => ({ axisKey: m.axisKey, target: m.target as string, order: i }))
-  if (!Array.isArray(requested) || requested.some(entry => !entry || typeof entry.axisKey !== 'string' || typeof entry.target !== 'string' || !entry.target.trim()) || new Set(requested.map(entry => entry.axisKey)).size !== requested.length) throw new ProjectionRequestError('Map each shared axis once to a nonempty channel specific.')
-
-  // ── Refusals, each by name. A silently truncated mapping is a mapping the operator did not choose. ──
-  const known = new Set(current.mapping.map((m) => m.axisKey))
-  for (const entry of requested) {
-    if (!known.has(entry.axisKey)) {
-      throw new ProjectionRequestError(`"${entry.axisKey}" is not one of this family's axes. Add it on the shared product first.`, { axes: [...known] })
-    }
-  }
-  if (current.limits.axes !== null && requested.length > current.limits.axes) {
-    throw new ProjectionRequestError(
-      `${current.coordinate.channelLabel} takes at most ${current.limits.axes} ${current.vocabulary.axisNounPlural} per listing, and this mapping has ${requested.length}.`,
-      { limit: current.limits.axes, source: current.limits.source.axes },
-    )
-  }
-  const targets = requested.map((entry) => entry.target)
-  const duplicateTarget = targets.find((target, index) => targets.indexOf(target) !== index)
-  if (duplicateTarget) {
-    throw new ProjectionRequestError(`Two axes are mapped onto "${duplicateTarget}". Each ${current.vocabulary.axisNoun} can carry one axis.`)
-  }
-  if (!current.freeform && current.targetOptions.length > 0) {
-    const allowed = new Set(current.targetOptions.map((option) => option.code))
-    const unknownTarget = targets.find((target) => !allowed.has(target))
-    if (unknownTarget) {
-      throw new ProjectionRequestError(
-        `"${unknownTarget}" is not a ${current.vocabulary.axisNoun} this coordinate offers.`,
-        { targetOptions: [...allowed] },
-      )
-    }
-  }
-
-  // ── The lock: adding or removing an axis relists; reordering and renaming do not (spec §4.4.4). ──
-  if (current.locked) {
-    const before = new Set(current.mapping.filter((m) => m.target).map((m) => canonicalVariantAxis(m.axisKey)))
-    const after = new Set(requested.map((entry) => canonicalVariantAxis(entry.axisKey)))
-    const changed = before.size !== after.size || [...after].some((key) => !before.has(key))
-    if (changed) {
-      throw new ProjectionConflictError('axes_locked', current.locked.reason, { locked: current.locked, current })
-    }
-  }
-
+  const proposed = await readProjection(input, { ...input, mapping: requested })
+  validateProjectionChange(current, proposed, requested)
+  if (!input.presentationOrder && projectionSignature(current) === projectionSignature(proposed) && (input.reset ? current.variation?.source.kind !== 'override' : current.variation?.source.kind === 'override')) return current
   const root = await resolveFamilyRoot(input.productId)
-  const listing = await prisma.channelListing.findFirst({
-    where: {
-      productId: root.id, channel, marketplace: market, aliasKey: input.aliasKey ?? '',
-      channelConnectionId: current.coordinate.accountId,
-    },
-    select: { id: true, version: true, platformAttributes: true },
-  })
-  if (!listing) {
-    throw new ProjectionConflictError('no_listing_here', `This family has no ${current.coordinate.channelLabel} listing on ${market}, so there is nothing to map yet.`)
-  }
-
-  if (channel === 'EBAY') {
-    const orderInput = input.presentationOrder ? {
-      productId: root.id, marketplace: market, accountId: current.coordinate.accountId ?? undefined, aliasKey: current.coordinate.aliasKey,
-      expectedVersion: input.expectedVersion, expectedToken: input.presentationOrder.expectedToken, change: input.presentationOrder.change,
-    } : null
-    const orderView = orderInput ? await preparePresentationOrder(orderInput) : null
-    // The axis SET is `Product.variationTheme` — the store `ebay-variation-push.service.ts` reads as
-    // authoritative. The axis NAME per axis is `_axisNameLabels`, which the cockpit's own reader uses as
-    // `nameLabels[a] || a`. The ORDER keys are NOT written here: they have a guarded editor of their own.
-    const names: Record<string, string> = { ...((listing.platformAttributes ?? {}) as Record<string, unknown>)._axisNameLabels as Record<string, string> ?? {} }
-    for (const entry of requested) names[entry.axisKey] = entry.target
-    for (const key of Object.keys(names)) if (!requested.some((entry) => entry.axisKey === key)) delete names[key]
-
-    // The SET keeps the order it already has wherever it can, so a mapping save cannot silently reorder a
-    // live listing's specifics behind the order editor's back.
-    const existingOrder = parseThemeAxes(root.variationTheme)
-    const ordered = [
-      ...existingOrder.filter((name) => requested.some((entry) => canonicalVariantAxis(entry.axisKey) === canonicalVariantAxis(name))),
-      ...requested.map((entry) => entry.axisKey).filter((key) => !existingOrder.some((name) => canonicalVariantAxis(name) === canonicalVariantAxis(key))),
-    ]
-
-    await prisma.$transaction(async (tx) => {
+  const listing = await prisma.channelListing.findFirst({ where: { productId: root.id, channel, marketplace: market, aliasKey: input.aliasKey ?? '', channelConnectionId: current.coordinate.accountId }, select: { id: true, version: true, platformAttributes: true } })
+  if (!listing) throw new ProjectionConflictError('no_listing_here', 'Create a listing on this coordinate before mapping variations.')
+  const orderInput = input.presentationOrder ? { productId: root.id, marketplace: market, accountId: current.coordinate.accountId ?? undefined, aliasKey: current.coordinate.aliasKey, expectedVersion: input.expectedVersion, expectedToken: input.presentationOrder.expectedToken, change: input.presentationOrder.change } : null
+  const orderView = orderInput ? await preparePresentationOrder(orderInput) : null
+  const names = Object.fromEntries((requested ?? []).map(e => [e.axisKey, e.target]))
+  const bag = { ...((listing.platformAttributes ?? {}) as Record<string, unknown>) }
+  if (input.reset) { delete bag._variationAxes; delete bag._axisNameLabels; bag._variationAxesMode = 'inherit' }
+  else { bag._variationAxes = requested!.map(e => e.axisKey); bag._axisNameLabels = names; bag._variationAxesMode = 'override' }
+  try {
+    await prisma.$transaction(async tx => {
       if (orderInput && orderView) {
-        await writePresentationOrderInTransaction(tx, orderInput, orderView, input.userId ?? null, names)
+        await writePresentationOrderInTransaction(tx, orderInput, orderView, input.userId ?? null, names, requested!.map(e => e.axisKey))
       } else {
-      const fresh = await tx.channelListing.findUnique({ where: { id: listing.id }, select: { version: true, platformAttributes: true } })
-      if (!fresh || fresh.version !== input.expectedVersion) {
-        throw new ProjectionConflictError('version_conflict', 'This listing changed while the mapping was being saved. Reload it and review the change again.')
-      }
-      await tx.channelListing.update({
-        where: { id: listing.id, version: input.expectedVersion },
-        data: {
-          platformAttributes: { ...((fresh.platformAttributes ?? {}) as Record<string, unknown>), _axisNameLabels: names } as never,
+        const saved = await tx.channelListing.updateMany({ where: { id: listing.id, version: input.expectedVersion }, data: {
+          ...(channel === 'EBAY' ? { platformAttributes: bag as never } : { variationMapping: input.reset ? null as never : orderedVariationMapping(requested!) as never, variationTheme: input.reset ? null : proposed.theme?.value ?? null }),
           version: { increment: 1 },
-        },
-      })
+        } })
+        if (saved.count !== 1) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
       }
-      if (root.variationTheme !== ordered.join(',')) await tx.product.update({ where: { id: root.id, version: root.version }, data: { variationTheme: ordered.join(','), version: { increment: 1 } } })
     }, { isolationLevel: 'Serializable', timeout: 30_000 })
-  } else {
-    // Amazon / Shopify / Etsy: the coordinate's own `variationTheme` column plus the FLAT `variationMapping`
-    // that `amazon-publish.adapter.ts:427` reads (`variationMapping?.[axis] ?? variationMapping?.[axis.toLowerCase()]`).
-    const flat: Record<string, string> = {}
-    for (const entry of requested) flat[entry.axisKey] = entry.target
-    await prisma.$transaction(async (tx) => {
-      const fresh = await tx.channelListing.findUnique({ where: { id: listing.id }, select: { version: true } })
-      if (!fresh || fresh.version !== input.expectedVersion) {
-        throw new ProjectionConflictError('version_conflict', 'This listing changed while the mapping was being saved. Reload it and review the change again.')
-      }
-      await tx.channelListing.update({
-        where: { id: listing.id },
-        data: {
-          variationMapping: flat as never,
-          ...(input.theme !== undefined ? { variationTheme: input.theme } : {}),
-          version: { increment: 1 },
-        },
-      })
-    })
+  } catch (error) {
+    if (['P2034', 'P2025'].includes(String((error as { code?: string })?.code))) throw new ProjectionConflictError('version_conflict', 'Another edit won this listing. Reload before saving.')
+    throw error
   }
-
   return getProjectionRead(input)
+}
+
+/**
+ * VT.1 / VX §6 — do the INCLUDED variants still have distinct keys under `mappedAxisKeys`?
+ *
+ * Built from the projection READ, so the number the refusal quotes is the number the cell and the Variants page
+ * already show — one computation, three consumers. `null` when the coordinate drops nothing (there is nothing a
+ * collision could come from) or when the read carries no children.
+ */
+export function collisionReportFor(current: ProjectionRead, mappedAxisKeys: string[]): CollisionReport | null {
+  const familyKeys = current.axes.map((a) => a.key)
+  const surviving = familyKeys.filter((key) => mappedAxisKeys.some((k) => canonicalVariantAxis(k) === canonicalVariantAxis(key)))
+  const dropped = familyKeys.filter((key) => !surviving.includes(key))
+  const variants = current.children.map(child => ({ ...child, axisValues: child.projectedAxisValues ?? child.sharedAxisValues }))
+  const colliding = variationCollisionGroups(surviving, variants)
+  const unresolved = colliding.reduce((n, group) => n + group.members.length, 0)
+  const droppedLabels = dropped.map(key => current.axes.find(a => a.key === key)?.label ?? key)
+  return {
+    groups: colliding.map(group => ({ key: group.key, members: group.members.map(child => ({ id: child.id, sku: child.sku, droppedValues: Object.fromEntries(dropped.map(key => [key, variationAxisValue(child.axisValues, key)])) })) })),
+    unresolved,
+    summary: variationCollisionSummary(unresolved, current.coordinate.label, droppedLabels),
+    resolvers: [
+      { kind: 'split', available: current.split.creatable, reason: current.split.creatable ? null : (current.split.heldReason ?? ALIAS_HELD_REASON) },
+      // `fold` needs a surviving axis to fold INTO; with nothing left there is nowhere to put the dropped label.
+      // VT.1b item 2 (VT.4) — fold needs a WRITABLE target cell, not merely a surviving axis.
+      { kind: 'fold', ...foldAvailability(current, surviving) },
+      { kind: 'exclude', available: true, reason: null },
+    ],
+  }
 }
 
 // ────────────────────────────────────────────────────────────────────

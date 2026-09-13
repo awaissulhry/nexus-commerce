@@ -83,7 +83,7 @@ const IdentityCell = memo(function IdentityCell(p: ICellRendererParams<Projectio
     image={source.image} inherited={row.child?.imageInherited} axes={(page.axes ?? []).map(axis => row.child?.sharedAxisValues?.[axis.key] ?? '—')}
     suspect={row.child?.axisValuesSuspect} pct={source.completeness?.pct ?? null}
     readiness={source.readiness?.state as import('@/design-system/grid/renderers/readiness').RowReadinessState | null}
-    completenessTip={`${source.sku} — ${source.completeness?.filled ?? 0} of ${source.completeness?.total ?? 0} channel fields filled (including optional fields)${source.readiness?.state ? ` · ${source.readiness.state}` : ''}`}
+    completenessTip={source.completeness == null ? `${source.sku} — completeness was not reported.` : `${source.sku} — ${source.completeness.filled} of ${source.completeness.total} channel fields filled (including optional fields)${source.readiness?.state ? ` · ${source.readiness.state}` : ''}`}
     menuItems={rowMenu(actionRow)} />
 })
 

@@ -1,3 +1,4 @@
+import { startReadinessReconcileCron } from './jobs/readiness-reconcile.job.js'
 import { visitActiveWorkspaces } from './lib/workspace-sweep.js'
 import { legacyIngress } from './lib/workspace-ingress.js'
 import "./db.js"; // ensure dotenv loads before anything else
@@ -128,6 +129,7 @@ import pimRoutes from "./routes/pim.routes.js";
 import pimGlobalRoutes from "./routes/pim-global.routes.js";
 import productsSheetRoutes from "./routes/products-sheet.routes.js";
 import productStudioRoutes from "./routes/product-studio.routes.js";
+import studioMatrixRoutes from "./routes/studio-matrix.routes.js"; // MX.1 — the Matrix page
 import catalogTransferRoutes from "./routes/catalog-transfer.routes.js";
 import catalogMatrixRoutes from "./routes/catalog-matrix.routes.js";
 import pimMappingRoutes from "./routes/pim-mapping.routes.js";
@@ -142,6 +144,7 @@ import { listingsSyndicationRoutes } from "./routes/listings-syndication.routes.
 import { listingHealthRoutes } from "./routes/listing-health.routes.js";
 import { fieldLinksRoutes } from "./routes/field-links.routes.js";
 import productsCatalogRoutes from "./routes/products-catalog.routes.js";
+import { delistCascadeRoutes } from "./routes/delist-cascade.routes.js";
 import productsSearchRoutes from "./routes/products-search.routes.js";
 import productsAiRoutes from "./routes/products-ai.routes.js";
 import { productEnrichmentAiRoutes, productAiDraftRoutes } from "./routes/product-enrichment.routes.js";
@@ -771,6 +774,8 @@ app.register(productsSheetRoutes, { prefix: '/api' });
 // PES.5 — the Product Edit Studio's reads. Under /api/products, so the RBAC
 // prefix rule maps GET->products:view and writes->products:edit automatically.
 app.register(productStudioRoutes, { prefix: '/api' });
+// MX.1 — the Matrix page's read, write door, verbs and revert (explicit manifest entry, most-specific-first).
+app.register(studioMatrixRoutes, { prefix: '/api' });
 app.register(catalogTransferRoutes, { prefix: '/api' });
 app.register(catalogMatrixRoutes, { prefix: '/api' });
 app.register(pimMappingRoutes, { prefix: '/api' });
@@ -783,6 +788,7 @@ app.register(auditLogRoutes, { prefix: '/api' });
 app.register(syncLogsRoutes, { prefix: '/api' });
 app.register(listingsSyndicationRoutes, { prefix: '/api' });
 app.register(productsCatalogRoutes, { prefix: '/api' });
+app.register(delistCascadeRoutes, { prefix: '/api' });
 app.register(productsSearchRoutes, { prefix: '/api' });
 app.register(productsAiRoutes, { prefix: '/api' });
 // PES.8 — generation resolves to ai:run via pfx('/api/ai/'); draft review/approve
@@ -980,6 +986,7 @@ async function start() {
       // LIST projection (missing rows → "products disappeared", stale totalStock
       // → "import didn't apply"). Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
       startReadCacheReconcileCron();
+      startReadinessReconcileCron();
 
       // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
       // QUEUED BulkActionJob rows that never got POST /:id/process'd

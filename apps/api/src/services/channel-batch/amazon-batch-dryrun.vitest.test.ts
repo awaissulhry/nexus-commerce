@@ -26,6 +26,14 @@ vi.mock('amazon-sp-api', () => ({
   },
 }))
 
+// The current client factory resolves account credentials before SDK construction.
+// Stop at that factory boundary too: the unlocked control must enter it without DB/network I/O.
+vi.mock('../../lib/amazon-sp-client.js', () => ({ amazonSpClient: () => {
+  throw new Error('TEST GUARD: the live SP-API path was reached during a dry-run test')
+} }))
+vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: async () => new Set() }))
+vi.mock('../listing-push-controls.js', () => ({ readPushControls: async () => [{id:'fixture',productId:'product',marketplace:'IT',syncPaused:false,offerClosedAt:null}] }))
+
 import { submitAmazonListingsBatch } from './amazon-batch-feed.service.js'
 
 const submission = (over: Record<string, unknown> = {}) => ({

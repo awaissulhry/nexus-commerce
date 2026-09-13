@@ -1,0 +1,10 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+page.waitForFunction: Timeout 15000ms exceeded.
+    at /Users/awais/nexus-commerce/docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs:67:15 {
+  name: 'TimeoutError'
+}
+
+Node.js v25.9.0

@@ -34,9 +34,19 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     }
   })
 
-  // Independent from the sheet read so a seller-name lookup cannot delay editing.
-  fastify.get<{ Querystring: { channel?: string; marketplace?: string; productType?: string; accountId?: string; shipping?: string; browseNodeIds?: string } }>('/categories/reference-labels', async (request, reply) => {
+  /**
+   * Independent from the sheet read so a seller-name lookup cannot delay editing.
+   *
+   * 🔴 `live=1` is the ONLY thing that authorises provider work here (LX.6 / R-LX-4). Without it the
+   * reply is served inside `withCachedSchemas`, so neither the seller shipping-template lookup nor
+   * `loadAmazonSpec`'s account-specific fallback can start a call — a page load asking for display
+   * names got a live `auth/o2/token` round trip per cold request before 2026-09-13 (measured:
+   * `docs/audits/2026-09-13-lx6/gateway-leak-before.json`). Only an operator gesture sends `live=1`:
+   * the reference cell editor opening its option list, and the write-time recovery read.
+   */
+  fastify.get<{ Querystring: { channel?: string; marketplace?: string; productType?: string; accountId?: string; shipping?: string; live?: string; browseNodeIds?: string } }>('/categories/reference-labels', async (request, reply) => {
     const { marketplace, productType, accountId, shipping } = request.query
+    const live = request.query.live === '1'
     const channel = (request.query.channel ?? 'AMAZON').toUpperCase()
     const browseNodeIds = [...new Set((request.query.browseNodeIds ?? '').split(',').filter(Boolean))]
     if (browseNodeIds.length > 200 || browseNodeIds.some(id => !/^\d{1,30}$/.test(id))) return reply.code(400).send({ error: 'Provide up to 200 numeric browse-node IDs' })
@@ -48,9 +58,11 @@ const categoriesRoutes: FastifyPluginAsync = async (fastify) => {
     if (!market) return reply.code(400).send({ error: 'Unknown marketplace' })
     try {
       const { amazonReferenceLabels, cachedCategoryLabels } = await import('../services/categories/reference-labels.service.js')
+      const { withCachedSchemas } = await import('../services/pim/cached-schema-context.js')
       const labels = await cachedCategoryLabels(channel, market.code, productType.toUpperCase())
       if (channel === 'EBAY') return { labels }
-      const result = await amazonReferenceLabels({ marketplace: market.code, productType: productType.toUpperCase(), accountId, shipping: shipping === '1', browseNodeIds })
+      const read = () => amazonReferenceLabels({ marketplace: market.code, productType: productType.toUpperCase(), accountId, shipping: shipping === '1', browseNodeIds })
+      const result = live ? await read() : await withCachedSchemas(read)
       return { ...result, labels: { ...labels, ...result.labels } }
     } catch (error) {
       const status = (error as { statusCode?: number }).statusCode

@@ -1,0 +1,9 @@
+{
+  "at": "2026-09-12T22:00:01.446Z",
+  "command": [
+    "node",
+    "scripts/check-ag-grid-import-boundary.mjs"
+  ],
+  "exitCode": 0,
+  "output": "✓ ag-grid import boundary: only the engine and the labs import AG Grid; no stylesheet outside the engine addresses it (5823 ts + 107 css scanned)\n"
+}

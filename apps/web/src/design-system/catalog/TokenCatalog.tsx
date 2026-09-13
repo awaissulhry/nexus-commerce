@@ -11,6 +11,7 @@
  * (.analysis/ds-catalog-verify.mjs captures it @2x).
  */
 
+import { PresenceExample } from './PresenceExample'
 import { ScrollingTabsExample } from './ScrollingTabsExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
@@ -390,6 +391,7 @@ const GDS_COLS: ColDef<GdsRow>[] = [
 ]
 
 export function TokenCatalog() {
+  const [scope, setScope] = useState('master')
   const [prowLog, setProwLog] = useState('')
   const [prowActive, setProwActive] = useState(false)
   const [prowExpanded, setProwExpanded] = useState(false)
@@ -735,6 +737,7 @@ export function TokenCatalog() {
           </div>
 
           <div style={{ display: 'grid', gap: 'var(--nds-space-12)', marginTop: 'var(--nds-space-18)' }}>
+            <PresenceExample />
             <Disclosure summary="Disclosure · supporting details">
               Content stays hidden until requested. Use Tab, then Enter or Space to expand it.
             </Disclosure>
@@ -808,6 +811,7 @@ export function TokenCatalog() {
             <SourceIndicator showLabel kind="rule" label="Mapping rule" description="Calculated by the configured rule" />
             <SourceIndicator showLabel kind="default" label="Channel default" description="Supplied by a configured default" />
             <SourceIndicator showLabel kind="missing" label="No mapping" description="No source has been configured" />
+            <SourceIndicator showLabel kind="warning" label="Formula needs attention" description="The supplied value is not allowed for Status." tooltip="The supplied value is not allowed for Status." />
           </div>
         </DSCard>
 
@@ -1045,8 +1049,8 @@ export function TokenCatalog() {
         <DSCard elevated>
           <ScopeBar
             label="Scope"
-            active="master"
-            onChange={() => {}}
+            active={scope}
+            onChange={setScope}
             items={[
               { id: 'master', label: 'Master', readiness: { pct: 96, state: 'ready' } },
               { id: 'AMAZON', label: 'Amazon', readiness: { pct: 92, state: 'warn' } },

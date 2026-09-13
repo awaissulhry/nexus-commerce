@@ -1,3 +1,6 @@
+import { offerActiveHonoured } from '@nexus/shared/listing-capabilities'
+import { contentField, translationMissing } from './content-resolver.js'
+import { contentWireValue } from './content-read.js'
 /**
  * MS.2 — the MASTER SHEET's rows for one market.
  *
@@ -39,6 +42,15 @@ export interface ReadinessIssue {
   message: string
   /** `error` = the channel WILL refuse; `warn` = accepted but it may reject. */
   severity: 'error' | 'warn'
+  /**
+   * LX.F P2-14 — the FACT, so no reader has to match the sentence. The catalogue
+   * filter and the `fallback@<lang>` projection both read this key; the wording
+   * of `message` stays free to change without silently falsifying either.
+   *
+   * VT.1b widened it with the three variation kinds for the same reason: the catalogue's
+   * `variation-mapping:unset|collides` filter narrows on `missing[].kind`, never on the sentence.
+   */
+  kind?: 'language-fallback' | 'theme-unset' | 'collision' | 'attribute-unbound'
 }
 
 export interface SheetReadiness {
@@ -49,6 +61,14 @@ export interface SheetReadiness {
 }
 
 export interface SheetListing {
+  offerClosedAt?: string | null
+  offerClosedBy?: string | null
+  offerCloseReason?: string | null
+  syncPaused?: boolean | null
+  /** Raw provider detail is distinct from the local listing status. */
+  channelFactDetail?: { shopifyStatus?: string; [key: string]: unknown } | null
+  /** Whether this adapter honours the local offer mark. Absent is unknown. */
+  offerActiveHonoured?: boolean
   id: string
   /**
    * When a sync last RAN for this listing — #327(8), for the Listings pane,
@@ -94,12 +114,42 @@ export interface SheetListing {
   follows: Record<string, boolean>
 }
 
+/**
+ * LX.F R-LX-15 — ONE content wire, two surfaces, and the difference is DECLARED.
+ *
+ * The §3 fields (`tier`, `language`, `requested`, `provenance`, `translation`) are the
+ * contract; the four `*Locale`/`translationState`/`needsTranslation` fields are LEGACY
+ * and are DERIVED from them by the single producer (`content-read.ts`
+ * `contentAttribute`), never computed a second time. `StudioCellValue` omits the legacy
+ * four (`studio-sheet.service.ts:133`) while this catalogue wire still carries them,
+ * because these consumers read them today — measured, not assumed
+ * (`/usr/bin/grep -rln`, excluding tests):
+ *   API  `routes/product-translations.routes.ts` · `shopify/channel-sheet-projection.ts`
+ *        · `pim/mapping/resolve-batch.service.ts` · `pim/mapping/cell-formula.service.ts`
+ *        · `pim/resolve-channel-field.ts`
+ *   web  `products/[id]/edit/tabs/MappingTab.tsx`
+ *        · `_shared/cockpit-shell/CatalogCascadeDrawer.tsx`
+ *        · `_studio/sheet/channel/cellDetailsSource.ts`
+ * Deleting them is a follow-up claim per consumer (each must read the §3 field instead);
+ * `content-wire-parity.vitest.test.ts` fails if the two mirrors stop agreeing on the §3
+ * set, or if the legacy set grows.
+ */
 export interface SheetCellValue {
   mapped?: { requiredByRule?: boolean } | null
+  /** LEGACY (see above): derived from the §3 fields by the one producer. */
   requestedLocale?: string
+  /** LEGACY: `language` says the same thing. */
   effectiveLocale?: string
+  /** LEGACY: derivable from `translation` + `language` vs `requested`. */
   translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
+  /** LEGACY: `translationMissing({ language }, requested)`. */
   needsTranslation?: boolean
+  // §3 `ResolvedContent`, the contract both wires carry.
+  tier?: import('./content-resolver.js').ResolvedContent['tier']
+  language?: import('./content-resolver.js').ResolvedContent['language']
+  requested?: import('./content-resolver.js').ResolvedContent['requested']
+  provenance?: import('./content-resolver.js').ResolvedContent['provenance']
+  translation?: import('./content-resolver.js').ResolvedContent['translation']
   value: unknown
   source: string
   inheritedFrom: string | null
@@ -198,7 +248,6 @@ const isBlank = (v: unknown): boolean =>
 /** The row's OWN storage for a key — what decides "inherited" vs "pinned". */
 function ownValue(row: ProductLike, col: SheetColumn, locale: string): unknown {
   if (col.storage === 'categoryAttributes') return row.categoryAttributes?.[col.key]
-  if (col.storage === 'localizedContent') return row.localizedContent?.[locale]?.[col.key]
   return (row as unknown as Record<string, unknown>)[col.key]
 }
 
@@ -251,8 +300,9 @@ export function computeReadiness(input: {
   const flat: FlatRow = {}
   for (const [key, cell] of Object.entries(values)) flat[key] = cell?.value
 
+  if (Object.values(values).some(cell => cell?.effectiveLocale) && !coordinate.languages?.length) throw new Error('Content readiness requires hydrated Marketplace.languages.')
   const labelByKey = new Map(columns.map((c) => [c.key, c.label]))
-  const issues: ReadinessIssue[] = evaluateRow(flat, validators).map((i) => ({
+  const issues: ReadinessIssue[] = evaluateRow(flat, validators, coordinate.languages?.length ? { requested: coordinate.languages[0], fields: Object.fromEntries(Object.entries(values).filter(([, cell]) => cell.effectiveLocale).map(([key, cell]) => [key, { language: cell.effectiveLocale }])) } : undefined).map((i) => ({
     key: i.field,
     label: labelByKey.get(i.field) ?? i.field,
     message: i.message,
@@ -287,7 +337,7 @@ export function completenessFor(columns: SheetColumn[], row: { isParent: boolean
     source: 'schema',
   }))
   const flat: Record<string, unknown> = {}
-  for (const c of applicable) flat[c.key] = values[c.key]?.needsTranslation ? null : values[c.key]?.value
+  for (const c of applicable) flat[c.key] = values[c.key]?.requestedLocale && translationMissing({ language: values[c.key].effectiveLocale }, values[c.key].requestedLocale!) ? null : values[c.key]?.value
   return computeMasterCompleteness(asMaster, flat)
 }
 
@@ -298,6 +348,7 @@ export function completenessFor(columns: SheetColumn[], row: { isParent: boolean
 const FOLLOW_FLAGS = ['followMasterTitle', 'followMasterDescription', 'followMasterPrice', 'followMasterQuantity', 'followMasterImages', 'followMasterBulletPoints'] as const
 
 const PRODUCT_SELECT = {
+  workspaceId: true, translations: true,
   familyId: true, weightValue: true, weightUnit: true, dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
   costPrice: true, minMargin: true, minPrice: true, maxPrice: true, lowStockThreshold: true,
   hsCode: true, countryOfOrigin: true, ppeCategory: true, garmentClass: true,
@@ -372,7 +423,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
   // AM.1 — the eBay leaf categories these products are listed under decide the eBay aspects.
   const ebayCategoryRows = flat.length === 0 ? [] : await prisma.channelListing.findMany({
     where: { productId: { in: flat.map((r) => r.id as string) }, channel: 'EBAY', marketplace: market },
-    select: { platformAttributes: true },
+    select: { translations: true, platformAttributes: true },
   })
   const ebayCategoryIds = [...new Set(ebayCategoryRows.map((r) => (r.platformAttributes as { categoryId?: unknown } | null)?.categoryId).filter((c): c is string => typeof c === 'string' && c.length > 0))].sort()
   const columnSet: SheetColumnSet = await getSheetColumns({ market, productTypes, variationAxes, ebayCategoryIds })
@@ -385,14 +436,14 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       productId: { in: productIds },
       OR: coordinates.map((c) => ({ channel: c.channel, marketplace: c.marketplace })),
     },
-    select: {
+    select: { translations: true,
       id: true, productId: true, channel: true, marketplace: true, listingStatus: true, isPublished: true,
       version: true,
       price: true, quantity: true, externalListingId: true, overrideData: true,
       titleOverride: true, descriptionOverride: true, priceOverride: true, quantityOverride: true, bulletPointsOverride: true,
       followMasterTitle: true, followMasterDescription: true, followMasterPrice: true,
       followMasterQuantity: true, followMasterImages: true, followMasterBulletPoints: true,
-      offerActive: true,
+      offerActive: true, offerClosedAt: true, offerClosedBy: true, offerCloseReason: true, syncPaused: true,
     },
   })
 
@@ -411,7 +462,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
 
     // The sheet is a MASTER surface: values are resolved WITHOUT a channel listing, so a cell shows
     // the master truth. Channel divergence is shown by the readiness columns, not by the cell.
-    const resolved: ResolvedAttributes = resolveAttributes({ product, parent, locale })
+    const resolved: ResolvedAttributes = resolveAttributes({ product, parent, locale, localizableKeys: columns.filter(c => c.storage === 'localizedContent').map(c => c.slot?.of ?? c.key) })
 
     const values: Record<string, SheetCellValue> = {}
     for (const col of columns) {
@@ -420,7 +471,19 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       // empty on real data while the values sat right there on the row.
       // AM.1 — a slot reads its LIST's store (`bulletPoints` for `bulletPoints_3`) and shows one
       // item; a list/measure column normalises the stored shape. Same projection as the studio.
-      const baseKey = col.slot ? col.slot.of : col.key
+      const baseKey = contentField(col.slot?.of ?? col.key)
+      const contentHit = resolved[baseKey]?.language ? resolved[baseKey] : null
+      if (contentHit) {
+        values[col.key] = { value: contentWireValue(projectCellValue(col, contentHit.value), col.slot ? undefined : col.shape),
+          source: contentHit.source, inheritedFrom: contentHit.inheritedFrom, inherited: contentHit.contentProvenance?.member === 'inherited',
+          // R-LX-15 — the §3 fields travel on this wire too, from the same resolved row,
+          // so a consumer can migrate off the legacy four without a second read.
+          tier: contentHit.tier, language: contentHit.language, requested: contentHit.requested,
+          provenance: contentHit.contentProvenance, translation: contentHit.content?.translation,
+          requestedLocale: locale, effectiveLocale: contentHit.language, translationState: contentHit.translationState,
+          needsTranslation: translationMissing(contentHit, locale) }
+        continue
+      }
       if (col.storage === 'column') {
         const raw = projectCellValue(col, normaliseColumnValue((product as unknown as Record<string, unknown>)[baseKey], col.kind))
         if (isBlankValue(raw)) continue
@@ -429,12 +492,6 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       }
 
       let hit = resolved[baseKey]
-      // The content trio lives per locale AND as a Product column; the column is the master's
-      // default text and is the fallback here as it already is for `name`.
-      if ((!hit || isBlankValue(hit.value)) && col.storage === 'localizedContent' && baseKey in (product as object)) {
-        const colRaw = (product as unknown as Record<string, unknown>)[baseKey]
-        if (!isBlankValue(colRaw)) hit = { value: colRaw, source: 'masterColumn', inheritedFrom: null }
-      }
       // A key the resolver returns with a null value is ABSENT, not "inherited nothing" — reporting
       // it as inherited paints a tint on an empty cell and tells the operator a parent supplied it.
       if (!hit || isBlankValue(hit.value)) continue
@@ -465,6 +522,11 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
             quantity: l.quantityOverride ?? l.quantity ?? null,
             externalListingId: l.externalListingId,
             offerActive: l.offerActive !== false,
+            offerActiveHonoured: offerActiveHonoured(c.channel),
+            offerClosedAt: l.offerClosedAt?.toISOString() ?? null,
+            offerClosedBy: l.offerClosedBy ?? null,
+            offerCloseReason: l.offerCloseReason ?? null,
+            syncPaused: l.syncPaused ?? null,
             follows: Object.fromEntries(FOLLOW_FLAGS.map((f) => [f, (l as unknown as Record<string, boolean>)[f] !== false])),
           }
         : null

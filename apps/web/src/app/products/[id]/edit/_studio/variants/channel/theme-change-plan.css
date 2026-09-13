@@ -1,0 +1,118 @@
+/*
+ * VT.4 — the theme-change plan modal's own stylesheet (canvas artboard 7).
+ *
+ * It lives beside the component and is imported BY the component rather than by `ChannelProjection`,
+ * because the plan also opens from the SHEET's Variation theme editor (VT.2's locked-commit path), where
+ * the Variants page is not mounted. A modal whose stylesheet arrived with a different surface would render
+ * unstyled exactly where the operator is about to read an irreversible step.
+ *
+ * Every colour and space is an existing DS token — no `:root` alias is declared here, so
+ * `check-dark-alias-scope.mjs` has nothing new to index and the dark theme follows for free.
+ * The step grid's column widths are the canvas's (16 / 80 / 190 / flexible / 70).
+ */
+
+.nds-vt-plan-note {
+  font-size: var(--nds-font-size-micro-plus);
+  color: var(--nds-text-3);
+}
+
+.nds-vt-plan-table {
+  border: 1px solid var(--nds-border-subtle);
+  /* 8px, the canvas's corner. `--nds-radius-md` is 7px in `tokens/radius.ts` — the scale is real and
+     was read, not guessed (and it is restated in `css-vars.ts`, so both spellings had to agree). */
+  border-radius: var(--nds-radius-lg);
+  overflow: hidden;
+  margin: var(--nds-space-12) 0;
+}
+
+.nds-vt-plan-head,
+.nds-vt-plan-row {
+  display: grid;
+  grid-template-columns: 16px 80px 190px minmax(0, 1fr) 70px;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-8) var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.nds-vt-plan-row:last-child { border-bottom: 0; }
+
+.nds-vt-plan-head {
+  align-items: center;
+  background: var(--nds-surface-sunken);
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: 700;
+  color: var(--nds-text-2);
+}
+
+.nds-vt-plan-row {
+  align-items: start;
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.nds-vt-plan-c-n {
+  color: var(--nds-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The verb is the wire's own spelling of an HTTP call, so it is set in the mono face. */
+.nds-vt-plan-c-verb {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-micro-plus);
+  color: var(--nds-text);
+}
+
+.nds-vt-plan-c-target {
+  font-weight: 600;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.nds-vt-plan-c-detail {
+  color: var(--nds-text-2);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.nds-vt-plan-c-reversible {
+  text-align: right;
+  font-weight: 600;
+}
+
+.nds-vt-plan-c-reversible.yes { color: var(--nds-success-strong); }
+.nds-vt-plan-c-reversible.no { color: var(--nds-danger-strong); }
+.nds-vt-plan-c-reversible.none { color: var(--nds-text-3); }
+
+.nds-vt-plan-outcomes {
+  display: flex;
+  gap: var(--nds-space-16);
+  margin-top: var(--nds-space-12);
+}
+
+.nds-vt-plan-outcomes > div { flex: 1; min-width: 0; }
+
+.nds-vt-plan-keeps-title,
+.nds-vt-plan-loses-title {
+  font-size: var(--nds-font-size-micro-plus);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: var(--nds-space-8);
+}
+
+.nds-vt-plan-keeps-title { color: var(--nds-success-strong); }
+.nds-vt-plan-loses-title { color: var(--nds-danger-strong); }
+
+.nds-vt-plan-item {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* At phone width the five columns cannot hold: the table scrolls in its own box, the page never does. */
+@media (max-width: 640px) {
+  .nds-vt-plan-table { overflow-x: auto; }
+  .nds-vt-plan-head,
+  .nds-vt-plan-row { min-width: 560px; }
+  .nds-vt-plan-outcomes { flex-direction: column; }
+}

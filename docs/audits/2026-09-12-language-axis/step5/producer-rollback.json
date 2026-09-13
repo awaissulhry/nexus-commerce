@@ -1,0 +1,5727 @@
+{
+  "at": "2026-09-12T21:31:16.944Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "ms": 3815.574791,
+  "count": 714,
+  "rows": [
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "it",
+      "state": "warn",
+      "pct": 100,
+      "note": "1 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "nl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "fr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "de",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "es",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "en",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "pl",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "sv",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": null,
+      "market": null,
+      "language": "tr",
+      "state": "blocked",
+      "pct": 0,
+      "note": "0 of 1 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "nl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "BE",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 55,
+      "note": "6 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 40,
+      "note": "12 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 33,
+      "note": "10 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 37,
+      "note": "11 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": 30,
+      "note": "9 of 30 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 55,
+      "note": "6 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 31,
+      "note": "10 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": 31,
+      "note": "10 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 55,
+      "note": "6 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 31,
+      "note": "10 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 38,
+      "note": "12 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": 31,
+      "note": "10 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IE",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 82,
+      "note": "9 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 41,
+      "note": "13 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 44,
+      "note": "14 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 45,
+      "note": "5 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "NL",
+      "language": "nl",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "PL",
+      "language": "pl",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "SE",
+      "language": "sv",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "TR",
+      "language": "tr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: OUTERWEAR"
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 45,
+      "note": "5 of 11 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "AMAZON",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": 28,
+      "note": "9 of 32 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "DE",
+      "language": "de",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "ES",
+      "language": "es",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "FR",
+      "language": "fr",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 67,
+      "note": "4 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "ready",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "IT",
+      "language": "it",
+      "state": "blocked",
+      "pct": 100,
+      "note": "6 of 6 required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance."
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "EBAY",
+      "market": "UK",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: EBAY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "blocked",
+      "pct": null,
+      "note": "Category metadata is incomplete: ETSY:*"
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "Shopify requirements are not cached for this account."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    },
+    {
+      "channel": "WOOCOMMERCE",
+      "market": "GLOBAL",
+      "language": "en",
+      "state": "absent",
+      "pct": null,
+      "note": "No active account for this destination."
+    }
+  ],
+  "providerGatewaysBlocked": [],
+  "transportAttempts": [],
+  "rolledBack": true
+}

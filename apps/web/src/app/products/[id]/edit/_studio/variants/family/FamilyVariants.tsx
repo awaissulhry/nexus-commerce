@@ -27,10 +27,9 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { AlertTriangle } from 'lucide-react'
 
 import { Banner, useToast, type MenuItemDef } from '@/design-system/components'
-import { Button, InfoTip, Pill } from '@/design-system/primitives'
+import { Button } from '@/design-system/primitives'
 import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
 import {
   actionContextMenu,
@@ -247,8 +246,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
       () => ({
         id: 'excluded-somewhere',
         label: 'Excluded somewhere',
-        noun: 'variants',
-        count: projectionsQuery.loading || projectionsQuery.error ? null : excluded.length,
+        count: projectionsQuery.loading || projectionsQuery.error ? null : { n: excluded.length, unit: 'variants' as const },
         hideWhenZero: false,
         note: projectionsQuery.error ? `The channel projections could not be read: ${projectionsQuery.error}` : 'Variants left out of at least one connected channel',
         cells: cellsFor(excluded, projections.channels.map(c => `proj:${c.key}`)),
@@ -262,8 +260,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
       () => ({
         id: 'missing-axis-values',
         label: 'Missing axis values',
-        noun: 'variants',
-        count: loading ? null : missingAxisIds.length,
+        count: loading ? null : { n: missingAxisIds.length, unit: 'variants' as const },
         hideWhenZero: false,
         note: 'Variants with at least one empty axis cell — they belong to no combination',
         cells: cellsFor(missingAxisIds, axisKeys),
@@ -277,8 +274,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
       () => ({
         id: 'duplicate-combinations',
         label: 'Duplicate combinations',
-        noun: 'combinations',
-        count: loading ? null : coverage.duplicates.length,
+        count: loading ? null : { n: coverage.duplicates.length, unit: 'combinations' as const },
         hideWhenZero: false,
         note: 'Variants sharing one combination of axis values',
         cells: cellsFor(duplicateIds, axisKeys),
@@ -548,6 +544,7 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
       <GridSheet
         toolbar={
           <SheetToolbar
+            pendingWrite={pending > 0 || writer.busy}
             visible={visibleRows.length}
             total={total}
             selected={selected}
@@ -571,35 +568,16 @@ function FamilyVariantsSurface({ productId, market, locale }: { productId: strin
                a family's structure, and the catalogue importer writes attributes by SKU, which is
                the sheet's job on Information. */
             absent={ABSENT_VIEWS}
-            trailing={
-              <>
-                {/*
-                  🔴 The SAME pill the sheet renders from the SAME `meta`, in the same words
-                  (`MasterSheet.tsx:1788`). It was missing here entirely — `schemaMissing` and
-                  `schemaAge` appeared nowhere in this lane — while this page prints a completeness
-                  percentage on every row. Measured today on GALE-JACKET at IT/PL/DE the array is
-                  empty, so nothing was wrong on screen; the defect is that a percentage would have
-                  gone on being printed with no caveat the moment it stopped being empty, while
-                  Information one tab away said "Setup incomplete" about the very same read.
-                  A number whose basis could not be read must say so wherever it is shown.
-                */}
-                {sheet && (sheet.meta.schemaMissing.length > 0 || sheet.meta.schemaAge.length > 0) && (
-                  <InfoTip
-                    tip={
-                      sheet.meta.schemaMissing.length > 0
-                        ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. The completeness percentages on these rows are computed over the attributes that COULD be read, so they are not a verdict on this product type. Choose a product family in Classification.`
-                        : `Length caps and lists come from a schema last fetched ${sheet.meta.schemaAge.map(t => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`
-                    }
-                  >
-                    <Pill tone="warning" size="md">
-                      <AlertTriangle size={11} /> {sheet.meta.schemaMissing.length > 0 ? 'Setup incomplete' : 'Cached requirements'}
-                    </Pill>
-                  </InfoTip>
-                )}
-    
-                {familyVerbs.status}
-              </>
-            }
+            status={[
+              ...(sheet && (sheet.meta.schemaMissing.length > 0 || sheet.meta.schemaAge.length > 0) ? [{
+                tone: 'warning' as const,
+                label: sheet.meta.schemaMissing.length > 0 ? 'Setup incomplete' : 'Cached requirements',
+                detail: sheet.meta.schemaMissing.length > 0
+                  ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. The completeness percentages on these rows are computed over the attributes that COULD be read, so they are not a verdict on this product type. Choose a product family in Classification.`
+                  : `Length caps and lists come from a schema last fetched ${sheet.meta.schemaAge.map(t => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
+              }] : []),
+              ...familyVerbs.status,
+            ]}
           />
         }
         footer={

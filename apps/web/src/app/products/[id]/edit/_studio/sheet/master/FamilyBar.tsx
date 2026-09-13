@@ -20,11 +20,10 @@
  * comes first, not that we have not finished something.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle } from 'lucide-react'
 
 import { actionLabel, actionsFor, contextOf, isRunnable, type ActionResult, type GridAction } from '@/design-system/grid/actions/registry'
 import { useActionPress } from '@/design-system/grid/actions/useActionPress'
-import { InfoTip, Pill } from '@/design-system/primitives'
+import type { SheetStatus } from '@/design-system/grid'
 import type { MenuItemDef } from '@/design-system/components'
 
 import { AddVariationDialog } from './AddVariationDialog'
@@ -57,7 +56,8 @@ const FAMILY_SCOPE = contextOf('product-family')
  */
 export function useFamilyVerbs({ family, actions, error, onRetry, onDone, onCollectVariation }: FamilyVerbsOptions): {
   items: MenuItemDef[]
-  status: ReactNode
+  /** Facts only; the engine owns their existing width compaction. */
+  status: readonly SheetStatus[]
   dialogs: ReactNode
 } {
   const summary = summariseFamily(family)
@@ -95,16 +95,12 @@ export function useFamilyVerbs({ family, actions, error, onRetry, onDone, onColl
     })
   }, [actions, error, onRetry, busy, pressOrCollect])
 
-  const status = (
-    <>
-      {summary.childless && (
-        <InfoTip tip="This parent has no children yet. Add a child or attach an existing standalone product to grow the family.">
-          <Pill tone="warning" size="sm"><AlertTriangle size={11} /> no children</Pill>
-        </InfoTip>
-      )}
-      {problem && <span className="nds-cell-stock-out" role="alert">{problem}</span>}
-    </>
-  )
+  const status: SheetStatus[] = []
+  if (summary.childless) status.push({
+    tone: 'warning', label: 'no children',
+    detail: 'This parent has no children yet. Add a child or attach an existing standalone product to grow the family.',
+  })
+  if (problem) status.push({ tone: 'danger', label: problem })
 
   const dialogs = (
     <>

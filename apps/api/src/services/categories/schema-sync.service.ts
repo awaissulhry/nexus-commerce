@@ -1,3 +1,4 @@
+import { categorySchemaMarket } from './category-schema-coordinate.js'
 import { languageTag } from '../pim/market-languages.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 // CategorySchemaService — fetch + cache live category schemas from
@@ -83,9 +84,9 @@ export class CategorySchemaService {
    * configured (e.g. local dev without SP-API creds).
    */
   async getSchema(query: SchemaQuery, opts: { force?: boolean } = {}) {
-    query = { ...query, marketplace: query.channel === 'EBAY'
-      ? (query.marketplace ?? 'IT').replace(/^EBAY_/i, '').toUpperCase()
-      : query.channel === 'ETSY' ? 'GLOBAL' : query.marketplace?.toUpperCase() ?? null }
+    // LX.F2 R-LX-20 — one authority for the stored coordinate (eBay's `EBAY_` prefix, Etsy's GLOBAL,
+    // the upper-casing) instead of this expression's own copy of all three rules.
+    query = { ...query, marketplace: categorySchemaMarket(query.channel, query.marketplace ?? (query.channel === 'EBAY' ? 'IT' : null)) }
     if (!opts.force) {
       const cached = await this.findFreshCache(query)
       if (cached) return cached
@@ -163,7 +164,7 @@ export class CategorySchemaService {
     if (!/^\d+$/.test(query.productType)) throw new Error('Select an eBay leaf category before refreshing requirements')
     const { EbayCategoryService } = await import('../ebay-category.service.js')
     const ebay = new EbayCategoryService()
-    const marketplace = (query.marketplace ?? 'IT').replace(/^EBAY_/i, '').toUpperCase()
+    const marketplace = categorySchemaMarket('EBAY', query.marketplace ?? 'IT')!
     // Both requests must succeed before replacing a usable cached definition.
     const [aspects, conditions] = await Promise.all([
       ebay.getCategoryAspectsRich(query.productType, marketplace, { forceRefresh: true, throwOnError: true }),

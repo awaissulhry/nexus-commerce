@@ -28,11 +28,11 @@ describe('reference choice loading', () => {
     const fetcher = vi.fn().mockResolvedValue(response({ themes }))
     vi.stubGlobal('fetch', fetcher)
     const { loadReferenceChoices } = await import('./referenceOptions')
-    await Promise.all([loadReferenceChoices('descriptionThemeId'), loadReferenceChoices('descriptionThemeId')])
+    await Promise.all([loadReferenceChoices('descriptionThemeId', {}, { live: true }), loadReferenceChoices('descriptionThemeId', {}, { live: true })])
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(fetcher.mock.calls[0][0]).toContain('/ebay/description-themes?view=options')
     fetcher.mockResolvedValue(response({ themes: [] }))
-    expect((await loadReferenceChoices('descriptionThemeId', {}, true)).options).toHaveLength(2)
+    expect((await loadReferenceChoices('descriptionThemeId', {}, { live: true, refresh: true })).options).toHaveLength(2)
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
@@ -41,17 +41,36 @@ describe('reference choice loading', () => {
     vi.stubGlobal('fetch', fetcher)
     const { loadReferenceChoices } = await import('./referenceOptions')
     const scope = { market: 'IT', productType: 'COAT', connectionId: 'seller-a' }
-    const choices = await loadReferenceChoices('merchant_shipping_group', scope)
+    const choices = await loadReferenceChoices('merchant_shipping_group', scope, { live: true })
     expect(choices.options.map(o => o.value)).toEqual(['', 'id'])
     expect(choices.labels.id).toBe('seller-a')
-    await loadReferenceChoices('shippingTemplate', scope)
+    await loadReferenceChoices('shippingTemplate', scope, { live: true })
     expect(fetcher).toHaveBeenCalledTimes(1)
-    expect((await loadReferenceChoices('shippingTemplate', { ...scope, connectionId: 'seller-b' })).labels.id).toBe('seller-b')
-    await loadReferenceChoices('shippingTemplate', { ...scope, market: 'DE' })
-    await loadReferenceChoices('shippingTemplate', { ...scope, productType: 'SHIRT' })
+    expect((await loadReferenceChoices('shippingTemplate', { ...scope, connectionId: 'seller-b' }, { live: true })).labels.id).toBe('seller-b')
+    await loadReferenceChoices('shippingTemplate', { ...scope, market: 'DE' }, { live: true })
+    await loadReferenceChoices('shippingTemplate', { ...scope, productType: 'SHIRT' }, { live: true })
     expect(fetcher).toHaveBeenCalledTimes(4)
-    await expect(loadReferenceChoices('shippingTemplate', { market: 'IT' })).rejects.toThrow('Choose a product type')
+    await expect(loadReferenceChoices('shippingTemplate', { market: 'IT' }, { live: true })).rejects.toThrow('Choose a product type')
     expect(fetcher).toHaveBeenCalledTimes(4)
+  })
+
+  /**
+   * 🔴 LX.6 / R-LX-4 — only a gesture may authorise provider work, and it says so ON THE WIRE.
+   * Both arms in one run: a display read that omits `live=1` proves nothing unless the same run
+   * shows the editor's read carrying it.
+   */
+  it('marks a gesture read live and leaves a page-load read cache-only on the wire', async () => {
+    const fetcher = vi.fn().mockImplementation(async () => response({ labels: { merchant_shipping_group: { id: 'Standard delivery' } } }))
+    vi.stubGlobal('fetch', fetcher)
+    const { loadReferenceChoices } = await import('./referenceOptions')
+    await loadReferenceChoices('merchant_shipping_group', { market: 'BE', productType: 'PAGELOAD', connectionId: 'seller-a' }, { live: false })
+    const pageLoad = new URL(String(fetcher.mock.calls[0][0]))
+    expect(pageLoad.searchParams.get('shipping')).toBe('1')
+    expect(pageLoad.searchParams.get('live')).toBeNull()
+    await loadReferenceChoices('merchant_shipping_group', { market: 'BE', productType: 'GESTURE', connectionId: 'seller-a' }, { live: true, refresh: true })
+    const gesture = new URL(String(fetcher.mock.calls[1][0]))
+    expect(gesture.searchParams.get('live')).toBe('1')
+    expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
   it('shares a pending request even when two editors request fresh choices', async () => {
@@ -59,8 +78,8 @@ describe('reference choice loading', () => {
     const fetcher = vi.fn(() => new Promise<Response>(done => { resolve = done }))
     vi.stubGlobal('fetch', fetcher)
     const { loadReferenceChoices } = await import('./referenceOptions')
-    const first = loadReferenceChoices('descriptionThemeId', {}, true)
-    const second = loadReferenceChoices('descriptionThemeId', {}, true)
+    const first = loadReferenceChoices('descriptionThemeId', {}, { live: true, refresh: true })
+    const second = loadReferenceChoices('descriptionThemeId', {}, { live: true, refresh: true })
     expect(fetcher).toHaveBeenCalledTimes(1)
     resolve(response({ themes }))
     expect(await first).toEqual(await second)
@@ -75,17 +94,17 @@ describe('reference choice loading', () => {
     vi.stubGlobal('fetch', fetcher)
     const { loadReferenceChoices } = await import('./referenceOptions')
     const scope = { market: 'IT', productType: 'COAT' }
-    await expect(loadReferenceChoices('shippingTemplate', scope)).rejects.toThrow('Amazon connection')
-    await expect(loadReferenceChoices('shippingTemplate', scope)).rejects.toThrow('incomplete response')
-    await expect(loadReferenceChoices('shippingTemplate', scope)).rejects.toThrow('incomplete response')
-    expect((await loadReferenceChoices('shippingTemplate', scope)).labels.id).toBe('Standard delivery')
+    await expect(loadReferenceChoices('shippingTemplate', scope, { live: true })).rejects.toThrow('Amazon connection')
+    await expect(loadReferenceChoices('shippingTemplate', scope, { live: true })).rejects.toThrow('incomplete response')
+    await expect(loadReferenceChoices('shippingTemplate', scope, { live: true })).rejects.toThrow('incomplete response')
+    expect((await loadReferenceChoices('shippingTemplate', scope, { live: true })).labels.id).toBe('Standard delivery')
   })
 
   it('does not expose provider response bodies or raw network errors', async () => {
     const fetcher = vi.fn().mockResolvedValueOnce(response({ error: 'private provider detail' }, 500)).mockRejectedValueOnce(new Error('Failed to fetch private detail'))
     vi.stubGlobal('fetch', fetcher)
     const { loadReferenceChoices } = await import('./referenceOptions')
-    await expect(loadReferenceChoices('descriptionThemeId')).rejects.toThrow('Description theme names are unavailable. Try again.')
-    await expect(loadReferenceChoices('descriptionThemeId')).rejects.toThrow('Check your connection and try again.')
+    await expect(loadReferenceChoices('descriptionThemeId', {}, { live: true })).rejects.toThrow('Description theme names are unavailable. Try again.')
+    await expect(loadReferenceChoices('descriptionThemeId', {}, { live: true })).rejects.toThrow('Check your connection and try again.')
   })
 })

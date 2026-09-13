@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T21:29:58.772Z",
+  "target": {
+    "target": "production",
+    "host": "ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech",
+    "database": "neondb"
+  },
+  "args": [
+    "migrate",
+    "resolve",
+    "--applied",
+    "20260912_lx5_readiness_index",
+    "--schema",
+    "/Users/awais/nexus-commerce/packages/database/prisma/schema.prisma"
+  ],
+  "status": 0,
+  "stdout": "Prisma schema loaded from packages/database/prisma/schema.prisma\nDatasource \"db\": PostgreSQL database \"neondb\", schema \"public\" at \"ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech\"\n\nMigration 20260912_lx5_readiness_index marked as applied.\n\n",
+  "stderr": "Environment variables loaded from .env\n"
+}

@@ -1,0 +1,2782 @@
+{
+  "database": "127.0.0.1:55439/nexus_development",
+  "at": "2026-09-13T19:21:07.191Z",
+  "product": {
+    "id": "cmokmy3a40078pm0p1fvnu523",
+    "sku": "GALE-JACKET",
+    "version": 59,
+    "updatedAt": "2026-09-12T23:46:18.550Z"
+  },
+  "receipts": [
+    {
+      "method": "GET",
+      "url": "/api/products/hard-delete-preflight?ids=cmokmy3a40078pm0p1fvnu523",
+      "elapsedMs": 49.69766699999991,
+      "statusCode": 200,
+      "body": {
+        "channelListings": [
+          {
+            "productId": "cmokmy3a40078pm0p1fvnu523",
+            "channel": "AMAZON",
+            "marketplace": "DE",
+            "externalListingId": "B0D8XBXM5H"
+          },
+          {
+            "productId": "cmokmy3a40078pm0p1fvnu523",
+            "channel": "AMAZON",
+            "marketplace": "ES",
+            "externalListingId": "B0DJ4MVVYX"
+          },
+          {
+            "productId": "cmokmy3a40078pm0p1fvnu523",
+            "channel": "AMAZON",
+            "marketplace": "IT",
+            "externalListingId": "B0F7J163XJ"
+          },
+          {
+            "productId": "cmokmy3a40078pm0p1fvnu523",
+            "channel": "EBAY",
+            "marketplace": "IT",
+            "externalListingId": "257584954808"
+          }
+        ],
+        "openOrders": [],
+        "activeBundles": [],
+        "fbaInventory": [],
+        "confirmPhrase": "GALE-JACKET",
+        "refusal": null,
+        "checks": [
+          {
+            "productId": "cmokmy3a40078pm0p1fvnu523",
+            "stockHolds": {
+              "status": "ok",
+              "scope": "product",
+              "dimensions": [
+                "productId",
+                "variationId"
+              ],
+              "provenance": [
+                "StockLevel",
+                "StockReservation"
+              ],
+              "asOf": null,
+              "blocking": false,
+              "refusal": null,
+              "rows": []
+            },
+            "advertising": {
+              "status": "ok",
+              "scope": "product",
+              "dimensions": [
+                "productId",
+                "asin"
+              ],
+              "provenance": [
+                "AdProductAd"
+              ],
+              "asOf": null,
+              "blocking": false,
+              "refusal": null,
+              "rows": []
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/products/operational-impact",
+      "elapsedMs": 41.11933399999998,
+      "statusCode": 200,
+      "body": {
+        "readAt": "2026-09-13T19:21:07.155Z",
+        "targets": [
+          {
+            "target": {
+              "productId": "cmokmy3a40078pm0p1fvnu523",
+              "channel": "EBAY",
+              "marketplace": "IT",
+              "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+              "aliasKey": ""
+            },
+            "checks": {
+              "channelListings": {
+                "status": "ok",
+                "scope": "coordinate",
+                "dimensions": [
+                  "productId",
+                  "channel",
+                  "marketplace",
+                  "channelConnectionId",
+                  "aliasKey"
+                ],
+                "provenance": [
+                  "ChannelListing"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": null,
+                "rows": [
+                  {
+                    "id": "cmpjyu1o1004rn801rl5mgtw8",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "EBAY",
+                    "marketplace": "IT",
+                    "region": "IT",
+                    "externalListingId": "257584954808",
+                    "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "vatRate": "22",
+                      "videoId": "",
+                      "subtitle": "",
+                      "bestOffer": false,
+                      "imageUrls": [
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820629/product-images/cmokmy3a40078pm0p1fvnu523/vohkt9vi8vbxxcdngide.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820606/product-images/cmokmy3a40078pm0p1fvnu523/flpf6ssrho4xsddnazcx.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820608/product-images/cmokmy3a40078pm0p1fvnu523/hhhzogbq9uy06z1hnr0f.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820612/product-images/cmokmy3a40078pm0p1fvnu523/vovwyklirnkmy6heqevl.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820663/product-images/cmokmy3a40078pm0p1fvnu523/zfkmmtplsqis4ihkefyl.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780823073/product-images/cmokmy3a40078pm0p1fvnu523/w1qje3tp3ceoxil30x6c.jpg"
+                      ],
+                      "weightUnit": "KILOGRAM",
+                      "conditionId": "NEW",
+                      "packageType": "",
+                      "handlingTime": 3,
+                      "packageWidth": 30,
+                      "dimensionUnit": "CENTIMETER",
+                      "itemSpecifics": {
+                        "Marca": "Xavia Racing",
+                        "Stile": "Da motociclista",
+                        "Genere": "Uomo",
+                        "Athlete": "Unisex",
+                        "Adatto a": "Adulto unisex",
+                        "Chiusura": "Cerniera",
+                        "Stagione": "Tutte le stagione",
+                        "Body type": "Regolare",
+                        "Materiale": "Poliestere, Nylon",
+                        "Quantità": "1",
+                        "Team name": "Giacca",
+                        "Protezione": "CE Livello 2",
+                        "Scollatura": "Colletto alla coreana",
+                        "Tipo di giacca": "Da moto",
+                        "Caratteristiche": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+                        "Paese di origine": "Pakistan",
+                        "Cura dell'indumento": "Lavabile in lavatrice",
+                        "Livello di protezione": "CE Livello 2",
+                        "Paese di fabbricazione": "Pakistan"
+                      },
+                      "listingFormat": "FIXED_PRICE",
+                      "packageHeight": 8,
+                      "packageLength": 45,
+                      "packageWeight": 2,
+                      "_variationAxes": [
+                        "Colore",
+                        "Taglia"
+                      ],
+                      "bestOfferFloor": 0,
+                      "returnPolicyId": "244471581017",
+                      "_axisNameLabels": {
+                        "Colore": "Colore",
+                        "Taglia": "Taglia"
+                      },
+                      "_axisValueOrder": {
+                        "__dim0__": [
+                          "Nero",
+                          "Giallo"
+                        ],
+                        "__dim1__": [
+                          "XXS",
+                          "XS",
+                          "S",
+                          "M",
+                          "L",
+                          "XL",
+                          "XXL",
+                          "3XL",
+                          "4XL",
+                          "5XL"
+                        ]
+                      },
+                      "descriptionPush": {
+                        "at": "2026-07-28T03:04:29.738Z",
+                        "themeId": "cms3634nu001ile0100ixz239",
+                        "galleryHash": "4c94e6a5aa98cb13b5284da99c17706c7310e3b4168731c479bb1f4c4f50ac7f",
+                        "themeVersion": 5
+                      },
+                      "listingDuration": "GTC",
+                      "paymentPolicyId": "244471571017",
+                      "bestOfferCeiling": 0,
+                      "sharedSkuListing": true,
+                      "descriptionThemeId": "cms3634nu001ile0100ixz239",
+                      "__lastPublishedAxes": {
+                        "EBAY_IT": [
+                          "Colore",
+                          "Taglia"
+                        ]
+                      },
+                      "fulfillmentPolicyId": "244471597017",
+                      "itemLocationCountry": "IT",
+                      "merchantLocationKey": "",
+                      "quantityLimitPerBuyer": null,
+                      "_presentationOrderRevision": {
+                        "savedAt": "2026-09-11T21:15:17.723Z",
+                        "version": 17,
+                        "publication": "separate"
+                      }
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "xaviaracing"
+                    },
+                    "alias": null
+                  }
+                ]
+              },
+              "openOrders": {
+                "status": "ok",
+                "scope": "coordinate",
+                "dimensions": [
+                  "productId",
+                  "channel",
+                  "marketplace",
+                  "channelConnectionId"
+                ],
+                "provenance": [
+                  "OrderItem",
+                  "Order"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": null,
+                "rows": []
+              },
+              "activeBundles": {
+                "status": "ok",
+                "scope": "product",
+                "dimensions": [
+                  "productId"
+                ],
+                "provenance": [
+                  "Bundle",
+                  "BundleComponent",
+                  "ChannelListing"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": null,
+                "rows": []
+              },
+              "fbaPosture": {
+                "status": "unavailable",
+                "scope": "coordinate",
+                "dimensions": [
+                  "productId",
+                  "sku",
+                  "asin",
+                  "marketplaceId"
+                ],
+                "provenance": [
+                  "Product.fulfillmentMethod",
+                  "ChannelListing.fulfillmentMethod",
+                  "Offer",
+                  "StockLevel",
+                  "FbaInventoryDetail",
+                  "Marketplace"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": "FBA posture is an Amazon check; this coordinate is not Amazon.",
+                "rows": []
+              },
+              "stockHolds": {
+                "status": "unavailable",
+                "scope": "product",
+                "dimensions": [
+                  "productId",
+                  "variationId"
+                ],
+                "provenance": [
+                  "StockLevel",
+                  "StockReservation"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": "Stock-ledger holds apply to product deletion, not this coordinate action.",
+                "rows": []
+              },
+              "advertising": {
+                "status": "unavailable",
+                "scope": "coordinate",
+                "dimensions": [
+                  "productId",
+                  "asin"
+                ],
+                "provenance": [
+                  "AdProductAd"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": "This check reads Amazon product ads; advertising on this channel was not checked.",
+                "rows": []
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "POST",
+      "url": "/api/products/operational-impact",
+      "elapsedMs": 32.10166700000002,
+      "statusCode": 200,
+      "body": {
+        "readAt": "2026-09-13T19:21:07.187Z",
+        "targets": [
+          {
+            "target": {
+              "productId": "cmokmy3a40078pm0p1fvnu523"
+            },
+            "checks": {
+              "channelListings": {
+                "status": "ok",
+                "scope": "coordinate",
+                "dimensions": [
+                  "productId",
+                  "channel",
+                  "marketplace",
+                  "channelConnectionId",
+                  "aliasKey"
+                ],
+                "provenance": [
+                  "ChannelListing"
+                ],
+                "asOf": null,
+                "blocking": true,
+                "refusal": null,
+                "rows": [
+                  {
+                    "id": "cmp26aqf500rjrx01jjcb6e6b",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "AMAZON",
+                    "marketplace": "DE",
+                    "region": "DE",
+                    "externalListingId": "B0D8XBXM5H",
+                    "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "attributes": {
+                        "brand": [
+                          {
+                            "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "item_name": [
+                          {
+                            "value": "XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "skip_offer": [
+                          {
+                            "value": "false",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "weave_type": [
+                          {
+                            "value": "Plain",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "item_type_name": [
+                          {
+                            "value": "Motorradjacke Herren",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "batteries_required": [
+                          {
+                            "value": "false",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "water_resistance_level": [
+                          {
+                            "value": "waterproof",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "merchant_shipping_group": [
+                          {
+                            "value": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "merchant_suggested_asin": [
+                          {
+                            "value": "B0F7J163XJ",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "fulfillment_availability": [
+                          {
+                            "marketplace_id": "A1PA6795UKMFR9",
+                            "fulfillment_channel_code": "AMAZON_EU"
+                          }
+                        ],
+                        "recommended_browse_nodes": [
+                          {
+                            "value": "2420941031",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "supplier_declared_has_product_identifier_exemption": [
+                          {
+                            "value": "true",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ],
+                        "child_parent_sku_relationship__child_relationship_type": [
+                          {
+                            "value": "variation",
+                            "language_tag": "de_DE",
+                            "marketplace_id": "A1PA6795UKMFR9"
+                          }
+                        ]
+                      }
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "A1VRHKTGYO1JNU"
+                    },
+                    "alias": null
+                  },
+                  {
+                    "id": "cmp27ic2c01flnv011r6iujo1",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "AMAZON",
+                    "marketplace": "ES",
+                    "region": "ES",
+                    "externalListingId": "B0DJ4MVVYX",
+                    "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "attributes": {
+                        "brand": [
+                          {
+                            "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "item_name": [
+                          {
+                            "value": "XAVIA GALE Chaqueta De Moto Para Hombre - Chaqueta De Moto Impermeable Y Ventilada Con Protección De Nivel 2 | Para Todas Las Estaciones",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "skip_offer": [
+                          {
+                            "value": "false",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "weave_type": [
+                          {
+                            "value": "Not applicable",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "condition_type": [
+                          {
+                            "value": "new_new",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "batteries_required": [
+                          {
+                            "value": "false",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "merchant_shipping_group": [
+                          {
+                            "value": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "merchant_suggested_asin": [
+                          {
+                            "value": "B0F7J163XJ",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "fulfillment_availability": [
+                          {
+                            "marketplace_id": "A1RKKUPIHCS9HS",
+                            "fulfillment_channel_code": "AMAZON_EU"
+                          }
+                        ],
+                        "recommended_browse_nodes": [
+                          {
+                            "value": "2420941031",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "supplier_declared_has_product_identifier_exemption": [
+                          {
+                            "value": "true",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ],
+                        "child_parent_sku_relationship__child_relationship_type": [
+                          {
+                            "value": "variation",
+                            "language_tag": "es_ES",
+                            "marketplace_id": "A1RKKUPIHCS9HS"
+                          }
+                        ]
+                      }
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "A1VRHKTGYO1JNU"
+                    },
+                    "alias": null
+                  },
+                  {
+                    "id": "cmp27h0m20129nv01tlpf3zdq",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "AMAZON",
+                    "marketplace": "FR",
+                    "region": "FR",
+                    "externalListingId": "B0D8XFSS9D",
+                    "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "attributes": {
+                        "brand": [
+                          {
+                            "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                            "language_tag": "fr_FR",
+                            "marketplace_id": "A13V1IB3VIYZZH"
+                          }
+                        ],
+                        "item_name": [
+                          {
+                            "value": "XAVIA GALE Veste De Moto Homme - Blouson Moto Imperméable Et Ventilé Avec Protection De Niveau 2 | Pour Toutes Les Saisons",
+                            "language_tag": "fr_FR",
+                            "marketplace_id": "A13V1IB3VIYZZH"
+                          }
+                        ],
+                        "skip_offer": [
+                          {
+                            "value": false,
+                            "marketplace_id": "A13V1IB3VIYZZH"
+                          }
+                        ],
+                        "merchant_suggested_asin": [
+                          {
+                            "value": "B0F7J163XJ",
+                            "language_tag": "fr_FR",
+                            "marketplace_id": "A13V1IB3VIYZZH"
+                          }
+                        ],
+                        "fulfillment_availability": [
+                          {
+                            "marketplace_id": "A13V1IB3VIYZZH",
+                            "fulfillment_channel_code": "AMAZON_EU"
+                          }
+                        ],
+                        "child_parent_sku_relationship__child_relationship_type": [
+                          {
+                            "value": "variation",
+                            "language_tag": "fr_FR",
+                            "marketplace_id": "A13V1IB3VIYZZH"
+                          }
+                        ]
+                      },
+                      "_amazonMediaObservations": {
+                        "cmp27h0m20129nv01tlpf3zdq": {
+                          "asin": "B0D8XFSS9D",
+                          "error": null,
+                          "slots": {},
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:48.934Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {},
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hc7e015env01bwjiqas3": {
+                          "asin": "B0BMS6ZZ4H",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:50.222Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hcmv015hnv01txssklmx": {
+                          "asin": "B0BMSJWW7L",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            },
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:51.156Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hcxu015knv01nwic3e6b": {
+                          "asin": "B0DJ4FLPHM",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:52.190Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hdbo015nnv01s8vqgkxa": {
+                          "asin": "B0BMSWM15B",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:54.033Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hdmd015qnv01kj9byec9": {
+                          "asin": "B0BMSC91YK",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            },
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:55.059Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hdx9015tnv01oue03hh4": {
+                          "asin": "B0BMS5B768",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:56.004Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27he8o015wnv01gyl6fwl9": {
+                          "asin": "B0BMSH19GY",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            },
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:56.887Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hek3015znv01heu9lmj3": {
+                          "asin": "B0DJ4926YX",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:58.031Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27heuv0162nv01vf8rn1ky": {
+                          "asin": "B0BMSCJRYD",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91sRfO3CJuL.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91Wa2XAp5FL.jpg",
+                              "slot": "PT02",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT03",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/9140OjnwBLL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/916qy0KBuyL.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dCfmnQYwL.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:07:59.149Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Noir"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hf590165nv01pwrfluhb": {
+                          "asin": null,
+                          "error": "Amazon reports a different ASIN for this seller SKU. Reconcile the listing identity first.",
+                          "slots": {},
+                          "theme": null,
+                          "issues": [],
+                          "catalog": [],
+                          "checkedAt": "2026-09-13T03:07:59.996Z",
+                          "supported": [],
+                          "attributes": {},
+                          "productType": null,
+                          "catalogError": "Not checked"
+                        },
+                        "cmp27hffj0168nv015et62or7": {
+                          "asin": "B0D8SCXFLK",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:00.957Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hfq2016bnv018056n95r": {
+                          "asin": "B0D8RN2WRF",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:02.113Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hg1l016env01wbbzhwah": {
+                          "asin": "B0DJ4CB5N6",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:03.162Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hgcx016hnv01xaxl94sc": {
+                          "asin": "B0D8RPCJSH",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            },
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:04.221Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hgo3016knv01bwwxlngr": {
+                          "asin": "B0D8RN4KDL",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:05.195Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hgzg016nnv01qtukkeru": {
+                          "asin": "B0D8SFVSGP",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:06.122Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hhbr016qnv01i65v79hj": {
+                          "asin": "B0D8S567P5",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:07.116Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hhmd016tnv01cs28az5r": {
+                          "asin": "B0DJ44CDWP",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            },
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:08.181Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hhxa016wnv011fp7qv6p": {
+                          "asin": "B0D8RPC284",
+                          "error": null,
+                          "slots": {
+                            "MAIN": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+                            "PT01": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+                            "PT02": "https://m.media-amazon.com/images/I/711KKDRy3DL.jpg",
+                            "PT03": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+                            "PT04": "https://m.media-amazon.com/images/I/91bfHDvv5BL.jpg",
+                            "PT05": "https://m.media-amazon.com/images/I/81nYLVTcJWL.jpg",
+                            "PT06": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg"
+                          },
+                          "theme": "SIZE/COLOR",
+                          "issues": [
+                            {
+                              "code": "100230",
+                              "message": "L'image PS05 a été identifiée comme contenant un ou plusieurs mot(s) injurieux. Pour corriger le problème, importez une nouvelle image PS05 conforme aux exigences relatives aux images.",
+                              "severity": "ERROR"
+                            },
+                            {
+                              "code": "100530",
+                              "message": "Pour vendre ce produit sur les sites de vente Amazon, vous devez fournir des informations ERN conformément à la réglementation sur la responsabilité élargie des producteurs (REP). Si vous ne fournissez pas ces informations le 2026-08-12T00:00:00.000Z au plus tard, cette offre peut être supprimée des sites de vente Amazon.",
+                              "severity": "WARNING"
+                            }
+                          ],
+                          "catalog": [
+                            {
+                              "url": "https://m.media-amazon.com/images/I/819kD2Bj5kL.jpg",
+                              "slot": "MAIN",
+                              "width": 2250,
+                              "height": 2250
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ZPB72tmML.jpg",
+                              "slot": "PT01",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/71fHXz+yYyL.jpg",
+                              "slot": "PT02",
+                              "width": 2100,
+                              "height": 2100
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91j6qC9w+tL.jpg",
+                              "slot": "PT03",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/914WicaAiwL.jpg",
+                              "slot": "PT04",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/810BTWM5X-L.jpg",
+                              "slot": "PT05",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91ShQH6rm-L.jpg",
+                              "slot": "PT06",
+                              "width": 2000,
+                              "height": 2000
+                            },
+                            {
+                              "url": "https://m.media-amazon.com/images/I/91dS7JyR-BL.jpg",
+                              "slot": "PT07",
+                              "width": 2000,
+                              "height": 2000
+                            }
+                          ],
+                          "checkedAt": "2026-09-13T03:08:09.179Z",
+                          "supported": [
+                            "MAIN",
+                            "PT01",
+                            "PT02",
+                            "PT03",
+                            "PT04",
+                            "PT05",
+                            "PT06",
+                            "PT07",
+                            "PT08",
+                            "SWCH"
+                          ],
+                          "attributes": {
+                            "color": "Jaune"
+                          },
+                          "productType": "COAT",
+                          "catalogError": null
+                        },
+                        "cmp27hi7a016znv01nths2bch": {
+                          "asin": null,
+                          "error": "Amazon reports a different ASIN for this seller SKU. Reconcile the listing identity first.",
+                          "slots": {},
+                          "theme": null,
+                          "issues": [],
+                          "catalog": [],
+                          "checkedAt": "2026-09-13T03:08:10.130Z",
+                          "supported": [],
+                          "attributes": {},
+                          "productType": null,
+                          "catalogError": "Not checked"
+                        }
+                      }
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "A1VRHKTGYO1JNU"
+                    },
+                    "alias": null
+                  },
+                  {
+                    "id": "cmp26aq5g00phrx01kcxn7fal",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "AMAZON",
+                    "marketplace": "IT",
+                    "region": "IT",
+                    "externalListingId": "B0F7J163XJ",
+                    "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "attributes": {
+                        "brand": [
+                          {
+                            "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "item_name": [
+                          {
+                            "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "skip_offer": [
+                          {
+                            "value": "false",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "weave_type": [
+                          {
+                            "value": "Not applicable",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "fabric_type": [
+                          {
+                            "value": "Poliestere",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "bullet_point": [
+                          {
+                            "value": "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena.",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "condition_type": [
+                          {
+                            "value": "Nuovo",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "parentage_level": [
+                          {
+                            "value": "parent",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "variation_theme": [
+                          {
+                            "name": "SIZE_NAME/COLOR_NAME",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "country_of_origin": [
+                          {
+                            "value": "Pakistan",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "batteries_required": [
+                          {
+                            "value": "false",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "external_product_id": [
+                          {
+                            "value": "B0F7J163XJ",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "product_description": [
+                          {
+                            "value": "Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "merchant_shipping_group": [
+                          {
+                            "value": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "merchant_suggested_asin": [
+                          {
+                            "value": "B0F7J163XJ",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "external_product_id_type": [
+                          {
+                            "value": "ASIN",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "fulfillment_availability": [
+                          {
+                            "marketplace_id": "APJ6JRA9NG5V4",
+                            "fulfillment_channel_code": "AMAZON_EU"
+                          }
+                        ],
+                        "recommended_browse_nodes": [
+                          {
+                            "value": "2420941031",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "supplier_declared_dg_hz_regulation": [
+                          {
+                            "value": "not_applicable",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "supplier_declared_has_product_identifier_exemption": [
+                          {
+                            "value": "true",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ],
+                        "child_parent_sku_relationship__child_relationship_type": [
+                          {
+                            "value": "variation",
+                            "language_tag": "it_IT",
+                            "marketplace_id": "APJ6JRA9NG5V4"
+                          }
+                        ]
+                      },
+                      "browseNodeId": "2420941031"
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "A1VRHKTGYO1JNU"
+                    },
+                    "alias": null
+                  },
+                  {
+                    "id": "cmpjyu1o1004rn801rl5mgtw8",
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "channel": "EBAY",
+                    "marketplace": "IT",
+                    "region": "IT",
+                    "externalListingId": "257584954808",
+                    "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+                    "aliasKey": "",
+                    "fulfillmentMethod": "FBM",
+                    "platformAttributes": {
+                      "vatRate": "22",
+                      "videoId": "",
+                      "subtitle": "",
+                      "bestOffer": false,
+                      "imageUrls": [
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820629/product-images/cmokmy3a40078pm0p1fvnu523/vohkt9vi8vbxxcdngide.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820606/product-images/cmokmy3a40078pm0p1fvnu523/flpf6ssrho4xsddnazcx.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820608/product-images/cmokmy3a40078pm0p1fvnu523/hhhzogbq9uy06z1hnr0f.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820612/product-images/cmokmy3a40078pm0p1fvnu523/vovwyklirnkmy6heqevl.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820663/product-images/cmokmy3a40078pm0p1fvnu523/zfkmmtplsqis4ihkefyl.jpg",
+                        "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780823073/product-images/cmokmy3a40078pm0p1fvnu523/w1qje3tp3ceoxil30x6c.jpg"
+                      ],
+                      "weightUnit": "KILOGRAM",
+                      "conditionId": "NEW",
+                      "packageType": "",
+                      "handlingTime": 3,
+                      "packageWidth": 30,
+                      "dimensionUnit": "CENTIMETER",
+                      "itemSpecifics": {
+                        "Marca": "Xavia Racing",
+                        "Stile": "Da motociclista",
+                        "Genere": "Uomo",
+                        "Athlete": "Unisex",
+                        "Adatto a": "Adulto unisex",
+                        "Chiusura": "Cerniera",
+                        "Stagione": "Tutte le stagione",
+                        "Body type": "Regolare",
+                        "Materiale": "Poliestere, Nylon",
+                        "Quantità": "1",
+                        "Team name": "Giacca",
+                        "Protezione": "CE Livello 2",
+                        "Scollatura": "Colletto alla coreana",
+                        "Tipo di giacca": "Da moto",
+                        "Caratteristiche": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+                        "Paese di origine": "Pakistan",
+                        "Cura dell'indumento": "Lavabile in lavatrice",
+                        "Livello di protezione": "CE Livello 2",
+                        "Paese di fabbricazione": "Pakistan"
+                      },
+                      "listingFormat": "FIXED_PRICE",
+                      "packageHeight": 8,
+                      "packageLength": 45,
+                      "packageWeight": 2,
+                      "_variationAxes": [
+                        "Colore",
+                        "Taglia"
+                      ],
+                      "bestOfferFloor": 0,
+                      "returnPolicyId": "244471581017",
+                      "_axisNameLabels": {
+                        "Colore": "Colore",
+                        "Taglia": "Taglia"
+                      },
+                      "_axisValueOrder": {
+                        "__dim0__": [
+                          "Nero",
+                          "Giallo"
+                        ],
+                        "__dim1__": [
+                          "XXS",
+                          "XS",
+                          "S",
+                          "M",
+                          "L",
+                          "XL",
+                          "XXL",
+                          "3XL",
+                          "4XL",
+                          "5XL"
+                        ]
+                      },
+                      "descriptionPush": {
+                        "at": "2026-07-28T03:04:29.738Z",
+                        "themeId": "cms3634nu001ile0100ixz239",
+                        "galleryHash": "4c94e6a5aa98cb13b5284da99c17706c7310e3b4168731c479bb1f4c4f50ac7f",
+                        "themeVersion": 5
+                      },
+                      "listingDuration": "GTC",
+                      "paymentPolicyId": "244471571017",
+                      "bestOfferCeiling": 0,
+                      "sharedSkuListing": true,
+                      "descriptionThemeId": "cms3634nu001ile0100ixz239",
+                      "__lastPublishedAxes": {
+                        "EBAY_IT": [
+                          "Colore",
+                          "Taglia"
+                        ]
+                      },
+                      "fulfillmentPolicyId": "244471597017",
+                      "itemLocationCountry": "IT",
+                      "merchantLocationKey": "",
+                      "quantityLimitPerBuyer": null,
+                      "_presentationOrderRevision": {
+                        "savedAt": "2026-09-11T21:15:17.723Z",
+                        "version": 17,
+                        "publication": "separate"
+                      }
+                    },
+                    "offers": [],
+                    "product": {
+                      "sku": "GALE-JACKET"
+                    },
+                    "channelConnection": {
+                      "displayName": "xaviaracing"
+                    },
+                    "alias": null
+                  }
+                ]
+              },
+              "openOrders": {
+                "status": "ok",
+                "scope": "product",
+                "dimensions": [
+                  "productId",
+                  "channel",
+                  "marketplace",
+                  "channelConnectionId"
+                ],
+                "provenance": [
+                  "OrderItem",
+                  "Order"
+                ],
+                "asOf": null,
+                "blocking": true,
+                "refusal": null,
+                "rows": []
+              },
+              "activeBundles": {
+                "status": "ok",
+                "scope": "product",
+                "dimensions": [
+                  "productId"
+                ],
+                "provenance": [
+                  "Bundle",
+                  "BundleComponent",
+                  "ChannelListing"
+                ],
+                "asOf": null,
+                "blocking": true,
+                "refusal": null,
+                "rows": []
+              },
+              "fbaPosture": {
+                "status": "unavailable",
+                "scope": "product",
+                "dimensions": [
+                  "productId",
+                  "sku",
+                  "asin",
+                  "marketplaceId"
+                ],
+                "provenance": [
+                  "Product.fulfillmentMethod",
+                  "ChannelListing.fulfillmentMethod",
+                  "Offer",
+                  "StockLevel",
+                  "FbaInventoryDetail",
+                  "Marketplace"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": "Amazon-managed fulfilment is recorded, but inventory detail is unavailable; units are not zero.",
+                "rows": [
+                  {
+                    "productId": "cmokmy3a40078pm0p1fvnu523",
+                    "isFba": true,
+                    "via": [
+                      "fulfillmentMethod"
+                    ],
+                    "units": null,
+                    "sellable": null,
+                    "notSellable": null,
+                    "pooled": false,
+                    "pooledAcross": [],
+                    "quantityScope": "market-snapshot",
+                    "accountAttribution": "account-unattributed",
+                    "detail": [],
+                    "asOf": null
+                  }
+                ]
+              },
+              "stockHolds": {
+                "status": "ok",
+                "scope": "product",
+                "dimensions": [
+                  "productId",
+                  "variationId"
+                ],
+                "provenance": [
+                  "StockLevel",
+                  "StockReservation"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": null,
+                "rows": []
+              },
+              "advertising": {
+                "status": "ok",
+                "scope": "product",
+                "dimensions": [
+                  "productId",
+                  "asin"
+                ],
+                "provenance": [
+                  "AdProductAd"
+                ],
+                "asOf": null,
+                "blocking": false,
+                "refusal": null,
+                "rows": []
+              }
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

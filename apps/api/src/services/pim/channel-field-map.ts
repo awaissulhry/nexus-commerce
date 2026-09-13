@@ -26,10 +26,16 @@ export const CHANNEL_FIELD_MAP: Record<string, string> = {
   ebay_description: 'description',
   ebay_price: 'price',
   ebay_quantity: 'quantity',
-  // CC.1 — variationTheme on ChannelListing, surfaced per-channel in the
-  // registry. Same target column for both prefixes.
-  amazon_variationTheme: 'variationTheme',
-  ebay_variationTheme: 'variationTheme',
+  // VT.1 (2026-09-13, D-VT3) REMOVED `amazon_variationTheme` and `ebay_variationTheme`. CC.1 added them when the
+  // variation theme was a sheet cell; it is now one engine-owned column with one writer
+  // (`PATCH /studio/projection`), which validates the mapping against the included variants, refuses a SET change
+  // on a live coordinate and reports collisions. This map has none of that, so keeping the entries would leave a
+  // second path to the same store with none of the checks. The refusal is deliberate and loud: `isChannelWritable`
+  // now returns false for both names, and the bulk PATCH answers "Field not editable" instead of writing.
+  //
+  // Measured before removing: **0 rows** of the 21 `ChannelListing.variationTheme` values on the local database
+  // were written by this route in the audit trail, and the two raw sheet columns that used it are retired in
+  // `channel-specs/{amazon,ebay}.ts` in the same change, so nothing on screen offers the field any more.
   // AM.1 — the master `bulletPoints` list on an Amazon scope writes the listing's OWN bullet array
   // (`bulletPointsOverride`, 512 of 725 listings already carry one). The write also sets
   // `followMasterBulletPoints = false`, because an override the listing still "follows master" past

@@ -82,3 +82,19 @@ describe('the cell has ONE tooltip', () => {
     expect(body).not.toMatch(/display:\s*'?none/)
   })
 })
+
+// Mount guards cover the two actual studio cell renderers; channelColumns delegates to CascadeCell.
+it.each([
+  'app/products/[id]/edit/_studio/sheet/master/columns.tsx',
+  'app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx',
+])('%s mounts an announced save shape beside the reason', (rel) => {
+  const src = read(rel)
+  expect(src).toContain('<CellSaveReason reason=')
+  expect(src).toContain('<CellSaveMark state=')
+})
+
+it('channel columns forward their existing save tracker to the actual cell renderer', () => {
+ const src = read('app/products/[id]/edit/_studio/sheet/master/channelColumns.tsx')
+ expect(src).toContain('cellRenderer: CascadeCell')
+ expect(src).toMatch(/cellRendererParams:\s*\{[^}]*\btracker\b/)
+})

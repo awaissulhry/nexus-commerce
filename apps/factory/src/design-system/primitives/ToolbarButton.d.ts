@@ -1,0 +1,81 @@
+import { type ButtonHTMLAttributes, type ReactNode } from 'react';
+export interface ToolbarButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'children'> {
+    icon: ReactNode;
+    /** aria-label + default tooltip heading */
+    label: string;
+    /** tooltip body text */
+    description?: string;
+    /** keyboard shortcut shown in tooltip, e.g. '⌘F' */
+    shortcut?: string;
+    /**
+     * Takes the native handler signature — the EVENT is passed.
+     *
+     * It used to be `() => void`, which silently made `preventDefault()` impossible: a
+     * ToolbarButton nested inside a `<label>` could not stop the click also toggling the label's
+     * control, so deleting a template also selected its row.
+     */
+    onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
+    disabled?: boolean;
+    /**
+     * Pressed / highlighted state, emitted as `aria-pressed`.
+     *
+     * SUPPRESSED when the caller passes `aria-expanded`. An icon button that opens a panel is a
+     * DISCLOSURE, not a toggle, and a control announcing both roles at once is worse than one
+     * announcing neither. This used to be hard-coded, so every expander converted to this component
+     * silently lost its disclosure semantics — pass `aria-expanded` and it does the right thing.
+     */
+    active?: boolean;
+    /** blue count badge top-right, capped at 99+ */
+    badge?: number;
+    className?: string;
+    /** override auto-generated tooltip content */
+    tooltipContent?: ReactNode;
+    /**
+     * Where the tooltip bubble sits relative to the button. `'end'` right-aligns it, for a button
+     * flush against a container edge where a centred bubble would overflow. Declared rather than
+     * detected by the default inline tooltip; portal mode also clamps it to the viewport. The last button of a
+     * right-aligned toolbar can declare its preferred alignment.
+     */
+    tooltipAlign?: 'center' | 'end';
+    /**
+     * `bare` (default) is the existing look: no border, no fill, 28x28, `--nds-text-2`.
+     * `boxed` adds the surface + border the ads console hand-rolls three ways (`.az-iconbtn` 34px,
+     * `.h10-sug-iconbtn` and `.rec-iconbtn` 28px). Measured 2026-08-25 — the DS had no boxed
+     * icon button, which is why three pages each invented one.
+     */
+    variant?: 'bare' | 'boxed';
+    /** `sm` is 24x24 rather than 28x28, for a dense action column. */
+    size?: 'md' | 'sm';
+    /**
+     * `danger` turns the HOVER red. For a button whose only cue that it destroys something is that
+     * colour — `.del`, `.mbrm`, `.strm`. Their wash measured 5.94:1; the DS note-error pair is
+     * 9.23:1.
+     */
+    tone?: 'neutral' | 'danger';
+    /**
+     * Hidden until its row is hovered — a per-row edit affordance that must not put an icon on
+     * every row of a grid.
+     *
+     * Put `nds-reveal-row` on the row; this button then fades in on hover. It stays visible on
+     * `:focus-visible` regardless, because an icon a keyboard user can reach and cannot see is
+     * worse than one that is always there — and `opacity: 0` alone leaves it focusable.
+     *
+     * Exists because `.h10-editpen` is #b6bdc8 on white — **1.89:1**, under even the 3:1 non-text
+     * floor — and was one of the sites the brief most wants converted and one of the few that
+     * could not be.
+     */
+    revealOnRowHover?: boolean;
+    /**
+     * Wrap in a `Tooltip`. Default true, matching every existing call site.
+     *
+     * Pass `false` for an icon button whose meaning is already obvious (a `x` close, a `-` remove).
+     * `Tooltip` renders a real `display: inline-flex` wrapper element, so adding one around a
+     * button that is a flex child or absolutely positioned can move it — and the 43 `.x`/`.rm`
+     * buttons in the ads console are exactly that. The `label` is still required and still becomes
+     * the `aria-label`: opting out of the bubble never opts out of the accessible name.
+     */
+    tooltip?: boolean;
+}
+export declare function ToolbarButton({ icon, label, description, shortcut, onClick, disabled, active, badge, className, tooltipContent, tooltipAlign, variant, size, tone, revealOnRowHover, tooltip, ...rest }: ToolbarButtonProps): import("react/jsx-runtime").JSX.Element;
+/** 1px vertical separator for use between toolbar button groups. */
+export declare function ToolbarDivider(): import("react/jsx-runtime").JSX.Element;

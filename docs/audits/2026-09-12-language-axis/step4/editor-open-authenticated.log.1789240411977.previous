@@ -1,0 +1,17 @@
+
+📌 BUILD STAMP — every file whose change can invalidate a reading below (sha1, first 8):
+   21:08:48  sha1:7332af83  docs/2026-09-03-cell-editing-contract.md
+   10:50:36  sha1:22b88761  apps/web/src/design-system/grid/NexusGrid.tsx
+   11:51:12  sha1:2f6b33f0  apps/web/src/design-system/grid/editors/openGesture.ts
+   01:51:51  sha1:10b69d50  apps/web/src/design-system/grid/editors/editorBox.ts
+   00:53:48  sha1:1ee0bc55  apps/web/src/design-system/grid/theme/grid.css
+   00:09:09  sha1:a3fb04f6  apps/web/src/design-system/grid/hosts/GridSheet.tsx
+   03:23:01  sha1:e63dbd62  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx
+   21:12:38  sha1:a7a36f19  scripts/check-editor-open.mjs
+
+🕐 21:12:45 · WHAT ELSE COULD BE SHARING THIS API — a snapshot, not a window
+   gate processes (node, this script), incl. this one: 1
+     pid 88297 ppid 88282  /opt/homebrew/Cellar/node/25.9.0_2/bin/node scripts/check-editor-open.mjs --strict
+   browser processes owned by a gate: 0
+   (a snapshot cannot see a run that already exited or one that starts later — read as "at least these, at this instant")
+Studio test sign-in refused (403)

@@ -20,6 +20,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { commitShopifySheetRow } from '../../shopify/channelSheetWriter'
 import { applyNormalizedReferenceChanges } from '../normalizedReferenceChanges'
 
+import { commitLanguageGroups } from '../languageWrites'
+import { commitVariationTheme } from '../master/masterWrite'
+import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
@@ -37,6 +40,7 @@ export interface UseChannelSheetOptions {
   channel: ChannelScopeChannel
   marketplace: string
   locale?: string
+  locales?: string[] | null
   view?: string
 }
 
@@ -72,6 +76,7 @@ export function channelScopeUrl(o: UseChannelSheetOptions): string {
   })
   if (o.accountId) params.set('accountId', o.accountId)
   if (o.locale) params.set('locale', o.locale)
+  if (o.locales) params.set('locales', o.locales.join(','))
   if (o.view) params.set('view', o.view)
   return `${getBackendUrl()}/api/products/${o.productId}/studio/sheet?${params}`
 }
@@ -207,18 +212,18 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 export const writeLandsOnListing = (cell: { writeTarget?: string } | null | undefined): boolean =>
   cell?.writeTarget === 'channelListing'
 
-export async function commitChannelRow(
+async function commitChannelLanguage(
   req: SheetWriteRequest<ChannelSheetRow>,
   coord: { channel: ChannelScopeChannel; marketplace: string; accountId?: string; locale?: string },
 ): Promise<SheetWriteResult> {
   const row = req.row
   if (!row) return { ok: false, reason: 'The grid no longer holds this row — reload the sheet' }
-  if (row.shopify && req.cells.every(cell => !!row.values[cell.colId]?.shopifyWrite)) return commitShopifySheetRow(req, coord)
-  if (req.cells.some(cell => !!row.values[cell.colId]?.shopifyWrite)) {
+  if (row.shopify && req.cells.every(cell => !!row.values[cell.colId]?.shopifyWrite && !row.values[cell.colId]?.contentAcknowledgement)) return commitShopifySheetRow(req, coord)
+  if (req.cells.some(cell => !!row.values[cell.colId]?.shopifyWrite && !row.values[cell.colId]?.contentAcknowledgement)) {
     const results: SheetWriteResult[] = [], cells: NonNullable<SheetWriteResult['cells']> = {}
     // Shared/listing CAS first; the narrow Shopify adapter independently checks each draft cell.
     for (const native of [false, true]) {
-      const subset = req.cells.filter(cell => !!row.values[cell.colId]?.shopifyWrite === native)
+      const subset = req.cells.filter(cell => (!!row.values[cell.colId]?.shopifyWrite && !row.values[cell.colId]?.contentAcknowledgement) === native)
       const result = await commitChannelRow({ ...req, cells: subset }, coord)
       results.push(result)
       for (const cell of subset) cells[cell.colId] = { ...(result.cells?.[cell.colId] ?? { ok: result.ok, reason: result.reason }), unreachable: result.cells?.[cell.colId]?.unreachable ?? !!result.unreachable }
@@ -228,11 +233,15 @@ export async function commitChannelRow(
 
   const changes = req.cells.map(({ colId, value, intent }) => {
     const cell = row.values?.[colId]
+    const address = intent === 'reset' || intent === 'reset-list' ? cell?.contentAcknowledgement?.pin.address ?? cell?.contentAddress : cell?.contentAddress
     const isReset = intent === 'reset' || intent === 'reset-list'
     return {
       colId,
       change: {
         id: row.id,
+        contentAddress: address,
+        ...(cell?.contentAcknowledged || isReset && cell?.contentAcknowledgement ? { contentAcknowledged: true } : {}),
+        contentVersion: cell?.contentVersion,
         // Fall back to the column key only when the server sent no cell for it; a made-up
         // writeField would be a write aimed at nothing.
         field: intent === 'reset-list' ? wholeListWriteField(cell?.writeField ?? colId) ?? cell?.writeField ?? colId : cell?.writeField ?? colId,
@@ -264,7 +273,7 @@ export async function commitChannelRow(
          * Defaulting to `'master'` when the server sent no cell matches the endpoint's own default
          * — the safe direction is the shared record refusing the edit, not a silent channel write.
          */
-        target: writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb ?? 'master',
+        target: cell?.contentAcknowledgement ? address?.tier === 'pin' ? 'channel' : 'master' : writeLandsOnListing(cell) ? 'channel' : cell?.writeVerb ?? 'master',
         intent: intent === 'reset-list' ? 'reset' : intent,
       },
     }
@@ -348,12 +357,12 @@ export async function commitChannelRow(
         // Name the row the number belongs to, or say nothing about a version at all. Asserting a
         // listing version we were handed from the product row is how the old message said "v1"
         // about a listing sitting at 19.
-        reason:
+        reason: body?.message || body?.error || (
           versionOf === 'channelListing'
             ? `Someone else changed this listing (now v${raw ?? '?'}). Review the edit before reloading.`
             : versionOf === 'product'
               ? `Someone else changed this product (now v${raw ?? '?'}). Review the edit before reloading.`
-              : 'Someone else changed this row first. Review the edit before reloading.',
+              : 'Someone else changed this row first. Review the edit before reloading.'),
       }
     }
     if (!res.ok) {
@@ -466,4 +475,46 @@ export async function updateListingAlias(input: {
   } catch (err) {
     return { ok: false, reason: err instanceof Error ? err.message : String(err) }
   }
+}
+
+
+export function commitChannelRow(
+  req: SheetWriteRequest<ChannelSheetRow>,
+  coord: { channel: ChannelScopeChannel; marketplace: string; accountId?: string; locale?: string; kindOf?: (colId: string) => string | undefined },
+): Promise<SheetWriteResult> {
+  /**
+   * VT.2 — a `variationTheme` cell leaves by its OWN route, exactly as the master sheet's does.
+   *
+   * The split sits here for the same reason the Shopify split sits in `commitChannelLanguage`: a
+   * fill or a paste can carry one theme cell beside ordinary ones, and each half must reach the
+   * route that accepts it. `variation_theme` was removed from `CHANNEL_WRITABLE` and from
+   * `CHANNEL_FIELD_MAP` by VT.1, so the bulk route would refuse the whole batch.
+   *
+   * 🔴 Routed on `kindOf` — the COLUMN's kind — and never on `writeField` or on the shape of the
+   * value. The adapter supplies it because this function is not given the column set; when it is
+   * absent nothing is split, which is the old behaviour exactly.
+   */
+  const theme = coord.kindOf ? req.cells.filter((c) => coord.kindOf!(c.colId) === 'variationTheme') : []
+  if (theme.length > 0) {
+    const rest = req.cells.filter((c) => coord.kindOf!(c.colId) !== 'variationTheme')
+    /* 🔴 `row.id`, the bare PRODUCT id — never `rowId`, which is this scope's grid identity
+       (`aliasKey:productId`, because the same child under three aliases is three rows). A rowId in
+       the URL would address no product at all. */
+    const productId = req.row?.id ?? req.rowId.split(':').pop() ?? req.rowId
+    return (async () => {
+      const themed = await commitVariationTheme({ ...req, cells: theme }, productId)
+      if (rest.length === 0) return themed
+      const other = await commitChannelRow({ ...req, cells: rest }, coord)
+      return {
+        ok: themed.ok && other.ok,
+        cells: { ...themed.cells, ...other.cells },
+        version: other.version ?? themed.version,
+        conflict: themed.conflict || other.conflict,
+        unreachable: themed.unreachable || other.unreachable,
+        reason: themed.reason ?? other.reason,
+      }
+    })()
+  }
+  return commitLanguageGroups(req, key => columnLanguages([key])[0] ?? coord.locale,
+    (request, language) => commitChannelLanguage(request, { ...coord, locale: language }))
 }

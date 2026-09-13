@@ -1,0 +1,44 @@
+{
+  "at": "2026-09-12T15:02:42.683Z",
+  "phase": "drift-cell",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "restored": [
+    {
+      "table": "OutboundSyncQueue",
+      "id": "cmtyijzeb000mnjcwrs8pcpcb",
+      "action": "removed rehearsal-created row"
+    },
+    {
+      "table": "ChannelListingTranslation",
+      "id": "cmtyijzdu000knjcwfoakpdai",
+      "action": "removed rehearsal-created row"
+    },
+    {
+      "table": "ProductTranslation",
+      "id": "cmtyijzci000injcw20ur51jj",
+      "action": "removed rehearsal-created row"
+    },
+    {
+      "table": "ChannelListing",
+      "id": "cmp00tsac0037s101ijg2of6x",
+      "fields": [
+        "version",
+        "updatedAt",
+        "followMasterTitle"
+      ],
+      "action": "restored baseline values"
+    },
+    {
+      "table": "Product",
+      "id": "cmokmy0lr0009pm0p9yxk7ho0",
+      "fields": [
+        "version",
+        "updatedAt"
+      ],
+      "action": "restored baseline values"
+    }
+  ],
+  "auditRows": "retained as rehearsal history"
+}

@@ -66,6 +66,7 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
       locale?: string
       sourceMarketplace?: string
       reason?: string
+      contentAddress?: import('@nexus/shared/content-language').ContentAddress
       applyGrace?: boolean
     }
   }>('/products/:id/mapping/apply', async (request, reply) => {
@@ -84,6 +85,7 @@ const mappingPropagationRoutes: FastifyPluginAsync = async (fastify) => {
         {
           productId: id,
           changes: b.changes,
+          contentAddress: b.contentAddress,
           channels: b.channels,
           markets: b.markets,
           locale: b.locale,

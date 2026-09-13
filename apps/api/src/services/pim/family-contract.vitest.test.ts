@@ -34,7 +34,10 @@ describe('Master family contract', () => {
     expect(evaluateRow({}, buildCoordinateValidators(columns, coordinate, jacket))).toEqual([expect.objectContaining({ field: 'lining', severity: 'error' })])
     expect(completenessFor(columns, glove, {}).required.total).toBe(0)
     const optional = buildSheetColumns({ fields: fields.map(field => ({ ...field, required: false })), coordinates: [], familySchema: true }).columns
-    expect(optional.map(column => column.key)).toEqual(['lining', 'closure'])
+    // VT.1 (2026-09-13, D-VT9): the engine-owned `variation_theme` column leads EVERY scope, so the family's own
+    // columns follow it. The per-family ordering this test exists to pin is asserted on the spec's columns.
+    expect(optional.map(column => column.key)).toEqual(['variation_theme', 'lining', 'closure'])
+    expect(optional.filter(column => column.kind === 'variationTheme')).toHaveLength(1)
   })
 })
 

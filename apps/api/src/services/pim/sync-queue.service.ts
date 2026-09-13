@@ -102,7 +102,15 @@ export interface SyncQueueRow {
   externalListingId: string | null
 }
 
+export interface SyncQueueSource {
+  source: 'OutboundSyncQueue' | 'ListingIssue' | 'AmazonSuppression' | 'ChannelListing.validationStatus'
+  queried: boolean
+  status: 'ok' | 'unavailable' | 'not-queried'
+  sentence: string
+}
+
 export interface SyncQueuePage {
+  sources: SyncQueueSource[]
   scope: {
     productId: string
     familyIds: string[]
@@ -316,6 +324,12 @@ export async function getProductSyncQueue(input: {
   const skuById = new Map(skuRows.map((p) => [p.id, p.sku]))
 
   return {
+    sources: [
+      { source: 'OutboundSyncQueue', queried: true, status: 'ok', sentence: 'This console reads queued writes linked to this product family.' },
+      { source: 'ListingIssue', queried: false, status: 'not-queried', sentence: 'Listing issues are not queried by this console.' },
+      { source: 'AmazonSuppression', queried: false, status: 'not-queried', sentence: 'Amazon suppressions are not queried by this console.' },
+      { source: 'ChannelListing.validationStatus', queried: false, status: 'not-queried', sentence: 'Listing validation status is not queried by this console.' },
+    ],
     scope: {
       productId: rootId,
       familyIds,

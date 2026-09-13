@@ -163,6 +163,7 @@ const ALL_GPSR_COLS = new Set([
 
 const ctx = (over: Partial<GpsrCheckContext> = {}): GpsrCheckContext => ({
   marketplace: 'IT',
+  languages: ({ IT: ['it'], DE: ['de'], BE: ['nl', 'fr'] } as Record<string, string[]>)[over.marketplace ?? 'IT'] ?? [],
   applicableColumns: ALL_GPSR_COLS,
   contentTypeValues: CONTENT_TYPES,
   ...over,

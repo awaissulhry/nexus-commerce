@@ -1,0 +1,22 @@
+✗ apps/api: 18 error(s) across 6 file(s) in 7.0s
+apps/api/src/services/master-content.service.ts(27,10): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'contentAddress'.
+apps/api/src/services/master-content.service.ts(27,31): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/master-content.service.ts(163,110): error TS2322: Type 'string' is not assignable to type 'SyncChannel'.
+apps/api/src/services/pim/content-bulk-write.ts(1,10): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'contentAddress'.
+apps/api/src/services/pim/content-bulk-write.ts(1,31): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/content-bulk-write.ts(40,71): error TS2345: Argument of type 'unknown' is not assignable to parameter of type 'string'.
+apps/api/src/services/pim/content-resolver.ts(7,15): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/content-resolver.ts(8,67): error TS2694: Namespace '"/Users/awais/nexus-commerce/packages/shared/dist/content-language"' has no exported member 'ContentCoordinate'.
+apps/api/src/services/pim/content-write.ts(1,10): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'contentAddress'.
+apps/api/src/services/pim/content-write.ts(1,31): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/studio-sheet.service.ts(533,61): error TS2694: Namespace '"/Users/awais/nexus-commerce/packages/shared/dist/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/studio-sheet.service.ts(535,80): error TS2694: Namespace '"/Users/awais/nexus-commerce/packages/shared/dist/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/studio-sheet.service.ts(536,77): error TS2694: Namespace '"/Users/awais/nexus-commerce/packages/shared/dist/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/translation-write.ts(1,10): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'contentAddress'.
+apps/api/src/services/pim/translation-write.ts(1,31): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.
+apps/api/src/services/pim/translation-write.ts(53,39): error TS2345: Argument of type '{ parent: { aPlusContent: JsonValue; name: string; workspaceId: string; id: string; sku: string; basePrice: Decimal; totalStock: number; lowStockThreshold: number; amazonAsin: string; ... 82 more ...; updatedAt: Date; }; } & { ...; }' is not assignable to parameter of type 'ContentProduct'.
+  Types of property 'categoryAttributes' are incompatible.
+    Type 'JsonValue' is not assignable to type 'Bag'.
+      Type 'string' is not assignable to type 'Bag'.
+apps/api/src/services/products/bulk-edit.service.ts(1,10): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'contentAddress'.
+apps/api/src/services/products/bulk-edit.service.ts(1,31): error TS2305: Module '"@nexus/shared/content-language"' has no exported member 'ContentAddress'.

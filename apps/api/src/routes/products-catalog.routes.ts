@@ -1,4 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify'
+import { OPERATIONAL_IMPACT_TARGET_CAP, parseOperationalImpact, readHardDeletePreflight, readOperationalImpact } from '../services/products/operational-impact.service.js'
+import { assertRequestPermission, requestUserId } from '../lib/auth/request-permission.js'
 import prisma from '../db.js'
 import { masterPriceService } from '../services/master-price.service.js'
 import { masterStatusService } from '../services/master-status.service.js'
@@ -78,11 +80,7 @@ async function refreshCacheRows(productIds: readonly string[]): Promise<void> {
 //               POST /api/saved-views/:id/set-default
 // ─────────────────────────────────────────────────────────────────────
 
-// Single-tenant: derive a stable userId from the request. When auth lands
-// this becomes req.user.id. For now everyone shares "default-user".
-function userIdFor(_req: any): string {
-  return 'default-user'
-}
+const userIdFor = requestUserId
 
 const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   // ═══════════════════════════════════════════════════════════════════
@@ -1663,6 +1661,16 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
   //       fbaInventory:    [{ productId, marketplaceId, fulfillmentCenterId, quantity }, ...],
   //     }
   // ═══════════════════════════════════════════════════════════════════
+  fastify.post('/products/operational-impact', {
+    preHandler: async request => { await assertRequestPermission(request, 'products.view') },
+  }, async (request, reply) => {
+    try {
+      return reply.send(await readOperationalImpact(parseOperationalImpact(request.body)))
+    } catch (err: any) {
+      return reply.code(err?.statusCode ?? 500).send({ error: err?.code ?? 'impact_read_failed', refusal: err?.message ?? String(err) })
+    }
+  })
+
   fastify.get('/products/hard-delete-preflight', async (request, reply) => {
     try {
       const q = request.query as { ids?: string }
@@ -1670,107 +1678,18 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       if (ids.length === 0) {
         return reply.code(400).send({ error: 'ids query param required (comma-separated)' })
       }
-      if (ids.length > 200) {
-        return reply.code(400).send({ error: `max 200 ids per call (got ${ids.length})` })
+      if (ids.length > OPERATIONAL_IMPACT_TARGET_CAP) {
+        return reply.code(400).send({ error: `max ${OPERATIONAL_IMPACT_TARGET_CAP} ids per call (got ${ids.length})` })
       }
-      const [channelListings, orderItems, bundleMasters, bundleComponents, fbaRows] =
-        await Promise.all([
-          prisma.channelListing.findMany({
-            where: {
-              productId: { in: ids },
-              listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
-              externalListingId: { not: null },
-            },
-            select: {
-              productId: true,
-              channel: true,
-              marketplace: true,
-              region: true,
-              externalListingId: true,
-            },
-          }),
-          prisma.orderItem.findMany({
-            where: {
-              productId: { in: ids },
-              order: {
-                status: { notIn: ['DELIVERED', 'CANCELLED', 'REFUNDED', 'RETURNED'] },
-                deletedAt: null,
-              },
-            },
-            select: {
-              productId: true,
-              order: {
-                select: {
-                  id: true,
-                  channelOrderId: true,
-                  channel: true,
-                  status: true,
-                },
-              },
-            },
-          }),
-          prisma.bundle.findMany({
-            where: { productId: { in: ids }, isActive: true },
-            select: { id: true, productId: true },
-          }),
-          prisma.bundleComponent.findMany({
-            where: { productId: { in: ids }, bundle: { isActive: true } },
-            select: { productId: true, bundleId: true },
-          }),
-          prisma.fbaInventoryDetail.findMany({
-            where: { productId: { in: ids }, quantity: { gt: 0 } },
-            select: {
-              productId: true,
-              marketplaceId: true,
-              fulfillmentCenterId: true,
-              quantity: true,
-              condition: true,
-            },
-          }),
-        ])
-
-      return reply.send({
-        channelListings: channelListings.map((l) => ({
-          productId: l.productId,
-          channel: l.channel,
-          marketplace: l.marketplace ?? l.region,
-          externalListingId: l.externalListingId,
-        })),
-        openOrders: orderItems
-          .filter((oi) => !!oi.productId && !!oi.order)
-          .map((oi) => ({
-            productId: oi.productId,
-            orderId: oi.order!.id,
-            channelOrderId: oi.order!.channelOrderId,
-            channel: oi.order!.channel,
-            status: oi.order!.status,
-          })),
-        activeBundles: [
-          ...bundleMasters.map((b) => ({
-            productId: b.productId,
-            bundleId: b.id,
-            role: 'master' as const,
-          })),
-          ...bundleComponents.map((c) => ({
-            productId: c.productId,
-            bundleId: c.bundleId,
-            role: 'component' as const,
-          })),
-        ],
-        fbaInventory: fbaRows.map((f) => ({
-          productId: f.productId,
-          marketplaceId: f.marketplaceId,
-          fulfillmentCenterId: f.fulfillmentCenterId,
-          quantity: f.quantity,
-          condition: f.condition,
-        })),
-      })
+      return reply.send(await readHardDeletePreflight(ids))
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
   })
 
-  fastify.post('/products/bulk-hard-delete', async (request, reply) => {
+  fastify.post('/products/bulk-hard-delete', {
+    preHandler: async (request) => assertRequestPermission(request, 'products.delete'),
+  }, async (request, reply) => {
     try {
       const body = request.body as {
         productIds?: string[]
@@ -1798,7 +1717,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
 
       // RT.2 — delist rows created inside the tx; instant-lane jobs fired
       // post-commit (see below).
-      const delistFireEntries: Array<{ id: string; productId: string | null; syncType: string }> = []
+      const delistFireEntries: Array<{ id: string; productId: string | null; syncType: string; holdUntil?: Date | null }> = []
       const result = await prisma.$transaction(async (tx) => {
         // Rows still present in Product, in the bin (deletedAt != null).
         const eligible = await tx.product.findMany({
@@ -1827,6 +1746,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             ghostCacheRemoved: 0,
             skipped: productIds.length,
             channelCascadeEnqueued: 0,
+            channelSkipped: [],
             dependents: {
               productImages: 0,
               marketplaceSyncs: 0,
@@ -1841,63 +1761,16 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         const ids = eligible.map((r) => r.id)
         const productIdFilter = { productId: { in: ids } }
 
-        // D.1 — Channel cascade. Before we drop the ChannelListing
-        // rows (they cascade via Product FK), read which channels this
-        // product is live on so we can enqueue an unpublish/delete sync
-        // job per (productId, channel, marketplace). The channel-sync
-        // worker drains these after the transaction commits — by then
-        // the local Product + ChannelListing are gone, but the queue
-        // rows still carry productId + externalListingId + channel so
-        // the adapters can finish the channel-side work.
+        // D.1 — Channel cascade. Capture coordinate/SKU/guards before purge;
+        // the held jobs intentionally have no Product or ChannelListing FK.
         let channelCascadeEnqueued = 0
+        let channelSkipped: import('../services/outbound-enqueue.js').DelistSkippedCoordinate[] = []
         if (channelAction !== 'none' && ids.length > 0) {
-          const liveListings = await tx.channelListing.findMany({
-            where: {
-              productId: { in: ids },
-              listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
-              externalListingId: { not: null },
-            },
-            select: {
-              id: true,
-              productId: true,
-              channel: true,
-              region: true,
-              marketplace: true,
-              externalListingId: true,
-              externalParentId: true,
-            },
-          })
-          // OutboundSyncQueue.targetChannel is the SyncChannel enum
-          // (AMAZON|EBAY|SHOPIFY|WOOCOMMERCE). ChannelListing.channel is
-          // a free String including 'ETSY'. Filter to enum-compatible
-          // values and drop the rest — Etsy doesn't have a delist
-          // adapter yet (D.2 covers Amazon/eBay/Shopify only).
-          const SUPPORTED: ReadonlyArray<string> = ['AMAZON', 'EBAY', 'SHOPIFY', 'WOOCOMMERCE']
-          const enqueueable = liveListings.filter((l) => SUPPORTED.includes(l.channel))
-          if (enqueueable.length > 0) {
-            const syncType =
-              channelAction === 'unpublish' ? 'UNPUBLISH_LISTING' : 'DELETE_LISTING'
-            const delistRows = await tx.outboundSyncQueue.createManyAndReturn({
-              select: { id: true, productId: true },
-              data: enqueueable.map((l) => ({
-                productId: l.productId,
-                channelListingId: l.id,
-                targetChannel: l.channel as any, // SyncChannel enum, validated above
-                targetRegion: l.region ?? l.marketplace ?? null,
-                syncStatus: 'PENDING' as const,
-                syncType,
-                externalListingId: l.externalListingId,
-                payload: {
-                  source: 'products-bulk-hard-delete',
-                  channelAction,
-                  marketplace: l.marketplace ?? l.region ?? null,
-                  externalParentId: l.externalParentId,
-                },
-              })),
-            })
-            delistFireEntries.push(...delistRows.map((r) => ({ id: r.id, productId: r.productId, syncType })))
-            channelCascadeEnqueued = enqueueable.length
-          }
+          const { enqueueDelistCascade } = await import('../services/outbound-enqueue.js')
+          const cascade = await enqueueDelistCascade(tx, ids, channelAction, actor)
+          delistFireEntries.push(...cascade.entries)
+          channelCascadeEnqueued = cascade.channelCascadeEnqueued
+          channelSkipped = cascade.channelSkipped
         }
 
         // One AuditLog row per affected row (both real + ghost) BEFORE
@@ -1985,6 +1858,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           skipped:
             productIds.length - eligible.length - ghostCacheRows.length,
           channelCascadeEnqueued,
+          channelSkipped,
           dependents: {
             productImages,
             marketplaceSyncs,
@@ -1997,13 +1871,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
 
-      // RT.2 — fire the delist jobs post-commit (instant lane; cron backstops).
-      if (delistFireEntries.length > 0) {
-        const { fireOutboundJobs } = await import('../services/outbound-enqueue.js')
-        void fireOutboundJobs(delistFireEntries, { source: 'products-bulk-hard-delete' })
-      }
-
-      return { ok: true, ...result }
+      // Presence W1.7 — read surviving queue rows after commit before dispatch.
+      const { dispatchCommittedDelistRows } = await import('../services/outbound-enqueue.js')
+      const channelCascade = await dispatchCommittedDelistRows(prisma, delistFireEntries)
+      return { ok: true, ...result, ...channelCascade }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
     }
@@ -2323,7 +2194,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         where: { parentId: null, deletedAt: null },
         orderBy: [{ updatedAt: 'desc' }],
         select: {
-          id: true, sku: true, name: true,
+          id: true, workspaceId: true, sku: true, name: true, description: true, bulletPoints: true, keywords: true,
           basePrice: true, totalStock: true, lowStockThreshold: true,
           status: true, isParent: true, parentId: true,
           brand: true, manufacturer: true,
@@ -2343,9 +2214,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
             select: { url: true },
             take: 1,
           },
-          translations: {
-            select: { language: true, name: true, description: true, bulletPoints: true },
-          },
+          translations: true,
           channelListings: {
             select: {
               channel: true, region: true, marketplace: true,
@@ -2461,7 +2330,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           variantAttributes: null,
           // Matrix columns
           locales: isMaster
-            ? computeLocaleCompleteness(p.translations ?? [])
+            ? computeLocaleCompleteness(p)
             : null, // variants show '--' in locale columns
           channels: buildChannels(p.channelListings ?? []),
           subRows: subRows,

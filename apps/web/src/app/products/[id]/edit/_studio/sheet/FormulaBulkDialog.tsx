@@ -8,6 +8,8 @@ import { FormulaComposer, type FormulaCandidate, type FormulaFunctionDoc, type F
 import { getBackendUrl } from '@/lib/backend-url'
 import { formulaOperationRequest as request, operationPending, mergeFormulaOperation, operationLabel, type FormulaOperation } from './formulaOperations'
 import styles from './formulaBulk.module.css'
+import { languageField } from './languages'
+import { languageLabel } from '../scopes'
 
 type PreviewRow = { productId: string; ok: boolean; before?: unknown; value?: unknown; expectedState?: string; error?: string; applied?: boolean; unknown?: boolean; undone?: boolean }
 const products = (count: number) => `${count} ${count === 1 ? 'product' : 'products'}`
@@ -15,9 +17,9 @@ const display = (value: unknown) => value == null || value === '' ? 'Empty' : ty
 
 export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, functions, preview, onClose, onApplied }: {
   rows: Array<{ id: string; label: string }>
-  columns: Array<{ key: string; label: string; kind?: string; editable?: boolean; formulaWritable?: boolean; writeTarget?: string }>
+  columns: Array<{ locale?: string; key: string; label: string; kind?: string; editable?: boolean; formulaWritable?: boolean; writeTarget?: string }>
   coordinate: { scope: 'master' | 'channel'; market: string; locale: string; channel?: string; marketplace?: string; channelConnectionId?: string; aliasKey?: string }
-  candidatesFor: (rowId: string) => FormulaCandidate[]; functions: FormulaFunctionDoc[]
+  candidatesFor: (rowId: string, fieldKey?: string) => FormulaCandidate[]; functions: FormulaFunctionDoc[]
   preview: (rowId: string, fieldKey: string, expr: string, signal?: AbortSignal) => Promise<FormulaPreviewResponse>
   onClose: () => void; onApplied: () => void
 }) {
@@ -38,11 +40,12 @@ export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, fu
   const labels = useMemo(() => new Map(rows.map(row => [row.id, row.label])), [rows])
   const field = fields.find(c => c.key === fieldKey)
   const sample = rows[0]?.id ?? ''
+  const destination = { ...coordinate, ...languageField(fieldKey, coordinate.locale) }
   const samplePreview = useCallback(async (expr: string, signal?: AbortSignal): Promise<FormulaPreviewResponse> => {
     if (mode === 'linked') return preview(sample, fieldKey, expr, signal)
     const response = await fetch(`${getBackendUrl()}/api/pim/formulas/bulk/preview`, {
       method: 'POST', credentials: 'include', signal, headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...coordinate, fieldKey, expr, mode, rows: [{ productId: sample }] }),
+      body: JSON.stringify({ ...destination, expr, mode, rows: [{ productId: sample }] }),
     })
     const body = await response.json()
     return response.ok ? body.rows[0] : { ok: false, error: body.error ?? 'Could not check this formula.' }
@@ -74,7 +77,7 @@ export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, fu
         const next: PreviewRow[] = []
         for (let start = 0; start < rows.length && mounted.current; start += 20) {
           setProgress(`Checking ${start + 1}–${Math.min(start + 20, rows.length)} of ${products(rows.length)}…`)
-          const response = await request<{ rows: PreviewRow[] }>('preview', { ...coordinate, fieldKey, expr: text, mode,
+          const response = await request<{ rows: PreviewRow[] }>('preview', { ...destination, expr: text, mode,
             rows: rows.slice(start, start + 20).map(row => ({ productId: row.id })) })
           next.push(...response.rows)
           if (mounted.current) setResults([...next])
@@ -82,7 +85,7 @@ export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, fu
         if (mounted.current) setProgress(`${next.filter(row => row.ok).length} of ${products(rows.length)} ready.`)
       } else {
         setApplied(true)
-        const input = retryInput.current ?? { operationId: crypto.randomUUID(), ...coordinate, fieldKey, expr: text, mode,
+        const input = retryInput.current ?? { operationId: crypto.randomUUID(), ...destination, expr: text, mode,
           rows: results.filter(row => row.ok).map(row => ({ productId: row.productId, label: labels.get(row.productId), expectedState: row.expectedState, expectedValue: row.value })) }
         retryInput.current = input
         await advance(await request('apply', input))
@@ -114,16 +117,16 @@ export function FormulaBulkDialog({ rows, columns, coordinate, candidatesFor, fu
     </>}>
     <div className={styles.content}>
       <label className={styles.field}>Field to update<Select value={fieldKey} disabled={busy || applied} onChange={event => { setFieldKey(event.target.value); invalidate() }}>
-        {fields.map(column => <option key={column.key} value={column.key}>{column.label}</option>)}
+        {fields.map(column => <option key={column.key} value={column.key}>{column.label}{column.locale ? ` · ${languageLabel(column.locale)}` : ''}</option>)}
       </Select></label>
       {coordinate.scope === 'channel' && field?.writeTarget === 'master' && <p>This is a shared product field. Changes appear across channels.</p>}
       <SegmentedControl wrap ariaLabel="How to apply the formula" value={mode} disabled={busy || applied} onChange={value => { setMode(value as 'once' | 'linked'); invalidate() }}
         options={[{ value: 'once', label: 'Apply values once' }, { value: 'linked', label: 'Keep linked with formulas' }]} />
       <p>{mode === 'once' ? 'Replaces these cells with calculated values. Existing formulas are removed.' : 'Stores a formula in each cell. Values follow changes to its source fields.'}</p>
       <FormulaComposer showModeHelp={false} text={text} onChange={value => { setText(value.startsWith('=') ? value : `=${value}`); invalidate() }}
-        candidates={candidatesFor(sample).filter(candidate => mode === 'once' || candidate.kind !== 'field' || candidate.name !== fieldKey)}
+        candidates={candidatesFor(sample, fieldKey).filter(candidate => mode === 'once' || candidate.kind !== 'field' || candidate.name !== destination.fieldKey)}
         functions={functions} preview={samplePreview} linked={mode === 'linked'} disabled={busy || applied} allowText={field?.kind !== 'number'}
-        sourceLabel={coordinate.scope === 'channel' ? `${coordinate.channel} · ${coordinate.marketplace} · ${coordinate.locale}` : `Shared product · ${coordinate.locale}`} />
+        sourceLabel={coordinate.scope === 'channel' ? `${coordinate.channel} · ${coordinate.marketplace} · ${destination.locale}` : `Shared product · ${destination.locale}`} />
       {rows.length > 1 && <p className={styles.note}>The result above previews {labels.get(sample)}. Preview products checks every selected row.</p>}
       <div role="status" aria-live="polite">{progress}</div>
       {error && <p role="alert" className={styles.error}>{error}</p>}

@@ -61,6 +61,7 @@ describe('the ⋯ column adapter', () => {
     const item = actionMenuItems(opts())(parent).find((i) => i.id === 'delete')!
     expect(item.label).toBe('delete')
     expect(item.title).toBe('A parent is removed by demoting it')
+    expect(item.description).toBe(item.title)
     expect(item.disabled).toBe(true)
     expect(item.onSelect).toBeUndefined()
   })
@@ -283,5 +284,19 @@ describe('actionLabel — the callable label (#363)', () => {
     const first = items[0] as { name: string }
     expect(first.name).toBe('Toggle 1')
     expect(typeof first.name).toBe('string')
+  })
+})
+
+
+describe('danger tone preserves four-surface declaration order', () => {
+  it('the DS gets a React glyph and AG gets an SVG string, with the same danger meaning', () => {
+    const dots = actionMenuItems(opts())(row)
+    const right = actionContextMenu(opts())({ node: { data: row }, defaultItems: [] } as never)
+    expect(dots.map(i => i.id)).toEqual(['open', 'delete', 'promote', 'unlink'])
+    expect(dots[1].tone).toBe('danger'); expect(dots[1].icon).toBeTruthy()
+    expect(dots[0].tone).toBeUndefined()
+    const danger = right[1] as { cssClasses: string[]; icon: string }
+    expect(danger.cssClasses).toEqual(['nds-menu-danger'])
+    expect(typeof danger.icon).toBe('string'); expect(danger.icon).toContain('<svg')
   })
 })

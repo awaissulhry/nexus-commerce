@@ -1,0 +1,136 @@
+{
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "identity": {
+    "database": "nexus_development",
+    "read_only": "on",
+    "at": "2026-09-12T21:42:48.601Z"
+  },
+  "columns": [
+    {
+      "column_name": "workspaceId",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "id",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "productId",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "coordinateKey",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "channel",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "market",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "accountId",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "aliasId",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "language",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "label",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "pct",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "state",
+      "data_type": "text",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "requiredFilled",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "requiredTotal",
+      "data_type": "integer",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "missing",
+      "data_type": "jsonb",
+      "is_nullable": "NO"
+    },
+    {
+      "column_name": "note",
+      "data_type": "text",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "mappingRules",
+      "data_type": "integer",
+      "is_nullable": "YES"
+    },
+    {
+      "column_name": "computedAt",
+      "data_type": "timestamp without time zone",
+      "is_nullable": "NO"
+    }
+  ],
+  "indexes": [
+    {
+      "indexname": "ReadinessIndex_channel_market_language_state_idx",
+      "indexdef": "CREATE INDEX \"ReadinessIndex_channel_market_language_state_idx\" ON public.\"ReadinessIndex\" USING btree (channel, market, language, state)"
+    },
+    {
+      "indexname": "ReadinessIndex_pkey",
+      "indexdef": "CREATE UNIQUE INDEX \"ReadinessIndex_pkey\" ON public.\"ReadinessIndex\" USING btree (id)"
+    },
+    {
+      "indexname": "ReadinessIndex_productId_idx",
+      "indexdef": "CREATE INDEX \"ReadinessIndex_productId_idx\" ON public.\"ReadinessIndex\" USING btree (\"productId\")"
+    },
+    {
+      "indexname": "ReadinessIndex_workspaceId_idx",
+      "indexdef": "CREATE INDEX \"ReadinessIndex_workspaceId_idx\" ON public.\"ReadinessIndex\" USING btree (\"workspaceId\")"
+    },
+    {
+      "indexname": "ReadinessIndex_workspaceId_productId_coordinateKey_language_key",
+      "indexdef": "CREATE UNIQUE INDEX \"ReadinessIndex_workspaceId_productId_coordinateKey_language_key\" ON public.\"ReadinessIndex\" USING btree (\"workspaceId\", \"productId\", \"coordinateKey\", language)"
+    }
+  ],
+  "rows": 714,
+  "migration": [
+    {
+      "migration_name": "20260912_lx5_readiness_index",
+      "finished_at": "2026-09-12T21:25:32.233Z",
+      "rolled_back_at": null
+    }
+  ],
+  "triggers": [],
+  "rolledBack": true
+}

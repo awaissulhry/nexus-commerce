@@ -1,0 +1,10 @@
+{
+  "start": "2026-09-13T19:08:17.732459+00:00",
+  "finish": "2026-09-13T19:09:20.380438+00:00",
+  "sourceFiles": 6731,
+  "changed": [],
+  "positiveControl": {
+    "path": "apps/web/src/design-system/styles/patterns.css",
+    "mtime": "2026-09-13T19:08:17.507898+00:00"
+  }
+}

@@ -1,4 +1,5 @@
 'use client'
+import { syncQueueSourceSchema } from '../presence/types'
 
 /**
  * PES.3 — the Errors & Sync console (Owner-approved, ruling #127).
@@ -24,7 +25,6 @@ import { PressableRow } from '@/design-system/components/PressableRow'
 import { getBackendUrl } from '@/lib/backend-url'
 
 import {
-  DORMANT_SOURCES,
   gateNote,
   groupIsQuiet,
   groupReason,
@@ -160,6 +160,9 @@ export function ErrorsSyncConsole({
       .then(async (res) => {
         const body = await res.json().catch(() => null)
         if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`)
+        if (body && Object.prototype.hasOwnProperty.call(body, 'sources')) {
+          body.sources = syncQueueSourceSchema.array().parse(body.sources)
+        }
         return body as SyncQueuePage
       })
       .then((body) => {
@@ -370,10 +373,9 @@ export function ErrorsSyncConsole({
         {/* ALWAYS rendered, never conditional on there being rows. This is the sentence that stops
             an empty console being read as "nothing is wrong". */}
         {page?.scope.coverageNote && <p className={styles.coverage}>{page.scope.coverageNote}</p>}
-        <p className={styles.dormant}>
-          Not shown here:{' '}
-          {DORMANT_SOURCES.map((d) => d.label).join(', ')} — nothing recorded on this coordinate yet.
-        </p>
+        {page && (page.sources == null
+          ? <p className={styles.dormant}>Source coverage was not reported by this response.</p>
+          : page.sources.map(source => <p key={source.source} className={styles.dormant}>{source.sentence}</p>))}
       </footer>
     </div>
   )

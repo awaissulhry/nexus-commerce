@@ -1,0 +1,260 @@
+{
+  "at": "2026-09-13T04:41:26.182Z",
+  "phase": "before",
+  "database": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development",
+    "productRows": 355,
+    "galeJacket": [
+      {
+        "id": "cmokmy3a40078pm0p1fvnu523",
+        "sku": "GALE-JACKET",
+        "version": 59
+      }
+    ]
+  },
+  "cachedOuterwearSchemas": [
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-09-12T14:52:55.476Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-09-12T14:52:54.397Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-09-12T14:52:54.095Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-09-12T14:52:53.568Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-09-12T14:51:37.132Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-09-11T00:02:13.089Z"
+    },
+    {
+      "marketplace": "BE",
+      "fetchedAt": "2026-09-11T00:02:06.844Z"
+    },
+    {
+      "marketplace": "NL",
+      "fetchedAt": "2026-09-11T00:02:06.844Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-09-11T00:02:04.888Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-09-11T00:01:15.404Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-09-11T00:01:09.606Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-09-11T00:01:00.287Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-09-07T15:37:36.608Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-09-07T15:37:34.170Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-09-07T15:37:14.670Z"
+    },
+    {
+      "marketplace": "BE",
+      "fetchedAt": "2026-09-07T15:37:10.140Z"
+    },
+    {
+      "marketplace": "NL",
+      "fetchedAt": "2026-09-07T15:37:10.140Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-09-07T15:35:50.064Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-09-07T15:35:47.504Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-09-06T00:49:16.023Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-09-05T01:29:06.569Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-09-01T01:04:58.250Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-08-30T15:53:51.133Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-08-30T15:53:50.676Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-08-30T15:53:50.645Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-08-30T15:53:50.332Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-07-27T15:47:02.939Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-07-27T15:47:02.157Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-07-27T15:47:02.112Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-07-27T15:47:01.954Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-07-27T15:46:56.743Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-06-29T13:09:40.196Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-06-29T00:42:36.836Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-06-29T00:42:36.674Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-06-29T00:42:36.593Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-06-29T00:42:36.461Z"
+    },
+    {
+      "marketplace": "UK",
+      "fetchedAt": "2026-05-28T12:22:59.622Z"
+    },
+    {
+      "marketplace": "ES",
+      "fetchedAt": "2026-05-28T12:22:59.484Z"
+    },
+    {
+      "marketplace": "FR",
+      "fetchedAt": "2026-05-28T12:22:58.875Z"
+    },
+    {
+      "marketplace": "DE",
+      "fetchedAt": "2026-05-28T12:22:58.842Z"
+    },
+    {
+      "marketplace": "IT",
+      "fetchedAt": "2026-05-28T04:22:24.052Z"
+    },
+    {
+      "marketplace": "NL",
+      "fetchedAt": "2026-05-26T06:50:16.886Z"
+    },
+    {
+      "marketplace": "BE",
+      "fetchedAt": "2026-05-26T06:50:16.886Z"
+    }
+  ],
+  "amazonConnection": {
+    "present": true,
+    "displayName": "A1VRHKTGYO1JNU",
+    "isPrimary": true
+  },
+  "arms": [
+    {
+      "arm": "control-db",
+      "input": {
+        "marketplace": "DE",
+        "productType": "OUTERWEAR",
+        "shipping": false
+      },
+      "ms": 21,
+      "transportAttempts": 0,
+      "labelGroups": 43,
+      "shippingLabelCount": 0,
+      "unavailable": [],
+      "stamp": null,
+      "error": null
+    },
+    {
+      "arm": "leak-master",
+      "input": {
+        "marketplace": "IT",
+        "productType": "OUTERWEAR",
+        "shipping": true
+      },
+      "ms": 79,
+      "transportAttempts": 1,
+      "labelGroups": 43,
+      "shippingLabelCount": 0,
+      "unavailable": [
+        "shippingTemplate"
+      ],
+      "stamp": null,
+      "error": null
+    },
+    {
+      "arm": "leak-channel",
+      "input": {
+        "marketplace": "DE",
+        "productType": "OUTERWEAR",
+        "shipping": true,
+        "accountId": "<amazon connection>"
+      },
+      "ms": 19,
+      "transportAttempts": 1,
+      "labelGroups": 43,
+      "shippingLabelCount": 0,
+      "unavailable": [
+        "shippingTemplate"
+      ],
+      "stamp": null,
+      "error": null
+    }
+  ],
+  "transportAttemptDetail": [
+    {
+      "at": "2026-09-13T04:41:26.162Z",
+      "target": "https://api.amazon.com/auth/o2/token",
+      "stack": "    at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/gateway-leak.mjs:34:17) |     at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) |     at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) |     at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) |     at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:30:18)"
+    },
+    {
+      "at": "2026-09-13T04:41:26.182Z",
+      "target": "https://api.amazon.com/auth/o2/token",
+      "stack": "    at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/gateway-leak.mjs:34:17) |     at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) |     at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) |     at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) |     at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:30:18)"
+    }
+  ]
+}

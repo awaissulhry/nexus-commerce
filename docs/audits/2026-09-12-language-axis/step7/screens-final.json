@@ -1,0 +1,351 @@
+[
+  {
+    "screen": "grid",
+    "bodyWidth": 1440,
+    "headers": [
+      "ag-Grid-SelectionColumn",
+      "ag-Grid-AutoColumn",
+      "available",
+      "sales",
+      "units",
+      "price",
+      "updated",
+      "title@de",
+      "description@de",
+      "readiness@de",
+      "actions"
+    ],
+    "markTitles": [
+      "Inherited from Italian · source — edit to give this row its own value",
+      "Inherited from Italian · source — edit to give this row its own value"
+    ],
+    "theme": "light",
+    "width": 1440
+  },
+  {
+    "screen": "grid",
+    "bodyWidth": 1440,
+    "headers": [
+      "ag-Grid-SelectionColumn",
+      "ag-Grid-AutoColumn",
+      "available",
+      "sales",
+      "units",
+      "price",
+      "updated",
+      "title@de",
+      "description@de",
+      "readiness@de",
+      "actions"
+    ],
+    "markTitles": [
+      "Inherited from Italian · source — edit to give this row its own value",
+      "Inherited from Italian · source — edit to give this row its own value"
+    ],
+    "theme": "dark",
+    "width": 1440
+  },
+  {
+    "screen": "grid",
+    "bodyWidth": 1728,
+    "headers": [
+      "ag-Grid-SelectionColumn",
+      "ag-Grid-AutoColumn",
+      "available",
+      "sales",
+      "units",
+      "price",
+      "updated",
+      "title@de",
+      "description@de",
+      "readiness@de",
+      "actions"
+    ],
+    "markTitles": [
+      "Inherited from Italian · source — edit to give this row its own value",
+      "Inherited from Italian · source — edit to give this row its own value"
+    ],
+    "theme": "light",
+    "width": 1728
+  },
+  {
+    "screen": "grid",
+    "bodyWidth": 1728,
+    "headers": [
+      "ag-Grid-SelectionColumn",
+      "ag-Grid-AutoColumn",
+      "available",
+      "sales",
+      "units",
+      "price",
+      "updated",
+      "title@de",
+      "description@de",
+      "readiness@de",
+      "actions"
+    ],
+    "markTitles": [
+      "Inherited from Italian · source — edit to give this row its own value",
+      "Inherited from Italian · source — edit to give this row its own value"
+    ],
+    "theme": "dark",
+    "width": 1728
+  },
+  {
+    "screen": "readiness-page1",
+    "links": [
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=fr&tab=errors&market=BE&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=nl&tab=errors&market=BE&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=de&tab=errors&market=DE&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=es&tab=errors&market=ES&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=fr&tab=errors&market=FR&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=en&tab=errors&market=IE&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=it&tab=errors&market=IT&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=nl&tab=errors&market=NL&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=pl&tab=errors&market=PL&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=sv&tab=errors&market=SE&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=tr&tab=errors&market=TR&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=AMAZON&locale=en&tab=errors&market=UK&account=cmothu9bo0000nz01asw6wx8j",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=de&tab=errors&market=DE&account=cmt142bli01vcp4010fjo2k13",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=de&tab=errors&market=DE&account=cmr4aaqb00025nz016k18rup9",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=es&tab=errors&market=ES&account=cmt142bli01vcp4010fjo2k13",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=es&tab=errors&market=ES&account=cmr4aaqb00025nz016k18rup9",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=fr&tab=errors&market=FR&account=cmt142bli01vcp4010fjo2k13",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=fr&tab=errors&market=FR&account=cmr4aaqb00025nz016k18rup9",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=it&tab=errors&market=IT&account=cmt142bli01vcp4010fjo2k13",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=it&tab=errors&market=IT&account=cmr4aaqb00025nz016k18rup9",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=en&tab=errors&market=UK&account=cmt142bli01vcp4010fjo2k13",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=EBAY&locale=en&tab=errors&market=UK&account=cmr4aaqb00025nz016k18rup9",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=ETSY&locale=en&tab=errors&market=GLOBAL&account=cmtvy3wta00fjnjpxl22lly3k",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=SHOPIFY&locale=en&tab=errors&market=GLOBAL&account=cmtugfpaa0006njhq8m2nvnxx",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=WOOCOMMERCE&locale=en&tab=errors&market=GLOBAL"
+    ],
+    "rows": 25
+  },
+  {
+    "screen": "readiness-page2",
+    "rows": 9,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&page=2"
+  },
+  {
+    "screen": "readiness-dense-before",
+    "bodyWidth": 1440,
+    "issues": 66,
+    "links": [
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors",
+      "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors"
+    ],
+    "rowHeight": 2090,
+    "width": 1440
+  },
+  {
+    "screen": "readiness",
+    "width": 1440,
+    "theme": "light",
+    "pageWidth": 1440,
+    "rowHeight": 62,
+    "studio": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors",
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de&lx7=final",
+    "viewport": 1440
+  },
+  {
+    "screen": "readiness",
+    "width": 1440,
+    "theme": "dark",
+    "pageWidth": 1440,
+    "rowHeight": 62,
+    "studio": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors",
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de&lx7=final",
+    "viewport": 1440
+  },
+  {
+    "screen": "readiness",
+    "width": 1728,
+    "theme": "light",
+    "pageWidth": 1728,
+    "rowHeight": 62,
+    "studio": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors",
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de&lx7=final",
+    "viewport": 1728
+  },
+  {
+    "screen": "readiness",
+    "width": 1728,
+    "theme": "dark",
+    "pageWidth": 1728,
+    "rowHeight": 62,
+    "studio": "/products/cmokmy0lr0009pm0p9yxk7ho0/edit/studio?scope=master&locale=de&tab=errors",
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de&lx7=final",
+    "viewport": 1728
+  },
+  {
+    "screen": "readiness-ready-empty",
+    "text": "Products\nListing readiness\nFind what needs attention by channel, market and language.\nBack to products\nChannel\nShared product\nMarket\nAll markets\nLanguage\nGerman\nState\nReady\nFamily\nAll families\n0 coordinates · 0 products\nTranslate filtered products…\nProduct\tDestination\tLanguage\tReadiness\tNeeds attention\tActions\nNo indexed rows match this filter.\n1\n\nLast computed: —. Readiness reflects saved information; publication checks run before publishing."
+  },
+  {
+    "screen": "translate-positive",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 products · reverted · 13/09/2026, 01:20:56\n1 products · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true
+  },
+  {
+    "screen": "import",
+    "width": 1440,
+    "theme": "light",
+    "pageWidth": 1440,
+    "viewport": 1440
+  },
+  {
+    "screen": "import",
+    "width": 1440,
+    "theme": "dark",
+    "pageWidth": 1440,
+    "viewport": 1440
+  },
+  {
+    "screen": "import",
+    "width": 1728,
+    "theme": "light",
+    "pageWidth": 1728,
+    "viewport": 1728
+  },
+  {
+    "screen": "import",
+    "width": 1728,
+    "theme": "dark",
+    "pageWidth": 1728,
+    "viewport": 1728
+  },
+  {
+    "screen": "import",
+    "width": 768,
+    "theme": "light",
+    "pageWidth": 768,
+    "viewport": 768
+  },
+  {
+    "screen": "import",
+    "width": 768,
+    "theme": "dark",
+    "pageWidth": 768,
+    "viewport": 768
+  },
+  {
+    "screen": "readiness-final",
+    "width": 1440,
+    "theme": "light",
+    "pageWidth": 1440,
+    "rowHeight": 62,
+    "tableWidth": 1324,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 1440,
+    "wrapWidth": 1326
+  },
+  {
+    "screen": "translate-final",
+    "width": 1440,
+    "theme": "light",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-final",
+    "width": 1440,
+    "theme": "dark",
+    "pageWidth": 1440,
+    "rowHeight": 62,
+    "tableWidth": 1324,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 1440,
+    "wrapWidth": 1326
+  },
+  {
+    "screen": "translate-final",
+    "width": 1440,
+    "theme": "dark",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-final",
+    "width": 1728,
+    "theme": "light",
+    "pageWidth": 1728,
+    "rowHeight": 62,
+    "tableWidth": 1438,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 1728,
+    "wrapWidth": 1440
+  },
+  {
+    "screen": "translate-final",
+    "width": 1728,
+    "theme": "light",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-final",
+    "width": 1728,
+    "theme": "dark",
+    "pageWidth": 1728,
+    "rowHeight": 62,
+    "tableWidth": 1438,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 1728,
+    "wrapWidth": 1440
+  },
+  {
+    "screen": "translate-final",
+    "width": 1728,
+    "theme": "dark",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-final",
+    "width": 768,
+    "theme": "light",
+    "pageWidth": 768,
+    "rowHeight": 62,
+    "tableWidth": 1008.875,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 768,
+    "wrapWidth": 654
+  },
+  {
+    "screen": "translate-final",
+    "width": 768,
+    "theme": "light",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-final",
+    "width": 768,
+    "theme": "dark",
+    "pageWidth": 768,
+    "rowHeight": 62,
+    "tableWidth": 1008.875,
+    "url": "http://localhost:4121/products/listing-readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+    "viewport": 768,
+    "wrapWidth": 654
+  },
+  {
+    "screen": "translate-final",
+    "width": 768,
+    "theme": "dark",
+    "text": "Translate · German\nEvery product matching the page filter, across all pages.\nFields\nTitle\n1 get a draft\n0 already have\n0 skipped\n\nLands on the shared German text. Every listing that follows it inherits on approval.\n\nAMAZON · DE (de) · EBAY · DE (de)\n\nEstimated cost · USD\n\ngemini-2.5-flash: $0.0002\n\nclaude-haiku-4-5-20251001: $0.0004\n\nEstimates use the current Nexus rate cards and estimated token counts. No model has been selected.\n\nAI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI. A completed run can be reverted as one operation. Drafts require review before publishing.\nRecent German runs\n1 product · reverted · 13/09/2026, 01:20:56\n1 product · revert partial · 13/09/2026, 01:15:31Revert run\nClose\nPreview translation\nGenerate drafts",
+    "disabled": true,
+    "modalWidth": 660
+  },
+  {
+    "screen": "readiness-narrow-keyboard",
+    "scrollLeft": 40,
+    "tabIndex": 0
+  }
+]

@@ -23,7 +23,7 @@ export function AliasPublishControl({ alias, rows }: AliasPublishControlProps) {
     problems.set(key, group)
   }
   return <div className="nds-alias-publish">
-    <Banner tone={selected.length === 0 ? 'neutral' : [...problems.values()].some(p => p.error) ? 'warning' : 'info'} title="Saved Information check">
+    <Banner tone={selected.length === 0 ? 'neutral' : [...problems.values()].some(p => p.error) ? 'warning' : 'info'} title="Saved values checked">
       {selected.length} rows checked in this listing. These results cover Information fields. Publication eligibility and provider acceptance require their own checks.
     </Banner>
     {[...problems.entries()].map(([key, problem]) => <div key={key}>

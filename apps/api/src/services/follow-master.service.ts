@@ -1,3 +1,4 @@
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 /**
  * Follow-Master quantity primitive (Phase 0 of the per-market inventory control
  * plan, docs/superpowers/plans/2026-07-08-follow-master-bulk-tool.md).
@@ -104,6 +105,8 @@ export interface FollowMasterResult {
 }
 
 export interface FollowMasterOpts {
+  /** Explicit coordinate mode used by Sync Control; omission preserves legacy callers. */
+  coordinates?: ListingCoordinate[]
   productIds: string[]
   channel: FollowMasterChannel
   markets: string[] | 'ALL'
@@ -114,7 +117,8 @@ export interface FollowMasterOpts {
 export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<FollowMasterResult> {
   const { productIds, channel, follow, actor } = opts
   const result: FollowMasterResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
-  if (productIds.length === 0) return result
+  const coordinateWhere = opts.coordinates?.map(whereCoordinate)
+  if (productIds.length === 0 || coordinateWhere?.length === 0) return result
 
   // Resolve the exact listings by (productId, channel, marketplace).
   const listings = await prisma.channelListing.findMany({
@@ -123,9 +127,10 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
       channel,
       ...(opts.markets === 'ALL' ? {} : { marketplace: { in: opts.markets } }),
       listingStatus: { not: 'ENDED' },
+      ...(coordinateWhere ? { OR: coordinateWhere } : {}),
     },
     select: {
-      id: true, productId: true, channel: true, region: true, marketplace: true,
+      id: true, productId: true, channel: true, region: true, marketplace: true, channelConnectionId: true, aliasKey: true,
       quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true,
       externalListingId: true, fulfillmentMethod: true, platformAttributes: true,
       product: { select: { sku: true, fulfillmentMethod: true } },
@@ -194,7 +199,7 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
         const freshBuffers = new Map<string, number | null>(
           (
             await tx.channelListing.findMany({
-              where: { id: { in: chunk.map((c) => c.id) } },
+              where: { id: { in: chunk.map((c) => c.id) }, ...(coordinateWhere ? { OR: chunk.map(whereCoordinate) } : {}) },
               select: { id: true, stockBuffer: true },
             })
           ).map((r) => [r.id, r.stockBuffer]),
@@ -242,7 +247,7 @@ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<F
           }
 
           await tx.channelListing.update({
-            where: { id: cl.id },
+            where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
             data: {
               quantity: write.quantity,
               quantityOverride: write.quantityOverride,
@@ -389,6 +394,7 @@ export interface StockBufferResult {
 }
 
 export interface StockBufferOpts {
+  coordinates?: ListingCoordinate[]
   productIds: string[]
   channel: FollowMasterChannel
   markets: string[] | 'ALL'
@@ -399,7 +405,8 @@ export interface StockBufferOpts {
 export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBufferResult> {
   const { productIds, channel, buffer, actor } = opts
   const result: StockBufferResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
-  if (productIds.length === 0) return result
+  const coordinateWhere = opts.coordinates?.map(whereCoordinate)
+  if (productIds.length === 0 || coordinateWhere?.length === 0) return result
 
   const listings = await prisma.channelListing.findMany({
     where: {
@@ -407,9 +414,10 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
       channel,
       ...(opts.markets === 'ALL' ? {} : { marketplace: { in: opts.markets } }),
       listingStatus: { not: 'ENDED' },
+      ...(coordinateWhere ? { OR: coordinateWhere } : {}),
     },
     select: {
-      id: true, productId: true, channel: true, region: true, marketplace: true,
+      id: true, productId: true, channel: true, region: true, marketplace: true, channelConnectionId: true, aliasKey: true,
       quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true,
       externalListingId: true, fulfillmentMethod: true, platformAttributes: true,
       product: { select: { sku: true, fulfillmentMethod: true } },
@@ -485,7 +493,7 @@ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBuffer
           }
 
           await tx.channelListing.update({
-            where: { id: cl.id },
+            where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
             data: {
               stockBuffer: write.stockBuffer,
               quantity: write.quantity,

@@ -4,5 +4,7 @@
 .fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--nds-space-18); }
 .actions, .links { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--nds-space-12); }
 .links { justify-content: flex-start; }
+.product { display: block; min-width: 16ch; max-width: 42ch; }
+.productName { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issues { display: grid; gap: var(--nds-space-12); padding-inline-start: var(--nds-space-20); margin: 0; }
 @media (max-width: 750px) { .fields { grid-template-columns: minmax(0, 1fr); } }

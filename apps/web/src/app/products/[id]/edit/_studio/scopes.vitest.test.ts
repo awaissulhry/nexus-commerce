@@ -6,6 +6,10 @@
  * `GLOBAL` pseudo-market, five of them (DE/ES/FR/IT/UK) served by exactly two channels. That
  * five-way tie is the reason `defaultMarket` is documented as a fallback rather than an answer,
  * and it is asserted here so nobody "fixes" the tiebreak believing it was ever meaningful.
+ *
+ * Owner D20, 2026-09-13: retain WooCommerce as a visible, read-only Presence scope.
+ * Channel/market/tab membership below is navigation availability, not a selling fact or
+ * permission to write. The fixture predates the containment ruling and cannot grant either.
  */
 
 import { describe, expect, it } from 'vitest'
@@ -20,6 +24,8 @@ import {
   historyStateIsInternal,
   deriveScopeOptions,
   flattenGrouped,
+  primaryLanguageFrom,
+  scopeLanguages,
   localeLabel,
   marketLabel,
   tabAvailable,
@@ -35,11 +41,11 @@ const LANG: Record<string, string> = {
 }
 
 const GROUPED = {
-  AMAZON: AMAZON.map((code) => ({ id: `a-${code}`, channel: 'AMAZON', code, name: `Amazon ${code}`, language: LANG[code] })),
-  EBAY: EBAY.map((code) => ({ id: `e-${code}`, channel: 'EBAY', code, name: `eBay ${code}`, language: LANG[code] })),
-  SHOPIFY: [{ id: 's-g', channel: 'SHOPIFY', code: 'GLOBAL', name: 'Shopify', language: 'en' }],
-  WOOCOMMERCE: [{ id: 'w-g', channel: 'WOOCOMMERCE', code: 'GLOBAL', name: 'Woo', language: 'en' }],
-  ETSY: [{ id: 't-g', channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', language: 'en' }],
+  AMAZON: AMAZON.map((code) => ({ id: `a-${code}`, channel: 'AMAZON', code, name: `Amazon ${code}`, language: LANG[code], languages: [LANG[code]] })),
+  EBAY: EBAY.map((code) => ({ id: `e-${code}`, channel: 'EBAY', code, name: `eBay ${code}`, language: LANG[code], languages: [LANG[code]] })),
+  SHOPIFY: [{ id: 's-g', channel: 'SHOPIFY', code: 'GLOBAL', name: 'Shopify', language: 'en', languages: ['en'] }],
+  WOOCOMMERCE: [{ id: 'w-g', channel: 'WOOCOMMERCE', code: 'GLOBAL', name: 'Woo', language: 'en', languages: ['en'] }],
+  ETSY: [{ id: 't-g', channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', language: 'en', languages: ['en'] }],
 }
 
 const rows = flattenGrouped(GROUPED)
@@ -87,7 +93,7 @@ describe('flattenGrouped', () => {
       // `Array.isArray` can catch, and the reason that line is not redundant.
       EBAY: 'not-an-array',
       ETSY: {},
-      SHOPIFY: [null, { code: null }, { id: 's', channel: 'SHOPIFY', code: 'GLOBAL', name: 'S', language: 'en' }],
+      SHOPIFY: [null, { code: null }, { id: 's', channel: 'SHOPIFY', code: 'GLOBAL', name: 'S', language: 'en', languages: ['en'] }],
     })
     expect(out.map((r) => `${r.channel}:${r.code}`)).toEqual(['AMAZON:IT', 'SHOPIFY:GLOBAL'])
   })
@@ -215,17 +221,17 @@ describe('defaultLocaleFor', () => {
   })
 
   it('takes the market\'s own configured language', () => {
-    expect(defaultLocaleFor('IT', rows)).toBe('it')
-    expect(defaultLocaleFor('DE', rows)).toBe('de')
+    expect(defaultLocaleFor('IT', rows, 'AMAZON')).toBe('it')
+    expect(defaultLocaleFor('DE', rows, 'AMAZON')).toBe('de')
   })
 
   it('is null for a market nobody sells in — not a guessed "en"', () => {
-    expect(defaultLocaleFor('ZZ', rows)).toBeNull()
+    expect(defaultLocaleFor('ZZ', rows, 'AMAZON')).toBeNull()
   })
 })
 
 describe('channelServesMarket', () => {
-  it('is the difference between a live chip and a disabled one', () => {
+  it('distinguishes an available scope chip from a disabled one', () => {
     expect(channelServesMarket('EBAY', 'IT', options)).toBe(true)
     // eBay is not configured for Poland — its chip must be disabled, not silently clickable.
     expect(channelServesMarket('EBAY', 'PL', options)).toBe(false)
@@ -263,12 +269,12 @@ describe('which tabs a scope offers', () => {
     }
   })
   it('offers Errors & Sync on master too — the strip is the same on every scope (CH.1, 2026-09-05); the tab itself says master holds no queue', () => {
-    expect(visibleTabs('master')).toEqual(['sheet', 'variants', 'images', 'errors', 'analytics', 'activity'])
+    expect(visibleTabs('master')).toEqual(['sheet', 'matrix', 'variants', 'images', 'errors', 'analytics', 'activity'])
     expect(tabAvailable('errors', 'master')).toBe(true)
   })
 
   it('offers it on any channel scope', () => {
-    expect(visibleTabs('EBAY')).toEqual(['sheet', 'variants', 'images', 'presentation', 'variation-order', 'errors', 'analytics', 'activity'])
+    expect(visibleTabs('EBAY')).toEqual(['sheet', 'matrix', 'variants', 'images', 'presentation', 'variation-order', 'errors', 'analytics', 'activity'])
     expect(tabAvailable('errors', 'AMAZON')).toBe(true)
   })
 
@@ -293,8 +299,21 @@ describe('which tabs a scope offers', () => {
     // assertion of the whole page: a channel reaches its projection through the SCOPE BAR, so if a scope ever
     // stopped offering `variants` that channel would have no way to its own projection at all (§1.1/§1.2).
     for (const scope of ['master', 'AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE']) {
-      expect(visibleTabs(scope).slice(0, 2)).toEqual(['sheet', 'variants'])
+      expect(visibleTabs(scope).slice(0, 3)).toEqual(['sheet', 'matrix', 'variants'])
     }
+  })
+
+  it('🔴 MX.P — offers Matrix on EVERY scope, DIRECTLY under Information, and never as a channel-only item', () => {
+    // `docs/2026-09-13-matrix-page-design.md` Revision: ONE Matrix page showing every coordinate at once;
+    // the scope bar's chips FILTER its groups. A scope that stopped offering it would have no route to its
+    // own coordinate's offer cells — the same IA failure the Variants assertion above exists to catch.
+    for (const scope of ['master', 'AMAZON', 'EBAY', 'SHOPIFY', 'ETSY', 'WOOCOMMERCE']) {
+      expect(tabAvailable('matrix', scope)).toBe(true)
+      expect(visibleTabs(scope)[1]).toBe('matrix')
+    }
+    // And it is its OWN tab id, not a rename of `variants`: both are in the list, in this order.
+    expect(STUDIO_TABS.indexOf('matrix')).toBe(1)
+    expect(STUDIO_TABS.indexOf('variants')).toBe(2)
   })
 
   it('🔴 Relationships stays removed from navigation and URL availability', () => {
@@ -344,5 +363,29 @@ describe('historyStateIsInternal — the form that silently stopped every studio
 
   it('does not fire on a falsy __NA — the marker must be truthy, as Next tests it', () => {
     expect(historyStateIsInternal({ __NA: false })).toBe(false)
+  })
+})
+
+
+describe('language chips use server metadata on every scope', () => {
+  const markets = flattenGrouped({
+    AMAZON: [{ code: 'BE', language: 'nl', languages: ['nl', 'fr'] }, { code: 'DE', languages: ['de'] }],
+    EBAY: [{ code: 'IT', languages: ['it'] }],
+    SHOPIFY: [{ code: 'GLOBAL', languages: ['fr', 'en'] }],
+    ETSY: [{ code: 'GLOBAL', languages: ['es'] }],
+    _meta: { primaryLanguage: 'it' },
+  })
+  it('keeps the configured source first in the shared union independently of the market', () => {
+    expect(scopeLanguages('master', 'BE', markets, 'it')).toEqual(['it', 'de', 'en', 'es', 'fr', 'nl'])
+    expect(scopeLanguages('master', 'DE', markets, 'it')).toEqual(scopeLanguages('master', 'BE', markets, 'it'))
+    expect(primaryLanguageFrom({ _meta: { primaryLanguage: 'fr' } })).toBe('fr')
+    expect(primaryLanguageFrom({})).toBeNull()
+  })
+  it.each([['AMAZON', 'BE', ['nl', 'fr']], ['AMAZON', 'DE', ['de']], ['EBAY', 'IT', ['it']], ['SHOPIFY', 'GLOBAL', ['fr', 'en']], ['ETSY', 'GLOBAL', ['es']]])('projects %s %s without a channel-specific list', (scope, market, languages) => {
+    expect(scopeLanguages(scope as string, market as string, markets, 'it')).toEqual(languages)
+  })
+  it('does not infer a language from another channel or the legacy scalar', () => {
+    expect(scopeLanguages('EBAY', 'BE', markets, 'it')).toEqual([])
+    expect(flattenGrouped({ AMAZON: [{ code: 'IT', language: 'it' }] })[0].languages).toEqual([])
   })
 })

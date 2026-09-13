@@ -1,0 +1,15 @@
+[
+  "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+  "apps/api/src/services/pim/content-language.ts",
+  "apps/api/src/services/pim/content-language.vitest.test.ts",
+  "apps/api/src/services/pim/content-resolver.ts",
+  "apps/api/src/services/pim/content-resolver.vitest.test.ts",
+  "apps/api/src/services/pim/content-resolver-shadow.ts",
+  "apps/api/src/services/pim/content-resolver-shadow.vitest.test.ts",
+  "packages/shared/cell-provenance.ts",
+  "packages/shared/package.json",
+  "apps/web/src/design-system/grid/renderers/provenance.ts",
+  "apps/web/src/design-system/CHANGELOG.md",
+  "apps/web/src/design-system/catalog/README.md",
+  ".claude/DS-GAPS.md"
+]

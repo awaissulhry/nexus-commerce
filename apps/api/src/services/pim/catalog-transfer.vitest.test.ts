@@ -17,8 +17,8 @@ const nativeCols = [col('name'), col('description'), col('weightValue', { kind: 
 const titleField = { fieldKey: 'item_name', sheetKey: 'name', label: 'Title', kind: 'text', shape: 'scalar', editable: true, selectionOnly: false, maxLength: 10, channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } } as CatalogueField
 const contracts: TransferContracts = { master: async () => nativeCols, channel: async () => ({ fields: [titleField, { ...titleField, fieldKey: 'material', sheetKey: 'material', shape: 'list', cardinality: { min: 0, max: 3 }, channelStore: undefined }] }) }
 const product = (patch: Record<string, unknown> = {}): TransferProduct => ({ id: 'p1', sku: '00123', name: 'Jacket', basePrice: '0', version: 4, parentId: null, isParent: false, familyId: 'f1', categoryAttributes: { material: 'Cotton' }, localizedContent: { it: { title: 'Giacca' }, en: { description: 'English description' } }, categories: [], ...patch })
-const listing = { id: 'l1', version: 8, followMasterTitle: true, title: 'Old snapshot', titleOverride: 'Old override', overrideData: {}, platformAttributes: { productType: 'OUTERWEAR' } }
-const context = (patch: Partial<TransferContext> = {}): TransferContext => ({ products: new Map([['00123', product()]]), listings: new Map([[transferTargetKey(channelRow()), [listing]]]), families: [{ id: 'f1', code: 'jackets', label: 'Jackets' }], categories: [{ id: 'c1', isActive: true }], accounts: [{ id: 'seller-a', channelType: 'AMAZON', marketplace: null }, { id: 'seller-b', channelType: 'AMAZON', marketplace: null }], markets: [{ channel: 'AMAZON', code: 'IT' }], ...patch })
+const listing = { id: 'l1', productId: 'p1', channel: 'AMAZON', marketplace: 'IT', channelConnectionId: 'seller-a', aliasKey: '', version: 8, followMasterTitle: true, title: 'Old snapshot', titleOverride: 'Old override', overrideData: {}, platformAttributes: { productType: 'OUTERWEAR' } }
+const context = (patch: Partial<TransferContext> = {}): TransferContext => ({ products: new Map([['00123', product()]]), listings: new Map([[transferTargetKey(channelRow()), [listing]]]), families: [{ id: 'f1', code: 'jackets', label: 'Jackets' }], categories: [{ id: 'c1', isActive: true }], accounts: [{ id: 'seller-a', channelType: 'AMAZON', marketplace: null }, { id: 'seller-b', channelType: 'AMAZON', marketplace: null }], markets: [{ channel: 'AMAZON', code: 'IT', languages: ['it'] }], ...patch })
 
 describe('Parent SKU import rules', () => {
   const parent = product({ id: 'root', sku: 'PARENT', isParent: true })
@@ -138,12 +138,14 @@ describe('catalog preview', () => {
     expect(invalid.issues[0].message).toContain('needs a locale')
     const valid = await buildTransferPlan([row({ field: 'careText', locale: 'en', value: 'Wash cold' })], 'update', context(), localizedContracts)
     expect(valid.issues).toEqual([])
-    expect(valid.targets[0].patch).toEqual({ localizedContent: { it: { title: 'Giacca' }, en: { description: 'English description', careText: 'Wash cold' } } })
+    expect(valid.targets[0].patch).toEqual({})
+    expect(valid.targets[0].contentWrites).toEqual([{ address: { tier: 'language', language: 'en' }, values: { careText: 'Wash cold' }, reset: [] }])
   })
   it('matches an existing SKU throughout the catalog without an open product ID', async () => {
     const result = await buildTransferPlan([row({ value: 'New name' })], 'update', context(), contracts)
     expect(result.issues).toEqual([])
-    expect(result.targets[0].patch).toEqual({ name: 'New name' })
+    expect(result.targets[0].patch).toEqual({})
+    expect(result.targets[0].contentWrites).toEqual([{ address: { tier: 'source' }, values: { title: 'New name' }, reset: [] }])
   })
   it('rejects unknown SKU in update and existing SKU in create', async () => {
     expect((await buildTransferPlan([row({ sku: 'unknown' })], 'update', context(), contracts)).issues[0].message).toContain('does not exist')
@@ -169,9 +171,11 @@ describe('catalog preview', () => {
     expect(result.issues.every(i => i.message.includes('cycle'))).toBe(true)
   })
   it('keeps locale-specific writes separate and preserves other locales', async () => {
-    const result = await buildTransferPlan([row({ locale: 'it', value: 'Nuova giacca' })], 'update', context(), contracts)
+    const result = await buildTransferPlan([row({ locale: 'de', value: 'Neue Jacke' })], 'update', context(), contracts)
     expect(result.issues).toEqual([])
-    expect(result.targets[0].patch).toEqual({ localizedContent: { it: { title: 'Nuova giacca' }, en: { description: 'English description' } } })
+    expect(result.targets[0].patch).toEqual({})
+    expect(result.targets[0].contentWrites).toEqual([{ address: { tier: 'language', language: 'de' }, values: { title: 'Neue Jacke' }, reset: [] }])
+    expect(result.targets[0].before?.localizedContent).toEqual(product().localizedContent)
   })
   it('does not convert an unchanged inherited channel field into a pinned override', async () => {
     const result = await buildTransferPlan([channelRow({ action: 'INHERIT', value: undefined })], 'update', context(), contracts)
@@ -182,7 +186,7 @@ describe('catalog preview', () => {
   it('lets an explicit SET pin even when its value equals Master', async () => {
     const result = await buildTransferPlan([channelRow({ value: 'Jacket' })], 'update', context(), contracts)
     expect(result.issues).toEqual([])
-    expect(result.targets[0].patch).toMatchObject({ title: 'Jacket', titleOverride: 'Jacket', followMasterTitle: false })
+    expect(result.targets[0].contentWrites).toEqual([{ address: { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT', accountId: 'seller-a' } }, values: { title: 'Jacket' }, reset: [] }])
   })
   it('never falls back from a requested account or alias to the primary listing', async () => {
     expect((await buildTransferPlan([channelRow({ accountId: 'seller-b' })], 'update', context(), contracts)).issues[0].message).toContain('does not exist')
@@ -223,8 +227,8 @@ describe('Shopify and Etsy product information transfer', () => {
   }
   const storeContext = (r: TransferRow, attributes = {}) => context({
     accounts: [{ id: r.accountId, channelType: r.channel, marketplace: 'GLOBAL', isActive: true }],
-    markets: [{ channel: r.channel, code: 'GLOBAL' }],
-    listings: new Map([[transferTargetKey(r), [{ ...listing, followMasterTitle: false, platformAttributes: attributes }]]]),
+    markets: [{ channel: r.channel, code: 'GLOBAL', languages: ['it'] }],
+    listings: new Map([[transferTargetKey(r), [{ ...listing, channel: r.channel, marketplace: r.marketplace, followMasterTitle: false, platformAttributes: attributes }]]]),
   })
   it.each(['SHOPIFY', 'ETSY'])('round trips %s draft text, nested attributes and resets without requiring a category', async channel => {
     const r = channelRow({ channel, marketplace: 'GLOBAL', field: 'title', value: 'Store title' })
@@ -234,12 +238,12 @@ describe('Shopify and Etsy product information transfer', () => {
     const c = { ...contracts, channel: async () => ({ fields: await storeFields(channel) }) }
     const plan = await buildTransferPlan(parsed.rows, 'update', storeContext(r), c)
     expect(plan.issues).toEqual([])
-    expect(plan.targets[0].patch).toMatchObject({ titleOverride: 'Store title', followMasterTitle: false,
-      platformAttributes: channel === 'SHOPIFY' ? { seo: { title: 'Search title' } } : { is_supply: false } })
+    expect(plan.targets[0].contentWrites).toEqual([expect.objectContaining({ address: { tier: 'pin', language: 'it', coordinate: { channel, market: 'GLOBAL', accountId: 'seller-a' } }, values: { title: 'Store title' } })])
+    expect(plan.targets[0].patch).toMatchObject({ platformAttributes: channel === 'SHOPIFY' ? { seo: { title: 'Search title' } } : { is_supply: false } })
     expect(plan.targets[0].patch).not.toHaveProperty('name')
     const reset = await buildTransferPlan([{ ...r, action: 'INHERIT', value: undefined }], 'update', storeContext(r), c)
     expect(reset.issues).toEqual([])
-    expect(reset.targets[0].patch).toMatchObject({ titleOverride: null, followMasterTitle: true })
+    expect(reset.targets[0].contentWrites).toEqual([expect.objectContaining({ values: {}, reset: ['title'] })])
   })
   it('preserves numeric Etsy taxonomy IDs and refuses invalid category and tag values', async () => {
     const r = channelRow({ entity: 'Listings', channel: 'ETSY', marketplace: 'GLOBAL', field: 'taxonomy_id', value: 123 })
@@ -254,5 +258,41 @@ describe('Shopify and Etsy product information transfer', () => {
     const clear = await buildTransferPlan([{ ...r, action: 'CLEAR', value: undefined }], 'update', storeContext(r, { taxonomy_id: 123 }), c)
     expect(clear.issues).toEqual([])
     expect(clear.targets[0].patch).toMatchObject({ platformAttributes: { taxonomy_id: null } })
+  })
+})
+
+describe('LX.F P1-8 / R-LX-8 — an inherited language value on transfer', () => {
+  const parent = product({ id: 'root', sku: 'PARENT', isParent: true })
+  const ctx = () => context({ products: new Map([['00123', product({ parentId: 'root' })], ['PARENT', parent]]) })
+  const inherited = row({ field: 'name', locale: 'de', action: 'INHERIT', value: 'Deutscher Titel' })
+
+  it('materialises onto the child when the owner is NOT in the transfer set', async () => {
+    const plan = await buildTransferPlan([inherited], 'update', ctx(), contracts)
+    expect(plan.issues).toEqual([])
+    expect(plan.targets[0].cells.at(-1)).toMatchObject({ after: 'Deutscher Titel', afterState: 'stored', verdict: 'changed' })
+    expect(plan.targets[0].contentWrites).toMatchObject([{ address: { tier: 'language', language: 'de' }, values: { title: 'Deutscher Titel' } }])
+  })
+
+  it('POSITIVE CONTROL — when the owner IS in the transfer set the child keeps inheriting', async () => {
+    const plan = await buildTransferPlan([inherited, row({ row: 3, sku: 'PARENT', field: 'name', locale: 'de', action: 'SET', value: 'Deutscher Titel' })], 'update', ctx(), contracts)
+    expect(plan.issues).toEqual([])
+    const child = plan.targets.find(target => target.identity.sku === '00123')!
+    expect(child.cells.at(-1)).toMatchObject({ after: null, afterState: 'inherited' })
+  })
+})
+
+describe('LX.F F4 — the empty locale on a two-language market says what to do', () => {
+  it('names the market and its languages instead of throwing the normaliser sentence', async () => {
+    const { transferContentAddress } = await import('./catalog-transfer-content.js')
+    const row = { row: 2, entity: 'Overrides' as const, sku: 'X', channel: 'AMAZON', accountId: 'a', marketplace: 'BE', aliasKey: '', locale: '', field: 'product_description', action: 'SET' as const }
+    // Before: `normalizeLanguage('')` ran first and threw `Invalid content language: `.
+    expect(() => transferContentAddress(row, ['nl', 'fr'])).toThrow('Choose an explicit language available on AMAZON · BE (nl, fr)')
+    expect(() => transferContentAddress(row, ['nl', 'fr'])).toThrow(expect.objectContaining({ statusCode: 400 }) as never)
+    // POSITIVE CONTROLS: a single-language market needs no explicit locale, and an
+    // explicit language on the two-language market resolves to its pin.
+    expect(transferContentAddress(row, ['nl'])).toMatchObject({ tier: 'pin', language: 'nl' })
+    expect(transferContentAddress({ ...row, locale: 'fr-BE' }, ['nl', 'fr'])).toMatchObject({ tier: 'pin', language: 'fr' })
+    // A language the market does not carry still names the market's languages.
+    expect(() => transferContentAddress({ ...row, locale: 'de' }, ['nl', 'fr'])).toThrow('(nl, fr)')
   })
 })

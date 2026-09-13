@@ -10,5 +10,6 @@ export function ShopifyContentRoute() {
   if (destination.status !== 'ready') return <p role="status">Loading Shopify destination…</p>
   if (!accountId) return <EmptyState title="Choose a Shopify account" description="Select the connected store to manage its family content." />
   const path = `/api/products/${encodeURIComponent(product.id)}/shopify-content?accountId=${encodeURIComponent(accountId)}&market=GLOBAL`
-  return <ShopifyContentWorkspace key={path} path={path} accountLabel={accounts.find(a => a.id === accountId)?.label ?? 'Shopify'} />
+  const selectedAccount = accounts.find(a => a.id === accountId)
+  return <ShopifyContentWorkspace key={path} path={path} accountLabel={selectedAccount?.label == null ? 'Account label not reported' : selectedAccount.label} />
 }

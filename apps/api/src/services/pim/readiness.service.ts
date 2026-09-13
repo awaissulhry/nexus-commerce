@@ -49,6 +49,8 @@
  * live where those columns exist, in the flat-file preflight. Claiming full
  * coverage here would be the exact dishonesty this module is fixing.
  */
+import { translationMissing } from './content-resolver.js'
+import type { ResolvedValue } from './attribute-resolver.js'
 import {
   checkDeprecatedValues,
   checkEnumValues,
@@ -204,7 +206,13 @@ export function buildCoordinateValidators(
  * Run every validator over one flat row. Pure: no DB, no schema fetch, no
  * channel call — so a whole family across every coordinate stays three queries.
  */
-export function evaluateRow(row: FlatRow, v: CoordinateValidators): PreflightIssue[] {
+export function evaluateRow(row: FlatRow, v: CoordinateValidators, content?: {
+  requested: string; fields: Record<string, Pick<ResolvedValue, 'language'> | undefined>
+}): PreflightIssue[] {
+  // LX.5: a source-language fallback is displayable but cannot fill a translated requirement.
+  if (content) row = Object.fromEntries(Object.entries(row).map(([key, value]) => [key,
+    content.fields[key] && translationMissing(content.fields[key]!, content.requested) ? null : value,
+  ]))
   const issues: PreflightIssue[] = []
 
   // A row with no product type resolves against no schema at all. Reporting it

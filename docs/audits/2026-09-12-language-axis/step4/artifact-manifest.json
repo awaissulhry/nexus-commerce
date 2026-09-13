@@ -1,0 +1,532 @@
+[
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/acknowledgement-light.png",
+    "mtime": "2026-09-12T14:53:55.525614+00:00",
+    "sha256": "46c6e1b80e10f2f88027839124555103f6a6b0041b863fcf90029fef51de4881"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/api-core-tests.json",
+    "mtime": "2026-09-12T13:41:07.618383+00:00",
+    "sha256": "59e0e0c8eaad76582c231509616328d7b72f289cd6dd8242a1d0ee03ca3bdb6f"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/api-sandbox-attempt.json",
+    "mtime": "2026-09-12T15:11:08.545223+00:00",
+    "sha256": "a80d2e475bb89242e179fd340bc028ab1d975cb7bbdbf75d9f41881aee1c3358"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/api-sandbox-attempt.log",
+    "mtime": "2026-09-12T15:11:08.545519+00:00",
+    "sha256": "c4b60335114a974cab76e3886d76df0cb700cf9d0c3aea84ad958c552dc2edb2"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/before.json",
+    "mtime": "2026-09-12T15:05:26.886800+00:00",
+    "sha256": "6acd18a567b5e522cd06253fe5fb14be65c316ab474430131a0199440ab3aec0"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/boundary-integration.md",
+    "mtime": "2026-09-12T15:06:46.898552+00:00",
+    "sha256": "ee97323856f7a2ee1904f5073b27d9261c58e9df43b12384cc93891b12d05264"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/auth.ts",
+    "mtime": "2026-09-12T14:03:20.368186+00:00",
+    "sha256": "70d42efafa53ca88fa6c4ec60a2e9df292d8898e90068986053e1d91402ba8b5"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/backend.ts",
+    "mtime": "2026-09-12T14:03:20.368521+00:00",
+    "sha256": "6ed799fb4d41f7062b917aca734e1eb98b66f5f8fed5dad2657b21ad547ffd02"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/dynamic.tsx",
+    "mtime": "2026-09-12T14:03:20.369038+00:00",
+    "sha256": "3051979394f8d2e58538de205d72a0cee75d0892352e833a3b7c12b9e370a3fc"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/index.html",
+    "mtime": "2026-09-12T14:03:20.369403+00:00",
+    "sha256": "44ff1dd6fbb3df256c7170ecc4b2cd33954b1c6eb47a8e5a63f040372205cb5d"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/link.tsx",
+    "mtime": "2026-09-12T14:03:20.368935+00:00",
+    "sha256": "33d4aa1f2e35772edc74bcdd9d3f43ae924df91a3650486f9375c6a8d8c86b52"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/main.tsx",
+    "mtime": "2026-09-12T14:03:20.369812+00:00",
+    "sha256": "afbaa619bda987b3caec1dacc555d0e0ee9a21e435dedd907d214bc1a56dd854"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/navigation.tsx",
+    "mtime": "2026-09-12T14:03:20.368763+00:00",
+    "sha256": "8e155d350d8f86eeda1eba189ae7b965ca20ce28790546a3ee94d7647f5c6f9c"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/server.mjs",
+    "mtime": "2026-09-12T14:03:20.369665+00:00",
+    "sha256": "c523a0eeb57eb03207a85210aca3123ef7fb8ba114366b0d16eb81c68e0c98de"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/browser-fixture/style.css",
+    "mtime": "2026-09-12T14:03:20.369134+00:00",
+    "sha256": "9c1760e5a10363461e282da55c6b377b49640adaa5b5a729c3b9a1659c10413a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/build-rehearsal.mjs",
+    "mtime": "2026-09-12T13:50:44.438887+00:00",
+    "sha256": "f3478d61871dd6e363097cf0fb8403d0dba26fc2b202662c2da1014092065dec"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/bulk-cascade-tests.json",
+    "mtime": "2026-09-12T14:49:40.984131+00:00",
+    "sha256": "bde981bfb5ded0baa87fe6504f90ef1e24a935e0c219ed65ce35250e0b3ac027"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/channel-de-before.json",
+    "mtime": "2026-09-12T14:02:22.393267+00:00",
+    "sha256": "cf5e64eee1adaf3fc90b021c58d0f03ea3353bf2e6b2df43f70d7bc442c4841a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/claim.mjs",
+    "mtime": "2026-09-12T12:23:31.185176+00:00",
+    "sha256": "57ed05555bfcbc7c4a64631c0bea75a855f05ef6c55a8ba39d68c289d69a37ba"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/content-tests-first.txt",
+    "mtime": "2026-09-12T13:12:00.550175+00:00",
+    "sha256": "5112e61cd10f041d77aba35414245b700c00564571e3364d3953c284e5e35599"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/content-tests-second.txt",
+    "mtime": "2026-09-12T13:12:30.159668+00:00",
+    "sha256": "7065ea9ce0d95616b07f76a53e57ded0ce22e1833eba2cab09800f8685567ef5"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/decline-at.json",
+    "mtime": "2026-09-12T14:54:16.992357+00:00",
+    "sha256": "4b21565e7ef13e495ed5b34c07239983395dfcf3a74eddf13c351f9e1f5e30e4"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/decline-final-at.json",
+    "mtime": "2026-09-12T14:57:31.701476+00:00",
+    "sha256": "3c171c2b52b5b197ed2f95cbbb12203a69fcb4d1d3c25d1fed83b10da491df92"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/decline-receipt.json",
+    "mtime": "2026-09-12T14:58:20.313951+00:00",
+    "sha256": "b33a202ac8abc2a5fff4e9a15790c466302d15cc723905cbb28afd12dd7ee0ff"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/diff-check.json",
+    "mtime": "2026-09-12T15:14:04.605607+00:00",
+    "sha256": "1a69d17049160c92e03ebc0bc614f33ef799a9e45421b4ba042d7fcde25f9c53"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/drift-acknowledgement-dark.png",
+    "mtime": "2026-09-12T15:01:38.182771+00:00",
+    "sha256": "df49f130dd6a967e02e5f4a29e10a09b7b52de91511457b886181c422dca3163"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/drift-wire.json",
+    "mtime": "2026-09-12T15:00:40.198088+00:00",
+    "sha256": "edfb056e93f5de28aa7c50e79683a3574ab355316b9ec220917892ee20b243a7"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/editor-open.log",
+    "mtime": "2026-09-12T14:53:12.851156+00:00",
+    "sha256": "b429411810a6403d230d7dbf2748ab76e07ed4bddd8d0f9151ad67bdbe56d22c"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-api-tests.json",
+    "mtime": "2026-09-12T15:11:27.725781+00:00",
+    "sha256": "198d948c679efd45580848a63d902fa60bedd84ff85d9e129c1e3bd6a9d64fd0"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-api-tests.log",
+    "mtime": "2026-09-12T15:11:27.725873+00:00",
+    "sha256": "587de2e259dd7b54783c4fab02a9cecac82d3a109e8affb48feaad7f4663a363"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-checks.mjs",
+    "mtime": "2026-09-12T15:06:46.901884+00:00",
+    "sha256": "43541de312b0acca00aee762a14b618e2da7c0e9173fa99dde84be95e5508509"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-local-read.json",
+    "mtime": "2026-09-12T15:12:45.085467+00:00",
+    "sha256": "1b8dae028c786f88fd51115a8d11f8175576d17d3902a0bbe2cf1c1686bfd726"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-local-read.mjs",
+    "mtime": "2026-09-12T15:12:23.268714+00:00",
+    "sha256": "be5bc6ab06006a25d5784057629159e7ea80c1670d2fbfc3070e5275dfab035e"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-provider-evidence.json",
+    "mtime": "2026-09-12T15:13:04.084511+00:00",
+    "sha256": "14ca3070e1a93e561f84423767820cf88fab73cf9fda7c2d2b7d1a08c2e7dbda"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-types.log",
+    "mtime": "2026-09-12T15:10:15.352243+00:00",
+    "sha256": "fbb2d37018e2b24571b27c596bb2649e3f479caad19589993125ad72752e01ba"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-web-tests.json",
+    "mtime": "2026-09-12T15:10:03.456726+00:00",
+    "sha256": "bf223958b44ef365940f7b2b13b1bf07a427b0bb76e59405edceed052d3c6db3"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/final-web-tests.log",
+    "mtime": "2026-09-12T15:10:03.456812+00:00",
+    "sha256": "0737661ea2d5c5d99d82e95c4b2c520f70db395f893b12176662d708f1cbcaa9"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fingerprint-tests.json",
+    "mtime": "2026-09-12T14:41:14.986658+00:00",
+    "sha256": "5aa887821f35815f32f3a9674df9656f7865a8d34983eab23f496f8562237d25"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-acknowledged-shared-restored.json",
+    "mtime": "2026-09-12T15:00:24.259644+00:00",
+    "sha256": "db670af1d4a9575fe8e24d08386046eb2ecbab65f08763da99f856632fe022a8"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-acknowledged-shared.json",
+    "mtime": "2026-09-12T14:59:11.983061+00:00",
+    "sha256": "aa0aac91278bbf032fbeaa59db25ad8c753600fd8c3175d62c2179b656baa1a7"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-baseline.json",
+    "mtime": "2026-09-12T14:36:17.980179+00:00",
+    "sha256": "3818aab5c32e5d18e89e0a1722230549998c5dccd46f073454a68c146916fef2"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-channel-pin-restored.json",
+    "mtime": "2026-09-12T14:47:12.987472+00:00",
+    "sha256": "a759896aaeff5c61b6fbbad99feefad7e284a1ae3409c47ad00b99bb1a018b41"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-channel-pin.json",
+    "mtime": "2026-09-12T14:47:04.537863+00:00",
+    "sha256": "d09e366a37657462c660b281825d47f2718e39033c2b6b0e30d3f4f28616d863"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-decline-final.json",
+    "mtime": "2026-09-12T14:58:20.232715+00:00",
+    "sha256": "a11855d7f44c983f1ca3f605a917ab88c6a699d141b93ea3dcf8653cb048e311"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-decline.json",
+    "mtime": "2026-09-12T14:54:50.660062+00:00",
+    "sha256": "1602efccfafbbecd2a7198eb14a7b65a0304338bb4b5bc461b8692de7bd6548f"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-drift-cell-restored.json",
+    "mtime": "2026-09-12T15:03:20.693924+00:00",
+    "sha256": "196d75839fa5390026e0510e318486071a086d64b3a904f5b79d03107a3557a5"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-drift-cell.json",
+    "mtime": "2026-09-12T15:02:42.217323+00:00",
+    "sha256": "c9b1f1bc3af6a7c02da7ee2f725be01de8fbf67dabebbe51683742a9bb21358f"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-drift-prepared.json",
+    "mtime": "2026-09-12T15:00:24.745087+00:00",
+    "sha256": "4ae0a3af208c4898f1dbcb11167373c72de45246fadcbe65ea1d57f99a54ac0a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-inherited-setup.json",
+    "mtime": "2026-09-12T14:48:07.344153+00:00",
+    "sha256": "cb4f07d4a3aabae73e45a1363deaa5607c6130c2cfca5d3cc21b8b5b4c8718da"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-german-final-restored.json",
+    "mtime": "2026-09-12T14:46:14.105252+00:00",
+    "sha256": "6620c8f13a101d9dd09be09112e301b9cc2e52b8cb6eee1d5b58eadc6c99020e"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-german-final.json",
+    "mtime": "2026-09-12T14:46:05.735170+00:00",
+    "sha256": "d86bd5da8914bebc0f7d8499d048674a32160b3f67ad343855b9c3b355db9a06"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-german-restored.json",
+    "mtime": "2026-09-12T14:39:47.579434+00:00",
+    "sha256": "bec777b54e42a3c4db4693306342f5bb6460817c62b4dacc211ada4fa6f527c8"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-german.json",
+    "mtime": "2026-09-12T14:39:04.790388+00:00",
+    "sha256": "37a2b3f83290a2f053fce25e7ee90f5fc0031670303212e1b88a61e3bd01e125"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-primary-restored.json",
+    "mtime": "2026-09-12T14:45:39.975762+00:00",
+    "sha256": "08be5de822468ab7166d0889ec8d2cff676e587afc93e93cadfc863b37813598"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture-master-primary.json",
+    "mtime": "2026-09-12T14:45:31.220621+00:00",
+    "sha256": "35795602e89214e1ce377201acc18d5678539f7983ba4a17283937c0991488bb"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fixture.mjs",
+    "mtime": "2026-09-12T14:32:47.526187+00:00",
+    "sha256": "2c70cd3f0b828af9821836db7554166e7d5c936fecf34fe9062b6650e0f3b756"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/fourth-types.txt",
+    "mtime": "2026-09-12T13:23:35.645318+00:00",
+    "sha256": "9504e58715b6c06a8ba754235bc941c98f881e16ab01de8390fba446f0f3133b"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/guard-output.json",
+    "mtime": "2026-09-12T15:13:03.931494+00:00",
+    "sha256": "6ba2d72ceddcc82c089b57c7df181ba9d643c9d5bc1027fc84f03dac7d306a01"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/guard.log",
+    "mtime": "2026-09-12T14:56:22.767964+00:00",
+    "sha256": "9f059f27001c98730e8e9adca6de75d5774b2bad3d997aa98599b3b12eab9ec2"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/initial-types.txt",
+    "mtime": "2026-09-12T13:03:53.065548+00:00",
+    "sha256": "35015f69680bec31490a09d4132dd2e675e85669a2932f2ab17c233aebd91c3c"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/inspect.mjs",
+    "mtime": "2026-09-12T12:49:33.527820+00:00",
+    "sha256": "2ae20156537b6efd4bf8950cdcd2e0d066d4f4173d70a7371acac66f3301c164"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/local-after.json",
+    "mtime": "2026-09-12T12:51:05.442354+00:00",
+    "sha256": "bf5005decd5efee92495ce55bcb75bab0ea5bd81faf8e0b7df8dbd05a569a2ea"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/local-api.mjs",
+    "mtime": "2026-09-12T14:44:11.209133+00:00",
+    "sha256": "fc2a0e35c5479d05e147e63f5a0777d9ce56d933e7483e79bce613dbe05b32f1"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/local-before.json",
+    "mtime": "2026-09-12T12:36:17.121139+00:00",
+    "sha256": "4654dc243b5e9ae29bee862131cdff383f00c189c3abd78a68c295dd59783d33"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/local-execute.json",
+    "mtime": "2026-09-12T12:50:23.298600+00:00",
+    "sha256": "192f9aad546e9d3561992387e7fadb6dfc58758a8138a0bb8c73344b87cbfba1"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/local-resolve.json",
+    "mtime": "2026-09-12T12:50:29.346142+00:00",
+    "sha256": "fad57a88f3082d2af8c777e5a45384638ec70fbb6bb459f1b678ea5bf78d26dc"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/manifest.py",
+    "mtime": "2026-09-12T15:10:49.395742+00:00",
+    "sha256": "156b41ff8037f63fedbce0e58fbbf4362801f9295b5788a6be2d8f7781df9e44"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/master-de-before.json",
+    "mtime": "2026-09-12T14:02:21.964657+00:00",
+    "sha256": "594227b58027fa21426d5a18aaf5fd496fdf719641ed439f3a5694ffa627cb2d"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/migration.sql",
+    "mtime": "2026-09-12T12:50:03.967764+00:00",
+    "sha256": "1ce46b3a34aaf43563554e2033c5f224cf38d8f963b75d43018e4892b234046b"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/preflight.mjs",
+    "mtime": "2026-09-12T13:42:33.794699+00:00",
+    "sha256": "9ca212697c1a5293a6c4e02aea7d6ac08b0d888acd4f7ed1e385dc4939783b8a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/production-after.json",
+    "mtime": "2026-09-12T12:55:59.785434+00:00",
+    "sha256": "532848be47903ac8f6a33e82be6daeba6806d8c7b9a94cd66c8a525e8c31b1b7"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/production-before.json",
+    "mtime": "2026-09-12T12:49:35.988807+00:00",
+    "sha256": "94a866f06bec109d18d79b55b028bd246555b561bdc40c7e3b17a70c85276af9"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/production-execute.json",
+    "mtime": "2026-09-12T12:50:45.577989+00:00",
+    "sha256": "b90ef110c2da4057874bf4ae24acc2696cf3c2df383f4234dd907a397a92df2e"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/production-resolve.json",
+    "mtime": "2026-09-12T12:50:55.884893+00:00",
+    "sha256": "4cf92c570d9165bcc2aa3c2c8bc6145707e4603648dee0e9012cc4f89f1a37cf"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/protected-before.json",
+    "mtime": "2026-09-12T12:23:31.198555+00:00",
+    "sha256": "56344a24ec7774d6f3249cc84a640fcb54a1fc283b5964ff6e871657053d4591"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/protected-check.json",
+    "mtime": "2026-09-12T15:14:04.539417+00:00",
+    "sha256": "5263829b55d7f7b0bbccf950a4a467d39071135581370643a1ec6c323fb84380"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/pure-api-tests.json",
+    "mtime": "2026-09-12T13:27:06.044719+00:00",
+    "sha256": "2d64c29a317950bb18a3694b169bd7fdf2470f213d9768a17c4f6feeedd9a590"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/pure-api-tests.txt",
+    "mtime": "2026-09-12T13:27:06.044763+00:00",
+    "sha256": "230d429790f332d42355c90d48a1693bdfe0713759d3dfeee5637ae6e74f2525"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/receipt-acknowledged-shared.json",
+    "mtime": "2026-09-12T14:59:50.875072+00:00",
+    "sha256": "a6410b43bd4ce8b3e17d1dafc863b310395c9846773bbf47433800597f3e0f00"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/receipt-drift-cell.json",
+    "mtime": "2026-09-12T15:02:42.358039+00:00",
+    "sha256": "f28ebdba9e400c0f586a8e0020d5f02195b6ab577012c2d990ebaa5603f2b1b8"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/record-location.json",
+    "mtime": "2026-09-12T15:16:05.329411+00:00",
+    "sha256": "7beb9ce1d22bd0de9bd0f7afc5dcb9d4d70306706bf9d4f8953b862c21b14d74"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/record.py",
+    "mtime": "2026-09-12T15:16:05.238495+00:00",
+    "sha256": "f956d9ca27d46dd1f8172674a4fdb485ddfd6524e52dd571ec419b0fa5f61feb"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/rehearsal-build.json",
+    "mtime": "2026-09-12T14:43:49.739446+00:00",
+    "sha256": "dab2af7190257e80c48832741b6a80ae698bcc449871750ec18a6d98dd6d2ec1"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/rehearsal-http.json",
+    "mtime": "2026-09-12T15:01:53.316732+00:00",
+    "sha256": "16cb0d16dc1d5800b251e8513e9e99b0af111b52c60f327f2ab1fba59706448a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/rehearsal-preflight.json",
+    "mtime": "2026-09-12T13:49:35.340493+00:00",
+    "sha256": "0136dfa4b7cabccdf3fbc4963d94d413f6cc1afc5a5e38e34dd478dd7fa934e7"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/rehearsal-runtime.mjs",
+    "mtime": "2026-09-12T14:43:49.701645+00:00",
+    "sha256": "c92a5c0dfe4a13e2af38fd1865fa888d54b9972f0a4136b4addcfb5e0f1aa02a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/rehearse.mjs",
+    "mtime": "2026-09-12T14:45:03.010660+00:00",
+    "sha256": "b100040d0f70167c273b05e03f72d39c95d779f8acf9525137ea423f638292ac"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/request-channel-pin.json",
+    "mtime": "2026-09-12T14:46:56.302648+00:00",
+    "sha256": "d0a1fb2971bc3e471c09debab4f4fdacc90e009fd970975fd07dffafa3dc26ab"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/request-inherited-setup.json",
+    "mtime": "2026-09-12T14:47:59.120015+00:00",
+    "sha256": "affa736902bf3e04bacab170831b09a9d81996625588c9afb436a655aad3b079"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/request-master-german-final.json",
+    "mtime": "2026-09-12T14:45:57.480521+00:00",
+    "sha256": "634f79616d9fe2cbf45e3dbeec8c8da65fe17dd979b593036bf64a85b16d2dae"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/request-master-primary.json",
+    "mtime": "2026-09-12T14:45:22.707276+00:00",
+    "sha256": "abb4da40e6bb50316bb7f54dc7c5f1dc94b8c5d05d628ea16d683be2ed47f224"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-acknowledged-shared.json",
+    "mtime": "2026-09-12T14:59:51.099906+00:00",
+    "sha256": "952f843f47713ec491edc4ef07fd8f6ca7bb94774cf12acf1d7d303a21456e02"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-channel-pin.json",
+    "mtime": "2026-09-12T14:47:04.704493+00:00",
+    "sha256": "ac63e802ea9b43364f10e14594c60cb355b03661ff71d5ad5ace0409a3c27787"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-drift-cell.json",
+    "mtime": "2026-09-12T15:02:42.683515+00:00",
+    "sha256": "5edca06d9ff75e8e04300b7ea680eb55065b9fbe9f4023f064aa23ef412e9918"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-master-german-final.json",
+    "mtime": "2026-09-12T14:46:05.853088+00:00",
+    "sha256": "47dd9b055c195cffcbfbfe919ed1f7a4c40b2e54266d517199df0b9b1b928fcc"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-master-german.json",
+    "mtime": "2026-09-12T14:39:16.456656+00:00",
+    "sha256": "a3229e3eebbe5b2c8fb72aad7465bed9e315d7f0b3602b0becf629e5d35bbb5b"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/restore-master-primary.json",
+    "mtime": "2026-09-12T14:45:31.468700+00:00",
+    "sha256": "c33b8cd8affc9f05dc4a765d607a88f45e26194fe68a3c6eaf26eba3e9df9e49"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/schema-command.mjs",
+    "mtime": "2026-09-12T12:50:03.967954+00:00",
+    "sha256": "6984ab7d22352ac76ae77aee209a96b8208f76048f8615ce8e50113a7663b781"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/scope.json",
+    "mtime": "2026-09-12T15:05:26.888161+00:00",
+    "sha256": "f3c9b98ba4e373a84301391504f64b96778cc92602322d369b05ce47ec3551cf"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/second-types.txt",
+    "mtime": "2026-09-12T13:06:43.436936+00:00",
+    "sha256": "67b55a49d3da13bb4c96e719fa5ef8d2fe6f4452b89b7fcd259210859b3bedea"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/source-manifest.json",
+    "mtime": "2026-09-12T15:14:04.534808+00:00",
+    "sha256": "6b46851f15dcd914f5279364e89dd57b54faec9e219f89d0875c39aced37ec98"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/step4-source.diff",
+    "mtime": "2026-09-12T15:14:04.535427+00:00",
+    "sha256": "96d6579112b6fc6bb1ed2fbd85f0c365855069e5ef487b172dbd65b369be3cbb"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/third-types.txt",
+    "mtime": "2026-09-12T13:16:15.210934+00:00",
+    "sha256": "1127e0bf55372308e5035c399d059bb02c1733053ee7a8c607217e460be6b07f"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/typecheck-receipt.json",
+    "mtime": "2026-09-12T15:10:15.353029+00:00",
+    "sha256": "0e9e6bf4b6b55654daba2c800ae7fd666f21109c12907887fc32b62d749bff04"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/verify-ui-receipt.mjs",
+    "mtime": "2026-09-12T14:59:50.813199+00:00",
+    "sha256": "dcedc9f675506ad2c5e284c458ca4feda5324e46717c88a01ade7d694439c09a"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step4/web-tests.json",
+    "mtime": "2026-09-12T14:46:45.664280+00:00",
+    "sha256": "ba5fb1fa4d83d91173c22afc0dfc84030aa591a323c1486c384ec14d5470c588"
+  }
+]

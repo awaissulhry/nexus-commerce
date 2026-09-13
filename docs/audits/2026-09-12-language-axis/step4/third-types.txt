@@ -1,0 +1,7 @@
+✗ apps/api: 1 error(s) across 6 file(s) in 6.0s
+apps/api/src/services/pim/content-write.vitest.test.ts(36,40): error TS2322: Type '{ id: string; productId: string; channel: string; marketplace: "UK" | "IT" | "DE" | "BE"; region: string; channelConnectionId: string; title: string; followMasterTitle: true; }' is not assignable to type '(Without<ChannelListingCreateInput, ChannelListingUncheckedCreateInput> & ChannelListingUncheckedCreateInput) | (Without<...> & ChannelListingCreateInput)'.
+  Type '{ id: string; productId: string; channel: string; marketplace: "UK" | "IT" | "DE" | "BE"; region: string; channelConnectionId: string; title: string; followMasterTitle: true; }' is not assignable to type 'Without<ChannelListingUncheckedCreateInput, ChannelListingCreateInput> & ChannelListingCreateInput'.
+    Type '{ id: string; productId: string; channel: string; marketplace: "UK" | "IT" | "DE" | "BE"; region: string; channelConnectionId: string; title: string; followMasterTitle: true; }' is not assignable to type 'Without<ChannelListingUncheckedCreateInput, ChannelListingCreateInput>'.
+      Types of property 'productId' are incompatible.
+        Type 'string' is not assignable to type 'never'.
+✓ apps/web: 2 file(s) given + 1 ambient + transitive imports — clean in 3.6s

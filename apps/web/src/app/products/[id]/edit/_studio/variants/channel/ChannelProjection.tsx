@@ -90,12 +90,12 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
   /* §4.2's three chips, through the frame's registry — the same mechanism the sheet uses, so a
      chip is one `useRegisterViewChip()` call and never a control in someone else's toolbar. */
   const excludedChip = useMemo<ViewChip | null>(() => page && counts ? {
-    id: 'vp-excluded', label: CHIP_LABELS.excluded, noun: 'variants', hideWhenZero: false, count: counts.excluded, tone: 'neutral',
+    id: 'vp-excluded', label: CHIP_LABELS.excluded, hideWhenZero: false, count: { n: counts.excluded, unit: 'variants' }, tone: 'neutral',
     note: 'Variants that are not part of this listing',
     cells: { byRow: chipCells(page, 'vp-excluded') },
   } : null, [page, counts])
   const pinnedChip = useMemo<ViewChip | null>(() => page && counts ? {
-    id: 'vp-pinned', label: CHIP_LABELS.pinned, compactLabel: 'Pinned', noun: 'variants', hideWhenZero: false, count: counts.pinned, tone: 'info',
+    id: 'vp-pinned', label: CHIP_LABELS.pinned, compactLabel: 'Pinned', hideWhenZero: false, count: { n: counts.pinned, unit: 'variants' }, tone: 'info',
     note: 'Variants with a value pinned for this channel',
     cells: { byRow: chipCells(page, 'vp-pinned') },
   } : null, [page, counts])
@@ -103,7 +103,7 @@ function Projection({ source, productId }: { source: ProjectionSource; productId
      not of any row, so there are no cells to mark. The chip's job is to carry the count and open
      the dock (below), which is the only place the error can be fixed. */
   const mappingChip = useMemo<ViewChip | null>(() => counts ? {
-    id: 'vp-mapping-errors', label: CHIP_LABELS.mappingErrors, compactLabel: 'Mapping', noun: 'axes', hideWhenZero: false, count: counts.mappingErrors, tone: 'warning',
+    id: 'vp-mapping-errors', label: CHIP_LABELS.mappingErrors, compactLabel: 'Mapping', hideWhenZero: false, count: { n: counts.mappingErrors, unit: 'axes' }, tone: 'warning',
     note: 'Shared axes with no target on this channel — fix them in Edit mapping', cells: { byRow: {} },
   } : null, [counts])
   useRegisterViewChip('vp-excluded', excludedChip)
@@ -400,7 +400,7 @@ function overflowVerbs(openPreflight: () => void, page: ProjectionPage | null): 
   return [
     {
       id: 'preflight',
-      label: 'Preflight',
+      label: 'Saved values checked',
       description: 'What a send would carry, checked by the server. Nothing is sent.',
       disabled: !page,
       onSelect: openPreflight,
@@ -408,7 +408,7 @@ function overflowVerbs(openPreflight: () => void, page: ProjectionPage | null): 
     {
       id: 'add-alias',
       label: '+ Add listing alias',
-      description: page?.split.heldReason ?? 'Listing aliases are not available for this family.',
+      description: page?.split.heldReason == null ? 'The server did not report why this action is unavailable.' : page.split.heldReason,
       disabled: true,
     },
   ]

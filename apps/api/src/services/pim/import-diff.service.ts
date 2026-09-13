@@ -1,3 +1,7 @@
+import type { ContentAddress } from '@nexus/shared/content-language'
+import { normalizeLanguage } from './content-language.js'
+import { contentHeaderKey, type ContentHeaderForm } from '@nexus/shared/content-header'
+import { availableContentLanguages } from './market-languages.js'
 /**
  * PES.5 / D15 — the import DIFF: parse a file, say what would change, write nothing.
  *
@@ -21,6 +25,7 @@ export type CellVerdict = 'unchanged' | 'changed' | 'refused'
 
 export interface DiffCell {
   restoreIntent?: 'set' | 'reset'
+  contentAddress?: ContentAddress
   rowId: string
   /** D15.13.3 — components, never a composed id; the client composes. */
   aliasKey: string
@@ -94,6 +99,15 @@ export interface ImportDiff {
 export type FileCellForm = 'list' | 'measure'
 export const LIST_SEPARATOR = ' | '
 
+/**
+ * LX.F P2-13 / F3 — ONE grammar, in `@nexus/shared/content-header`, because the web
+ * export had a second writer that disagreed on three things (see that module). This
+ * spelling is unchanged: it is the live producer, so no existing file changes meaning.
+ */
+export function languageHeader(field: string, scope: { channel?: string | null; marketplace?: string | null; locale?: string | null }, form?: ContentHeaderForm): string {
+  return contentHeaderKey(field, scope, form)
+}
+
 export function parseHeader(raw: string): {
   fieldKey: string
   scope: DiffCell['scope']
@@ -102,6 +116,7 @@ export function parseHeader(raw: string): {
 } | null {
   const h = String(raw ?? '').trim()
   if (!h) return null
+  if (h.split('@').length > 2) return null
   const [keyPart, coordPart] = h.split('@')
   let fieldKey = keyPart.trim()
   if (!fieldKey) return null
@@ -120,18 +135,30 @@ export function parseHeader(raw: string): {
   if (coordPart === undefined) {
     return { fieldKey, scope: { kind: 'master', channel: null, marketplace: null, locale: null }, isFormulaColumn, form }
   }
+  // LX.F P2-18 — ONE accept-and-normalise rule in both locale positions. The master
+  // position used `/^[a-z]{2,3}$/` while the channel position below accepts
+  // `[a-zA-Z]{2,3}([-_]…)*` and normalises, so `title@de-DE` and `title@DE` parsed on a
+  // channel coordinate and returned null (an unrecognised column) on a master one.
+  // Nothing emits a regional master tag today, so the asymmetry was consistent only
+  // by accident. Match the permissive shape, normalise, and let the throw be the
+  // rejection — the same rule the channel position already follows.
+  if (/^[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})*$/.test(coordPart) && !coordPart.includes(':')) {
+    try { return { fieldKey, scope: { kind: 'master', channel: null, marketplace: null, locale: normalizeLanguage(coordPart) }, isFormulaColumn, form } }
+    catch { return null }
+  }
   const parts = coordPart.split(':')
   // channel:market:locale — locale may be omitted, channel and market may not.
   if (parts.length < 2 || parts.length > 3) return null
   const [channel, marketplace, locale] = parts
   if (!channel?.trim() || !marketplace?.trim()) return null
+  if (locale?.trim() && !/^[a-zA-Z]{2,3}(?:[-_][a-zA-Z0-9]{2,8})*$/.test(locale.trim())) return null
   return {
     fieldKey,
     scope: {
       kind: 'channel',
       channel: channel.trim().toUpperCase(),
       marketplace: marketplace.trim().toUpperCase(),
-      locale: locale?.trim() ? locale.trim().toLowerCase() : null,
+      locale: locale?.trim() ? normalizeLanguage(locale.trim()) : null,
     },
     isFormulaColumn,
     form,
@@ -317,7 +344,7 @@ export async function computeImportDiff(input: {
    * `productId:<field as sent>` — the write field (what the write path was told), or the sheet key.
    */
   validateBatch?: (
-    cells: { productId: string; fieldKey: string; writeField: string; value: unknown; scope: DiffCell['scope'] }[],
+    cells: { productId: string; fieldKey: string; writeField: string; value: unknown; scope: DiffCell['scope']; contentAddress?: ContentAddress }[],
   ) => Promise<Map<string, string>>
 }): Promise<ImportDiff> {
   const { getStudioSheet } = await import('./studio-sheet.service.js')
@@ -326,8 +353,25 @@ export async function computeImportDiff(input: {
   const unknownColumns: string[] = []
   const ignoredColumns: string[] = []
 
+  /**
+   * LX.F F5 — ONE language-validity rule, derived from `Marketplace.languages`.
+   *
+   * `parseHeader` validates the SHAPE of a locale, not its existence, so `name@zz`
+   * parsed as `{tier:'language', language:'zz'}` and a write would have created a
+   * `ProductTranslation` row in a language nothing sells in — while
+   * `catalog-translate.ts:68` refuses exactly that value on the catalogue path. The
+   * authority answers here too, and an unsellable language is reported as an UNKNOWN
+   * COLUMN (the file's own vocabulary for "this header names nothing"), never written.
+   */
+  const available = new Set(await availableContentLanguages())
+  for (const p of parsed) {
+    if (!p.parsed?.scope.locale || available.has(p.parsed.scope.locale)) continue
+    unknownColumns.push(p.raw)
+    p.parsed = null
+  }
+
   // One sheet read per distinct coordinate the headers name — never per cell.
-  const coordKey = (sc: DiffCell['scope']) => `${sc.kind}:${sc.channel ?? ''}:${sc.marketplace ?? ''}`
+  const coordKey = (sc: DiffCell['scope']) => `${sc.kind}:${sc.channel ?? ''}:${sc.marketplace ?? ''}:${sc.locale ?? ''}`
   const needed = new Map<string, DiffCell['scope']>()
   for (const p of parsed) if (p.parsed) needed.set(coordKey(p.parsed.scope), p.parsed.scope)
 
@@ -336,6 +380,7 @@ export async function computeImportDiff(input: {
     const sheet = await getStudioSheet({
       productId: input.productId,
       scope: sc.kind,
+      ...(sc.locale ? { locale: sc.locale } : {}),
       market: sc.kind === 'channel' ? (sc.marketplace ?? input.market) : input.market,
       ...(sc.kind === 'channel' && sc.channel ? { channel: sc.channel } : {}),
     } as never)
@@ -384,6 +429,7 @@ export async function computeImportDiff(input: {
         writeField: String(column?.writeField ?? p.parsed.fieldKey),
         fieldKey: p.parsed.fieldKey,
         scope: p.parsed.scope,
+        ...(current?.contentAddress ? { contentAddress: current.contentAddress } : {}),
         verdict: d.verdict, pins: d.pins,
         before: current?.value ?? null, after: d.after,
         ...(d.reason ? { reason: d.reason } : {}),
@@ -403,14 +449,17 @@ export async function computeImportDiff(input: {
   if (input.validateBatch) {
     const candidates = cells
       .filter((c) => c.verdict === 'changed')
-      .map((c) => ({ productId: c.rowId, fieldKey: c.fieldKey, writeField: c.writeField, value: c.after, scope: c.scope }))
+      .map((c) => ({ productId: c.rowId, fieldKey: c.fieldKey, writeField: c.writeField, value: c.after, scope: c.scope, contentAddress: c.contentAddress }))
     if (candidates.length > 0) {
       const refusals = await input.validateBatch(candidates)
       for (const c of cells) {
         if (c.verdict !== 'changed') continue
         // The write path answers with the field it was TOLD (the write field; a slot write answers as
         // its base field), so a refusal is looked up by every name this cell could have answered to.
-        const reason = refusals.get(`${c.rowId}:${c.writeField}`)
+        const reason = refusals.get(`${c.rowId}:${c.writeField}@${c.scope.locale ?? ''}`)
+          ?? refusals.get(`${c.rowId}:${c.writeField.replace(/\[\d+\]$/, '')}@${c.scope.locale ?? ''}`)
+          ?? refusals.get(`${c.rowId}:${c.fieldKey}@${c.scope.locale ?? ''}`)
+          ?? refusals.get(`${c.rowId}:${c.writeField}`)
           ?? refusals.get(`${c.rowId}:${c.writeField.replace(/\[\d+\]$/, '')}`)
           ?? refusals.get(`${c.rowId}:${c.fieldKey}`)
         if (reason) {

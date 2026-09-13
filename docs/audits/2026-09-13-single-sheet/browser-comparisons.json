@@ -1,0 +1,179 @@
+[
+  {
+    "label": "master search retains parent",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "master long-text popup",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "master formula editor",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "master row menu",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "master record drawer",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel initial",
+    "elements": 55,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "channel initial corrected",
+    "elements": 55,
+    "geometryEqual": false,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel required chip filtering",
+    "elements": 27,
+    "geometryEqual": false,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel required chip settled",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel preferences",
+    "elements": 56,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel popup editor",
+    "elements": 56,
+    "geometryEqual": false,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel popup settled",
+    "elements": 56,
+    "geometryEqual": false,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel saved edit",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel dark theme",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel 1280 dark",
+    "elements": 55,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "channel 1280 dark preferences",
+    "elements": 56,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "channel read-only drawer",
+    "elements": 57,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "channel drawer settled",
+    "elements": 57,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "channel restored drawer after focus fix",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel drawer 1280 same viewport",
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "channel drawer dark 1280 same viewport",
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "Shopify initial",
+    "elements": 0,
+    "geometryEqual": true,
+    "snapshotEqual": false
+  },
+  {
+    "label": "Shopify complete fixture",
+    "elements": 51,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "Amazon synthetic field matrix",
+    "elements": 0,
+    "geometryEqual": false,
+    "snapshotEqual": false
+  },
+  {
+    "label": "eBay synthetic field matrix settled",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "Amazon synthetic field matrix settled",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "final master initial",
+    "elements": 27,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "final master popup",
+    "elements": 28,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "final channel drawer",
+    "elements": 55,
+    "geometryEqual": true,
+    "snapshotEqual": true
+  },
+  {
+    "label": "final channel drawer 1280",
+    "geometryEqual": true,
+    "snapshotEqual": true
+  }
+]

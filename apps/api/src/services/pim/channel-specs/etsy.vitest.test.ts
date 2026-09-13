@@ -12,7 +12,10 @@ export const property = (changes: Partial<EtsyTaxonomyProperty> = {}): EtsyTaxon
   possible_values: [{ value_id: 4, name: 'Green', scale_id: null }], selected_values: [], scales: [], ...changes,
 })
 const coordinate = { channel: 'ETSY' as const, marketplace: 'GLOBAL', label: 'ETSY:GLOBAL', inMarket: true }
-const columns = (...specs: ReturnType<typeof etsyProductSpec>[]) => buildSheetColumns({ fields: [], coordinates: [coordinate], specs: specs.map(spec => ({ coordinate, spec })), scopeKind: 'channel' }).columns
+// VT.1 (2026-09-13): the sheet now leads with ONE engine-owned `variation_theme` column on every scope
+// (`sheet-columns.service.ts:variationThemeColumn`), so `columns(spec)[0]` is no longer the spec's first field.
+// Filtered by KIND rather than by key so the helper keeps answering "the columns this spec produced".
+const columns = (...specs: ReturnType<typeof etsyProductSpec>[]) => buildSheetColumns({ fields: [], coordinates: [coordinate], specs: specs.map(spec => ({ coordinate, spec })), scopeKind: 'channel' }).columns.filter(c => c.kind !== 'variationTheme')
 
 describe('Etsy listing coverage on the shared sheet', () => {
   it('accounts for every official listing response, create and update attribute', () => {

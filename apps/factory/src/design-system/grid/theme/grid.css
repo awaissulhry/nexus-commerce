@@ -315,7 +315,7 @@
    at `.nds-cell-expand` below — and the working one sitting 60 lines away is exactly what made the
    dead one look verified. A token whose name does not say which property it belongs to will be used
    in the wrong one eventually. */
-.nds-ag-floating-set:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
+.nds-ag-floating-set:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -1px; }
 /* `.nds-cell-expand:focus-visible` below carried the SAME weakness in its milder form — it painted,
    but only a 12%-alpha shadow, measured at 1.17:1. FIXED below (DS.1 ruling #296), after DS.1
    enumerated the token and found 9 of 22 rules using that shadow as their ONLY focus signal. Kept
@@ -480,7 +480,7 @@
    `outline-offset` is NEGATIVE, like its sibling: AG clips every cell with `overflow: hidden` (the
    same fact that cut the hover bubble at `:131`), so an outward ring on a 20px control sitting at a
    cell edge would be the second invisible focus indicator on this control in a row. */
-.nds-cell-expand:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -1px; }
+.nds-cell-expand:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -1px; }
 .nds-cell-expand-slot { width: 20px; flex: none; }
 
 /* actions: Edit + ⋯, right-aligned */
@@ -503,9 +503,9 @@
 .nds-cell-group-count { font-size: 12px; color: var(--nds-text-2); white-space: nowrap; }
 
 /* stock levels */
-.nds-cell-stock-out { color: var(--nds-danger); font-weight: var(--nds-font-weight-semibold); }
-.nds-cell-stock-low { color: var(--nds-warning); font-weight: var(--nds-font-weight-semibold); }
-.nds-cell-stock-ok { color: var(--nds-success); font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-stock-out { color: var(--nds-danger-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-stock-low { color: var(--nds-warning-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-cell-stock-ok { color: var(--nds-success-text); font-weight: var(--nds-font-weight-semibold); }
 
 /* locked — the cell (a whole read-only column) and the value (a lock glyph beside it) */
 .nds-ag-wrap .ag-cell.nds-cell-is-locked { color: var(--nds-grid-locked-fg); }
@@ -562,15 +562,15 @@
   pointer-events: none;
 }
 .nds-ag-wrap .ag-cell.nds-cell-is-pending { background: var(--nds-grid-pending-bg) !important; }
-.nds-ag-wrap .ag-cell.nds-cell-is-saving { background: var(--nds-grid-saving-bg) !important; }
+.nds-ag-wrap .ag-cell.nds-cell-is-saving { background: var(--nds-grid-saving-bg) !important; box-shadow: inset 0 0 0 1px var(--nds-primary); }
 .nds-ag-wrap .ag-cell.nds-cell-is-saved { box-shadow: inset 0 0 0 1px var(--nds-success); transition: box-shadow 400ms ease; }
 .nds-ag-wrap .ag-cell.nds-cell-is-refused { background: var(--nds-grid-refused-bg) !important; box-shadow: inset 0 0 0 1px var(--nds-grid-refused-ring); }
 /* 🔴 "We do not know", in warning tone — NOT the danger tone a refusal wears. `waiting` is a flight
    still open past the patience window; `unknown` is a fetch that rejected and may or may not have
    applied. Both are honest ignorance, and painting either as a refusal is what told an operator a
    34-second write had failed when it had in fact saved. */
-.nds-ag-wrap .ag-cell.nds-cell-is-waiting { background: color-mix(in srgb, var(--nds-warning) 8%, transparent) !important; }
-.nds-ag-wrap .ag-cell.nds-cell-is-unknown { background: color-mix(in srgb, var(--nds-warning) 8%, transparent) !important; box-shadow: inset 0 0 0 1px var(--nds-warning); }
+.nds-ag-wrap .ag-cell.nds-cell-is-waiting { background: color-mix(in srgb, var(--nds-warning) 8%, transparent) !important; box-shadow: inset 0 0 0 1px var(--nds-warning); }
+.nds-ag-wrap .ag-cell.nds-cell-is-unknown { background: color-mix(in srgb, var(--nds-warning) 8%, transparent) !important; box-shadow: inset 0 0 0 2px var(--nds-warning); }
 .nds-cell-select-editor { width: 100%; padding: 0 4px; }
 
 /* sheet validation — a tint AND a corner triangle (never colour alone); the reason is the cell's title */
@@ -625,9 +625,9 @@
 .nds-cell-prov-inherited { color: var(--nds-prov-inherited-fg, var(--nds-info-strong)); }
 /* Inherited VIA a layer that itself overrides the master (ruling #16): the same family as plain
    inheritance, distinguished by its own glyph rather than by a shade of the same one. */
-.nds-cell-prov-via { color: var(--nds-primary); }
+.nds-cell-prov-via { color: var(--nds-prov-inherited-fg); }
 .nds-ag-wrap .ag-cell.nds-cell-is-inherited-override { background: color-mix(in srgb, var(--nds-primary) 5%, transparent); }
-.nds-cell-prov-pinned { color: var(--nds-primary); }
+.nds-cell-prov-pinned { color: var(--nds-prov-inherited-fg); }
 /* 🔴 `--nds-prov-ai-fg` with a FALLBACK, deliberately. DS.2 is landing that token now and it does
    not exist yet — and an undefined custom property in a `color` computes to `rgba(0,0,0,0)`, i.e.
    the mark disappears, silently, with no guard in the repo that catches it. Writing it bare would
@@ -660,7 +660,7 @@
    broken — the formula simply produced nothing — and reserving danger for a cell that is actually
    invalid keeps the two distinguishable on a sheet showing both. Not `opacity`: an informative glyph
    is never dimmed (the banked contrast rule). */
-.nds-cell-prov-refused { color: var(--nds-warning); font-weight: 700; }
+.nds-cell-prov-refused { color: var(--nds-warning-text); font-weight: 700; }
 /* Only the typography is local — italic and weight are what make a `ƒ` read as a function rather
    than an `f`, and they are not what was ruled into the engine. */
 .nds-formula-glyph { font-style: italic; font-weight: 700; line-height: 1; font-size: var(--nds-font-size-sm); }
@@ -994,6 +994,57 @@
    Both sides now sit on the same floor, so the swap is exact by construction. */
 .nds-grid-search .nds-field { min-height: var(--nds-grid-toolbar-slot-h); box-sizing: border-box; }
 .nds-ag-wrap, .nds-gridcard { --nds-grid-toolbar-slot-h: 36px; }
+/* the toolbar's OVERFLOW rule (`../toolbars/GridToolbarFold`, LX.F2 / ruling R-LX-18). MEASURED on the
+   real studio sheet, signed in, loaded state verified: the sheet toolbar's children summed 2150px on
+   amazon·DE (scrollWidth 2266) against 1200/1360/1648/1968 of usable width at 1280/1440/1728/2048 — over
+   by 950/790/502/182, with 9/8/7/4 controls CLIPPED off the right edge, `Customise`, `Export`, `Import`,
+   `More` and `Requirements` among them. The nine filter chips are 1345.4 of that 2150 (ebay·IT: six of
+   786.6 of 1583.2), so folding the chips alone leaves ~945/~937 and nothing clips at any of the four.
+   Priority is the ruling's: the chips fold first, count kept on the trigger; Export/Import into `⋯`
+   is arithmetically unnecessary at every measured width and is therefore NOT implemented on a guess.
+   The panel keeps its children MOUNTED (hidden), so a chip's pressed state survives a close. */
+/* The count NEVER folds (R-LX-18) — so at phone widths it ELLIPSISES instead of overflowing the bar.
+   Measured on master at 320px: the count text ("21 rows · Parent · 20 children · Colore × Taglia…")
+   needed 271px inside a 240px box, which drove `scrollWidth 277 > clientWidth 252` and wrapped the bar
+   to 247.8px tall — with 0 controls clipped, so nothing was unreachable, but the census read it as an
+   overflow and it had nothing to do with the chips (already folded to 99.9px). Scoped to the SHEET host,
+   not `.nds-toolbar` globally, so no other grid's toolbar changes; the full text stays in the title. */
+.nds-grid-sheet .nds-toolbar > .cnt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.nds-toolbar-fold { display: contents; }
+.nds-toolbar-fold.is-folded { display: inline-flex; position: relative; align-items: center; min-width: 0; }
+.nds-toolbar-fold-trigger { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+/* 🔴 LX.FIN — EVERY TOKEN IN THESE TWO RULES WAS UNDEFINED, and the panel rendered with NO background,
+   NO border, NO radius and NO shadow: floating text over the grid rows, in BOTH themes.
+
+   MEASURED on screen 2026-09-13 through `studio-gate-session -- _lxfin-screens.mjs`, 32 readings at 1440
+   and 1728 in light and dark: with the panel OPENED, `getComputedStyle(panel).backgroundColor` was
+   **`rgba(0, 0, 0, 0)`** on all 32. `--nds-grid-surface`, `--white`, `--nds-grid-border`, `--grey-200`,
+   `--grey-150`, `--grey-700`, `--radius-md` and `--shadow-md` are defined NOWHERE in this repo
+   (`/usr/bin/grep -rc '<token>:'` = 0 for each; the control, `--nds-surface`, matches 2), and an
+   undefined custom property makes the whole declaration invalid at computed-value time — so a
+   `var(--undefined, var(--also-undefined))` chain is not a fallback, it is a deleted rule.
+
+   This is the SAME mistake this file already documents 340 lines up, at `.nds-formula-editor`
+   ("I first wrote `--nds-shadow-md`, which exists nowhere in this repo … the popup would have rendered
+   with NO shadow and nothing would have said so"). It came back because nobody had OPENED this panel:
+   LX.F2 wrote it, and said so — "the panel's open state is asserted by construction … but nobody has
+   watched a chip toggle from inside the panel." A token name that LOOKS like a token passes every gate
+   this repo has; only the screen can say. */
+.nds-toolbar-fold-count {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 17px; height: 17px;
+  padding: 0 5px; border-radius: 9px; font-size: 11px; font-weight: 600; line-height: 1;
+  background: var(--nds-surface-sunken); color: var(--nds-text-2);
+}
+.nds-toolbar-fold-panel {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0;
+  display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+  max-width: min(640px, calc(100vw - 32px)); padding: 10px;
+  background: var(--nds-surface); border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md); box-shadow: var(--nds-shadow-menu);
+}
+.nds-toolbar-fold-panel[hidden] { display: none !important; }
+
 @container (max-width: 1320px) { .nds-grid-selbar-lbl { display: none; } }
 @container (max-width: 1100px) { .nds-grid-selbar-note { display: none; } }
 
@@ -1035,8 +1086,8 @@
 /* The unasked-for consequences are set apart, never mixed into the list above. */
 .nds-grid-confirm-aside { border-left: 2px solid var(--nds-warning); padding-left: 10px; }
 .nds-grid-confirm-aside li { color: var(--nds-grid-muted-fg); }
-.nds-grid-confirm-warn { color: var(--nds-warning); }
-.nds-grid-confirm-error { color: var(--nds-danger); }
+.nds-grid-confirm-warn { color: var(--nds-warning-text); }
+.nds-grid-confirm-error { color: var(--nds-danger-text); }
 
 /* PES.2 F4 — the add-variation form's field grid. Two columns so a four-field identity block reads
    as one shape rather than a column of four, and one column when there is no room for two. */
@@ -1099,7 +1150,7 @@
      the whole explanation channel. I wrote it in and the guard caught it. */
   font-size: 12.5px; height: 28px;
 }
-.nds-grid-toolbar-absent:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; border-radius: var(--nds-radius-sm, 4px); }
+.nds-grid-toolbar-absent:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; border-radius: var(--nds-radius-sm, 4px); }
 
 /* §14.6 — the footer's HEIGHT never changes, only its content. The slot holds one line whatever
    occupies it (a refusal, the shortcut hint, the `?` alone, or nothing at all while the retired
@@ -1129,7 +1180,7 @@
   background: none; color: var(--nds-text-2); font-size: 11px; font-weight: 600; cursor: pointer;
 }
 .nds-btn.xs.nds-grid-sheet-help:hover { background: var(--nds-surface-hover); color: var(--nds-text); border-color: var(--nds-border-strong); }
-.nds-btn.xs.nds-grid-sheet-help:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-btn.xs.nds-grid-sheet-help:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .nds-grid-sheet-note-glyph { display: inline-flex; flex: 0 0 auto; }
 .nds-grid-sheet-note-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The count is the statement and never truncates — an operator must always be able to read THAT
@@ -1168,7 +1219,7 @@ button.nds-grid-sheet-note:hover .nds-grid-sheet-note-count { text-decoration: u
    `outline: 2px solid var(--nds-focus-ring)` expands to nonsense and is dropped whole, leaving a
    control with no focus indicator and no error anywhere. There is a live instance of exactly that
    at grid.css:304 (`--nds-grid-focus-ring` aliases it), filed to PES.2. */
-button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-sm); }
+button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-sm); }
 /* No collapsible detail panel: this strip sits inside `.nds-gridcard`, which is `overflow: hidden`
    to round its corners, so an absolutely-positioned panel here is painted, invisible and
    un-hit-testable (reference_gridcard_clips_dropdowns). A detail surface must be portalled and
@@ -1177,7 +1228,6 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-primary)
 
 /* A sheet's toolbar stays on its 40px band. Search absorbs available width. */
 .nds-grid-sheet .nds-toolbar {
-  padding: 0 6px;
   height: var(--nds-toolbar-h, 40px);
   min-height: var(--nds-toolbar-h, 40px);
   min-width: 0;
@@ -1205,7 +1255,7 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-primary)
 }
 .nds-sheet-toolbar-actions > * { flex-shrink: 0; }
 @media (max-width: 1279px) {
-  .nds-grid-sheet .nds-toolbar { height: auto; flex-basis: auto; flex-wrap: wrap; padding-block: 6px; overflow-x: visible; }
+  .nds-grid-sheet .nds-toolbar { height: auto; flex-basis: auto; flex-wrap: wrap; overflow-x: visible; }
   .nds-grid-sheet .nds-toolbar .nds-grid-views, .nds-grid-sheet .nds-sheet-toolbar-actions { flex-wrap: wrap; }
 }
 /* 🔴 The pill override that used to live here is GONE, and the reason it existed was wrong.
@@ -1422,3 +1472,196 @@ button.nds-grid-sheet-note:focus-visible { outline: 2px solid var(--nds-primary)
   .nds-toolbar .nds-fchip-full { display: none; }
   .nds-fchip .nds-fchip-compact { display: inline; }
 }
+
+/* Formula-aware value mode retains the sheet long-text sizing contract. */
+.ag-popup-editor .nds-formula-fieldwrap textarea { resize: none; overflow-y: auto; }
+
+/* LX.10: reviewed human text older than its source; distinct from an AI draft. */
+.nds-ag-wrap .ag-cell.nds-cell-is-outdated { background: var(--nds-warning-soft); }
+.nds-cell-prov-outdated { color: var(--nds-warning-strong); }
+
+/* A wide field group must name itself in the visible viewport, including while scrolling. */
+.nds-ag-nexus .ag-header-group-cell.nds-ag-group-start .ag-header-group-cell-label {
+  justify-content: flex-start;
+}
+
+/* ── VT.2 — the Variation theme cell and the AxesPanelEditor ────────────────────────────────────
+   Design §3.4 / §3.5, canvas artboards 2–5. Every number here is a TOKEN: the canvas's inline
+   values (36px rows, 28px controls, 420px panel, #1f6fde, the 6%/7% tints) already exist in the DS,
+   and the tints in particular arrive through `.nds-cell-is-inherited` / `.nds-cell-is-pinned` above,
+   which the two builders' `provenanceClassRules` already spread. Nothing below re-declares a tint. */
+.nds-axes-cell { gap: 4px; }
+.nds-axes-cell .nds-cell-value-text { flex: 1 1 auto; }
+.nds-axes-sep { color: var(--nds-text-strong); padding-inline: 1px; }
+.nds-axes-name-unbound { color: var(--nds-warning-strong); }
+.nds-axes-warn { flex: none; color: var(--nds-warning-text); font-weight: var(--nds-font-weight-bold); margin-right: 4px; }
+.nds-axes-unset { color: var(--nds-text-strong); }
+/* R-VT-16 — the TEXT is `--nds-warning-text` (#6d3f10), not the triangle's `--nds-warning-strong`
+   (#c2410c, i.e. `--nds-amber-700`). The canvas states #6d3f10 for a warning sentence, `.nds-tag.warning`
+   (the `n dropped` tag two elements to its right) already uses it, and the two states were drawing the
+   same warning in two colours. Dark keeps working through the alias `--nds-warning-text:
+   var(--nds-warning-strong)` that the `.dark` block already declares. */
+.nds-axes-unset-required { color: var(--nds-warning-text); font-weight: 600; }
+.nds-axes-trail, .nds-axes-lock { flex: none; display: inline-flex; align-items: center; }
+.nds-axes-lock { color: var(--nds-text-strong); margin-left: 4px; }
+
+/* The editor. `--nds-control-h-sm` is the 28px tier every control in it sits on — the register
+   `scripts/check-control-census.mjs` enforces, and the reason the panel reads level with the sheet. */
+.nds-axes-editor {
+  container-type: inline-size;
+  display: flex; flex-direction: column; min-width: 0; overflow: auto;
+  background: var(--nds-surface); color: var(--nds-text);
+}
+/* 🔴 A COLUMN flex container shrinks its children when the content is taller than the box, and this
+   one is capped by `editorBox` at 420×320. Measured before this rule: the 28px filter field rendered
+   at 15px — the DS's `--nds-control-h-sm` was set and then overridden by flex-shrink, which reads on
+   screen as a token that does not work rather than as a layout that squeezed. Nothing in this panel
+   may shrink; the panel scrolls instead (`overflow: auto` above). */
+.nds-axes-editor > * { flex: 0 0 auto; }
+.nds-axes-head {
+  display: flex; align-items: center; gap: var(--nds-space-8); flex: none;
+  min-height: 36px; flex-wrap: wrap; padding: 0 var(--nds-space-12); border-bottom: 1px solid var(--nds-border);
+}
+.nds-axes-title { font-size: var(--nds-font-size-sm); font-weight: var(--nds-font-weight-bold); color: var(--nds-text-strong); }
+.nds-axes-scope { font-size: var(--nds-font-size-xs); color: var(--nds-text-strong); }
+.nds-axes-keys { margin-left: auto; font-size: 11px; color: var(--nds-text-strong); white-space: nowrap; }
+.nds-axes-source {
+  /* 34px on the canvas, and the 28px control inside it is what decides that: 28 + 3 + 3 = 34, so the
+     block padding is 3 and not a space token. Measured at 37px with `--nds-space-4` (4+4+28+1 border). */
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); flex: none; box-sizing: border-box;
+  min-height: 34px; padding: 2px var(--nds-space-12); background: var(--nds-surface-sunken);
+  border-bottom: 1px solid var(--nds-border);
+}
+.nds-axes-sourcetext { font-size: var(--nds-font-size-xs); color: var(--nds-text-strong); min-width: 0; }
+.nds-axes-sourceact { margin-left: auto; flex: none; }
+.nds-axes-banner { padding: var(--nds-space-8) var(--nds-space-12) var(--nds-space-4); }
+.nds-axes-sectionlabel { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-10) var(--nds-space-12) var(--nds-space-4); }
+.nds-axes-sectionname {
+  font-size: 10.5px; font-weight: var(--nds-font-weight-bold); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--nds-text-strong);
+}
+.nds-axes-sectionhint { margin-left: auto; font-size: 11px; color: var(--nds-text-strong); }
+.nds-axes-filter {
+  display: flex; align-items: center; gap: 7px; box-sizing: border-box;
+  margin: var(--nds-space-4) var(--nds-space-12) var(--nds-space-6);
+  height: var(--nds-control-h-sm, 28px); padding: 0 9px;
+  border: 1px solid var(--nds-border); border-radius: var(--nds-radius-lg); background: var(--nds-surface);
+}
+.nds-axes-filter input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font-size: var(--nds-font-size-xs); color: var(--nds-text); }
+.nds-axes-filterhint { flex: none; font-size: 11px; color: var(--nds-text-strong); white-space: nowrap; }
+.nds-axes-group {
+  display: flex; align-items: center; gap: var(--nds-space-6); width: 100%; height: 24px;
+  padding: 0 15px; border: 0; background: none; cursor: pointer;
+  font-size: 11px; font-weight: var(--nds-font-weight-bold); letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--nds-text-strong);
+}
+.nds-axes-groupcount { font-weight: 600; color: var(--nds-text-strong); text-transform: none; letter-spacing: 0; }
+.nds-axes-opt {
+  display: flex; align-items: center; gap: 9px; width: calc(100% - 12px); box-sizing: border-box;
+  min-height: 30px; height: auto; margin: 0 var(--nds-space-6); padding: 0 9px;
+  border: 0; border-radius: var(--nds-radius-md); background: none; cursor: pointer;
+  font-size: var(--nds-font-size-sm); color: var(--nds-text); text-align: left;
+}
+.nds-axes-opt:hover, .nds-axes-opt.hl { background: var(--nds-surface-hover); }
+.nds-axes-opt.sel { background: color-mix(in srgb, var(--nds-primary) 8%, transparent); }
+.nds-axes-optmeta { margin-left: auto; font-size: var(--nds-font-size-xs); color: var(--nds-text-strong); white-space: normal; text-align: right; }
+.nds-axes-radio { flex: none; width: 15px; height: 15px; border-radius: var(--nds-radius-pill); border: 1px solid var(--nds-border-strong); background: var(--nds-surface); }
+.nds-axes-opt.sel .nds-axes-radio { border: 5px solid var(--nds-primary); }
+.nds-axes-check { flex: none; width: 15px; height: 15px; border-radius: var(--nds-radius-sm); border: 1px solid var(--nds-border-strong); background: var(--nds-surface); }
+.nds-axes-rows { padding: 0 var(--nds-space-12) var(--nds-space-4); }
+.nds-axes-row { display: flex; align-items: center; gap: var(--nds-space-8); min-width: 0; width: 100%; }
+.nds-axes-label { flex: none; width: 72px; font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-strong); }
+.nds-axes-meta { margin-left: auto; flex: none; font-size: var(--nds-font-size-xs); color: var(--nds-text-strong); white-space: nowrap; }
+.nds-axes-mono { font-family: var(--nds-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: var(--nds-font-size-xs); }
+.nds-axes-add { display: flex; align-items: center; gap: var(--nds-space-8); padding: var(--nds-space-2) var(--nds-space-12) var(--nds-space-6); }
+.nds-axes-foot {
+  display: flex; align-items: center; gap: var(--nds-space-8); flex: none;
+  min-height: 32px; padding: 0 var(--nds-space-12); border-top: 1px solid var(--nds-border);
+  font-size: 11.5px; color: var(--nds-text-strong);
+}
+.nds-axes-footright { margin-left: auto; flex: none; }
+
+/* ── VT.2c — the DOCK host of `AxesPanelEditor` (spec §4.4.1) ────────────────────────────────
+   The panel is ONE SECTION of the 420px mapping dock, not a popup: it drops the popup's own
+   surface, scroll box and 12px inset and sits in the dock's §4.4 padding. The row numbers below
+   are the ones VP.4's `variants-channel.css:206–234` measured for the same three elements, moved
+   into the engine so the swap is Δ0 on screen and there is ONE definition of the row. */
+.nds-axes-editor-dock { background: none; overflow: visible; }
+.nds-axes-editor-dock .nds-axes-rows, .nds-axes-editor-dock .nds-axes-add { padding-inline: 0; }
+.nds-axes-row-dock { gap: var(--nds-space-8); }
+.nds-axes-dockname {
+  flex: 0 0 92px; width: 92px; font-size: var(--nds-font-size-sm-plus); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.nds-axes-arrow { flex: none; font-size: 12px; line-height: 1; color: var(--nds-text-3); }
+.nds-axes-docktarget { flex: 1; min-width: 0; }
+/* The inert-grip reason. A paragraph, not the 11px `nowrap` hint slot: the server's sentence names
+   an item id and an editor, and a truncated reason is a reason nobody can act on. */
+.nds-axes-ordernote {
+  margin: 0 0 var(--nds-space-4); font-size: var(--nds-font-size-micro-plus);
+  color: var(--nds-text-strong); line-height: 1.45;
+}
+
+/* Variation editors keep every instruction and action readable in narrow hosts. */
+@container (max-width: 380px) {
+  .nds-axes-head { padding-block: var(--nds-space-4); gap: var(--nds-space-4) var(--nds-space-8); }
+  .nds-axes-keys { flex-basis: 100%; margin-left: 0; white-space: normal; }
+  .nds-axes-source { padding-block: var(--nds-space-4); }
+  .nds-axes-sectionlabel, .nds-axes-add, .nds-axes-foot { flex-wrap: wrap; }
+  .nds-axes-sectionhint { margin-left: 0; }
+  .nds-axes-filter { flex-wrap: wrap; height: auto; min-height: var(--nds-control-h-sm); padding-block: var(--nds-space-4); }
+  .nds-axes-filter .nds-axes-filterhint { flex-basis: 100%; white-space: normal; }
+  .nds-axes-add .nds-axes-filterhint { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .nds-axes-label { width: 60px; overflow-wrap: anywhere; }
+  .nds-axes-dockname { flex-basis: 72px; width: 72px; }
+  .nds-axes-optmeta { max-width: 40%; }
+}
+
+/* ── MX.G — the Matrix cells (design 2026-09-13 §3.4; renderers/MatrixCells.tsx) ────────────────
+   Every colour is a token used at the USE site (no new `:root` alias, so `check-dark-alias-scope`
+   has nothing to resolve). The provenance tints arrive through `.nds-cell-is-inherited` /
+   `.nds-cell-is-pinned` / `.nds-cell-is-locked` above — nothing below re-declares one. */
+/* A paused listing's Mode · Qty · Buffer · Sync share ONE muted tint (§3.4's row tint rule): the
+   SUNK ground + the secondary text. Distinct from `locked` (nothing can be written) and from
+   `inherited` (the value is somebody else's) — a paused cell is the operator's own, merely held. */
+.nds-ag-wrap .ag-cell.nds-cell-is-paused { background: var(--nds-surface-sunken); color: var(--nds-text-2); }
+/* The trailing marks: 🔗 ✎ ƒ are `.nds-cell-prov` (their own colours); ⚠ ⇄ ⏸ are the Matrix's three. */
+/* 2px gaps and a 3px lead: measured at the contract's 96px, `FBM ✎ ⚠ ⇄ ⌄` needs every one of them. */
+.nds-matrix-marks { display: inline-flex; align-items: center; gap: 2px; margin-left: 3px; flex: none; }
+.nds-matrix-marks .nds-cell-prov { margin-right: 0; }
+.nds-matrix-warn { color: var(--nds-warning-text); font-weight: var(--nds-font-weight-bold); line-height: 1; }
+.nds-matrix-reported { color: var(--nds-text-2); font-weight: var(--nds-font-weight-bold); line-height: 1; }
+/* The ⏸ glyph: `--nds-font-size-xs` so it sits level with the 12.5px word rather than above it. */
+.nds-matrix-pause { display: inline-block; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); margin-right: var(--nds-space-4); line-height: 1; }
+/* The Sync cell is a BUTTON (click = Needs attention). It fills the cell and inherits its type. */
+.nds-matrix-syncbtn {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; width: 100%; height: 100%;
+  padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left;
+}
+.nds-matrix-syncbtn:focus-visible { box-shadow: var(--nds-focus-ring); outline: 2px solid var(--nds-text); outline-offset: 1px; border-radius: var(--nds-radius-sm); }
+.nds-matrix-syncbtn .nds-projcell-dot { flex: none; }
+/* `Uncounted`: the word carries the warning, in the token a warning SENTENCE reads (R-VT-16). */
+.nds-matrix-word-warn .nds-cell-value-text { color: var(--nds-warning-text); font-weight: 600; }
+.nds-matrix-syncglyph { flex: none; font-size: var(--nds-font-size-xs); line-height: 1; font-weight: var(--nds-font-weight-bold); }
+/* The glyph's tone — the same five tokens `.nds-projcell-dot[data-tone]` reads; the SHAPE is the identity. */
+.nds-matrix-syncglyph[data-tone='success'] { color: var(--nds-success-text); }
+.nds-matrix-syncglyph[data-tone='warning'] { color: var(--nds-warning-text); }
+.nds-matrix-syncglyph[data-tone='danger'] { color: var(--nds-danger-text); }
+.nds-matrix-syncglyph[data-tone='info'] { color: var(--nds-primary); }
+.nds-matrix-syncglyph[data-tone='neutral'] { color: var(--nds-text-3); }
+/* The sale editor: three 28px rows inside AG's popup, on the DS surface. */
+.nds-matrix-sale-editor {
+  display: grid; gap: var(--nds-space-8); box-sizing: border-box; padding: var(--nds-space-8) var(--nds-space-12);
+  background: var(--nds-surface); color: var(--nds-text);
+}
+.nds-matrix-sale-field { display: grid; gap: var(--nds-space-4); font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.nds-matrix-sale-hint { margin: 0; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+
+/* PR.6: one owner for sheet toolbar padding; preserves the existing 6px gutter. */
+.nds-gridcard.nds-grid-sheet .nds-toolbar { padding-block: 0; padding-inline: var(--nds-space-6); }
+@media (max-width: 1279px) {
+  .nds-gridcard.nds-grid-sheet .nds-toolbar { padding-block: var(--nds-space-6); }
+}
+.nds-grid-confirm-unknown { color: var(--nds-warning-text); }
+
+.nds-axes-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }

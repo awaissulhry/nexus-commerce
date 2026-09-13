@@ -1,0 +1,1060 @@
+--- before-step5/packages/database/prisma/schema.prisma
++++ after-step5/packages/database/prisma/schema.prisma
+@@ -350,6 +350,7 @@
+   channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
+   channelLiveImages         ChannelLiveImage[] // IE.4: read-replica of channel-served images
+   scheduledImagePublishes   ScheduledImagePublish[] // PB.10: future-dated publish intents
++  readinessIndex            ReadinessIndex[]
+   translations              ProductTranslation[] // H.10: per-language master content
+   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
+   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
+@@ -19076,3 +19077,31 @@
+   @@index([channelListingId])
+   @@index([workspaceId])
+ }
++
++// LX.5: materialized readiness; account and alias retain design section 3 coordinates.
++model ReadinessIndex {
++  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
++  id String @id @default(cuid())
++  productId String
++  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
++  // Canonical JSON tuple prevents NULL-distinct duplicate shared/primary rows.
++  coordinateKey String
++  channel String?
++  market String?
++  accountId String?
++  aliasId String?
++  language String
++  label String
++  pct Int?
++  state String
++  requiredFilled Int
++  requiredTotal Int
++  missing Json
++  note String?
++  mappingRules Int?
++  computedAt DateTime
++  @@unique([workspaceId, productId, coordinateKey, language], name: "productId_coordinateKey_language")
++  @@index([channel, market, language, state])
++  @@index([productId])
++  @@index([workspaceId])
++}
+--- before-step5/packages/database/workspaces/model-ownership.json
++++ after-step5/packages/database/workspaces/model-ownership.json
+@@ -432,6 +432,7 @@
+     "MarketplaceTaxonomy",
+     "MarketplaceTaxonomySnapshot",
+     "MarketplaceTaxonomyNode",
+-    "ChannelListingTranslation"
++    "ChannelListingTranslation",
++    "ReadinessIndex"
+   ]
+ }
+--- before-step5/packages/database/workspaces/scoped-keys.json
++++ after-step5/packages/database/workspaces/scoped-keys.json
+@@ -6114,5 +6114,27 @@
+         ]
+       }
+     ]
++  },
++  "ReadinessIndex": {
++    "scalar": {},
++    "compound": {
++      "productId_coordinateKey_language": [
++        "productId",
++        "coordinateKey",
++        "language"
++      ]
++    },
++    "relations": [
++      {
++        "field": "product",
++        "model": "Product",
++        "from": [
++          "productId"
++        ],
++        "to": [
++          "id"
++        ]
++      }
++    ]
+   }
+ }
+--- before-step5/packages/database/prisma/migrations/20260912_lx5_readiness_index/migration.sql
++++ after-step5/packages/database/prisma/migrations/20260912_lx5_readiness_index/migration.sql
+@@ -0,0 +1,36 @@
++-- LX.5: new table only. No business data changes and no trigger/function.
++BEGIN;
++SET LOCAL lock_timeout = '5s';
++SET LOCAL statement_timeout = '30s';
++CREATE TABLE "ReadinessIndex" (
++ "workspaceId" TEXT NOT NULL DEFAULT NULLIF(current_setting('nexus.workspace_id', true), ''),
++ "id" TEXT NOT NULL,
++ "productId" TEXT NOT NULL,
++ "coordinateKey" TEXT NOT NULL,
++ "channel" TEXT,
++ "market" TEXT,
++ "accountId" TEXT,
++ "aliasId" TEXT,
++ "language" TEXT NOT NULL,
++ "label" TEXT NOT NULL,
++ "pct" INTEGER,
++ "state" TEXT NOT NULL,
++ "requiredFilled" INTEGER NOT NULL,
++ "requiredTotal" INTEGER NOT NULL,
++ "missing" JSONB NOT NULL,
++ "note" TEXT,
++ "mappingRules" INTEGER,
++ "computedAt" TIMESTAMP(3) NOT NULL,
++ CONSTRAINT "ReadinessIndex_pkey" PRIMARY KEY ("id"),
++ CONSTRAINT "ReadinessIndex_productId_fkey" FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE
++);
++CREATE UNIQUE INDEX "ReadinessIndex_workspaceId_productId_coordinateKey_language_key" ON "ReadinessIndex"("workspaceId", "productId", "coordinateKey", "language");
++CREATE INDEX "ReadinessIndex_channel_market_language_state_idx" ON "ReadinessIndex"("channel", "market", "language", "state");
++CREATE INDEX "ReadinessIndex_productId_idx" ON "ReadinessIndex"("productId");
++CREATE INDEX "ReadinessIndex_workspaceId_idx" ON "ReadinessIndex"("workspaceId");
++DO $$ BEGIN
++ IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nexus_workspace_runtime') THEN
++  GRANT SELECT, INSERT, UPDATE, DELETE ON "ReadinessIndex" TO nexus_workspace_runtime;
++ END IF;
++END $$;
++COMMIT;
+--- before-step5/apps/api/src/lib/database-context.ts
++++ after-step5/apps/api/src/lib/database-context.ts
+@@ -1,7 +1,7 @@
+ import { AsyncLocalStorage } from 'node:async_hooks'
+ import type { Prisma, PrismaClient } from '@prisma/client'
+ 
+-type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>> }
++type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>> }
+ const context = new AsyncLocalStorage<Context>()
+ 
+ /** Formula operations reuse the ordinary writers inside one outer transaction. */
+@@ -36,13 +36,28 @@
+   await effect()
+ }
+ 
++/** Deduplicated synchronous producers: failure rolls the entire content transaction back. */
++export async function beforeDatabaseCommit(key: string, producer: () => Promise<unknown>) {
++  const active = context.getStore()
++  if (!active) throw new Error('A readiness producer requires the content transaction.')
++  active.producers.set(key, producer)
++}
++
+ export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
+   if (context.getStore()) return work()
+   for (let attempt = 0; ; attempt++) {
+     const effects = new Map<string, () => Promise<unknown>>()
++    const producers = new Map<string, () => Promise<unknown>>()
+     let result: T
+     try {
+-      result = await client.$transaction(tx => context.run({ client: tx, effects }, work), {
++      result = await client.$transaction(tx => context.run({ client: tx, effects, producers }, async () => {
++        const value = await work()
++        while (producers.size) {
++          const pending = [...producers.values()]; producers.clear()
++          for (const produce of pending) await produce()
++        }
++        return value
++      }), {
+         isolationLevel: 'Serializable', maxWait: 10_000, timeout: 60_000,
+       })
+     } catch (error) {
+--- before-step5/apps/api/src/services/pim/readiness-index.service.ts
++++ after-step5/apps/api/src/services/pim/readiness-index.service.ts
+@@ -0,0 +1,78 @@
++import type { Prisma } from '@prisma/client'
++import prisma from '../../db.js'
++import { beforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
++import { getStudioSheet } from './studio-sheet.service.js'
++import { withCachedSchemas } from './cached-schema-context.js'
++import { marketLanguages } from './market-languages.js'
++import { coordinatesFor } from './sheet-columns.service.js'
++import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, type ReadinessCoordinate } from './readiness-model.js'
++
++/** One family refresh per outer write, after cascades/formulas and before commit. */
++export async function produceReadiness(productId: string) {
++  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
++  const rootId = product.parentId ?? product.id
++  await beforeDatabaseCommit(`readiness:${rootId}`, () => reconcileFamilyReadiness(rootId))
++}
++
++/** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */
++export async function reconcileFamilyReadiness(productId: string): Promise<number> {
++  return inDatabaseTransaction(prisma, () => withCachedSchemas(async () => {
++    const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
++    const rootId = product.parentId ?? product.id
++    const [products, markets, accounts] = await Promise.all([
++      prisma.product.findMany({ where: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null }, select: { id: true } }),
++      prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }] }),
++      prisma.channelConnection.findMany({ where: { isActive: true }, select: { id: true, channelType: true, accountLabel: true, displayName: true } }),
++    ])
++    const languages = readinessLanguages(markets)
++    const destinations: Array<{ coordinate: ReadinessCoordinate; language: string; label: string }> = languages.map(language => ({
++      coordinate: { channel: null, market: null, accountId: null, aliasId: null }, language, label: 'Shared product',
++    }))
++    for (const market of markets) {
++      const coordinate = coordinatesFor(market.code, [market])[0]
++      if (!coordinate) continue
++      const owners = accounts.filter(a => a.channelType === market.channel)
++      for (const accountId of owners.length ? owners.map(a => a.id) : [null]) for (const language of marketLanguages(market.channel, market.code, [market])) {
++        destinations.push({ coordinate: { channel: market.channel, market: market.code, accountId, aliasId: null }, language, label: `${coordinate.label}${owners.length > 1 ? ` · ${owners.find(a => a.id === accountId)?.accountLabel ?? owners.find(a => a.id === accountId)?.displayName ?? 'Connected account'}` : ''}` })
++      }
++    }
++    const computedAt = new Date()
++    const rows: Prisma.ReadinessIndexCreateManyInput[] = []
++    for (const { coordinate, language, label } of destinations) {
++      let sheet: Awaited<ReturnType<typeof getStudioSheet>> | undefined
++      let unavailable: string | undefined
++      try {
++        if (coordinate.channel && !coordinate.accountId) throw new Error('No active account for this destination.')
++        sheet = await getStudioSheet({ productId: rootId, scope: coordinate.channel ? 'channel' : 'master', channel: coordinate.channel ?? undefined,
++          market: coordinate.market ?? markets.find(m => m.code !== 'GLOBAL')?.code ?? 'IT', locale: language,
++          accountId: coordinate.accountId ?? undefined, includeMapping: !!coordinate.channel })
++      } catch (error) {
++        // Business/schema availability is a readable state. Never swallow database failures.
++        if (error instanceof TypeError || error instanceof ReferenceError || (error as { code?: string }).code?.startsWith('P')) throw error
++        unavailable = error instanceof Error ? error.message : 'Requirements could not be checked.'
++      }
++      if (!sheet) {
++        for (const product of products) rows.push({ productId: product.id, ...coordinate, coordinateKey: readinessCoordinateKey(coordinate), language, label,
++          pct: null, state: 'absent', requiredFilled: 0, requiredTotal: 0, missing: [], note: unavailable, mappingRules: null, computedAt })
++        continue
++      }
++      const market = markets.find(m => m.channel === coordinate.channel && m.code === coordinate.market)
++      const mapping = market?.schemaMapping as { fields?: Record<string, unknown>; byProductType?: Record<string, Record<string, unknown>> } | null
++      for (const row of sheet.rows) {
++        const c = { ...coordinate, aliasId: row.aliasId }
++        const summary = readinessFromSheet({ ...sheet, rows: [row], aliases: sheet.aliases.filter(a => a.id === row.aliasId) }, coordinate.channel ? new Set([
++          ...Object.keys(mapping?.fields ?? {}), ...Object.keys(mapping?.byProductType?.[row.productType ?? ''] ?? {}),
++        ]).size : null)
++        const missing = row.readiness.issues.map(issue => ({ productId: row.id, field: issue.key,
++          label: issue.label, reason: issue.message }))
++        rows.push({ productId: row.id, ...c, coordinateKey: readinessCoordinateKey(c), language, label: row.aliasId ? `${label} · ${sheet.aliases.find(a => a.id === row.aliasId)?.label ?? 'Listing customization'}` : label,
++          pct: summary.pct, state: summary.state, requiredFilled: summary.required.filled, requiredTotal: summary.required.total,
++          missing, note: summary.note, mappingRules: summary.mappingRules, computedAt })
++      }
++    }
++    // Only the derived index is replaced; content, versions and legacy bags are untouched.
++    await prisma.readinessIndex.deleteMany({ where: { productId: { in: products.map(p => p.id) } } })
++    if (rows.length) await prisma.readinessIndex.createMany({ data: rows })
++    return rows.length
++  }))
++}
+--- before-step5/apps/api/src/services/pim/scope-readiness.service.ts
++++ after-step5/apps/api/src/services/pim/scope-readiness.service.ts
+@@ -1,111 +1,64 @@
++import type { ReadinessIndex } from '@prisma/client'
++import prisma from '../../db.js'
+ import { readFamilyAccountId } from './family-account.js'
+ import { resolveWorkspaceDestination } from './workspace-destination.js'
+-/**
+- * PES.5 — readiness for EVERY scope of one product, in ONE call.
+- *
+- * Contract specified by PES.1 in `docs/pes-claims.md` and adopted verbatim, route
+- * and all. The scope bar renders a chip per scope; a call per chip would be
+- * N round-trips to paint one row of the header, which is exactly the pattern
+- * `project_master_sheet_gds4` records as making the older surfaces unusable.
+- *
+- * The honesty rule is PES.1's and it is the important part:
+- *
+- *   `pct: null` whenever readiness CANNOT be computed — no cached schema for
+- *   the product type, or the channel is not active on this market. The frame
+- *   renders `—` plus the note and never derives a percentage in the browser
+- *   (feedback_100_percent_honest_ui).
+- *
+- * Both null cases are reported by the substrate rather than guessed at:
+- * `schemaMissing[]` comes back from the column build, and an inactive channel
+- * simply produces no coordinate.
+- *
+- * Cost: one product findMany + one listing findMany + one (5-min cached)
+- * column build per channel, then pure work.
+- */
+-import type { StudioSheet } from './studio-sheet.service.js'
+-import { getInformationSheet as getStudioSheet } from './information-sheet.js'
+-import { getStudioColumns } from './studio-columns.js'
+-/** PES.1's four-value scope vocabulary. Deliberately NOT the row-level
+- *  `ReadinessState` (`ready|missing|errors|live|unlisted`) — that describes one
+- *  listing, this describes a whole scope. Neither is mapped onto the other. */
+-export type ScopeState = 'ready' | 'warn' | 'blocked' | 'absent'
++import { coordinatesFor } from './sheet-columns.service.js'
++import { normalizeLanguage } from './content-language.js'
++import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
++import { readinessLanguages, readinessCoordinateKey, type ProductReadiness, type ReadinessCoordinate, type ReadinessMatrixEntry, type MissingReadinessField, type ScopeReadiness } from './readiness-model.js'
++export { readinessFromSheet } from './readiness-model.js'
++export type { ScopeReadiness, ScopeState, ProductReadiness, ReadinessMatrixEntry } from './readiness-model.js'
+ 
+-export interface ScopeReadiness {
+-  /** `master`, or the channel name (`AMAZON`, `EBAY`, …). */
+-  id: string
+-  label: string
+-  pct: number | null
+-  required: { filled: number; total: number }
+-  state: ScopeState
+-  /** Why `pct` is null, or why the scope is absent. Rendered beside the chip. */
+-  note?: string
+-  aliasCount: number
+-  /** Rules applicable to the selected categories. Explicit listing values can
+-   * also supply fields without a mapping rule. `null` for Master. */
+-  mappingRules: number | null
+-}
+-
+-export interface ProductReadiness {
+-  market: string
+-  locale: string
+-  scopes: ScopeReadiness[]
+-  computedAt: string
+-}
+-
+-/** Summarize the same rows and validators the editor serves, including listing aliases. */
+-export function readinessFromSheet(sheet: StudioSheet, mappingRules: number | null): ScopeReadiness {
+-  const required = sheet.rows.reduce((sum, row) => ({
+-    filled: sum.filled + row.completeness.required.filled,
+-    total: sum.total + row.completeness.required.total,
+-  }), { filled: 0, total: 0 })
+-  const issues = sheet.rows.flatMap(row => row.readiness.issues)
+-  const missing = sheet.meta.schemaMissing
+-  const mappingUnavailable = sheet.scope.kind === 'channel' && (!sheet.meta.mapping || !!sheet.meta.mapping.skippedReason || sheet.meta.mapping.missingProductIds.length > 0)
+-  const unavailable = missing.length > 0 || required.total === 0 || mappingUnavailable
+-  return {
+-    id: sheet.scope.channel ?? 'master', label: sheet.scope.label, required,
+-    pct: unavailable ? null : Math.round(100 * required.filled / required.total),
+-    state: issues.some(i => i.severity === 'error') ? 'blocked' : missing.length > 0 || required.total === 0 ? 'absent'
+-      : mappingUnavailable || issues.length > 0 ? 'warn' : 'ready',
+-    ...(missing.length ? { note: `Category metadata is incomplete: ${missing.join(', ')}` }
+-      : mappingUnavailable ? { note: sheet.meta.mapping?.skippedReason ?? 'Channel mapping values have not been fully checked' }
+-      : required.total === 0 ? { note: 'No required attributes are defined for this scope' }
+-      : { note: `${required.filled} of ${required.total} required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.` }),
+-    aliasCount: sheet.aliases.filter(alias => alias.id !== null).length,
+-    mappingRules,
++export function summarizeReadinessIndex(rows: ReadinessIndex[], c: ReadinessCoordinate, language: string, label: string): ReadinessMatrixEntry {
++  const required = rows.reduce((sum, r) => ({ filled: sum.filled + r.requiredFilled, total: sum.total + r.requiredTotal }), { filled: 0, total: 0 })
++  const unscorable = !rows.length || rows.some(r => r.pct === null) || !required.total
++  const notes = [...new Set(rows.filter(r => r.pct === null).map(r => r.note).filter((n): n is string => !!n))]
++  return { channel: c.channel, market: c.market, accountId: c.accountId, aliasId: c.aliasId, coordinateKey: readinessCoordinateKey(c), language, id: c.channel ?? 'master', label, required,
++    pct: unscorable ? null : Math.round(100 * required.filled / required.total),
++    state: rows.some(r => r.state === 'blocked') ? 'blocked' : !rows.length || rows.some(r => r.state === 'absent') ? 'absent' : rows.some(r => r.state === 'warn') ? 'warn' : 'ready',
++    note: !rows.length ? 'Readiness has not been computed for this language.' : notes.length ? notes.join(' · ') : `${required.filled} of ${required.total} required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance.`,
++    aliasCount: new Set(rows.map(r => r.aliasId).filter(Boolean)).size,
++    mappingRules: c.channel ? Math.max(0, ...rows.map(r => r.mappingRules ?? 0)) : null,
++    missing: rows.flatMap(r => r.missing as unknown as MissingReadinessField[]),
++    computedAt: rows.length ? new Date(Math.min(...rows.map(r => r.computedAt.getTime()))).toISOString() : null,
+   }
+ }
+ 
++/** Read only the materialized index and destination identity; never construct a sheet here. */
+ export async function getProductReadiness(input: { productId: string; market: string; channel?: string; accountId?: string; selectedOnly?: boolean; listingId?: string; locale?: string }): Promise<ProductReadiness> {
+   const market = input.market.toUpperCase()
+-  const { default: prisma } = await import('../../db.js')
++  const locale = normalizeLanguage(input.locale ?? PRIMARY_CONTENT_LOCALE)
+   const destination = input.channel ? await resolveWorkspaceDestination({ productId: input.productId, channel: input.channel, marketplace: market, accountId: input.accountId, listingId: input.listingId }) : null
+-  const master = await getStudioSheet({ ...input, market, scope: 'master', includeMapping: false })
+-  const [set, mappings] = await Promise.all([
+-    getStudioColumns({ market, productTypes: [...new Set(master.rows.map(row => row.productType).filter((v): v is string => !!v))], includeEmptyChannels: true }),
+-    prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, schemaMapping: true } }),
++  const product = await prisma.product.findFirstOrThrow({ where: { id: input.productId, deletedAt: null }, select: { id: true, parentId: true } })
++  const rootId = product.parentId ?? product.id
++  const [rows, markets] = await Promise.all([
++    prisma.readinessIndex.findMany({ where: { product: { OR: [{ id: rootId }, { parentId: rootId }], deletedAt: null } }, orderBy: [{ coordinateKey: 'asc' }, { language: 'asc' }, { productId: 'asc' }] }),
++    prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true, languages: true, language: true } }),
+   ])
+-  const coordinates = input.selectedOnly ? set.coordinates.filter(coordinate => coordinate.channel === input.channel) : set.coordinates
+-  const sheets = await Promise.allSettled(coordinates.map(async coordinate => getStudioSheet({
+-    productId: input.productId, market: coordinate.marketplace, locale: input.locale, scope: 'channel', channel: coordinate.channel,
+-    accountId: coordinate.channel === input.channel ? destination?.accountId ?? input.accountId : await readFamilyAccountId(input.productId, coordinate.channel, coordinate.marketplace),
+-  })))
+-  const scopes = [readinessFromSheet(master, null)]
+-  for (const [index, result] of sheets.entries()) {
+-    if (result.status === 'rejected') {
+-      const coordinate = coordinates[index]
+-      scopes.push({ id: coordinate.channel, label: coordinate.label, pct: null, required: { filled: 0, total: 0 },
+-        state: 'absent', aliasCount: 0, mappingRules: null,
+-        note: result.reason instanceof Error ? result.reason.message : 'Requirements could not be checked for this destination.' })
+-      continue
+-    }
+-    const enriched = result.value
+-    const sheet = enriched.scope.channel === input.channel && destination?.aliasKey !== null && destination?.aliasKey !== undefined ? { ...enriched, rows: enriched.rows.filter(row => (row.aliasId ?? '') === destination.aliasKey), aliases: enriched.aliases.filter(alias => (alias.id ?? '') === destination.aliasKey) } : enriched
+-    const mapping = mappings.find(m => m.channel === sheet.scope.channel && m.code === sheet.scope.marketplace)
+-    const rules = (mapping?.schemaMapping ?? {}) as { fields?: Record<string, unknown>; byProductType?: Record<string, Record<string, unknown>> }
+-    const keys = new Set(Object.keys(rules.fields ?? {}))
+-    for (const row of sheet.rows) for (const key of Object.keys(rules.byProductType?.[row.productType ?? ''] ?? {})) keys.add(key)
+-    scopes.push(readinessFromSheet(sheet, keys.size))
++  const groups = new Map<string, ReadinessIndex[]>()
++  for (const row of rows) { const key = JSON.stringify([row.coordinateKey, row.language]); const group = groups.get(key) ?? []; group.push(row); groups.set(key, group) }
++  const languages = readinessLanguages(markets)
++  const matrix = [...groups.values()].map(group => summarizeReadinessIndex(group, group[0], group[0].language, group[0].label)).sort((a, b) =>
++    Number(!!a.channel) - Number(!!b.channel) || a.coordinateKey.localeCompare(b.coordinateKey) || languages.indexOf(a.language) - languages.indexOf(b.language))
++  const shared: ReadinessCoordinate = { channel: null, market: null, accountId: null, aliasId: null }
++  const languageSummaries = (candidates: ReadinessIndex[], c: ReadinessCoordinate, label: string) => [...new Set(candidates.map(r => r.language))].map(language => {
++    const result = summarizeReadinessIndex(candidates.filter(r => r.language === language), c, language, label)
++    return { language, pct: result.pct, state: result.state }
++  })
++  const master = summarizeReadinessIndex(rows.filter(r => !r.channel && r.language === locale), shared, locale, 'Shared product')
++  master.languages = languageSummaries(rows.filter(r => !r.channel), shared, 'Shared product')
++  const scopes: ScopeReadiness[] = [master]
++  for (const coordinate of coordinatesFor(market, markets, input.selectedOnly ? { only: input.channel ? [input.channel] : [] } : {})) {
++    let accountId: string | null = null
++    let unavailable: string | undefined
++    try { accountId = coordinate.channel === input.channel ? destination?.accountId ?? input.accountId ?? null : await readFamilyAccountId(rootId, coordinate.channel, coordinate.marketplace) }
++    catch (error) { unavailable = error instanceof Error ? error.message : 'Choose an account for this destination.' }
++    const aliasId = coordinate.channel === input.channel ? destination?.aliasKey ?? null : null
++    const candidates = rows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && r.language === locale && (aliasId === null || r.aliasId === aliasId))
++    const summary = summarizeReadinessIndex(candidates, { channel: coordinate.channel, market: coordinate.marketplace, accountId, aliasId }, locale, coordinate.label)
++    if (unavailable) { summary.pct = null; summary.state = 'absent'; summary.note = unavailable }
++    summary.languages = languageSummaries(rows.filter(r => r.channel === coordinate.channel && r.market === coordinate.marketplace && r.accountId === accountId && (aliasId === null || r.aliasId === aliasId)), summary, coordinate.label)
++    scopes.push(summary)
+   }
+-  return { market, locale: master.schema.locale, scopes, computedAt: new Date().toISOString() }
++  return { market, locale, scopes, matrix, computedAt: rows.length ? new Date(Math.min(...rows.map(r => r.computedAt.getTime()))).toISOString() : new Date().toISOString() }
+ }
+--- before-step5/apps/api/src/services/pim/cached-schema-context.ts
++++ after-step5/apps/api/src/services/pim/cached-schema-context.ts
+@@ -0,0 +1,6 @@
++import { AsyncLocalStorage } from 'node:async_hooks'
++
++// Readiness producers may consume completed cache entries, never start provider work.
++const cachedSchemas = new AsyncLocalStorage<boolean>()
++export const cachedSchemasOnly = () => cachedSchemas.getStore() === true
++export const withCachedSchemas = <T>(work: () => Promise<T>): Promise<T> => cachedSchemas.run(true, work)
+--- before-step5/apps/api/src/services/pim/channel-specs/index.ts
++++ after-step5/apps/api/src/services/pim/channel-specs/index.ts
+@@ -1,3 +1,4 @@
++import { cachedSchemasOnly } from '../cached-schema-context.js'
+ import { WorkspaceCache } from '../../../lib/workspace-cache.js'
+ /**
+  * AM.1 — the DB-backed loaders for channel specs, with the caches the page-load path needs.
+@@ -69,7 +70,7 @@
+   })
+   if (!row) {
+     // An account-specific provider read is a cache-miss fallback, never a page-load bypass.
+-    if (accountId) return (await import('../../categories/seller-schema.service.js')).amazonSellerSpec(accountId, mk, pt)
++    if (accountId && !cachedSchemasOnly()) return (await import('../../categories/seller-schema.service.js')).amazonSellerSpec(accountId, mk, pt)
+     return remember(key, stamp, {
+       channel: 'AMAZON', marketplace: mk, category: pt, fields: [], groups: [],
+       fetchedAt: null, schemaVersion: null, coverage: {}, unrecognised: [], absent: true,
+--- before-step5/apps/api/src/services/pim/channel-specs/shopify.ts
++++ after-step5/apps/api/src/services/pim/channel-specs/shopify.ts
+@@ -1,18 +1,23 @@
++import { cachedSchemasOnly } from '../cached-schema-context.js'
+ import { WorkspaceCache } from '../../../lib/workspace-cache.js'
+ import { shopifyAdmin } from '../../shopify/admin-client.js'
+ import { readLinkedStoreSchema, invalidateShopifyDefinitionConstraints } from '../../shopify/linked-products-gateway.js'
+ import { shopifyProductSpec } from './store.js'
+ import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
+ 
+-const schemas = new WorkspaceCache<string, { expires: number; pending: Promise<ShopifyStoreSchema> }>()
++const schemas = new WorkspaceCache<string, { expires: number; pending: Promise<ShopifyStoreSchema>; value?: ShopifyStoreSchema }>()
+ export function invalidateShopifyMappingSchema(accountId: string) { schemas.delete(accountId); invalidateShopifyDefinitionConstraints() }
+ 
+ /** Workspace/store isolation and single-flight reads. Failures never become an empty schema. */
+ export function readShopifyMappingSchema(accountId: string, fresh = false): Promise<ShopifyStoreSchema> {
+   const cached = schemas.get(accountId)
++  if (cachedSchemasOnly()) {
++    if (cached?.value) return Promise.resolve(cached.value)
++    throw new Error('Shopify requirements are not cached for this account.')
++  }
+   if (!fresh && cached && cached.expires > Date.now()) return cached.pending
+-  const entry = { expires: Date.now() + 30_000, pending: Promise.resolve(null as unknown as ShopifyStoreSchema) }
+-  entry.pending = shopifyAdmin(accountId).then(({ graphql }) => readLinkedStoreSchema(graphql)).catch(error => {
++  const entry: { expires: number; pending: Promise<ShopifyStoreSchema>; value?: ShopifyStoreSchema } = { expires: Date.now() + 30_000, pending: Promise.resolve(null as unknown as ShopifyStoreSchema) }
++  entry.pending = shopifyAdmin(accountId).then(({ graphql }) => readLinkedStoreSchema(graphql)).then(value => { entry.value = value; return value }).catch(error => {
+     if (schemas.get(accountId) === entry) schemas.delete(accountId)
+     throw error
+   })
+--- before-step5/apps/api/src/services/pim/studio-columns.ts
++++ after-step5/apps/api/src/services/pim/studio-columns.ts
+@@ -1,3 +1,4 @@
++import { cachedSchemasOnly } from './cached-schema-context.js'
+ /**
+  * PES.5 — a process-local cache for studio column builds.
+  *
+@@ -49,7 +50,7 @@
+ export function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumnSet> {
+   if (input.accountId) return getSheetColumns(input)
+   const key = [
+-    workspaceIdForQuery(),
++    workspaceIdForQuery(), cachedSchemasOnly() ? 'cached-only' : 'interactive',
+     input.market,
+     input.locale ?? '',
+     input.productTypes.slice().sort().join(','),
+--- before-step5/apps/api/src/services/master-content.service.ts
++++ after-step5/apps/api/src/services/master-content.service.ts
+@@ -3,6 +3,7 @@
+  * The caller's transaction owns values, versions, audit and outbound queue rows.
+  */
+ 
++import { produceReadiness } from './pim/readiness-index.service.js'
+ import type { PrismaClient } from '@prisma/client'
+ import { Prisma } from '@prisma/client'
+ import prisma from '../db.js'
+@@ -149,6 +150,7 @@
+       }
+       const audit = await tx.auditLog.create({ data: { entityType: 'Product', entityId: productId, action: 'update', userId: ctx.actor ?? null,
+         before: {}, after: changes as Prisma.InputJsonValue, metadata: { fields, language, reason: ctx.reason ?? null, cascadedListingIds, queuedSyncIds } }, select: { id: true } })
++      await produceReadiness(productId)
+       return { changed: fields.length > 0, changedFields: fields, cascadedListingIds, snapshottedListingIds, queuedSyncIds, auditLogId: audit.id }
+     }
+     return ctx.tx ? runner(ctx.tx) : this.client.$transaction(runner)
+--- before-step5/apps/api/src/services/pim/content-write.ts
++++ after-step5/apps/api/src/services/pim/content-write.ts
+@@ -1,3 +1,4 @@
++import { produceReadiness } from './readiness-index.service.js'
+ import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+ import { workspaceKey } from '@nexus/database/workspace-context'
+ import prisma from '../../db.js'
+@@ -72,6 +73,7 @@
+     } else await prisma.channelListingTranslation.create({ data: { ...data, channelListingId: listing.id, language: address.language, version: 1 } })
+     await prisma.auditLog.create({ data: { entityType: 'ChannelListing', entityId: listing.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
+       before: prior as any ?? {}, after: { values, reset: resets } as any, metadata: { layer: 'pin', language: address.language, coordinate: c as any } } })
++    await produceReadiness(product.id)
+     return prisma.channelListingTranslation.findUniqueOrThrow({ where: { channelListingId_language: workspaceKey({ channelListingId: listing.id, language: address.language }) } })
+   })
+ }
+--- before-step5/apps/api/src/jobs/readiness-reconcile.job.ts
++++ after-step5/apps/api/src/jobs/readiness-reconcile.job.ts
+@@ -0,0 +1,28 @@
++import cron from '../lib/cron/clustered.js'
++import prisma from '../db.js'
++import { recordCronRun } from '../utils/cron-observability.js'
++import { reconcileFamilyReadiness } from '../services/pim/readiness-index.service.js'
++
++let scheduled: ReturnType<typeof cron.schedule> | null = null
++/** Clustered cron supplies the workspace context; each family commits atomically. */
++export async function runReadinessReconcile() {
++  return recordCronRun('readiness-reconcile', async () => {
++    let cursor: string | undefined, families = 0, rows = 0
++    const failures: Error[] = []
++    do {
++      const products = await prisma.product.findMany({ where: { parentId: null, deletedAt: null }, select: { id: true }, orderBy: { id: 'asc' }, take: 100,
++        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}) })
++      for (const product of products) {
++        try { rows += await reconcileFamilyReadiness(product.id); families++ }
++        catch (error) { failures.push(new Error(`${product.id}: ${error instanceof Error ? error.message : String(error)}`)) }
++      }
++      cursor = products.length === 100 ? products[products.length - 1].id : undefined
++    } while (cursor)
++    if (failures.length) throw new Error(`Readiness reconcile: ${families} families repaired; ${failures.length} failed. ${failures.map(error => error.message).join('; ')}`)
++    return `Reconciled ${families} families, ${rows} readiness rows.`
++  })
++}
++export function startReadinessReconcileCron() {
++  if (scheduled || process.env.NEXUS_ENABLE_READINESS_RECONCILE === '0') return
++  scheduled = cron.schedule('17 2 * * *', async () => { await runReadinessReconcile() })
++}
+--- before-step5/apps/api/src/index.ts
++++ after-step5/apps/api/src/index.ts
+@@ -1,3 +1,4 @@
++import { startReadinessReconcileCron } from './jobs/readiness-reconcile.job.js'
+ import { visitActiveWorkspaces } from './lib/workspace-sweep.js'
+ import { legacyIngress } from './lib/workspace-ingress.js'
+ import "./db.js"; // ensure dotenv loads before anything else
+@@ -980,6 +981,7 @@
+       // LIST projection (missing rows → "products disappeared", stale totalStock
+       // → "import didn't apply"). Opt out: NEXUS_ENABLE_READCACHE_RECONCILE=0.
+       startReadCacheReconcileCron();
++      startReadinessReconcileCron();
+ 
+       // W1.3 — orphan bulk-job cleanup (hourly). Auto-cancels PENDING /
+       // QUEUED BulkActionJob rows that never got POST /:id/process'd
+--- before-step5/apps/api/src/services/products/bulk-edit.service.ts
++++ after-step5/apps/api/src/services/products/bulk-edit.service.ts
+@@ -1,3 +1,4 @@
++import { produceReadiness } from '../pim/readiness-index.service.js'
+ import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
+ import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+ import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
+@@ -6,7 +7,7 @@
+ import type { SheetChannel } from '../pim/sheet-columns.service.js'
+ import { workspaceKey } from '@nexus/database/workspace-context'
+ import type { FastifyBaseLogger } from 'fastify'
+-import { activeDatabaseTransaction, afterDatabaseCommit } from '../../lib/database-context.js'
++import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
+ import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
+ import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
+ import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
+@@ -191,6 +192,8 @@
+ 
+ /** Validate, preview or atomically apply product edits, including their formula dependencies. */
+ export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
++  // Bind mutation promises before constructing them, including facts and formula cascades.
++  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context))
+   const { changes, marketplaceContext, marketplaceContexts } =
+     input ?? {}
+   // Effective context list: prefer the new array, fall back to the
+@@ -2581,6 +2584,7 @@
+     const cacheRefreshIds = Array.from(
+       new Set<string>([...productIds, ...allAffectedChildIds]),
+     )
++    for (const id of cacheRefreshIds) await produceReadiness(id)
+     await afterDatabaseCommit(`product-cache:${cacheRefreshIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(cacheRefreshIds)).catch(err => {
+       context.logger.warn({ err, productIds: cacheRefreshIds }, '[products/bulk] cache refresh failed')
+     })
+--- before-step5/apps/api/src/services/pim/readiness-model.ts
++++ after-step5/apps/api/src/services/pim/readiness-model.ts
+@@ -0,0 +1,71 @@
++import { marketLanguages, type MarketLanguageRow } from './market-languages.js'
++import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
++import type { StudioSheet } from './studio-sheet.service.js'
++export type ScopeState = 'ready' | 'warn' | 'blocked' | 'absent'
++
++export interface ScopeReadiness {
++  languages?: Array<{ language: string; pct: number | null; state: ScopeState }>
++  /** `master`, or the channel name (`AMAZON`, `EBAY`, …). */
++  id: string
++  label: string
++  pct: number | null
++  required: { filled: number; total: number }
++  state: ScopeState
++  /** Why `pct` is null, or why the scope is absent. Rendered beside the chip. */
++  note?: string
++  aliasCount: number
++  /** Rules applicable to the selected categories. Explicit listing values can
++   * also supply fields without a mapping rule. `null` for Master. */
++  mappingRules: number | null
++}
++
++export interface ProductReadiness {
++  market: string
++  locale: string
++  scopes: ScopeReadiness[]
++  computedAt: string
++  matrix: ReadinessMatrixEntry[]
++}
++
++/** Summarize the same rows and validators the editor serves, including listing aliases. */
++export function readinessFromSheet(sheet: StudioSheet, mappingRules: number | null): ScopeReadiness {
++  const required = sheet.rows.reduce((sum, row) => ({
++    filled: sum.filled + row.completeness.required.filled,
++    total: sum.total + row.completeness.required.total,
++  }), { filled: 0, total: 0 })
++  const issues = sheet.rows.flatMap(row => row.readiness.issues)
++  const missing = sheet.meta.schemaMissing
++  const mappingUnavailable = sheet.scope.kind === 'channel' && (!sheet.meta.mapping || !!sheet.meta.mapping.skippedReason || sheet.meta.mapping.missingProductIds.length > 0)
++  const unavailable = missing.length > 0 || required.total === 0 || mappingUnavailable
++  return {
++    id: sheet.scope.channel ?? 'master', label: sheet.scope.label, required,
++    pct: unavailable ? null : Math.round(100 * required.filled / required.total),
++    state: issues.some(i => i.severity === 'error') ? 'blocked' : missing.length > 0 || required.total === 0 ? 'absent'
++      : mappingUnavailable || issues.length > 0 ? 'warn' : 'ready',
++    ...(missing.length ? { note: `Category metadata is incomplete: ${missing.join(', ')}` }
++      : mappingUnavailable ? { note: sheet.meta.mapping?.skippedReason ?? 'Channel mapping values have not been fully checked' }
++      : required.total === 0 ? { note: 'No required attributes are defined for this scope' }
++      : { note: `${required.filled} of ${required.total} required values filled across this scope. Row completeness also includes optional attributes. Information completeness does not establish publication eligibility or provider acceptance.` }),
++    aliasCount: sheet.aliases.filter(alias => alias.id !== null).length,
++    mappingRules,
++  }
++}
++
++
++export interface MissingReadinessField { productId: string; field: string; label: string; reason: string }
++export interface ReadinessCoordinate { channel: string | null; market: string | null; accountId: string | null; aliasId: string | null }
++export interface ReadinessMatrixEntry extends ScopeReadiness, ReadinessCoordinate {
++  language: string
++  coordinateKey: string
++  missing: MissingReadinessField[]
++  computedAt: string | null
++}
++
++export function readinessCoordinateKey(c: ReadinessCoordinate): string {
++  return JSON.stringify([c.channel, c.market, c.accountId, c.aliasId])
++}
++
++/** Ordered union of the marketplace authority, with the shared source first. */
++export function readinessLanguages(markets: readonly MarketLanguageRow[]): string[] {
++  return [...new Set([PRIMARY_CONTENT_LOCALE, ...markets.flatMap(m => marketLanguages(m.channel, m.code, [m]))])]
++}
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/types.ts
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/types.ts
+@@ -127,6 +127,7 @@
+ export type { ScopeReadinessState }
+ 
+ export interface ScopeReadiness extends ScopeBarReadiness {
++  languages?: Array<{ language: string; pct: number | null; state: ScopeReadinessState }>
+   /** The counts the percentage came from, so the chip's tooltip can show its own arithmetic. */
+   required?: { filled: number; total: number }
+   /**
+@@ -160,12 +161,25 @@
+    * only while it matches — a different coordinate is a different question, and the old answer is
+    * not a stale version of it (§3.6; measured IT→DE showing IT's 71% under a DE bar).
+    */
+-  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; at: number; coordinate: string }
++  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[]; at: number; coordinate: string }
+   | { status: 'unavailable'; reason: string }
+   | { status: 'error'; message: string }
+ 
+ /** The wire shape PES.1 asked PES.5 for (docs/pes-claims.md). */
++export interface ReadinessMatrixEntry extends ScopeReadiness {
++  coordinateKey: string
++  channel: string | null
++  market: string | null
++  accountId: string | null
++  aliasId: string | null
++  language: string
++  label: string
++  missing: Array<{ productId: string; field: string; label: string; reason: string }>
++  computedAt: string | null
++}
++
+ export interface ScopeReadinessResponse {
++  matrix: ReadinessMatrixEntry[]
+   market: string
+   scopes: Array<{ id: string } & ScopeReadiness>
+ }
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/contracts.tsx
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/contracts.tsx
+@@ -42,7 +42,7 @@
+ import { useWorkspaceDestination, type DestinationState } from './useWorkspaceDestination'
+ import { createWorkspaceSaveStore } from './workspaceSave'
+ import { studioChannelViewPatch } from './navigationHref'
+-import { parseReadinessResponse } from './readiness'
++import { parseReadinessResponse, parseReadinessMatrix } from './readiness'
+ import {
+   leaveConfirmMessage,
+   pendingWrites,
+@@ -438,7 +438,7 @@
+         }
+         const json: unknown = await res.json()
+         if (cancelled) return
+-        setQuery({ status: 'ready', byScope: parseReadinessResponse(json), at: Date.now(), coordinate })
++        setQuery({ status: 'ready', byScope: parseReadinessResponse(json), matrix: parseReadinessMatrix(json), at: Date.now(), coordinate })
+       } catch (e) {
+         if (cancelled) return
+         const timedOut = e instanceof DOMException && e.name === 'AbortError'
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/readiness.ts
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/readiness.ts
+@@ -7,10 +7,11 @@
+  * checked and everything required is missing" about a scope nobody scored.
+  */
+ 
+-import type { ScopeReadiness } from './types'
++import { SCOPE_READINESS_STATES } from '@/design-system/grid/renderers/readiness'
++import type { ReadinessMatrixEntry, ScopeReadiness } from './types'
+ 
+ /** The four states the scope vocabulary allows. Anything else is a contract change, not a value. */
+-const SCOPE_STATES = new Set(['ready', 'warn', 'blocked', 'absent'])
++const SCOPE_STATES = new Set<string>(SCOPE_READINESS_STATES)
+ 
+ /**
+  * `{ scopes: [...] }` → `{ [scopeId]: ScopeReadiness }`.
+@@ -49,6 +50,7 @@
+     out[s.id] = {
+       pct,
+       state,
++      ...(Array.isArray(s.languages) ? { languages: s.languages.filter((entry): entry is NonNullable<ScopeReadiness['languages']>[number] => !!entry && typeof entry.language === 'string' && SCOPE_STATES.has(entry.state) && (entry.pct === null || typeof entry.pct === 'number' && Number.isFinite(entry.pct))) } : {}),
+       required,
+       // Same strictness as `pct`: only a real finite number counts. `0` is meaningful here — it is
+       // the "no rules configured" discriminator — so it must survive, exactly as a measured 0% does.
+@@ -62,3 +64,17 @@
+   }
+   return out
+ }
++
++/** The matrix uses the same percentage/state parser as the scope chips. */
++export function parseReadinessMatrix(json: unknown): ReadinessMatrixEntry[] {
++  const rows = (json as { matrix?: unknown } | null)?.matrix
++  if (!Array.isArray(rows)) return []
++  return rows.flatMap(raw => {
++    if (!raw || typeof raw !== 'object' || typeof raw.coordinateKey !== 'string' || typeof raw.language !== 'string' || typeof raw.label !== 'string') return []
++    if (!['channel', 'market', 'accountId', 'aliasId'].every(key => raw[key] === null || typeof raw[key] === 'string')) return []
++    const score = parseReadinessResponse({ scopes: [{ ...raw, id: 'entry' }] }).entry
++    const missing = Array.isArray(raw.missing) ? raw.missing.filter((m: Record<string, unknown>) => m && ['productId','field','label','reason'].every(key => typeof m[key] === 'string')) : []
++    return [{ ...score, coordinateKey: raw.coordinateKey, channel: raw.channel, market: raw.market, accountId: raw.accountId, aliasId: raw.aliasId,
++      language: raw.language, label: raw.label, missing, computedAt: typeof raw.computedAt === 'string' ? raw.computedAt : null }]
++  })
++}
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/readiness.vitest.test.ts
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/readiness.vitest.test.ts
+@@ -149,3 +149,16 @@
+     }
+   })
+ })
++
++import { parseReadinessMatrix } from './readiness'
++it('keeps matrix, pressed-language chip and other-language tooltip on the same wire values', () => {
++ const entry = { id: 'AMAZON', coordinateKey: '["AMAZON","BE","a",null]', channel: 'AMAZON', market: 'BE', accountId: 'a', aliasId: null,
++  language: 'nl', label: 'Amazon · BE', pct: null, state: 'blocked', note: 'Dutch title is missing.', missing: [{ productId: 'p', field: 'name', label: 'Title', reason: 'Dutch title is missing.' }], computedAt: '2026-09-12T00:00:00Z',
++  languages: [{ language: 'nl', pct: null, state: 'blocked' }, { language: 'fr', pct: 100, state: 'ready' }] }
++ const response = { scopes: [entry], matrix: [entry] }
++ const chip = parseReadinessResponse(response).AMAZON, matrix = parseReadinessMatrix(response)[0]
++ expect(matrix.pct).toBe(chip.pct); expect(matrix.state).toBe(chip.state)
++ expect(matrix.missing[0].reason).toBe(chip.note)
++ expect(chip.languages?.[1]).toEqual({ language: 'fr', pct: 100, state: 'ready' })
++ expect(parseReadinessMatrix({ matrix: [{ ...entry, accountId: 1 }] })).toEqual([])
++})
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx
+@@ -1,5 +1,6 @@
+ 'use client'
+ 
++import { readinessMeta } from '@/design-system/grid/renderers/readiness'
+ import { useMemo } from 'react'
+ import { Button } from '@/design-system/primitives'
+ import { Listbox } from '@/design-system/components'
+@@ -17,14 +18,19 @@
+       if (id === scope && save.kind === 'error') return { pct: null, state: 'blocked', note: save.message }
+       if (id === scope && save.kind === 'saving') return 'loading'
+       if (readiness.status === 'loading') return 'loading'
+-      if (readiness.status === 'ready') return readiness.byScope[id] ?? { pct: null, state: 'absent', note: 'Choose this channel and account to check requirements.' }
++      if (readiness.status === 'ready') {
++        const value = readiness.byScope[id]
++        if (!value) return { pct: null, state: 'absent', note: 'Choose this channel and account to check requirements.' }
++        const others = value.languages?.filter(entry => entry.language !== locale).map(entry => `${entry.language.toUpperCase()}: ${readinessMeta(entry.state, 'scope').label} ${entry.pct === null ? '—' : `${entry.pct}%`}`)
++        return { ...value, note: [`${locale?.toUpperCase() ?? 'Selected language'}: ${value.note ?? ''}`, ...(others ?? [])].join(' · ') }
++      }
+       return { pct: null, state: 'absent', note: readiness.status === 'unavailable' ? readiness.reason : readiness.message }
+     }
+     return [
+       { id: MASTER_SCOPE, label: 'Shared product', readiness: scored(MASTER_SCOPE) },
+       ...options.channels.map(c => ({ id: c.id, label: c.label, readiness: market && c.markets.includes(market) ? scored(c.id) : undefined })),
+     ]
+-  }, [options.channels, market, readiness, scope, save])
++  }, [options.channels, market, readiness, scope, save, locale])
+   return <ScopeBar className="nds-workspace-scope" label="Editing" items={items} active={scope} onChange={setScope} right={
+     scope === MASTER_SCOPE ? <Listbox
+       size="sm" width="auto" options={options.locales.map(l => ({ value: l.code, label: l.label }))}
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/ErrorsSyncTab.tsx
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/ErrorsSyncTab.tsx
+@@ -10,6 +10,7 @@
+ import { useCallback } from 'react'
+ 
+ import { useStudioProduct, useStudioRecord, useStudioScope } from '../contracts'
++import { ReadinessPanel } from './ReadinessPanel'
+ import { ErrorsSyncConsole } from './ErrorsSyncConsole'
+ 
+ export function ErrorsSyncTab() {
+@@ -44,20 +45,14 @@
+     [setTab, record],
+   )
+ 
+-  // Guarded by `visibleTabs()` — master has no sync queue and is not offered this tab at all — but
+-  // a tab that can be reached by URL should say why it is empty rather than render half a pane.
+-  if (!coordinate) {
+-    return (
+-      <div style={{ padding: '24px' }}>
+-        Master holds the truth, not a sync queue. Pick a channel scope to see what it refused.
+-      </div>
+-    )
+-  }
++  if (!coordinate) return <ReadinessPanel />
+ 
+   const label =
+     options.channels.find((c) => c.id === scope)?.label ?? `${coordinate.channel} · ${coordinate.marketplace}`
+ 
+   return (
++    <>
++    <ReadinessPanel />
+     <ErrorsSyncConsole
+       productId={product.id}
+       channel={coordinate.channel}
+@@ -67,5 +62,6 @@
+       scopeLabel={label}
+       onJumpToRow={jump}
+     />
++    </>
+   )
+ }
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/ReadinessPanel.tsx
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/ReadinessPanel.tsx
+@@ -0,0 +1,54 @@
++'use client'
++
++import { Card, DataGrid, type Column } from '@/design-system/components'
++import { Pill } from '@/design-system/primitives'
++import { readinessMeta } from '@/design-system/grid/renderers/readiness'
++import { useScopeReadiness, useStudioScope } from '../contracts'
++import type { ReadinessMatrixEntry } from '../types'
++import styles from './readiness.module.css'
++
++type MatrixRow = { key: string; label: string; entries: Record<string, ReadinessMatrixEntry> }
++function ReadinessValue({ entry, language }: { entry?: ReadinessMatrixEntry; language: string }) {
++  if (!entry) return <span title={`This coordinate does not carry ${language.toUpperCase()}.`}>—</span>
++  const meta = readinessMeta(entry.state, 'scope')
++  return <Pill tone={meta.tone} title={entry.note} data-readiness-language={language} data-readiness-state={entry.state} data-readiness-pct={entry.pct ?? 'null'}>
++    {meta.label} · {entry.pct === null ? '—' : `${entry.pct}%`}
++  </Pill>
++}
++
++/** One index response feeds both tables and the scope bar. No readiness is computed in the browser. */
++export function ReadinessPanel() {
++  const readiness = useScopeReadiness()
++  const { locale } = useStudioScope()
++  if (readiness.status !== 'ready') return <Card header="Readiness" description={readiness.status === 'loading' ? 'Loading readiness…' : readiness.status === 'error' ? readiness.message : readiness.reason} />
++  const entries = readiness.matrix
++  const languages = [...new Set(entries.map(entry => entry.language))]
++  const grouped = new Map<string, MatrixRow>()
++  for (const entry of entries) {
++    const row = grouped.get(entry.coordinateKey) ?? { key: entry.coordinateKey, label: entry.label, entries: {} }
++    row.entries[entry.language] = entry; grouped.set(entry.coordinateKey, row)
++  }
++  const columns: Column<MatrixRow>[] = [
++    { key: 'coordinate', label: 'Coordinate', width: 220, sticky: true, render: row => row.label },
++    ...languages.map(language => ({ key: language, label: `${language.toUpperCase()}${language === locale ? ' · selected' : ''}`, render: (row: MatrixRow) => <ReadinessValue entry={row.entries[language]} language={language} /> })),
++  ]
++  const attention = entries.filter(entry => entry.state !== 'ready')
++  return <div className={styles.panel}>
++    <Card header="Readiness by language" padded={false} description="Required content for each destination and language. — means readiness could not be scored.">
++      <DataGrid ariaLabel="Readiness matrix" keyboardScroll rows={[...grouped.values()]} rowKey={row => row.key} columns={columns} emptyState="Readiness has not been computed for this product." />
++    </Card>
++    <Card header="Needs attention" padded={false} description="Missing or invalid fields from the same readiness results.">
++      <DataGrid ariaLabel="Needs attention by language" keyboardScroll rows={attention} rowKey={entry => `${entry.coordinateKey}:${entry.language}`} columns={[
++        { key: 'coordinate', label: 'Coordinate', render: entry => entry.label },
++        { key: 'language', label: 'Language', render: entry => entry.language.toUpperCase() },
++        { key: 'state', label: 'Readiness', render: entry => <ReadinessValue entry={entry} language={entry.language} /> },
++        { key: 'missing', label: 'Missing or invalid fields', render: entry => <div className={styles.missing}>{entry.missing.length
++          ? [...new Set(entry.missing.map(field => field.field))].map((key, index) => {
++            const fields = entry.missing.filter(field => field.field === key)
++            return <span key={key} title={[...new Set(fields.map(field => field.reason))].join(' · ')}>{index > 0 ? ', ' : ''}{fields[0].label}</span>
++          })
++          : entry.note ?? 'Requirements could not be checked.'}</div> },
++      ]} emptyState="Every computed destination and language is ready." />
++    </Card>
++  </div>
++}
+--- before-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/readiness.module.css
++++ after-step5/apps/web/src/app/products/[id]/edit/_studio/channel-ops/readiness.module.css
+@@ -0,0 +1,11 @@
++.panel {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr);
++  gap: var(--nds-space-16);
++  padding: var(--nds-space-16);
++  min-width: 0;
++}
++.missing {
++  white-space: normal;
++  min-width: 18rem;
++}
+--- before-step5/apps/api/src/services/pim/scope-readiness.vitest.test.ts
++++ after-step5/apps/api/src/services/pim/scope-readiness.vitest.test.ts
+@@ -2,8 +2,9 @@
+ import { describe, expect, it, vi } from 'vitest'
+ vi.mock('./studio-sheet.service.js', () => ({ getStudioSheet: vi.fn() }))
+ vi.mock('./studio-columns.js', () => ({ getStudioColumns: vi.fn() }))
+-vi.mock('../../db.js', () => ({ default: { marketplace: { findMany: async () => [] } } }))
+-import { getProductReadiness, readinessFromSheet } from './scope-readiness.service.js'
++const db = vi.hoisted(() => ({ product: { findFirstOrThrow: vi.fn(async () => ({ id: 'p', parentId: null })) }, readinessIndex: { findMany: vi.fn() }, marketplace: { findMany: vi.fn() } }))
++vi.mock('../../db.js', () => ({ default: db }))
++import { getProductReadiness, readinessFromSheet, summarizeReadinessIndex } from './scope-readiness.service.js'
+ import { getStudioSheet } from './studio-sheet.service.js'
+ import { getStudioColumns } from './studio-columns.js'
+ const sheet = (mapping: unknown): any => ({
+@@ -13,12 +14,24 @@
+   meta: { schemaMissing: [], mapping },
+ })
+ 
+-it('reads store readiness at GLOBAL even while the shared sheet uses a country market', async () => {
+-  vi.mocked(getStudioColumns).mockResolvedValue({ coordinates: [{ channel: 'SHOPIFY', marketplace: 'GLOBAL', label: 'Shopify · GLOBAL' }] } as never)
+-  vi.mocked(getStudioSheet).mockImplementation(async input => ({ ...sheet({ skippedReason: null, missingProductIds: [] }), scope: { kind: input.scope, channel: input.channel, label: 'Shopify · GLOBAL', marketplace: input.market } }) as never)
+-  const result = await getProductReadiness({ productId: 'p', market: 'IT' })
+-  expect(getStudioSheet).toHaveBeenCalledWith(expect.objectContaining({ channel: 'SHOPIFY', market: 'GLOBAL' }))
+-  expect(result.scopes.find(s => s.id === 'SHOPIFY')?.note).toContain('required values filled')
++it('reads the index at GLOBAL without constructing any sheet or column set', async () => {
++  db.marketplace.findMany.mockResolvedValue([{ channel: 'SHOPIFY', code: 'GLOBAL', languages: ['en'] }])
++  db.readinessIndex.findMany.mockResolvedValue([{ productId: 'p', channel: 'SHOPIFY', market: 'GLOBAL', accountId: 'account-SHOPIFY', aliasId: null,
++    coordinateKey: '["SHOPIFY","GLOBAL","account-SHOPIFY",null]', language: 'en', label: 'Shopify · GLOBAL', pct: 100, state: 'ready', requiredFilled: 1, requiredTotal: 1, missing: [], computedAt: new Date(), mappingRules: 1 }])
++  const result = await getProductReadiness({ productId: 'p', market: 'IT', locale: 'en' })
++  expect(result.scopes.find(s => s.id === 'SHOPIFY')).toMatchObject({ pct: 100, state: 'ready' })
++  expect(result.matrix[0]).toMatchObject({ market: 'GLOBAL', accountId: 'account-SHOPIFY', language: 'en' })
++  expect(getStudioSheet).not.toHaveBeenCalled(); expect(getStudioColumns).not.toHaveBeenCalled()
++  const german = await getProductReadiness({ productId: 'p', market: 'IT', locale: 'de' })
++  expect(german.scopes.find(s => s.id === 'SHOPIFY')).toMatchObject({ pct: null, state: 'absent', languages: [{ language: 'en', state: 'ready', pct: 100 }] })
++})
++it('weights family counts, preserves null and uses the scope state independently of percentage', () => {
++  const c = { channel: 'AMAZON', market: 'DE', accountId: 'a', aliasId: null }
++  const rows = [{ ...c, pct: 100, state: 'ready', requiredFilled: 1, requiredTotal: 1, missing: [], computedAt: new Date(), mappingRules: 1 },
++    { ...c, pct: 0, state: 'blocked', requiredFilled: 0, requiredTotal: 9, missing: [], computedAt: new Date(), mappingRules: 1 }]
++  expect(summarizeReadinessIndex(rows as any, c, 'de', 'Amazon')).toMatchObject({ pct: 10, state: 'blocked', required: { filled: 1, total: 10 } })
++  expect(summarizeReadinessIndex([{ ...rows[0], pct: null }] as any, c, 'de', 'Amazon').pct).toBeNull()
++  expect(summarizeReadinessIndex([], c, 'de', 'Amazon')).toMatchObject({ pct: null, state: 'absent' })
+ })
+ describe('scope readiness uses verified effective channel values', () => {
+   it('does not claim readiness when mapping failed or did not run', () => {
+--- before-step5/apps/api/src/services/pim/readiness-index.vitest.test.ts
++++ after-step5/apps/api/src/services/pim/readiness-index.vitest.test.ts
+@@ -0,0 +1,20 @@
++import { expect, it, vi } from 'vitest'
++import { readinessCoordinateKey, readinessLanguages } from './readiness-model.js'
++import { withCachedSchemas } from './cached-schema-context.js'
++vi.mock('../shopify/admin-client.js', () => ({ shopifyAdmin: vi.fn() }))
++vi.mock('../shopify/linked-products-gateway.js', () => ({ readLinkedStoreSchema: vi.fn(), invalidateShopifyDefinitionConstraints: vi.fn() }))
++import { shopifyAdmin } from '../shopify/admin-client.js'
++import { readShopifyMappingSchema } from './channel-specs/shopify.js'
++it('keeps shared, primary, aliases and accounts distinct even with delimiter characters', () => {
++ const c = { channel: null, market: null, accountId: null, aliasId: null }
++ const keys = [c, { ...c, channel: 'AMAZON', market: 'BE' }, { ...c, accountId: 'a|b', aliasId: 'c' }, { ...c, accountId: 'a', aliasId: 'b|c' }].map(readinessCoordinateKey)
++ expect(new Set(keys).size).toBe(4)
++})
++it('a cache-only producer never enters the Shopify credential or transport gateway on a miss', async () => {
++ await expect(withCachedSchemas(async () => readShopifyMappingSchema('uncached-account'))).rejects.toThrow('not cached')
++ expect(shopifyAdmin).not.toHaveBeenCalled()
++})
++
++it('preserves the source first and Belgium’s ordered languages in the matrix', () => {
++ expect(readinessLanguages([{ channel: 'AMAZON', code: 'BE', languages: ['nl','fr'] }, { channel: 'AMAZON', code: 'DE', languages: ['de'] }])).toEqual(['it','nl','fr','de'])
++})
+--- before-step5/apps/api/src/services/pim/content-write.vitest.test.ts
++++ after-step5/apps/api/src/services/pim/content-write.vitest.test.ts
+@@ -4,6 +4,8 @@
+ vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: null, redis: null, searchIndexQueue: null, readCacheQueue: null, addJobSafely: vi.fn() }))
+ vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refresh: vi.fn(), refreshMany: vi.fn() }, FACE_IMAGE_ORDER_BY: [], FACE_IMAGE_SELECT: {}, pickFaceImage: () => null }))
+ import prisma from '../../db.js'
++import { beforeDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
++import { reconcileFamilyReadiness } from './readiness-index.service.js'
+ import { writeContent } from './content-write.js'
+ import { writeTranslation } from './translation-write.js'
+ import { resolveContent } from './content-resolver.js'
+@@ -60,6 +62,7 @@
+   expect(resolveContent({product:after.product as any,field:'title',localizableKeys:['untranslated_schema_field'],address:{requested:'de'}}).translation?.outdated).toBe(false)
+   expect(after.product.localizedContent).toEqual(before.product.localizedContent); expect(after.listing.title).toBe(before.listing.title)
+   expect(after.listing.version).toBe(before.listing.version+1)
++  expect(await prisma.readinessIndex.findFirst({ where: { productId: 'lx-child', channel: null, language: 'de' } })).toMatchObject({ pct: null, requiredFilled: 1, requiredTotal: 1 }) // The disposable fixture has no cached category schema.
+   expect(await prisma.channelListing.findMany({ where:{ marketplace:{ not:'DE' } } })).toEqual(other)
+  })
+  it('a pin writes the new table and never changes the shared value', async () => {
+@@ -118,3 +121,21 @@
+  })
+ 
+ })
++
++it('LX.5 index failure rolls back content, versions, cascades and index in the same transaction', async () => {
++ const before = await read(), indexBefore = await prisma.readinessIndex.findMany({ orderBy: { id: 'asc' } })
++ await expect(inDatabaseTransaction(prisma, async () => {
++  await writeContent({ productId: 'lx-child', address: shared, values: { title: 'Must roll back' }, label: 'Product title' })
++  await beforeDatabaseCommit('forced-index-failure', async () => { throw new Error('Index unavailable') })
++ })).rejects.toThrow('Index unavailable')
++ expect(await read()).toEqual(before)
++ expect(await prisma.readinessIndex.findMany({ orderBy: { id: 'asc' } })).toEqual(indexBefore)
++})
++it('LX.5 reconcile repairs a missing index without touching content or legacy JSON', async () => {
++ const before = await read()
++ await prisma.readinessIndex.deleteMany({})
++ expect(await reconcileFamilyReadiness('lx-child')).toBeGreaterThan(0)
++ expect(await read()).toEqual(before)
++ expect(await prisma.readinessIndex.count({ where: { productId: 'lx-child', channel: null, language: 'sv' } })).toBe(0)
++ expect(await prisma.readinessIndex.count({ where: { productId: 'lx-child', channel: null, language: 'de' } })).toBe(1)
++})
+--- before-step5/apps/api/src/jobs/readiness-reconcile.vitest.test.ts
++++ after-step5/apps/api/src/jobs/readiness-reconcile.vitest.test.ts
+@@ -0,0 +1,21 @@
++import { expect, it, vi } from 'vitest'
++const mock = vi.hoisted(() => ({ findMany: vi.fn(), reconcile: vi.fn(), schedule: vi.fn() }))
++vi.mock('../db.js', () => ({ default: { product: { findMany: mock.findMany } } }))
++vi.mock('../lib/cron/clustered.js', () => ({ default: { schedule: mock.schedule } }))
++vi.mock('../utils/cron-observability.js', () => ({ recordCronRun: async (_name: string, work: () => Promise<unknown>) => work() }))
++vi.mock('../services/pim/readiness-index.service.js', () => ({ reconcileFamilyReadiness: mock.reconcile }))
++import { runReadinessReconcile } from './readiness-reconcile.job.js'
++it('continues across family failures and reports the run as failed after trying the remaining families', async () => {
++ mock.findMany.mockResolvedValueOnce([{ id: 'one' }, { id: 'two' }, { id: 'three' }])
++ mock.reconcile.mockResolvedValueOnce(3).mockRejectedValueOnce(new Error('stale schema transaction')).mockResolvedValueOnce(5)
++ await expect(runReadinessReconcile()).rejects.toThrow('2 families repaired; 1 failed')
++ expect(mock.reconcile.mock.calls.map(call => call[0])).toEqual(['one','two','three'])
++ expect(mock.schedule).not.toHaveBeenCalled()
++})
++it('walks root families in bounded cursor pages and repairs missing rows through the same producer', async () => {
++ mock.findMany.mockReset(); mock.reconcile.mockReset().mockResolvedValue(2)
++ mock.findMany.mockResolvedValueOnce(Array.from({ length: 100 }, (_, i) => ({ id: `family-${i}` }))).mockResolvedValueOnce([{ id: 'last' }])
++ await expect(runReadinessReconcile()).resolves.toBe('Reconciled 101 families, 202 readiness rows.')
++ expect(mock.findMany.mock.calls[1][0]).toMatchObject({ cursor: { id: 'family-99' }, skip: 1, take: 100, where: { parentId: null, deletedAt: null } })
++ expect(mock.reconcile).toHaveBeenCalledTimes(101)
++})

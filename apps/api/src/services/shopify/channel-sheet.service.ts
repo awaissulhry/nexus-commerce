@@ -49,7 +49,7 @@ export async function enrichShopifyChannelSheet(page: StudioSheet): Promise<Stud
   return result
 }
 
-export const shopifySheetChangesSchema = z.object({ cells: z.array(z.object({ colId: z.string().min(1), ownerId: z.string().min(1), fieldId: z.string().min(1), token: z.string().min(1), baseline: z.string().nullable(), value: z.string().nullable(), intent: z.enum(['set', 'pin', 'reset', 'reset-list']) })).min(1).max(1000) }).strict().superRefine((input, ctx) => {
+export const shopifySheetChangesSchema = z.object({ cells: z.array(z.object({ contentAddress: z.unknown().optional(), colId: z.string().min(1), ownerId: z.string().min(1), fieldId: z.string().min(1), token: z.string().min(1), baseline: z.string().nullable(), value: z.string().nullable(), intent: z.enum(['set', 'pin', 'reset', 'reset-list']) })).min(1).max(1000) }).strict().superRefine((input, ctx) => {
   const columns = new Set<string>(), addresses = new Map<string, string>()
   input.cells.forEach((cell, index) => {
     const address = JSON.stringify([cell.ownerId, cell.fieldId]), intent = JSON.stringify([cell.intent, cell.value])
@@ -97,6 +97,13 @@ export async function saveShopifySheetCells(productId: string, scope: ContentSco
       try {
         const row = snapshot.rows.find(r => r.id === change.ownerId), field = fields.find(f => f.id === change.fieldId)
         if (!row || !field) throw new Error('This owner or field no longer belongs to the selected listing. Reload the sheet.')
+        // LX.F F-LX-1 (third instance) — the ContentAddress gate was unconditional, one line
+        // ABOVE the rule that refuses every content field on this path. So it could only ever
+        // fire for a field this path REFUSES anyway, or wrongly for a metafield/native field
+        // that carries no content at all (measured: a `custom.flag` boolean write answered
+        // "Custom product needs a ContentAddress before it can be saved."). The content
+        // refusal below is the one rule that belongs here, and it names the writer to use.
+        if (['title', 'description', 'bodyHtml', 'descriptionHtml'].includes(field.id)) throw new Error(`${field.label} must be saved through the sheet's content address writer.`)
         if (change.token !== shopifyCellToken(current.workspace, row.id, field, row.locale)) throw new Error('Another editor changed this draft cell. Your input is retained; review the saved value before retrying.')
         const reason = informationRestriction(row, field, draft, false)
         if (reason) throw new Error(reason)

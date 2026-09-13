@@ -1,4 +1,6 @@
-import { resolveAttributes, type ProductLike } from './attribute-resolver.js'
+import type { ProductLike } from './attribute-resolver.js'
+import { resolveContentAttributes, contentLanguages } from './content-read.js'
+import { normalizeLanguage } from './content-language.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 
 export interface GlobalLocaleSlot {
@@ -14,12 +16,9 @@ export interface GlobalLocaleSlot {
  * an absent translation retains its existing source fallback until LX.7.
  */
 export function globalContentLocales(product: ProductLike, parent: ProductLike | null, configuredLanguages: readonly string[] = []): Record<string, GlobalLocaleSlot> {
-  const own = { ...product, localizedContent: {} }
-  const ancestor = parent ? { ...parent, localizedContent: {} } : null
-  const languages = new Set([PRIMARY_CONTENT_LOCALE, ...configuredLanguages])
-  for (const owner of [ancestor, own]) for (const row of owner?.translations ?? []) languages.add(String(row.language).toLowerCase())
+  const languages = new Set([...contentLanguages(product, parent), ...configuredLanguages.map(normalizeLanguage)])
   return Object.fromEntries([...languages].sort().map(language => {
-    const resolved = resolveAttributes({ product: own, parent: ancestor, locale: language })
+    const resolved = resolveContentAttributes({ product, parent, requested: language })
     return [language, {
       title: (resolved.title?.value as string) ?? null,
       description: (resolved.description?.value as string) ?? null,

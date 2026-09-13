@@ -6,6 +6,10 @@
  *
  *     Listed · Draft · Excluded · Not set up · Needs a value
  *
+ * VT.4 added a SIXTH, `Collides` (VX design D9, `docs/2026-09-12-variation-projection-design.md` §11.3),
+ * on the same rule: its tone is READ from `readinessMeta`, its `from` records which state, and it earns a
+ * member because its remedy is in the mapping dock and not in the cell. See its entry below.
+ *
  * ## Why this is a THIRD table and not a local map
  *
  * `readiness.ts` deliberately holds two vocabularies and exports no converter between them
@@ -49,7 +53,10 @@
 import { readinessMeta, type ReadinessTone } from './readiness'
 
 /** One variant row against one channel coordinate, as the operator reads it. */
-export type ProjectionState = 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value'
+export type ProjectionState =
+  | 'listed' | 'draft' | 'excluded' | 'not-set-up' | 'needs-value' | 'collides'
+  /* MX.G — the four the Matrix adds (design `docs/2026-09-13-matrix-page-design.md` §3.4). */
+  | 'suppressed' | 'closed' | 'error' | 'ended'
 
 export interface ProjectionMeta {
   /** Taken from `readinessMeta()`; never chosen here. See `from`. */
@@ -124,6 +131,88 @@ const PROJECTION: Record<ProjectionState, ProjectionMeta> = {
     muted: false,
     interactive: true,
     hint: 'A value this channel requires is missing or invalid — publishing would be refused',
+  },
+  /**
+   * VT.4 / VX D9 — the SIXTH word. The row is INCLUDED and every value it needs is there; what is
+   * missing is on the coordinate: the axes this channel receives cannot tell this variant apart from
+   * another included one (`CollisionReport`, `docs/vt1-contracts.md` §3.5).
+   *
+   * Why it is a member and not `needs-value` reused: the NEXT CLICK differs. A missing value is fixed
+   * in the cell; a collision is fixed in the mapping dock's Collisions section, by choosing a resolver
+   * for the whole coordinate. Two states whose remedy is in two different places cannot share one word
+   * without the word lying about where to go.
+   *
+   * The tone is READ from `readinessMeta('missing', 'row')` — the same row-warning tone `needs-value`
+   * reads, and recorded in `from` like every other member, because the SEVERITY is the same (this
+   * coordinate cannot be published) even though the remedy is not. No colour is chosen here.
+   * `interactive: true`: excluding the variant IS one of the three resolvers, so the checkbox must work.
+   */
+  collides: {
+    tone: readinessMeta('missing', 'row').tone,
+    from: 'row:missing',
+    label: 'Collides',
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'Two included variants produce the same combination on this channel — choose a resolver in the mapping dock',
+  },
+  /**
+   * MX.G / design §3.4 — the FOUR the Matrix adds, on the same rule as `collides`: each tone is READ
+   * from `readinessMeta` and recorded in `from`, and each earns a member because its REMEDY is
+   * somewhere the five original words do not point.
+   *
+   * They are not a Matrix-local vocabulary. The `Listing` cell is `ProjectionCell` on both the
+   * Variants page and the Matrix (design §3.2's last line: "one cell definition on both states"), so
+   * a word that existed only on one of them would be the fork this file was written to prevent. The
+   * Variants page never produces these four today — its projection read has no channel-side episode
+   * — and a state it does not produce costs it nothing.
+   *
+   * 🔴 `not buyable` (the 386 Amazon `DISCOVERABLE` rows, design Appendix C) is deliberately NOT a
+   * tenth word: Amazon's own meaning is "listed, and not winning the buy box", which is `listed`
+   * plus a DETAIL. `ListingCell.detail` carries it (contract §3.6), and inventing a word for it
+   * would have split `Listed` in two for a fact that is not a state.
+   */
+  suppressed: {
+    /* An Amazon suppression episode: the listing exists and the channel is refusing to show it. The
+       row cannot sell — the same severity `errors` carries, which is why the tone is read from it. */
+    tone: readinessMeta('errors', 'row').tone,
+    from: 'row:errors',
+    label: 'Suppressed',
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'The channel is suppressing this listing — the reason is on Needs attention',
+  },
+  closed: {
+    /* `offerClosedAt` (SCT.6). Nothing is wrong and nothing is live: exactly `unlisted`'s meaning,
+       and the same neutral a `draft` reads. A DIFFERENT word from `Draft` because the remedy is a
+       different control — Sync Control reopens an offer; publishing promotes a draft. */
+    tone: readinessMeta('unlisted', 'row').tone,
+    from: 'row:unlisted',
+    label: 'Closed',
+    dot: 'hollow',
+    muted: true,
+    interactive: true,
+    hint: 'The offer is closed on this market — reopen it in Sync Control',
+  },
+  error: {
+    tone: readinessMeta('errors', 'row').tone,
+    from: 'row:errors',
+    label: 'Error',
+    dot: 'solid',
+    muted: false,
+    interactive: true,
+    hint: 'The channel refused this listing — the reason is on Needs attention',
+  },
+  ended: {
+    /* `listingStatus: ENDED` — an eBay item that ran out or was ended. Over, not broken. */
+    tone: readinessMeta('unlisted', 'row').tone,
+    from: 'row:unlisted',
+    label: 'Ended',
+    dot: 'hollow',
+    muted: true,
+    interactive: true,
+    hint: 'This listing has ended on the channel — relist it to sell again',
   },
 }
 

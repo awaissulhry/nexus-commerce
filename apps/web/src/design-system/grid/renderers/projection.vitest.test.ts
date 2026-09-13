@@ -14,14 +14,24 @@ import { PROJECTION_STATES, isProjectionState, projectionMeta, type ProjectionSt
  *    PES.2 ever recolours a readiness state.
  */
 describe('projection vocabulary', () => {
-  it('says exactly the five words spec §9 fixes', () => {
-    expect(PROJECTION_STATES).toEqual(['listed', 'draft', 'excluded', 'not-set-up', 'needs-value'])
+  it('says exactly the five words spec §9 fixes, the sixth VX D9 adds, and the four MX §3.4 adds', () => {
+    expect(PROJECTION_STATES).toEqual([
+      'listed', 'draft', 'excluded', 'not-set-up', 'needs-value', 'collides',
+      /* MX.G, design §3.4 — the Matrix's four. The ORDER is the declaration order in the table and
+         is asserted because `PROJECTION_STATES` is what a legend and a filter's options render. */
+      'suppressed', 'closed', 'error', 'ended',
+    ])
     expect(PROJECTION_STATES.map((s) => projectionMeta(s).label)).toEqual([
       'Listed',
       'Draft',
       'Excluded',
       'Not set up',
       'Needs a value',
+      'Collides',
+      'Suppressed',
+      'Closed',
+      'Error',
+      'Ended',
     ])
   })
 
@@ -43,16 +53,56 @@ describe('projection vocabulary', () => {
       expect(meta.tone).toBe(source.tone)
       delegated += 1
     }
-    expect(delegated).toBe(4)
+    // 9 of the 10 delegate: `excluded` is still the only member that paints no status colour.
+    // The count is the positive control on the loop above — it is what makes a silently skipped
+    // member fail rather than pass (the arm that would have failed is the one never run).
+    expect(delegated).toBe(9)
   })
 
   it('maps each state to the dot §3.3 draws', () => {
-    // success solid · neutral hollow · nothing · nothing · warning solid
-    expect(projectionMeta('listed')).toMatchObject({ tone: 'success', dot: 'solid', muted: false })
+    // info solid · neutral hollow · nothing · nothing · warning solid
+    expect(projectionMeta('listed')).toMatchObject({ tone: 'info', dot: 'solid', muted: false })
     expect(projectionMeta('draft')).toMatchObject({ tone: 'neutral', dot: 'hollow', muted: false })
     expect(projectionMeta('excluded')).toMatchObject({ dot: 'none', muted: true })
     expect(projectionMeta('not-set-up')).toMatchObject({ dot: 'none', muted: true })
     expect(projectionMeta('needs-value')).toMatchObject({ tone: 'warning', dot: 'solid', muted: false })
+    // VT.4 / VX D9 — the sixth word shares the row-warning SEVERITY and declares the same source.
+    expect(projectionMeta('collides')).toMatchObject({ tone: 'warning', dot: 'solid', muted: false, from: 'row:missing' })
+    expect(projectionMeta('collides').tone).toBe(readinessMeta('missing', 'row').tone)
+    /* MX.G, design §3.4 + the mandate's counterparts, verbatim: `suppressed` → row:errors,
+       `closed`/`ended` → row:unlisted, `error` → row:errors. Asserted against the SOURCE, not
+       against a colour name, so a recolour of a readiness state follows here automatically. */
+    expect(projectionMeta('suppressed')).toMatchObject({ dot: 'solid', muted: false, from: 'row:errors' })
+    expect(projectionMeta('suppressed').tone).toBe(readinessMeta('errors', 'row').tone)
+    expect(projectionMeta('closed')).toMatchObject({ dot: 'hollow', muted: true, from: 'row:unlisted' })
+    expect(projectionMeta('closed').tone).toBe(readinessMeta('unlisted', 'row').tone)
+    expect(projectionMeta('error')).toMatchObject({ dot: 'solid', muted: false, from: 'row:errors' })
+    expect(projectionMeta('error').tone).toBe(readinessMeta('errors', 'row').tone)
+    expect(projectionMeta('ended')).toMatchObject({ dot: 'hollow', muted: true, from: 'row:unlisted' })
+    expect(projectionMeta('ended').tone).toBe(readinessMeta('unlisted', 'row').tone)
+  })
+
+  it('gives each of the four Matrix words its own remedy sentence', () => {
+    /* Same test `collides` earns: two states that share a tone must not share a hint, or the word
+       tells the operator a severity and nothing about where to go. `Closed` and `Ended` share
+       `row:unlisted` and must still point at two different controls. */
+    const hints = ['suppressed', 'closed', 'error', 'ended'].map((s) => projectionMeta(s).hint)
+    expect(new Set(hints).size).toBe(4)
+    expect(projectionMeta('closed').hint).toContain('Sync Control')
+    expect(projectionMeta('ended').hint.toLowerCase()).toContain('relist')
+    expect(projectionMeta('suppressed').hint).toContain('Needs attention')
+    expect(projectionMeta('error').hint).toContain('Needs attention')
+    expect(projectionMeta('suppressed').hint).not.toBe(projectionMeta('error').hint)
+  })
+
+  it('gives `collides` its own remedy sentence, not `needs a value`\u2019s', () => {
+    // The two share a tone on purpose and must NOT share the hint: one is fixed in the cell, the
+    // other in the mapping dock, and the hint is the only thing that says which.
+    expect(projectionMeta('collides').hint).not.toBe(projectionMeta('needs-value').hint)
+    expect(projectionMeta('collides').hint).toContain('mapping dock')
+    expect(projectionMeta('collides').label).not.toBe(projectionMeta('needs-value').label)
+    // Excluding a variant IS one of the three resolvers, so the checkbox may not be held here.
+    expect(projectionMeta('collides').interactive).toBe(true)
   })
 
   it('holds the include checkbox on "Not set up" only, and gives it a reason', () => {

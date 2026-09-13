@@ -1,0 +1,5 @@
+✓ apps/api: 8 file(s) given + 0 ambient + transitive imports — clean in 6.7s
+
+  scope: the files given and everything they IMPORT — not their consumers.
+  An exported-signature change can be green here and break a caller; for that, run the
+  workspace's own `npm run typecheck`.

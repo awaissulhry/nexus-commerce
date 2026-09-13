@@ -10,6 +10,7 @@
 import { useCallback } from 'react'
 
 import { useStudioProduct, useStudioRecord, useStudioScope } from '../contracts'
+import { ReadinessPanel } from './ReadinessPanel'
 import { ErrorsSyncConsole } from './ErrorsSyncConsole'
 
 export function ErrorsSyncTab() {
@@ -44,20 +45,14 @@ export function ErrorsSyncTab() {
     [setTab, record],
   )
 
-  // Guarded by `visibleTabs()` — master has no sync queue and is not offered this tab at all — but
-  // a tab that can be reached by URL should say why it is empty rather than render half a pane.
-  if (!coordinate) {
-    return (
-      <div style={{ padding: '24px' }}>
-        Master holds the truth, not a sync queue. Pick a channel scope to see what it refused.
-      </div>
-    )
-  }
+  if (!coordinate) return <ReadinessPanel />
 
   const label =
     options.channels.find((c) => c.id === scope)?.label ?? `${coordinate.channel} · ${coordinate.marketplace}`
 
   return (
+    <>
+    <ReadinessPanel />
     <ErrorsSyncConsole
       productId={product.id}
       channel={coordinate.channel}
@@ -67,5 +62,6 @@ export function ErrorsSyncTab() {
       scopeLabel={label}
       onJumpToRow={jump}
     />
+    </>
   )
 }

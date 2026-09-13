@@ -1,3 +1,5 @@
+import { normalizeLanguage } from './pim/content-language.js'
+import { languageTag } from './pim/market-languages.js'
 /**
  * MC.9.4 — Brand Story submission to Amazon SP-API.
  *
@@ -52,9 +54,7 @@ const MODULE_TYPE_MAP: Record<string, { amazonType: string; payloadKey: string }
   },
 }
 
-function amazonLocale(locale: string): string {
-  return locale.replace('-', '_')
-}
+
 
 export interface SubmissionResponse {
   ok: boolean
@@ -81,7 +81,7 @@ export async function submitBrandStoryDocument(
   const contentRecord = {
     brandName: doc.brand,
     name: doc.name,
-    locale: amazonLocale(doc.locale),
+    locale: languageTag(normalizeLanguage(doc.locale), doc.marketplace),
     modules: doc.modules.map((m) => {
       const mapping = MODULE_TYPE_MAP[m.type]
       if (!mapping) return { type: 'UNKNOWN', payload: m.payload }

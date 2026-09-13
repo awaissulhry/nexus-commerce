@@ -1,3 +1,4 @@
+import { cachedSchemasOnly } from './cached-schema-context.js'
 /**
  * PES.5 — a process-local cache for studio column builds.
  *
@@ -47,9 +48,9 @@ export interface StudioColumnsInput {
  * for five minutes.
  */
 export function getStudioColumns(input: StudioColumnsInput): Promise<SheetColumnSet> {
-  if (input.accountId) return getSheetColumns(input)
   const key = [
-    workspaceIdForQuery(),
+    workspaceIdForQuery(), cachedSchemasOnly() ? 'cached-only' : 'interactive',
+    input.accountId ?? '',
     input.market,
     input.locale ?? '',
     input.productTypes.slice().sort().join(','),

@@ -29,7 +29,6 @@ import { logger } from '../../utils/logger.js'
 import {
   AMAZON_SLOTS,
   MARKETPLACE_IDS,
-  MARKETPLACE_LOCALE,
   SLOT_TO_ATTRIBUTE,
   submitAmazonListingsBatch,
   pollAmazonFeedStatus,

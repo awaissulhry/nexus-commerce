@@ -1527,13 +1527,13 @@ export async function buildKeywordRankBidContexts() {
      */
     const perAsin = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
     for (const r of ranks) {
-      const k = `${r.keyword.trim().toLowerCase()} ${r.marketplace} ${r.asin ?? ''}`
+      const k = `${r.keyword.trim().toLowerCase()}\u001f${r.marketplace}\u001f${r.asin ?? ''}`
       const e = perAsin.get(k)
       if (!e) perAsin.set(k, { r }); else if (!e.prior) e.prior = r
     }
     const latest = new Map<string, { r: typeof ranks[number]; prior?: typeof ranks[number] }>()
     for (const [k, e] of perAsin) {
-      const pairKey = k.slice(0, k.lastIndexOf(' '))
+      const pairKey = k.slice(0, k.lastIndexOf('\u001f'))
       const held = latest.get(pairKey)
       if (!held || e.r.capturedAt > held.r.capturedAt) latest.set(pairKey, e)
     }
@@ -1563,7 +1563,7 @@ export async function buildKeywordRankBidContexts() {
       .map((t) => {
         const kw = (t.expressionValue ?? '').trim().toLowerCase()
         const mkt = t.adGroup?.campaign?.marketplace ?? ''
-        const e = kw ? latest.get(`${kw} ${mkt}`) : undefined
+        const e = kw ? latest.get(`${kw}\u001f${mkt}`) : undefined
         if (!e) return null // no rank snapshot for this keyword → skip
         const cur = e.r, prior = e.prior
         // +ve delta = rank improved (the number went down). ABSENT — not 0 — when either end is missing.

@@ -1,3 +1,4 @@
+import { normalizeLanguage } from './content-language.js'
 import ExcelJS from 'exceljs'
 import { parse } from 'csv-parse/sync'
 import { TRANSFER_CHANNELS, TRANSFER_COLUMNS, transferFileRow, type TransferRow, type TransferIssue, type TransferEntity } from '@nexus/shared/catalog-transfer'
@@ -28,10 +29,9 @@ export function parseTransferRecords(records: Record<string, string>[], entity?:
     if (unsafeKey(field) || unsafeKey(get('locale'))) { error('Invalid field or locale'); continue }
     if (!['SET', 'CLEAR', 'INHERIT'].includes(action)) { error('Choose SET, CLEAR or INHERIT; blank action does not change data'); continue }
     if (action !== 'SET' && get('value')) { error(`${action} must have an empty value cell`); continue }
-    const channel = get('channel').toUpperCase(), accountId = get('accountId'), marketplace = get('marketplace').toUpperCase(), aliasKey = get('aliasKey'), locale = get('locale').toLowerCase()
+    const channel = get('channel').toUpperCase(), accountId = get('accountId'), marketplace = get('marketplace').toUpperCase(), aliasKey = get('aliasKey'), locale = get('locale') ? normalizeLanguage(get('locale')) : ''
     if (kind === 'Products' && (channel || accountId || marketplace || aliasKey)) { error('Shared product rows cannot carry a channel, account, marketplace or alias'); continue }
     if (kind !== 'Products' && (!TRANSFER_CHANNELS.includes(channel) || !accountId || !marketplace)) { error('Channel rows need AMAZON, EBAY, SHOPIFY or ETSY, an accountId and a marketplace'); continue }
-    if (kind !== 'Products' && locale) { error('A listing has one marketplace language; leave locale empty on channel rows'); continue }
     if (locale && !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(locale)) { error('Use a language code such as it, en or en-gb'); continue }
     let version: number | undefined
     if (get('version')) {
@@ -66,7 +66,7 @@ function recordsOf(grid: string[][]): Record<string, string>[] {
   })
 }
 
-export async function readTransferFile(buffer: Buffer, filename: string) {
+export async function readTransferFile(buffer: Buffer, filename: string, options: { blankPolicy?: 'ignore' | 'clear' } = {}) {
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty CSV or XLSX file up to 10 MB')
   if (/\.csv$/i.test(filename)) {
     const grid = parse(buffer, { bom: true, skip_empty_lines: true, max_record_size: 256_000 }) as string[][]
@@ -78,7 +78,7 @@ export async function readTransferFile(buffer: Buffer, filename: string) {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(buffer as never)
   const { readCatalogWorkbook } = await import('./catalog-workbook.js')
-  const wide = readCatalogWorkbook(workbook)
+  const wide = readCatalogWorkbook(workbook, undefined, options)
   if (wide) return wide
   const rows: TransferRow[] = [], issues: TransferIssue[] = []
   for (const sheet of workbook.worksheets) {

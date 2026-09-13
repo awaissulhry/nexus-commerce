@@ -23,6 +23,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+const channelFetch = vi.hoisted(() => {
+  const fetch = vi.fn(() => { throw new Error('Unexpected outbound channel call') })
+  vi.stubGlobal('fetch', fetch)
+  return fetch
+})
+
 const productFindFirst = vi.fn()
 const productFindMany = vi.fn()
 const channelListingFindMany = vi.fn()
@@ -30,6 +36,7 @@ const aliasFindMany = vi.fn()
 const fieldLinkGroupFindMany = vi.fn()
 const cellFormulaFindMany = vi.fn()
 const getStudioColumns = vi.fn()
+const marketplaceFindMany = vi.fn()
 
 vi.mock('../../db.js', () => ({
   default: {
@@ -41,6 +48,9 @@ vi.mock('../../db.js', () => ({
     productListingAlias: { findMany: (...a: unknown[]) => aliasFindMany(...a) },
     fieldLinkGroup: { findMany: (...a: unknown[]) => fieldLinkGroupFindMany(...a) },
     cellFormula: { findMany: (...a: unknown[]) => cellFormulaFindMany(...a) },
+    // LX.F R-LX-13 — LX-era reads this mock predates: the sheet resolves the
+    // cross-channel reach from `Marketplace.languages` (`studio-sheet.service.ts:1058`).
+    marketplace: { findUnique: async () => ({ schemaMapping: null }), findMany: (...a: unknown[]) => marketplaceFindMany(...a) },
   },
 }))
 vi.mock('./studio-columns.js', () => ({
@@ -68,7 +78,8 @@ const col = (key: string, scope: 'global' | 'per_variant') => ({
 })
 
 beforeEach(() => {
-  for (const m of [productFindFirst, productFindMany, channelListingFindMany, aliasFindMany, fieldLinkGroupFindMany, cellFormulaFindMany, getStudioColumns]) m.mockReset()
+  channelFetch.mockClear()
+  for (const m of [productFindFirst, productFindMany, channelListingFindMany, aliasFindMany, fieldLinkGroupFindMany, cellFormulaFindMany, getStudioColumns, marketplaceFindMany]) m.mockReset()
   productFindFirst.mockResolvedValue({ id: PARENT, parentId: null })
   productFindMany.mockResolvedValue([
     { id: PARENT, sku: 'FAM', isParent: true, parentId: null, productType: 'OUTERWEAR',
@@ -78,19 +89,48 @@ beforeEach(() => {
     { id: 'v1', sku: 'FAM-1', isParent: false, parentId: PARENT, productType: 'OUTERWEAR',
       variationAxes: [], variantAttributes: { Color: 'Nero', Size: '3XL' }, categoryAttributes: {} },
   ])
+  marketplaceFindMany.mockResolvedValue([{ channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' }])
   channelListingFindMany.mockResolvedValue([])
   aliasFindMany.mockResolvedValue([])
   fieldLinkGroupFindMany.mockResolvedValue([])
   cellFormulaFindMany.mockResolvedValue([])
+  // LX.F R-LX-13 — `coordinates` is a REQUIRED field of the real column set
+  // (`sheet-columns.service.ts:216`), and LX's `readinessCoord` reads it
+  // (`studio-sheet.service.ts:1148`). A mock that omits it crashed the sheet.
   getStudioColumns.mockResolvedValue({
     columns: [col('sku', 'per_variant'), col('color', 'per_variant'), col('size', 'per_variant'), col('brand', 'global')],
+    coordinates: [],
   })
 })
 
 describe('shared product relationships', () => {
+  it.each([['AMAZON', true], ['EBAY', false], ['WOOCOMMERCE', false], ['SHOPIFY', false]] as const)(
+    'reports whether %s honours the stored offer control', async (channel, honoured) => {
+      marketplaceFindMany.mockResolvedValue([{ channel, code: 'IT', languages: ['it'], language: 'it' }])
+      getStudioColumns.mockResolvedValue({ columns: [col('brand', 'global')], coordinates: [
+        { channel, marketplace: 'IT', label: `${channel} · IT`, inMarket: true, languages: ['it'] },
+      ] })
+      channelListingFindMany.mockResolvedValue([{
+        id: 'listed-parent', productId: PARENT, channel, marketplace: 'IT', channelConnectionId: 'account',
+        aliasKey: '', aliasId: null, offerActive: true, listingStatus: 'ACTIVE', isPublished: true, version: 5,
+        offerClosedAt: new Date('2026-09-13T12:00:00.000Z'), offerClosedBy: 'session-user', offerCloseReason: 'Fixture', syncPaused: channel === 'AMAZON',
+      }])
+      const sheet = await getStudioSheet({ productId: PARENT, scope: 'channel', channel, market: 'IT', locale: 'it' })
+      expect(sheet.rows.find(row => row.isParent && row.aliasId === null)?.listing)
+        .toMatchObject({ id: 'listed-parent', offerActive: true, offerActiveHonoured: honoured })
+      expect(sheet.rows.find(row => row.isParent && row.aliasId === null)?.listing).toMatchObject({
+        offerClosedAt: '2026-09-13T12:00:00.000Z', offerClosedBy: 'session-user', offerCloseReason: 'Fixture', syncPaused: channel === 'AMAZON',
+      })
+      expect(channelListingFindMany.mock.calls.some(([query]) => ['offerClosedAt', 'offerClosedBy', 'offerCloseReason', 'syncPaused'].every(field => query.select?.[field] === true))).toBe(true)
+      expect(sheet.rows.find(row => !row.isParent && row.aliasId === null)?.listing).toBeNull()
+      expect(sheet.rows.find(row => row.isParent && row.aliasId === null)?.listing?.channelFactDetail).toBeUndefined()
+      expect(channelFetch).not.toHaveBeenCalled()
+    },
+  )
+
   it('projects the same parent and child relationship under every listing alias', async () => {
     aliasFindMany.mockResolvedValue([{ id: 'outlet', label: 'Outlet', position: 1, status: 'ACTIVE' }])
-    getStudioColumns.mockResolvedValue({ columns: [col('brand', 'global')], coordinates: [{ channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true }] })
+    getStudioColumns.mockResolvedValue({ columns: [col('brand', 'global')], coordinates: [{ channel: 'AMAZON', marketplace: 'IT', label: 'Amazon · IT', inMarket: true, languages: ['it'] }] })
     const sheet = await getStudioSheet({ productId: PARENT, scope: 'channel', channel: 'AMAZON', market: 'IT', locale: 'it' })
     expect(sheet.rows).toHaveLength(4)
     for (const aliasId of [null, 'outlet']) {
@@ -139,6 +179,7 @@ describe('#756 — formulaWritable', () => {
   it('a master-routed column is writable exactly when the writer\'s gate says so', async () => {
     getStudioColumns.mockResolvedValue({
       columns: [col('brand', 'global'), col('weave_type', 'global'), col('manufacturer', 'global'), col('waterproofRating', 'global'), col('basePrice', 'global'), col('costPrice', 'global')],
+      coordinates: [],
     })
     const sheet = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
     for (const c of sheet.columns) {
@@ -152,7 +193,7 @@ describe('#756 — formulaWritable', () => {
   })
 
   it('offers formulas on writable text and price fields', async () => {
-    getStudioColumns.mockResolvedValue({ columns: [col('brand', 'global'), col('basePrice', 'global')] })
+    getStudioColumns.mockResolvedValue({ columns: [col('brand', 'global'), col('basePrice', 'global')], coordinates: [] })
     const sheet = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
     const by = Object.fromEntries(sheet.columns.map((c) => [c.key, (c as { formulaWritable?: boolean }).formulaWritable]))
     expect(writerAcceptsField('brand')).toBe(true)
@@ -173,7 +214,7 @@ describe('#756 — formulaWritable', () => {
     // (not in the master allow-list, not attr_*, not a mapped channel field),
     // so READABLE and FORMULA-WRITABLE remain different questions even after
     // the widening. `sku` is now writable, because an operator can type it.
-    getStudioColumns.mockResolvedValue({ columns: [col('weave_type', 'global')] })
+    getStudioColumns.mockResolvedValue({ columns: [col('weave_type', 'global')], coordinates: [] })
     const sheet = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
     expect((sheet.columns.find(col => col.key === 'weave_type') as { formulaWritable?: boolean }).formulaWritable).toBe(false)
     expect(writerAcceptsField('weave_type')).toBe(false)
@@ -229,7 +270,7 @@ describe('P11 — axis marker', () => {
   it('a GLOBAL column is never an axis, even if its key matches one', async () => {
     // The scope half of the derivation, which no other case exercises: without
     // it, a global column named `color` would be marked.
-    getStudioColumns.mockResolvedValue({ columns: [col('color', 'global')] })
+    getStudioColumns.mockResolvedValue({ columns: [col('color', 'global')], coordinates: [] })
     const sheet = await getStudioSheet({ productId: PARENT, scope: 'master', market: 'IT', locale: 'it' } as never)
     expect((sheet.columns.find(col => col.key === 'color') as { axis?: boolean }).axis).toBe(false)
   })

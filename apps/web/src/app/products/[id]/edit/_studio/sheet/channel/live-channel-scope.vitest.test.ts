@@ -59,7 +59,7 @@ beforeAll(async () => {
    * (see the skip note below); a transient `tsx watch` restart made it skip silently and look
    * identical to success.
    */
-  const look = await fetch(`${API}/api/products/search?q=${encodeURIComponent(SKU)}&limit=5`, {
+  const look = await fetch(`${API}/api/products/search?q=${encodeURIComponent(SKU)}&limit=200&sort=sku`, {
     signal: AbortSignal.timeout(20000),
   })
   if (!look.ok) throw new Error(`product lookup failed: HTTP ${look.status}`)
@@ -92,12 +92,12 @@ beforeAll(async () => {
  * result is a green "8 skipped" that is structurally incapable of testing anything, which looks
  * exactly like an honest "no API here" (reference_test_scoping_and_hidden_assertions).
  */
-function live(name: string, fn: () => void | Promise<void>) {
+function live(name: string, fn: (ctx: import('vitest').TestContext) => void | Promise<void>) {
   it(name, (ctx) => {
     // Only a genuinely absent API skips. If the API answered but the read failed, `beforeAll`
     // already threw and this never runs — a broken read must never report as a tidy skip.
-    if (!apiReachable) return ctx.skip()
-    return fn()
+    if (!apiReachable) return ctx.skip(`No local API is reachable at ${API}`)
+    return fn(ctx)
   })
 }
 
@@ -111,7 +111,8 @@ describe('live channel scope (skips without a local API)', () => {
   live('sends every cell field this lane consumes', () => {
     // A missing `writeField`/`writeTarget` would make an edit land somewhere unintended, and a
     // missing `layer` would silently drop the whole cascade onto the legacy `source` fallback.
-    const cell = Object.values(rows.find((r) => r.rowKind === 'variant')?.values ?? {})[0]
+    const column = page!.columns.find(c => c.kind !== 'variationTheme')!
+    const cell = rows.find((r) => r.rowKind === 'variant')?.values[column.key]
     expect(cell).toBeDefined()
     for (const k of ['value', 'source', 'inherited', 'layer', 'pinned', 'editable', 'writeField', 'writeTarget']) {
       expect(cell).toHaveProperty(k)
@@ -173,7 +174,7 @@ describe('live channel scope (skips without a local API)', () => {
         const state = classifyProvenance(c, 'channel')
         expect(['own', 'inherited', 'inheritedOverride', 'pinned', 'ai', 'aiStale', 'mapped', 'mappedShared'])
           .toContain(state)
-        const derived = c.mapped?.status === 'mapped' && c.mapped.provenance !== 'override'
+        const derived = c.mapped?.status === 'mapped' && (c.mapped.derived ?? c.mapped.provenance !== 'override')
         expect(state === 'mapped' || state === 'mappedShared').toBe(derived)
         /**
          * 🔴 The `mappedShared` half is NOT asserted here, deliberately — it cannot currently be
@@ -202,8 +203,8 @@ describe('live channel scope (skips without a local API)', () => {
 })
 
 describe('live view chips — the honest-count rule on real data', () => {
-  live('every Amazon sheet field is available in the same category’s mapping catalogue', async () => {
-    if (CHANNEL !== 'AMAZON') return
+  live('every Amazon sheet field is available in the same category’s mapping catalogue', async (ctx) => {
+    if (CHANNEL !== 'AMAZON') return ctx.skip(`Amazon catalogue parity does not apply to ${CHANNEL}`)
     const productType = rows.find((r) => r.productType)?.productType
     expect(productType).toBeTruthy()
     const res = await fetch(`${API}/api/pim/channel-mapping/AMAZON/IT/fields?productType=${encodeURIComponent(productType!)}`)
@@ -229,8 +230,8 @@ describe('live view chips — the honest-count rule on real data', () => {
     const colIds = new Set(page!.columns.map((c) => c.key))
     const serverWarnings = rows.reduce((n, r) => n + new Set(r.readiness.issues.filter((i) => i.severity === 'warn' && colIds.has(i.key)).map((i) => i.key)).size, 0)
     const serverMissing = rows.reduce((n, r) => n + new Set(r.completeness.required.missing.filter((m) => colIds.has(m.key)).map((m) => m.key)).size, 0)
-    expect(warn.count).toBe(serverWarnings)
-    expect(req.count).toBe(serverMissing)
+    expect(warn.count).toEqual({ n: serverWarnings, unit: 'cells' })
+    expect(req.count).toEqual({ n: serverMissing, unit: 'cells' })
   })
 
   live('every counted cell points at a real row AND a real column', () => {

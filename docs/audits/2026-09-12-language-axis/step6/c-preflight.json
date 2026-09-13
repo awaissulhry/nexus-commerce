@@ -1,0 +1,20 @@
+{
+  "master": {
+    "at": "2026-09-12T23:18:51.679552+00:00",
+    "rows": 21,
+    "columns": 363,
+    "localizableColumns": 192,
+    "schemaMissing": [],
+    "tookMs": 190
+  },
+  "be": {
+    "at": "2026-09-12T23:18:51.679552+00:00",
+    "rows": 21,
+    "columns": 4,
+    "localizableColumns": 0,
+    "schemaMissing": [
+      "OUTERWEAR"
+    ],
+    "tookMs": 135
+  }
+}

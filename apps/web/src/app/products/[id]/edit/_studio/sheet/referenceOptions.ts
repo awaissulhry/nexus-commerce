@@ -18,7 +18,24 @@ export function descriptionThemeChoices(body: unknown): ReferenceChoices {
   return { labels: { ...labels, none: 'No theme' }, options: [defaults, { value: 'none', label: 'No theme' }, ...themes.filter(theme => theme.active).map(theme => ({ value: theme.id, label: theme.name, title: `${theme.name}\nID: ${theme.id}`, searchText: `${theme.name} ${theme.id}` }))] }
 }
 
-export async function loadReferenceChoices(field: ReferenceField, scope: ReferenceScope = {}, refresh = false): Promise<ReferenceChoices> {
+/**
+ * How this read may be answered.
+ *
+ * 🔴 `live` is REQUIRED, not defaulted (LX.6 / R-LX-4, `reference_explicit_flag_beats_inference`).
+ * Every caller states whether an operator asked for this list — a page load never has, and
+ * `?live=1` is the only thing that lets the server talk to Amazon. Deriving it from `refresh` one
+ * line away is exactly the shape that let a display lookup buy a live `auth/o2/token` round trip on
+ * every cold Studio load; a new caller that forgets it is a COMPILE error rather than a leak.
+ */
+export interface ReferenceReadIntent {
+  /** An operator gesture asked for this list (the cell editor opening, a write-recovery read). */
+  live: boolean
+  /** Ignore a warm client-side entry — orthogonal to `live`. */
+  refresh?: boolean
+}
+
+export async function loadReferenceChoices(field: ReferenceField, scope: ReferenceScope, intent: ReferenceReadIntent): Promise<ReferenceChoices> {
+  const { live, refresh = false } = intent
   const theme = field === 'descriptionThemeId'
   const etsy = REFERENCE_FIELDS[field].channel === 'ETSY'
   if (etsy && !scope.connectionId) throw new Error('Choose an Etsy account before selecting a resource.')
@@ -26,7 +43,7 @@ export async function loadReferenceChoices(field: ReferenceField, scope: Referen
   const key = theme ? 'themes' : JSON.stringify([etsy ? field : 'shippingTemplate', scope.market, scope.productType, scope.connectionId ?? 'primary'])
   const hit = cache.get(key)
   if (hit && (hit.pending || (!refresh && hit.expires > Date.now()))) return hit.value
-  const path = etsy ? `etsy/information/references?${new URLSearchParams({ accountId: scope.connectionId!, field })}` : theme ? 'ebay/description-themes?view=options' : `categories/reference-labels?${new URLSearchParams({ marketplace: scope.market!, productType: scope.productType!, shipping: '1', ...(scope.connectionId ? { accountId: scope.connectionId } : {}) })}`
+  const path = etsy ? `etsy/information/references?${new URLSearchParams({ accountId: scope.connectionId!, field })}` : theme ? 'ebay/description-themes?view=options' : `categories/reference-labels?${new URLSearchParams({ marketplace: scope.market!, productType: scope.productType!, shipping: '1', ...(live ? { live: '1' } : {}), ...(scope.connectionId ? { accountId: scope.connectionId } : {}) })}`
   const pending = (async () => {
     let response: Response
     try { response = await fetch(`${getBackendUrl()}/api/${path}`, { credentials: 'include', signal: AbortSignal.timeout(20_000) }) }

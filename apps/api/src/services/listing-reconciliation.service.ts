@@ -27,7 +27,7 @@ import {
 import { ebayAuthService } from './ebay-auth.service.js'
 import { logger } from '../utils/logger.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
-import { primaryConnectionIds } from './connection-resolver.service.js'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 
 export type ReconChannel = 'AMAZON' | 'EBAY'
 export type ReconStatus = 'PENDING' | 'CONFIRMED' | 'CONFLICT' | 'CREATE_NEW' | 'IGNORE'
@@ -462,7 +462,8 @@ export async function runAmazonReconciliation(
  * Confirm a reconciliation row: write externalListingId + ASIN to the
  * matching ChannelListing (upsert if not found), then mark row CONFIRMED.
  */
-export async function confirmReconRow(id: string, reviewedBy: string): Promise<void> {
+export async function confirmReconRow(id: string, reviewedBy: string, coordinate: ListingCoordinate): Promise<void> {
+  const where = whereCoordinate(coordinate)
   const row = await prisma.listingReconciliation.findUniqueOrThrow({ where: { id } })
 
   if (!row.matchedProductId) {
@@ -470,6 +471,10 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
   }
   if (!row.externalListingId) {
     throw new Error('Row has no externalListingId — channel data may be incomplete')
+  }
+
+  if (coordinate.productId !== row.matchedProductId || coordinate.channel !== row.channel || coordinate.marketplace !== row.marketplace) {
+    throw new Error('RECON_COORDINATE_MISMATCH')
   }
 
   // ── Determine whether this is a variation child or standalone ──────────
@@ -491,50 +496,26 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
     ? row.parentAsin!          // parent ASIN → ChannelListing
     : row.externalListingId    // standalone ASIN → ChannelListing
 
-  // MAP.2b — resolved BEFORE the transaction opens. A resolve inside would add a
-  // query to the transaction's lifetime for an answer that does not depend on it.
-  const reconConn = (await primaryConnectionIds([row.channel])).get(row.channel) ?? null
+  const reconConn = coordinate.channelConnectionId
+  // The legacy variation model cannot express aliases or nullable unique inputs.
+  if (isVariationChild && (coordinate.aliasKey !== '' || reconConn === null)) throw new Error('RECON_VARIATION_COORDINATE_UNSUPPORTED')
 
   await prisma.$transaction(async (tx) => {
-    // ── 1. Upsert ChannelListing (parent-level) ──────────────────────────
-    // Use the named unique index (productId, channel, marketplace) so that
-    // multiple variation children confirming the same parent product don't
-    // race to create duplicate ChannelListing rows.
-    await tx.channelListing.upsert({
-      where: {
-        productId_channel_marketplace: workspaceKey({
-          productId: row.matchedProductId!,
-          channel: row.channel,
-          marketplace: row.marketplace,
-          channelConnectionId: reconConn,
-          // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
-          aliasKey: '',
-        }),
-      },
-      create: {
-        productId: row.matchedProductId!,
-        channel: row.channel,
-        marketplace: row.marketplace,
-        channelMarket: `${row.channel}_${row.marketplace}`,
-        region: row.marketplace,
-        externalListingId: listingAsin,
-        externalParentId: row.parentAsin ?? null,
-        listingStatus: 'ACTIVE',
-        title: row.title ?? undefined,
-        // Price/qty on the parent listing: for variations, this is the range;
-        // we use the confirming row's values as an initial snapshot.
-        price: row.channelPrice ?? undefined,
-        masterQuantity: row.channelQuantity ?? undefined,
-      },
-      update: {
-        // Keep the parent ASIN if already set; don't downgrade to a child ASIN
-        // if another variation was confirmed first.
-        ...(row.parentAsin
-          ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin }
-          : {}),
-        listingStatus: 'ACTIVE',
-      },
+    const existing = await tx.channelListing.findFirst({ where })
+    // PR.1 recreate guard lands with the identity schema. Until then never
+    // turn a deliberately ended coordinate ACTIVE through reconciliation.
+    if (existing?.listingStatus === 'ENDED' || ['ENDED', 'DISCONTINUED', 'RELEASED'].includes((existing as any)?.presenceIntent)) {
+      throw new Error('RECON_RECREATE_REQUIRED: ended coordinates require an explicit recreate action')
+    }
+    if (existing) await tx.channelListing.update({
+      where: { id: existing.id, ...where, listingStatus: existing.listingStatus, ...('presenceIntent' in existing ? { presenceIntent: existing.presenceIntent } : {}) },
+      data: { ...(row.parentAsin ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin } : {}), listingStatus: 'ACTIVE' },
     })
+    else await tx.channelListing.create({ data: {
+      ...where, channelMarket: `${row.channel}_${row.marketplace}`, region: row.marketplace,
+      externalListingId: listingAsin, externalParentId: row.parentAsin ?? null, listingStatus: 'ACTIVE',
+      title: row.title ?? undefined, price: row.channelPrice ?? undefined, masterQuantity: row.channelQuantity ?? undefined,
+    } })
 
     // ── 2. Upsert VariantChannelListing (per-variation) ─────────────────
     // Only when this is a variation child with a known variation ID.
@@ -554,6 +535,7 @@ export async function confirmReconRow(id: string, reviewedBy: string): Promise<v
           variantId: row.matchedVariationId!,
           channel: row.channel,
           marketplace: row.marketplace,
+          channelConnectionId: reconConn,
           channelSku: row.externalSku,
           channelProductId: row.externalListingId,  // child ASIN
           channelPrice: row.channelPrice ?? 0,
@@ -906,6 +888,7 @@ export interface BulkActionResult {
 export async function bulkConfirmReconRows(
   ids: string[],
   reviewedBy: string,
+  coordinates: Record<string, ListingCoordinate>,
 ): Promise<BulkActionResult> {
   let succeeded = 0
   let failed = 0
@@ -918,7 +901,7 @@ export async function bulkConfirmReconRows(
     await Promise.all(
       batch.map(async id => {
         try {
-          await confirmReconRow(id, reviewedBy)
+          await confirmReconRow(id, reviewedBy, coordinates?.[id])
           succeeded++
         } catch (err) {
           failed++

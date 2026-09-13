@@ -117,7 +117,8 @@ export function channelWriteGate(input: ChannelWriteGateInput): ChannelWriteGate
    * stated meaning, so a server that starts sending it still blocks.
    */
   if (!input.cell || input.cell.writable === false || input.cell.writeBlockedReason) return 'blocked'
-  if (input.cell.affectsAllChannels && !input.acknowledged) return 'acknowledge'
+  if (input.cell.contentAcknowledgement && input.cell.contentAddress === null) return 'acknowledge'
+  if (input.cell.affectsAllChannels && !input.cell.contentAcknowledgement && !input.acknowledged) return 'acknowledge'
   return 'write'
 }
 
@@ -391,4 +392,13 @@ export function crossChannelColumnCount(
 ): number {
   if (!row?.values) return 0
   return Object.values(row.values).filter((c) => c?.affectsAllChannels && c.editable !== false && c.writable !== false).length
+}
+
+/** An unscorable alias makes every row pill unscorable, even if structural fields are filled. */
+export function rowReadinessPill(row: StudioRow, alias: AliasGroup | undefined) {
+  const pct = alias?.readiness.percent == null ? null : row.completeness?.overall?.pct ?? null
+  const reason = row.readiness.issues.find(issue => issue.label === 'Channel requirements')?.message
+  return { pct, state: row.readiness.state, tip: pct === null
+    ? `${row.sku} — ${reason ?? 'Readiness cannot be scored until this coordinate’s requirements are available.'}`
+    : `${row.sku} — ${row.completeness.overall.filled} of ${row.completeness.overall.total} channel fields filled (including optional fields) · ${row.readiness.state}` }
 }

@@ -31,6 +31,23 @@ describe('runAction — a verb with no preflight', () => {
 })
 
 describe('runAction — the preflight gates everything', () => {
+  it.each(['none', 'confirm'] as const)('keeps the operator refusal ahead of diagnostics at level %s', async level => {
+    const run = vi.fn(async () => ({ ok: true })), ask = vi.fn(yes)
+    const out = await runAction(verb({ reach: 'channel', preflight: async () => ({ level, title: 'End?', unavailable: 'This verb is read-only here.' }), run }), rows, ask)
+    expect(out).toEqual({ kind: 'refused', problem: 'This verb is read-only here.' })
+    expect(run).not.toHaveBeenCalled(); expect(ask).not.toHaveBeenCalled()
+    const control = await runAction(verb({ run }), rows, ask)
+    expect(control.kind).toBe('ran'); expect(run).toHaveBeenCalledOnce()
+  })
+  it('channel reach cannot bypass the reversal contract or inherit a softer rung', async () => {
+    const run = vi.fn(async () => ({ ok: true })), ask = vi.fn(yes)
+    const preflight = async (): Promise<ActionImpact> => ({ title: 'End?', level: 'none', reversal: { verb: 'Restore', fidelity: 'exact' } })
+    expect((await runAction(verb({ reach: 'channel', run }), rows, ask)).kind).toBe('refused')
+    expect((await runAction(verb({ reach: 'channel', preflight, run }), rows, ask)).kind).toBe('refused')
+    expect(run).not.toHaveBeenCalled(); expect(ask).not.toHaveBeenCalled()
+    expect((await runAction(verb({ reach: 'channel', preflight: async () => ({ ...await preflight(), level: 'confirm' }), run }), rows, ask)).kind).toBe('ran')
+    expect(run).toHaveBeenCalledOnce(); expect(ask).toHaveBeenCalledOnce()
+  })
   it('cancels a parameter picker without confirming, running or reporting an error', async () => {
     const run = vi.fn(async () => ({ ok: true })), ask = vi.fn(yes)
     expect(await runAction(verb({ preflight: async () => ({ level: 'none', title: 'Pick a product', cancelled: true }), run }), rows, ask)).toEqual({ kind: 'cancelled' })

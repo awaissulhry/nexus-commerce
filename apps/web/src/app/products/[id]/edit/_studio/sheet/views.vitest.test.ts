@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ALL_VIEW_ID } from '@/design-system/grid/views/presets'
 
-import { ALWAYS_COLUMNS, alwaysColumnsFor, essentialsColumns, IDENTITY_COLUMN, orderColumnKeys, REQUIRED_VIEW_ID, rowIsMissingRequired, sheetViews, type ViewContext } from './views'
+import { ALWAYS_COLUMNS, alwaysColumnsFor, essentialsColumns, IDENTITY_COLUMN, orderColumnKeys, REQUIRED_VIEW_ID, rowIsMissingRequired, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import type { SheetColumn } from './master/types'
 
 const col = (over: Partial<SheetColumn> & Pick<SheetColumn, 'key'>): SheetColumn => ({
@@ -96,7 +96,7 @@ describe('sheetViews — complete and focused Information views', () => {
   it('offers All attributes, Required, Essentials and Localized content from column rules', () => {
     const r = sheetViews(COLUMNS, ctx)
     expect(r.source).toBe('rules')
-    expect(r.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'essentials', 'localized-content'])
+    expect(r.presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, REQUIRED_VIEW_ID, 'languages', 'essentials', 'localized-content'])
   })
 
   it('Required is every column some channel requires on this product type, filled or not, in the §9.2 order', () => {
@@ -117,7 +117,7 @@ describe('sheetViews — complete and focused Information views', () => {
 
   it('omits an empty Required set while retaining useful content views', () => {
     const none = COLUMNS.map((c) => ({ ...c, requiredBy: [] }))
-    expect(sheetViews(none, ctx).presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, 'essentials', 'localized-content'])
+    expect(sheetViews(none, ctx).presets.map((v) => v.id)).toEqual([ALL_VIEW_ID, 'languages', 'essentials', 'localized-content'])
   })
 
   it('avoids provider group duplication while retaining the Essentials rule', () => {
@@ -153,7 +153,7 @@ describe('sheetViews — the server wins when it speaks', () => {
   it('uses PES.5’s views verbatim, after All attributes, and says they came from the server', () => {
     const r = sheetViews(COLUMNS, ctx, [{ id: 'pricing', label: 'Pricing', columnKeys: ['basePrice'] }])
     expect(r.source).toBe('server')
-    expect(r.presets.slice(1)).toEqual([{ id: 'pricing', label: 'Pricing', columns: ['basePrice'] }])
+    expect(r.presets.slice(2)).toEqual([{ id: 'pricing', label: 'Pricing', columns: ['basePrice'] }])
   })
 
   it('an EMPTY server list is not an answer — the rules still run', () => {
@@ -194,5 +194,71 @@ describe('alwaysColumnsFor — the guarantee resolved against columns that exist
 
   it('preserves the intent order, not the caller order', () => {
     expect(alwaysColumnsFor(['completeness', 'sku', 'product'])).toEqual([...ALWAYS_COLUMNS])
+  })
+})
+
+
+/* ── VT.2 / ruling R-VT-1 — the STRUCTURAL column and the stale saved view ─────────────────── */
+
+/**
+ * The measurement behind this block, so the next reader does not have to take it on trust: on
+ * 2026-09-13 `variation_theme` was served by `/studio/sheet` (27 columns, `defaultVisible: true`,
+ * group `Identity`), built by BOTH sheet builders, and rendered nowhere — a verified sweep of the
+ * grid's own horizontal scroller (0 → 1601 of scrollWidth 3261) found 26 of the 27 served columns.
+ * The account's active view was a saved `Custom (23)` preset saved before the column existed.
+ */
+const VT_COLUMN = col({ key: 'variation_theme', group: 'Identity', storage: 'column', kind: 'variationTheme', shape: 'axes', defaultVisible: true })
+
+describe('R-VT-1 — a saved view may not silently drop a structural column', () => {
+  it('recognises the variation-theme column by KIND, never by key', () => {
+    expect(structuralColumnKeys([...COLUMNS, VT_COLUMN])).toEqual(['variation_theme'])
+    /* Renamed key, same kind: still structural. This is the arm a key-matched rule would fail. */
+    expect(structuralColumnKeys([{ ...VT_COLUMN, key: 'family_axes' }])).toEqual(['family_axes'])
+  })
+
+  it('finds NO structural column in a column set that has none — the negative, with its control', () => {
+    expect(structuralColumnKeys(COLUMNS)).toEqual([])
+    expect(COLUMNS.length).toBeGreaterThan(3)
+  })
+
+  it('injects it into the always-columns, so every saved and custom view carries it', () => {
+    const addressable = [IDENTITY_COLUMN, 'brand', 'variation_theme']
+    const structural = structuralColumnKeys([...COLUMNS, VT_COLUMN])
+    expect(alwaysColumnsFor(addressable, structural)).toEqual(['product', 'variation_theme'])
+    /* Identity stays FIRST and the structural column follows it — D-VT9's "first after identity". */
+    expect(alwaysColumnsFor(addressable, structural)[0]).toBe(IDENTITY_COLUMN)
+  })
+
+  it('never injects a column the grid cannot address', () => {
+    /* A structural column the server stopped sending must not be asked for by name — that is the
+       `sku` / `completeness` defect (#770) this function already exists to prevent. */
+    expect(alwaysColumnsFor([IDENTITY_COLUMN, 'brand'], ['variation_theme'])).toEqual(['product'])
+  })
+
+  it('does not duplicate a column that is ALSO in the saved list', () => {
+    const always = alwaysColumnsFor([IDENTITY_COLUMN, 'variation_theme'], ['variation_theme'])
+    const savedVisible = ['variation_theme', 'brand']
+    /* This is the composition `useSheetColumns` performs when a saved view is applied. */
+    const applied = [...always, ...savedVisible.filter((k) => !always.includes(k))]
+    expect(applied).toEqual(['product', 'variation_theme', 'brand'])
+  })
+
+  it('leaves a NON-structural column absent from a saved view hidden — the scoping control', () => {
+    /* Without this the rule would read as "re-inject everything", which would undo every deliberate
+       hide an operator has ever made. `brand` is absent from the saved list and stays absent. */
+    const always = alwaysColumnsFor([IDENTITY_COLUMN, 'variation_theme', 'brand'], ['variation_theme'])
+    const savedVisible = ['name']
+    const applied = [...always, ...savedVisible.filter((k) => !always.includes(k))]
+    expect(applied).toEqual(['product', 'variation_theme', 'name'])
+    expect(applied).not.toContain('brand')
+  })
+
+  it('keeps ALWAYS_COLUMNS unchanged — the structural set is derived, not appended to a constant', () => {
+    expect([...ALWAYS_COLUMNS]).toEqual(['product', 'sku', 'completeness'])
+  })
+
+  it('puts the column in the Essentials preset too, by kind (D-VT9)', () => {
+    const keys = essentialsColumns([VT_COLUMN, ...COLUMNS], {} as ViewContext)
+    expect(keys[0]).toBe('variation_theme')
   })
 })

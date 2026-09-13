@@ -1,5 +1,10 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../services/listing-push-controls.js'
+import { buildAmazonContentAttributes, type AmazonContentInput } from '../services/pim/amazon-content-payload.js'
+import { resolvePublishContent, publishContentIssues, requireReviewedContent } from '../services/pim/publish-review-gate.js'
 import { configuredAmazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { marketLanguages, languageTag } from '../services/pim/market-languages.js'
+import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { assertInformationLocale } from '../services/pim/information-locale.js'
 import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -9,7 +14,9 @@ import { AmazonService } from '../services/marketplaces/amazon.service.js'
 import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
-import { primaryConnectionIds } from '../services/connection-resolver.service.js'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+import { writeCoordinateOffer } from '../services/market-offer-availability.service.js'
+import { assertRequestPermission } from '../lib/auth/request-permission.js'
 
 const amazonService = new AmazonService()
 
@@ -17,14 +24,19 @@ const amazonService = new AmazonService()
 export async function buildMarketplaceAmazonAttributes(input: {
   marketplace: string; marketplaceId: string; language?: string; attributes: Record<string, unknown>;
   title?: string | null; description?: string | null; bulletPoints?: string[]; price?: unknown;
+  content?: Omit<AmazonContentInput, 'marketplace' | 'marketplaceId'>;
 }): Promise<Record<string, any>> {
-  const languages = await marketLanguages('AMAZON', input.marketplace)
+  const languages = input.content ? [] : await marketLanguages('AMAZON', input.marketplace)
   const language = input.language ?? languages[0]
-  assertInformationLocale('AMAZON', language, languages)
-  const tag = languageTag(language, input.marketplace)
+  if (!input.content) assertInformationLocale('AMAZON', language, languages)
+  const tag = input.content ? undefined : languageTag(language, input.marketplace)
   const spAttrs: Record<string, unknown> = {
     ...input.attributes,
   }
+  if (input.content) {
+    for (const key of ['item_name', 'product_description', 'bullet_point', 'generic_keyword']) delete spAttrs[key]
+    Object.assign(spAttrs, await buildAmazonContentAttributes({ ...input.content, marketplace: input.marketplace, marketplaceId: input.marketplaceId }))
+  } else {
   if (input.title) {
     spAttrs.item_name = [{ value: input.title, marketplace_id: input.marketplaceId, language_tag: tag }]
   }
@@ -37,6 +49,7 @@ export async function buildMarketplaceAmazonAttributes(input: {
       marketplace_id: input.marketplaceId,
       language_tag: tag,
     }))
+  }
   }
   if (input.price != null) {
     spAttrs.purchasable_offer = [{
@@ -242,12 +255,12 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
       })
       const grouped = marketplaces.reduce(
         (acc, mp) => {
-          ;(acc[mp.channel] ??= []).push(mp)
+          ;(acc[mp.channel] ??= []).push({ ...mp, languages: marketLanguages(mp.channel, mp.code, marketplaces) })
           return acc
         },
         {} as Record<string, typeof marketplaces>
       )
-      return grouped
+      return { ...grouped, _meta: { primaryLanguage: PRIMARY_CONTENT_LOCALE } }
     } catch (error: any) {
       return reply.code(500).send({ error: error?.message ?? String(error) })
     }
@@ -256,6 +269,7 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/products/:id/all-listings — every channel/marketplace listing for a product
   fastify.get<{ Params: { id: string } }>(
     '/products/:id/all-listings',
+    { preHandler: request => assertRequestPermission(request, 'products.view') },
     async (request, reply) => {
       try {
         const { id } = request.params
@@ -286,11 +300,11 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // MA.1 — PATCH /api/products/:id/offer-availability
   // Toggle offerActive per (channel, marketplace) for a single product.
-  // Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
+  // Body: { markets: Array<Omit<ListingCoordinate, 'productId'> & { offerActive: boolean }> }
   // Auto-creates ChannelListing rows that don't exist yet (with offerActive set).
   fastify.patch<{
     Params: { id: string }
-    Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
+    Body: { markets: Array<Omit<ListingCoordinate, 'productId'> & { offerActive: boolean }> }
   }>(
     '/products/:id/offer-availability',
     async (request, reply) => {
@@ -300,28 +314,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         if (!Array.isArray(markets) || markets.length === 0) {
           return reply.code(400).send({ error: 'markets array is required' })
         }
-        // MAP.2b — resolved ONCE for the distinct channels in this batch, not per
-        // row: the answer cannot change during the loop, and per-row resolution
-        // would be one round-trip each.
-        const connByChannel = await primaryConnectionIds(markets.map((m) => m.channel))
-        const results = await Promise.all(
-          markets.map(({ channel, marketplace, offerActive }) =>
-            prisma.channelListing.upsert({
-              where: { productId_channel_marketplace: workspaceKey({ productId: id, channel, marketplace, channelConnectionId: connByChannel.get(channel) ?? null, aliasKey: '' }) },
-              update: { offerActive },
-              create: {
-                productId: id,
-                channel,
-                marketplace,
-                region: marketplace,
-                channelMarket: `${channel}_${marketplace}`,
-                listingStatus: 'DRAFT',
-                offerActive,
-              },
-              select: { id: true, channel: true, marketplace: true, offerActive: true },
-            })
-          )
-        )
+        const targets = markets.map(m => ({ ...m, productId: id }))
+        targets.forEach(whereCoordinate)
+        const results = await Promise.all(targets.map(t => writeCoordinateOffer(t, t.offerActive)))
         // Sync inventory immediately for any listing just turned active
         const activatedIds = results.filter((r) => r.offerActive).map((r) => r.id)
         if (activatedIds.length > 0) void syncActivatedListings(activatedIds)
@@ -373,9 +368,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
 
   // MA.1 — POST /api/products/bulk-offer-availability
   // Toggle offerActive across many products × many markets in one shot.
-  // Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
+  // Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
   fastify.post<{
-    Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
+    Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
   }>(
     '/products/bulk-offer-availability',
     async (request, reply) => {
@@ -390,53 +385,15 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         if (typeof offerActive !== 'boolean') {
           return reply.code(400).send({ error: 'offerActive must be a boolean' })
         }
-        let upserted = 0
-        // Fan out: for each product × market, upsert the ChannelListing.
-        // Batched in chunks of 50 to avoid overwhelming the connection pool.
-        const pairs: Array<{ productId: string; channel: string; marketplace: string }> = []
-        for (const productId of productIds) {
-          for (const { channel, marketplace } of markets) {
-            pairs.push({ productId, channel, marketplace })
-          }
+        const pairs: ListingCoordinate[] = productIds.flatMap(productId => markets.map(m => ({ ...m, productId })))
+        pairs.forEach(whereCoordinate)
+        const changedIds: string[] = []
+        for (let i = 0; i < pairs.length; i += 50) {
+          const results = await Promise.all(pairs.slice(i, i + 50).map(c => writeCoordinateOffer(c, offerActive)))
+          changedIds.push(...results.map(r => r.id))
         }
-        // MAP.2b — resolved once for the whole bulk operation.
-        const bulkConnByChannel = await primaryConnectionIds(pairs.map((p) => p.channel))
-        const CHUNK = 50
-        for (let i = 0; i < pairs.length; i += CHUNK) {
-          const chunk = pairs.slice(i, i + CHUNK)
-          await Promise.all(
-            chunk.map(({ productId, channel, marketplace }) =>
-              prisma.channelListing.upsert({
-                where: { productId_channel_marketplace: workspaceKey({ productId, channel, marketplace, channelConnectionId: bulkConnByChannel.get(channel) ?? null, aliasKey: '' }) },
-                update: { offerActive },
-                create: {
-                  productId,
-                  channel,
-                  marketplace,
-                  region: marketplace,
-                  channelMarket: `${channel}_${marketplace}`,
-                  listingStatus: 'DRAFT',
-                  offerActive,
-                },
-                select: { id: true },
-              })
-            )
-          )
-          upserted += chunk.length
-        }
-        // When activating, sync inventory for every listing that just turned active
-        if (offerActive) {
-          const allIds = await prisma.channelListing.findMany({
-            where: {
-              productId: { in: productIds },
-              channel: { in: [...new Set(markets.map((m) => m.channel))] },
-              marketplace: { in: [...new Set(markets.map((m) => m.marketplace))] },
-              offerActive: true,
-            },
-            select: { id: true },
-          })
-          void syncActivatedListings(allIds.map((l) => l.id))
-        }
+        const upserted = changedIds.length
+        if (offerActive && changedIds.length) void syncActivatedListings(changedIds)
         return { ok: true, upserted, offerActive }
       } catch (error: any) {
         return reply.code(500).send({ error: error?.message ?? String(error) })
@@ -1004,10 +961,16 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
 
       try {
         const [product, listing] = await Promise.all([
-          prisma.product.findUnique({ where: { id } }),
-          prisma.channelListing.findFirst({ where: { productId: id, channel, marketplace } }),
+          prisma.product.findUnique({ where: { id }, include: { translations: true, parent: { include: { translations: true } } } }),
+          prisma.channelListing.findFirst({ where: { productId: id, channel, marketplace }, include: { translations: true } }),
         ])
         if (!product) return reply.code(404).send({ error: `Product ${id} not found` })
+
+        const pushControls = await readPushControls({ channel, productIds: [id], allowAbsent: true })
+        for (const current of pushControls) {
+          const refusal = assertPushAllowed(current)
+          if (refusal) return reply.code(409).send({ ok: false, status: 'REFUSED', message: refusal.sentence, refusal })
+        }
 
         // Resolve values: listing override first, fall back to master product
         const resolvedTitle = listing?.title ?? product.name
@@ -1015,7 +978,8 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
         const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
 
-        const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = []
+        const content = await resolvePublishContent({ product: product as any, parent: product.parent as any, listing, marketplace, channel })
+        const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = publishContentIssues(content)
         if (!resolvedTitle || String(resolvedTitle).trim().length === 0) {
           issues.push({ message: 'Title is required', severity: 'ERROR' })
         }
@@ -1059,7 +1023,8 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
 
           const spAttrs = await buildMarketplaceAmazonAttributes({ marketplace, marketplaceId: mpId,
             language: request.body?.language, attributes: attrs, title: resolvedTitle,
-            description: listing?.description, bulletPoints: listing?.bulletPointsOverride, price: resolvedPrice })
+            description: listing?.description, bulletPoints: listing?.bulletPointsOverride, price: resolvedPrice,
+            content: { product: product as any, parent: product.parent as any, listing } })
 
           const sellerId = (await getAmazonSellerId())
           const spResult = await amazonSpApiClient.putListingsItem({
@@ -1181,15 +1146,12 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({ error: 'coordinates array is required' })
       }
       try {
-        const product = await prisma.product.findUnique({ where: { id } })
+        const product = await prisma.product.findUnique({ where: { id }, include: { translations: true, parent: { include: { translations: true } } } })
         if (!product) return reply.code(404).send({ error: `Product ${id} not found` })
 
         const listings = await prisma.channelListing.findMany({
           where: { productId: id },
-          select: {
-            channel: true, marketplace: true, title: true, price: true,
-            description: true, quantity: true, platformAttributes: true,
-          },
+          include: { translations: true },
         })
         const byCoord = new Map(listings.map((l) => [`${l.channel}:${l.marketplace}`, l]))
         const amazonConfigured = (await amazonService.isConfigured())
@@ -1198,14 +1160,15 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
         // client applies — so the review can label it without guessing.
         const amazonDryRun = (process.env.AMAZON_PUBLISH_MODE ?? '').toLowerCase() !== 'live'
 
-        const results = coordinates.map(({ channel, marketplace }) => {
+        const results = await Promise.all(coordinates.map(async ({ channel, marketplace }) => {
           const listing = byCoord.get(`${channel}:${marketplace}`)
           const pa = (listing?.platformAttributes as Record<string, any> | null) ?? {}
           const resolvedTitle = listing?.title ?? product.name
           const resolvedPrice = listing?.price ?? (product as any).basePrice ?? null
           const resolvedProductType = pa.productType ?? (product as any).productType ?? ''
 
-          const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = []
+          const content = await resolvePublishContent({ product: product as any, parent: product.parent as any, listing, marketplace, channel })
+          const issues: { message: string; severity: 'ERROR' | 'WARNING' }[] = publishContentIssues(content)
           if (!resolvedTitle || String(resolvedTitle).trim().length === 0) {
             issues.push({ message: 'Title is required', severity: 'ERROR' })
           }
@@ -1244,8 +1207,9 @@ const marketplacesRoutes: FastifyPluginAsync = async (fastify) => {
               quantity: listing?.quantity ?? null,
             },
             listed: Boolean(listing),
+            languages: content.map(row => row.language), requireReviewed: requireReviewedContent(),
           }
-        })
+        }))
 
         return reply.send({
           productId: id,

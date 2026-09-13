@@ -243,7 +243,7 @@ function CompareItem({
       {/* "No listing here" and "a listing with an empty value" are different facts, and the
           operator acts differently on each. */}
       {!cell.exists ? (
-        <p className={styles.absent}>{cell.readOnlyReason ?? 'No listing on this coordinate.'}</p>
+        <p className={styles.absent}>{cell.readOnlyReason == null ? 'No value record was returned for this coordinate. The reason was not reported.' : cell.readOnlyReason}</p>
       ) : value === '' ? (
         <p className={styles.absent}>empty</p>
       ) : (

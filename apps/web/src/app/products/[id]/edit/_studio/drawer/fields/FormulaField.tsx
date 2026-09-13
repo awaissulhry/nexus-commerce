@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { languageColumn } from '../../sheet/languages'
 import { FormulaComposer } from '@/design-system/grid/editors/FormulaComposer'
 import { exprOf, isFormulaDraft, type FormulaCandidate } from '@/design-system/grid'
 import type { DrawerFormulas, SheetColumn } from '../types'
@@ -31,8 +32,8 @@ export interface FormulaFieldProps {
 export function FormulaField({ column, rowId, formulas, storedExpr, candidates, originalText, disabled, ariaLabel, onExit, onSaved }: FormulaFieldProps) {
   const [text, setText] = useState(storedExpr ? `=${storedExpr}` : originalText)
   const preview = useCallback((expr: string, signal?: AbortSignal) => formulas.preview(rowId, column.key, expr, signal), [formulas.preview, rowId, column.key])
-  return <FormulaComposer text={text} onChange={setText} candidates={candidates.filter(c => c.kind !== 'field' || c.name !== column.key)}
-    functions={formulas.functions} preview={preview} sourceLabel={formulas.sourceLabel} disabled={disabled || formulas.ready === false}
+  return <FormulaComposer text={text} onChange={setText} candidates={candidates.filter(c => c.kind !== 'field' || c.name !== languageColumn(column.key).fieldKey)}
+    functions={formulas.functions} preview={preview} sourceLabel={formulas.sourceLabelFor?.(column.key) ?? formulas.sourceLabel} disabled={disabled || formulas.ready === false}
     allowText={column.kind !== 'number'} ariaLabel={`${ariaLabel} — formula`} saveOnBlur
     onCancel={() => { setText(storedExpr ? `=${storedExpr}` : originalText); onExit(originalText) }}
     onApply={async draft => {

@@ -22,8 +22,8 @@
  *
  * It is now `aria-disabled` + an `above` class for the look, and clicking it calls `onRefused`
  * instead of `onSet`: no doomed request, and the ceiling's sentence lands in the page's banner
- * where the operator is already looking. `disabled` is kept for `busy` alone — a write in flight
- * needs no explanation because it resolves on its own. Its `acr-*` classes live in `control-room.css`, which another programme also owns,
+ * where the operator is already looking. A busy write also stays focusable and explains why
+ * another change must wait; it never calls onSet. Its `acr-*` classes live in `control-room.css`, which another programme also owns,
  * so the markup is restyled here under `h10-au-*` instead of importing across pages.
  *
  * `h10-au-`, NOT `h10-am-`: that prefix is the app-wide Ads Manager grid namespace. This file
@@ -68,20 +68,19 @@ export function ModeNotches({
         const above = RANK[lv] > RANK[ceiling]
         const on = level === lv
         const earned = earnedAuto && lv === 'AUTO' && !on
+        const reason = busy ? 'Wait for the pending write to finish.' : above ? ceilingReason : earned ? `${earnedWhy ?? ''} Click to graduate this rule to Auto.` : M.hint
         return (
           <Button
             key={lv}
-            className={`h10-au-notch ${lv.toLowerCase()}${earned ? ' earned' : ''}${above ? ' above' : ''}`}
+            className={`h10-au-notch nds-focus-inset ${lv.toLowerCase()}${earned ? ' earned' : ''}${above ? ' above' : ''}`}
             active={on}
             aria-pressed={on}
-            // 🔴 NEVER `disabled` for `above` — see the U13 note at the top. `busy` is fine: it
-            // needs no explanation and clears itself.
-            disabled={busy}
             aria-disabled={above || busy}
             // A refusing notch keeps its reason AND can deliver it. A control that refuses
             // silently is what teaches an operator to distrust the whole surface.
-            title={above ? ceilingReason : earned ? `${earnedWhy ?? ''} Click to graduate this rule to Auto.` : M.hint}
-            onClick={() => { if (above) { onRefused?.(ceilingReason); return } onSet(lv) }}
+            title={reason}
+            aria-description={above || busy ? reason : undefined}
+            onClick={() => { if (above || busy) { onRefused?.(reason); return } onSet(lv) }}
           >
             {earned ? <GraduationCap size={12} aria-hidden /> : <M.Icon size={12} aria-hidden />}
             {M.label}

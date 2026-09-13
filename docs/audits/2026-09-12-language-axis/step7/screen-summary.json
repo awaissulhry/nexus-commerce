@@ -1,0 +1,146 @@
+{
+  "at": "2026-09-13T00:27:14.259Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "readOnly": true,
+  "identityAdapter": "Fixed test user in isolated harness; not an authentication gate",
+  "familyProducts": 21,
+  "requests": 2569,
+  "transportAttempts": 0,
+  "blockedGateways": {
+    "amazonSellerSpec": 123
+  },
+  "refusedSupportRequests": [
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "count": 185
+    },
+    {
+      "method": "GET",
+      "path": "/api/sidebar/counts",
+      "count": 164
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/push-health",
+      "count": 2
+    },
+    {
+      "method": "GET",
+      "path": "/api/listings/events",
+      "count": 1
+    },
+    {
+      "method": "GET",
+      "path": "/api/listing-wizard/product-types",
+      "count": 19
+    },
+    {
+      "method": "GET",
+      "path": "/api/ebay/flat-file/category-breadcrumbs",
+      "count": 19
+    },
+    {
+      "method": "GET",
+      "path": "/api/ebay/policies",
+      "count": 19
+    },
+    {
+      "method": "GET",
+      "path": "/api/ebay/description-themes",
+      "count": 19
+    }
+  ],
+  "apiErrors": [],
+  "readinessPages": [
+    {
+      "path": "/api/catalog-transfer/readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0",
+      "total": 34,
+      "rows": 25
+    },
+    {
+      "path": "/api/catalog-transfer/readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&page=2",
+      "total": 34,
+      "rows": 9
+    },
+    {
+      "path": "/api/catalog-transfer/readiness?productIds=cmokmy0lr0009pm0p9yxk7ho0&channel=SHARED&language=de",
+      "total": 1,
+      "rows": 1
+    }
+  ],
+  "translations": [
+    {
+      "token": "b89d4a369a1faa7a8191cf794eeb51b14ed11d83dbb8d650f614bc0dc5ca7d2b",
+      "language": "de",
+      "fields": [
+        "title"
+      ],
+      "total": 1,
+      "getDraft": 1,
+      "alreadyHave": 0,
+      "skipped": 0,
+      "reach": "Lands on the shared German text. Every listing that follows it inherits on approval.",
+      "destinations": [
+        "AMAZON \u00b7 DE (de)",
+        "EBAY \u00b7 DE (de)"
+      ],
+      "estimates": [
+        {
+          "provider": "gemini",
+          "model": "gemini-2.5-flash",
+          "usd": 0.0001795,
+          "inputTokens": 215,
+          "outputTokens": 46
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-haiku-4-5-20251001",
+          "usd": 0.000445,
+          "inputTokens": 215,
+          "outputTokens": 46
+        }
+      ],
+      "generationEnabled": false,
+      "gate": "AI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI."
+    },
+    {
+      "token": "bc3a5fe8a53151a7689d8caae99d842e8583ffe1536ba4d6c9a8f3857b40aec3",
+      "language": "de",
+      "fields": [
+        "title"
+      ],
+      "total": 17,
+      "getDraft": 17,
+      "alreadyHave": 0,
+      "skipped": 0,
+      "reach": "Lands on the shared German text. Every listing that follows it inherits on approval.",
+      "destinations": [
+        "AMAZON \u00b7 DE (de)",
+        "EBAY \u00b7 DE (de)"
+      ],
+      "estimates": [
+        {
+          "provider": "gemini",
+          "model": "gemini-2.5-flash",
+          "usd": 0.0030515,
+          "inputTokens": 3655,
+          "outputTokens": 782
+        },
+        {
+          "provider": "anthropic",
+          "model": "claude-haiku-4-5-20251001",
+          "usd": 0.007565,
+          "inputTokens": 3655,
+          "outputTokens": 782
+        }
+      ],
+      "generationEnabled": false,
+      "gate": "AI generation is disabled. You can preview the scope and estimate; drafts can be generated when the owner enables AI."
+    }
+  ]
+}

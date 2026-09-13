@@ -1,3 +1,7 @@
+import { channelContentField, channelContentState } from './catalog-transfer-content.js'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { contentLanguages } from './content-read.js'
+import { normalizeLanguage } from './content-language.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
 import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
@@ -9,6 +13,7 @@ import { writeTransferDownload } from './catalog-transfer-download.js'
 import { masterWorkbookField, channelWorkbookField, relationshipFields, workbookScopesForRows } from './catalog-workbook-scopes.js'
 import { writeCatalogWorkbook, type WorkbookField } from './catalog-workbook.js'
 import { marketLanguages } from './market-languages.js'
+import { readinessLanguages } from './readiness-model.js'
 
 const empty = { row: 0, entity: 'Products' as const, sku: '', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: '', action: 'SET' as const }
 const contentFields = new Set(['name', 'title', 'description', 'bulletPoints', 'keywords'])
@@ -25,6 +30,18 @@ export async function catalogDestinationOptions() {
     markets: markets.filter(m => TRANSFER_CHANNELS.includes(m.channel) && (m.code === 'GLOBAL' || /^[A-Z]{2}$/.test(m.code))).map(m => ({ ...m, language: marketLanguages(m.channel, m.code, [m])[0] })),
   }
 }
+/** Language choices use every active market's configured language authority. */
+export async function catalogTransferLanguages() {
+  const markets = await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, languages: true, language: true } })
+  return { sourceLanguage: PRIMARY_CONTENT_LOCALE, languages: readinessLanguages(markets) }
+}
+
+/** Readiness includes all active markets, beyond the transfer destination subset. */
+export async function catalogReadinessOptions() {
+  const [options, markets] = await Promise.all([catalogDestinationOptions(), prisma.marketplace.findMany({ where: { isActive: true }, orderBy: [{ channel: 'asc' }, { code: 'asc' }], select: { channel: true, code: true, name: true } })])
+  return { ...options, markets }
+}
+
 export async function catalogTransferOptions() {
   const [destinations, categories, channelCategories, categoryLabels] = await Promise.all([
     catalogDestinationOptions(),
@@ -80,7 +97,7 @@ export async function catalogTransferTemplate(market: string, familyId: string, 
 }
 
 type ExportInput = { skus?: string[]; familyId?: string; market: string; marketplaces?: string[]; effective?: boolean; layout?: 'wide' | 'attributes'; boundary?: ProductTransferBoundary; fields?: string[]; workbookWriter?: (scopes: import('./catalog-workbook.js').WorkbookScope[]) => Promise<Buffer> }
-const productInclude = { categories: { select: { categoryId: true, isPrimary: true } }, parent: { select: { sku: true, familyId: true } } } as const
+const productInclude = { translations: true, categories: { select: { categoryId: true, isPrimary: true } }, parent: { include: { translations: true } } } as const
 
 async function catalogRows(
   products: Prisma.ProductGetPayload<{ include: typeof productInclude }>[],
@@ -88,10 +105,10 @@ async function catalogRows(
   contracts: ReturnType<typeof transferContracts>,
   families: { id: string; code: string }[],
   workbookMeta?: WeakMap<TransferRow, { fields: WorkbookField[]; category: string; note?: string }>,
-  languages?: Map<string, string>,
+  languages?: Map<string, string[]>,
 ) {
   const rows: TransferRow[] = []
-  const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: { in: TRANSFER_CHANNELS }, ...(input.boundary ? { id: { in: input.boundary.listings.map(l => l.id) } } : input.marketplaces ? input.marketplaces.length ? { marketplace: { in: input.marketplaces } } : {} : { marketplace: input.market }) }, orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { aliasKey: 'asc' }] })
+  const listings = await prisma.channelListing.findMany({ where: { productId: { in: products.map(p => p.id) }, channel: { in: TRANSFER_CHANNELS }, ...(input.boundary ? { id: { in: input.boundary.listings.map(l => l.id) } } : input.marketplaces ? input.marketplaces.length ? { marketplace: { in: input.marketplaces } } : {} : { marketplace: input.market }) }, include: { translations: true }, orderBy: [{ channel: 'asc' }, { marketplace: 'asc' }, { aliasKey: 'asc' }] })
   if (!input.effective && (!input.boundary || input.boundary.includeShared)) for (const product of products) {
     const start = rows.length
     const identity = { ...empty, sku: product.sku, version: product.version }
@@ -105,14 +122,19 @@ async function catalogRows(
         const own = masterTransferState(product, col)
         rows.push({ ...identity, field: col.key, action: own.state === 'inherited' ? 'INHERIT' : own.value === null ? 'CLEAR' : 'SET', value: own.value })
       }
-      const contentByLocale = jsonRecord(product.localizedContent)
-      const locales = new Set(input.boundary?.locales ?? [...Object.keys(contentByLocale), ...listings.filter(l => l.productId === product.id).map(l => languages?.get(JSON.stringify([l.channel, l.marketplace]))).filter((l): l is string => !!l)])
+      const locales = new Set(input.boundary?.locales ?? [...contentLanguages(product, product.parent), ...listings.filter(l => l.productId === product.id).flatMap(l => languages?.get(JSON.stringify([l.channel, l.marketplace])) ?? [])])
       for (const locale of locales) {
-        const content = contentByLocale[locale]
+        // Source core fields already have their existing language-neutral row. Explicitly selected languages retain their sheet.
+        if (locale === PRIMARY_CONTENT_LOCALE && contentFields.has(col.key)) continue
         if (!contentFields.has(col.key) && col.storage !== 'localizedContent') continue
-        const present = Object.prototype.hasOwnProperty.call(jsonRecord(content), col.key === 'name' ? 'title' : col.key)
-        if (!present && !workbookMeta) continue
-        const localized = masterTransferState(product, col, locale)
+        const localized = masterTransferState(product, col, normalizeLanguage(locale))
+        const present = localized.state === 'stored'
+        // R-LX-8: a child whose language text is owned by the parent exports with
+        // the TEXT, as `INHERIT` (its ownership), instead of being skipped — an
+        // export of the child alone used to drop the family's German title with
+        // nothing on the file to show it had ever existed.
+        const inheritedText = localized.state === 'inherited' && localized.value !== null && localized.value !== undefined
+        if (!present && !inheritedText && !workbookMeta) continue
         rows.push({ ...identity, field: col.key, locale, action: !present ? 'INHERIT' : localized.value === null ? 'CLEAR' : 'SET', value: localized.value })
       }
     }
@@ -139,23 +161,31 @@ async function catalogRows(
     const storedCategory = platform[categoryKey]
     const category = String((hasCategory && transferIsStore(listing.channel) ? storedCategory : storedCategory ?? defaults.get(JSON.stringify([listing.channel, listing.marketplace]))?.[listing.productId]?.channelCategoryId) ?? '')
     const contract = await contracts.channel(listing.channel, listing.marketplace, category)
+    const listingLanguages = languages?.get(JSON.stringify([listing.channel, listing.marketplace])) ?? await marketLanguages(listing.channel, listing.marketplace)
     if (input.effective) {
       const { resolveBatch } = await import('./mapping/resolve-batch.service.js')
-      const result = await resolveBatch({ productIds: [listing.productId], channel: listing.channel, marketplace: listing.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, productType: category, includeCatalogue: false })
-      for (const value of Object.values(result.products[0]?.cells ?? {})) rows.push({ ...identity, field: value.fieldKey, action: 'SET', value: value.value })
+      for (const locale of listingLanguages) {
+      const result = await resolveBatch({ locale, productIds: [listing.productId], channel: listing.channel, marketplace: listing.marketplace, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, productType: category, includeCatalogue: false })
+      for (const value of Object.values(result.products[0]?.cells ?? {})) rows.push({ ...identity, locale, field: value.fieldKey, action: 'SET', value: value.value })
+      }
     } else {
       rows.push({ ...identity, entity: 'Listings', field: categoryKey, action: storedCategory != null ? 'SET' : hasCategory && transferIsStore(listing.channel) ? 'CLEAR' : 'INHERIT', value: storedCategory ?? undefined })
       for (const field of contract.fields) {
         if (field.fieldKey === categoryKey) continue
         if (input.boundary && managedChannelField(field)) continue
-        const own = storedChannelState(listing, field.channelStore, [field.fieldKey, field.sheetKey].filter((k): k is string => !!k))
-        const value = typeof own.value === 'object' && own.value && 'toNumber' in own.value ? (own.value as { toNumber(): number }).toNumber() : own.value
-        rows.push({ ...identity, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
+        const textField = channelContentField(field)
+        for (const locale of textField ? listingLanguages : ['']) {
+          const own = textField ? channelContentState(products.find(p => p.id === listing.productId)!, listing, textField, locale, listingLanguages) : storedChannelState(listing, field.channelStore, [field.fieldKey, field.sheetKey].filter((k): k is string => !!k))
+          const value = typeof own.value === 'object' && own.value && 'toNumber' in own.value ? (own.value as { toNumber(): number }).toNumber() : own.value
+          rows.push({ ...identity, locale, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
+        }
       }
     }
     if (workbookMeta) {
       const fields = [{ field: categoryKey, label: 'Channel category', type: listing.channel === 'ETSY' ? 'number' : 'text' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey && (!input.boundary || !managedChannelField(f))).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))]
-      for (const row of rows.slice(start)) workbookMeta.set(row, { category, fields, note: contract.warning })
+      const textFields = new Set(contract.fields.filter(f => channelContentField(f)).map(f => f.fieldKey))
+      const facts = fields.filter(f => !textFields.has(f.field)), text = fields.filter(f => textFields.has(f.field))
+      for (const row of rows.slice(start)) workbookMeta.set(row, { category, fields: row.locale ? text : facts, note: contract.warning })
     }
   }
   return rows
@@ -177,7 +207,7 @@ export async function exportCatalogTransfer(input: ExportInput) {
   const families = await prisma.productFamily.findMany({ select: { id: true, code: true } })
   const workbookMeta = input.layout === 'wide' && !input.effective ? new WeakMap<TransferRow, { fields: WorkbookField[]; category: string; note?: string }>() : undefined
   // Match resolveBatch’s default locale from the same channel-qualified authority.
-  const languages = workbookMeta ? new Map((await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, language: true, languages: true } })).map(m => [JSON.stringify([m.channel, m.code]), marketLanguages(m.channel, m.code, [m])[0]])) : undefined
+  const languages = new Map((await prisma.marketplace.findMany({ where: { isActive: true }, select: { channel: true, code: true, language: true, languages: true } })).map(m => [JSON.stringify([m.channel, m.code]), marketLanguages(m.channel, m.code, [m])]))
   async function* productRows() {
     for (let offset = 0; offset < selection.length; offset += 100) {
       const ids = selection.slice(offset, offset + 100).map(product => product.id)

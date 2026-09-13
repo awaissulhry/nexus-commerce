@@ -1,0 +1,51 @@
+{
+  "narrow": {
+    "viewport": [
+      390,
+      844
+    ],
+    "editor": [
+      8,
+      509,
+      374,
+      320
+    ],
+    "scrollWidth": 374,
+    "clientWidth": 374
+  },
+  "desktop": {
+    "viewport": [
+      1440,
+      900
+    ],
+    "editor": [
+      229,
+      250,
+      420,
+      320
+    ],
+    "scrollWidth": 420,
+    "clientWidth": 420
+  },
+  "instructionContrast": {
+    "light": 9.87,
+    "dark": 12.73
+  },
+  "keyboard": [
+    "Enter opens",
+    "Escape discards and restores variation_theme gridcell focus"
+  ],
+  "draftCollisionCopy": "Collisions will be checked when you save.",
+  "ebayNarrow": {
+    "editor": [
+      8,
+      516,
+      374,
+      320
+    ],
+    "scrollWidth": 374,
+    "clientWidth": 374,
+    "overflowingElements": 0,
+    "resizedWhileOpen": true
+  }
+}

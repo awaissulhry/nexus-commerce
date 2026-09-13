@@ -1,3 +1,8 @@
+import { applyProductBulkEdits } from '../services/products/bulk-edit.service.js'
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { contentField, isLocalizableContent } from '../services/pim/content-resolver.js'
+import { marketplaceForLanguage } from '../services/pim/market-languages.js'
+import { marketLanguages } from '../services/pim/market-languages.js'
 import { availableContentLanguages } from '../services/pim/market-languages.js'
 import { currentFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
 import { inDatabaseTransaction } from '../lib/database-context.js'
@@ -62,6 +67,8 @@ interface GlobalView {
 }
 
 interface PatchBody {
+  contentAddress?: ContentAddress
+  market?: string
   dryRun?: boolean
   reset?: Record<string, string[]>
   expectedVersion?: number
@@ -260,10 +267,38 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       if (errors.length > 0) {
         return reply.status(400).send({ error: 'invalid_patch', details: errors })
       }
-      const language = Object.keys(body.patch!).find(isContentLocale)
-      if (language || body.reset !== undefined) {
-        return reply.code(409).send({ error: `Localized content${language ? ` (${language})` : ''} is legacy and read-only.`, field: 'localizedContent' })
+      const languages = Object.keys(body.patch!).filter(isContentLocale)
+      if (languages.length) {
+        const result = await inDatabaseTransaction(prisma, async () => {
+          let currentVersion = body.expectedVersion, updated = 0
+          for (const language of languages) {
+            const values = body.patch![language] as Record<string, unknown>
+            const writeField = (field: string) => field === 'title' ? 'name' : ['description','bulletPoints','keywords'].includes(field) ? field : `attr_${field}`
+            const changes = [
+              ...Object.entries(values).map(([field,value]) => ({ id, field: writeField(field), value, contentAddress: body.contentAddress })),
+              ...(body.reset?.[language] ?? []).map(field => ({ id, field: writeField(field), value: null, intent: 'reset' as const, contentAddress: body.contentAddress })),
+            ]
+            if (languages.length !== 1 || Object.keys(body.patch!).some(key => !isContentLocale(key)) || Object.keys(body.reset ?? {}).some(key => key !== language)) {
+              throw Object.assign(new Error('Send one shared language and its ContentAddress per request.'), { statusCode: 400 })
+            }
+            const saved = await applyProductBulkEdits({ changes, expectedVersion: currentVersion, dryRun: body.dryRun,
+              marketplaceContexts: [{ marketplace: body.market ?? await marketplaceForLanguage(language), locale: language } as any] },
+              { formulaCascade: request.headers['x-nexus-formula-cascade'] === '1', userId: (request as any).authUser?.id, ip: request.ip, logger: request.log })
+            if (saved.errors?.length) throw Object.assign(new Error(saved.errors[0].error), { statusCode: 400 })
+            currentVersion = saved.currentVersion; updated += saved.updated ?? 0
+          }
+          return { success: true, updated, currentVersion, versionOf: 'product' }
+        })
+        return reply.send({ ...result, version: result.currentVersion })
       }
+      const firstField = Object.values(body.patch ?? {}).flatMap(value => Object.keys(value ?? {}))[0] ?? 'Content'
+      // LX.F F-LX-1 — only a CONTENT write needs a ContentAddress (design §6). This
+      // branch handles the technical / identifier / physical groups, so demanding one
+      // unconditionally refused `{ technical: { material } }` with a sentence about
+      // content and, worse, MASKED the version-conflict 409 the same route owes.
+      const addressed = Object.values(body.patch ?? {}).flatMap(value => Object.keys(value ?? {})).filter(field => isLocalizableContent(contentField(field)))
+      if (addressed.length) contentAddress(body.contentAddress, addressed[0])
+      if (body.reset !== undefined) return reply.code(400).send({ error: `${firstField} needs a field-specific reset through the sheet writer.` })
       const patch = body.patch!
 
       // Read current — needed for the merge. We could go straight to
@@ -338,7 +373,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
         if (patch.technical) Object.assign(changes, patch.technical)
         // Localized content is refused above; only technical attributes reach this cascade.
         if (Object.keys(changes).length > 0) {
-          void applyCatalogCascade({ productId: id, changes }, { reason: 'global-tab-save' }).catch(
+          void applyCatalogCascade({ productId: id, changes, contentAddress: body.contentAddress }, { reason: 'global-tab-save' }).catch(
             (err: unknown) => {
               request.log.warn(
                 { err, productId: id },
@@ -374,8 +409,8 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       const { id, clId } = request.params
 
       const [product, channelListing] = await Promise.all([
-        prisma.product.findUnique({ where: { id } }),
-        prisma.channelListing.findUnique({ where: { id: clId } }),
+        prisma.product.findUnique({ where: { id }, include: { translations: true } }),
+        prisma.channelListing.findUnique({ where: { id: clId }, include: { translations: true } }),
       ])
       if (!product) return reply.status(404).send({ error: 'Product not found' })
       if (!channelListing || channelListing.productId !== id) {
@@ -383,19 +418,22 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const parent = product.parentId
-        ? await prisma.product.findUnique({ where: { id: product.parentId } })
+        ? await prisma.product.findUnique({ where: { id: product.parentId }, include: { translations: true } })
         : null
 
+      const languages = await marketLanguages(channelListing.channel, channelListing.marketplace)
       // Master (no channel context) gives the "what would I inherit
       // if I reset the override" value per SSOT field.
       const masterResolved = resolveAttributes({
         product: product as any,
         parent: parent as any,
+        locale: languages[0], marketLanguages: languages,
       })
       // Effective with channel applied gives the current value.
       const effectiveResolved = resolveAttributes({
         product: product as any,
         parent: parent as any,
+        locale: languages[0], marketLanguages: languages,
         channelListing: channelListing as any,
       })
 
@@ -463,7 +501,7 @@ const pimGlobalRoutes: FastifyPluginAsync = async (fastify) => {
           .send({ error: 'field must be one of title|description|price|quantity|bulletPoints|all' })
       }
 
-      const cl = await prisma.channelListing.findUnique({ where: { id: clId } })
+      const cl = await prisma.channelListing.findUnique({ where: { id: clId }, include: { translations: true } })
       if (!cl || cl.productId !== id) {
         return reply.status(404).send({ error: 'Channel listing not found for product' })
       }

@@ -16,7 +16,7 @@ export function ReferenceSelectEditor({ fieldKey, market, productType, connectio
   useEffect(() => {
     let active = true
     // Recheck active/default state on each open; names shown in cells may be cached.
-    void loadReferenceChoices(fieldKey, { market, productType, connectionId }, true)
+    void loadReferenceChoices(fieldKey, { market, productType, connectionId }, { live: true, refresh: true })
       .then(choices => { if (active) setResult({ key, choices }) })
       .catch(error => { if (active) setResult({ key, error: error.message }) })
     return () => { active = false }

@@ -1,0 +1,31 @@
+{
+  "measuredAt": "2026-09-13T18:50:25.473007+00:00",
+  "studio": {
+    "command": "NEXT_PUBLIC_API_URL=http://127.0.0.1:1 PES3_API=http://127.0.0.1:1 ../../node_modules/.bin/vitest run 'src/app/products/[id]/edit/_studio' 'src/app/products/_components/hardDelete.vitest.test.ts' --maxWorkers=2",
+    "filesPassed": 130,
+    "passed": 1803,
+    "failed": 0,
+    "skipped": 13,
+    "exit": 0,
+    "load": 4.96
+  },
+  "wireNull": {
+    "command": "node scripts/check-wire-null-defaults.mjs --check",
+    "count": 13,
+    "baseline": 17,
+    "exit": 0,
+    "load": 5.39
+  },
+  "webTsc": {
+    "exit": 2,
+    "diagnostics": 1,
+    "owner": "PR.6",
+    "path": "apps/web/src/design-system/catalog/PresenceExample.tsx"
+  },
+  "w3Prepared": {
+    "applied": false,
+    "passed": 34,
+    "exit": 0
+  },
+  "ownerD20": "Retain visible read-only WooCommerce Presence; membership assertions retained"
+}

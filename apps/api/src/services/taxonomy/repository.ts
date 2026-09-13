@@ -1,3 +1,4 @@
+import { categorySchemaMarkets } from '../categories/category-schema-coordinate.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
@@ -9,7 +10,9 @@ import { TaxonomyError, validateTaxonomy, type TaxonomyDownload } from './model.
 import { taxonomySearchCache } from './search-cache.js'
 
 export const taxonomyWhere = (channel: string, market: string) => ({ channel: channel.toUpperCase(), marketplace: taxonomyMarket(channel.toUpperCase(), market) })
-export const schemaMarkets = (channel: string, market: string) => [...new Set([taxonomyMarket(channel, market), market, ...(channel === 'EBAY' ? [market.startsWith('EBAY_') ? market : `EBAY_${market}`] : []), ...(['UK', 'GB', 'EBAY_GB', 'EBAY_UK'].includes(market) ? ['UK', 'GB', 'EBAY_GB', 'EBAY_UK'] : [])])]
+/** LX.F2 R-LX-20 — the eBay half now DELEGATES to the one coordinate authority; this function keeps
+ *  only what is its own: the taxonomy provider's market for the pair, and the caller's raw spelling. */
+export const schemaMarkets = (channel: string, market: string) => [...new Set([taxonomyMarket(channel, market), market, ...categorySchemaMarkets(channel, market)])]
 const sourceKey = (channel: string, market: string) => ({ taxonomy_scope: workspaceKey(taxonomyWhere(channel, market)) })
 
 export async function listTaxonomySources() {

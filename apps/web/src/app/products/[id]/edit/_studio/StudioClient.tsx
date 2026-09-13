@@ -21,6 +21,10 @@
  * into the grid hosts, so a future consumer cannot hit it at all); this mount is wanted either way.
  */
 
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { loadStudioData } from './studio-data'
+import { StudioPlaceholder } from './StudioPlaceholder'
+import { when } from './drawer/format'
 import { ToastProvider } from '@/design-system/components'
 
 import { StudioStateProvider } from './contracts'
@@ -30,15 +34,34 @@ import type { MarketplaceLite, StudioFamily, StudioProduct } from './types'
 export interface StudioClientProps {
   product: StudioProduct
   family: StudioFamily | null
+  primaryLanguage: string | null
   marketplaces: MarketplaceLite[]
   marketplacesFailed: boolean
 }
 
-export function StudioClient({ product, family, marketplaces, marketplacesFailed }: StudioClientProps) {
+export function StudioClient({ product, family, marketplaces, primaryLanguage, marketplacesFailed }: StudioClientProps) {
+  const [discovery, setDiscovery] = useState<{ productId: string; marketplaces: MarketplaceLite[]; failed: boolean } | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const generation = useRef(0)
+  useEffect(() => { generation.current += 1; return () => { generation.current += 1 } }, [product.id])
+  const retryDiscovery = useCallback(async () => {
+    const mine = generation.current
+    setRetrying(true)
+    try {
+      const result = await loadStudioData(product.id)
+      if (mine !== generation.current) return
+      if (result.kind === 'ok') setDiscovery({ productId: product.id, marketplaces: result.data.marketplaces, failed: result.data.marketplacesFailed })
+    } finally { if (mine === generation.current) setRetrying(false) }
+  }, [product.id])
+  const current = discovery?.productId === product.id ? discovery : null
+  if (product.deletedAt != null) return <StudioPlaceholder title="This product is in the bin">
+    {product.sku} · Moved to the bin <time dateTime={product.deletedAt}>{when(product.deletedAt)}</time>.
+  </StudioPlaceholder>
   return (
     <ToastProvider>
-      <StudioStateProvider key={product.id} product={product} family={family} marketplaces={marketplaces}>
-        <StudioFrame marketplacesFailed={marketplacesFailed} />
+      <StudioStateProvider key={product.id} product={product} family={family} marketplaces={current?.marketplaces ?? marketplaces} marketplacesFailed={current?.failed ?? marketplacesFailed}
+        discoveryRetry={retryDiscovery} discoveryRetrying={retrying} primaryLanguage={primaryLanguage}>
+        <StudioFrame />
       </StudioStateProvider>
     </ToastProvider>
   )

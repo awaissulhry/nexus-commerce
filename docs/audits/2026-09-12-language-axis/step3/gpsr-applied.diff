@@ -1,0 +1,10 @@
+--- apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts
++++ apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts
+@@ -163,6 +163,7 @@
+ 
+ const ctx = (over: Partial<GpsrCheckContext> = {}): GpsrCheckContext => ({
+   marketplace: 'IT',
++  languages: ({ IT: ['it'], DE: ['de'], BE: ['nl', 'fr'] } as Record<string, string[]>)[over.marketplace ?? 'IT'] ?? [],
+   applicableColumns: ALL_GPSR_COLS,
+   contentTypeValues: CONTENT_TYPES,
+   ...over,

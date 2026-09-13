@@ -1,4 +1,5 @@
 import { assertLegacyPresentationPublishAllowed } from './ebay-presentation-consumer.service.js'
+import { assertListingContentReviewed } from './pim/publish-review-gate.js'
 import { PrismaClient } from "@prisma/client";
 import { EbayService } from "./marketplaces/ebay.service.js";
 import prisma from "@nexus/database";
@@ -51,6 +52,8 @@ export class EbayPublishService {
     const draft = await this.fetchDraftWithRelations(draftId);
     this.validateDraftData(draft);
     await assertLegacyPresentationPublishAllowed({ productId: draft.product.id, marketplace: options?.marketplaceId });
+    // D7 / R-LX-7 — the one review verdict, beside the presentation one.
+    await assertListingContentReviewed({ productId: draft.product.id, channel: 'EBAY', marketplace: options?.marketplaceId ?? null });
 
     const finalPrice = options?.overridePrice ?? Number(draft.product.basePrice);
 

@@ -25,12 +25,12 @@ import {
   refreshAllSnapshots,
 } from '../services/pricing-snapshot.service.js'
 import { refreshFxRates } from '../services/fx-rate.service.js'
-import { priceChangeData } from '../services/price-history.service.js'
 import {
   refreshFeeEstimates,
   refreshCompetitivePricing,
 } from '../services/sp-api-pricing.service.js'
 import { pushPriceUpdate } from '../services/pricing-outbound.service.js'
+import { writeChannelPrices } from '../services/pim/channel-price-write.service.js'
 import { runPromotionScheduler } from '../services/promotion-scheduler.service.js'
 import { Prisma } from '@prisma/client'
 
@@ -1162,6 +1162,8 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
         channel?: string
         marketplace?: string
         fulfillmentMethod?: 'FBA' | 'FBM'
+        channelConnectionId?: string | null
+        aliasKey?: string | null
       }
       if (!body.sku || !body.channel || !body.marketplace) {
         return reply
@@ -1173,6 +1175,8 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
         channel: body.channel,
         marketplace: body.marketplace,
         fulfillmentMethod: body.fulfillmentMethod ?? null,
+        channelConnectionId: body.channelConnectionId,
+        aliasKey: body.aliasKey,
       })
       return result
     } catch (error: any) {
@@ -1225,14 +1229,7 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
       for (const v of variants) productIdBySku.set(v.sku, v.productId)
       for (const p of products) productIdBySku.set(p.sku, p.id)
 
-      let updated = 0
-      const skusTouched = new Set<string>()
-
-      // A.4 — Audit-trail reason describes the operation. The drawer copy
-      // claims bulk-override "Logs to ChannelListingOverride for audit"; this
-      // makes that true. The Amazon push path (pricing-outbound.service.ts:178)
-      // already writes ChannelListingOverride rows for fieldName='price'; we
-      // mirror that convention.
+      // A.4 — Audit-trail reason describes the operation.
       const reasonForMode =
         body.mode === 'CLEAR'
           ? 'bulk-override CLEAR'
@@ -1240,78 +1237,35 @@ const pricingRoutes: FastifyPluginAsync = async (fastify) => {
           ? `bulk-override SET_FIXED ${Number(body.value).toFixed(2)}`
           : `bulk-override SET_PERCENT_DISCOUNT ${body.value}%`
 
+      // MX.1 / Add 4(b) — the write is the ONE channel price write (`channel-price-write.service.ts`). Before, this
+      // route set `priceOverride` WITHOUT `followMasterPrice = false`, so the engine's CHANNEL_OVERRIDE layer never
+      // read it and `updated: N` reported a change the resolved price did not reflect (report 25 §5.3). Now every
+      // applied row carries `price` + `priceOverride` + `followMasterPrice = false` (CLEAR hands the listing back to the
+      // master price), the override audit row and the PriceChangeEvent the service writes, and ONE PRICE_UPDATE row.
+      const targets: Array<{ listingId: string; price: number | null; sku: string }> = []
       for (const snap of snapshots) {
         const productId = productIdBySku.get(snap.sku)
         if (!productId) continue
-        // Read priceOverride alongside id so we can capture the before value
-        // for the audit row.
         const listing = await prisma.channelListing.findFirst({
           where: { productId, channel: snap.channel, marketplace: snap.marketplace },
-          select: { id: true, priceOverride: true },
+          select: { id: true },
         })
         if (!listing) continue
-
-        let newOverride: string | null
-        if (body.mode === 'CLEAR') {
-          newOverride = null
-        } else if (body.mode === 'SET_FIXED') {
-          newOverride = Number(body.value).toFixed(2)
-        } else {
+        let price: number | null
+        if (body.mode === 'CLEAR') price = null
+        else if (body.mode === 'SET_FIXED') price = Number(Number(body.value).toFixed(2))
+        else {
           // SET_PERCENT_DISCOUNT — apply % off the current snapshot price
           const base = Number(snap.computedPrice)
           if (base <= 0) continue
-          newOverride = (base * (1 - Number(body.value) / 100)).toFixed(2)
+          price = Number((base * (1 - Number(body.value) / 100)).toFixed(2))
         }
-
-        const previousOverride =
-          listing.priceOverride != null ? listing.priceOverride.toString() : null
-
-        // No-op short-circuit. Repeating an identical bulk apply (e.g. user
-        // double-clicked) shouldn't generate audit noise.
-        if (previousOverride === newOverride) continue
-
-        // Atomic: ChannelListing update + audit row land together. If the
-        // audit write fails the override write rolls back, keeping the two
-        // sources of truth aligned.
-        await prisma.$transaction([
-          prisma.channelListing.update({
-            where: { id: listing.id },
-            data: {
-              priceOverride: newOverride,
-              lastOverrideAt: new Date(),
-              lastOverrideBy: 'bulk-override',
-            },
-          }),
-          prisma.channelListingOverride.create({
-            data: {
-              channelListingId: listing.id,
-              fieldName: 'price',
-              previousValue: previousOverride,
-              newValue: newOverride,
-              reason: reasonForMode,
-              changedBy: 'bulk-override',
-            },
-          }),
-          // PH.1 — unified timeline row, atomic with the override above.
-          prisma.priceChangeEvent.create({
-            data: priceChangeData({
-              productId,
-              sku: snap.sku,
-              channel: snap.channel,
-              marketplace: snap.marketplace,
-              fulfillmentMethod: snap.fulfillmentMethod,
-              oldPrice: previousOverride,
-              newPrice: newOverride,
-              currency: snap.currency,
-              source: 'BULK_OVERRIDE',
-              reason: reasonForMode,
-              actor: 'bulk-override',
-            }),
-          }),
-        ])
-        updated++
-        skusTouched.add(snap.sku)
+        targets.push({ listingId: listing.id, price, sku: snap.sku })
       }
+      const written = await writeChannelPrices({ targets: targets.map(({ listingId, price }) => ({ listingId, price })), actor: 'bulk-override', source: 'BULK_OVERRIDE', reason: reasonForMode })
+      const updated = written.applied
+      const skusTouched = new Set<string>()
+      for (const [i, o] of written.results.entries()) if (o.outcome === 'applied') skusTouched.add(targets[i]!.sku)
 
       let snapshotsRefreshed = 0
       if (skusTouched.size > 0) {

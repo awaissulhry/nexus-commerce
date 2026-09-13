@@ -4171,3 +4171,77 @@ On the live Categories page, Tab from Products skipped directly to Listings: `.h
 ## Factory grid monospace token — 2026-09-12 · RESOLVED
 
 The token-resolution guard found five Factory grid stylesheet references to undefined `--nds-font-mono`. Added the shared token to Factory and a host-font fallback in both token sources; regenerated both apps' stylesheets. Formula/editor text now has a defined monospace family in either host.
+
+2026-09-12 LX.7 — Resolved: CellProvenance was web-only, preventing the API content contract from using the same vocabulary across TypeScript rootDir boundaries. Extracted the existing type into @nexus/shared/cell-provenance; the web renderer re-exports it. Factory has no corresponding grid/provenance module; no duplicate is introduced. Step 6 retains ownership of outdated rendering.
+
+### 2026-09-12 — LX strict editor: exact refusal tooltip / value textarea
+
+Closed: SourceIndicator always joined the source label, server sentence and action, so the strict refusal check could not read the sentence alone. Added optional `tooltip`, consumed for channel formula refusals; action aria-label remains descriptive. The formula-aware editor also inherited the general Textarea resize handle; restored the existing sheet no-resize rule on its actual textarea. Both changes mirrored in Factory.
+
+Follow-up measurement: both channel hosts disable custom tooltip portals; the first override alone therefore rendered no tooltip. The same exact sentence now also supplies the native title, matching the Master warning’s fallback.
+
+LX.10 · 2026-09-13 · Closed implementation gap: the cell vocabulary had no human translation-age state and the two hosts described sources independently. Added `outdated` + `describeCellSource` in grid/renderers; History glyph uses the existing 11px mark geometry, semantic warning foreground/background. Screen measurements recorded in the Step 6(a) audit before acceptance. Factory mirrored with new renderer modules.
+
+### LX.11 · Wide field-group labels · 2026-09-13
+Measured the Shared Languages view at 1440 and 1728: the nine-language Name group existed in the DOM but its centred label was beyond the viewport. Closed with DS `nds-ag-group-start`, mirrored in Factory, used by the shared sheet builder; the existing `gridGeometry.stripH` sets the band height. Screen recheck passed on 2026-09-13: field headings visible at 1440/1728 in both themes on populated Shared, Amazon DE and eBay IT views; Belgium has no text schema and remains Q-LX6-1.
+
+LX.12 · 2026-09-13 · Closed formula context gap: FormulaWiring previously supplied only the row/name, so a Languages view could not scope references to the edited column. Optional fieldKey arguments now flow through the existing Web AG selector, with a contract regression. Factory has no AG formula adapter; shared runtime and tokens are unchanged.
+
+### LX6 missing-contract readiness (2026-09-13)
+Gap: CompletenessPill silently omitted null scores. Extended to show — and an accessible explanation; extracted and mirrored in Factory. Existing DS EmptyState covers the missing-contract sheet body without a new control. Missing-contract BE nl/fr screen verification pending before the explicitly authorized local fixture seed.
+
+### LX6 canonical mark tooltip (2026-09-13)
+Gap: the older pin tooltip interpreted `from` as the overwritten upstream value, while LX.12 uses `from` for the answering tier. `describeCellSource` now names the addressed listing for canonical pins; ProvenanceMark accepts its exact tooltip. Both sheets consume it, mirrored in Factory, regression tested. Item(d) screen acceptance awaits a stable source revision after concurrent ProductSheet extraction invalidated the20-screen attempt.
+- `OptionList` cannot express a grouped SINGLE-select with a keyboard HIGHLIGHT — it is a checkbox multi-select whose search query is internal, it has no option groups (the third sighting after `Listbox`), and it exposes no highlighted index, so a caller cannot implement "a key adds the highlighted candidate". VT.2's variation-theme editor needs all three at once: three Appendix A groups with counts (`Covers every axis` / `Drops an axis` / `Deprecated`), radio semantics over 50 Amazon theme enum values, and D-VT7's `,` and `/`. Measured on the real cached schema: 8 candidates on `VX-TEST-3AX`, 50 on GALE's OUTERWEAR. The list is therefore local to `design-system/grid/editors/AxesPanelEditor.tsx` (one implementation, three scopes, two hosts) rather than a second copy of `OptionList` — apps/web/src/design-system/components/OptionList.tsx:40
+- `OrderedList` has no HORIZONTAL orientation. It renders an `<ol>` of stacked rows, which is right for the channel scopes' axis rows and wrong for the master editor's chip line, where canvas artboard 2 draws `⠿ Colour [2 values] × ⠿ Size [10 values]` on ONE 28px row. VT.2 uses the vertical list on every scope rather than hand-rolling a second drag idiom, so master's two chips stack (2 × 28px + gap) where the canvas has one row — apps/web/src/design-system/components/OrderedList.tsx:24
+
+### VT.F · 2026-09-13 · `Listbox` had no portal container (R-VT-8) — CLOSED in the DS
+Gap: `Listbox` portalled its option panel to `document.body` unconditionally (`Listbox.tsx:114`), which is right on a page
+and wrong inside an **AG Grid popup editor** — the panel lands outside the popup's DOM, so clicking an option is a click
+OUTSIDE the editor, AG ends the edit and `onChange` never reports. VT.2c measured it on the variation-theme cell's target
+control and could not re-point an axis with the mouse. Closed with an optional `portalTo?: Element | null` (default
+`document.body`, so all existing call sites are unchanged in behaviour), mirrored byte-identical in Factory
+(`check-ds-fork-drift --check` green, both sides `782382e48f0d4695`), and its declaration regenerated so the committed
+`.d.ts` describes the component that exists. The AG container is resolved by `agPopupHostOf()` in
+`grid/editors/AxesPanelEditor.tsx` (pure, exported, 4 test arms) rather than by a selector in a page. Positioning needed no
+change: `usePopoverPosition` returns `position: fixed` viewport coordinates, which do not depend on the portal parent.
+HELD honestly: the on-screen mouse re-point is NOT witnessed — no coordinate on this catalogue offers an ENABLED aspects
+`Listbox` (eBay·IT is the only one with cached aspects and both its axes are published, so both controls are correctly
+disabled; eBay·DE and Etsy·GLOBAL answer `targetOptionsState: unavailable`). — apps/web/src/design-system/components/Listbox.tsx:43
+
+### VT.F · 2026-09-13 · no DS control for "a held control that states its own reason" on a grid editor row
+Gap, stated rather than closed: the variation-theme editor holds three controls with reasons (both target Listboxes under a
+live lock, and `+ Add a specific` at the limit), and each does it by setting `disabled` plus writing the server's sentence
+into `aria-label`/`title` by hand. There is no DS primitive that pairs a disabled control with its refusal sentence, so
+every surface that needs it re-implements the pairing and a future one will forget the sentence —
+`reference_disabled_control_cannot_explain` is the trap, and the programme's own rule is that a held control is rendered
+and says why. Measured on screen (GALE eBay·IT, 1440×900): `aria-label="Color is the eBay specific Colore, locked: Live on
+eBay IT (item 257584954808) — changing the set relists it. Reordering does not."` VT.F did not add a primitive for it — a
+final pass is the wrong place to introduce one — and records it as the gap it is. — apps/web/src/design-system/grid/editors/AxesPanelEditor.tsx:575
+
+
+### 2026-09-13 — Variation Theme audit follow-up
+
+Closed: narrow Variation Theme popup was limited to room right of the cell and clipped its controls. The shared editor now uses available viewport width and explicit viewport placement, wraps instructional rows and uses strong semantic text for hints. Closed: factory lacked the editor/renderer and their grid dependencies; counterparts and exports are present and required by the drift guard. The dock now consumes server provenance rather than inventing a derived source.
+
+### PR.6 — Presence additions and Menu correction — 2026-09-13 (append-only correction)
+The earlier Menu six-field census is stale: title and description already existed in source; stale declarations hid title from readers. Added tone?: Tone to the existing separator affordance, mapped GridAction.danger in both adapters, kept declaration order. Description-bearing disabled items are held/keyboard reachable and guarded; reason remains in title. Every native-disabled CSS rule was paired first. No ScopeBar behavior change.
+
+Presence needed a two-axis mark and explicit absent timestamps: PresenceMark uses Tag + Pill + AsOf; ago/when moved once from the studio. ActionConfirm was misfiled under grid/actions and used four grid-only strong-text classes: components/ActionConfirm is now canonical with a compatibility export. Read-only review composes SummaryTable; per-row tone is deliberately refused and rides a Pill. Disclosure adds Tone to native details. CellSaveMark supplies three distinct unresolved-write glyphs beside CellSaveReason. SheetStatuses supplies the data-only, capped toolbar status pattern; GridViewsMenu names and confirms in an anchored popover. No new token was minted; existing --nds-text supplies the menu explanation. Named text-token changes and accessibility measurements are in the PR.6 evidence/ledger; unresolved grid claim and gates are not marked complete here.
+
+### PR.6 follow-up correction — 2026-09-13
+The MX ownership hold referenced above is released by its explicit close-out; the paired grid ink/ring/padding and barrel changes are applied. Add axis now retains keyboard focus and associates its visible reason, with activation guarded. Menu native OFF remains separate from description-bearing held items. Browser evidence refutes the assumption that a primary-token use-site escapes a descendant light pin: real focus outlines now use existing --nds-text, and pinned/override provenance uses --nds-prov-inherited-fg while retaining each glyph. ScopeBar is still forbidden and untouched by PR.6; silent-disabled and broader contrast acceptance remain open. See the PR.6 audit for measured limitations; no all-green gate is claimed here.
+
+
+### PR.6 approved accessibility follow-up — 2026-09-13
+
+ScopeBar now lets arrow keys reach a held scope and its InfoTip without changing the selected scope; Enter and click remain guarded. Theme-controlled AxesPanel checkboxes keep keyboard focus, their supplied explanation and unchanged checked state. The ModeNotches consumer exposes the pending-write sentence through its existing refusal banner callback.
+
+`nds-focus-inset` keeps a Button outline inside a clipped joined control and uses currentColor so the ring follows the actual normal, selected and hovered ink. Use it only where that ink clears 3:1 on every control fill. The catalog includes held and editable axes as local demonstrations; held scopes are in the existing ScopeBar example. PresenceMark additionally accepts `{line, now, via?}` for canonical aggregate metadata without an invented member Presence, and preserves “Could not ask” when observation time/source are absent.
+
+With Owner approval, existing danger/warning/formula text tokens now clear 7:1 across the conservative 80-ground light and dark matrices; success already clears that bar. No new token, fill, or ratchet-baseline increase. The corrected source-derived measurements live in the PR.6 audit.
+
+Correction to the preceding open-gap note: the Owner approved the ScopeBar/ModeNotches repair, existing rail-chevron alias and stronger contrast candidates. Those changes are applied; silent-disabled now meets its previously measured baselines (21/10/8). Final verification remains separately recorded in the PR.6 ledger.
+
+### PR.6 completed verification — 2026-09-13
+The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is readable at390px in both themes, and compact PresenceMark/SheetStatuses retain canonical explanations. Final17 guards exit0, web/Factory tsc0, Node110files1367tests0, web260/260 and Factory191/191 declarations matched. No baseline increase. Full grounds/limitations, including the swatch checker’s21 reported but unenforced state-tint combinations, are recorded in docs/audits/2026-09-13-presence/pr6/README.md; historical open-gap paragraphs above are superseded by this receipt.

@@ -1,3 +1,5 @@
+import { normalizeLanguage } from '../../pim/content-language.js'
+import { resolveContent, translationMissing } from '../../pim/content-resolver.js'
 /**
  * PES.8 — the draft lifecycle: record, overlay, decide.
  *
@@ -183,7 +185,7 @@ export async function loadCurrentValues(
   const products = await prisma.product.findMany({
     where: { id: { in: ids } },
     select: {
-      id: true,
+      id: true, workspaceId: true, parentId: true, translations: true, parent: { include: { translations: true } },
       name: true,
       description: true,
       bulletPoints: true,
@@ -235,17 +237,6 @@ export async function loadCurrentValues(
       : [],
   )
 
-  // D7 — the per-locale record. A translation's "current value" is its ProductTranslation row,
-  // never the master column: comparing a German draft against the Italian master would call every
-  // draft stale on its first read.
-  const translations = localesNeeded.length
-    ? await prisma.productTranslation.findMany({
-        where: { productId: { in: ids }, language: { in: localesNeeded.map((l) => l.toLowerCase()) } },
-        select: { productId: true, language: true, name: true, description: true, bulletPoints: true, keywords: true },
-      })
-    : []
-  const byTranslation = new Map(translations.map((t) => [`${t.productId}:${t.language}`, t]))
-
   const PRIMARY = '\u0000primary'
   const coordKey = (productId: string, channel: string, marketplace: string | null) =>
     `${productId}:${channel}:${marketplace}`
@@ -261,10 +252,12 @@ export async function loadCurrentValues(
       if (isTranslationDraft(addr)) {
         const target = LOCALIZED_KEYS[addr.writeField]
         if (!target) return { found: false, ambiguous: false, value: null }
-        const row = byTranslation.get(`${productId}:${addr.locale!.toLowerCase()}`)
-        // No translation row yet is a real answer: that locale is empty, not unknown.
-        if (!row) return { found: true, ambiguous: false, value: null }
-        return { found: true, ambiguous: false, value: row[target] ?? null }
+        const product = byProduct.get(productId)
+        if (!product) return { found: false, ambiguous: false, value: null }
+        const requested = normalizeLanguage(addr.locale!)
+        const resolved = resolveContent({ product: product as any, parent: product.parent as any, field: target, address: { requested } })
+        return { found: true, ambiguous: false, value: translationMissing(resolved, requested) ? null : resolved.value }
+
       }
       if (addr.channel !== null) {
         const target = CHANNEL_FIELD_TARGET[addr.writeField]
@@ -375,7 +368,7 @@ export async function recordDrafts(
         channel: r.address.channel,
         marketplace: r.address.marketplace,
         aliasId: r.address.aliasId,
-        locale: r.address.locale,
+        locale: r.address.locale ? normalizeLanguage(r.address.locale) : null,
         writeField: r.address.writeField,
         columnKey: r.columnKey,
         market: r.market,
@@ -423,7 +416,7 @@ export interface ListDraftsInput {
 
 export async function listDrafts(input: ListDraftsInput): Promise<DraftOverlayRow[]> {
   const statuses = input.status && input.status.length > 0 ? input.status : ['pending', 'failed']
-  const rows = await prisma.productAiDraft.findMany({
+  const loadedRows = await prisma.productAiDraft.findMany({
     where: {
       ...(input.productIds && input.productIds.length > 0
         ? { productId: { in: input.productIds } }
@@ -432,12 +425,13 @@ export async function listDrafts(input: ListDraftsInput): Promise<DraftOverlayRo
       ...(input.channel !== undefined ? { channel: input.channel } : {}),
       ...(input.marketplace !== undefined ? { marketplace: input.marketplace } : {}),
       // Absent means "the master's own values", never "any locale".
-      locale: input.locale ?? null,
+      locale: input.locale ? { not: null } : null,
       status: { in: statuses },
     },
     orderBy: [{ productId: 'asc' }, { cellKey: 'asc' }],
     take: Math.min(input.limit ?? 2000, 5000),
   })
+  const rows = loadedRows.filter(row => input.locale ? row.locale && normalizeLanguage(row.locale) === normalizeLanguage(input.locale) : row.locale === null)
   if (rows.length === 0) return []
 
   const addresses = rows.map((r) => decodeCellKey(r.cellKey))
@@ -462,7 +456,7 @@ export async function listDrafts(input: ListDraftsInput): Promise<DraftOverlayRo
       channel: r.channel,
       marketplace: r.marketplace,
       aliasId: r.aliasId,
-      locale: r.locale,
+      locale: r.locale ? normalizeLanguage(r.locale) : null,
       draftValue: r.draftValue,
       baseValue: r.baseValue,
       baseSource: r.baseSource,

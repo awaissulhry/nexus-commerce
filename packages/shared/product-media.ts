@@ -1,9 +1,10 @@
+import { normalizeLanguage, languageEntry } from './content-language.js'
 import { z } from 'zod'
 
 export const PRODUCT_MEDIA_KEY = '_productMedia'
 export const mediaLocaleSchema = z.string().min(2).max(64).refine(value => {
-  try { return Intl.getCanonicalLocales(value).length === 1 } catch { return false }
-}, 'Choose a valid language tag.').transform(value => Intl.getCanonicalLocales(value)[0])
+  try { return !!normalizeLanguage(value) } catch { return false }
+}, 'Choose a valid language tag.').transform(value => normalizeLanguage(value))
 const httpsUrl = z.url().max(4096).refine(value => new URL(value).protocol === 'https:', 'Use a public HTTPS file URL.')
 export const mediaCaptionSchema = z.object({ url: httpsUrl, language: mediaLocaleSchema, label: z.string().trim().min(1).max(160) }).strict()
 export const productMediaItemSchema = z.object({
@@ -44,11 +45,12 @@ export function mediaObject(value: unknown): Record<string, unknown> {
 
 /** Invalid saved collections are surfaced to the caller, never replaced by an empty gallery. */
 export function readMediaCollection(content: unknown, locale: string): ProductMediaCollection | undefined {
-  const value = mediaObject(mediaObject(content)[locale])[PRODUCT_MEDIA_KEY]
+  const value = mediaObject(languageEntry(Object.entries(mediaObject(content)).filter(([key]) => !key.startsWith('_')), locale))[PRODUCT_MEDIA_KEY]
   return value === undefined ? undefined : productMediaCollectionSchema.parse(value)
 }
 
 export function writeMediaCollection(content: unknown, locale: string, collection: ProductMediaCollection | null) {
+  locale = normalizeLanguage(locale)
   const root = mediaObject(content), language = { ...mediaObject(root[locale]) }
   if (collection === null) delete language[PRODUCT_MEDIA_KEY]
   else language[PRODUCT_MEDIA_KEY] = collection

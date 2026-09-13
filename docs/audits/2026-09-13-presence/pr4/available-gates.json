@@ -1,0 +1,110 @@
+{
+  "status": "W1.5-PUSH DONE \u2014 SHOP-P fact persistence and PR.4 AT-WAVE-4 await W2-SCHEMA-APPLIED",
+  "measuredAt": "2026-09-13T18:46:40.956856+00:00",
+  "database": {
+    "host": "127.0.0.1",
+    "port": 55439,
+    "database": "nexus_development",
+    "fixture": "disposable DRAFT rows under GALE XAVIA; rollback only",
+    "productionWrites": 0,
+    "channelWrites": 0
+  },
+  "checks": {
+    "sharedBuild": {
+      "exit": 0
+    },
+    "sharedTests": {
+      "exit": 0,
+      "files": 20,
+      "passed": 219
+    },
+    "builtDistProbe": {
+      "exit": 0,
+      "imports": 4
+    },
+    "apiTsc": {
+      "exit": 0
+    },
+    "apiTests": {
+      "exit": 0,
+      "files": 28,
+      "passed": 563,
+      "maxWorkers": 2
+    },
+    "shopifyProjection": {
+      "exit": 0,
+      "passed": 3,
+      "notSelected": 13
+    },
+    "shopifyLocalDb": {
+      "exit": 0,
+      "passed": 1,
+      "durationSeconds": 24.62,
+      "readBackDelaySecondsEach": 8,
+      "statuses": [
+        "ACTIVE",
+        "INACTIVE",
+        "INACTIVE"
+      ],
+      "versionsAsserted": true,
+      "rollbackResidue": 0
+    },
+    "installedPushGate": {
+      "exit": 0,
+      "derivedListingPushFunctions": 47,
+      "explicitContracts": 3,
+      "missingGuards": 0
+    },
+    "seedsOnInstalledSource": {
+      "removedPricingGuard": {
+        "exit": 1,
+        "missingGuards": 1,
+        "derivedListingPushFunctions": 47
+      },
+      "newWriterOutsideOriginalSlice": {
+        "exit": 1,
+        "missingGuards": 1,
+        "derivedListingPushFunctions": 48
+      },
+      "amazonPreparedFeedBypass": {
+        "exit": 1,
+        "missingGuards": 1,
+        "derivedListingPushFunctions": 47
+      },
+      "removedEbayFeedGuard": {
+        "exit": 1,
+        "missingGuards": 1,
+        "derivedListingPushFunctions": 47
+      },
+      "removedMarketingGuard": {
+        "exit": 1,
+        "missingGuards": 1,
+        "derivedListingPushFunctions": 47
+      }
+    },
+    "ebayFeedAndPromotions": {
+      "exit": 0,
+      "files": 2,
+      "passed": 54
+    },
+    "stagedPresenceRuntime": {
+      "applied": false,
+      "virtualSharedTscExit": 0,
+      "equivalenceCases": 4000,
+      "runtimeWebImports": 0,
+      "awaiting": "PR.6 AT-WAVE-4 per its handoff constraint"
+    }
+  },
+  "baselineFailures": {
+    "file": "apps/api/src/services/shopify/channel-sheet.vitest.test.ts",
+    "count": 4,
+    "verifiedOnCopiedBeforeSource": true,
+    "changedAssertions": 0
+  },
+  "pending": [
+    "W2-SCHEMA-APPLIED before fact-column persistence and its DB test",
+    "PR.6 AT-WAVE-4 before the additional shared Presence runtime paired move",
+    "SHOP-P DONE and PR.4 AT-WAVE-4 after all original requirements are green"
+  ],
+  "commitCreated": false
+}

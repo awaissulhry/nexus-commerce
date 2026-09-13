@@ -1,0 +1,8 @@
+.body { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.body p { margin: 0; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.issues { margin: 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-6); overflow-wrap: anywhere; }
+.products { max-height: 240px; overflow: auto; border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); }
+.product { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--nds-space-4); padding: var(--nds-space-10); overflow-wrap: anywhere; }
+.product + .product { border-top: 1px solid var(--nds-border-subtle); }
+@media (min-width: 640px) { .product { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) auto; gap: var(--nds-space-12); } }

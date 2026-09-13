@@ -15,6 +15,8 @@ export interface SourceIndicatorProps {
   kind: ValueSourceKind
   label: string
   description: string
+  /** Exact tooltip copy, including a native title when the host disables custom hints. */
+  tooltip?: string
   /** An action is offered only when both its description and handler are present. */
   actionLabel?: string
   onAction?: () => void
@@ -24,7 +26,7 @@ export interface SourceIndicatorProps {
 }
 
 /** A value's origin, with a hover/focus explanation that escapes scrolling grids. */
-export function SourceIndicator({ kind, label, description, actionLabel, onAction, showLabel = false, tabIndex = 0 }: SourceIndicatorProps) {
+export function SourceIndicator({ kind, label, description, tooltip, actionLabel, onAction, showLabel = false, tabIndex = 0 }: SourceIndicatorProps) {
   const Icon = ICONS[kind]
   const actionable = !!onAction && !!actionLabel
   const explanation = [label, description, actionable ? actionLabel : null]
@@ -32,11 +34,11 @@ export function SourceIndicator({ kind, label, description, actionLabel, onActio
   const content = <><Icon size={14} strokeWidth={2} aria-hidden="true" />{showLabel && <span>{label}</span>}</>
   const className = `nds-source-indicator${showLabel ? ' nds-source-indicator--label' : ''}`
   return (
-    <Tooltip portal label={explanation}>
+    <Tooltip portal label={tooltip ?? explanation}>
       {actionable ? (
         <Button
           inline variant="quiet" className={className} type="button"
-          aria-label={explanation} tabIndex={tabIndex} data-value-source={kind}
+          aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
           onMouseDownCapture={(event) => event.stopPropagation()}
           onDoubleClickCapture={(event) => event.stopPropagation()}
           // AG handles native key events before React's bubble handlers; capture keeps Enter/Space on this action.
@@ -44,7 +46,7 @@ export function SourceIndicator({ kind, label, description, actionLabel, onActio
           onClick={(event) => { event.stopPropagation(); onAction() }}
         >{content}</Button>
       ) : (
-        <span className={className} role="img" aria-label={explanation} tabIndex={tabIndex} data-value-source={kind}
+        <span className={className} role="img" aria-label={explanation} title={tooltip} tabIndex={tabIndex} data-value-source={kind}
           onKeyDownCapture={(event) => {
             if (event.key === 'Enter' || event.key === ' ') { event.stopPropagation(); event.preventDefault() }
           }}>

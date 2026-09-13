@@ -1,3 +1,7 @@
+import { contentAddress } from '@nexus/shared/content-language'
+import { applyProductBulkEdits } from '../services/products/bulk-edit.service.js'
+import { normalizeLanguage } from '../services/pim/content-language.js'
+import { contentLanguages } from '../services/pim/content-read.js'
 import { availableContentLanguages } from '../services/pim/market-languages.js'
 import { contentSlots, CONTENT_COLUMNS, contentReviewState } from '../services/pim/content-locale.js'
 import { writeTranslation } from '../services/pim/translation-write.js'
@@ -39,7 +43,7 @@ import {
   getPrimaryLanguage,
   isPrimaryLanguage,
   marketplaceForLanguage,
-  resolveProductContent,
+  resolveProductContent, resolvedContent,
 } from '../services/products/translation-resolver.service.js'
 import {
   ListingContentService,
@@ -50,6 +54,9 @@ import { GEMINI_DEFAULT_MODEL } from '../services/ai/rate-cards.js'
 const listingContentService = new ListingContentService()
 
 interface TranslationBody {
+  contentAddress?: import('@nexus/shared/content-language').ContentAddress
+  expectedVersion?: number
+  contentVersion?: number
   name?: string | null
   description?: string | null
   bulletPoints?: string[] | null
@@ -69,25 +76,17 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
         include: { translations: true, parent: { include: { translations: true } } },
       })
       if (!product) return reply.code(404).send({ error: 'Product not found' })
-      const rows = await prisma.productTranslation.findMany({
-        where: { productId: id },
-        orderBy: { language: 'asc' },
-      })
-      const slots = contentSlots(product)
       return {
-        availableLanguages: await availableContentLanguages(),
-        primaryLanguage: getPrimaryLanguage(),
-        translations: Object.keys(slots).filter(language => !language.startsWith('_') && language === language.toLowerCase()).sort().map(language => {
-          const legacy = rows.find(row => row.language.toLowerCase() === language)
-          const values = slots[language]
-          const states = Object.fromEntries(Object.keys(CONTENT_COLUMNS).filter(key => key in values).map(key => [key, contentReviewState(product, key, language)]))
-          return { ...legacy, productId: id, language,
-            ...Object.fromEntries(Object.entries(CONTENT_COLUMNS).filter(([key]) => key in values).map(([key, column]) => [column, values[key]])),
-            reviewedAt: Object.values(states).every(state => state === 'reviewed' || state === 'current') ? legacy?.reviewedAt ?? values._meta?.title?.authoredAt ?? null : null,
-            translationStates: states,
-          }
+        availableLanguages: await availableContentLanguages(), primaryLanguage: getPrimaryLanguage(),
+        translations: contentLanguages(product, product.parent).sort().map(language => {
+          const row = product.translations.find(row => normalizeLanguage(row.language) === language)
+          const resolved = resolvedContent(product, language)
+          return { ...row, productId: id, ...resolved,
+            reviewedAt: Object.values(resolved.fields).every(field => ['reviewed', 'current'].includes(field.translationState)) ? row?.reviewedAt ?? null : null,
+            translationStates: Object.fromEntries(Object.entries(CONTENT_COLUMNS).map(([key, column]) => [key, resolved.fields[column].translationState])) }
         }),
       }
+
     },
   )
 
@@ -106,7 +105,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
     Body: TranslationBody
   }>('/products/:id/translations/:language', async (request, reply) => {
     const { id, language } = request.params
-    const lang = language.toLowerCase()
+    const lang = normalizeLanguage(language)
     const body = request.body ?? {}
 
     const product = await prisma.product.findUnique({
@@ -145,28 +144,12 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
       setData.reviewedAt = null
     }
 
-    const row = await writeTranslation({ productId: id, locale: lang, values: setData, state: setData.reviewedAt === null ? 'draft' : 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.upsert({
-      where: { productId_language: workspaceKey({ productId: id, language: lang }) },
-      create: {
-        productId: id,
-        language: lang,
-        name: typeof body.name === 'string' ? body.name : null,
-        description:
-          typeof body.description === 'string' ? body.description : null,
-        bulletPoints: Array.isArray(body.bulletPoints)
-          ? body.bulletPoints
-          : [],
-        keywords: Array.isArray(body.keywords) ? body.keywords : [],
-        source: body.source ?? 'manual',
-        sourceModel: body.sourceModel ?? null,
-        reviewedAt: body.reviewedAt
-          ? new Date(body.reviewedAt)
-          : body.source && body.source.startsWith('ai-')
-            ? null
-            : new Date(),
-      },
-      update: setData,
-    }))
+    const result = await applyProductBulkEdits({ changes: Object.entries(setData).filter(([field]) => ['name','description','bulletPoints','keywords'].includes(field)).map(([field,value]) => ({ id, field, value,
+      contentAddress: body.contentAddress, contentVersion: body.contentVersion, contentState: setData.reviewedAt === null ? 'draft' : 'reviewed' })), expectedVersion: body.expectedVersion,
+      marketplaceContexts: [{ marketplace: await marketplaceForLanguage(lang), locale: lang } as any] },
+      { formulaCascade: request.headers['x-nexus-formula-cascade'] === '1', userId: (request as any).authUser?.id, ip: request.ip, logger: request.log })
+    if (result.errors?.length) return reply.code(400).send({ error: result.errors[0].error, errors: result.errors })
+    const row = await prisma.productTranslation.findFirst({ where: { productId: id, language: lang } })
     return row
   })
 
@@ -174,10 +157,8 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:id/translations/:language/review',
     async (request, reply) => {
       const { id, language } = request.params
-      const lang = language.toLowerCase()
-      const result = await writeTranslation({ productId: id, locale: lang, values: {}, state: 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.updateMany({
-        where: { productId: id, language: lang }, data: { reviewedAt: new Date() },
-      }))
+      const lang = normalizeLanguage(language)
+      const result = await writeTranslation({ address: (request.body as any)?.contentAddress, expectedVersion: (request.body as any)?.expectedVersion, expectedTranslationVersion: (request.body as any)?.contentVersion, productId: id, locale: lang, values: {}, state: 'reviewed', userId: (request as any).authUser?.id, ip: request.ip })
       return { ok: true, reviewedAt: new Date().toISOString() }
     },
   )
@@ -186,16 +167,14 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
     '/products/:id/translations/:language',
     async (request, reply) => {
       const { id, language } = request.params
-      const lang = language.toLowerCase()
+      const lang = normalizeLanguage(language)
       if (isPrimaryLanguage(lang)) {
         return reply.code(400).send({
           error: 'cannot delete primary-language master',
         })
       }
-      const result = await writeTranslation({ productId: id, locale: lang, values: {}, state: 'draft', remove: true, userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.deleteMany({
-        where: { productId: id, language: lang },
-      }))
-      return { ok: true, deleted: result.count }
+      const result = await writeTranslation({ address: (request.body as any)?.contentAddress, expectedVersion: (request.body as any)?.expectedVersion, expectedTranslationVersion: (request.body as any)?.contentVersion, productId: id, locale: lang, values: {}, state: 'draft', remove: true, userId: (request as any).authUser?.id, ip: request.ip })
+      return { ok: true, deleted: result && 'count' in result ? result.count : 0 }
     },
   )
 
@@ -242,12 +221,14 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
         })
       }
       const { id } = request.params
-      const lang = request.params.language.toLowerCase()
+      const lang = normalizeLanguage(request.params.language)
       if (isPrimaryLanguage(lang)) {
         return reply.code(400).send({
           error: `language '${lang}' is the primary language; nothing to translate`,
         })
       }
+      const address = contentAddress((request.body as any)?.contentAddress, 'Translation')
+      if (address.tier !== 'language' || address.language !== lang) return reply.code(400).send({ error: `Translation needs the shared ${lang} language address.` })
       const requested = (
         request.body?.fields && request.body.fields.length > 0
           ? request.body.fields
@@ -394,28 +375,7 @@ const productTranslationsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Upsert. On create we still want any non-touched fields to land
       // sensibly (empty arrays for bulletPoints/keywords).
-      const row = await writeTranslation({ productId: id, locale: lang, values: updates, state: updates.reviewedAt === null ? 'draft' : 'reviewed', userId: (request as any).authUser?.id, ip: request.ip }, tx => tx.productTranslation.upsert({
-        where: { productId_language: workspaceKey({ productId: id, language: lang }) },
-        create: {
-          productId: id,
-          language: lang,
-          name: typeof updates.name === 'string' ? (updates.name as string) : null,
-          description:
-            typeof updates.description === 'string'
-              ? (updates.description as string)
-              : null,
-          bulletPoints: Array.isArray(updates.bulletPoints)
-            ? (updates.bulletPoints as string[])
-            : [],
-          keywords: Array.isArray(updates.keywords)
-            ? (updates.keywords as string[])
-            : [],
-          source: 'ai-gemini',
-          sourceModel: GEMINI_DEFAULT_MODEL,
-          reviewedAt: null,
-        },
-        update: updates,
-      }))
+      const row = await writeTranslation({ address: (request.body as any)?.contentAddress, expectedVersion: (request.body as any)?.expectedVersion, expectedTranslationVersion: (request.body as any)?.contentVersion, productId: id, locale: lang, values: updates, state: updates.reviewedAt === null ? 'draft' : 'reviewed', userId: (request as any).authUser?.id, ip: request.ip })
 
       return {
         row,

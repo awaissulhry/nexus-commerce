@@ -1,0 +1,487 @@
+{
+  "at": "2026-09-13T00:04:33.263024+00:00",
+  "scope": "Step 7 actual edited/created source files; content comparison against pre-edit snapshots, not git HEAD. mtime is a reading, not authorship. Two assigned catalogue files lacked pre-edit snapshots and are explicitly marked.",
+  "files": [
+    {
+      "path": "apps/api/src/lib/auth/permissions-manifest-order.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "f53cef6066b051eb80b2c6f61112670f6d9dbe24b0cd2eb61f0e0c87cdebd2cd",
+      "mtime": "2026-09-12T23:45:00.612887+00:00",
+      "sha256": "91e9db6f284ecdee70665cda9655c10177e86ab92111f1e711741ef5447f9981"
+    },
+    {
+      "path": "apps/api/src/lib/auth/permissions-manifest.ts",
+      "change": "changed",
+      "beforeSha256": "b2f5150b13b6bb5c97b1493c7d99594110bdc8c95f86199487be3d7484115b42",
+      "mtime": "2026-09-12T23:45:00.612660+00:00",
+      "sha256": "3f26abb16c426a846874e6aa97cfaa432228237222f80569766605e7d65e8635"
+    },
+    {
+      "path": "apps/api/src/routes/catalog-transfer.routes.ts",
+      "change": "changed; initial literal glob omitted pre-edit bytes",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T23:40:19.739031+00:00",
+      "sha256": "904d99ca531414b30279948691ec2726235a9afb860083f7960b743660bb0ae9"
+    },
+    {
+      "path": "apps/api/src/routes/marketplaces.routes.ts",
+      "change": "changed",
+      "beforeSha256": "869faf488f97ec2bd847618a5e8777eb7a164236a2299b4bef7489bbb35a5f46",
+      "mtime": "2026-09-12T22:39:12.513943+00:00",
+      "sha256": "3f902f6c26dd1702d254be3e8b1bd353354ee65468c56e2b2de01212b1579f5e"
+    },
+    {
+      "path": "apps/api/src/services/bulk-action.service.ts",
+      "change": "changed",
+      "beforeSha256": "867ff4ea9d1fdb4de4db69c972dfa3f6883d50dc11f27be23d281798d2c83bfb",
+      "mtime": "2026-09-12T22:39:12.566604+00:00",
+      "sha256": "8401109c360c8ef9b71df465f73b5e72379bfb5ec48408bcd062d0a150c7a58b"
+    },
+    {
+      "path": "apps/api/src/services/outbound-sync.service.ts",
+      "change": "changed",
+      "beforeSha256": "2448113827a662cedb15ed51819d1e23aefbf172de279ec568dfacc2305eaa41",
+      "mtime": "2026-09-12T22:18:16.872382+00:00",
+      "sha256": "bb994e61e6b49f7b00977a030f6af0810bb1f38a4be981b39091495c0f2347a3"
+    },
+    {
+      "path": "apps/api/src/services/pim/amazon-content-payload.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:57:26.193618+00:00",
+      "sha256": "52409e4740c442c1418edaa77b21cb80c02312ed9dca1c241d427dce8b5ad73c"
+    },
+    {
+      "path": "apps/api/src/services/pim/amazon-content-payload.vitest.test.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T23:00:55.725117+00:00",
+      "sha256": "789b4f7faf91d3ebbcfdb576b2afb0bf308c8a2284c5b61b82b8d67384581976"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-language.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:47:53.885159+00:00",
+      "sha256": "dd3f128f3b3f129d3f865eab93c05257f3174f338cf70ef638d4ec36f8b855cb"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-language.vitest.test.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:49:43.464533+00:00",
+      "sha256": "c7a1f3209a4baf2173a4c5d51c0b467ba1fabd92563bb7fcc778cd12c79f8709"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-product-transfer.ts",
+      "change": "changed",
+      "beforeSha256": "641b6f4051e9eb095782ed3ccbbae91116f1ab882ac48c0a186cdcfd473723d3",
+      "mtime": "2026-09-12T22:40:53.275037+00:00",
+      "sha256": "cc5c6710cb2d34a06288c6f635148b2ab804ff6c9a4feb6302bdf233cb8865a9"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-content.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:44:54.964867+00:00",
+      "sha256": "502ff32fe648f8ee947c7472eb9fd4161107bce3d44a2cd2002189ee0f087ee7"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+      "change": "changed",
+      "beforeSha256": "3106235894223268457cc6a5e787289e4b9a3196fae64b81e67ba181fd128eee",
+      "mtime": "2026-09-12T23:00:55.723723+00:00",
+      "sha256": "be74348d8e927f6ea0c98a88cf82943fa63ff310ca69ca86ad52d61a8c20d69f"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-export.ts",
+      "change": "changed",
+      "beforeSha256": "369ad992ea3d4883635a579f60d597ea1e5c6b99b04a8b22b0c2a68d96d7118f",
+      "mtime": "2026-09-12T22:44:10.210699+00:00",
+      "sha256": "ddf5a53ab70237e1128057c8ca57ea0425e727f8c1a5be9e45154c4699cb7d43"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-export.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "835a2d4b5d90157baeed45a4d8dfe4c71dbf620ccd212b0e1679c658c625fe0e",
+      "mtime": "2026-09-12T22:53:45.366093+00:00",
+      "sha256": "abc117a52ab0242b63fb20316626b5097f1def0ea368139db2ec454019fbc7a5"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-file.ts",
+      "change": "changed",
+      "beforeSha256": "b460c68563a6b5e8e416306d32702fedcfecbfe662f8caaac7cabcf619110eaf",
+      "mtime": "2026-09-12T22:40:53.274728+00:00",
+      "sha256": "39d4e787b2390820e35d9489ec882882730da4ed5b68a1ad2d3566f0c2eac411"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-jobs.ts",
+      "change": "changed",
+      "beforeSha256": "bcf0b19246018f68926bcdf5679cac671df12cb4557a5aaed2ed070daf79f68d",
+      "mtime": "2026-09-12T22:59:48.201798+00:00",
+      "sha256": "5245dc5a15472f6d34b1de1c5c0bf160f31068939aa3d4d942c6d1247a8dac78"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-jobs.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "73bf7d83fdae819758d54ca754012e68fc678fc230d3a5849d146560584e7835",
+      "mtime": "2026-09-12T22:59:48.201979+00:00",
+      "sha256": "c966b8a43fcea7a686e32bd878fecbc4d7bab7b95ed6db81107433fbf9670bf4"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer-plan.ts",
+      "change": "changed",
+      "beforeSha256": "879796a198ed8d352954f364641fc4d3ce3f5516e3a7312ba38ce3fdcdc55e78",
+      "mtime": "2026-09-12T23:00:55.723281+00:00",
+      "sha256": "d4fd903e7f123d58c0191cb403d640c9232e16a1920fd9c5daadeb0bf7ce1976"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-transfer.service.ts",
+      "change": "changed; initial literal glob omitted pre-edit bytes",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:57:26.192359+00:00",
+      "sha256": "ccbee8a4fd9f5ae0e47add08d8bcb4d9cc208a963a5af1e8f009796c64c68ed6"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-translate.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T23:17:07.479196+00:00",
+      "sha256": "80457d5613fe31dd9728bf2a7cafbf6aa88d3355f88538d3fca4a0defd9a939f"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-translate.vitest.test.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T23:17:07.479445+00:00",
+      "sha256": "493d199eb9aee52ac2b96cdac266a87d4662e1d474ec74ea2d17143d9ba0c694"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+      "change": "changed",
+      "beforeSha256": "ae08b0bb6fda7beb6a2d3fd66658b41e1e6dd7e97f9da82cff3b7158eee1dfda",
+      "mtime": "2026-09-12T22:41:50.139852+00:00",
+      "sha256": "1c20e220fa52e270ae7b7a149bef8af64cb482eac8aec84281e7d69c655faed0"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-workbook-scopes.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "0fd4c2d63806560eedaf33156d8a76ca47dda84436542f57c73f39f20a3c96ee",
+      "mtime": "2026-09-12T22:53:45.365276+00:00",
+      "sha256": "1546994d408a1932467deb495b7d8b59006034a35263cece4f2596cc0e17a968"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-workbook.ts",
+      "change": "changed",
+      "beforeSha256": "0fd160bfb4fd88c54c9eb5282cf261d467a0ba7e11d3e805e4dde2e39f355953",
+      "mtime": "2026-09-12T22:54:37.412392+00:00",
+      "sha256": "9bb467d9adde210bdf80053ac8268230ea69dc72d7947270c48181bb4927eefe"
+    },
+    {
+      "path": "apps/api/src/services/pim/catalog-workbook.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "2311a433b0b83bacb487f397a1d6d39ef0dd0aa424c90d7ba556445d32b2deee",
+      "mtime": "2026-09-12T22:53:45.364952+00:00",
+      "sha256": "d7c9353c6b655ec32ac671d08a06f796c83883b51cf0ccab9b8fa4ba50436c41"
+    },
+    {
+      "path": "apps/api/src/services/pim/import-diff.service.ts",
+      "change": "changed",
+      "beforeSha256": "a248c44ce283cb739e28b5e1406d39299e4f2b555535ce2cc8d3629bb3f5d178",
+      "mtime": "2026-09-12T23:09:18.291757+00:00",
+      "sha256": "121588fc6f09da6812deaa8ae8740b5445d3ac68066d5e6074d7a9765ab8cecb"
+    },
+    {
+      "path": "apps/api/src/services/pim/import-diff.service.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "61997aed8086ccde2cceae8e29bd0a3bf99f0a4b14138aaac9640aa6694e6d13",
+      "mtime": "2026-09-12T23:09:18.292068+00:00",
+      "sha256": "89373a097dbb8a1f1534f5da200d2be9ac73d32ef293b423e62caa5b0d26bb01"
+    },
+    {
+      "path": "apps/api/src/services/pim/import-jobs.service.ts",
+      "change": "changed",
+      "beforeSha256": "be0bdd4ceb0583e6414810d6f30fc351f0ab8a53adad5b07346a26333b54b898",
+      "mtime": "2026-09-12T22:43:37.431592+00:00",
+      "sha256": "6daeaa170cbb050efdcd880ddd8dc389b2981138a5616bde980cea42a2d923a4"
+    },
+    {
+      "path": "apps/api/src/services/pim/listing-readiness.service.ts",
+      "change": "changed",
+      "beforeSha256": "f28ebf93aec6692be1e348141e06f9278049ca217cc3d14a8160cf5d3868df6a",
+      "mtime": "2026-09-12T23:41:07.884593+00:00",
+      "sha256": "4677e66531d831f4880aa3508017569fd138d6f504827db09083c8744fb53c47"
+    },
+    {
+      "path": "apps/api/src/services/pim/listing-readiness.vitest.test.ts",
+      "change": "changed",
+      "beforeSha256": "415d782a817b6dded4f5d89b5df5f47a6c8abf146729f4ebd46ba609695a897b",
+      "mtime": "2026-09-12T23:41:07.885134+00:00",
+      "sha256": "6e83fb5f64052b21dc37d09a4601669777d5dfd09ad7869b97ea4e3757f21fb6"
+    },
+    {
+      "path": "apps/api/src/services/pim/studio-columns-cache.vitest.test.ts",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:16:46.529546+00:00",
+      "sha256": "9c3d06f83b7318913616b3823dddd8f96bf5bde81e4130ed877d43d0a1f3640e"
+    },
+    {
+      "path": "apps/api/src/services/pim/studio-columns.ts",
+      "change": "changed",
+      "beforeSha256": "e1fa4d55a75744fc2ea1fed09293c5d5203ba217872767a015aa8e3c5cdf5e98",
+      "mtime": "2026-09-12T22:15:12.268341+00:00",
+      "sha256": "b565e554437dc37403fa1432e84dc59b27ba2ea2d59e457fe4efc6459dfc8b67"
+    },
+    {
+      "path": "apps/api/src/services/products/list-products.service.ts",
+      "change": "changed",
+      "beforeSha256": "30b715830ba5fed6fe03f7be1192d15207a3ba8a968aa82eb3b15f9e3ceba656",
+      "mtime": "2026-09-12T22:47:53.884432+00:00",
+      "sha256": "badf20e962b894a866dd798af198d2168f12ab7f271b7cc6cbef0516c8f5882e"
+    },
+    {
+      "path": "apps/api/src/services/products/products-grid.contract.ts",
+      "change": "changed",
+      "beforeSha256": "393e3aa46e68f1c20bfd9f02990bf196098026d27f6ac5086436b7ca75996bee",
+      "mtime": "2026-09-12T22:47:53.885281+00:00",
+      "sha256": "912000da0bb1a142c2a3a2d06cd9f7a5798bd981523992e0057d480408787fa4"
+    },
+    {
+      "path": "apps/web/src/app/products/catalog-transfer/page.tsx",
+      "change": "changed",
+      "beforeSha256": "0f69c4f8d4be8956bd7b14185b255b7368c4d5e69a96bdc54e8357cf47fca872",
+      "mtime": "2026-09-12T22:57:54.286797+00:00",
+      "sha256": "1d5e1f29c8ba2151443bf409242af24c13afadfcee30a6885e217c5b2cd0e022"
+    },
+    {
+      "path": "apps/web/src/app/products/listing-readiness/page.tsx",
+      "change": "changed",
+      "beforeSha256": "41765e7f28a9fb27f615c4bf4bda6b34d9d93bfec29d2287f5901fad357eccae",
+      "mtime": "2026-09-12T23:57:58.390680+00:00",
+      "sha256": "017f2ad13abe5af8925f92564e6a0019da3facedff4c33723a013aada7ad5b57"
+    },
+    {
+      "path": "apps/web/src/app/products/listing-readiness/readiness.module.css",
+      "change": "changed",
+      "beforeSha256": "1d6814ab80ccbba259790233548d137d30424833d0243b0b661b2fab6240506e",
+      "mtime": "2026-09-12T23:57:02.425316+00:00",
+      "sha256": "e4f9362e3f739677a89c99acfeecd25abe70827de3318cbc7590d6c9f87564ed"
+    },
+    {
+      "path": "apps/web/src/app/products/next/ProductsNextClient.tsx",
+      "change": "changed",
+      "beforeSha256": "a6fe1485a89a827a130a9d02236c0f4d051b24c483203f27c44ebc17f40c806b",
+      "mtime": "2026-09-12T22:47:53.884782+00:00",
+      "sha256": "60c345efc193df7bf89f07321d6a1b0b174c5113116fcab427dd0ba691337178"
+    },
+    {
+      "path": "apps/web/src/app/products/next/TranslateDialog.tsx",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T23:57:02.489105+00:00",
+      "sha256": "d228bf95b5caa261b36afb4b241aa18723bc4521869d64e6da4ec3ef41d83d53"
+    },
+    {
+      "path": "apps/web/src/app/products/next/language.module.css",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:31:37.509504+00:00",
+      "sha256": "051eba4ce002871dc1c2f9018c4b0d5c47db6feb221cf27d59ed2f8a100d0935"
+    },
+    {
+      "path": "apps/web/src/app/products/next/languageColumns.tsx",
+      "change": "created",
+      "beforeSha256": null,
+      "mtime": "2026-09-12T22:31:37.511479+00:00",
+      "sha256": "ec8a75af438fcf2b04733820ed36efc94da84d1f03875f9a87af8ca580cc522b"
+    },
+    {
+      "path": "apps/web/src/app/products/next/productsServerContract.ts",
+      "change": "changed",
+      "beforeSha256": "9d6a2cd6557b7b39fd546fdbd7dcaec7361923094fdbbe0fd658c84ee5ef2390",
+      "mtime": "2026-09-12T22:21:54.078578+00:00",
+      "sha256": "12250126cd936ea30feb67dab03194b7de7ef7d7bc1850b76af36ee4ec97d2dd"
+    },
+    {
+      "path": "packages/shared/listing-readiness.ts",
+      "change": "changed",
+      "beforeSha256": "bf72512a078ba554d8e5a990d435a3fadf85b2ecb1bf53136d879f92d02e2874",
+      "mtime": "2026-09-12T22:48:21.346846+00:00",
+      "sha256": "0fff3a1280bf3565fdb4ab1f23134cc03dd0ab3253087bb2c5dfc98da986a381"
+    },
+    {
+      "path": "packages/shared/products-grid.ts",
+      "change": "changed",
+      "beforeSha256": "ced1fa5466ef16578b67b31d3d060e85a15a022b16d387050916373263455d06",
+      "mtime": "2026-09-12T22:46:34.723386+00:00",
+      "sha256": "55f7303366ed9798b8bbfeaa3066fc6f312fd5bef4f87bbf3764e9fb88f40493"
+    }
+  ],
+  "protected": [
+    {
+      "path": "apps/web/src/app/design/language-axis/fixtures.ts",
+      "same": true,
+      "sha256": "adb46c737439dba3bda2a84475e0a84d00c5d74d1b226713ae355ce691d2fa5a"
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/LanguageAxisClient.tsx",
+      "same": true,
+      "sha256": "5ec6a73dc8d09f190c3ea5f9b031b7385e965c8ab055b790db9cc413fc8f8d36"
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/language-axis.module.css",
+      "same": true,
+      "sha256": "96b8046b8ad31e4717c6a8d0e9e668ed343bb1e62b046db81886b6a178003ea4"
+    },
+    {
+      "path": "apps/web/src/app/design/language-axis/page.tsx",
+      "same": true,
+      "sha256": "95b4cfae68db482a2255066797e5f19a6d33e23c4d945ec648ea17c29de8a0a7"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-format.vitest.test.ts",
+      "same": true,
+      "sha256": "7c8e224edc2fc17c82372b0434255ccd24300fac27b5dfc3fae9ab38f0079ad2"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce.ts",
+      "same": true,
+      "sha256": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-propagate.service.ts",
+      "same": true,
+      "sha256": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-roundtrip.vitest.test.ts",
+      "same": true,
+      "sha256": "81283819e665874d8429630c239ab002294c4088d820c91f112d24177601c7f5"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx-schema.vitest.test.ts",
+      "same": true,
+      "sha256": "dd989b3bf7b69ae3e7ac428802c3564d356f0480228454673d6653e3fdc0e14e"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-pull.service.ts",
+      "same": true,
+      "sha256": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+      "same": true,
+      "sha256": "1c8264c4c1e6b518f9fe53e977e4a03979d69a7ffaa42c3d5b0cc15e35845e4b"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-verify-live.vitest.test.ts",
+      "same": true,
+      "sha256": "4833e19c092b72343f67430bee7c2b7a2c51a80266c7176cbb17a057b07617fd"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce.vitest.test.ts",
+      "same": true,
+      "sha256": "8573a9860c4c579c9e746a6b8f4e47b2dfa742269f822c57d34b98258f370d80"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-export.vitest.test.ts",
+      "same": true,
+      "sha256": "1398d0debc0be590e84d53da43c90079e122eee5efd7f70b7029a3b2cf3772c0"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-union-manifest.vitest.test.ts",
+      "same": true,
+      "sha256": "c874b0c1d47d0caac9ab8e9872b7743004b05f949de1cff39a337d84866f5de4"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping-ai.ts",
+      "same": true,
+      "sha256": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-pull-preview.service.ts",
+      "same": true,
+      "sha256": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+      "same": true,
+      "sha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file.service.ts",
+      "same": true,
+      "sha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping.ts",
+      "same": true,
+      "sha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-merge.ts",
+      "same": true,
+      "sha256": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-schema-walk.vitest.test.ts",
+      "same": true,
+      "sha256": "58725803964641c9f7aa141552abd6bc0021780a0e9378af9c9c4c3c870150eb"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-merge.vitest.test.ts",
+      "same": true,
+      "sha256": "f9e28d68820195ad624ec27a65211ab4ee233d8256013348e59b95cd20cb2f7b"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-hydrate.service.ts",
+      "same": true,
+      "sha256": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file.browse-nodes.vitest.test.ts",
+      "same": true,
+      "sha256": "93db6d3a882232236ddabe57cb7bd9d819be93ad0ce38a5759ad36ebee66e0c7"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-coerce-ai.ts",
+      "same": true,
+      "sha256": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-ufx6-feedops.vitest.test.ts",
+      "same": true,
+      "sha256": "d61d5e70c7aa35c14bacc8bf14563c65ffce2cdcc1a084eb7817d69fa06e5c27"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-mapping.vitest.test.ts",
+      "same": true,
+      "sha256": "9a0dd07ebaa5768592163b1d9f96826fd2708ed9974a9c097c03e253f85c0a5c"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-verify-live.service.ts",
+      "same": true,
+      "sha256": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927"
+    },
+    {
+      "path": "apps/api/src/services/amazon/flat-file-create.vitest.test.ts",
+      "same": true,
+      "sha256": "da0f42275661de6a2359fc0781a9f90da65f9022ccd2812656fed7b93e7f3bf2"
+    },
+    {
+      "path": "apps/api/src/services/channel-batch/amazon-batch-feed.service.ts",
+      "same": true,
+      "sha256": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556"
+    }
+  ],
+  "diffCheck": {
+    "command": "git diff --check -- <these source files>",
+    "exitCode": 0,
+    "output": "",
+    "limitation": "Git does not inspect untracked files; all source bytes are independently hashed here."
+  },
+  "verifiedAfterGate": "2026-09-13T00:27:14.259Z",
+  "sourceChangedDuringGate": [],
+  "protectedChanged": []
+}

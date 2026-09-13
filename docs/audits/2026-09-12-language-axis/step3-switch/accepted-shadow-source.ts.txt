@@ -1,0 +1,167 @@
+/** LX.7 comparison only. No reader switches, writes, provider calls or acceptance allow-list. */
+import { resolveAttributes, type ProductLike } from './attribute-resolver.js'
+import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE, sourceContent } from './content-locale.js'
+import { contentPathAddress, resolveContentPath, resolveContentBatch, type ContentProduct, type ContentListing, type Coordinate, type ResolvedContent } from './content-resolver.js'
+import { marketLanguages } from './market-languages.js'
+import { normalizeLanguage } from './content-language.js'
+import { etsyContentState } from '../etsy/information-content.js'
+import { resolveSourcePath } from './resolve-channel-field.js'
+import { globalContentLocales } from './global-content.js'
+import { shopifyProductSpec } from './channel-specs/store.js'
+import { storedChannelState } from './channel-value-mutation.js'
+
+type Row = Record<string, any>
+export const reclassifications = {
+  'R1-legacy-json-retired': 'Product.localizedContent no longer supplies text; no values are moved or backfilled.',
+  'R2-default-language-listing-pin': 'Existing listing title/description and broken-inheritance overrides are pins for Marketplace.languages[0] only.',
+  'R3-language-before-source': 'A parent language translation answers before a child native source value; child wins within each tier.',
+  'R4-native-source-authority': 'Native Product columns supply primary text; untagged category aliases and primary translation rows no longer override those columns.',
+  'R5-untagged-text-override-retired': 'overrideData continues to hold facts but no longer supplies language content.',
+  'R6-explicit-source-fallback': 'An exact-language sourceContent miss now returns source text with its actual source language.',
+  'R7-outbound-content-retired': 'Provider/store-specific content bags no longer supply authored language content.',
+  'R8-language-review-metadata': 'The resolved value reports its actual language and translation-row review status.',
+  'R9-regional-key-normalized': 'An existing regional table key is found in memory through the language-only normaliser; nothing is rewritten.',
+  'R10-empty-field-fallback': 'Absent/default empty text fields fall through individually rather than hiding a populated lower tier.',
+} as const
+export type Reclassification = keyof typeof reclassifications | 'UNCLASSIFIED'
+export const equalContent = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+const object = (v: any): Row => v && typeof v === 'object' && !Array.isArray(v) ? v : {}
+const present = (v: any) => v != null && v !== '' && (!Array.isArray(v) || v.length > 0)
+const workspace = (row: Row) => row.workspaceId ?? null
+const id = (row: Row, key = row.id) => JSON.stringify([workspace(row), key])
+
+export interface ShadowDiff {
+  reader: string; productId: string; sku: string; workspaceId: string | null
+  listingId: string | null; coordinate: Coordinate | null; field: string; language: string
+  valueChanged: boolean; languageChanged: boolean; reviewChanged: boolean
+  classification: Reclassification; old: Row; next: ResolvedContent
+}
+
+/** Narrow candidate verification prevents a fabricated new value from being reclassified as a known change. */
+export function classifyContentDiff(input: { old: Row; next: ResolvedContent; product: Row; parent?: Row | null; listing?: Row | null; field: string; reader: string }): Reclassification {
+  const { old, next, product, parent, listing, field, reader } = input
+  const column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
+  const native = (owner: Row) => column ? owner[column] : owner.categoryAttributes?.[field] ?? owner.categoryAttributes?.variations?.[field] ?? owner.variantAttributes?.[field]
+  const source = column ? [product, parent].filter(Boolean).map(owner => native(owner!)).find(present) ?? null
+    : resolveAttributes({ product: { ...product, localizedContent: {}, translations: [] } as ProductLike, parent: parent ? { ...parent, localizedContent: {}, translations: [] } as ProductLike : null, locale: PRIMARY_CONTENT_LOCALE })[field]?.value ?? null
+  const translations = [product, parent].filter(Boolean).flatMap(owner => owner!.translations ?? [])
+  const tableValues = translations.filter(row => normalizeLanguage(row.language) === next.requested).map(row => column ? row[column] : row.attributes?.[field])
+  const legacyValues = field === 'title' ? [listing?.titleOverride, listing?.title] : field === 'description' ? [listing?.descriptionOverride, listing?.description] : field === 'bulletPoints' ? [listing?.bulletPointsOverride] : []
+  if (next.language !== (['source', 'computed'].includes(next.tier) ? normalizeLanguage(PRIMARY_CONTENT_LOCALE) : next.requested)
+    || next.tier === 'source' && !equalContent(next.value, source)
+    || next.tier === 'language' && !tableValues.some(value => equalContent(value, next.value))
+    || next.tier === 'pin' && !legacyValues.some(value => present(value) && equalContent(value, next.value))
+    || next.tier === 'computed' && next.value !== null) return 'UNCLASSIFIED'
+  if (equalContent(old.value, next.value)) return 'R8-language-review-metadata'
+  if (reader.startsWith('etsy') || reader.startsWith('shopify') || reader.startsWith('syndication')) return 'R7-outbound-content-retired'
+  if (next.tier === 'pin' || old.source === 'channelExplicit') return 'R2-default-language-listing-pin'
+  if (old.source === 'channelOverride') return 'R5-untagged-text-override-retired'
+  const slots = [product, parent].filter(Boolean).flatMap(owner => Object.values(object(owner!.localizedContent)))
+  if (old.value != null && slots.some(slot => Object.prototype.hasOwnProperty.call(object(slot), field) && equalContent(object(slot)[field], old.value))) return 'R1-legacy-json-retired'
+  if (translations.some(row => row.language !== normalizeLanguage(row.language) && normalizeLanguage(row.language) === next.requested)) return 'R9-regional-key-normalized'
+  if (next.tier === 'language' && old.source === 'masterColumn') return 'R3-language-before-source'
+  if (['sourceContent', 'mapping-source'].includes(reader) && old.value == null && next.tier === 'source') return 'R6-explicit-source-fallback'
+  if (next.tier === 'source' && ['master', 'variant', 'masterLocale', 'variantLocale'].includes(old.source)) return 'R4-native-source-authority'
+  if (old.value === '' || Array.isArray(old.value) && !old.value.length) return 'R10-empty-field-fallback'
+  return 'UNCLASSIFIED'
+}
+
+export function compareProductionContent(data: {
+  products: Row[]; listings: Row[]; marketplaces: Row[]; translations: Row[]
+  localizableKeysByProduct?: Record<string, string[]>
+  /** The actual existing syndication extractor, extracted and hashed by the audit builder to avoid route bootstrap. */
+  extractLocaleTitle?: (pa: unknown, marketplace: string, language: string) => string | null
+  productResolvedContent?: (product: any, language: string) => any
+}) {
+  const products: Row[] = data.products.map(product => ({ ...product, translations: data.translations.filter(row => id(row, row.productId) === id(product)) }))
+  const productMap = new Map(products.map(product => [id(product), product]))
+  const counts: Record<string, { compared: number; valueDiffs: number; languageDiffs: number; reviewDiffs: number; diffs: number }> = {}
+  const classificationCounts: Record<string, number> = {}, diffs: ShadowDiff[] = []
+  const coveredListings = new Set<string>(), coordinates = new Set<string>()
+  const observe = (reader: string, product: Row, parent: Row | undefined, listing: Row | undefined, coordinate: Coordinate | null, field: string, language: string, old: Row, next: ResolvedContent) => {
+    const key = JSON.stringify([reader, field, language])
+    const count = counts[key] ??= { compared: 0, valueDiffs: 0, languageDiffs: 0, reviewDiffs: 0, diffs: 0 }
+    count.compared++
+    const valueChanged = !equalContent(old.value, next.value)
+    const languageChanged = present(old.value) && present(next.value) && (old.effectiveLocale ?? null) !== next.language
+    const newReview = next.translation ? next.translation.outdated ? 'outdated' : next.translation.reviewedAt ? 'reviewed' : next.translation.source === 'manual' ? 'current' : 'draft' : next.language !== language ? 'fallback' : 'current'
+    const reviewChanged = present(old.value) && present(next.value) && old.translationState != null && old.translationState !== newReview
+    if (!valueChanged && !languageChanged && !reviewChanged) return
+    const classification = classifyContentDiff({ old, next, product, parent, listing, field, reader })
+    count.valueDiffs += Number(valueChanged); count.languageDiffs += Number(languageChanged); count.reviewDiffs += Number(reviewChanged); count.diffs++
+    classificationCounts[classification] = (classificationCounts[classification] ?? 0) + 1
+    diffs.push({ reader, productId: product.id, sku: product.sku, workspaceId: workspace(product), listingId: listing?.id ?? null, coordinate, field, language, valueChanged, languageChanged, reviewChanged, classification, old: { ...old, value: old.value ?? null }, next })
+  }
+  for (const product of products) {
+    const parent = product.parentId ? productMap.get(id(product, product.parentId)) : undefined
+    if (product.parentId && !parent) throw new Error(`Missing parent for ${product.id}`)
+    const localizableKeys = data.localizableKeysByProduct?.[id(product)] ?? []
+    const fields = [...Object.keys(CONTENT_COLUMNS), ...localizableKeys]
+    const markets = data.marketplaces.filter(market => workspace(market) === workspace(product))
+    const sharedLanguages = [...new Set([normalizeLanguage(PRIMARY_CONTENT_LOCALE), ...markets.flatMap(m => marketLanguages(m.channel, m.code, markets as any)), ...[product, parent].filter(Boolean).flatMap(p => p!.translations.map(row => normalizeLanguage(row.language)))])].sort()
+    const global = globalContentLocales(product as ProductLike, (parent ?? null) as ProductLike | null, sharedLanguages)
+    const scopes: Array<{ coordinate: Coordinate | null; listing?: Row; languages: string[] }> = [{ coordinate: null, languages: sharedLanguages }]
+    for (const market of markets) {
+      const marketListings = data.listings.filter(l => workspace(l) === workspace(product) && l.channel === market.channel && (l.marketplace && l.marketplace !== 'DEFAULT' ? l.marketplace : l.region) === market.code)
+      const languages = marketLanguages(market.channel, market.code, markets as any)
+      const coordinateOf = (listing?: Row): Coordinate => ({ channel: market.channel, market: market.code, ...(listing?.channelConnectionId ? { accountId: listing.channelConnectionId } : {}), ...(listing?.aliasId || listing?.aliasKey ? { aliasId: listing.aliasId ?? listing.aliasKey } : {}) })
+      const marketCoordinates = [...new Map((marketListings.length ? marketListings : [undefined]).map(listing => { const coordinate = coordinateOf(listing); return [JSON.stringify(coordinate), coordinate] })).values()]
+      // Cross EVERY product with EVERY observed account/alias coordinate in its workspace,
+      // including products with no listing there. Never replace an absent listing with a peer's row.
+      for (const coordinate of marketCoordinates) {
+        const matches = marketListings.filter(l => id(l, l.productId) === id(product) && JSON.stringify(coordinateOf(l)) === JSON.stringify(coordinate))
+        if (matches.length > 1) throw new Error(`Ambiguous listings for ${product.id} at ${JSON.stringify(coordinate)}`)
+        const listing = matches[0]
+        if (listing) coveredListings.add(id(listing))
+        scopes.push({ coordinate, listing, languages })
+      }
+    }
+    for (const scope of scopes) {
+      const { coordinate, listing, languages } = scope
+      if (coordinate) coordinates.add(JSON.stringify([workspace(product), coordinate]))
+      const hydratedListing: ContentListing | null = listing ? { ...listing, id: listing.id, productId: listing.productId, coordinate: coordinate!, languages } : null
+      const batch = resolveContentBatch({ members: [{ product: product as ContentProduct, parent: parent as ContentProduct, listing: hydratedListing, localizableKeys }], fields, addresses: languages.map(requested => ({ requested, ...(coordinate ? { coordinate } : {}) })) })
+      for (const row of batch) {
+        const language = row.address.requested
+        const old = resolveAttributes({ product: product as ProductLike, parent: (parent ?? null) as ProductLike | null, channelListing: listing as any, locale: language, localizableKeys })
+        const oldProduct = !coordinate ? data.productResolvedContent?.({ ...product, parent }, language) : undefined
+        for (const field of fields) {
+          const next = row.fields[field]
+          observe(coordinate ? 'attribute-coordinate' : 'attribute-shared', product, parent, listing, coordinate, field, language, old[field] ?? { value: null }, next)
+          if (!coordinate) observe('sourceContent', product, parent, undefined, null, field, language, { value: sourceContent({ ...product, parent }, field, language) }, next)
+          if (!coordinate && field in CONTENT_COLUMNS) {
+            observe('global-content', product, parent, undefined, null, field, language, { ...old[field], value: global[language]?.[field as keyof typeof global[string]] }, next)
+            if (oldProduct) observe('product-content', product, parent, undefined, null, field, language, oldProduct.fields[CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]], next)
+          }
+          if (listing?.channel === 'ETSY' && ['title', 'description'].includes(field)) observe('etsyContentState', product, parent, listing, coordinate, field, language, etsyContentState(listing, language, field) ?? { value: null }, next)
+          if (listing?.channel === 'AMAZON' && field === 'title' && data.extractLocaleTitle) observe('syndication-title', product, parent, listing, coordinate, field, language, { value: data.extractLocaleTitle(listing.platformAttributes, coordinate!.market, language) }, next)
+          if (listing?.channel === 'SHOPIFY' && ['title', 'description'].includes(field)) {
+            const spec = shopifyProductSpec(null, coordinate?.accountId).fields.find(spec => spec.masterKey === (field === 'title' ? 'name' : field))!
+            const stored = storedChannelState(listing, spec.channelStore, [spec.masterKey ?? spec.key, spec.key])
+            observe('shopify-information-native', product, parent, listing, coordinate, field, language, { value: stored.value }, next)
+            for (const tag of Object.keys(object(listing.platformAttributes?._shopifyInformationLocales)).filter(tag => normalizeLanguage(tag) === language)) {
+              const translated = storedChannelState(listing, { kind: 'platformAttributes', path: ['_shopifyInformationLocales', tag, spec.shopifyField!.id] }, [spec.masterKey ?? spec.key, spec.key])
+              observe('shopify-information-locale', product, parent, listing, coordinate, field, language, { value: translated.value, effectiveLocale: tag }, next)
+            }
+          }
+        }
+        if (coordinate) {
+          const market = markets.find(m => m.channel === coordinate.channel && m.code === coordinate.market)!
+          const mapping = object(market.schemaMapping), category = listing?.platformAttributes?.productType ?? product.productType
+          const rules = { ...object(mapping.fields), ...object(mapping.byProductType?.[category]) }
+          const paths = [...new Set(Object.values(rules).flatMap(rule => [rule.source, rule.fallback].filter((path): path is string => typeof path === 'string' && !!path)))]
+          for (const path of paths) {
+            const parsed = contentPathAddress(path, language, localizableKeys)
+            if (!parsed) continue
+            const next = resolveContentPath({ product: product as ContentProduct, parent: parent as ContentProduct, listing: hydratedListing, address: { requested: language, coordinate }, localizableKeys, path })!
+            const flat = Object.fromEntries(Object.entries(old).map(([field, hit]) => [field, hit.value]))
+            const value = resolveSourcePath(path, flat, product as ProductLike, language)
+            observe('mapping-source', product, parent, listing, coordinate, parsed.field, language, { ...old[parsed.field], value, path }, next)
+          }
+        }
+      }
+    }
+  }
+  if (coveredListings.size !== data.listings.length) throw new Error(`Listing coverage mismatch: ${coveredListings.size}/${data.listings.length}`)
+  return { counts: Object.entries(counts).map(([key, counts]) => { const [reader, field, language] = JSON.parse(key); return { reader, field, language, ...counts } }), classificationCounts, diffs, coveredListings: coveredListings.size, coordinates: coordinates.size }
+}

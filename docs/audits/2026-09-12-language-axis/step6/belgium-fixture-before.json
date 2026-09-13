@@ -1,0 +1,44 @@
+{
+  "at": "2026-09-13T01:06:23.871Z",
+  "fixture": true,
+  "authorization": "Owner Q-LX6-1",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "source": [
+    {
+      "id": "cmpm9zx6m02f1mn01zbsmsq6r",
+      "workspaceId": "nexus_legacy_workspace",
+      "marketplace": "NL",
+      "schemaVersion": "UAAAAAAAAAAAAAAAAlYDyvo7xG_e0NR-trJPjzB7m",
+      "fetchedAt": "2026-05-26T04:50:16.886Z",
+      "expiresAt": "2026-05-27T04:50:16.825Z",
+      "isActive": true,
+      "payloadSha256": "fb9e019c594643fa394194be50d53eac9ff5e51f90908f2de268f5cf305b1e6f"
+    },
+    {
+      "id": "cmtrem3hr002gnjxqkvdr8icg",
+      "workspaceId": "nexus_legacy_workspace",
+      "marketplace": "NL",
+      "schemaVersion": "43a9ee6eb98250cd364af2a2118bc710078dfd2ae29e53ab3a4167c144ae959c",
+      "fetchedAt": "2026-09-07T13:37:10.140Z",
+      "expiresAt": "2026-09-08T13:37:10.140Z",
+      "isActive": true,
+      "payloadSha256": "364eb508441db7a700454326594407328f27ab325bfca80466833b11c77760d3"
+    },
+    {
+      "id": "cmtw6z0ky005unj3chpu6c7hx",
+      "workspaceId": "nexus_legacy_workspace",
+      "marketplace": "NL",
+      "schemaVersion": "2b2492ea9ca78dfc613a57402fdf90407948383dc4e32f05231c2c0efd2f051c",
+      "fetchedAt": "2026-09-10T22:02:06.844Z",
+      "expiresAt": "2026-09-11T22:02:06.844Z",
+      "isActive": true,
+      "payloadSha256": "2de502c29e17f5731bf08aaef3ab09126a7efd3e5853a487d496ccecf834dc86"
+    }
+  ],
+  "before": [],
+  "inserted": []
+}

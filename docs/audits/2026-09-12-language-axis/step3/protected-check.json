@@ -1,0 +1,204 @@
+{
+  "measuredAt": "2026-09-12T06:37:55.175378+00:00",
+  "changed": [
+    "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts"
+  ],
+  "files": [
+    {
+      "file": "apps/api/src/lib/amazon-sp-client.ts",
+      "beforeSha256": "965c9738044c1088fcaea5dad16779ff5401b18310183e6d6b2baa337e27a1cc",
+      "afterSha256": "965c9738044c1088fcaea5dad16779ff5401b18310183e6d6b2baa337e27a1cc",
+      "changed": false,
+      "mtime": "2026-09-12T06:08:11.866111+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-coerce-ai.ts",
+      "beforeSha256": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+      "afterSha256": "94fa0b4b73c77bdb2240484bf0f570750d3220b6e20434ad69b80a03f91df89b",
+      "changed": false,
+      "mtime": "2026-06-17T04:55:40.292181+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-coerce.ts",
+      "beforeSha256": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+      "afterSha256": "6cabd67f95d9eb3d7b71ae05defb5bc85b3c84b2c28d940f3cff1b24bf11f4a3",
+      "changed": false,
+      "mtime": "2026-06-17T04:55:12.960361+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-coerce.vitest.test.ts",
+      "beforeSha256": "8573a9860c4c579c9e746a6b8f4e47b2dfa742269f822c57d34b98258f370d80",
+      "afterSha256": "8573a9860c4c579c9e746a6b8f4e47b2dfa742269f822c57d34b98258f370d80",
+      "changed": false,
+      "mtime": "2026-06-17T04:56:34.820745+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-create.vitest.test.ts",
+      "beforeSha256": "da0f42275661de6a2359fc0781a9f90da65f9022ccd2812656fed7b93e7f3bf2",
+      "afterSha256": "da0f42275661de6a2359fc0781a9f90da65f9022ccd2812656fed7b93e7f3bf2",
+      "changed": false,
+      "mtime": "2026-07-16T11:25:38.464247+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-export.vitest.test.ts",
+      "beforeSha256": "1398d0debc0be590e84d53da43c90079e122eee5efd7f70b7029a3b2cf3772c0",
+      "afterSha256": "1398d0debc0be590e84d53da43c90079e122eee5efd7f70b7029a3b2cf3772c0",
+      "changed": false,
+      "mtime": "2026-06-17T04:25:48.046899+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-hydrate.service.ts",
+      "beforeSha256": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+      "afterSha256": "3a4945f9e7d3311ed9359210801deac23217d32f34f1081e9785bfd468cd8352",
+      "changed": false,
+      "mtime": "2026-07-19T22:19:55.096270+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping-ai.ts",
+      "beforeSha256": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+      "afterSha256": "d5d78756f4249135397135d06e998d2a4ce69d07a1af86ce6533e3df650c74c6",
+      "changed": false,
+      "mtime": "2026-06-17T05:43:54.038837+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping.ts",
+      "beforeSha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+      "afterSha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab",
+      "changed": false,
+      "mtime": "2026-07-16T02:07:56.380249+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping.vitest.test.ts",
+      "beforeSha256": "9a0dd07ebaa5768592163b1d9f96826fd2708ed9974a9c097c03e253f85c0a5c",
+      "afterSha256": "9a0dd07ebaa5768592163b1d9f96826fd2708ed9974a9c097c03e253f85c0a5c",
+      "changed": false,
+      "mtime": "2026-07-16T02:08:14.773762+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-merge.ts",
+      "beforeSha256": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+      "afterSha256": "53a0d174a2cf7cc0d3b8a95891198aa4e0bb9060d0d1f53daf6a37819b610a9e",
+      "changed": false,
+      "mtime": "2026-06-17T05:25:00.780183+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-merge.vitest.test.ts",
+      "beforeSha256": "f9e28d68820195ad624ec27a65211ab4ee233d8256013348e59b95cd20cb2f7b",
+      "afterSha256": "f9e28d68820195ad624ec27a65211ab4ee233d8256013348e59b95cd20cb2f7b",
+      "changed": false,
+      "mtime": "2026-06-17T05:30:19.680491+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-propagate.service.ts",
+      "beforeSha256": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+      "afterSha256": "baf2a8a3e5721c17c24942e0e4ea564730750812aa3b7adbdea72e3b9d5eed3b",
+      "changed": false,
+      "mtime": "2026-05-12T04:44:39.975984+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-pull-preview.service.ts",
+      "beforeSha256": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+      "afterSha256": "9d7c13fb9b854d23b8926226b412f2f95390234d70dd22f1525b6c21acc07687",
+      "changed": false,
+      "mtime": "2026-05-19T19:32:20.834995+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-pull.service.ts",
+      "beforeSha256": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+      "afterSha256": "d180bd1aaf0a5a2bd6703d2657898682cb20e7bac8068e82a24e2aeea3389c70",
+      "changed": false,
+      "mtime": "2026-07-20T00:59:41.493119+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-roundtrip.vitest.test.ts",
+      "beforeSha256": "81283819e665874d8429630c239ab002294c4088d820c91f112d24177601c7f5",
+      "afterSha256": "81283819e665874d8429630c239ab002294c4088d820c91f112d24177601c7f5",
+      "changed": false,
+      "mtime": "2026-07-20T00:58:40.917595+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+      "beforeSha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+      "afterSha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a",
+      "changed": false,
+      "mtime": "2026-07-16T05:23:32.512893+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-schema-walk.vitest.test.ts",
+      "beforeSha256": "58725803964641c9f7aa141552abd6bc0021780a0e9378af9c9c4c3c870150eb",
+      "afterSha256": "58725803964641c9f7aa141552abd6bc0021780a0e9378af9c9c4c3c870150eb",
+      "changed": false,
+      "mtime": "2026-07-16T05:23:45.727148+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-ufx-schema.vitest.test.ts",
+      "beforeSha256": "dd989b3bf7b69ae3e7ac428802c3564d356f0480228454673d6653e3fdc0e14e",
+      "afterSha256": "dd989b3bf7b69ae3e7ac428802c3564d356f0480228454673d6653e3fdc0e14e",
+      "changed": false,
+      "mtime": "2026-07-10T18:25:02.967466+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-ufx6-feedops.vitest.test.ts",
+      "beforeSha256": "d61d5e70c7aa35c14bacc8bf14563c65ffce2cdcc1a084eb7817d69fa06e5c27",
+      "afterSha256": "d61d5e70c7aa35c14bacc8bf14563c65ffce2cdcc1a084eb7817d69fa06e5c27",
+      "changed": false,
+      "mtime": "2026-09-11T22:42:12.300866+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-ufx6-format.vitest.test.ts",
+      "beforeSha256": "7c8e224edc2fc17c82372b0434255ccd24300fac27b5dfc3fae9ab38f0079ad2",
+      "afterSha256": "7c8e224edc2fc17c82372b0434255ccd24300fac27b5dfc3fae9ab38f0079ad2",
+      "changed": false,
+      "mtime": "2026-07-10T18:23:13.626735+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts",
+      "beforeSha256": "23e50ddc035920eed37c021c4a07c673c2502af62f97487bcabb6472e89ecabc",
+      "afterSha256": "1c8264c4c1e6b518f9fe53e977e4a03979d69a7ffaa42c3d5b0cc15e35845e4b",
+      "changed": true,
+      "mtime": "2026-09-12T06:14:54.831962+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-union-manifest.vitest.test.ts",
+      "beforeSha256": "c874b0c1d47d0caac9ab8e9872b7743004b05f949de1cff39a337d84866f5de4",
+      "afterSha256": "c874b0c1d47d0caac9ab8e9872b7743004b05f949de1cff39a337d84866f5de4",
+      "changed": false,
+      "mtime": "2026-07-10T16:27:06.851972+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-verify-live.service.ts",
+      "beforeSha256": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+      "afterSha256": "93dca3da0fc1cde78a14f69e2c1c6d88c1afd123565cb150c736af23cf8f2927",
+      "changed": false,
+      "mtime": "2026-07-19T23:06:28.588011+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-verify-live.vitest.test.ts",
+      "beforeSha256": "4833e19c092b72343f67430bee7c2b7a2c51a80266c7176cbb17a057b07617fd",
+      "afterSha256": "4833e19c092b72343f67430bee7c2b7a2c51a80266c7176cbb17a057b07617fd",
+      "changed": false,
+      "mtime": "2026-07-19T23:07:04.040666+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file.browse-nodes.vitest.test.ts",
+      "beforeSha256": "93db6d3a882232236ddabe57cb7bd9d819be93ad0ce38a5759ad36ebee66e0c7",
+      "afterSha256": "93db6d3a882232236ddabe57cb7bd9d819be93ad0ce38a5759ad36ebee66e0c7",
+      "changed": false,
+      "mtime": "2026-06-30T02:07:22.073996+00:00"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file.service.ts",
+      "beforeSha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+      "afterSha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2",
+      "changed": false,
+      "mtime": "2026-07-20T00:56:44.669645+00:00"
+    },
+    {
+      "file": "apps/api/src/services/channel-batch/amazon-batch-feed.service.ts",
+      "beforeSha256": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+      "afterSha256": "a0d462e9236db79496be9437a4f315118894c0dd61fcf048da2040f091caa556",
+      "changed": false,
+      "mtime": "2026-09-12T05:31:23.505555+00:00"
+    }
+  ]
+}

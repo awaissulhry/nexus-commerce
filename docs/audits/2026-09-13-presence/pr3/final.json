@@ -1,0 +1,43 @@
+{
+  "at": "2026-09-13T17:39:47.129222+00:00",
+  "host": "127.0.0.1:55439/nexus_development",
+  "testCwd": "apps/api",
+  "tscExit": 0,
+  "vitestExit": 0,
+  "testFiles": 13,
+  "testsPassed": 174,
+  "localDbTests": 13,
+  "durationSeconds": 125.37,
+  "routePrismaExit": 1,
+  "routePrismaUnrelated": [
+    {
+      "file": "apps/api/src/routes/assets.routes.ts",
+      "baseline": 62,
+      "current": 64,
+      "dirty": true
+    },
+    {
+      "file": "apps/api/src/routes/brand-story.routes.ts",
+      "baseline": 32,
+      "current": 33,
+      "dirty": true
+    },
+    {
+      "file": "apps/api/src/routes/catalog-transfer.routes.ts",
+      "baseline": 0,
+      "current": 2,
+      "dirty": true
+    }
+  ],
+  "rehearsal": {
+    "oldWhereCountOnly": 2,
+    "removed": 1,
+    "siblingRemaining": 1,
+    "channelCalls": 0,
+    "sentinelListingResidue": 0,
+    "sentinelProductResidue": 0
+  },
+  "committed": false,
+  "productionWrites": 0,
+  "channelWrites": 0
+}

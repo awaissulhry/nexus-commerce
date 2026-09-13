@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { approveDrafts as approveApi, loadDrafts, rejectDrafts as rejectApi } from './api'
 import {
   groupByColumn,
+  projectDrafts,
   indexDrafts,
   provenanceFor,
   type AiProvenance,
@@ -30,6 +31,8 @@ export interface UseAiDraftsInput {
   marketplace: string | null
   /** The locale on screen. Absent = the master's own values only. */
   locale?: string | null
+  locales?: readonly string[] | null
+  columnKeys?: readonly string[]
 }
 
 export interface UseAiDraftsValue {
@@ -66,6 +69,8 @@ export function useAiDrafts(input: UseAiDraftsInput): UseAiDraftsValue {
   // re-runs on every parent render for the life of the page.
   const idsKey = useMemo(() => [...productIds].sort().join(','), [productIds])
 
+  const localesKey = JSON.stringify(input.locales ?? null)
+  const columnsKey = JSON.stringify(input.columnKeys ?? null)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -80,11 +85,14 @@ export function useAiDrafts(input: UseAiDraftsInput): UseAiDraftsValue {
     const ac = new AbortController()
     abortRef.current = ac
     setLoading(true)
-    loadDrafts({ productIds: ids, channel, marketplace, locale }, ac.signal)
+    loadDrafts({ productIds: ids, channel, marketplace, locale, locales: JSON.parse(localesKey) }, ac.signal)
       .then((res) => {
         if (ac.signal.aborted) return
-        setDrafts(res.drafts)
-        setCounts(res.counts)
+        const columns = JSON.parse(columnsKey) as string[] | null
+        const projected = columns ? projectDrafts(res.drafts, columns) : res.drafts
+        setDrafts(projected)
+        setCounts(columns ? { total: projected.length, pending: projected.filter(d => d.status === 'pending').length,
+          failed: projected.filter(d => d.status === 'failed').length, stale: projected.filter(d => d.stale).length } : res.counts)
         setError(null)
       })
       .catch((err: unknown) => {
@@ -99,7 +107,7 @@ export function useAiDrafts(input: UseAiDraftsInput): UseAiDraftsValue {
         if (!ac.signal.aborted) setLoading(false)
       })
     return () => ac.abort()
-  }, [idsKey, channel, marketplace, locale, nonce])
+  }, [idsKey, channel, marketplace, locale, localesKey, columnsKey, nonce])
 
   const refresh = useCallback(() => setNonce((n) => n + 1), [])
 

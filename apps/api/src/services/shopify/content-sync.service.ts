@@ -1,4 +1,5 @@
 import { readShopifyMappingSchema } from '../pim/channel-specs/shopify.js'
+import { assertListingContentReviewed } from '../pim/publish-review-gate.js'
 import { listingInformationDraft, listingInformationTranslations, listingInformationOverrideReview, validateListingInformationOverrides } from './listing-information-plan.js'
 import { readLinkedStoreSchema } from './linked-products-gateway.js'
 import { buildLinkedPlan, applyLinkedBatch } from './linked-products.service.js'
@@ -14,11 +15,24 @@ import { contentDestination, readContent, publicContent, object, digest, CONTENT
 import { shopifyAdmin } from './admin-client.js'
 import { publishContent, readRemoteProduct, type ShopifyRemoteProduct } from './content-publisher.js'
 import { nativeListingValue } from './native-listing-value.js'
+import { assertPushAllowed, type PushLockListing, type PushRefusal } from '@nexus/shared/push-lock'
+
+function pushRefused(listing: PushLockListing, refusal: PushRefusal) {
+  const intent = listing as PushLockListing & { presenceIntentAt?: Date | string | null; presenceIntentBy?: string | null }
+  const sentence = intent.presenceIntent === 'ENDED'
+    ? `This listing was deliberately ended${intent.presenceIntentAt ? ` on ${new Date(intent.presenceIntentAt).toISOString()}` : ''}${intent.presenceIntentBy ? ` by ${intent.presenceIntentBy}` : ''}. Relist it before sending changes.`
+    : refusal.sentence
+  return Object.assign(new WorkspaceScopeError(sentence, 409), { code: refusal.code, refusal: { ...refusal, sentence } })
+}
 
 export async function previewContentSync(productId: string, scope: ContentScope, remote = false) {
   const destination = await contentDestination(productId, scope)
   const cachedSchema = await readShopifyMappingSchema(destination.accountId)
   const data = await prisma.$transaction(tx => readContent(tx, destination, cachedSchema.locales, cachedSchema), { isolationLevel: 'RepeatableRead' })
+  for (const listing of data.listings) {
+    const refusal = assertPushAllowed(listing)
+    if (refusal) throw pushRefused(listing, refusal)
+  }
   const identity = `${data.listing?.workspaceId ?? 'nexus'}:${data.family.id}${destination.aliasKey ? ':' + destination.aliasKey : ''}`
   let shopify: ShopifyRemoteProduct | null = null, locations: { id: string; name: string; isActive: boolean }[] = [], domain: string | null = null
   let informationDraft: ShopifyLinkedDraft | null = null
@@ -51,14 +65,19 @@ export async function previewContentSync(productId: string, scope: ContentScope,
 export async function synchronizeContent(productId: string, scope: ContentScope, body: unknown) {
   const input = object(body)
   const linkedDestination = await contentDestination(productId, scope)
-  const linkedListing = await prisma.channelListing.findFirst({ where: { productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, channelConnectionId: linkedDestination.accountId, aliasKey: linkedDestination.aliasKey ?? '' }, select: { platformAttributes: true } })
+  const linkedListing = await prisma.channelListing.findFirst({ where: { productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, channelConnectionId: linkedDestination.accountId, aliasKey: linkedDestination.aliasKey ?? '' } })
+  const refusal = assertPushAllowed(linkedListing)
+  if (refusal && linkedListing) throw pushRefused(linkedListing, refusal)
   const linkedIssue = shopifyInformationPublicationIssue(linkedListing?.platformAttributes)
   if (linkedIssue) throw new WorkspaceScopeError(linkedIssue, 422)
   if (typeof input.expectedRevision !== 'string' || typeof input.expectedRemoteRevision !== 'string' || typeof input.locationId !== 'string') throw new WorkspaceScopeError('Review the saved content and Shopify destination, then choose an inventory location.', 400)
+  // D7 / R-LX-7 — one review verdict for every channel: an unreviewed machine
+  // draft must not reach a Shopify translation any more than an Amazon payload.
+  await assertListingContentReviewed({ productId: linkedDestination.familyId, channel: 'SHOPIFY', marketplace: linkedDestination.marketplace, accountId: linkedDestination.accountId })
   const preview = await previewContentSync(productId, scope, true)
   if (preview.revision !== input.expectedRevision || preview.remoteRevision !== input.expectedRemoteRevision) throw new WorkspaceScopeError('Nexus or Shopify changed after the preview. Refresh the review before synchronising.')
   if (preview.errors.length) throw new WorkspaceScopeError(preview.errors.join('\n'), 422)
-  if (preview.changes.requiresActiveConfirmation && input.confirmActive !== true) throw new WorkspaceScopeError('This changes a live or archived product, or applies a saved Active/Archived status. Review and explicitly approve that destination first.', 422)
+  if (preview.changes.requiresActiveConfirmation && input.confirmActive !== true) throw new WorkspaceScopeError('This synchronisation applies the saved status and sales channels to this listing. Review and explicitly approve that destination first.', 422)
   const destination = await contentDestination(productId, scope)
   const storeSchema = await readShopifyMappingSchema(destination.accountId)
   const runId = randomUUID()
@@ -67,7 +86,11 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     const informationIssue = shopifyInformationPublicationIssue(data.listing?.platformAttributes)
     if (informationIssue) throw new WorkspaceScopeError(informationIssue, 422)
     if (data.revision !== input.expectedRevision || !data.listing) throw new WorkspaceScopeError('Save the content and refresh the preview before synchronising.')
-    if (data.listing.syncPaused || data.listing.syncLocked) throw new WorkspaceScopeError('Synchronisation is paused or locked for this listing.', 422)
+    for (const listing of data.listings) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw pushRefused(listing, refusal)
+    }
+    if (data.listing.syncLocked) throw new WorkspaceScopeError('Synchronisation is locked for this listing.', 422)
     if (data.publish.status === 'PUBLISHING' && Date.now() - Date.parse(data.publish.lastCheckpointAt ?? data.publish.startedAt) < 20 * 60_000) throw new WorkspaceScopeError('A Shopify synchronisation is already running for this family.')
     const publication = { ...data.publish, status: 'PUBLISHING', runId, startedAt: new Date().toISOString(), error: null, locationId: input.locationId }
     const saved = await tx.channelListing.updateMany({ where: { id: data.listing.id, version: data.listing.version }, data: { version: { increment: 1 }, platformAttributes: { ...object(data.listing.platformAttributes), [PUBLISH_KEY]: publication } as Prisma.InputJsonValue } })
@@ -132,16 +155,17 @@ export async function synchronizeContent(productId: string, scope: ContentScope,
     const verifiedProduct = await readRemoteProduct(graphql, result.productId, preview.identity)
     if (!verifiedProduct) throw new WorkspaceScopeError('The synchronized Shopify product could not be read back.', 502)
     const isPublished = verifiedProduct.status === 'ACTIVE'
+    const listingStatus = isPublished ? 'ACTIVE' : 'INACTIVE'
     await prisma.$transaction(async tx => {
       for (const variant of current.variants) {
         const existing = await tx.channelListing.findFirst({ where: { productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '' } })
         const platformAttributes = { ...object(existing?.platformAttributes), nexusFamilyId: current.family.id, variantId: result.variantIds[variant.id].split('/').at(-1), inventoryItemId: result.inventoryItemIds[variant.id].split('/').at(-1), shopifyProductId: result.productId.split('/').at(-1), inventoryLocationId: input.locationId } as Prisma.InputJsonValue
-        const mapping = { platformAttributes, externalListingId: result.productId.split('/').at(-1), platformProductId: result.productId.split('/').at(-1), isPublished }
+        const mapping = { platformAttributes, externalListingId: result.productId.split('/').at(-1), platformProductId: result.productId.split('/').at(-1), isPublished, listingStatus }
         if (existing) await tx.channelListing.update({ where: { id: existing.id }, data: { ...mapping, version: { increment: 1 } } })
         else await tx.channelListing.create({ data: { ...mapping, productId: variant.id, channel: 'SHOPIFY', marketplace: destination.marketplace, channelMarket: 'SHOPIFY_GLOBAL', region: 'GLOBAL', channelConnectionId: destination.accountId, aliasKey: destination.aliasKey ?? '', aliasId: destination.aliasKey } })
       }
       const parent = await tx.channelListing.findUniqueOrThrow({ where: { id: listingId } })
-      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId } as Prisma.InputJsonValue } })
+      await tx.channelListing.update({ where: { id: listingId }, data: { version: { increment: 1 }, isPublished, listingStatus, platformAttributes: { ...object(parent.platformAttributes), nexusFamilyId: current.family.id, inventoryLocationId: input.locationId } as Prisma.InputJsonValue } })
     }, { isolationLevel: 'Serializable' })
     await checkpoint({ ...result, error: null })
     return { success: true, ...result, message: `Verified ${current.variants.length} native Shopify variants. Storefront theme verification is a separate review.` }

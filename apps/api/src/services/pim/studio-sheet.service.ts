@@ -1,3 +1,12 @@
+import { offerActiveHonoured } from '@nexus/shared/listing-capabilities'
+import { studioContentFacts } from './studio-content-wire.js'
+import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
+import type { ContentWriteFacts } from '@nexus/shared/content-language'
+import { marketLanguages } from './market-languages.js'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { isLocalizableContent, contentField, listingFollowsContent, translationMissing } from './content-resolver.js'
+import { contentWireValue } from './content-read.js'
+import { normalizeLanguage } from './content-language.js'
 /**
  * PES.5 — the Product Edit Studio's sheet read: ONE family, ONE scope.
  *
@@ -45,11 +54,13 @@ import { columnApplies, columnRequiredByAny, columnRequiredHere, columnForCatego
 import { relationshipColumns, relationshipValues, RELATIONSHIP_GROUP } from './studio-relationships.js'
 import { storedChannelState } from './channel-value-mutation.js'
 import { shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
-import { UnknownMarketError, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
+import { UnknownMarketError, VARIATION_THEME_KEY, type SheetColumn, type SheetCoordinate, type SheetGroup, type SheetSpecCoverage } from './sheet-columns.service.js'
 import { projectCellValue, readPath, isBlankValue } from './sheet-values.js'
 import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../product-read-cache.service.js'
 import { mediaLocaleSchema, mediaObject, resolveMediaCollection } from '@nexus/shared/product-media'
 import { getStudioColumns } from './studio-columns.js'
+import { withCachedSchemas } from './cached-schema-context.js'
+import { channelLabel } from '@nexus/shared/channel-label'
 import { productCategoryContext } from './product-category-context.js'
 import { isPrimaryChannelConnection } from '../connection-resolver.service.js'
 import { categoryForListing } from './mapping/category-mapping.service.js'
@@ -100,11 +111,8 @@ export type CellLayer =
  * own them.
  */
 export interface MappedCell {
+  derived?: boolean
   nexusDraft?: boolean
-  requestedLocale?: string
-  effectiveLocale?: string
-  translationState?: import('./attribute-resolver.js').ResolvedValue['translationState']
-  needsTranslation?: boolean
   sourceOwner?: { kind: 'listing' | 'system'; label: string; path: string } | null
 
   supplyingRule?: { id: string; name: string; version: number; href: string }
@@ -125,7 +133,13 @@ export interface MappedCell {
   overLimit: { chars?: number; bytes?: number } | null
 }
 
-export interface StudioCellValue extends SheetCellValue {
+export interface StudioCellValue extends Omit<SheetCellValue, 'requestedLocale' | 'effectiveLocale' | 'translationState' | 'needsTranslation'>, ContentWriteFacts {
+  tier?: importResolvedContent['tier']
+  language?: importResolvedContent['language']
+  requested?: importResolvedContent['requested']
+  provenance?: importResolvedContent['provenance']
+  translation?: importResolvedContent['translation']
+
   resettable?: boolean
   nexusDraft?: boolean
   shopifyWrite?: import('@nexus/shared/shopify-information').ShopifySheetWrite
@@ -407,6 +421,8 @@ export interface StudioSheet {
 }
 
 export interface GetStudioSheetInput {
+  /** Languages view; ordinary reads keep their existing single-language wire. */
+  locales?: string[]
   accountId?: string
   includeMapping?: boolean
   /** A parent OR a child id — the family root is resolved either way. */
@@ -443,6 +459,7 @@ export class ScopeNotAvailableError extends Error {
 // ────────────────────────────────────────────────────────────────────
 
 const PRODUCT_SELECT = {
+  workspaceId: true,
   familyId: true, weightValue: true, weightUnit: true, dimLength: true, dimWidth: true, dimHeight: true, dimUnit: true,
   costPrice: true, minMargin: true, minPrice: true, maxPrice: true, lowStockThreshold: true,
   hsCode: true, countryOfOrigin: true, ppeCategory: true, garmentClass: true,
@@ -452,20 +469,32 @@ const PRODUCT_SELECT = {
   version: true, basePrice: true, categoryAttributes: true, localizedContent: true, translations: true, variantAttributes: true,
   description: true, bulletPoints: true, keywords: true, brand: true, manufacturer: true,
   gtin: true, ean: true, upc: true, totalStock: true, variationAxes: true,
+  // VT.1 — `Product.variationTheme` is the eBay axis SET store, ONE record for every eBay market and alias (T2).
+  // The Variation theme cell reads it as the eBay override when the coordinate carries no `_variationAxes` of its
+  // own, which is the precedence VX D1 settles; without it the eBay cell could not name where its set came from.
+  variationTheme: true,
 } as const
 
 const LISTING_SELECT = {
+  translations: true,
+  workspaceId: true, channelConnectionId: true, aliasKey: true,
   id: true, productId: true, aliasId: true, version: true, channel: true, marketplace: true, listingStatus: true,
   isPublished: true, price: true, quantity: true, externalListingId: true, overrideData: true,
   titleOverride: true, descriptionOverride: true, priceOverride: true, quantityOverride: true,
   bulletPointsOverride: true, followMasterTitle: true, followMasterDescription: true,
   followMasterPrice: true, followMasterQuantity: true, followMasterImages: true,
   followMasterBulletPoints: true, offerActive: true, lastSyncedAt: true,
+  offerClosedAt: true, offerClosedBy: true, offerCloseReason: true, syncPaused: true,
   // #542(2) — the three ChannelListing COLUMNS the prefixed write route targets
   // (`amazon_title` → `title`, etc.). They were never selected, which is why a
   // cell advertising `writeField: amazon_title` could not read what that write
   // had put there: the projection did not carry the column at all.
   title: true, description: true, variationTheme: true,
+  // VT.1 — the mapping the Amazon/Shopify/Etsy publish path reads. R-VT-13 (VT.F2): it is the ORDERED shape
+  // `{axes:[{axisKey,target,order}]}` now, and every reader takes the flat legacy map too. The variation
+  // theme cell reports the coordinate's own projection, and its override tier IS these two columns; selecting the
+  // theme without the mapping would have shown an override whose axis targets the cell could not name.
+  variationMapping: true,
   // AM.1 — the listing's OWN bag: eBay item specifics and listing settings, Amazon's synced
   // attributes. Read for columns whose `channels[coord].store` is a `platformAttributes` path.
   platformAttributes: true,
@@ -501,14 +530,18 @@ const FOLLOW_BY_KEY: Record<string, (typeof FOLLOW_FLAGS)[number]> = {
  * branch there and rejected as "Field not editable", so guessing would hand the
  * grid a field name that always fails.
  */
-const CHANNEL_WRITABLE: Record<string, 'title' | 'description' | 'variationTheme' | 'bulletPoints' | 'price' | 'quantity'> = {
+const CHANNEL_WRITABLE: Record<string, 'title' | 'description' | 'bulletPoints' | 'price' | 'quantity'> = {
   price: 'price', quantity: 'quantity',
   title: 'title', name: 'title', item_name: 'title',
   description: 'description', product_description: 'description',
-  variationTheme: 'variationTheme',
-  // AM.1 — Amazon's `variation_theme` IS the listing's `variationTheme` column (one store): the
-  // prefixed route `amazon_variationTheme` already exists.
-  variation_theme: 'variationTheme',
+  // VT.1 (2026-09-13, D-VT3) REMOVED `variationTheme` and `variation_theme` from this table. The variation theme
+  // has ONE writer now - `PATCH /studio/projection` (channel) and `PATCH /studio/variation-axes` (master), named
+  // per cell in `cell.value.write.endpoint` - and the raw sheet columns that used these routes are retired in
+  // `channel-specs/`. Leaving them here would keep a second, unvalidated path open to the same store: the bulk
+  // PATCH has no lock, no keys-the-variants check and no collision rule, so a cell that reached it could set a
+  // theme on a LIVE parent that Amazon answers with an 8541-class error.
+  // `CHANNEL_FIELD_MAP` in `channel-field-map.ts` dropped `{amazon,ebay}_variationTheme` in the same step, so the
+  // write endpoint refuses the field rather than silently routing it to master.
   // AM.1 — the master bullet list on a channel scope writes the listing's own array
   // (`amazon_bulletPoints` → `bulletPointsOverride`, channel-field-map.ts). Slot columns
   // (`bulletPoints_3`) route through their base key and append `[3]` to the write field.
@@ -519,7 +552,7 @@ const CHANNEL_WRITABLE: Record<string, 'title' | 'description' | 'variationTheme
 const CHANNEL_WRITE_PREFIX: Record<string, string> = { AMAZON: 'amazon', EBAY: 'ebay' }
 
 
-export interface WriteRouting {
+export interface WriteRouting extends Pick<ContentWriteFacts, 'contentAddress' | 'contentAcknowledgement'> {
   writeField: string
   writeVerb: 'master' | 'channel'
   writeTarget: 'master' | 'channelListing'
@@ -540,10 +573,62 @@ export interface WriteRouting {
  * once. Found by PES.3's 409 rehearsal against the live contract.
  */
 export function resolveWriteRouting(
-  col: Pick<SheetColumn, 'key' | 'writeField' | 'storage'> & Partial<Pick<SheetColumn, 'slot' | 'editable' | 'helpText'>>,
+  col: Pick<SheetColumn, 'key' | 'writeField' | 'storage'> & Partial<Pick<SheetColumn, 'slot' | 'editable' | 'helpText' | 'kind'>>,
   coordinate: { channel: string } | null,
   aliasId: string | null,
+  content?: { requested: string; primary: string; resolved?: { tier?: string; follows?: boolean; language?: string }; market?: string; accountId?: string; reach?: string[]; languages?: readonly string[] },
 ): WriteRouting {
+  // VT.1 — the variation theme has its OWN endpoints (`PATCH /studio/variation-axes` on master,
+  // `PATCH /studio/projection` on a coordinate), named per cell in `cell.value.write.endpoint`. It must therefore
+  // never be handed a bulk-PATCH field name: the Shopify/Etsy branch below would have rewritten it to
+  // `attr_variation_theme` and the Amazon/eBay branch to the override bag — measured on Shopify·GLOBAL, where the
+  // served column came back with `writeField: "attr_variation_theme"` before this branch existed. Routed FIRST and
+  // by `kind`, so both sheet builders and every caller of this function get the same answer.
+  if (col.kind === 'variationTheme') {
+    return {
+      writeField: col.key,
+      writeVerb: coordinate ? 'channel' : 'master',
+      writeTarget: coordinate ? 'channelListing' : 'master',
+      // The theme on a channel coordinate writes THAT coordinate's parent listing row, never the shared record.
+      affectsAllChannels: false,
+      writable: col.editable !== false,
+      writeBlockedReason: null,
+    }
+  }
+  const localizable = isLocalizableContent(col.slot?.of ?? col.key, col.storage)
+  if (content && localizable) {
+    const language = normalizeLanguage(content.requested)
+    const shared = language === content.primary ? { tier: 'source' as const } : { tier: 'language' as const, language }
+    const languageLabel = new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
+    // LX.F2 R-LX-16 (F-LX-8) — a pin address is only offered for a language the
+    // COORDINATE can carry. `content-write.ts:48` refuses a pin whose language is
+    // not in `marketLanguages(channel, market)`, so offering one here produced the
+    // third path R-LX-16 forbids: the read handed the client an address
+    // (`contentAcknowledgement.pin`) and the write answered 400 for it. Measured on
+    // the fixture Etsy·GLOBAL coordinate (`Marketplace.languages` = `['en']`) with
+    // German pressed: the cell served `contentAddress: null` + a `Pin on Etsy ·
+    // GLOBAL · de` choice, and that choice was unwritable. When the coordinate
+    // cannot carry the language there is no choice to make: the destination is the
+    // LANGUAGE tier, `contentAddress` says so, and no acknowledgement is emitted.
+    // The gate is skipped when the caller did not supply the authority (`undefined`
+    // ≠ empty — `reference_could_not_measure_vs_measured_empty`), so a caller
+    // without the marketplace rows keeps the previous answer.
+    const coordinateCarriesLanguage = !content.languages || content.languages.map(normalizeLanguage).includes(language)
+    const pin = coordinate && coordinateCarriesLanguage ? { tier: 'pin' as const, language, coordinate: { channel: coordinate.channel, market: content.market!,
+      ...(content.accountId ? { accountId: content.accountId } : {}), ...(aliasId ? { aliasId } : {}) } } : null
+    const pinned = content.resolved?.tier === 'pin' && content.resolved.follows === false
+    return { writeField: col.writeField, writeVerb: pin ? 'channel' : 'master', writeTarget: pin ? 'channelListing' : 'master',
+      affectsAllChannels: !!coordinate && !pinned, writable: col.editable !== false, writeBlockedReason: col.editable === false ? col.helpText ?? 'This field is read-only.' : null,
+      contentAddress: pin ? pinned ? pin : null : shared,
+      ...(pin ? { contentAcknowledgement: {
+        shared: { label: `${content.resolved?.language === language ? 'Edit the shared' : 'Write the shared'} ${languageLabel}${content.resolved?.language === language ? '' : ' (new)'}`, address: shared },
+        // LX.F P2-15 — one `channelLabel`, in `@nexus/shared`. The chain here and in
+        // the reach list below labelled ANY fifth channel "Etsy".
+        pin: { label: `Pin on ${channelLabel(coordinate.channel)} · ${content.market} · ${language}`, address: pin },
+        reach: content.reach ?? [],
+      } } : {}),
+    }
+  }
   // Store fields use the contract's storage address through the shared attribute writer.
   // In particular, a store title must never write the shared Product.name column.
   if (coordinate && ['SHOPIFY', 'ETSY'].includes(coordinate.channel) && (coordinate.channel === 'SHOPIFY' || col.key !== 'sku')) {
@@ -554,7 +639,7 @@ export function resolveWriteRouting(
   }
   const prefix = coordinate ? CHANNEL_WRITE_PREFIX[coordinate.channel] : undefined
   // A SLOT routes exactly as its list does; the slot index rides on the write field (`[3]`).
-  const baseKey = col.slot ? col.slot.of : col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key
+  const baseKey = contentField(col.slot?.of ?? col.key)
   const slotSuffix = col.slot ? `[${col.slot.index}]` : ''
   const chanField = CHANNEL_WRITABLE[baseKey]
   // Route 1 (pre-existing): the six prefixed fields that map to ChannelListing
@@ -689,23 +774,19 @@ export function sheetValueForColumn(
 ): unknown {
   // AM.1 — a slot reads its LIST's store and projects one item; a list/measure column normalises
   // the stored shape. The base key is the store's key (`bulletPoints` for `bulletPoints_3`).
-  const baseKey = col.slot ? col.slot.of : col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key
+  const baseKey = contentField(col.slot?.of ?? col.key)
   let base: unknown
-  if (col.storage === 'column') {
+  if (resolved[baseKey] && (isLocalizableContent(baseKey, col.storage))) base = resolved[baseKey]?.value
+  else if (col.storage === 'column') {
     base = normalise(product[baseKey], col.kind)
     if (baseKey === 'countryOfOrigin' && isBlankValue(base)) base = resolved.country_of_origin?.value ?? null
   }
   else {
     base = resolved[baseKey]?.value
-    // The content trio (`description`, `bulletPoints`, `keywords`) lives per locale AND as a Product
-    // column; `name` already reads its column on every market, so these read the column as the
-    // fallback for the same reason — the master's default text is the master's text. Measured
-    // 2026-09-05: master·IT showed `description` empty on every GALE row while Product.description
-    // was the store the bulk PATCH writes.
-    if (resolved[baseKey] === undefined && col.storage === 'localizedContent' && baseKey in product) base = normalise(product[baseKey], col.kind)
+
   }
   if (base === undefined) base = null
-  return projectCellValue(col, base)
+  return contentWireValue(projectCellValue(col, base), col.slot ? undefined : col.shape)
 }
 
 /**
@@ -726,7 +807,7 @@ export function formulaLookupMap(
   for (const [k, v] of Object.entries(resolved)) flat[k] = v?.value ?? null
   for (const col of columns) {
     const value = sheetValueForColumn(col, product, resolved)
-    flat[col.key] = isBlankValue(value) && parent && col.scope === 'global'
+    flat[col.key] = !resolved[contentField(col.slot?.of ?? col.key)] && isBlankValue(value) && parent && col.scope === 'global'
       ? sheetValueForColumn(col, parent, resolved) : value
   }
   return flat
@@ -743,7 +824,6 @@ function normalise(v: unknown, kind: SheetColumn['kind']): unknown {
 /** The row's OWN storage for a key — what decides pinned vs inherited. */
 function ownValue(row: ProductLike, col: SheetColumn, locale: string): unknown {
   if (col.storage === 'categoryAttributes') return row.categoryAttributes?.[col.key]
-  if (col.storage === 'localizedContent') return row.localizedContent?.[locale]?.[col.key === 'name' ? 'title' : col.key]
   return (row as unknown as Record<string, unknown>)[col.key]
 }
 
@@ -756,6 +836,7 @@ function layerFor(source: string | null, hasAlias: boolean): CellLayer {
   // intent.
   if (source === null) return 'default'
   switch (source) {
+    case 'channelSnapshot':
     case 'master':
     case 'masterLocale':
     case 'masterColumn':
@@ -845,7 +926,27 @@ export async function ebayCategoryIdsFor(
   return [...ids].sort()
 }
 
+/**
+ * R-LX-10 (on LX.R's P2-19, confirmed live by LX.6) — a Studio sheet read is
+ * CACHE-ONLY by construction, not by every branch inside it remembering to be.
+ *
+ * `channel-specs/index.ts:73` falls back to `amazonSellerSpec` (an SP-API
+ * `getDefinitionsProductType`) when a coordinate has no active `CategorySchema`
+ * row and an account is present — measured by LX.6 on Amazon·PL / OUTERWEAR:
+ * **2 provider attempts on a cold page load**, 0 on the three cached scopes. The
+ * fallback is right for an on-demand caller that asks for live data
+ * (`ReferenceSelectEditor.tsx`, `sheetRecovery.ts`, `reference-values.service.ts`
+ * all pass an explicit intent) and wrong for a page load, so the SCOPE decides:
+ * inside here `cachedSchemasOnly()` is true, the spec comes back `absent: true`
+ * and the sheet reports it honestly in `meta.schemaMissing` instead of reaching
+ * for the provider. Expiry is deliberately NOT a miss (the latest row is used
+ * regardless of `expiresAt`, per VT.1) — only a MISSING row is.
+ */
 export async function getStudioSheet(input: GetStudioSheetInput): Promise<StudioSheet> {
+  return withCachedSchemas(() => studioSheetRead(input))
+}
+
+async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet> {
   const t0 = Date.now()
   // #513(3) — per-phase server timing, IN the request. An outside instrument
   // localises cost to a route and cannot say what the route WAITS on; a 50-row
@@ -918,7 +1019,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
   })
   mark('columns')
   const { columns, coordinates, locale: marketLocale, droppedKeys, schemaMissing, schemaAge, availableMarkets, groups: columnGroups, coverage } = columnSet
-  const locale = (input.locale ?? marketLocale).toLowerCase()
+  const locale = normalizeLanguage(input.locale ?? marketLocale)
 
   let coordinate: SheetCoordinate | null = null
   if (wantChannel) {
@@ -967,7 +1068,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
   const formulaByProduct = new Map<string, Map<string, (typeof formulaRows)[number]>>()
   for (const f of formulaRows) {
     const column = columns.find(c => c.key === f.fieldKey)
-    if (f.locale && f.locale.toLowerCase() !== locale && (!column || column.storage === 'localizedContent')) continue
+    if (f.locale && normalizeLanguage(f.locale) !== locale && (!column || column.storage === 'localizedContent')) continue
     let m = formulaByProduct.get(`${f.productId}:${f.aliasKey ?? ''}`)
     if (!m) { m = new Map(); formulaByProduct.set(`${f.productId}:${f.aliasKey ?? ''}`, m) }
     const existing = m.get(f.fieldKey)
@@ -993,6 +1094,10 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
       select: { fieldKey: true, variantId: true, translatePolicy: true, sourceLanguage: true, members: true, id: true },
     }),
   ])
+  const [reachListings, reachMarkets] = coordinate ? await Promise.all([
+    prisma.channelListing.findMany({ where: { productId: { in: familyIds } }, select: { productId: true, channel: true, marketplace: true, title: true, description: true, titleOverride: true, descriptionOverride: true, bulletPointsOverride: true, followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true, translations: true } }),
+    prisma.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } }),
+  ]) : [[], []]
   mark('related')
 
   // ── 3b. what the MAPPING ENGINE would ship for these cells ────────
@@ -1080,7 +1185,8 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
   // Validators are per (coordinate, productType, isParent) — built once here,
   // never per row.
   const validatorCache = new Map<string, ReturnType<typeof buildCoordinateValidators>>()
-  const readinessCoord: SheetCoordinate = coordinate ?? { channel: 'MASTER' as SheetCoordinate['channel'], marketplace: market, label: 'Master', inMarket: true }
+  const readinessCoord: SheetCoordinate = coordinate ?? { channel: 'MASTER' as SheetCoordinate['channel'], marketplace: market, label: 'Master', inMarket: true,
+    languages: coordinates.find(c => c.channel === 'AMAZON' && c.marketplace === market)?.languages }
   const missingSchemaFor = (category: string | null | undefined) => !!coordinate &&
     ((coordinate.channel !== 'SHOPIFY' && !category) ||
       (schemaMissing ?? []).some(key => key === category || key === `${coordinate.channel}:${category}` || key === `${coordinate.channel}:*`))
@@ -1114,17 +1220,31 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
         // truth; channel scope resolves WITH it so the cell shows what that
         // listing would actually publish.
         channelListing: (listingRow as unknown as ChannelListingLike) ?? null,
+        marketLanguages: coordinate?.languages,
         locale,
       })
 
       const values: Record<string, StudioCellValue> = {}
       for (const header of columns) {
         const col = coordinate ? columnForCategory(header, coordinate.label, effectiveCategory) : header
-        const routing = resolveWriteRouting(col, coordinate, projection.id)
+
 
         let base: SheetCellValue | null = null
         let divergence: { publishesAs: unknown; note: string } | null = null
-        if (col.storage === 'column') {
+        const contentHit = resolved[contentField(col.slot?.of ?? col.key)]?.language ? resolved[contentField(col.slot?.of ?? col.key)] : null
+        const routing = resolveWriteRouting(col, coordinate, projection.id, { requested: locale, primary: PRIMARY_CONTENT_LOCALE,
+          resolved: contentHit ? { tier: contentHit.tier, language: contentHit.language, follows: contentHit.tier === 'pin' ? contentHit.follows ?? false : true } : undefined,
+          market: coordinate?.marketplace, accountId: context?.connectionId ?? undefined,
+          // LX.F2 R-LX-16 — the coordinate's own language authority, the same list
+          // the resolver is handed at :1206, so the acknowledgement can never offer
+          // a pin the write path refuses.
+          languages: coordinate?.languages,
+          reach: [...new Set(reachListings.filter(listing => listing.productId === product.id && marketLanguages(listing.channel, listing.marketplace, reachMarkets).includes(locale) && listingFollowsContent(listing, col.slot?.of ?? col.key, locale, marketLanguages(listing.channel, listing.marketplace, reachMarkets))).map(listing => `${channelLabel(listing.channel)} · ${listing.marketplace} (${locale})`))] })
+        if (contentHit) {
+          base = { value: sheetValueForColumn(col, product as unknown as Record<string, unknown>, resolved),
+            source: contentHit.source, inheritedFrom: contentHit.inheritedFrom,
+            inherited: contentHit.contentProvenance?.member === 'inherited' }
+        } else if (col.storage === 'column') {
           // #674 — the cell shows the layer the WRITE targets, and says so when
           // another layer disagrees.
           //
@@ -1166,7 +1286,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
           // back to its Product column. This branch used to read `resolved[col.key]` directly, so a
           // master slot (`bulletPoints_3`) — a key no store holds — read nothing (rehearsal 2026-09-05:
           // the write landed in `Product.bulletPoints[2]` and the cell stayed empty).
-          const baseKey = col.slot ? col.slot.of : col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key
+          const baseKey = contentField(col.slot?.of ?? col.key)
           const raw = sheetValueForColumn(col, product as unknown as Record<string, unknown>, resolved)
           if (resolved[baseKey] || !isBlankValue(raw)) {
             const hit = resolved[baseKey]
@@ -1199,7 +1319,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
         // The same stored-state reader drives the grid, import previews and channel mapping.
         // An explicit blank is a stored value; follow flags suppress stale listing snapshots.
         const channelFacts = coordinate ? col.channels?.[coordinate.label] : undefined
-        if (coordinate && routing.writeTarget === 'channelListing' && listingRow) {
+        if (!contentHit && coordinate && routing.writeTarget === 'channelListing' && listingRow) {
           const channelColumn = routing.writeVerb === 'master' ? CHANNEL_WRITABLE[col.slot?.of ?? col.key] : undefined
           const store = channelFacts?.store ?? (channelColumn ? { kind: 'listingColumn' as const,
             column: channelColumn === 'bulletPoints' ? 'bulletPointsOverride' : channelColumn,
@@ -1216,7 +1336,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
         if (!base && coordinate && (col.key === 'categoryId' || col.key === 'productType' || col.key === 'taxonomy_id') && effectiveCategory) {
           base = { value: effectiveCategory, source: 'master', inheritedFrom: rootId, inherited: true }
         }
-        const empty: SheetCellValue = { value: null, source: null, inheritedFrom: null, inherited: false }
+        const empty: SheetCellValue = { value: contentWireValue(null, col.slot ? undefined : col.shape), source: null, inheritedFrom: null, inherited: false }
         const cell = base ?? empty
 
         const link = coordinate
@@ -1239,7 +1359,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
         // a cell follows master while the channel layer holds no value of its
         // own.
         const followFlag = FOLLOW_BY_KEY[col.slot?.of ?? col.key]
-        const follows = routing.writeTarget === 'channelListing' && listingRow
+        const follows = contentHit && coordinate ? contentHit.tier === 'pin' ? contentHit.follows ?? false : true : routing.writeTarget === 'channelListing' && listingRow
           ? followFlag
             ? (listingRow as unknown as Record<string, boolean>)[followFlag] !== false
             : layer !== 'channel' && layer !== 'alias'
@@ -1295,17 +1415,10 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
         const fx = formulaByProduct.get(`${product.id}:${coordinate ? projection.id ?? '' : ''}`)?.get(col.key)
         values[col.key] = {
           ...cell,
-          ...(m?.effectiveLocale ? { requestedLocale: m.requestedLocale, effectiveLocale: m.effectiveLocale, translationState: m.translationState, needsTranslation: m.needsTranslation }
-            : !coordinate && resolved[col.slot?.of ?? (col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key)]?.effectiveLocale ? {
-              requestedLocale: locale, effectiveLocale: resolved[col.slot?.of ?? (col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key)].effectiveLocale,
-              translationState: resolved[col.slot?.of ?? (col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key)].translationState,
-              needsTranslation: ['fallback', 'outdated'].includes(resolved[col.slot?.of ?? (col.storage === 'localizedContent' && col.key === 'name' ? 'title' : col.key)].translationState ?? ''),
-            } : {}),
+          ...studioContentFacts(contentHit?.content, m, fx, locale, coordinate?.label),
           // Show the effective channel value that preview validates, including an empty mapping.
           // The separate mapping object retains transforms, provenance and diagnostics.
-          value: coordinate?.channel === 'SHOPIFY'
-            ? m ? m.value : cell.source === 'channelExplicit' ? cell.value : null
-            : m?.status === 'mapped' ? m.value : cell.value,
+          value: contentWireValue(m?.status === 'mapped' ? m.value : contentHit ? cell.value : coordinate?.channel === 'SHOPIFY' ? m ? m.value : cell.source === 'channelExplicit' ? cell.value : null : cell.value, col.slot ? undefined : col.shape),
           ...(divergence ? { divergence } : {}),
           ...(fx
             ? {
@@ -1319,7 +1432,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
           mapped: m
             ? {
                 value: m.value,
-                requestedLocale: m.requestedLocale, effectiveLocale: m.effectiveLocale, translationState: m.translationState, needsTranslation: m.needsTranslation,
+                derived: m.content ? m.content.tier === 'computed' : m.provenance !== 'override' && !!m.rule,
                 sourceOwner: m.sourceOwner,
                 status: m.status,
                 provenance: m.provenance,
@@ -1340,11 +1453,14 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
           layer,
           // `pinned` is about THIS layer holding the value, which is exactly
           // "the value did not come from somewhere further up".
-          pinned: layer === 'alias' || layer === 'channel' || (layer === 'variant' && !isParent),
+          pinned: follows !== true && (layer === 'alias' || layer === 'channel' || (layer === 'variant' && !isParent)),
           follows,
           editable: cellEditable,
           linkGroupId: link ? (linkGroups.find((g) => g.fieldKey === col.key)?.id ?? null) : null,
           ...routing,
+          ...(routing.contentAddress?.tier === 'language' ? { contentVersion: product.translations.find(row => row.language === locale)?.version ?? 0 }
+            : routing.contentAddress?.tier === 'pin' ? { contentVersion: listingRow?.translations.find(row => row.language === locale)?.version ?? 0 } : {}),
+          ...(routing.contentAddress === undefined ? { contentAddress: routing.writeTarget === 'channelListing' && coordinate ? { tier: 'pin' as const, language: locale, coordinate: { channel: coordinate.channel, market: coordinate.marketplace, ...(context?.connectionId ? { accountId: context.connectionId } : {}), ...(projection.id ? { aliasId: projection.id } : {}) } } : { tier: 'source' as const } } : {}),
           // #513/#522 — `writable` MIRRORS editability, and the reason travels
           // with whichever rule said no.
           //
@@ -1375,6 +1491,11 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
             quantity: listingRow.quantityOverride ?? listingRow.quantity ?? null,
             externalListingId: listingRow.externalListingId,
             offerActive: listingRow.offerActive !== false,
+            offerActiveHonoured: offerActiveHonoured(listingRow.channel),
+            offerClosedAt: listingRow.offerClosedAt?.toISOString() ?? null,
+            offerClosedBy: listingRow.offerClosedBy ?? null,
+            offerCloseReason: listingRow.offerCloseReason ?? null,
+            syncPaused: listingRow.syncPaused ?? null,
             // #327(8) — the Listings pane had no time reference at all. This is
             // when a sync last RAN, which is NOT "last checked against the
             // channel": nothing here polls the channel to confirm the remote
@@ -1413,7 +1534,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
 
       const flat: FlatRow = {}
       for (const [k, cell] of Object.entries(values)) flat[k] = cell.mapped?.status === 'mapped' ? cell.mapped.value : cell.value
-      const issues: ReadinessIssue[] = evaluateRow(flat, validatorsFor(rowShape)).map((i) => ({
+      const issues: ReadinessIssue[] = evaluateRow(flat, validatorsFor(rowShape), { requested: locale, fields: Object.fromEntries(Object.entries(values).filter(([, cell]) => cell.language).map(([key, cell]) => [key, { language: cell.language }])) }).map((i) => ({
         key: i.field,
         label: columns.find((c) => c.key === i.field)?.label ?? i.field,
         message: i.message,
@@ -1422,9 +1543,18 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
       for (const column of columns) {
         if (!columnApplies(column, rowShape)) continue
         const localized = values[column.key]
-        if (localized?.needsTranslation) issues.push({ key: column.key, label: column.label,
-          message: `${locale} content ${localized.translationState === 'outdated' ? 'is outdated' : 'is missing'}${localized.effectiveLocale ? `; showing ${localized.effectiveLocale} fallback` : ''}.`,
-          severity: columnRequiredByAny(column, rowShape) || localized.mapped?.requiredByRule ? 'error' : 'warn' })
+        if (localized?.language && translationMissing({ language: localized.language }, locale)) {
+          const message = `${locale} content ${localized.translation?.outdated ? 'is outdated' : 'is missing'}${localized.language ? `; showing ${localized.language} fallback` : ''}.`
+          // LX.F P1-4 — one defect, one issue. `readiness.service.ts:212` nulls an
+          // untranslated value before validating, so a required untranslated field
+          // ALREADY has an error for this key; pushing a second one double-counted
+          // the alias summary and listed the field twice in ReadinessIndex.missing
+          // with two sentences. Same precedence rule as the mapping push below.
+          const existing = issues.findIndex(issue => issue.key === column.key && issue.severity === 'error')
+          if (existing >= 0) issues[existing] = { ...issues[existing], message: `${issues[existing].message} — ${message}`, kind: 'language-fallback' }
+          else issues.push({ key: column.key, label: column.label, message, kind: 'language-fallback',
+            severity: columnRequiredByAny(column, rowShape) || localized.mapped?.requiredByRule ? 'error' : 'warn' })
+        }
         for (const message of values[column.key]?.mapped?.errors ?? []) {
           // A blocking mapping verdict replaces the weaker warning for the same field.
           for (let index = issues.length - 1; index >= 0; index--) {
@@ -1489,6 +1619,133 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
     }
   }
 
+  // ── 5b. VT.1 — the ONE Variation theme column, one cell per FAMILY per coordinate ──
+  //
+  // Computed ONCE for the scope, after the per-row work, and written onto the PARENT rows only: the structure lives
+  // on the parent (design VT.8), a child row shows `—` with `Set on the parent`, and an ALIAS row carries the
+  // alias's OWN projection because the store is the alias's own parent listing row (T10).
+  //
+  // The facts are gathered by `variation-theme-facts.ts` from CACHED sources only — the latest `CategorySchema` row
+  // regardless of expiry for Amazon, the sheet's own `variantEligible` columns for eBay — so opening the editor
+  // costs no schema call (T13).
+  {
+    const { buildVariationThemeCells } = await import('./variation-theme-facts.js')
+    const themeColumn = columns.find((c) => c.key === VARIATION_THEME_KEY) ?? { key: VARIATION_THEME_KEY, writeField: VARIATION_THEME_KEY, storage: 'listing' as const, kind: 'variationTheme' as const, editable: true }
+    const { childVariationCell, variationReadinessItems, VT_COPY } = await import('./variation-rules.service.js')
+    // The LEAF, not `family-projection.service.js`: that module imports THIS one, and a cycle hands back a
+    // half-built module rather than failing loudly (the measurement is in `variation-excluded.ts`).
+    const { readExcludedListingIds } = await import('./variation-excluded.js')
+
+    // Inclusion comes from the SAME reader the projection uses, so the cell's collision count and the Variants
+    // page's cannot disagree. Master scope has no inclusion concept: every child is part of the family.
+    // An unreadable exclusion store means the collision count is NOT COMPUTED, never silently zero: the cell then
+    // reports `collisions: null` rather than "0 collisions", which is a different sentence.
+    let excluded = new Set<string>()
+    let exclusionKnown = true
+    if (coordinate && listingRows.length > 0) {
+      try { excluded = await readExcludedListingIds(listingRows.map((l) => l.id)) }
+      catch { exclusionKnown = false }
+    }
+    const variants = !exclusionKnown ? undefined : children.map((child) => {
+      const own = coordinate ? listingByRow.get(`${child.id}:`) ?? null : null
+      return {
+        id: child.id,
+        sku: child.sku,
+        included: coordinate ? !!own && !excluded.has(own.id) : true,
+        axisValues: rows.find((r) => r.id === child.id && r.aliasId === null)?.axisValues ?? {},
+      }
+    })
+
+    const parentListings = new Map<string, import('./variation-rules.service.js').VariationListingFacts | null>()
+    for (const group of projections) {
+      const aliasKey = group.id ?? ''
+      const row = coordinate ? listingByRow.get(`${rootId}:${group.id ?? ''}`) ?? null : null
+      parentListings.set(aliasKey, row ? {
+        version: row.version ?? 0,
+        variationTheme: row.variationTheme ?? null,
+        // R-VT-13: either shape, relayed RAW — `variation-rules.service.ts` parses it through the one parser.
+        variationMapping: row.variationMapping ?? null,
+        platformAttributes: (row.platformAttributes ?? null) as Record<string, unknown> | null,
+        externalListingId: row.externalListingId ?? null,
+        listingStatus: row.listingStatus ?? null,
+      } : null)
+    }
+
+    const cells = await buildVariationThemeCells({
+      coordinate: coordinate ? { channel: coordinate.channel, marketplace: coordinate.marketplace, label: coordinate.label } : null,
+      market,
+      accountId: context?.connectionId ?? null,
+      columns,
+      family: {
+        rootId,
+        familyAxes: Array.isArray(root.variationAxes) ? root.variationAxes : [],
+        productVersion: root.version ?? 1,
+        productTheme: root.variationTheme ?? null,
+        productType: root.productType ?? null,
+        childIds: children.map((c) => c.id),
+        ...(variants ? { variants } : {}),
+      },
+      parentListings,
+      categoriesByAlias: coordinate ? new Map([...parentListings].map(([alias, listing]) => [alias, categoryForListing(context?.defaults[rootId], coordinate.channel, listing?.platformAttributes).channelCategoryId])) : undefined,
+      variantsByAlias: !exclusionKnown ? undefined : new Map(projections.map(group => [group.id ?? '', children.map(child => {
+        const own = coordinate ? listingByRow.get(`${child.id}:${group.id ?? ''}`) ?? null : null
+        return { id: child.id, sku: child.sku, included: coordinate ? !!own && !excluded.has(own.id) : true, axisValues: rows.find(r => r.id === child.id && (r.aliasId ?? '') === (group.id ?? ''))?.axisValues ?? {} }
+      })])),
+    })
+
+    for (const row of rows) {
+      const parentRow = row.parentId === null
+      const cell = parentRow ? cells.get(row.aliasId ?? '') ?? null : null
+      const blocked = childVariationCell()
+      // ONE predicate: the same `resolveWriteRouting` every other cell uses, so the cell and the column cannot
+      // disagree about where this write lands (reference_write_predicate_must_match_its_readers).
+      const themeRouting = resolveWriteRouting(themeColumn, coordinate, row.aliasId ?? null)
+      row.values[VARIATION_THEME_KEY] = {
+        // The cell VALUE is the whole projection on a parent row, and `null` on a child — the renderer draws `—`.
+        value: (cell ?? null) as unknown as SheetCellValue['value'],
+        source: 'none',
+        layer: 'master',
+        pinned: !!cell && cell.source.kind === 'override',
+        follows: null,
+        editable: parentRow,
+        linkGroupId: null,
+        mapped: null,
+        writeField: themeRouting.writeField,
+        writeTarget: themeRouting.writeTarget,
+        writeVerb: themeRouting.writeVerb,
+        affectsAllChannels: themeRouting.affectsAllChannels,
+        writable: parentRow ? (cell?.writable ?? false) : false,
+        writeBlockedReason: parentRow ? (cell?.writeBlockedReason ?? null) : blocked.writeBlockedReason,
+      } as StudioCellValue
+      if (!parentRow) row.values[VARIATION_THEME_KEY].value = null
+      if (!parentRow) row.values[VARIATION_THEME_KEY].writeBlockedReason = VT_COPY.setOnParent
+
+      // VT.1 Phase 5 — the three variation readiness items, on the PARENT row where the structure lives. They ride
+      // the row's existing `readiness.issues`, which is what the alias summaries, the Needs-attention list and the
+      // catalogue filter already read: one vocabulary, no second channel. `scope-readiness.service.ts` is NOT
+      // touched - it reads only the materialized `ReadinessIndex` ("never construct a sheet here"), so emitting
+      // these from the sheet is the only place the facts exist without a new index column and its writer.
+      if (parentRow && cell) {
+        for (const item of variationReadinessItems(cell, coordinate?.label ?? 'Master')) {
+          row.readiness.issues.push({
+            key: VARIATION_THEME_KEY,
+            label: 'Variation theme',
+            message: item.message,
+            severity: item.severity === 'error' ? 'error' : 'warn',
+            // VT.1b — the FACT beside the sentence (LX.F's P2-14 field): `readiness-index.service.ts` carries it into
+            // `ReadinessIndex.missing[].kind`, which is what the catalogue's `variation-mapping:unset|collides` filter
+            // narrows on. A reader matching the message wording would go false the day the copy changes.
+            kind: item.kind,
+          })
+        }
+        // Re-apply the row's OWN state rule (line ~1516) rather than inventing a second one: an error dominates
+        // every other state there, so adding an error must move the state exactly as an error found in-loop would.
+        if (row.readiness.issues.some((i) => i.severity === 'error')) row.readiness.state = 'errors'
+        else if (row.readiness.state === 'ready' && row.readiness.issues.length > 0) row.readiness.state = 'missing'
+      }
+    }
+  }
+
   // ── 6. alias group summaries ──────────────────────────────────────
   const aliases: AliasGroup[] = coordinate
     ? groups.map((g) => {
@@ -1509,7 +1766,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
             if (!columnApplies(c, { isParent: r.isParent, productType: r.productType, familyId: r.familyId })) continue
             if (!r.values[c.key]?.mapped?.requiredByRule && !columnRequiredHere(c, coordinate.label, r.productType, r.familyId, r.values)) continue
             total++
-            if (!r.values[c.key]?.needsTranslation && !isBlank(r.values[c.key]?.value)) filled++
+            if ((!r.values[c.key]?.language || !translationMissing({ language: r.values[c.key].language }, locale)) && !isBlank(r.values[c.key]?.value)) filled++
           }
         }
         const headRow = mine.find((r) => r.isParent) ?? mine[0]
@@ -1577,6 +1834,7 @@ export async function getStudioSheet(input: GetStudioSheetInput): Promise<Studio
 
   const columnsWithRouting = columns.map((col) => ({
     ...col,
+    localizable: isLocalizableContent(col.slot?.of ?? col.key, col.storage),
     ...resolveWriteRouting(col, coordinate, null),
     ...(SPEC_WIDTHS[col.key] !== undefined ? { width: SPEC_WIDTHS[col.key] } : {}),
     // Case-insensitive EXACT key match — `color` is the column, `Color` the

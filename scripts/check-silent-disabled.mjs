@@ -26,68 +26,64 @@
  * TypeScript AST, never grepped, because a regex over source cannot tell an attribute from a
  * string that mentions one ([[reference_verification_probe_false_positives]]).
  *
- * THE ESCAPE, and it is a real fix rather than a pragma: also carry `aria-disabled`. That is the
- * shape the remedy takes —
- *
- *     disabled={busy}                     // transient, resolves itself, needs no explanation
- *     aria-disabled={held || busy}        // held: still live, so hover/click/focus can explain
- *     className={`… ${held ? 'held' : ''}`}
- *     onClick={() => { if (held) { explain(); return } write() }}
- *
- * — so an element that has thought about the distinction is exempt, and one that has not is
- * counted. `aria-disabled` alone (no `disabled`) is never flagged: it cannot swallow an event.
+ * PR.6 correction: aria-disabled does not cancel a native disabled attribute. The former
+ * unconditional exemption masked controls that still swallowed focus and events. Only a held
+ * control with NO native disabled attribute is exempt now. Widened-root counts were recorded
+ * before tightening this detector; the archived census makes the two effects distinguishable.
  *
  * RATCHET, not a gate: the pre-existing sites are named, not fixed, and the count may not grow.
  * Lower BASELINE whenever you clear some.
  */
 import ts from 'typescript'
-import { existsSync, readFileSync } from 'node:fs'
-import { execSync } from 'node:child_process'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { resolve, relative } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import assert from 'node:assert/strict'
 
-const ROOT = process.argv[2] ?? 'apps/web/src/app/marketing/ads/rules-automation'
-/** Sites carrying `disabled` + `title` and no `aria-disabled`, measured 2026-08-19 after U13. */
-const BASELINE = Number(process.env.SILENT_DISABLED_BASELINE ?? 27)
-
-// Run from the repo root whatever the caller's cwd, and REFUSE to scan nothing: a ratchet that
-// silently finds 0 files reports "✓" forever and is worse than no check at all.
-process.chdir(execSync('git rev-parse --show-toplevel', { encoding: 'utf8' }).trim())
-if (!existsSync(ROOT)) {
-  console.error(`❌ silent-disabled: scan root ${ROOT} does not exist — the check would pass vacuously.`)
-  process.exit(1)
+process.chdir(execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim())
+const DEFAULT_ROOTS = {
+  'apps/web/src/app/marketing/ads/rules-automation': 21,
+  // First DS census under the original detector, 2026-09-13: 10 web / 8 Factory.
+  // Frozen BEFORE tightening. New detector findings must be repaired, never re-baselined.
+  'apps/web/src/design-system': 10,
+  'apps/factory/src/design-system': 8,
 }
-const files = execSync(`find ${ROOT} -name '*.tsx'`, { encoding: 'utf8' }).trim().split('\n').filter(Boolean)
-if (files.length === 0) {
-  console.error(`❌ silent-disabled: no .tsx found under ${ROOT} — the check would pass vacuously.`)
-  process.exit(1)
+const positional = process.argv.slice(2).filter(arg => !arg.startsWith('--'))
+const roots = positional.length ? positional : Object.keys(DEFAULT_ROOTS)
+const measure = process.argv.includes('--measure')
+function filesIn(root) {
+  assert.ok(existsSync(root), `scan root ${root} does not exist`)
+  return readdirSync(root, { withFileTypes: true }).flatMap(e => e.isDirectory()
+    ? filesIn(resolve(root, e.name)) : e.name.endsWith('.tsx') ? [resolve(root, e.name)] : [])
 }
-
-const hits = []
-for (const f of files) {
-  const src = ts.createSourceFile(f, readFileSync(f, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
-  const visit = (n) => {
+function inspect(text, file) {
+  const src = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+  const hits = []
+  function visit(n) {
     if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
-      const attrs = n.attributes.properties.filter(ts.isJsxAttribute).map((a) => a.name.getText())
-      if (attrs.includes('disabled') && attrs.includes('title') && !attrs.includes('aria-disabled')) {
-        const { line } = src.getLineAndCharacterOfPosition(n.getStart())
-        hits.push(`${f}:${line + 1}  <${n.tagName.getText()}>`)
+      const attrs = n.attributes.properties.filter(ts.isJsxAttribute).map(a => a.name.getText(src))
+      if (attrs.includes('disabled') && attrs.includes('title')) {
+        const { line } = src.getLineAndCharacterOfPosition(n.getStart(src))
+        hits.push(`${relative(process.cwd(), file)}:${line + 1} <${n.tagName.getText(src)}>`)
       }
     }
     ts.forEachChild(n, visit)
   }
   visit(src)
+  return hits
 }
-
-const n = hits.length
-if (n > BASELINE) {
-  console.error(`\n❌ silent-disabled ratchet: ${BASELINE} → ${n} — a control was given a reason it cannot deliver.`)
-  console.error('   A `title` on a `disabled` element is never shown, and the element takes no focus and no click.')
-  console.error('   Use `aria-disabled` + a held class and answer the click, or drop the title. Sites:\n')
-  for (const h of hits) console.error(`   ${h}`)
-  console.error('')
-  process.exit(1)
+assert.equal(inspect('<button disabled title="Reason" />', '/seed.tsx').length, 1)
+assert.equal(inspect('<button aria-disabled title="Reason" />', '/control.tsx').length, 0)
+assert.equal(inspect('<button disabled aria-disabled title="Reason" />', '/masked-seed.tsx').length, 1)
+console.log('silent-disabled positive control: native-disabled seed caught; held-only control accepted')
+let failed = false
+for (const root of roots) {
+  const files = filesIn(root)
+  assert.ok(files.length, `no .tsx files measured under ${root}`)
+  const hits = files.flatMap(file => inspect(readFileSync(file, 'utf8'), file))
+  const baseline = Number(process.env.SILENT_DISABLED_BASELINE ?? DEFAULT_ROOTS[root] ?? 0)
+  console.log(`${root}: ${files.length} files; ${hits.length} sites; baseline ${baseline}${measure ? ' (measurement only)' : ''}`)
+  for (const hit of hits) console.log(`  ${hit}`)
+  if (hits.length > baseline) failed = true
 }
-if (n < BASELINE) {
-  console.log(`✓ silent-disabled: ${n} site(s) — below the ${BASELINE} baseline. Lower BASELINE in this script to hold the ground.`)
-} else {
-  console.log(`✓ silent-disabled: ${n} site(s), at the ${BASELINE} baseline.`)
-}
+process.exitCode = measure ? 0 : failed ? 1 : 0

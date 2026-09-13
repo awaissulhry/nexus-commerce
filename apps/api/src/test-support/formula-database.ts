@@ -12,6 +12,15 @@ export async function formulaDatabase(options: { maxConnections?: number; port?:
   const sql = execFileSync(`${root}/node_modules/.bin/prisma`, ['migrate', 'diff', '--from-empty', '--to-schema-datamodel', `${root}/packages/database/prisma/schema.prisma`, '--script'], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 })
   const db = await PGlite.create()
   await db.exec(sql)
+  // LX.F P3-22 — the deployed databases carry columns `schema.prisma` does not.
+  // `ChannelListing.variationExcluded` is DELIBERATELY absent from the schema
+  // (`family-projection.service.ts:385-398`: "a database ahead of the schema is
+  // inert; a schema ahead of a database is an outage") and is read/written there
+  // through narrow raw SQL. Without it this disposable database is BEHIND every
+  // deployed one, and 12 LX integration assertions could not execute at all —
+  // the arm that would have failed was the one never run. Keep this tied to that
+  // service: if it stops using the column, delete this line with it.
+  await db.exec('ALTER TABLE "ChannelListing" ADD COLUMN IF NOT EXISTS "variationExcluded" boolean NOT NULL DEFAULT false')
   await db.exec(`INSERT INTO "Workspace" (id, name, status, "isLegacy", "createdByUserId", "creationKey", "updatedAt")
     VALUES ('nexus_legacy_workspace', 'Test business', 'active', true, 'test-bootstrap', 'test-bootstrap', CURRENT_TIMESTAMP)`)
   await db.exec(workspacePolicySql())

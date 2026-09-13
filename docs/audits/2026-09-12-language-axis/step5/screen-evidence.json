@@ -1,0 +1,1099 @@
+{
+  "at": "2026-09-12T21:58:58.524Z",
+  "productId": "cmokmy3a40078pm0p1fvnu523",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "databaseRows": 714,
+  "databaseReadRolledBack": true,
+  "readings": [
+    {
+      "keyboardScroll": {
+        "old": 0,
+        "moved": 0,
+        "client": 1338,
+        "scroll": 1338,
+        "right": 1423,
+        "viewport": 1440,
+        "tabIndex": null
+      }
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:44.864Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 0,
+        "state": "blocked",
+        "required": {
+          "filled": 0,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nBlocked\n0%",
+      "tip": "Shared product — Blocked · 0%. DE: 0 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · IT: Warnings 100% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-DE-de-1440-light.png"
+    },
+    {
+      "keyboardScroll": {
+        "old": 0,
+        "moved": 0,
+        "client": 1626,
+        "scroll": 1626,
+        "right": 1711,
+        "viewport": 1728,
+        "tabIndex": null
+      }
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1728,
+      "theme": "light",
+      "at": "2026-09-12T21:58:45.997Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 0,
+        "state": "blocked",
+        "required": {
+          "filled": 0,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nBlocked\n0%",
+      "tip": "Shared product — Blocked · 0%. DE: 0 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · IT: Warnings 100% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 1728,
+        "document": 1728,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1626,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1710,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-DE-de-1728-light.png"
+    },
+    {
+      "keyboardScroll": {
+        "old": 0,
+        "moved": 0,
+        "client": 1338,
+        "scroll": 1338,
+        "right": 1423,
+        "viewport": 1440,
+        "tabIndex": null
+      }
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1440,
+      "theme": "dark",
+      "at": "2026-09-12T21:58:47.255Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 0,
+        "state": "blocked",
+        "required": {
+          "filled": 0,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nBlocked\n0%",
+      "tip": "Shared product — Blocked · 0%. DE: 0 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · IT: Warnings 100% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-DE-de-1440-dark.png"
+    },
+    {
+      "keyboardScroll": {
+        "old": 0,
+        "moved": 0,
+        "client": 1626,
+        "scroll": 1626,
+        "right": 1711,
+        "viewport": 1728,
+        "tabIndex": null
+      }
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1728,
+      "theme": "dark",
+      "at": "2026-09-12T21:58:48.415Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 0,
+        "state": "blocked",
+        "required": {
+          "filled": 0,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nBlocked\n0%",
+      "tip": "Shared product — Blocked · 0%. DE: 0 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · IT: Warnings 100% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 1728,
+        "document": 1728,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1626,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1710,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-DE-de-1728-dark.png"
+    },
+    {
+      "keyboardScroll": {
+        "old": 0,
+        "moved": 40,
+        "client": 858,
+        "scroll": 1282,
+        "right": 943,
+        "viewport": 960,
+        "tabIndex": "0"
+      }
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 960,
+      "theme": "light",
+      "at": "2026-09-12T21:58:49.833Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 0,
+        "state": "blocked",
+        "required": {
+          "filled": 0,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nBlocked\n0%",
+      "tip": "Shared product — Blocked · 0%. DE: 0 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · IT: Warnings 100% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 960,
+        "document": 960,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1282.1171875,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1366.1171875,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-DE-de-960-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "master",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:50.899Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 100,
+        "state": "warn",
+        "required": {
+          "filled": 21,
+          "total": 21
+        }
+      },
+      "chipText": "Shared product\n·\nWarnings\n100%",
+      "tip": "Shared product — Warnings · 100%. IT: 21 of 21 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance. · DE: Blocked 0% · EN: Blocked 0% · ES: Blocked 0% · FR: Blocked 0% · NL: Blocked 0% · PL: Blocked 0% · SV: Blocked 0% · TR: Blocked 0%",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-master-IT-it-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "AMAZON",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:51.974Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 37,
+        "state": "blocked",
+        "required": {
+          "filled": 224,
+          "total": 611
+        }
+      },
+      "chipText": "Amazon\n·\nBlocked\n37%",
+      "tip": "Amazon — Blocked · 37%. DE: 224 of 611 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance.",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-AMAZON-DE-de-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "nl"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:53.016Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": null,
+        "state": "blocked",
+        "required": {
+          "filled": 21,
+          "total": 21
+        }
+      },
+      "chipText": "Amazon\n·\nBlocked\n—",
+      "tip": "Amazon — Blocked. NL: Category metadata is incomplete: OUTERWEAR · FR: Blocked —",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-AMAZON-BE-nl-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "fr"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:54.057Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": null,
+        "state": "blocked",
+        "required": {
+          "filled": 21,
+          "total": 21
+        }
+      },
+      "chipText": "Amazon\n·\nBlocked\n—",
+      "tip": "Amazon — Blocked. FR: Category metadata is incomplete: OUTERWEAR · NL: Blocked —",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-AMAZON-BE-fr-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "AMAZON",
+        "market": "UK",
+        "language": "en"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:55.142Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 28,
+        "state": "blocked",
+        "required": {
+          "filled": 185,
+          "total": 651
+        }
+      },
+      "chipText": "Amazon\n·\nBlocked\n28%",
+      "tip": "Amazon — Blocked · 28%. EN: 185 of 651 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance.",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-AMAZON-UK-en-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "EBAY",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:56.391Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": 67,
+        "state": "blocked",
+        "required": {
+          "filled": 84,
+          "total": 126
+        }
+      },
+      "chipText": "eBay\n·\nBlocked\n67%",
+      "tip": "eBay — Blocked · 67%. IT: 84 of 126 required values filled across this scope. Information completeness does not establish publication eligibility or provider acceptance.",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-EBAY-IT-it-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "SHOPIFY",
+        "market": "GLOBAL",
+        "language": "en"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:57.467Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": null,
+        "state": "absent",
+        "required": {
+          "filled": 0,
+          "total": 0
+        }
+      },
+      "chipText": "Shopify\n·\nNot set up",
+      "tip": "Shopify — Not set up. EN: Shopify requirements are not cached for this account.",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-SHOPIFY-GLOBAL-en-1440-light.png"
+    },
+    {
+      "coordinate": {
+        "scope": "ETSY",
+        "market": "GLOBAL",
+        "language": "en"
+      },
+      "width": 1440,
+      "theme": "light",
+      "at": "2026-09-12T21:58:58.524Z",
+      "matrixEntries": 34,
+      "attentionRows": 34,
+      "scope": {
+        "pct": null,
+        "state": "blocked",
+        "required": {
+          "filled": 42,
+          "total": 168
+        }
+      },
+      "chipText": "Etsy\n·\nBlocked\n—",
+      "tip": "Etsy — Blocked. EN: Category metadata is incomplete: ETSY:*",
+      "bounds": {
+        "viewport": 1440,
+        "document": 1440,
+        "matrix": {
+          "x": 84,
+          "y": 235.25,
+          "width": 1338,
+          "height": 1175.75,
+          "top": 235.25,
+          "right": 1422,
+          "bottom": 1411,
+          "left": 84
+        }
+      },
+      "screenshot": "screen-ETSY-GLOBAL-en-1440-light.png"
+    }
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/csrf"
+    },
+    {
+      "method": "GET",
+      "path": "/api/connections"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness"
+    },
+    {
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/sync-queue"
+    }
+  ],
+  "blocked": [
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/notifications"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/sidebar/counts"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    },
+    {
+      "kind": "API outside readiness screen",
+      "method": "GET",
+      "path": "/api/listings/publish-readiness"
+    }
+  ],
+  "pageErrors": [],
+  "providerNote": "Only audited database GET routes admitted. Publish/readiness and unrelated calls refused before dispatch. No content writes."
+}

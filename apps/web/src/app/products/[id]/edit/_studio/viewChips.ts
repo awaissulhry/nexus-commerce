@@ -15,17 +15,16 @@ export function viewChipRows(cells: ViewChipCells): string[] {
   return Object.keys(cells.byRow).filter((id) => cells.byRow[id].length > 0)
 }
 
-/** The same unit as Required and the column views; cell totals stay explicit in the detail. */
+/** Filter breadth only. This is not the chip's displayed quantity. */
 export function viewChipColumnCountLabel(chip: ViewChip): string | null {
   if (chip.count === null) return null
-  if (chip.noun && chip.noun !== 'columns') return String(chip.count)
   const columns = viewChipColumns(chip.cells).length
   return `${columns} ${columns === 1 ? 'column' : 'columns'}`
 }
 
 export function viewChipSummary(chip: ViewChip): string {
   if (chip.count === null) return chip.note ?? 'Not counted yet'
-  if (chip.noun && chip.noun !== 'columns') return `${chip.count} ${chip.count === 1 ? (chip.noun === 'axes' ? 'axis' : chip.noun.slice(0, -1)) : chip.noun}`
+  if (chip.count.unit !== 'cells') return viewChipCountLabel(chip)!
   const rows = viewChipRows(chip.cells).length
   const cells = Object.values(chip.cells.byRow).reduce((n, keys) => n + new Set(keys).size, 0)
   return `${cells} affected ${cells === 1 ? 'cell' : 'cells'} across ${viewChipColumnCountLabel(chip)} and ${rows} ${rows === 1 ? 'row' : 'rows'}`
@@ -54,7 +53,7 @@ export function isViewChipVisible(chip: ViewChip, activeId?: string | null): boo
   // A selected filter stays selected at zero, with a visible way to clear it.
   if (chip.id === activeId) return true
   if (chip.count === null) return true
-  if (chip.count === 0) return chip.hideWhenZero !== false ? false : true
+  if (chip.count.n === 0) return chip.hideWhenZero !== false ? false : true
   return true
 }
 
@@ -66,7 +65,10 @@ export function isViewChipVisible(chip: ViewChip, activeId?: string | null): boo
  * scored (feedback_100_percent_honest_ui).
  */
 export function viewChipCountLabel(chip: ViewChip): string | null {
-  return chip.count === null ? null : String(chip.count)
+  if (chip.count === null) return null
+  const { n, unit } = chip.count
+  const word = n === 1 ? (unit === 'axes' ? 'axis' : unit.slice(0, -1)) : unit
+  return `${n} ${word}`
 }
 
 /**

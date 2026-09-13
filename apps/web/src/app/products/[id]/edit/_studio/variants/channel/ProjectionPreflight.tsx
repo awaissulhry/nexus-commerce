@@ -48,7 +48,7 @@ export function ProjectionPreflight({ productId, channel, marketplace, accountId
     <Modal
       open
       onClose={onClose}
-      title={`Information check · ${label}`}
+      title={`Saved values checked · ${label}`}
       subtitle="What a send would carry, checked by the server. Nothing is sent from here."
       size="lg"
     >

@@ -78,6 +78,7 @@ export function buildGridRequest(
     },
     context: {
       tile: context.tile,
+      ...(context.language ? { language: context.language } : {}),
       familyId: context.familyId || null,
       salesDays: context.salesDays,
       filters: context.filters,

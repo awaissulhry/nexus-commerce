@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-13T18:55:39.853Z",
+  "database": "127.0.0.1:55439/nexus_development",
+  "marker": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce",
+  "cleanup": {
+    "products": 0,
+    "listings": 0,
+    "queues": 0,
+    "events": 0
+  },
+  "galeVersion": 59
+}

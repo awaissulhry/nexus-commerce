@@ -37,6 +37,7 @@ import { ComparePane } from './panes/ComparePane'
 import { ListingsPane } from './panes/ListingsPane'
 import { useFieldHistory } from './useFieldHistory'
 import { useCompare } from './useCompare'
+import { matchesOpenRecord } from '../sheet/compareTargets'
 import { useRecordState } from './useRecordState'
 import { useRestorePoints } from './useRestorePoints'
 import { useRecordImages } from '../images/record'
@@ -395,6 +396,11 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
                 {target.label} has its own value for <strong>{compareRow.label}</strong>. Copying replaces it.
               </p>
               <p>
+                {target.kind === 'channel'
+                  ? `This copy is a pin on ${target.label} — only that listing changes.`
+                  : `This copy changes the shared ${target.label} text, which every listing that follows it inherits.`}
+              </p>
+              <p>
                 <strong>Currently there:</strong> {String(to.value ?? '(empty)')}
               </p>
               <p>
@@ -409,6 +415,12 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
         if (!ok) return
       }
 
+      /**
+       * LX.13 — a copy lands through the ONE write path on the TARGET's scope, as a `pin`. The
+       * target's address rides on `target.scope`: `locale` names the language tier row, and a
+       * channel coordinate makes it a pin on that coordinate — which the confirm above says in
+       * words before it happens.
+       */
       await write(column, from.value, 'pin', target.scope)
       compare.reload()
     },
@@ -451,17 +463,16 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
    * No `?? compareTargets[0]` fallback either. Marking an arbitrary target as "this record" is the
    * same failure one step quieter; if nothing matches, nothing is marked.
    */
+  /**
+   * 🔴 LX.13 — the predicate now lives in `sheet/compareTargets.ts#matchesOpenRecord` and includes
+   * the LANGUAGE. Restating it here was exact only while a scope had one language: with a language
+   * target per language of the shared record, a master scope read in German matched the ITALIAN
+   * source row, so the column an operator copies FROM was the wrong language's text — #342.2, one
+   * dimension further on.
+   */
   const sourceTargetId = useMemo(
-    () =>
-      compareTargets.find(
-        (t) =>
-          t.scope.kind === scope.kind &&
-          (t.scope.channel ?? null) === (scope.channel ?? null) &&
-          (t.scope.marketplace ?? null) === (scope.marketplace ?? null) &&
-          (t.scope.aliasId ?? '') === (scope.aliasId ?? '') &&
-          (t.scope.accountId ?? null) === (scope.accountId ?? null),
-      )?.id ?? '',
-    [compareTargets, scope.kind, scope.channel, scope.marketplace, scope.aliasId, scope.accountId],
+    () => compareTargets.find((t) => matchesOpenRecord(t, scope))?.id ?? '',
+    [compareTargets, scope],
   )
 
   const pickField = useCallback(

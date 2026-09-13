@@ -3,6 +3,7 @@
  * Handles product, inventory, and order synchronization with parent-child hierarchy
  */
 
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import prisma from "../../db.js";
 import { WooCommerceService, type WooCommerceProductSync, type WooCommerceOrderSync } from "../marketplaces/woocommerce.service.js";
 import { MarketplaceSyncError } from "../../utils/error-handler.js";
@@ -290,6 +291,14 @@ export class WooCommerceSyncService {
         throw new Error(`Product ${product.id} not synced to WooCommerce`);
       }
 
+      // This legacy caller has no coordinate account. A missing control refuses;
+      // any held matching listing blocks, rather than choosing an arbitrary account.
+      const controls = await prisma.channelListing.findMany({ where: { channel: 'WOOCOMMERCE', productId: product.id } })
+      if (!controls.length) throw new Error('PUSH_CONTROL_UNAVAILABLE: No stored WooCommerce listing controls were found.')
+      for (const row of controls) {
+        const refusal = assertPushAllowed(row)
+        if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+      }
       // Update variation stock in WooCommerce
       await this.woocommerceService.updateVariationStock(
         product.woocommerceProductId,

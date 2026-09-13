@@ -431,6 +431,9 @@
     "MasterFieldRuleRevision",
     "MarketplaceTaxonomy",
     "MarketplaceTaxonomySnapshot",
-    "MarketplaceTaxonomyNode"
+    "MarketplaceTaxonomyNode",
+    "ChannelListingTranslation",
+    "ReadinessIndex",
+    "SellerReferenceLabel"
   ]
 }

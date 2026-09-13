@@ -21,6 +21,7 @@
 import { AlertTriangle, CheckCircle2, CircleDashed, ExternalLink } from 'lucide-react'
 import { Pill } from '@/design-system/primitives/Pill'
 import { readinessMeta } from '../readinessMeta'
+import { listingStatusMeta } from '@/design-system/grid/renderers/listingStatus'
 import { listingUrl } from '../listingUrl'
 import { ago, when } from '../format'
 import type { DrawerScope, SheetRow } from '../types'
@@ -42,6 +43,9 @@ export function ListingsPane({
   actions?: ReactNode
 }) {
   const listing = row.listing
+  const status = listingStatusMeta(listing?.listingStatus)
+  const providerStatus = listing?.channelFactDetail?.shopifyStatus
+  const providerMeta = listingStatusMeta(providerStatus)
   const readiness = row.readiness
   /**
    * 🔴 NOT `?? 'unlisted'`. That invented a state the server never reported — "Not listed" is a
@@ -100,39 +104,45 @@ export function ListingsPane({
       <dl className={styles.lFacts}>
         <div className={styles.lFact}>
           <dt>Status</dt>
-          <dd>{listing?.listingStatus ?? <span className={styles.absent}>no listing row</span>}</dd>
+          <dd>{listing ? <Pill tone={status.tone} title={status.hint}>{status.label}</Pill> : <span className={styles.absent}>No listing record here</span>}</dd>
         </div>
+        {providerStatus !== undefined && <div className={styles.lFact}>
+          <dt>Shopify status (stored report)</dt>
+          <dd><Pill tone={providerMeta.tone} title={providerMeta.hint}>{providerMeta.label}</Pill></dd>
+        </div>}
         {/* Two different facts, shown as two (ruling #115.2). Collapsing them into one
             "active?" row would say a paused offer is unpublished, or a published-but-paused
             listing is live — and an operator acts differently on each. */}
         <div className={styles.lFact}>
-          <dt>Pushed to channel</dt>
+          <dt>Published (Nexus record)</dt>
           <dd>
             {listing == null ? (
               '—'
             ) : listing.isPublished ? (
               'yes'
             ) : (
-              <span title="The marketplace keeps serving what it last received until someone publishes.">
-                no — not being pushed
-              </span>
+              <span title="The local publication flag does not establish what the channel is selling.">no</span>
             )}
           </dd>
         </div>
         <div className={styles.lFact}>
-          <dt>Offer</dt>
+          <dt>Offer (Nexus mark)</dt>
           <dd>
             {listing == null || listing.offerActive === undefined ? (
               <span className={styles.absent}>not reported</span>
             ) : listing.offerActive ? (
-              'selling'
+              'not marked paused'
             ) : (
-              <span title="The listing still exists on the marketplace; its buy box is suppressed.">
-                paused
+              <span title="A Nexus mark. Amazon acts on it at the next Amazon flat-file publish; eBay, Shopify and Etsy do not read it.">
+                marked paused
               </span>
             )}
           </dd>
         </div>
+        {listing?.offerActiveHonoured === false && <div className={styles.lFact}>
+          <dt>Offer mark effect</dt>
+          <dd>This channel does not act on the Nexus offer mark.</dd>
+        </div>}
         <div className={styles.lFact}>
           <dt>Price</dt>
           <dd>{money(listing?.price ?? null)}</dd>

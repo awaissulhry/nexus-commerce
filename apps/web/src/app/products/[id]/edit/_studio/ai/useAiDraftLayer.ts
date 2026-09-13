@@ -31,7 +31,7 @@ export interface AiDraftLayer {
   drafts: UseAiDraftsValue
 }
 
-export function useAiDraftLayer(input: UseAiDraftsInput): AiDraftLayer {
+export function useAiDraftLayer(input: UseAiDraftsInput, contentChip?: ViewChip): AiDraftLayer {
   const drafts = useAiDrafts(input)
 
   // The ref the stable `draftFor` reads. Updated on every load; never a dependency of anything.
@@ -50,7 +50,7 @@ export function useAiDraftLayer(input: UseAiDraftsInput): AiDraftLayer {
    * exactly the drafted cells rather than to a rectangle around them.
    */
   const cells: ViewChipCells = useMemo(() => {
-    const byRow: Record<string, string[]> = {}
+    const byRow: Record<string, string[]> = Object.fromEntries(Object.entries(contentChip?.cells.byRow ?? {}).map(([id, keys]) => [id, [...keys]]))
     for (const d of drafts.drafts) {
       if (d.status !== 'pending') continue
       const cols = byRow[d.productId] ?? []
@@ -58,7 +58,7 @@ export function useAiDraftLayer(input: UseAiDraftsInput): AiDraftLayer {
       byRow[d.productId] = cols
     }
     return { byRow }
-  }, [drafts.drafts])
+  }, [drafts.drafts, contentChip])
 
   const chip: ViewChip = useMemo(() => {
     // 🔴 `null` is NOT zero, and this is the case that makes the distinction matter: while the
@@ -66,13 +66,14 @@ export function useAiDraftLayer(input: UseAiDraftsInput): AiDraftLayer {
     // operator "we checked, there are no drafts" on the strength of not having checked — and the
     // chip would then hide itself at that fake zero, so drafts waiting for review would be
     // invisible with nothing on screen admitting it.
-    const counted = !drafts.loading && drafts.error === null
-    const pending = drafts.drafts.filter((d) => d.status === 'pending').length
+    const counted = !drafts.loading && drafts.error === null && (!contentChip || contentChip.count !== null)
+    const pending = Object.values(cells.byRow).reduce((sum, keys) => sum + keys.length, 0)
     return {
       id: 'ai-drafts',
       label: 'AI drafts',
       tone: 'info',
-      count: counted ? pending : null,
+      hideWhenZero: false,
+      count: counted ? { n: pending, unit: 'cells' } : null,
       note: drafts.error
         ? `Could not read AI drafts: ${drafts.error}`
         : drafts.loading
@@ -80,7 +81,7 @@ export function useAiDraftLayer(input: UseAiDraftsInput): AiDraftLayer {
           : 'Cells an AI has proposed a value for. Nothing applies until you approve it.',
       cells: counted ? cells : { byRow: {} },
     }
-  }, [drafts.loading, drafts.error, drafts.drafts, cells])
+  }, [drafts.loading, drafts.error, drafts.drafts, cells, contentChip])
 
   useRegisterViewChip('ai-drafts', chip)
 

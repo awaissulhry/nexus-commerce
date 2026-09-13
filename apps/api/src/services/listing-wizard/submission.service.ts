@@ -1,3 +1,6 @@
+import { amazonParentVariationAttributes } from './amazon-publish.adapter.js'
+import { loadStoredVariationProjection } from '../pim/stored-variation-projection.js'
+import { flatVariationMapping } from '@nexus/shared/variation-mapping'
 import { marketLanguages, type MarketLanguageRow } from '../pim/market-languages.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
@@ -202,16 +205,15 @@ async function resolveAmazonMarketplaceIds(
  * "Color") to the SP-API attribute names Amazon expects for the listing's
  * productType ("size_name", "color_name", etc.).
  *
- * One findMany scoped to (productId, AMAZON, marketplaces). Empty mapping
- * is a valid result — the adapter falls back to a `_name` suffix on common
- * axes when no row exists.
+ * Resolve the primary account’s effective theme and bindings for each selected market.
+ * The adapter verifies them against the cached product-type schema before any write.
  */
 async function resolveAmazonVariationMappings(
   prisma: PrismaClient,
   productId: string | undefined,
   channels: Array<{ platform: string; marketplace: string }>,
-): Promise<Map<string, Record<string, string>>> {
-  const out = new Map<string, Record<string, string>>()
+): Promise<Map<string, { mapping: Record<string, string>; theme: string | null }>> {
+  const out = new Map<string, { mapping: Record<string, string>; theme: string | null }>()
   if (!productId) return out
 
   const marketplaces = [
@@ -223,26 +225,19 @@ async function resolveAmazonVariationMappings(
   ]
   if (marketplaces.length === 0) return out
 
+  const accountId = (await primaryConnectionIds(['AMAZON'])).get('AMAZON') ?? null
   const rows = await prisma.channelListing.findMany({
     where: {
       productId,
-      channel: 'AMAZON',
+      channel: 'AMAZON', channelConnectionId: accountId, aliasKey: '',
       marketplace: { in: marketplaces },
     },
-    select: { marketplace: true, variationMapping: true },
+    select: { id: true, marketplace: true, variationMapping: true },
   })
 
   for (const row of rows) {
-    const mapping = row.variationMapping as Record<string, unknown> | null
-    if (!mapping || typeof mapping !== 'object') continue
-    // Coerce JSON values to string — anything non-string is dropped.
-    const coerced: Record<string, string> = {}
-    for (const [k, v] of Object.entries(mapping)) {
-      if (typeof v === 'string' && v.length > 0) coerced[k] = v
-    }
-    if (Object.keys(coerced).length > 0) {
-      out.set(`AMAZON:${row.marketplace}`, coerced)
-    }
+    const { cell } = await loadStoredVariationProjection({ productId, channel: 'AMAZON', market: row.marketplace, listingId: row.id })
+    out.set(`AMAZON:${row.marketplace}`, { theme: cell.theme?.code ?? null, mapping: Object.fromEntries(cell.axes.filter(a => a.included && a.target).map(a => [a.familyKey, a.target!])) })
   }
   return out
 }
@@ -606,6 +601,11 @@ export class SubmissionService {
 
   // ── Phase I — multi-channel validation + payload composition ──
 
+  async validateCurrentMultiChannel(wizard: MultiChannelWizard, readiness?: Partial<Record<string, boolean>>): Promise<MultiChannelValidation> {
+    const variations = await resolveAmazonVariationMappings(this.prisma, wizard.productId, wizard.channels)
+    return this.validateMultiChannel(wizard, readiness, variations)
+  }
+
   validateMultiChannel(
     wizard: MultiChannelWizard,
     /** C.1 — pre-flight readiness keyed by platform. Caller computes
@@ -614,6 +614,7 @@ export class SubmissionService {
      *  skip the check (back-compat with callers that don't yet
      *  provide it). */
     readiness?: Partial<Record<string, boolean>>,
+    effectiveVariations?: Map<string, { theme: string | null }>,
   ): MultiChannelValidation {
     const state = wizard.state ?? {}
     const channelStates = wizard.channelStates ?? {}
@@ -758,7 +759,7 @@ export class SubmissionService {
       // fallback.
       const channelTheme =
         ((slice as any).variations?.theme as string | undefined) ??
-        (variations.commonTheme as string | undefined)
+        (variations.commonTheme as string | undefined) ?? effectiveVariations?.get(channelKey)?.theme
       const includedSkus = Array.isArray(variations.includedSkus)
         ? (variations.includedSkus as string[])
         : []
@@ -1216,7 +1217,7 @@ export class SubmissionService {
       }
       const theme =
         ((slice as any).variations?.theme as string | undefined) ??
-        (variations.commonTheme as string | undefined)
+        (variations.commonTheme as string | undefined) ?? amazonVariationMappings.get(channelKey)?.theme ?? undefined
       const groupKey = contentGroupKey(c.platform, c.marketplace, languageRows)
       const groupContent = (contentByGroup as Record<string, any>)[groupKey] ?? {}
       const channelPricing = (slice as any).pricing ?? {}
@@ -1361,12 +1362,12 @@ export class SubmissionService {
       const payload: AmazonListingPayload = {
         productType,
         marketplaceId,
-        attributes: amazonAttributes,
+        attributes: children.length && theme ? { ...amazonAttributes, ...amazonParentVariationAttributes(marketplaceId, theme) } : amazonAttributes,
         parentSku,
         childSkus: includedSkus.length > 0 ? includedSkus : undefined,
         children: children.length > 0 ? children : undefined,
         variationTheme: theme,
-        variationMapping: amazonVariationMappings.get(channelKey),
+        variationMapping: amazonVariationMappings.get(channelKey)?.mapping,
         imageUrls: orderedUrls.length > 0 ? orderedUrls.slice(0, 9) : undefined,
       }
 

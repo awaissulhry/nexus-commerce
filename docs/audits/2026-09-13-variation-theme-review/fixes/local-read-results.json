@@ -1,0 +1,500 @@
+[
+  {
+    "scope": {
+      "channel": null,
+      "market": "IT"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 224,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": null,
+      "source": {
+        "kind": "derived",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Derived from the family axes"
+      },
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Color",
+          "target": "color",
+          "included": true
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Size",
+          "target": "size",
+          "included": true
+        }
+      ],
+      "dropped": [],
+      "collisions": null,
+      "writable": true,
+      "expectedVersion": 59
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "AMAZON",
+      "market": "IT",
+      "accountId": "cmothu9bo0000nz01asw6wx8j"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 678,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": {
+        "code": "COLOR/SIZE",
+        "label": "Colore / Taglia",
+        "deprecated": false
+      },
+      "source": {
+        "kind": "derived",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Derived from the family axes",
+        "tieBreak": "only-live"
+      },
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Colore",
+          "target": "color",
+          "included": true,
+          "segment": "COLOR"
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Taglia",
+          "target": "size",
+          "included": true,
+          "segment": "SIZE"
+        }
+      ],
+      "dropped": [],
+      "collisions": {
+        "unresolved": 4,
+        "summary": "4 variants cannot be told apart on Amazon · IT with the current variation values."
+      },
+      "candidatesState": "ok",
+      "candidateCount": 50,
+      "writable": true,
+      "expectedVersion": 87
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "AMAZON",
+      "market": "IT",
+      "accountId": "cmothu9bo0000nz01asw6wx8j"
+    },
+    "endpoint": "projection",
+    "status": 200,
+    "ms": 344,
+    "version": 87,
+    "theme": "COLOR/SIZE",
+    "mapping": [
+      {
+        "axisKey": "Colore",
+        "axisLabel": "Color",
+        "target": "color",
+        "order": 0
+      },
+      {
+        "axisKey": "Taglia",
+        "axisLabel": "Size",
+        "target": "size",
+        "order": 1
+      }
+    ],
+    "collisions": {
+      "unresolved": 4,
+      "summary": "4 variants cannot be told apart on Amazon · IT with the current variation values."
+    }
+  },
+  {
+    "scope": {
+      "channel": "AMAZON",
+      "market": "DE",
+      "accountId": "cmothu9bo0000nz01asw6wx8j"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 486,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": {
+        "code": "COLOR/SIZE",
+        "label": "Farbe / Größe",
+        "deprecated": false
+      },
+      "source": {
+        "kind": "derived",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Derived from the family axes",
+        "tieBreak": "only-live"
+      },
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Farbe",
+          "target": "color",
+          "included": true,
+          "segment": "COLOR"
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Größe",
+          "target": "size",
+          "included": true,
+          "segment": "SIZE"
+        }
+      ],
+      "dropped": [],
+      "collisions": {
+        "unresolved": 4,
+        "summary": "4 variants cannot be told apart on Amazon · DE with the current variation values."
+      },
+      "candidatesState": "ok",
+      "candidateCount": 50,
+      "writable": true,
+      "expectedVersion": 13
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "AMAZON",
+      "market": "DE",
+      "accountId": "cmothu9bo0000nz01asw6wx8j"
+    },
+    "endpoint": "projection",
+    "status": 200,
+    "ms": 312,
+    "version": 13,
+    "theme": "COLOR/SIZE",
+    "mapping": [
+      {
+        "axisKey": "Colore",
+        "axisLabel": "Color",
+        "target": "color",
+        "order": 0
+      },
+      {
+        "axisKey": "Taglia",
+        "axisLabel": "Size",
+        "target": "size",
+        "order": 1
+      }
+    ],
+    "collisions": {
+      "unresolved": 4,
+      "summary": "4 variants cannot be told apart on Amazon · DE with the current variation values."
+    }
+  },
+  {
+    "scope": {
+      "channel": "EBAY",
+      "market": "IT",
+      "accountId": "cmr4aaqb00025nz016k18rup9"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 134,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": null,
+      "source": {
+        "kind": "override",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Overridden here"
+      },
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Colore",
+          "target": "Colore",
+          "included": true
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Taglia",
+          "target": "Taglia",
+          "included": true
+        }
+      ],
+      "dropped": [],
+      "collisions": {
+        "unresolved": 0,
+        "summary": "0 collisions on this coordinate"
+      },
+      "candidatesState": "ok",
+      "candidateCount": 3,
+      "writable": true,
+      "expectedVersion": 18
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "EBAY",
+      "market": "IT",
+      "accountId": "cmr4aaqb00025nz016k18rup9"
+    },
+    "endpoint": "projection",
+    "status": 200,
+    "ms": 4076,
+    "version": 18,
+    "mapping": [
+      {
+        "axisKey": "Colore",
+        "axisLabel": "Color",
+        "target": "Colore",
+        "order": 0
+      },
+      {
+        "axisKey": "Taglia",
+        "axisLabel": "Size",
+        "target": "Taglia",
+        "order": 1
+      }
+    ],
+    "collisions": {
+      "unresolved": 0,
+      "summary": "0 collisions on this coordinate"
+    }
+  },
+  {
+    "scope": {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "accountId": "cmtugfpaa0006njhq8m2nvnxx"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 15204,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": null,
+      "source": {
+        "kind": "derived",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Derived from the family axes"
+      },
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Color",
+          "target": "Color",
+          "included": true
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Size",
+          "target": "Size",
+          "included": true
+        }
+      ],
+      "dropped": [],
+      "collisions": {
+        "unresolved": 0,
+        "summary": "0 collisions on this coordinate"
+      },
+      "candidatesState": "freeform",
+      "candidateCount": 0,
+      "writable": true,
+      "expectedVersion": 4
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "SHOPIFY",
+      "market": "GLOBAL",
+      "accountId": "cmtugfpaa0006njhq8m2nvnxx"
+    },
+    "endpoint": "projection",
+    "status": 200,
+    "ms": 265,
+    "version": 4,
+    "mapping": [
+      {
+        "axisKey": "Colore",
+        "axisLabel": "Color",
+        "target": "Color",
+        "order": 0
+      },
+      {
+        "axisKey": "Taglia",
+        "axisLabel": "Size",
+        "target": "Size",
+        "order": 1
+      }
+    ],
+    "collisions": {
+      "unresolved": 0,
+      "summary": "0 collisions on this coordinate"
+    }
+  },
+  {
+    "scope": {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "accountId": "cmtvy3wta00fjnjpxl22lly3k"
+    },
+    "endpoint": "sheet",
+    "status": 200,
+    "ms": 157,
+    "columns": [
+      {
+        "key": "variation_theme",
+        "kind": "variationTheme",
+        "width": 160,
+        "shape": "axes"
+      }
+    ],
+    "cell": {
+      "theme": null,
+      "source": {
+        "kind": "derived",
+        "ruleLabel": null,
+        "category": null,
+        "label": "Derived from the family axes"
+      },
+      "deliveryNote": "Saved as a Nexus draft. Publishing Etsy variation properties is not available yet.",
+      "axes": [
+        {
+          "axisKey": "color",
+          "familyKey": "Colore",
+          "label": "Color",
+          "channelName": "Color",
+          "target": null,
+          "included": true,
+          "unbound": {
+            "reason": "Choose a variation property from this Etsy category."
+          }
+        },
+        {
+          "axisKey": "size",
+          "familyKey": "Taglia",
+          "label": "Size",
+          "channelName": "Size",
+          "target": null,
+          "included": true,
+          "unbound": {
+            "reason": "Choose a variation property from this Etsy category."
+          }
+        }
+      ],
+      "dropped": [],
+      "collisions": {
+        "unresolved": 0,
+        "summary": "0 collisions on this coordinate"
+      },
+      "candidatesState": "unavailable",
+      "candidateCount": 0,
+      "writable": true,
+      "expectedVersion": 1
+    },
+    "childThemeNonNull": 0,
+    "rowCount": 21
+  },
+  {
+    "scope": {
+      "channel": "ETSY",
+      "market": "GLOBAL",
+      "accountId": "cmtvy3wta00fjnjpxl22lly3k"
+    },
+    "endpoint": "projection",
+    "status": 200,
+    "ms": 175,
+    "version": 1,
+    "mapping": [
+      {
+        "axisKey": "Colore",
+        "axisLabel": "Color",
+        "target": null,
+        "order": 0
+      },
+      {
+        "axisKey": "Taglia",
+        "axisLabel": "Size",
+        "target": null,
+        "order": 1
+      }
+    ],
+    "collisions": {
+      "unresolved": 0,
+      "summary": "0 collisions on this coordinate"
+    }
+  }
+]

@@ -181,6 +181,16 @@ const ALL_SURFACES = [
     kind: 'overlay',
     open: { label: /^Generate combinations$/, witness: '.nds-modal' },
   },
+
+  /* ── MX.P: the Matrix surfaces (design 2026-09-13, Revision) ────────────────────────────────
+     ONE state — every coordinate at once — and the scope bar FILTERS the groups rather than
+     switching surfaces, so the second row here is the same page narrowed to one channel's groups
+     (a fixture pins a dimension: a census taken on the full page alone never sees the filtered
+     toolbar). Both are sheets: `SheetToolbar` + `GridSheet` + `NexusGrid`, like the Variants page.
+     In preview mode (while `GET …/studio/matrix` answers 404) every write goes to an in-memory
+     store, and the non-GET abort below is the belt to that. */
+  { key: 'master · matrix', url: `${STUDIO}?tab=matrix`, kind: 'sheet' },
+  { key: 'amazon·DE · matrix', url: `${STUDIO}?scope=AMAZON&market=DE&locale=de&tab=matrix`, kind: 'sheet' },
 ]
 
 /** A filtered run measures fewer surfaces; it never measures them more loosely. */
@@ -203,8 +213,14 @@ function otherGateRunning() {
      the script name in its command line, so a substring test reported "another gate is running" on
      every solo run, by construction. A gate is a process whose args START with `node ` and name a
      gate script, and is not this pid. */
+  /* 🔴 …AND NOT THIS PROCESS'S PARENT (VT.2, 2026-09-13). The `startsWith('node ')` test above was
+     written to defeat a `zsh -c` wrapper, and `scripts/studio-gate-session.mjs` — the signed-in
+     session every lane now runs gates inside (R-GATE-1) — defeats it right back: its own argv IS
+     `node scripts/studio-gate-session.mjs -- node scripts/check-control-census.mjs`, which both
+     starts with `node ` and names a gate script. Excluded by PID, so a genuine second gate started
+     through the same wrapper is still reported. */
   return rows
-    .filter((r) => r.pid !== process.pid)
+    .filter((r) => r.pid !== process.pid && r.pid !== process.ppid)
     .filter((r) => r.args.startsWith('node ') && /scripts\/check-(editor-open|control-census)\.mjs/.test(r.args))
     .map((r) => `pid ${r.pid} ppid ${r.ppid}  ${r.args}`)
 }

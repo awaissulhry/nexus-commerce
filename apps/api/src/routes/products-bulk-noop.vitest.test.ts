@@ -43,12 +43,18 @@ const resolveBatch = vi.fn()
 const referenceThemes = vi.fn()
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
 // Persistence contracts run without Redis or background cache workers.
+// LX.F R-LX-13 — and that now includes the QUEUE: this file's 68 failures in this
+// environment were all `getaddrinfo ENOTFOUND …upstash.io`, i.e. a DNS lookup for Redis
+// from inside the route, not an assertion. `products-bulk-recalc-guard.vitest.test.ts:16`
+// already mocks it exactly this way; unsetting `REDIS_URL` does not help because the env
+// file is loaded by the runner itself.
+vi.mock('../lib/queue.js', () => ({ addJobSafely: async () => null, outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: { connection: null } }))
 vi.mock('../services/product-event.service.js', () => ({ productEventService: { emitMany: async () => [], emitManyTx: async () => [] } }))
 vi.mock('../services/audit-log.service.js', () => ({ auditLogService: { writeMany: async () => [] } }))
 vi.mock('../services/product-read-cache.service.js', () => ({ productReadCacheService: { refreshMany: async () => [] } }))
 
-vi.mock('../db.js', () => ({
-  default: {
+vi.mock('../db.js', () => {
+  const client = {
     ebayDescriptionTheme: { findMany: (...a: unknown[]) => referenceThemes(...a) },
     productListingAlias: { findMany: (...a: unknown[]) => aliasFindMany(...a) },
     product: {
@@ -64,10 +70,12 @@ vi.mock('../db.js', () => ({
       upsert: (...a: unknown[]) => channelListingUpsert(...a),
     },
     bulkOperation: { create: (...a: unknown[]) => bulkOperationCreate(...a) },
-    $transaction: (...a: unknown[]) => $transaction(...a),
+    // Execute the outer interactive transaction; the spy measures its statement batches.
+    $transaction: (work: any, ...args: unknown[]): any => typeof work === 'function' ? work(client) : $transaction(work, ...args),
     $executeRaw: (...a: unknown[]) => executeRaw(...a),
-  },
-}))
+  }
+  return { default: client }
+})
 vi.mock('../services/connection-resolver.service.js', () => ({
   // A Map, not an object literal: the handler calls `connFor.get(channel)`.
   // Returning `{}` here produced a 500 ("connFor.get is not a function") that
@@ -77,6 +85,8 @@ vi.mock('../services/connection-resolver.service.js', () => ({
 }))
 // attr_* writes are gated on the per-marketplace registry; the channel case
 // below needs a definition that exists and is editable, nothing more.
+// Readiness production has its own PostgreSQL regressions; isolate that derived refresh here.
+vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: async () => {} }))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),

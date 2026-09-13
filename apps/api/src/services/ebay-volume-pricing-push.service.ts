@@ -38,7 +38,8 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { postEbayMarketing } from './ebay-marketing-dispatch.service.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { postEbayMarketing, readEbayPromotionPushControls } from './ebay-marketing-dispatch.service.js'
 import { validateVolumeTiers, type VolumeTier } from './ebay-volume-pricing.service.js'
 
 export interface PushVolumePromotionResult {
@@ -178,6 +179,18 @@ export async function pushVolumePromotion(
       ],
       durationMs: Date.now() - startedAt,
     }
+  }
+
+  try {
+    const controls = await readEbayPromotionPushControls(payload)
+    for (const listing of controls) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw new Error(`${refusal.code}: ${refusal.sentence}`)
+    }
+  } catch (error) {
+    const message = (error as Error).message
+    await prisma.ebayVolumePromotion.update({ where: { id: promotionId }, data: { lastSyncStatus: 'FAILED', lastSyncedAt: new Date(), lastSyncError: message } })
+    return { ok: false, promotionId, liveMode, warnings, error: message, durationMs: Date.now() - startedAt }
   }
 
   // Live path — dispatch via the connection-aware Sell-Marketing client (VP.0).

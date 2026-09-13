@@ -1,0 +1,2295 @@
+{
+  "transportAttempts": [],
+  "blockedGateways": [],
+  "requests": [
+    {
+      "at": "2026-09-13T01:29:55.018Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:29:55.034Z",
+      "method": "GET",
+      "path": "/api/marketplaces/grouped",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:01.546Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:01.980Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:01.996Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.012Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.017Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.021Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.123Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.186Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.197Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.206Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.210Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.213Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.309Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.421Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.427Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.431Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:02.434Z",
+      "method": "GET",
+      "path": "/api/products/ai/drafts?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:59.000Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:30:59.014Z",
+      "method": "GET",
+      "path": "/api/marketplaces/grouped",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:00.778Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.188Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.204Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.216Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.220Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.223Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.325Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.372Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.383Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.392Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.397Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.401Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.516Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.532Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.540Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.545Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:01.550Z",
+      "method": "GET",
+      "path": "/api/products/ai/drafts?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.061Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.490Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.502Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.508Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.510Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.515Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.598Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.646Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.657Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.662Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.665Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.669Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.756Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.770Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.776Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.781Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:03.784Z",
+      "method": "GET",
+      "path": "/api/products/ai/drafts?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.310Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.680Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.693Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.700Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.704Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.708Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.787Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.828Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.839Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.845Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.849Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.853Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.937Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.953Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.960Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.964Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:05.968Z",
+      "method": "GET",
+      "path": "/api/products/ai/drafts?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.412Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.801Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.815Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.823Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.827Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.831Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.913Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.958Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.968Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.973Z",
+      "method": "GET",
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.976Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3Amaster",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:07.979Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:08.064Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:08.078Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:08.085Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:08.088Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:08.091Z",
+      "method": "GET",
+      "path": "/api/products/ai/drafts?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:09.672Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:09.973Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:09.982Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.475Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.498Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.501Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.504Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.595Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.798Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.814Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.819Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.824Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.977Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.988Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:10.992Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.271Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.568Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.574Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.848Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.865Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.871Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.874Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:12.957Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.147Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.164Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.167Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.171Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.283Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.291Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:13.296Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:14.759Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.060Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.067Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.323Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.341Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.345Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.349Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.434Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.653Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.668Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.671Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.674Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.786Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.795Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:15.799Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.115Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.416Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.422Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.673Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.690Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.693Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.696Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.782Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.979Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.995Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:17.999Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:18.003Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:18.116Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:18.123Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:18.128Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:19.475Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:19.778Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:19.785Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.203Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.220Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.224Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.228Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.311Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.475Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.492Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.498Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.502Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.618Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.627Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:20.631Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:21.932Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.232Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.239Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.438Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.455Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.459Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.462Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.546Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.693Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.707Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.712Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.716Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.828Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.836Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:22.840Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.224Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.519Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.526Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.728Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.746Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.750Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.754Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.834Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:24.988Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.004Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.008Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.012Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.115Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.124Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:25.129Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.449Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.746Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.754Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.950Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.969Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.973Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:26.977Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.058Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.236Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.251Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.255Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.259Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.379Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.387Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:27.391Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:28.804Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.148Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.155Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.385Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.404Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.409Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.412Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.493Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.650Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.665Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.676Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.679Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.795Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.806Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:29.810Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.123Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.426Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.433Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.648Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.667Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.672Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.676Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.756Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.904Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.924Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.929Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:31.932Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:32.034Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:32.042Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:32.046Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.413Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.716Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.723Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.931Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.948Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.952Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:33.954Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.039Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.191Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.207Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.211Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.214Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.319Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.327Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:34.332Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:35.667Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:35.977Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:35.985Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.313Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.356Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.364Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.371Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.503Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.816Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.838Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.844Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.851Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.855Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:36.858Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:37.028Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:37.042Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:37.050Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:39.540Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:39.882Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:39.890Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.143Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.150Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.155Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.159Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.288Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it&channel=EBAY&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.424Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.432Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.438Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.449Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.499Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?channel=EBAY&marketplace=IT&productType=177104",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:40.506Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.250Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.544Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.552Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.785Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.793Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.800Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.804Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:42.968Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it&channel=EBAY&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.118Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.126Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.130Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.133Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.202Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?channel=EBAY&marketplace=IT&productType=177104",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:43.209Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:44.858Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.151Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.163Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.371Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.380Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.385Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.392Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.535Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it&channel=EBAY&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.651Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.657Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.660Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.663Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.713Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?channel=EBAY&marketplace=IT&productType=177104",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:45.717Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.086Z",
+      "method": "GET",
+      "path": "/api/connections",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.429Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.439Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.592Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.599Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.603Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.607Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.692Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=IT&locale=it&channel=EBAY&accountId=cmr4aaqb00025nz016k18rup9",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.783Z",
+      "method": "GET",
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=EBAY&market=IT&accountId=cmr4aaqb00025nz016k18rup9&locale=it",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.788Z",
+      "method": "GET",
+      "path": "/api/pim/formulas/functions",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.791Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Aviews%3AEBAY",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.793Z",
+      "method": "GET",
+      "path": "/api/saved-views?surface=product-edit%3Alayout%3AEBAY%3AIT",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.832Z",
+      "method": "GET",
+      "path": "/api/categories/reference-labels?channel=EBAY&marketplace=IT&productType=177104",
+      "status": 200,
+      "rolledBack": true
+    },
+    {
+      "at": "2026-09-13T01:31:47.836Z",
+      "method": "POST",
+      "path": "/api/pim/formulas/batch",
+      "status": 200,
+      "rolledBack": true
+    }
+  ]
+}

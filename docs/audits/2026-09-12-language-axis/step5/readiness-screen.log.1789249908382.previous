@@ -1,0 +1,12 @@
+{"scope":"master","market":"DE","language":"de","width":1440,"theme":"light","matrixEntries":34,"chip":0,"state":"blocked"}
+{"scope":"master","market":"DE","language":"de","width":1728,"theme":"light","matrixEntries":34,"chip":0,"state":"blocked"}
+{"scope":"master","market":"DE","language":"de","width":1440,"theme":"dark","matrixEntries":34,"chip":0,"state":"blocked"}
+{"scope":"master","market":"DE","language":"de","width":1728,"theme":"dark","matrixEntries":34,"chip":0,"state":"blocked"}
+{"scope":"master","market":"IT","language":"it","width":1440,"theme":"light","matrixEntries":34,"chip":100,"state":"warn"}
+{"scope":"AMAZON","market":"DE","language":"de","width":1440,"theme":"light","matrixEntries":34,"chip":37,"state":"blocked"}
+{"scope":"AMAZON","market":"BE","language":"nl","width":1440,"theme":"light","matrixEntries":34,"chip":null,"state":"blocked"}
+{"scope":"AMAZON","market":"BE","language":"fr","width":1440,"theme":"light","matrixEntries":34,"chip":null,"state":"blocked"}
+{"scope":"AMAZON","market":"UK","language":"en","width":1440,"theme":"light","matrixEntries":34,"chip":28,"state":"blocked"}
+{"scope":"EBAY","market":"IT","language":"it","width":1440,"theme":"light","matrixEntries":34,"chip":67,"state":"blocked"}
+{"scope":"SHOPIFY","market":"GLOBAL","language":"en","width":1440,"theme":"light","matrixEntries":34,"chip":null,"state":"absent"}
+{"scope":"ETSY","market":"GLOBAL","language":"en","width":1440,"theme":"light","matrixEntries":34,"chip":null,"state":"blocked"}

@@ -1,0 +1,1243 @@
+{
+  "at": "2026-09-12T23:47:46.598Z",
+  "files": [
+    {
+      "file": "apps/api/src/env.ts",
+      "sha256": "4b31c85fe4340a16ee75a837eab31725191885ad3158e8530504cb44a1fddfc5"
+    },
+    {
+      "file": "apps/api/src/lib/database-context.ts",
+      "sha256": "8e77e32ff21d1ae4e060c8a9426e204413d8208050452034489408a5994238ff"
+    },
+    {
+      "file": "apps/api/src/db.ts",
+      "sha256": "2288de37c1123acd70cc89d9add14a085f7b0627630a8ef8f9829a9ee24d5a1a"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-language.ts",
+      "sha256": "3a1cd81ff1ad897cde963a7bb7fec8d8003c898d6f4f4745240069f573014982"
+    },
+    {
+      "file": "apps/api/src/services/pim/variant-attribute-keys.ts",
+      "sha256": "355b983b2d84ffc45a61836455159b8620c8c6d931fbe9d98397fab8e4855487"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-resolver.ts",
+      "sha256": "c3c60b084e0c8a8ba3d676a7d4c45316a99652cc73c25c696c3b145b38dd56f1"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-read.ts",
+      "sha256": "ac4149474f6ab5b0f0b9e25aaf79f4ad1d4703871a4bf04be79a87c053bc61d4"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-locale.ts",
+      "sha256": "b15d3a16658c3439bc662d0a292af831cabedd434576d95b068d954623b64cb6"
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages.ts",
+      "sha256": "53ba82137f48026424b4df9de7af1e158f77dfdb1bcc978f2d7f922c561c2b2b"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-field-map.ts",
+      "sha256": "c22e340054b7e18d1a2767466c4f016e2247b37207400ef7da3102be0e4f7827"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-field-gate.ts",
+      "sha256": "ac36cc101955b64ed470dee985fbf10981611e668a4212bfbcc516f28958b57a"
+    },
+    {
+      "file": "apps/api/src/services/pim/attribute-resolver.ts",
+      "sha256": "0a742817ac7ae6ca12730d0a9baf1d4fd1b59d2b3a8cb8f077d144401bae3e70"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/expr.ts",
+      "sha256": "9bbe688e4ef7aaf37f8ff9a20f44c21525bbb228c07577290fea492c7b336926"
+    },
+    {
+      "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+      "sha256": "064de96c8bc7fab47d265bbafa0c224ec252a36beb244e609bdb269802b8e0a7"
+    },
+    {
+      "file": "apps/api/src/services/listing-wizard/conditional-requirements.ts",
+      "sha256": "0409a825052ab96220f3aa46b3ba38cb526043c6e5af128f937960bde52edab2"
+    },
+    {
+      "file": "apps/api/src/services/listing-preflight.service.ts",
+      "sha256": "ca801c62f201731568a271c81bd8059012c265dbd97a8e75521bf7db3826015d"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-values.ts",
+      "sha256": "f9272caaefe9a99baf5c7ef18ccd438c0fa72378df162d9b0bb3ff2f83cb6ad5"
+    },
+    {
+      "file": "apps/api/src/services/pim/readiness.service.ts",
+      "sha256": "5a41651547d93ae56aba37a5d0c4233c731de7a578d9f2965e24eaa406fc15f4"
+    },
+    {
+      "file": "apps/api/src/services/pim/studio-relationships.ts",
+      "sha256": "332b65753ccbebb332402245e3f57fbc86d83f19076848c474819d52b3e36426"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-inheritance.ts",
+      "sha256": "7f073e17734ea02ecb1f983b1792ed7b3259cb670da228bb06422e48fb9fef98"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-state-guard.ts",
+      "sha256": "8db02507ba338dd60fc1986ab2bb3c22c25d5746d9ba1d93aba97ccdcf69a2f0"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-value-mutation.ts",
+      "sha256": "9554508b30dced1838422c24b21f6db1cdbc5cf13b0eb3d1708d725edd4b0ba0"
+    },
+    {
+      "file": "apps/api/src/services/pim/information-locale.ts",
+      "sha256": "f9f9e68f00b6e9a1d8b595554b12687d7ba4a8f7c71179d14b8db94dc6a9e3b4"
+    },
+    {
+      "file": "apps/api/src/lib/workspace-context.ts",
+      "sha256": "8d23337092d3a481a3dc24a7ba8d3631c9b2595d1f829bc2acf5bdf3087ff192"
+    },
+    {
+      "file": "apps/api/src/lib/workspace-cache.ts",
+      "sha256": "1bb7a7e3cd518c70e3986cc1aa48a5bdd3d127704ef7280d6c638836cd7ca019"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/types.ts",
+      "sha256": "79cada11b7f5e96da5915422858292954b4a74fe3c9b5ad0110ef23f2a72a361"
+    },
+    {
+      "file": "apps/api/src/services/pim/schema-to-fields.ts",
+      "sha256": "4b9de1a971226819cef191d3086e1b94279ce3bfe5fe5ce9ef8dd5ee4658bb5f"
+    },
+    {
+      "file": "apps/api/src/utils/logger.ts",
+      "sha256": "81065e42fce6ce07dd995a5e957fc71596b5735594a535b59bac42cf66801a0b"
+    },
+    {
+      "file": "apps/api/src/lib/events/correlation.ts",
+      "sha256": "481d2182c2e0f0fae21d6f599d853181f24cd54bf31e9004b0969209aef8e900"
+    },
+    {
+      "file": "apps/api/src/lib/workspace-sweep.ts",
+      "sha256": "88caeb1549304e2082fb1d6dadbf795eb350332c307e112aec6943a0813d3191"
+    },
+    {
+      "file": "apps/api/src/lib/events/relay.ts",
+      "sha256": "8c102a388dd1a281c37190a0e49c459c0220425894c493998559796d889f06f6"
+    },
+    {
+      "file": "apps/api/src/lib/events/publish.ts",
+      "sha256": "c1bb212163399cc10e35783f8ae051225e87eb6620fbce312b15a2c546315f03"
+    },
+    {
+      "file": "apps/api/src/lib/events/broker.ts",
+      "sha256": "17b31bbbeb39b68dbcee25a185c875071ec781ec9f1e2f61972e9794d3965b8b"
+    },
+    {
+      "file": "apps/api/src/lib/queue.ts",
+      "sha256": "d81a5caa9fe8e0bb58269408dd2b0be747dc9ca50cb2dc66645bbb20d9316b79"
+    },
+    {
+      "file": "apps/api/src/lib/events/redis-streams.driver.ts",
+      "sha256": "625c3f2abf4546bc73aeb72ed3ec8927eb42f68c9c8dd634aab160acd6c79d39"
+    },
+    {
+      "file": "apps/api/src/lib/events/subscribe.ts",
+      "sha256": "135dbaf1c6e8f36af2958842b80208229be7cf8b09078469f37ba7da270c34f9"
+    },
+    {
+      "file": "apps/api/src/lib/events/index.ts",
+      "sha256": "0e5ec9364d5d863fe15e771d6ddc6a4fa8522f7d963c66b116a6e689a533bc01"
+    },
+    {
+      "file": "apps/api/src/lib/events/ephemeral.ts",
+      "sha256": "8e07fbac7f20e0fecd5617c1b2310a62496f013c747ff272e68af1fb724560ee"
+    },
+    {
+      "file": "apps/api/src/lib/events/bus.ts",
+      "sha256": "26f05b9696977d50d6f7e196d22f00166da8548efb00679722cf15f99058e6b2"
+    },
+    {
+      "file": "apps/api/src/services/sync-logs-events.service.ts",
+      "sha256": "ec386d36fa14d61c7cb554b1d21273be9293669165c22822a74195047dbe9e6f"
+    },
+    {
+      "file": "apps/api/src/services/error-grouping.service.ts",
+      "sha256": "2450f6502fb3e18c95e0afe075f91d196400288532bf68c12cb2642b8694e565"
+    },
+    {
+      "file": "apps/api/src/utils/request-context.ts",
+      "sha256": "01e92658da73cea899cc8582905aecd3bc825b974e69d823aacc6fd2d4f46eb0"
+    },
+    {
+      "file": "apps/api/src/utils/trace-log.ts",
+      "sha256": "aff273b2bb12379fbf0fa00ae9198601f58fcd13331e1fb9dfb41062c7ec8324"
+    },
+    {
+      "file": "apps/api/src/utils/otel-setup.ts",
+      "sha256": "36a58a0aa5fb3a91d63fc28c8bde62de8c46215a1379228bc163bb20137e3818"
+    },
+    {
+      "file": "apps/api/src/services/outbound-api-call-log.service.ts",
+      "sha256": "64191c57e98bef6675e0a0f70e3c35a33a4056152f619862415f4dc2771a003c"
+    },
+    {
+      "file": "apps/api/src/services/ebay-aspect-names.ts",
+      "sha256": "218b1a7cad8fccf600d1b7c93e6434cec89d389e102818294f466fb5f73e7fa9"
+    },
+    {
+      "file": "apps/api/src/services/connection-resolver.service.ts",
+      "sha256": "6d1843312e83b70b29ba181488e11b352cb1aa1666b99fa20bde94b51f3aeee3"
+    },
+    {
+      "file": "apps/api/src/lib/crypto.ts",
+      "sha256": "8cd526f5c69c0d24f479fb2aa426ce4e4efddda6e37088ab57805a7a0a4cf4f2"
+    },
+    {
+      "file": "apps/api/src/services/cx/events.service.ts",
+      "sha256": "2bae3900aae0e9da67cc1de5cbf3b6ff5ec995dcf5a2b28bf2c4c847d9f0aa3e"
+    },
+    {
+      "file": "apps/api/src/services/cx/app-configuration-error.ts",
+      "sha256": "067e2874b51439d5b7aadae85cbf3c96392d341a720df466920b61c751ef1514"
+    },
+    {
+      "file": "apps/api/src/services/cx/apps.service.ts",
+      "sha256": "69148092d1b5a52af4f9b71ef300744b78f0bb5b5dbdc3f08bb39d926b7f0d38"
+    },
+    {
+      "file": "apps/api/src/services/cx/catalog.ts",
+      "sha256": "de97d10cd8f802017d4f0fea03b655e4b18fa5746342dbde646b7d2c6f47cded"
+    },
+    {
+      "file": "apps/api/src/services/email/transport.ts",
+      "sha256": "79ae2f1ebe1137c8b19aafa6a889bdca390a6fe3a185d6f19b9670000f23ae85"
+    },
+    {
+      "file": "apps/api/src/services/webhook-dispatch.service.ts",
+      "sha256": "68662e5977e53c80eeef79fd4fa4f5886f0f8b2215ae9bbb83dbacf782e5dad1"
+    },
+    {
+      "file": "apps/api/src/services/monitoring/alert.service.ts",
+      "sha256": "850e9fc34ab1399c89c34ecea361a46ba030ff0a8aad6ee53f5b965c0f29df0e"
+    },
+    {
+      "file": "apps/api/src/services/cx/token-response.ts",
+      "sha256": "1b20c0b1fb68b59e385db3fba5adec17b16cf5ef26197ad95958bdb6fbb32303"
+    },
+    {
+      "file": "apps/api/src/lib/amazon-sp-client.ts",
+      "sha256": "04f846753ee2bcd76934ab3a99deda52529509f651aa3d38e3acb2c91511af35"
+    },
+    {
+      "file": "apps/api/src/services/cx/token.service.ts",
+      "sha256": "67dde15c4f0fda3ed71d0e7c2a461d5940e49de4cfff8c803334f35d606c97a0"
+    },
+    {
+      "file": "apps/api/src/services/ebay-auth.service.ts",
+      "sha256": "387b05e433a815edaf8f346241e1816ea47f4ac20f3c5781d9d8ddf12a71f03d"
+    },
+    {
+      "file": "apps/api/src/services/ebay-category.service.ts",
+      "sha256": "aed727f31e11efdaba1c9d7f97b1c0fc4a235c51e85258a3d98de2ea685160a8"
+    },
+    {
+      "file": "apps/api/src/services/pim/field-registry.service.ts",
+      "sha256": "abb6de386e33846bf3386e503d9d4d8e66a99bb92791c62452907b0afb4fc5fa"
+    },
+    {
+      "file": "apps/api/src/services/pim/cached-schema-context.ts",
+      "sha256": "94ff2f38a306a75e50aaf9e9257a114258218dc5e422f3d61417d5c7f665a19c"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/amazon.ts",
+      "sha256": "92d413253d3e848de7b6970382be62019ae7e2f55594aa62c9b244217e7fd68f"
+    },
+    {
+      "file": "apps/api/src/services/ebay-condition.ts",
+      "sha256": "ad8b25dfcb1e6ccc328b7861805c888cac2422a9e988c775b1df474d6d2a3477"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/ebay.ts",
+      "sha256": "2a4295e3891279d9d6630f4f51c8740869906f5a4f2465158da83e356bf89cd9"
+    },
+    {
+      "file": "apps/api/src/utils/ttl-cache.ts",
+      "sha256": "a5f46893a5bcbd33155d8e6886a207030c02ce1f1be332099c9379349d1a8261"
+    },
+    {
+      "file": "apps/api/src/services/categories/marketplace-ids.ts",
+      "sha256": "dc24c9a7824554512ed21af6dc67c2266aa627bd9238e4e8f9bd817c48556db9"
+    },
+    {
+      "file": "apps/api/src/services/categories/schema-document.ts",
+      "sha256": "14bffbc87ff032eb0584122ff3683eb7e27375fa2e79b28c8a5b4c50cd334811"
+    },
+    {
+      "file": "apps/api/src/services/categories/seller-schema.service.ts",
+      "sha256": "abc1df7830238a07fa1f5b9a99d70a4be6fa8d8b54b9429b2bd3467bb6968aee"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/index.ts",
+      "sha256": "8b9db14899cc96940a9bf0b74da798a73692998cf8440391776f4ee3c6625c74"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy-listing-schema.ts",
+      "sha256": "a57203d214d1c58c2effbc30b3874fcf49844e78c9f29d1008c89b749a60c97e"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy.ts",
+      "sha256": "79fe65af2041b4558976ca5599be9d8b37e2515f065a60b74bbc30adf43fa140"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/store.ts",
+      "sha256": "0b6ce5db1dff1a9c736df59b7c774552a6341a193d8632a204f49bdd39186b60"
+    },
+    {
+      "file": "apps/api/src/services/family-hierarchy.service.ts",
+      "sha256": "f1d18d44efc1c3dccd9f9c2f8cafa2153a9e3ca6c1ff3de81ab6e00343294c8d"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-sheet-schema.ts",
+      "sha256": "9943ba8a5dd42d70bb4071d3f3f9e2a5dd8031837d119e730ad865e53f8b54b5"
+    },
+    {
+      "file": "apps/api/src/services/cx/connectors/shopify/auth.ts",
+      "sha256": "d575e500f809ea10baa3792fef152f924554c841af10eea3c19b11bde4056195"
+    },
+    {
+      "file": "apps/api/src/services/shopify-publish-gate.service.ts",
+      "sha256": "b05a31f1c482a7f523d0b01a3a1f8cb80585095411359db5d95f4e42754ebcc5"
+    },
+    {
+      "file": "apps/api/src/services/shopify/admin-client.ts",
+      "sha256": "dc39035f53a2bc40194dcf4437b737c2f4c8af1bf0fa446cc06c6be06474248c"
+    },
+    {
+      "file": "apps/api/src/services/pim/workspace-destination.ts",
+      "sha256": "8a0cffb8e6439fbd7dead9a17dc5d89312260fe396e9908774d006002e2a567d"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/revision-token.ts",
+      "sha256": "51ebafcb3b383d289eaf539929b8117dd721631716ae542780d8b9f4dfc04b42"
+    },
+    {
+      "file": "apps/api/src/services/taxonomy/model.ts",
+      "sha256": "371213ee5b23366d58c9aea747e30ec8da3bc4692a6dfdbd03b6f0bd4175f639"
+    },
+    {
+      "file": "apps/api/src/services/taxonomy/amazon.ts",
+      "sha256": "63834c50bb6275783655ced5c816fef27a8ac88b94a6bd3c0e538eb811d8a845"
+    },
+    {
+      "file": "apps/api/src/services/etsy/read-client.ts",
+      "sha256": "3135fc14c48e17fdc019564a3a0d7b8a20a58c848df366446ac67c2ef890fe0a"
+    },
+    {
+      "file": "apps/api/src/services/taxonomy/providers.ts",
+      "sha256": "4b0801c7c4f50d31621b038945f4987d2c846e2eddc4086f85d2f34feda8f060"
+    },
+    {
+      "file": "apps/api/src/services/taxonomy/search-cache.ts",
+      "sha256": "9cc3986c9ee57d9dc54bf5991fb2bad5f44f8f8ac3b5becf7fce5ce68d270b79"
+    },
+    {
+      "file": "apps/api/src/services/taxonomy/repository.ts",
+      "sha256": "0258cb7481532f13a74a87e54719559c193decc909263c86b1d5683e93cf6b95"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-products-gateway.ts",
+      "sha256": "d87c810043fa2c5dda5508f2eb21f3e2f7763832b354aa781355f47610f13384"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/shopify.ts",
+      "sha256": "b1f28c9a1e3b0f5d7ef0b7693225c580e4b1bd2fa9ebaa2a65af56b5e057f9e1"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy-loader.ts",
+      "sha256": "ad2859fa879b243e677434344c77886ffa800a661edde113103166ff5686f4c9"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-columns.service.ts",
+      "sha256": "e0e196eb5aa12446432edc4d74fa00c09e28bf31bd0b138ec32de6d1d5767b67"
+    },
+    {
+      "file": "apps/api/src/services/fulfillment-derivation.service.ts",
+      "sha256": "c7c32c6195a12b08562e5c6d0bf88a84535042e1e691104c1babe80e47fd7219"
+    },
+    {
+      "file": "apps/api/src/services/product-read-cache.service.ts",
+      "sha256": "dc7de72b6774f9689a830ec19c66702ca6a7cac0535a3428273aff8e014156c6"
+    },
+    {
+      "file": "apps/api/src/services/pim/studio-columns.ts",
+      "sha256": "b565e554437dc37403fa1432e84dc59b27ba2ea2d59e457fe4efc6459dfc8b67"
+    },
+    {
+      "file": "apps/api/src/services/ebay-theme-axes.ts",
+      "sha256": "a79be13d487bb45fe3d555e111d354b7871ce254a0049b2b129f570a18ff35e4"
+    },
+    {
+      "file": "apps/api/src/services/ebay-value-order.ts",
+      "sha256": "e06dcc6aa715bee611d701418bbfb1f2fb56a7a45ba652a72658c26b0b0958fe"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/presentation-rules.ts",
+      "sha256": "ae9e0f5113e526b708535221939e74bb24fce2ac31d37af082579ff8a1801325"
+    },
+    {
+      "file": "apps/api/src/services/pim/schema-mapping.service.ts",
+      "sha256": "c44aeb68441ab8d13f5fa50d8af04fb504c2e640b7a8e738505cbf6de36959c5"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/category-mapping.service.ts",
+      "sha256": "284575ab8ad33ddf44bebd4d49d14b2227ad6b80937a76eeef11937c2c6cdc28"
+    },
+    {
+      "file": "apps/api/src/services/pim/product-category-context.ts",
+      "sha256": "5be7f5744f4d4688848d9ed00848e7414ad10aa449efeee8993037fdeb81150f"
+    },
+    {
+      "file": "apps/api/src/services/pim/ebay-listing-values.ts",
+      "sha256": "ec6e9bb11f40c152b1268362310ff0e0e642ddd7aa0533838fae5e4ab3f49451"
+    },
+    {
+      "file": "apps/api/src/services/marketplaces/amazon.service.ts",
+      "sha256": "4464218d69dc65a709f7827d976522aa620fde6c011849d8bf92d34ade1c6271"
+    },
+    {
+      "file": "apps/api/src/services/categories/enum-labels.ts",
+      "sha256": "18019d5914adbcf095e686d67524cc6096e8c4302775899e77702c0d7f307053"
+    },
+    {
+      "file": "apps/api/src/services/categories/schema-sync.service.ts",
+      "sha256": "e1d0922eaeb8c58d69a8e131c1bb0056d69336ab238fea44239b94325b49472f"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-schema.service.ts",
+      "sha256": "cfe26fb32516f0e568c265c42f6d28cffc43b3cec4bc4458e18bc23ce30811a4"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-completeness.service.ts",
+      "sha256": "f32d89ba00fb5e7c91feaa30eed3c84259842f7bdbb6aee9024dbaf9e9ccbf48"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-rows.service.ts",
+      "sha256": "733a792f5f83738a7690ae32c05fc6c6f5cb422e593af26dd016112e064301d6"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/presentation-context.ts",
+      "sha256": "d53a6395faf3d40991f1bc68065ffb215c173fd51ebd544ad83da7fe40bdf9d6"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/validate-channel-value.ts",
+      "sha256": "1dc7818fbcb1ed2b0fcfa1b4b57c7f34da4183302537f89bbad7f274091640f0"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/master-default-rule.ts",
+      "sha256": "73f805eb1320e5b70bc9b4715c6fafd2232be9f4ce443b32fc8de6fb203b6003"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/amazon-schema-vocabulary.ts",
+      "sha256": "7ddc01f3e570ac07c3f309babe498e362e86ed36a6d1ab8ee52cafb75f4bf4b1"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/schema-requirements.ts",
+      "sha256": "cc9b8b698815d2d2cb712aeda1fdf20500273619136327cebf4b2602336932f5"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/source-definition-plan.ts",
+      "sha256": "e9e92c6f7a25e86252715d9539f75d633fdef5dd18a77dd392b72aa6d421b91d"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/field-catalogue.service.ts",
+      "sha256": "461cf32c6dae094283f136da73003a34f1d2f7289446b004460fc0c71296ff2a"
+    },
+    {
+      "file": "apps/api/src/services/ai/rate-cards.ts",
+      "sha256": "a4b7573565eaca51986c4c04f41e9bcce4d7b7dd1fee81620575469151749cbb"
+    },
+    {
+      "file": "apps/api/src/services/ai/providers/anthropic.provider.ts",
+      "sha256": "500995d48ad1bc563cd28a0c51c28cd7565b6a21bcb8d5c7ad784d9df351a354"
+    },
+    {
+      "file": "apps/api/src/services/ai/providers/gemini.provider.ts",
+      "sha256": "9d26da90bb18f3cdf162298635bae71bdcdebd7d8f3b1fe01b3a70b873b71c90"
+    },
+    {
+      "file": "apps/api/src/services/ai/providers/local.provider.ts",
+      "sha256": "20cde4a61afd84004e472ac15979676225f566eb59eab3f9828c5af09444b5ab"
+    },
+    {
+      "file": "apps/api/src/services/ai/providers/index.ts",
+      "sha256": "a9fe7e322fa104f0486d8127c40d9131c47c86a44cc570d3484783a8c0fd9354"
+    },
+    {
+      "file": "apps/api/src/services/ai/usage-logger.service.ts",
+      "sha256": "88646bf674ef1cf6eb657191701ab1ecc837214ef3569e51e51aa33c4df2e786"
+    },
+    {
+      "file": "apps/api/src/lib/parse-locale-number.ts",
+      "sha256": "04495010b885d4305d3e2ca65ce4fb893d18adbe7cb31235138867c348a67978"
+    },
+    {
+      "file": "apps/api/src/services/channel-listing-cas.ts",
+      "sha256": "a5ee296e3f901c093abeb5d68ab3241b629182be3442f179243e413b70d6e42f"
+    },
+    {
+      "file": "apps/api/src/services/stockout-detector.service.ts",
+      "sha256": "6c55ad0fec6dd15f9b33078b4008db0a9c9ea5537044a577d1894d2f2bc63480"
+    },
+    {
+      "file": "apps/api/src/services/cost-layers.service.ts",
+      "sha256": "7752ff6b7656a770f3a0328618656afa9d102c300447355f6ad559cd06be2406"
+    },
+    {
+      "file": "apps/api/src/services/available-to-publish.service.ts",
+      "sha256": "9518d3a97c1b084c09dde164d8dece419b006fbf4f3bb4c156b742e796b6b6ab"
+    },
+    {
+      "file": "apps/api/src/services/sync-control-core.ts",
+      "sha256": "6ac9256eba7c4bf3cf9eaf159e639dff1a3ecbfe765565fd43443be7aec93d89"
+    },
+    {
+      "file": "apps/api/src/services/sync-control-policy.service.ts",
+      "sha256": "ae94c4d3d3a6148f5ae5acee466fcf118b39fe80c9d89e3caafb7bb388090d10"
+    },
+    {
+      "file": "apps/api/src/services/ebay-shared-fanout.service.ts",
+      "sha256": "0ab0450ad67b3029829a4b1f10a60c232d89a2455baf92ff38dbb8297fe185c6"
+    },
+    {
+      "file": "apps/api/src/services/sync-coalesce.ts",
+      "sha256": "0e4bada4f25feea0337db656b83238c4e315e8eacaf0f23a262f73d91a53b9ad"
+    },
+    {
+      "file": "apps/api/src/services/sync-priority.ts",
+      "sha256": "b8a7264643c0ebc193ecbaafc39c1b2f1f6327ca35ce150597c29316c8c8dae1"
+    },
+    {
+      "file": "apps/api/src/services/default-stock-location.ts",
+      "sha256": "98acd1332186f27d9f5f0d4a61ef596e464bb9f7d97a95a0f4a2ccd724cba9cd"
+    },
+    {
+      "file": "apps/api/src/services/stock-level.service.ts",
+      "sha256": "f10e84a82e95553106d7500764ea5e0edeb2116bceade8c12a3c750f3e1d3551"
+    },
+    {
+      "file": "apps/api/src/services/lot.service.ts",
+      "sha256": "cc9971ea33648b785a0e617a1127f43242459640bf803e829a1b40894b133a44"
+    },
+    {
+      "file": "apps/api/src/services/stock-movement.service.ts",
+      "sha256": "e39ad1c3475b838348ce6d42b153dc0dbdd714df547743671121badec1606114"
+    },
+    {
+      "file": "apps/api/src/services/amazon/browse-nodes.ts",
+      "sha256": "f1b38f25a8442208cba52c2737873e3aad7a029e56c6af7ce72f353ce986a3d6"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-mapping.ts",
+      "sha256": "4f192572d0f0f31aac4608d7650f08bfcc01e4c091b8567987591afe1b6fddab"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file-schema-walk.ts",
+      "sha256": "951f4aeb95880d0fb9d78a576c1044a132edca7d21d3731a3ca51bb59d14233a"
+    },
+    {
+      "file": "apps/api/src/services/flat-file/listing-scope.ts",
+      "sha256": "7784cdc30bc323e6a57d57a42821b367f165117425224d21b42a16ce3c3234e9"
+    },
+    {
+      "file": "apps/api/src/services/amazon/flat-file.service.ts",
+      "sha256": "a16e81ec34d700cf9ae9514191870e92839a9ca37595f5fe3eb415fd8f46cea2"
+    },
+    {
+      "file": "apps/api/src/services/amazon/value-translate.service.ts",
+      "sha256": "8c9894b7c386411e1107c87901aedce5dccc1c4d6f09010f104079eb09c55591"
+    },
+    {
+      "file": "apps/api/src/services/pim/value-map.service.ts",
+      "sha256": "c9d5cdc2105a3a10a2edb8c6ab8b9132e525ad1ff40c2d4e2306422c0e330b03"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+      "sha256": "f40036de8a9d8c1aa01d175471a3811e1d301d4e0e23c1e3eecb0d9d884e0209"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/index.ts",
+      "sha256": "5dfb92e66b651156394ec8a78a089114357b25d33b556fe7cf7c260cdc0f1843"
+    },
+    {
+      "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+      "sha256": "e33eee16f12706bd1bf7fda273f75c8654cb4a9c79cebdb00a8484962dd7fc13"
+    },
+    {
+      "file": "apps/api/src/services/pim/readiness-model.ts",
+      "sha256": "7ed99040f30fa3f89ca57bacee4c9eb678769274d1ec9b0e9600d096236ca026"
+    },
+    {
+      "file": "apps/api/src/services/pim/readiness-index.service.ts",
+      "sha256": "d6de5ca472e6518ec1a6913a9b95aa76f17304ba3e1ac576dd3edb99b10691f4"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/formula-write-context.ts",
+      "sha256": "6658b476c71c64f1a9bcdc278db29d82878a7620575f2381ad95497d5622c53a"
+    },
+    {
+      "file": "apps/api/src/services/master-content.service.ts",
+      "sha256": "4aa7bbc293e08d63b645567fcccede3e5bed394be2ec7aac3d0288b51a783dab"
+    },
+    {
+      "file": "apps/api/src/services/pim/translation-write.ts",
+      "sha256": "b06aec3974deea7ab99615cc276c97fe2f2c810f00e38cc7d404613da0536c05"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-write.ts",
+      "sha256": "4f2e71e90d41210aa08c24036508d4edc19f92c79722be4a24e13f63e9da3726"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/formula-storage.ts",
+      "sha256": "c6b2bc28e89f0bf73ecbf82c7af8b89f18ccfd937bf4fc88c55a0178d433c549"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/formula-graph.ts",
+      "sha256": "920af64b40c29901544f3a1736b3b89443895d60d8f58001d1a77b2a548ab420"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/formula-reference-values.ts",
+      "sha256": "7ac9227ead02b5d29a62c6d2604fbd6af1bbe7d37778c1e330df8d0f7985068b"
+    },
+    {
+      "file": "apps/api/src/services/audit-log.service.ts",
+      "sha256": "58b9a3d587da2d83c38f4bccb1fb6f83cebca0e086a859ece89054233ff736cb"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/cell-formula.service.ts",
+      "sha256": "09e9a4029bd9248c4ca1324794673e9dfa5b290b50995e473037d4ffc415c533"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-bulk-write.ts",
+      "sha256": "1d562dec970de64f7c20b7d001060cb05d7c67a4480648d936bbf057ff81b66b"
+    },
+    {
+      "file": "apps/api/src/services/pim/shared-variation-values.ts",
+      "sha256": "a2a4c484356a129aae3c711acb49e7ae1b7586da2c631d4d9cbcb9370762e0ed"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-value-write.ts",
+      "sha256": "b14d5cebefa7dc677d2e52a6d93465afdbb6e4888cdee87d1103a17f90dc3dce"
+    },
+    {
+      "file": "apps/api/src/services/etsy/information-references.ts",
+      "sha256": "75d30b2fc34de01db439ee4f763eefe370e0afb21f6bf7010da829b60d7a6988"
+    },
+    {
+      "file": "apps/api/src/services/ebay-account.service.ts",
+      "sha256": "94dc64b0097ea312b7c874808cc2c4c347ddc5c655809a00e39f6d1fec968bca"
+    },
+    {
+      "file": "apps/api/src/services/categories/browse-node-labels.service.ts",
+      "sha256": "98b086a3bab91d85e812655d132de3b0b017d4e5397fc2d2884da577c802e3de"
+    },
+    {
+      "file": "apps/api/src/services/categories/reference-labels.service.ts",
+      "sha256": "a8ed8611ffe11dbe90a708f0e1c841d8b841a998f6613dfe61fbce64841fd80e"
+    },
+    {
+      "file": "apps/api/src/services/pim/reference-values.service.ts",
+      "sha256": "2539fa2f83ef6da6410aae1d4bdd60483b275ad7a4f4f013fcb96b60fc9f9ea6"
+    },
+    {
+      "file": "apps/api/src/services/pim/validation-marketplace.ts",
+      "sha256": "19511b5a9b2b1032d43c3757fe7587be7a7de78535756f7b6819bc2f0984835f"
+    },
+    {
+      "file": "apps/api/src/services/master-price.service.ts",
+      "sha256": "3e3a09c66e80a4f49e7acdae930f1496a945613252946b9bda4cdbcd6fc880af"
+    },
+    {
+      "file": "apps/api/src/services/listing-events.service.ts",
+      "sha256": "ccf029491da3b169b0b4787e09382cabe16125c256b28964b3d259d2c0fd3318"
+    },
+    {
+      "file": "apps/api/src/services/product-event.service.ts",
+      "sha256": "a2ae2b206de010940f37f4e1e1e392c898a975a26e5c5be6906003e09e17b12d"
+    },
+    {
+      "file": "apps/api/src/services/pim/numeric-storage.ts",
+      "sha256": "cbfccbe4013ea86b705752ef2bf1376f95be0e50e3cf9964ce5c3b178c4029ca"
+    },
+    {
+      "file": "apps/api/src/services/pim/relationship-alias-guard.ts",
+      "sha256": "fac9e42f8fc5f71da3800947ef6f9ca70c1894d1ffc3d44fac0ab3684737fbfe"
+    },
+    {
+      "file": "apps/api/src/services/pim/product-relationship.service.ts",
+      "sha256": "cb5d580ad4cae30a6fbd520fffce014283253cd28dd7bc41ae90d2c06077e9c0"
+    },
+    {
+      "file": "apps/api/src/services/pim/listing-alias.service.ts",
+      "sha256": "d3e57f98dc83f452942c64e26cdc99424e8c5df5dd22a003bc1476cbc816fdee"
+    },
+    {
+      "file": "apps/api/src/services/pim/information-validation.ts",
+      "sha256": "6c7c8e856a14b749979b13bde77f75a767a91d01cc55000fb44a10be85fcbf3f"
+    },
+    {
+      "file": "apps/api/src/services/products/bulk-edit.service.ts",
+      "sha256": "d5b2feb54deff9763ef2dad9f05a081643b29994343766b522a47c236695b1ad"
+    },
+    {
+      "file": "apps/api/src/lib/api-key-auth.ts",
+      "sha256": "92a9f584dd826b57d6afa7cef15d5ba0c61abc21f536494cda78e400bec59491"
+    },
+    {
+      "file": "apps/api/src/lib/api-key-hook.ts",
+      "sha256": "75754e2f9138f83471435e33935bb90698f02d87a87053b100a08423b144008a"
+    },
+    {
+      "file": "apps/api/src/services/pim/restorable-fields.ts",
+      "sha256": "d90c38ba9a67d9304c2720b80db1e34c6747ad31623a32db0ad453e5cc6886d6"
+    },
+    {
+      "file": "apps/api/src/services/products/bulk-upload.service.ts",
+      "sha256": "d5cfb24ae2ef85ef16f1d35ccebb7ed6a4d54a3a8cc850e85bfa1fd387d87f12"
+    },
+    {
+      "file": "apps/api/src/services/products/bulk-zip-upload.service.ts",
+      "sha256": "bd19880efc3020910d364c88e6eae24fb56e963984c9ed4ff1a9ab8e56629c4f"
+    },
+    {
+      "file": "apps/api/src/services/idempotency.service.ts",
+      "sha256": "d2a15686bb11f3bb63d0f250e398ba4071f465ed035d4f3dfa2d5124e91c2ebd"
+    },
+    {
+      "file": "apps/api/src/utils/list-etag.ts",
+      "sha256": "ae0a826bff77d44ad235389869053fffbb36dcdc0b573f3cd3de780bb5fa4ded"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-language.ts",
+      "sha256": "dd3f128f3b3f129d3f865eab93c05257f3174f338cf70ef638d4ec36f8b855cb"
+    },
+    {
+      "file": "apps/api/src/services/advertising/ads-cache.ts",
+      "sha256": "39a7070faba231919b63c39b646e73c6028861069ff5549a941ad59be7e8d939"
+    },
+    {
+      "file": "apps/api/src/services/products/list-products.service.ts",
+      "sha256": "badf20e962b894a866dd798af198d2168f12ab7f271b7cc6cbef0516c8f5882e"
+    },
+    {
+      "file": "apps/api/src/services/products/products-grid.contract.ts",
+      "sha256": "912000da0bb1a142c2a3a2d06cd9f7a5798bd981523992e0057d480408787fa4"
+    },
+    {
+      "file": "apps/api/src/services/products/products-grid-groups.service.ts",
+      "sha256": "1d235576fce3504e0f7ee715fa66c7bcacddfc2259e158a4780a02a197bdf4c5"
+    },
+    {
+      "file": "apps/api/src/services/pim/audit-state.ts",
+      "sha256": "50432d1b5bbb62d2309b7a6ff5ad931d766b435c93eed58f5cff3124933c2f6a"
+    },
+    {
+      "file": "apps/api/src/utils/marketplace-code.ts",
+      "sha256": "dad20a3e1a7fb8e55cdec177cd038e92785f32754f999630fa112cde8fe2dc16"
+    },
+    {
+      "file": "apps/api/src/services/amazon-publish-gate.service.ts",
+      "sha256": "3598d25f9230730a1c3288dabb0c6b985d400be512130e09809232c6bb816990"
+    },
+    {
+      "file": "apps/api/src/clients/amazon-sp-api.client.ts",
+      "sha256": "22e89a870e58797964f7db7984d4e25daa55f79f9566c183bdb32fd131961c2b"
+    },
+    {
+      "file": "apps/api/src/services/amazon-mcf.service.ts",
+      "sha256": "6f17db5a4b9550d8642fdd1eace0c954b6714a96f7126f99c9247b126e49ab02"
+    },
+    {
+      "file": "apps/api/src/services/pim/resolver-shadow.ts",
+      "sha256": "df905004f20fd0ece6754adfb4fc1abed364bf3ba6266899c054c46d9e672816"
+    },
+    {
+      "file": "apps/api/src/services/product-analytics.service.ts",
+      "sha256": "71dc3f1e7d3870c70279869de0411cd775535cc6d012f6e78ef8fabbf61e5480"
+    },
+    {
+      "file": "apps/api/src/routes/products.routes.ts",
+      "sha256": "1024f59e0cc0a0636409540b5058907d16937e645c3adcf5ad8c15a2be3328fa"
+    },
+    {
+      "file": "apps/api/src/services/pim/amazon-content-payload.ts",
+      "sha256": "52409e4740c442c1418edaa77b21cb80c02312ed9dca1c241d427dce8b5ad73c"
+    },
+    {
+      "file": "apps/api/src/services/outbound-enqueue.ts",
+      "sha256": "304e1adc46b4c1e809d3939b533949de91400fb3c481e5b7de7f0dd9eae7cfe2"
+    },
+    {
+      "file": "apps/api/src/services/listing-activation-sync.service.ts",
+      "sha256": "b354ab043046bcfccb6db227b761c2d39661df9978d9dfdc0d1de03a6bcba36d"
+    },
+    {
+      "file": "apps/api/src/routes/marketplaces.routes.ts",
+      "sha256": "3f902f6c26dd1702d254be3e8b1bd353354ee65468c56e2b2de01212b1579f5e"
+    },
+    {
+      "file": "apps/api/src/lib/auth/identity-context.ts",
+      "sha256": "2ed449d0a3df5f722f42fdb972309018c58be1445871842b847bd41934f8fcf9"
+    },
+    {
+      "file": "apps/api/src/utils/settings-audit.ts",
+      "sha256": "5c83151d111eeb018ed053f347c14187d3ec3c1eb4f13d103bde7473c4969507"
+    },
+    {
+      "file": "apps/api/src/services/connection-label.ts",
+      "sha256": "209fd082834b549fc13421f5e4ce2f4d24c66adda6731cb81a56865b839fa619"
+    },
+    {
+      "file": "apps/api/src/routes/connections.routes.ts",
+      "sha256": "84b12c5f053f32f6da928fd9945f628792e9b89bbe5a4eebd59db3672438b321"
+    },
+    {
+      "file": "apps/api/src/services/saved-views/persistence.service.ts",
+      "sha256": "f1d1653adfbf4f907e668c746eb8d399d0fbf7e4feb8bd2541fe6d8d0465323b"
+    },
+    {
+      "file": "apps/api/src/routes/saved-view-persistence.routes.ts",
+      "sha256": "4f577973ce9d378af92202d46b56c3f66ffe32f799ff9d8cb3755287e34d63af"
+    },
+    {
+      "file": "apps/api/src/services/master-status.service.ts",
+      "sha256": "a0ad46e96caaa2a19614052d26897b7a69b1b86607e44485d71ca48c10a8ffda"
+    },
+    {
+      "file": "apps/api/src/services/content-auto-publish.service.ts",
+      "sha256": "a7637bd3c3c0128787482b1292bd7068bd9972b7bd2aa4e788bc5ee7606445fc"
+    },
+    {
+      "file": "apps/api/src/utils/server-timing.ts",
+      "sha256": "299bc948822f22a46992e1e29e23bd5908a53856d43b1d9fb8409f37e726d38f"
+    },
+    {
+      "file": "apps/api/src/services/translation-completeness.service.ts",
+      "sha256": "9e090dbaa24c32da8c961e4f4e233a7f17b86b890a0a829657903a79557f9acb"
+    },
+    {
+      "file": "apps/api/src/services/sync-status.service.ts",
+      "sha256": "d531a8b826fb7598981f854387d9d8db0993ffd6cf56974ebea9c37f7f97f4fe"
+    },
+    {
+      "file": "apps/api/src/routes/products-catalog.routes.ts",
+      "sha256": "f5844022e30010a5d02279b5e6a225c9c676f6d7e2fbdb10fbb72c632898405a"
+    },
+    {
+      "file": "apps/api/src/routes/pim.routes.ts",
+      "sha256": "e93a3589bdc1344ff1fba7dd2b476e854a0a994afdf33aabae02bfb5fa6a44d0"
+    },
+    {
+      "file": "apps/api/src/services/ai/ai-features.ts",
+      "sha256": "1f625fc868e5427834f9dec946a9673605e31b47c4bc2be8dc02b9ee3ed1a943"
+    },
+    {
+      "file": "apps/api/src/services/ai/model-resolver.service.ts",
+      "sha256": "9dd9139206db7b239ab15796279d581afb85428bfb5e8acfd737691926f0c5fc"
+    },
+    {
+      "file": "apps/api/src/services/listing-wizard/product-types.constants.ts",
+      "sha256": "bc597c07cbe6936059fa5c1dec4c46bc4f28034d53537b60f715d6dfe5451deb"
+    },
+    {
+      "file": "apps/api/src/services/listing-wizard/product-types.service.ts",
+      "sha256": "8d8dc55502bf5b564ea8b3b35b0f715975eed89bc60b2207d9935693fbd6cb95"
+    },
+    {
+      "file": "apps/api/src/services/etsy/taxonomy.ts",
+      "sha256": "db6e950cf2213641a0d9c403886b959b48c21c237784105b63304a278fac98f8"
+    },
+    {
+      "file": "apps/api/src/routes/categories.routes.ts",
+      "sha256": "51b422572b44d1d3c7bdfe08711a0c2d80461b2acfbce70ec2468228bf2af115"
+    },
+    {
+      "file": "apps/api/src/services/pim/language-sheet.ts",
+      "sha256": "a57c7efe292b1bbe5191dbee2214105d20de632fdbbff3bd6b9633ea898c5120"
+    },
+    {
+      "file": "apps/api/src/services/shopify/channel-sheet-projection.ts",
+      "sha256": "f9d0b418910283485995f5f8379f9f7502c0b88177ed0590c3e4b0ae868cd216"
+    },
+    {
+      "file": "apps/api/src/services/shopify/native-listing-value.ts",
+      "sha256": "92963951f18e0269349e0889c666c8aaee22e94c57eb0226e010b867228cce77"
+    },
+    {
+      "file": "apps/api/src/services/shopify/listing-media-content.ts",
+      "sha256": "4539c4ff312cc8022246e6dbb9396233c3cc4baf0b0721130e0d160cf3209dd5"
+    },
+    {
+      "file": "apps/api/src/services/shopify/listing-sheet-values.ts",
+      "sha256": "83562dbaa611ac6fcb7f44b2663e295933d91a542ddf8916a21a870e955c13ec"
+    },
+    {
+      "file": "apps/api/src/services/shopify/content-workspace.service.ts",
+      "sha256": "36d7921690ec704643deac06a42c28f7a2e5ef454827a75420e684ad9e9c0225"
+    },
+    {
+      "file": "apps/api/src/services/shopify/information-publications.ts",
+      "sha256": "343b8d834e2c8076eb6f4058c6d3695a5d2f4fc82b8cee053f45fceee9600b98"
+    },
+    {
+      "file": "apps/api/src/services/shopify/information-inventory.ts",
+      "sha256": "47a9c827e0e2197a78641818fcddf51b1cfe9d867169b67065b7441f641c933a"
+    },
+    {
+      "file": "apps/api/src/services/shopify/information-translations.ts",
+      "sha256": "ac4bec2f5d78c69fcfa4406fa5a8e34d81ce882c950b0c81bffba7b7d8b56769"
+    },
+    {
+      "file": "apps/api/src/services/shopify/information-media-membership.ts",
+      "sha256": "e8fa2551b41bed830043b888b8a4426a1cc87bef413249795e14c027b324156e"
+    },
+    {
+      "file": "apps/api/src/services/shopify/information-gateway.ts",
+      "sha256": "d87a9a555f22306c7ede7bf200c5642f1e41ac31bf52b137c5a22e3b6e1e22af"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-shared-content.service.ts",
+      "sha256": "ca3d5f5dcca82e257bf5529c56a2ba103dcaf42720d0770a6325eec7d64c7d1d"
+    },
+    {
+      "file": "apps/api/src/services/shopify/content-publisher.ts",
+      "sha256": "ac4713b1cc8471ff1c001e1dc895cf210e22c22b1b23b6c15cbca0525de9d52a"
+    },
+    {
+      "file": "apps/api/src/services/shopify/channel-sheet-media.ts",
+      "sha256": "e88104ccaf2ef7eb1fb08750ab7546cd2b5854929aaf7c013a20fc96e615eeec"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-products.service.ts",
+      "sha256": "0ad4e93ec9d4b9d53b607662f83f18023d7f3f43612d013a34c38a19aa9f306b"
+    },
+    {
+      "file": "apps/api/src/services/shopify/channel-sheet.service.ts",
+      "sha256": "87cdc6c7d35bd3fd8bbe1b2532bd85ac0f1dede68ea13f837ace51aaa6327ca5"
+    },
+    {
+      "file": "apps/api/src/services/pim/information-sheet.ts",
+      "sha256": "d4196b2dc39f906de12ed2dc2e3422c9c8624fbca49ad97e25a43751fff10f80"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-account.ts",
+      "sha256": "cebe16e308f16eee2666da33109af063695b5f5b9f8b4375aa1c55d4aa2cd449"
+    },
+    {
+      "file": "apps/api/src/services/pim/scope-readiness.service.ts",
+      "sha256": "87f6523df25b4df0fcd83df1cf5dc066899682195fe54fb929a4a24e7af4e2b6"
+    },
+    {
+      "file": "apps/api/src/services/pim/restore-points.service.ts",
+      "sha256": "f193e7d0acc846da43c808b2c1b437ad2c62aa064499c49b20fc770f1aa703c3"
+    },
+    {
+      "file": "apps/api/src/services/pim/workspace-history.ts",
+      "sha256": "3f2759379a6587f9ce74c9f9915c700e45b1636a82ca31255ecfa9bda543513f"
+    },
+    {
+      "file": "apps/api/src/services/pim/cell-history.service.ts",
+      "sha256": "ec7ed062983cd7b1427384b96b844629e1a8e25b2de256595ddbd793e9f342ac"
+    },
+    {
+      "file": "apps/api/src/services/pim/sync-failure-reason.ts",
+      "sha256": "8a16f6832c652d8c9b6567e3c9e468fa7f87f6a52f9f08732fcacba719f7ce98"
+    },
+    {
+      "file": "apps/api/src/services/pim/sync-queue.service.ts",
+      "sha256": "9f8932c4c4644769b5e7f31b76122ce93f98324868efddeaca59c769b5e97a4f"
+    },
+    {
+      "file": "apps/api/src/services/pim/listing-snapshot.service.ts",
+      "sha256": "c69c37f1b26aa6c0830a9ef1c4906e6ae224f41caf5e8fb46b158a626ab6e1fc"
+    },
+    {
+      "file": "apps/api/src/services/ebay-presentation-consumer.service.ts",
+      "sha256": "01d50b435fdc3582224761bb0d9b433f78b4d78e8bad6aaeb2bd26e52e142328"
+    },
+    {
+      "file": "apps/api/src/services/images/ebay-image-axis.pure.ts",
+      "sha256": "afa95345cd71c7cb7e0eacb6893d1cc3a4b81ede25c8361affb466df10ab6669"
+    },
+    {
+      "file": "apps/api/src/services/ebay-variation-preflight.ts",
+      "sha256": "cc0900140cab7d85588f230573804d50de00fc2d1e5e338a629f6d72116210f4"
+    },
+    {
+      "file": "apps/api/src/services/ebay-variation-push.service.ts",
+      "sha256": "8e3bd862dcd78d052d936b28249b3ad654d59f517c57f18759f4a28aee0e38b1"
+    },
+    {
+      "file": "apps/api/src/services/ebay-image-axis-preference.service.ts",
+      "sha256": "80def4fe3da368dfe2086da184e26be51c0924e5e1c3e249120b91f906ae2aad"
+    },
+    {
+      "file": "apps/api/src/services/ebay-family-axes.service.ts",
+      "sha256": "fb2c244c7ae3a3abee9c9c91475a33bb23db42df8774eeb42568473f77b68c83"
+    },
+    {
+      "file": "apps/api/src/services/ebay-presentation-order.service.ts",
+      "sha256": "edf4d27b97c713ea89ecdaefb7dfe69d75f705dbfb0dd23ad822c0cf8208727c"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-projection-limits.ts",
+      "sha256": "83930fb244ee901462636400d53d6f39cacf0329b9073e46ba1c4b5b0f265cd2"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-projection.service.ts",
+      "sha256": "a2ff78fad1fc1a66fea068d851bdca81f479ab0e3a96c72fa114689795f85e2d"
+    },
+    {
+      "file": "apps/api/src/services/pim/import-diff.service.ts",
+      "sha256": "121588fc6f09da6812deaa8ae8740b5445d3ac68066d5e6074d7a9765ab8cecb"
+    },
+    {
+      "file": "apps/api/src/services/pim/import-jobs.service.ts",
+      "sha256": "6daeaa170cbb050efdcd880ddd8dc389b2981138a5616bde980cea42a2d923a4"
+    },
+    {
+      "file": "apps/api/src/routes/variant-transfer.routes.ts",
+      "sha256": "2db9ea201349205bef253b906b580bb9b097e70c36400be4389312858b0e5aa5"
+    },
+    {
+      "file": "apps/api/src/services/pim/workspace-observations.ts",
+      "sha256": "2c1550d0c1efa139cc199f2b6293162aeb9775b4f2cd40fd99b624feab65e471"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-variation-axes.ts",
+      "sha256": "40335b40d129add537676439659e9d1ae4d4059e77d0ff13daf799d3b4ba8cfd"
+    },
+    {
+      "file": "apps/api/src/services/pim/family-generate.service.ts",
+      "sha256": "f8bca81f3b85bcf69554104b13d6dc23456724d0aea4ab8d4493bbaed16b2b6f"
+    },
+    {
+      "file": "apps/api/src/services/category-lock.ts",
+      "sha256": "bd825e3954e0aa21e83185b0abe2ddb3c0af427efc601c7dd646999a61a6ec57"
+    },
+    {
+      "file": "apps/api/src/services/pim/product-classification.ts",
+      "sha256": "d2461ab9ee592590d37aaac05eb457e0223ffdaf9df2724a0aa5da382ba7adaa"
+    },
+    {
+      "file": "apps/api/src/routes/product-studio.routes.ts",
+      "sha256": "8f2636c5fbba0e7946daa100f07f40469e7eee2c513bd6eebaa6144e7789aec1"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/formula-bulk.service.ts",
+      "sha256": "e8539264edda44b438303ac8261e72d94c7ee81906af8ec9b4910eb570cd0a85"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/master-rule.service.ts",
+      "sha256": "a99cac11956c04d66bea6be2adf3b9a7156b6c56b7d2795889a184a28073637a"
+    },
+    {
+      "file": "apps/api/src/routes/cell-formula.routes.ts",
+      "sha256": "c4e042f6fd93d6c314d15362b08db23296b68c5c3ecfeb717d93a29718f42ea0"
+    },
+    {
+      "file": "apps/api/src/services/pim/legacy-content-write.ts",
+      "sha256": "f7a82bd60c8f8ec7d5d78430d94ea9b59743fbee56534c3acac9b7394c830e30"
+    },
+    {
+      "file": "apps/api/src/services/pim/localized-content.ts",
+      "sha256": "c912649342f33d40d8690d0392af96c5b70d0ce429b6f67fcf123ecf6e66d339"
+    },
+    {
+      "file": "apps/api/src/services/pim/global-content.ts",
+      "sha256": "c692ccc770a607d49dcee46afd4c32cfc1b4aa99c41419ad4c8729c1204a1af7"
+    },
+    {
+      "file": "apps/api/src/services/ai/translate.service.ts",
+      "sha256": "97d98054f04ee81e590701ee1ae9ec1867dc3be40c5d8ed84ff08b90c97437a5"
+    },
+    {
+      "file": "apps/api/src/services/field-resolution/propagation-fill.ts",
+      "sha256": "fc7ea34bb9969dc3f08ed32694bada1e43d74a94201a247568f9ea6ef0425a44"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping-propagation.service.ts",
+      "sha256": "f958e46b22010e5b3fee8c0f6c5b5cc9cfebd335226fdb324e0aeb10c6b13c63"
+    },
+    {
+      "file": "apps/api/src/services/pim/apply-mapping.service.ts",
+      "sha256": "fd159c6d7b1bcd29515a95f5c53ffe68f71069ef3bd3a7ec4a4e9c63d7104029"
+    },
+    {
+      "file": "apps/api/src/services/pim/reverse-mapping.service.ts",
+      "sha256": "254027ce65cc628f8acfeb95dec057dfc853de4a7c86133dded63c9265f6e8a4"
+    },
+    {
+      "file": "apps/api/src/services/products/translation-resolver.service.ts",
+      "sha256": "f26731ad6ce3c286665f62d113a871a496a90dc1d6f822be5f6d304911beb14b"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+      "sha256": "6e966068da732ba05115eeb4062f9c8caf83390ee766355be4f674a5de5c039d"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping-suggest.service.ts",
+      "sha256": "4e55f05e63809ce4a5ad65e5037ae1905d2f95f4e96e578789f82f374b1bab80"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping-suggest-ai.service.ts",
+      "sha256": "47e68d0b03eccb322777749eeedc3a8834fa6af2cc2cb4281ce2c3afcb6419d7"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-ai-fill.service.ts",
+      "sha256": "d686f4b01068b431d8b1a4b754743a485c2e9cb002683baa67b7492533698993"
+    },
+    {
+      "file": "apps/api/src/routes/pim-global.routes.ts",
+      "sha256": "fddb6078f9aa626c1e46ac617c3eb8bebac71cb771bfbcf423962944a5d62f33"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/cell-key.ts",
+      "sha256": "2b5252da9115464ab2c63b1ff216f9e702016114eae9e0b14931f52beb3658ba"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/draft.service.ts",
+      "sha256": "49e02d225c939f8d7ed96bd6f71647ebbf82cce4cf50f47a8488ae9cab694d67"
+    },
+    {
+      "file": "apps/api/src/services/ai/budget.service.ts",
+      "sha256": "fec98871e59a8a87f1dc16a99f22aede5e0f0f622d148517b777c8f41a6d316f"
+    },
+    {
+      "file": "apps/api/src/services/ai/prompt-sanitizer.ts",
+      "sha256": "3f7ce192a247b6c16b5c74afcfdc71115c8f06d08396026ef5732ee673167eb2"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/constraints.ts",
+      "sha256": "014b248364dd1ed865a61523d7bbb242ccfcf0313b01c20b5b4a75096d49dff1"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/prompt.ts",
+      "sha256": "b3fd3fa5e032977a9f997d442f5d7c1578323da3619664a9caf1f795f77bba5c"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/validate.ts",
+      "sha256": "6d00c5bcbe634d791879f582b8188d15dceabb77a53346b195bb2934987b5646"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/response.ts",
+      "sha256": "c63e2301a6670cb2c5a0ac3ea7d6ab908b06f9d30d4858e35714142aed09a5f8"
+    },
+    {
+      "file": "apps/api/src/services/ai/enrichment/generate.service.ts",
+      "sha256": "44fda09651a3a08df1f3e05408b48fc8307783c835c3165b0ba56d3c93e83538"
+    },
+    {
+      "file": "apps/api/src/routes/product-enrichment.routes.ts",
+      "sha256": "166d016854d6b32a295e780cb39e2809c403d0e8cc9b0b7a6256750a7f645fca"
+    },
+    {
+      "file": "apps/api/src/services/pim/listing-readiness.service.ts",
+      "sha256": "4677e66531d831f4880aa3508017569fd138d6f504827db09083c8744fb53c47"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-translate.ts",
+      "sha256": "80457d5613fe31dd9728bf2a7cafbf6aa88d3355f88538d3fca4a0defd9a939f"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-source-file.ts",
+      "sha256": "97f44c3d2d5278745ba2f0edcab47c38fd8205afa69044410acd8157d1ecd5c1"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-workbook-format.ts",
+      "sha256": "a05f7431255a8351f4a7311986ccbe2efc27ad41aa3677a41e8d48cd4e5f6916"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-workbook.ts",
+      "sha256": "9bb467d9adde210bdf80053ac8268230ea69dc72d7947270c48181bb4927eefe"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-file.ts",
+      "sha256": "39d4e787b2390820e35d9489ec882882730da4ed5b68a1ad2d3566f0c2eac411"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-content.ts",
+      "sha256": "502ff32fe648f8ee947c7472eb9fd4161107bce3d44a2cd2002189ee0f087ee7"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-plan.ts",
+      "sha256": "d4fd903e7f123d58c0191cb403d640c9232e16a1920fd9c5daadeb0bf7ce1976"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-download.ts",
+      "sha256": "37e6c8d4784c6823dfc27d6d794ec01870a6e201dff1577664e486746226008c"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+      "sha256": "1c20e220fa52e270ae7b7a149bef8af64cb482eac8aec84281e7d69c655faed0"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-export.ts",
+      "sha256": "ddf5a53ab70237e1128057c8ca57ea0425e727f8c1a5be9e45154c4699cb7d43"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer.service.ts",
+      "sha256": "ccbee8a4fd9f5ae0e47add08d8bcb4d9cc208a963a5af1e8f009796c64c68ed6"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-preserved.ts",
+      "sha256": "0c4551b61e77191f00f2e14f41f71ad796f0bc13c53cbffc26a7a437944fa68b"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-product-transfer.ts",
+      "sha256": "cc5c6710cb2d34a06288c6f635148b2ab804ff6c9a4feb6302bdf233cb8865a9"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+      "sha256": "be74348d8e927f6ea0c98a88cf82943fa63ff310ca69ca86ad52d61a8c20d69f"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-transfer-jobs.ts",
+      "sha256": "5245dc5a15472f6d34b1de1c5c0bf160f31068939aa3d4d942c6d1247a8dac78"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-source-mapping.ts",
+      "sha256": "9b6bd0f3f0b28643e61746564c2a43a1b33ebcab868cb2c106097e5bab5fba8b"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-source.service.ts",
+      "sha256": "2ee08836084124a382843e02ddbf879bd34d9b54ab429eb45b22b97a2b119d77"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-source-fetch.ts",
+      "sha256": "d2521eaf01f5adff5e1ae6a7233b53e0e1ad2b1b12332a3f4bde1c0fcbef60fe"
+    },
+    {
+      "file": "apps/api/src/services/amazon/template-workbook.ts",
+      "sha256": "8530c40d9d645395e74861c5e687ce43f5c2a3f2d81a5274bce38451dc47c085"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-amazon-workbook.ts",
+      "sha256": "2b2ede8b79ebd380cfca55ffd346dc6e16b602892c373343ea7e75410c0ec335"
+    },
+    {
+      "file": "apps/api/src/services/pim/catalog-editor-workbook.ts",
+      "sha256": "243fcc1384b7be7deb118a8e532f296fd5b792d6b6e113057aaa8348ace701c8"
+    },
+    {
+      "file": "apps/api/src/routes/catalog-transfer.routes.ts",
+      "sha256": "904d99ca531414b30279948691ec2726235a9afb860083f7960b743660bb0ae9"
+    }
+  ],
+  "runtimeSha256": "5615e4ea06f41ebd49b98444e699251da30cda4566f643f8e8f179e6cad64805",
+  "substitutions": [
+    "Counted provider gateways throw before credentials and transport",
+    "Queues have no workers or Redis",
+    "ProductReadCache refresh methods suppressed; all readers unchanged"
+  ]
+}

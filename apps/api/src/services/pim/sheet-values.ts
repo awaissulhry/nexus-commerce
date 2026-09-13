@@ -127,7 +127,13 @@ export interface ShapeWriteFacts {
   kind?: string
   key?: string
   label?: string
-  shape?: 'scalar' | 'list' | 'measure'
+  /**
+   * VT.1 (2026-09-13) added `'axes'`. It is NOT a writable shape - `coerceForShape` refuses it by name. It is here
+   * so a column whose value is a structure cannot reach this writer by accident: the variation theme has ONE writer
+   * (`PATCH /studio/projection` / `PATCH /studio/variation-axes`), and a bulk PATCH that tried to send it would
+   * otherwise have been a type hole rather than a refusal an operator can read.
+   */
+  shape?: 'scalar' | 'list' | 'measure' | 'axes'
   cardinality?: { min: number; max: number | null }
   unitOptions?: string[]
   options?: string[]
@@ -147,6 +153,13 @@ const named = (f: ShapeWriteFacts) => f.label ?? f.key ?? 'this field'
  * wizard's L.2 encoding) is accepted for a list, because imports still carry it.
  */
 export function coerceForShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWriteResult {
+  // VT.1 - a structure-valued column has no scalar/list/measure form to coerce INTO, so this writer refuses it
+  // with a sentence instead of stringifying it. The refusal is the loud half of "one fact, one writer": the
+  // variation theme is written by `PATCH /studio/projection` (channel) or `PATCH /studio/variation-axes` (master),
+  // which is what `cell.value.write.endpoint` names on every cell.
+  if (facts?.shape === 'axes') {
+    return { ok: false, error: `${named(facts)} is set by the variation theme editor, not by a cell write.` }
+  }
   const result = coerceShape(facts, raw)
   if (result.ok === false || result.value === null || result.value === undefined) return result
   const value = result.value

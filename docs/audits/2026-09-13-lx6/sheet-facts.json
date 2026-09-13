@@ -1,0 +1,543 @@
+{
+  "at": "2026-09-13T04:50:26.141Z",
+  "database": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "productId": "cmokmy3a40078pm0p1fvnu523",
+  "facts": [
+    {
+      "name": "master·IT·it",
+      "single": {
+        "ms": 349,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 236,
+        "localizableColumns": 64,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 4956,
+        "affectsAllChannelsCells": 0,
+        "affectsAllChannelsColumns": 0,
+        "affectsAllChannelsColumnKeys": [],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [],
+        "chipCounts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 202,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 364,
+        "localizableColumns": 192,
+        "qualifiedColumns": 192,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Name",
+          "Description",
+          "Bullet points",
+          "Search keywords",
+          "Fabric composition",
+          "Care instructions",
+          "Battery cell composition other than listed",
+          "Fur",
+          "Inner",
+          "Safety data sheet url",
+          "Athlete",
+          "Band"
+        ],
+        "localesEcho": null,
+        "cells": 7644,
+        "affectsAllChannelsCells": 0,
+        "affectsAllChannelsColumns": 0,
+        "affectsAllChannelsColumnKeys": [],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [],
+        "chipCounts": {
+          "Needs translation": 2688,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "AMAZON·IT·it",
+      "single": {
+        "ms": 552,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 163,
+        "localizableColumns": 13,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 3423,
+        "affectsAllChannelsCells": 42,
+        "affectsAllChannelsColumns": 2,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "keywords"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-12T14:51:37.132Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 250,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 163,
+        "localizableColumns": 13,
+        "qualifiedColumns": 13,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Title",
+          "Product Description",
+          "Bullet 1",
+          "Bullet 2",
+          "Bullet 3",
+          "Bullet 4",
+          "Bullet 5",
+          "Bullet 6",
+          "Bullet 7",
+          "Bullet 8",
+          "Bullet 9",
+          "Bullet 10"
+        ],
+        "localesEcho": null,
+        "cells": 3423,
+        "affectsAllChannelsCells": 42,
+        "affectsAllChannelsColumns": 2,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "keywords@it"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-12T14:51:37.132Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "AMAZON·DE·de",
+      "single": {
+        "ms": 599,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 165,
+        "localizableColumns": 13,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 3465,
+        "affectsAllChannelsCells": 74,
+        "affectsAllChannelsColumns": 13,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "description",
+          "bulletPoints_1",
+          "bulletPoints_2",
+          "bulletPoints_3",
+          "bulletPoints_4",
+          "bulletPoints_5",
+          "bulletPoints_6",
+          "bulletPoints_7",
+          "bulletPoints_8",
+          "bulletPoints_9",
+          "bulletPoints_10"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-12T14:52:54.095Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 53,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 340,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 165,
+        "localizableColumns": 13,
+        "qualifiedColumns": 13,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Title",
+          "Product Description",
+          "Bullet 1",
+          "Bullet 2",
+          "Bullet 3",
+          "Bullet 4",
+          "Bullet 5",
+          "Bullet 6",
+          "Bullet 7",
+          "Bullet 8",
+          "Bullet 9",
+          "Bullet 10"
+        ],
+        "localesEcho": null,
+        "cells": 3465,
+        "affectsAllChannelsCells": 74,
+        "affectsAllChannelsColumns": 13,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "description@de",
+          "bulletPoints_1@de",
+          "bulletPoints_2@de",
+          "bulletPoints_3@de",
+          "bulletPoints_4@de",
+          "bulletPoints_5@de",
+          "bulletPoints_6@de",
+          "bulletPoints_7@de",
+          "bulletPoints_8@de",
+          "bulletPoints_9@de",
+          "bulletPoints_10@de"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-12T14:52:54.095Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 53,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "AMAZON·BE·nl",
+      "single": {
+        "ms": 409,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 164,
+        "localizableColumns": 13,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 3444,
+        "affectsAllChannelsCells": 294,
+        "affectsAllChannelsColumns": 14,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "name",
+          "description",
+          "bulletPoints_1",
+          "bulletPoints_2",
+          "bulletPoints_3",
+          "bulletPoints_4",
+          "bulletPoints_5",
+          "bulletPoints_6",
+          "bulletPoints_7",
+          "bulletPoints_8",
+          "bulletPoints_9"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-11T00:02:06.844Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 273,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 348,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 177,
+        "localizableColumns": 26,
+        "qualifiedColumns": 26,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Title",
+          "Product Description",
+          "Bullet 1",
+          "Bullet 2",
+          "Bullet 3",
+          "Bullet 4",
+          "Bullet 5",
+          "Bullet 6",
+          "Bullet 7",
+          "Bullet 8",
+          "Bullet 9",
+          "Bullet 10"
+        ],
+        "localesEcho": null,
+        "cells": 3717,
+        "affectsAllChannelsCells": 567,
+        "affectsAllChannelsColumns": 27,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "name@nl",
+          "name@fr",
+          "description@nl",
+          "description@fr",
+          "bulletPoints_1@nl",
+          "bulletPoints_1@fr",
+          "bulletPoints_2@nl",
+          "bulletPoints_2@fr",
+          "bulletPoints_3@nl",
+          "bulletPoints_3@fr",
+          "bulletPoints_4@nl"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-11T00:02:06.844Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 546,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "AMAZON·BE·fr",
+      "single": {
+        "ms": 207,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 164,
+        "localizableColumns": 13,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 3444,
+        "affectsAllChannelsCells": 294,
+        "affectsAllChannelsColumns": 14,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "name",
+          "description",
+          "bulletPoints_1",
+          "bulletPoints_2",
+          "bulletPoints_3",
+          "bulletPoints_4",
+          "bulletPoints_5",
+          "bulletPoints_6",
+          "bulletPoints_7",
+          "bulletPoints_8",
+          "bulletPoints_9"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-11T00:02:06.844Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 273,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 343,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 177,
+        "localizableColumns": 26,
+        "qualifiedColumns": 26,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Title",
+          "Product Description",
+          "Bullet 1",
+          "Bullet 2",
+          "Bullet 3",
+          "Bullet 4",
+          "Bullet 5",
+          "Bullet 6",
+          "Bullet 7",
+          "Bullet 8",
+          "Bullet 9",
+          "Bullet 10"
+        ],
+        "localesEcho": null,
+        "cells": 3717,
+        "affectsAllChannelsCells": 567,
+        "affectsAllChannelsColumns": 27,
+        "affectsAllChannelsColumnKeys": [
+          "sku",
+          "name@nl",
+          "name@fr",
+          "description@nl",
+          "description@fr",
+          "bulletPoints_1@nl",
+          "bulletPoints_1@fr",
+          "bulletPoints_2@nl",
+          "bulletPoints_2@fr",
+          "bulletPoints_3@nl",
+          "bulletPoints_3@fr",
+          "bulletPoints_4@nl"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "OUTERWEAR",
+              "fetchedAt": "2026-09-11T00:02:06.844Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 546,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "EBAY·IT·it",
+      "single": {
+        "ms": 130,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 51,
+        "localizableColumns": 2,
+        "qualifiedColumns": 0,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [],
+        "localesEcho": null,
+        "cells": 1071,
+        "affectsAllChannelsCells": 21,
+        "affectsAllChannelsColumns": 1,
+        "affectsAllChannelsColumnKeys": [
+          "sku"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "EBAY:177104",
+              "fetchedAt": "2026-09-13T02:50:39.489Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      },
+      "languages": {
+        "ms": 111,
+        "transportAttempts": 0,
+        "rows": 21,
+        "columns": 51,
+        "localizableColumns": 2,
+        "qualifiedColumns": 2,
+        "qualifiedShapeOk": true,
+        "qualifiedGroups": [
+          "Title",
+          "Description"
+        ],
+        "localesEcho": null,
+        "cells": 1071,
+        "affectsAllChannelsCells": 21,
+        "affectsAllChannelsColumns": 1,
+        "affectsAllChannelsColumnKeys": [
+          "sku"
+        ],
+        "schemaMissing": [],
+        "schemaAgeFetchedAt": [
+          [
+            "0",
+            {
+              "productType": "EBAY:177104",
+              "fetchedAt": "2026-09-13T02:50:39.489Z"
+            }
+          ]
+        ],
+        "chipCounts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        }
+      }
+    },
+    {
+      "name": "SHOPIFY·GLOBAL",
+      "single": {
+        "ms": 24,
+        "transportAttempts": 0,
+        "error": "Shopify requirements are not cached for this account."
+      },
+      "languages": {
+        "ms": 38,
+        "transportAttempts": 0,
+        "error": "Shopify requirements are not cached for this account."
+      }
+    }
+  ],
+  "transportAttempts": []
+}

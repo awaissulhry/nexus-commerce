@@ -68,7 +68,7 @@ describe('incoming mappings and file boundaries', () => {
 const columns = ['name', 'basePrice', 'totalStock', 'description'].map(key => ({ key, writeField: key, label: key, group: 'Shared', kind: 'text', storage: 'column', scope: 'global', requiredBy: [], editable: true, defaultVisible: true }))
 const title = { fieldKey: 'item_name', sheetKey: 'name', label: 'Title', kind: 'text', shape: 'scalar', editable: true, channelStore: { kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' } }
 const contracts = { master: async () => columns, channel: async () => ({ fields: [title] }) } as TransferContracts
-const context = (): TransferContext => ({ products: new Map([['0001', { id: 'p1', sku: '0001', name: 'Existing', version: 1, familyId: 'f1', parentId: null, isParent: false, categories: [{ categoryId: 'c1', isPrimary: true }], basePrice: 10, totalStock: 7 }]]), listings: new Map(), families: [{ id: 'f1', code: 'coats', label: 'Coats' }], accounts: [{ id: 'account-a', channelType: 'AMAZON', marketplace: null, isActive: true }], markets: [{ channel: 'AMAZON', code: 'IT' }], categories: [{ id: 'c1', isActive: true }] })
+const context = (): TransferContext => ({ products: new Map([['0001', { id: 'p1', sku: '0001', name: 'Existing', version: 1, familyId: 'f1', parentId: null, isParent: false, categories: [{ categoryId: 'c1', isPrimary: true }], basePrice: 10, totalStock: 7 }]]), listings: new Map(), families: [{ id: 'f1', code: 'coats', label: 'Coats' }], accounts: [{ id: 'account-a', channelType: 'AMAZON', marketplace: null, isActive: true }], /* LX.F2 R-LX-21 — `Marketplace.languages` is the ONLY language authority since LX.2, and a row without one is an operator-fixable configuration fact that now answers 400 ("No content languages configured for AMAZON/IT", `market-languages.ts`, LX.F F-LX-5). This fixture's market row carried no languages, so every content cell in it became an issue and the target was dropped. */ markets: [{ channel: 'AMAZON', code: 'IT', languages: ['it'] }], categories: [{ id: 'c1', isActive: true }] })
 describe('canonical write validation and source ownership', () => {
   it('refuses conflicting source rows targeting the same shared fact', async () => {
     const result = mapSourceTable({ headers: ['SKU', 'Name'], records: [{ SKU: '0001', Name: 'A' }, { SKU: '0001', Name: 'B' }] }, mapping({ bindings: [mapping().bindings[0]] }))
@@ -89,7 +89,14 @@ describe('canonical write validation and source ownership', () => {
   it('preserves an override and rejects inactive account destinations', async () => {
     const m = mapping({ bindings: [mapping().bindings[1]], policy: { shared: 'replace', overrides: 'preserve' } })
     const parsed = mapSourceTable(table(input), m), c = context()
-    c.listings.set(transferTargetKey(parsed.rows[0]), [{ id: 'l1', version: 1, title: 'Custom', followMasterTitle: false, platformAttributes: { productType: 'COAT' } }])
+    // LX.F2 R-LX-21 — since LX.3 a channel text override is a `ChannelListingTranslation` PIN,
+    // not the legacy `ChannelListing.title` column: the fixture carried only the column, so the
+    // planner saw no override to preserve, dropped the target, and `plan.targets[0]` was
+    // undefined. The legacy column is kept alongside the pin (that is what a real row looks
+    // like during LX.3's blank-then-drop) so the exclusion can only come from the tier that
+    // ships.
+    c.listings.set(transferTargetKey(parsed.rows[0]), [{ id: 'l1', version: 1, title: 'Custom', followMasterTitle: false, platformAttributes: { productType: 'COAT' },
+      translations: [{ id: 'l1-it', channelListingId: 'l1', language: 'it', name: 'Custom', description: null, bulletPoints: [], keywords: [], attributes: {}, follows: [], source: 'manual', reviewedAt: new Date(), version: 1 }] }])
     const plan = await buildTransferPlan(parsed.rows, 'update', c, contracts, m.policy)
     expect(plan.targets[0].patch).toEqual({}); expect(plan.exclusions).toHaveLength(1)
     c.accounts[0].isActive = false

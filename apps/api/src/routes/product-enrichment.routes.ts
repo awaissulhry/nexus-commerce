@@ -1,3 +1,4 @@
+import { normalizeLanguage } from '../services/pim/content-language.js'
 /**
  * PES.8 — the AI enrichment routes, deliberately split across two prefixes.
  *
@@ -58,7 +59,7 @@ function readScope(body: RunBody): EnrichmentScope {
     channel,
     marketplace: body.marketplace ? String(body.marketplace).trim().toUpperCase() : null,
     aliasId: body.aliasId ? String(body.aliasId).trim() : null,
-    locale: body.locale ? String(body.locale).trim() : null,
+    locale: body.locale ? normalizeLanguage(String(body.locale).trim()) : null,
   }
 }
 
@@ -154,7 +155,7 @@ export const productAiDraftRoutes: FastifyPluginAsync = async (fastify) => {
     // `?locale=de` scopes to that locale's drafts; absent means the master's own values.
     const localeRaw = typeof q.locale === 'string' ? q.locale.trim() : ''
     const drafts = await listDrafts({
-      locale: localeRaw && localeRaw.toLowerCase() !== 'master' ? localeRaw.toLowerCase() : null,
+      locale: localeRaw && localeRaw.toLowerCase() !== 'master' ? normalizeLanguage(localeRaw) : null,
       productIds: csv(q.productIds),
       runId: typeof q.runId === 'string' && q.runId ? q.runId : undefined,
       // 'master' is how a caller asks for the master scope, since an absent

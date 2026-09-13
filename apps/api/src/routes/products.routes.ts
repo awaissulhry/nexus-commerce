@@ -1,3 +1,5 @@
+import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
+import { normalizeLanguage } from '../services/pim/content-language.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { applyProductBulkEdits, ProductBulkError, type ProductBulkInput } from '../services/products/bulk-edit.service.js'
 import { runFormulaWrite, registerFormulaRequestContext } from '../services/pim/mapping/formula-write-context.js'
@@ -744,6 +746,9 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       at: string
       fields: Record<string, unknown>
       expectedVersion?: number
+      contentAddress?: import('@nexus/shared/content-language').ContentAddress
+      market?: string
+      locale?: string
     }
   }>('/products/:id/restore', async (request, reply) => {
     try {
@@ -816,7 +821,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
             : priorRow[field]) ?? null,
         },
         after: { field, value },
-        metadata: { source: 'restore', restoredTo: at, layer: 'master', channel: null, marketplace: null, aliasId: null },
+        metadata: { source: 'restore', restoredTo: at, layer: 'master', channel: null, marketplace: null, aliasId: null, language: normalizeLanguage(request.body.locale ?? PRIMARY_CONTENT_LOCALE) },
       }))
 
       // PES.5 (#220) — the restore MUST advance `Product.version`.
@@ -827,13 +832,10 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       // overwrites the restored values with no 409. The one write most likely
       // to be racing a stale view is exactly the one the guard could not see.
       // The bulk PATCH CAS-bumps inside its transaction; this path did not.
-      const [restored] = await prisma.$transaction([
-        prisma.product.update({
-          where: { id },
-          data: { ...(data as Record<string, unknown>), version: { increment: 1 } } as any,
-          select: { version: true },
-        }),
-      ])
+      const restored = await applyProductBulkEdits({ changes: changes.map(change => ({ ...change, contentAddress: request.body.contentAddress })), expectedVersion,
+        marketplaceContexts: [{ marketplace: request.body.market ?? await (await import('../services/pim/market-languages.js')).marketplaceForLanguage(normalizeLanguage(request.body.locale ?? PRIMARY_CONTENT_LOCALE)), locale: normalizeLanguage(request.body.locale ?? PRIMARY_CONTENT_LOCALE) } as any] },
+        { formulaCascade: false, userId: (request as any).authUser?.id, ip: request.ip, logger: request.log })
+      if (restored.errors?.length) return reply.code(400).send({ error: restored.errors[0].error, errors: restored.errors })
       // Fire-and-forget, matching the bulk PATCH: a logging failure must not
       // fail a restore the operator already committed to.
       void auditLogService.writeMany(restoreAudit)
@@ -852,7 +854,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.send({
         ok: true,
         restoredFields: Object.keys(data),
-        currentVersion: restored?.version ?? null,
+        currentVersion: restored.currentVersion ?? null,
         versionOf: 'product',
       })
     } catch (err: any) {

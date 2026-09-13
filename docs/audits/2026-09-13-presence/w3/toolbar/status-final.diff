@@ -1,0 +1,435 @@
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/SheetToolbar.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/SheetToolbar.tsx
+@@ -14,7 +14,7 @@
+  *
+  *  1. **Scope-specific controls are ADDITIONS, never replacements — and since CH.1 (Owner,
+  *     2026-09-05) they are not BUTTONS either.** A scope's own verbs (the family verbs, a listing's
+- *     preflight, add alias) are items of the one ⋯ overflow; `trailing` holds transient status only.
++ *     preflight, add alias) are items of the one ⋯ overflow; `status` holds transient status data only.
+  *     The bar therefore renders the same controls, in the same order, on master and on every channel.
+  *  2. **A control absent on a scope is absent for a STATED REASON.** `absent` is not documentation —
+  *     it is the only way to omit anything, it is typed, and the reason is rendered as a disabled overflow item. Silence is what let the channel scope lose five controls without anyone deciding
+@@ -35,7 +35,7 @@
+ import { Button, FilterChip, Input } from '@/design-system/primitives'
+ import { Menu, type MenuItemDef } from '@/design-system/components'
+ import { GridToolbar } from '@/design-system/patterns'
+-import { ALL_VIEW_ID, GridSearchSlot, GridToolbarFold, GridViewsMenu, useToolbarOverflow, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
++import { ALL_VIEW_ID, GridSearchSlot, GridToolbarFold, GridViewsMenu, SheetStatuses, type SheetStatus, useToolbarOverflow, useToolbarStatusCompaction, type GridStateApi, type GridViewPreset, type SavedGridView } from '@/design-system/grid'
+ 
+ import { viewChipIsAlarm, type ViewChip } from '../contracts'
+ import { viewChipCountLabel, viewChipSummary } from '../viewChips'
+@@ -108,19 +108,8 @@
+    * overflow, above Reload; they never add a button of their own.
+    */
+   overflow?: readonly MenuItemDef[]
+-  /**
+-   * Transient STATUS only — a staleness pill, an export note, an in-flight acknowledgement. Never a
+-   * control.
+-   *
+-   * R-LX-27 — a FUNCTION here receives the fold's last tier: `compact` is true when the chips have
+-   * folded, `Export`/`Import` have moved into `⋯`, and the bar is STILL wider than it can show
+-   * (measured: `scrollW 1444` vs `clientW 1372` on a childless family at 1440, with `Customise` and
+-   * `⋯` clipped off the right edge). A status node with a glyph that stands alone passes it to the
+-   * DS `Pill`'s `compact`; a node with nothing to collapse ignores it. The ENGINE measures, the
+-   * surface chooses which of ITS nodes can give the width back — the same split the verbs use.
+-   * A plain `ReactNode` stays valid and never compacts.
+-   */
+-  trailing?: ReactNode | ((state: { compact: boolean }) => ReactNode)
++  /** Status data only. Commands belong in the single overflow; arbitrary nodes are rejected. */
++  status?: readonly SheetStatus[]
+   /** 🔴 The ONLY way to omit a standard control, and it costs a reason. */
+   absent?: readonly AbsentControl[]
+ }
+@@ -263,7 +252,7 @@
+             )
+           })}
+           </GridToolbarFold>}
+-          {typeof p.trailing === 'function' ? p.trailing({ compact: compactStatus }) : p.trailing}
++          <SheetStatuses status={p.status} compact={compactStatus} />
+           <div className="nds-sheet-toolbar-actions" ref={actionsRef}>
+             {!gone('customise') && p.onCustomise && <Button size="sm" disabled={blocked} onClick={p.onCustomise}>Customise</Button>}
+             {!gone('export') && p.onExport && !tight && (
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/matrix/MatrixToolbar.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/matrix/MatrixToolbar.tsx
+@@ -14,10 +14,8 @@
+  *              disabled overflow item; a bare `disabled` Import button would be a silent hold
+  *   ⋯          Reload
+  */
+-import type { ReactNode } from 'react'
+-
+ import type { MenuItemDef } from '@/design-system/components'
+-import type { GridStateApi, GridViewPreset, SavedGridView } from '@/design-system/grid'
++import type { GridStateApi, GridViewPreset, SavedGridView, SheetStatus } from '@/design-system/grid'
+ 
+ import type { ViewChip } from '../types'
+ import { SheetToolbar, type AbsentControl } from '../sheet/SheetToolbar'
+@@ -54,7 +52,7 @@
+   exportDisabled: boolean
+   onReload: () => void
+   overflow?: readonly MenuItemDef[]
+-  trailing?: ReactNode
++  status?: readonly SheetStatus[]
+ }
+ 
+ export function MatrixToolbar(p: MatrixToolbarProps) {
+@@ -85,7 +83,7 @@
+       unavailable={p.unavailable}
+       overflow={p.overflow}
+       absent={MATRIX_IMPORT_HELD}
+-      trailing={p.trailing}
++      status={p.status}
+     />
+   )
+ }
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/SheetToolbar.vitest.test.ts
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/SheetToolbar.vitest.test.ts
+@@ -80,3 +80,44 @@
+     expect(items.find(item => item.id === 'reload')?.onSelect).toBeTypeOf('function')
+   })
+ })
++
++
++describe('SheetToolbar data contracts', () => {
++  it('prints the producer quantity and keeps filter breadth in the detail', () => {
++    const markup = renderToStaticMarkup(createElement(SheetToolbar, {
++      visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(),
++      chips: [{ id: 'mapping-errors', label: 'Mapping errors', count: { n: 63, unit: 'cells' },
++        cells: { byRow: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [String(i), ['a', 'b', 'c']])) } }],
++    }))
++    expect(markup).toContain('63 cells')
++    expect(markup).toContain('63 affected cells across 3 columns and 21 rows')
++  })
++
++  it('never replaces a declared variant count with the number of affected columns', () => {
++    const markup = renderToStaticMarkup(createElement(SheetToolbar, {
++      visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(),
++      chips: [{ id: 'excluded', label: 'Excluded', count: { n: 4, unit: 'variants' }, cells: { byRow: {} } }],
++    }))
++    expect(markup).toContain('4 variants')
++    expect(markup).not.toContain('0 columns')
++  })
++
++  it('renders declared status and keeps its danger announcement', () => {
++    const markup = renderToStaticMarkup(createElement(SheetToolbar, {
++      visible: 21, total: 21, selected: 0, search: '', onSearch: vi.fn(),
++      status: [{ tone: 'danger', label: 'Read failed', detail: 'Reload this sheet.' }],
++    }))
++    expect(markup).toContain('role="alert"')
++    expect(markup).toContain('Read failed')
++    expect(markup).toContain('Reload this sheet.')
++  })
++})
++
++// Compile-time contract: a feature cannot sneak a command through the status slot.
++type ToolbarStatus = NonNullable<SheetToolbarProps<unknown>['status']>
++// @ts-expect-error A React button is not status data.
++const buttonStatus: ToolbarStatus = [createElement('button', null, 'Open dialog')]
++// @ts-expect-error Status accepts no command callback.
++const commandStatus: ToolbarStatus = [{ tone: 'info', label: 'Open dialog', onClick: () => {} }]
++void buttonStatus
++void commandStatus
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/FamilyBar.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/FamilyBar.tsx
+@@ -20,11 +20,10 @@
+  * comes first, not that we have not finished something.
+  */
+ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+-import { AlertTriangle } from 'lucide-react'
+ 
+ import { actionLabel, actionsFor, contextOf, isRunnable, type ActionResult, type GridAction } from '@/design-system/grid/actions/registry'
+ import { useActionPress } from '@/design-system/grid/actions/useActionPress'
+-import { InfoTip, Pill } from '@/design-system/primitives'
++import type { SheetStatus } from '@/design-system/grid'
+ import type { MenuItemDef } from '@/design-system/components'
+ 
+ import { AddVariationDialog } from './AddVariationDialog'
+@@ -57,14 +56,8 @@
+  */
+ export function useFamilyVerbs({ family, actions, error, onRetry, onDone, onCollectVariation }: FamilyVerbsOptions): {
+   items: MenuItemDef[]
+-  /**
+-   * R-LX-27 — a FUNCTION, not a node, because the toolbar's width is known below this hook. `compact`
+-   * arrives from the grid engine's last fold tier (`useToolbarStatusCompaction`) through
+-   * `SheetToolbar`'s `trailing`, and only the PILL takes it: `problem` is a sentence and a sentence
+-   * with its words hidden is not a status, it is a blank. Call it with nothing where the host is not
+-   * a width-constrained toolbar (the Variants dock).
+-   */
+-  status: (state?: { compact?: boolean }) => ReactNode
++  /** Facts only; the engine owns their existing width compaction. */
++  status: readonly SheetStatus[]
+   dialogs: ReactNode
+ } {
+   const summary = summariseFamily(family)
+@@ -102,18 +95,12 @@
+     })
+   }, [actions, error, onRetry, busy, pressOrCollect])
+ 
+-  const status = (state?: { compact?: boolean }) => (
+-    <>
+-      {summary.childless && (
+-        <InfoTip tip="This parent has no children yet. Add a child or attach an existing standalone product to grow the family.">
+-          {/* 92.3px expanded — one of the 230.8px LX.FIN attributed the 1440 clip to. Compact keeps
+-              the glyph and the accessible name and gives the words' width back to `Customise`. */}
+-          <Pill tone="warning" size="sm" icon={<AlertTriangle size={11} />} compact={state?.compact}>no children</Pill>
+-        </InfoTip>
+-      )}
+-      {problem && <span className="nds-cell-stock-out" role="alert">{problem}</span>}
+-    </>
+-  )
++  const status: SheetStatus[] = []
++  if (summary.childless) status.push({
++    tone: 'warning', label: 'no children',
++    detail: 'This parent has no children yet. Add a child or attach an existing standalone product to grow the family.',
++  })
++  if (problem) status.push({ tone: 'danger', label: problem })
+ 
+   const dialogs = (
+     <>
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/ClassificationDialog.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/ClassificationDialog.tsx
+@@ -11,8 +11,7 @@
+   categories: Array<{ id: string; label: string; suggestedFamilyId: string | null; mappings: Array<{ channel: string; marketplace: string; channelCategoryId: string; reviewedAt: string | null }> }>
+ }
+ 
+-export function ClassificationDialog({ productId, disabled, onChanged }: { productId: string; disabled: boolean; onChanged: () => void }) {
+-  const [open, setOpen] = useState(false)
++export function ClassificationDialog({ productId, open, onClose, onChanged }: { productId: string; open: boolean; onClose: () => void; onChanged: () => void }) {
+   const [data, setData] = useState<Classification | null>(null)
+   const [familyId, setFamilyId] = useState('')
+   const [primaryId, setPrimaryId] = useState('')
+@@ -45,14 +44,13 @@
+       })
+       const body = await response.json()
+       if (!response.ok) throw new Error(body.error ?? 'Could not save classification')
+-      setOpen(false); onChanged()
++      onClose(); onChanged()
+     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save classification') }
+     finally { setSaving(false) }
+   }
+   return <>
+-    <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setOpen(true)}>Classification</Button>
+-    <Modal open={open} onClose={() => { if (!saving) setOpen(false) }} title="Product classification" size="md" footer={<>
+-      <Button variant="secondary" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
++    <Modal open={open} onClose={() => { if (!saving) onClose() }} title="Product classification" size="md" footer={<>
++      <Button variant="secondary" disabled={saving} onClick={() => onClose()}>Cancel</Button>
+       <Button variant="primary" disabled={!data || saving || categoryIds.length > 0 && !primaryId} onClick={() => void save()}>{saving ? 'Saving…' : 'Save classification'}</Button>
+     </>}>
+       {error && <p role="alert">{error} <Button variant="ghost" size="sm" disabled={saving} onClick={() => setRevision(v => v + 1)}>Reload</Button></p>}
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/SchemaStatus.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/SchemaStatus.tsx
+@@ -6,12 +6,12 @@
+ import { getBackendUrl } from '@/lib/backend-url'
+ import { channelLabel } from '../../scopes'
+ 
+-export function SchemaStatus({ channel, market, accountId, categories, missing, ages, onRefreshed }: {
++export function SchemaStatus({ channel, market, accountId, categories, missing, ages, open, onClose, onRefreshed }: {
+   channel: string; market: string; categories: string[]; missing: string[]
+   accountId?: string | null
++  open: boolean; onClose: () => void
+   ages: Array<{ productType: string; fetchedAt: string }>; onRefreshed: () => void
+ }) {
+-  const [open, setOpen] = useState(false)
+   const [busy, setBusy] = useState(false)
+   const [error, setError] = useState<string | null>(null)
+   const store = channel === 'SHOPIFY'
+@@ -25,13 +25,12 @@
+     }))
+     const errors = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+     if (errors.length) setError(errors.map(r => String(r.reason.message ?? r.reason)).join('; '))
+-    else { setOpen(false); onRefreshed() }
++    else { onClose(); onRefreshed() }
+     setBusy(false)
+   }
+   return <>
+-    <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>{missing.length ? 'Requirements incomplete' : 'Requirements'}</Button>
+-    <Modal open={open} onClose={() => { if (!busy) setOpen(false) }} title={`${channelLabel(channel)} · ${market} requirements`} size="md" footer={<>
+-      <Button variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Close</Button>
++    <Modal open={open} onClose={() => { if (!busy) onClose() }} title={`${channelLabel(channel)} · ${market} requirements`} size="md" footer={<>
++      <Button variant="secondary" disabled={busy} onClick={() => onClose()}>Close</Button>
+       {!store && <Button variant="primary" disabled={busy || !categories.length} onClick={() => void refresh()}>{busy ? 'Refreshing…' : 'Refresh requirements'}</Button>}
+     </>}>
+       {store ? <>
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx
+@@ -13,7 +13,6 @@
+ import { sheetEmptyState } from '../sheetGridStates';
+ import { formulaTransfer } from '@/design-system/grid';
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+-import { AlertTriangle } from 'lucide-react';
+ import { useAuth } from '@/lib/auth/AuthProvider';
+ import { Banner } from '@/design-system/components';
+ import { Button, InfoTip, Pill } from '@/design-system/primitives';
+@@ -225,6 +224,7 @@
+     const stableContextMenu = useCallback<typeof getContextMenuItems>((p) => contextMenuRef.current(p), []);
+     const onFamilyChanged = useCallback(() => { familyQuery.reload(); reload(); }, [familyQuery, reload]);
+     onFamilyChangedRef.current = onFamilyChanged;
++    const [classificationOpen, setClassificationOpen] = useState(false);
+     const [formulaHistoryOpen, setFormulaHistoryOpen] = useState(false);
+     const [bulkFormulaRows, setBulkFormulaRows] = useState<Array<{
+         id: string;
+@@ -561,20 +561,17 @@
+             onReload: onReload,
+             loading: loading,
+             unavailable: !!error,
+-            overflow: [...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+-            /* R-LX-27 — `compact` comes from the grid ENGINE's last fold tier through `SheetToolbar`
+-               (`useToolbarStatusCompaction`), never from a breakpoint in this file. The two status
+-               pills are the 230.8px LX.FIN attributed the 1440 clip to; `ClassificationDialog` is a
+-               VERB and keeps its label. */
+-            trailing: ({ compact }) => <>
+-                <ClassificationDialog productId={productId} disabled={loading || !!error || !canEdit} onChanged={onFamilyChanged}/>
+-                {(staleTypes.length > 0 || (sheet?.meta.schemaMissing.length ?? 0) > 0) && (<InfoTip tip={sheet && sheet.meta.schemaMissing.length > 0
++            overflow: [{ id: 'classification', label: 'Classification…', disabled: loading || !!error || !canEdit, description: !canEdit ? 'You do not have permission to change product classification.' : 'Choose the product family and categories.', onSelect: () => setClassificationOpen(true) }, ...familyVerbs.items, { id: 'formula-history', label: 'Formula history…', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected || !formulas.ready || !canEdit, onSelect: () => setBulkFormulaRows(selectedRows.map(row => ({ id: row.id, label: row.sku ?? row.id })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
++            status: [
++                ...(staleTypes.length > 0 || (sheet?.meta.schemaMissing.length ?? 0) > 0 ? [{
++                    tone: 'warning' as const,
++                    label: (sheet?.meta.schemaMissing.length ?? 0) > 0 ? 'Setup incomplete' : 'Cached requirements',
++                    detail: sheet && sheet.meta.schemaMissing.length > 0
+                         ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. Choose a product family in Classification; channel requirements use their selected category.`
+-                        : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`}>
+-                    <Pill tone="warning" size="md" icon={<AlertTriangle size={11}/>} compact={compact}>{(sheet?.meta.schemaMissing.length ?? 0) > 0 ? 'Setup incomplete' : 'Cached requirements'}</Pill>
+-                  </InfoTip>)}
+-                {familyVerbs.status({ compact })}
+-              </>,
++                        : `Length caps and lists come from a schema last fetched ${staleTypes.map((t) => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
++                }] : []),
++                ...familyVerbs.status,
++            ],
+         },
+         toolbarExtra: <></>,
+         status: {
+@@ -649,6 +646,7 @@
+         before: <>{mediaEditor.element}
+     {formulaHistoryOpen && <FormulaHistoryDialog familyProductId={productId} coordinate={{ scope: 'master', market, locale }} onClose={() => setFormulaHistoryOpen(false)} onApplied={() => { formulas.reload(); refresh(); }}/>}
+     {bulkFormulaRows && <FormulaBulkDialog rows={bulkFormulaRows} columns={sheet?.columns ?? []} coordinate={{ scope: 'master', market, locale }} functions={formulas.functions} preview={formulas.preview} candidatesFor={(id, fieldKey) => { const row = rowsRef.current.find(row => row.id === id); return row ? candidatesFor(row, fieldKey) : []; }} onClose={() => setBulkFormulaRows(null)} onApplied={() => { formulas.reload(); refresh(); }}/>}</>, afterGrid: <>{chipBar.activeId === 'ai-drafts' && <AiDraftReview drafts={aiLayer.drafts} skuById={skuById} onApplied={reload}/>}</>, beforePreferences: <>
++        <ClassificationDialog productId={productId} open={classificationOpen} onClose={() => setClassificationOpen(false)} onChanged={onFamilyChanged}/>
+     {sheet && (<ProductTransferDrawer open={importOpen} intent={transferIntent} onClose={() => setImportOpen(false)} productId={productId} market={market} locale={locale} selectedIds={selectedRows.map(row => row.id)} visibleFields={sheetColumns.visibleAttributeKeys().flatMap(key => { const c = sheet.columns.find(c => c.key === key); return c ? [c.slot?.of ?? c.key] : []; })} onReference={() => onExport('view')} onApplied={() => { formulas.reload(); reload(); familyQuery.reload(); }}/>)}
+         {familyProductPicker.element}</>,
+     };
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx
+@@ -115,6 +115,7 @@
+     reporterRef.current = reporter;
+     const writeSeq = useRef(0);
+     const writeInstanceId = useId();
++    const [requirementsOpen, setRequirementsOpen] = useState(false);
+     const [formulaHistoryOpen, setFormulaHistoryOpen] = useState(false);
+     const [bulkFormulaRows, setBulkFormulaRows] = useState<Array<{
+         id: string;
+@@ -756,19 +757,14 @@
+             importDisabled: !data || loading || destination.status !== 'ready' || !auth.has('products.import'),
+             loading: loading,
+             unavailable: unavailable,
+-            overflow: [...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
+-            trailing: data && <>
+-              <SchemaStatus channel={channel} market={marketplace} accountId={accountId} categories={[...new Set(rows.map(row => row.productType).filter((v): v is string => !!v))]} missing={data.meta.schemaMissing} ages={data.meta.schemaAge} onRefreshed={reload}/>
+-              
+-              {preflightAlias && (<Modal open onClose={() => {
+-                        if (!reviewBusy)
+-                            setPreflightAlias(null);
+-                    }} title={`${reviewCopy(reviewPath != null ? 'synchronize' : 'check').title} · ${data.scope.label} · ${aliasMark(preflightAlias.position)}`} subtitle={reviewCopy(reviewPath != null ? 'synchronize' : 'check').subtitle} size="lg">
+-                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void refresh(() => !tracker.hasUnconfirmedChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
+-                </Modal>)}
+-              {exportNote && <span className="nds-cell-sub">{exportNote}</span>}
+-
+-            </>,
++            overflow: [{ id: 'requirements', label: data?.meta.schemaMissing.length ? 'Requirements incomplete…' : 'Requirements…', disabled: !data, description: 'Inspect the requirements for this category and marketplace.', onSelect: () => setRequirementsOpen(true) }, ...overflowItems, { id: 'formula-history', label: 'Formula history…', disabled: selectedAlias == null && new Set(selected.map(row => row.aliasId ?? '')).size !== 1, description: 'Select rows from one listing to inspect its formula history.', onSelect: () => setFormulaHistoryOpen(true) }, { id: 'bulk-formula', label: 'Apply formula to selected products…', disabled: !selected.length || !formulas.ready || new Set(selected.map(row => row.aliasId ?? '')).size !== 1, onSelect: () => setBulkFormulaRows(selected.map(row => ({ id: row.id, label: row.sku ?? row.id, rowId: row.rowId, aliasKey: row.aliasId ?? '' })).sort((a, b) => Number(a.id === productId) - Number(b.id === productId))) }],
++            status: data ? [{
++                tone: data.meta.schemaMissing.length ? 'warning' : 'neutral',
++                label: data.meta.schemaMissing.length ? 'Requirements incomplete' : 'Requirements',
++                detail: data.meta.schemaMissing.length
++                    ? `Incomplete: ${data.meta.schemaMissing.map(key => key === 'ETSY:*' ? 'Etsy category not selected' : key.replace(/^ETSY:/, 'Etsy category ')).join(', ')}. Readiness cannot be confirmed until these requirements are available.`
++                    : 'Requirements depend on the listing category and marketplace. Refresh them after changing categories and before publishing.',
++            }] : [],
+         },
+         toolbarExtra: <>    {pendingMasterWrite && (() => {
+                 const pm = pendingMasterWrite;
+@@ -843,7 +839,7 @@
+             showRefusedOnly: showRefusedOnly,
+             onToggleRefused: () => setShowRefusedOnly((v) => !v),
+             lastSavedAt: lastSavedAt,
+-        }, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
++        }, footerExtra: exportNote ? <span className="nds-cell-sub">{exportNote}</span> : null, footerBefore: null, footerLead: <>    {data && crossChannelCols > 0 && (<span className="nds-cell-muted cs-cross-channel-note" style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`${crossChannelCols} of ${data.columns.length} columns write the shared master record — every channel sees those edits`}>
+               {crossChannelCols} of {data.columns.length} columns write the shared master record — every channel sees those edits
+             </span>)}</>,
+         notice: null,
+@@ -888,7 +884,17 @@
+             },
+         } : null,
+         preferences: !unavailable ? preferences : null,
+-        before: null, beforePreferences: <>{confirmElement}
++        before: null, beforePreferences: <>{data && <>
++              <SchemaStatus open={requirementsOpen} onClose={() => setRequirementsOpen(false)} channel={channel} market={marketplace} accountId={accountId} categories={[...new Set(rows.map(row => row.productType).filter((v): v is string => !!v))]} missing={data.meta.schemaMissing} ages={data.meta.schemaAge} onRefreshed={reload}/>
++              
++              {preflightAlias && (<Modal open onClose={() => {
++                        if (!reviewBusy)
++                            setPreflightAlias(null);
++                    }} title={`${reviewCopy(reviewPath != null ? 'synchronize' : 'check').title} · ${data.scope.label} · ${aliasMark(preflightAlias.position)}`} subtitle={reviewCopy(reviewPath != null ? 'synchronize' : 'check').subtitle} size="lg">
++                  <>{reviewPath ? <ShopifySheetReview key={reviewPath} path={reviewPath} schema={shopifySchema} onBusyChange={setReviewBusy} onChanged={() => void refresh(() => !tracker.hasUnconfirmedChanges)}/> : <AliasPublishControl alias={preflightAlias} rows={rows} channel={channel} marketplace={marketplace} autoRun/>}</>
++                </Modal>)}
++        </>}
++        {confirmElement}
+             {listResetConfirm.element}
+             {reloadConfirm.element}</>, afterPreferences: <>
+     {problem && <Banner tone="warning" onDismiss={clearProblem}>{problem}</Banner>}
+--- /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/variants/family/FamilyVariants.tsx
++++ /Users/awais/nexus-commerce/apps/web/src/app/products/[id]/edit/_studio/variants/family/FamilyVariants.tsx
+@@ -27,10 +27,9 @@
+  */
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+ import { useParams } from 'next/navigation'
+-import { AlertTriangle } from 'lucide-react'
+ 
+ import { Banner, useToast, type MenuItemDef } from '@/design-system/components'
+-import { Button, InfoTip, Pill } from '@/design-system/primitives'
++import { Button } from '@/design-system/primitives'
+ import { PreferencesModal, type PreferencesColumnSpec, type PreferencesValue } from '@/design-system/patterns'
+ import {
+   actionContextMenu,
+@@ -569,36 +568,16 @@
+                a family's structure, and the catalogue importer writes attributes by SKU, which is
+                the sheet's job on Information. */
+             absent={ABSENT_VIEWS}
+-            trailing={
+-              <>
+-                {/*
+-                  🔴 The SAME pill the sheet renders from the SAME `meta`, in the same words
+-                  (`MasterSheet.tsx:1788`). It was missing here entirely — `schemaMissing` and
+-                  `schemaAge` appeared nowhere in this lane — while this page prints a completeness
+-                  percentage on every row. Measured today on GALE-JACKET at IT/PL/DE the array is
+-                  empty, so nothing was wrong on screen; the defect is that a percentage would have
+-                  gone on being printed with no caveat the moment it stopped being empty, while
+-                  Information one tab away said "Setup incomplete" about the very same read.
+-                  A number whose basis could not be read must say so wherever it is shown.
+-                */}
+-                {sheet && (sheet.meta.schemaMissing.length > 0 || sheet.meta.schemaAge.length > 0) && (
+-                  <InfoTip
+-                    tip={
+-                      sheet.meta.schemaMissing.length > 0
+-                        ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. The completeness percentages on these rows are computed over the attributes that COULD be read, so they are not a verdict on this product type. Choose a product family in Classification.`
+-                        : `Length caps and lists come from a schema last fetched ${sheet.meta.schemaAge.map(t => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`
+-                    }
+-                  >
+-                    <Pill tone="warning" size="md">
+-                      <AlertTriangle size={11} /> {sheet.meta.schemaMissing.length > 0 ? 'Setup incomplete' : 'Cached requirements'}
+-                    </Pill>
+-                  </InfoTip>
+-                )}
+-    
+-                {/* The dock is not a width-constrained toolbar: no compaction is asked for. */}
+-                {familyVerbs.status()}
+-              </>
+-            }
++            status={[
++              ...(sheet && (sheet.meta.schemaMissing.length > 0 || sheet.meta.schemaAge.length > 0) ? [{
++                tone: 'warning' as const,
++                label: sheet.meta.schemaMissing.length > 0 ? 'Setup incomplete' : 'Cached requirements',
++                detail: sheet.meta.schemaMissing.length > 0
++                  ? `Attribute setup is incomplete: ${sheet.meta.schemaMissing.join(', ')}. The completeness percentages on these rows are computed over the attributes that COULD be read, so they are not a verdict on this product type. Choose a product family in Classification.`
++                  : `Length caps and lists come from a schema last fetched ${sheet.meta.schemaAge.map(t => `${t.productType} ${t.fetchedAt.slice(0, 10)}`).join(', ')}.`,
++              }] : []),
++              ...familyVerbs.status,
++            ]}
+           />
+         }
+         footer={

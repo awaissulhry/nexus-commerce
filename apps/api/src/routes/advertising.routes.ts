@@ -5042,7 +5042,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     }
     const buckets = new Map<string, Bucket>()
     for (const r of rawRows) {
-      const k = `${r.query} ${r.matchType ?? ''} ${r.campaignId} ${r.adGroupId} ${r.marketplace} ${r.adProduct} ${r.currencyCode}`
+      const k = `${r.query}\u001f${r.matchType ?? ''}\u001f${r.campaignId}\u001f${r.adGroupId}\u001f${r.marketplace}\u001f${r.adProduct}\u001f${r.currencyCode}`
       let b = buckets.get(k)
       if (!b) {
         b = {
@@ -8623,7 +8623,7 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     // collapse to latest + prior per (keyword, marketplace)
     const byKey = new Map<string, { latest: typeof rows[number]; prior?: typeof rows[number] }>()
     for (const r of rows) {
-      const k = `${r.keyword} ${r.marketplace}`
+      const k = `${r.keyword}\u001f${r.marketplace}`
       const e = byKey.get(k)
       if (!e) byKey.set(k, { latest: r })
       else if (!e.prior) e.prior = r

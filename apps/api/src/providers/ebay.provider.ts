@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../services/listing-push-controls.js'
 /**
  * eBay API Provider
  * 
@@ -97,6 +99,11 @@ export class eBayAPIProvider {
     galleryUrls: string[]
     colorSets?: Array<{ axisName: string; value: string; urls: string[] }>
   }): Promise<{ success: boolean; error?: string }> {
+    const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [input.itemId] })
+    for (const row of pushControls) {
+      const refusal = assertPushAllowed(row)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
     const pictures = input.galleryUrls
       .map((url) => `    <PictureURL>${this.escapeXml(url)}</PictureURL>`)
       .join('\n')

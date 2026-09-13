@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T12:50:45.577Z",
+  "target": {
+    "target": "production",
+    "host": "ep-purple-river-altf6t3y.c-3.eu-central-1.aws.neon.tech",
+    "database": "neondb"
+  },
+  "args": [
+    "db",
+    "execute",
+    "--file",
+    "/Users/awais/nexus-commerce/packages/database/prisma/migrations/20260912_lx4_channel_listing_translations/migration.sql",
+    "--schema",
+    "/Users/awais/nexus-commerce/packages/database/prisma/schema.prisma"
+  ],
+  "status": 0,
+  "stdout": "Script executed successfully.\n",
+  "stderr": ""
+}

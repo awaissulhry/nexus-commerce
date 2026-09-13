@@ -1,3 +1,4 @@
+import { loadStoredVariationProjection } from './pim/stored-variation-projection.js'
 /**
  * Amazon Variation Payload Builder Service
  * 
@@ -5,6 +6,7 @@
  * Handles variation theme mapping, attribute transformation, and parent/child relationships.
  */
 
+import { parseVariationMapping } from '@nexus/shared/variation-mapping';
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js';
 
@@ -32,6 +34,13 @@ interface AmazonVariationPayload {
   parentSku: string;
   childCount: number;
   timestamp: string;
+}
+
+/** SP-API requirements vary by product type/market. The downstream writer
+ * always emits fulfilment, so omission here would merely invent DEFAULT later. */
+export function requireAmazonFulfillment(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('AMAZON_FULFILLMENT_UNSET: set Fulfilment (product default) before building an Amazon payload')
+  return value
 }
 
 export class AmazonMapperService {
@@ -91,6 +100,10 @@ export class AmazonMapperService {
         throw new Error(`ChannelListing not found: ${channelListingId}`);
       }
 
+      const { cell: effective } = await loadStoredVariationProjection({ productId, channel: 'AMAZON', market: channelListing.marketplace, listingId: channelListingId })
+      channelListing.variationTheme = effective.theme?.code ?? null
+      channelListing.variationMapping = { axes: effective.axes.filter(a => a.included && a.target).map((a, order) => ({ axisKey: a.familyKey, target: a.target!, order })) }
+      if (effective.axes.some(a => a.included && a.unbound)) throw new Error('Resolve the unbound Amazon variation attributes before exporting.')
       if (!channelListing.variationTheme) {
         throw new Error(`No variation theme set for listing: ${channelListingId}`);
       }
@@ -104,7 +117,7 @@ export class AmazonMapperService {
         description: channelListing.description || '',
         price: channelListing.price ? Number(channelListing.price) : Number(product.basePrice),
         quantity: channelListing.quantity || product.totalStock,
-        fulfillmentChannel: product.fulfillmentChannel || 'FBA',
+        fulfillmentChannel: requireAmazonFulfillment(product.fulfillmentChannel),
       };
 
       // Build child items
@@ -131,7 +144,7 @@ export class AmazonMapperService {
           description: childChannelListing?.description || '',
           price: childChannelListing?.price ? Number(childChannelListing.price) : Number(child.basePrice),
           quantity: childChannelListing?.quantity || child.totalStock,
-          fulfillmentChannel: child.fulfillmentChannel || product.fulfillmentChannel || 'FBA',
+          fulfillmentChannel: requireAmazonFulfillment(child.fulfillmentChannel || product.fulfillmentChannel),
         };
 
         childItems.push(childItem);
@@ -173,17 +186,41 @@ export class AmazonMapperService {
    */
   private extractVariationAttributes(
     childProduct: any,
-    variationMapping: Record<string, any>,
+    variationMapping: Record<string, any> | null,
     variationTheme: string
   ): VariationAttribute {
     const attributes: VariationAttribute = {};
+    const categoryAttributesForAxes = (childProduct.categoryAttributes ?? {}) as Record<string, any>;
 
-    // Get the mapping configuration for this theme
-    const themeMapping = variationMapping[variationTheme];
+    /**
+     * 🔴 R-VT-13 (VT.F2) — this reader expects a THIRD shape: `{[theme]: {masterAttribute, platformAttribute,
+     * values}}`, keyed by the whole theme string. `writeProjectionMapping` has never written that shape, so on a
+     * row the projection wrote this method warned "No mapping found for variation theme" and returned NOTHING —
+     * measured, not assumed: the flat map's keys are AXES (`Colore`), and `variationMapping["Colore,Taglia"]` is
+     * undefined. With the ordered shape it would additionally have printed `availableThemes: ["axes"]`.
+     *
+     * So both axis-keyed shapes are now read FIRST, per axis, through the one shared parser: the child's own
+     * `categoryAttributes` supply the value and the mapping supplies the channel attribute name. The legacy
+     * theme-keyed shape still wins where a row really carries it — it also carries a value map, which the axis
+     * shapes do not, and dropping it would lose data.
+     */
+    const themeMapping = variationMapping?.[variationTheme];
     if (!themeMapping) {
+      const axisEntries = parseVariationMapping(variationMapping).entries;
+      if (axisEntries.length > 0) {
+        for (const entry of axisEntries) {
+          const value = categoryAttributesForAxes[entry.axisKey]
+            ?? categoryAttributesForAxes[entry.axisKey.toLowerCase()]
+            ?? (childProduct.variantAttributes as Record<string, any> | undefined)?.[entry.axisKey];
+          if (value === undefined || value === null || value === '') continue;
+          attributes[entry.target] = value;
+        }
+        return attributes;
+      }
       logger.warn('No mapping found for variation theme', {
         variationTheme,
-        availableThemes: Object.keys(variationMapping),
+        availableThemes: Object.keys(variationMapping ?? {}),
+        mappingShape: parseVariationMapping(variationMapping).shape,
       });
       return attributes;
     }

@@ -120,14 +120,25 @@ describe('adaptLegacySheet', () => {
     expect(adaptLegacySheet(page({ rows }), 'nope').family.id).toBe('p1')
   })
 
-  it('keeps the per-coordinate readiness in the legacy-only field, uncollapsed', () => {
+  /**
+   * 🔴 CORRECTED by LX.FIN (R-LX-22), with the reason beside it rather than deleted.
+   *
+   * It used to assert `readinessByCoordinate` carried `['AMAZON:IT','EBAY:IT']`. That field, and the
+   * ROW-vocabulary per-coordinate column set it fed, are gone: the columns are now fed from
+   * `ReadinessIndex` in the SCOPE vocabulary through the readiness contract, which this fallback path
+   * reads too. The property that still matters is the one this test was really about — **no single
+   * verdict is invented from two different ones** — so that half is kept and strengthened.
+   */
+  it('invents no single row verdict from a per-coordinate answer, and carries no dead field', () => {
     const out = adaptLegacySheet(
       page({ rows: [row({ readiness: { 'AMAZON:IT': { state: 'errors', issues: [] }, 'EBAY:IT': { state: 'live', issues: [] } } })] }),
       'p1',
     )
-    // No single verdict is invented from two different ones.
     expect(out.rows[0].readiness).toBeUndefined()
-    expect(Object.keys(out.rows[0].readinessByCoordinate ?? {})).toEqual(['AMAZON:IT', 'EBAY:IT'])
+    expect('readinessByCoordinate' in out.rows[0]).toBe(false)
+    // POSITIVE CONTROL in the same run: the adapter did produce the row and its other fields.
+    expect(out.rows[0].id).toBe('p1')
+    expect(out.rows[0].completeness).toBeDefined()
   })
 
   it('reports variationAxes as empty rather than guessing — the catalogue read does not return them', () => {

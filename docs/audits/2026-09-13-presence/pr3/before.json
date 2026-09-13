@@ -1,0 +1,46 @@
+[
+  {
+    "path": "apps/api/src/services/ebay-flat-file-delete.service.ts",
+    "sha256": "dfff3ead8a913aa2db8d8d24122c56dba3f02ed295814c0a269402357aa14b31"
+  },
+  {
+    "path": "apps/api/src/services/amazon/amazon-flat-file-remove.service.ts",
+    "sha256": "e757e51bac95059725ce8dba46cf884bac22d5132f2990a070ac57e64e1e6ba9"
+  },
+  {
+    "path": "apps/api/src/services/amazon-market-offer.service.ts",
+    "sha256": "dd5ed0823734a4470865df7a59a3634e0bc1a5900bc580908a36015f5fcef784"
+  },
+  {
+    "path": "apps/api/src/routes/sync-control.routes.ts",
+    "sha256": "ac77965499c990e47b439e186f68dbaafb8349c10778537325f52b4442415bea"
+  },
+  {
+    "path": "apps/api/src/routes/marketplaces.routes.ts",
+    "sha256": "ec6088c1abf7045bf8cebfa0a755d016585ea24355a02b7cf4dcae3e8fe4664c"
+  },
+  {
+    "path": "apps/api/src/services/listings/recovery.service.ts",
+    "sha256": "14cdcf8d4dd1c8b429f58bc6436c8380af77a9ab6cc1d908e3cca55fdd946ae2"
+  },
+  {
+    "path": "apps/api/src/services/ebay-label-guard.service.ts",
+    "sha256": "ad6a8c2fb5f114684cf73dc91c9cd04ca452dc1fc1df20f14f47901ec8e52a43"
+  },
+  {
+    "path": "apps/api/src/services/listing-reconciliation.service.ts",
+    "sha256": "a8927165eecb7a4a916037032191dbc9c6e31da995015eb5610349ef1faf62b4"
+  },
+  {
+    "path": "apps/api/src/services/amazon-mapper.service.ts",
+    "sha256": "3261e9f7fde83e34b13a3bb30a40e884654a4498ec98a9376a620002a6e1d63f"
+  },
+  {
+    "path": "apps/api/src/services/follow-master.service.ts",
+    "sha256": "860a47e223087f0903484684d2c4658773828bb8eacbae511bcd3380f2acc928"
+  },
+  {
+    "path": "apps/api/src/routes/reconciliation.routes.ts",
+    "sha256": "5a583ee585bfef50c96e262f6fb33691e5f9145f02611dea7fae76536d14219d"
+  }
+]

@@ -1,3 +1,5 @@
+import { readPushControls } from './listing-push-controls.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
 import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -90,6 +92,11 @@ export async function executePresentationPublication(jobId: string, userId: stri
       const verify = async () => {
         await renew()
         const current = await presentationOrderInputs(target.destination)
+        const controls = await readPushControls({ channel: 'EBAY', listingIds: [target.listingId], externalIds: [target.itemId] })
+        for (const row of controls) {
+          const refusal = assertPushAllowed(row)
+          if (refusal) throw new MappingConflict(`${refusal.code}: ${refusal.sentence}`)
+        }
         if (current.token !== target.token || current.listing.version !== target.version || current.listing.externalListingId !== target.itemId) throw new MappingConflict('Listing, family membership or rules changed after review')
         return current
       }

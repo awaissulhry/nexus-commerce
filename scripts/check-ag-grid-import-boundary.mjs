@@ -25,6 +25,7 @@ import { stripComments } from './lib/strip-comments.mjs'
 
 const ALLOWED = [
   'apps/web/src/design-system/grid/',
+  'apps/factory/src/design-system/grid/', // The required factory mirror is the same engine boundary.
   'apps/web/src/app/design/grid-lab/',
 ]
 

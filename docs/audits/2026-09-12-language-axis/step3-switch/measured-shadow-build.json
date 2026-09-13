@@ -1,0 +1,137 @@
+{
+  "builtAt": "2026-09-12T07:51:41.817Z",
+  "files": [
+    {
+      "file": "apps/api/src/routes/listings-syndication.routes.ts",
+      "sha256": "57500e1024fa67da9a1ef1e0077e1c245c526d4a5b6f69cda802b4e8e0a5cad8"
+    },
+    {
+      "file": "apps/api/src/services/products/translation-resolver.service.ts",
+      "sha256": "f26731ad6ce3c286665f62d113a871a496a90dc1d6f822be5f6d304911beb14b"
+    },
+    {
+      "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+      "sha256": "9e39fca32f60ddab270625f1c6ebeb8ded364f83707e874a471f2b174cb0b71c"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-rows.service.ts",
+      "sha256": "219379510b71a412aed4dcfd012f5e5598803c5126082d109049fc983ed3e007"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-field-map.ts",
+      "sha256": "c22e340054b7e18d1a2767466c4f016e2247b37207400ef7da3102be0e4f7827"
+    },
+    {
+      "file": "apps/api/src/services/pim/master-field-gate.ts",
+      "sha256": "ac36cc101955b64ed470dee985fbf10981611e668a4212bfbcc516f28958b57a"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-language.ts",
+      "sha256": "3a1cd81ff1ad897cde963a7bb7fec8d8003c898d6f4f4745240069f573014982"
+    },
+    {
+      "file": "apps/api/src/services/pim/variant-attribute-keys.ts",
+      "sha256": "355b983b2d84ffc45a61836455159b8620c8c6d931fbe9d98397fab8e4855487"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-resolver.ts",
+      "sha256": "a6f28b76872a68dfea9dc177ebcf25c905aa909cf394bc7f6884032f17fc6803"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-read.ts",
+      "sha256": "ac4149474f6ab5b0f0b9e25aaf79f4ad1d4703871a4bf04be79a87c053bc61d4"
+    },
+    {
+      "file": "apps/api/src/services/pim/content-locale.ts",
+      "sha256": "b15d3a16658c3439bc662d0a292af831cabedd434576d95b068d954623b64cb6"
+    },
+    {
+      "file": "apps/api/src/services/pim/attribute-resolver.ts",
+      "sha256": "0a742817ac7ae6ca12730d0a9baf1d4fd1b59d2b3a8cb8f077d144401bae3e70"
+    },
+    {
+      "file": "apps/api/src/services/pim/market-languages.ts",
+      "sha256": "53ba82137f48026424b4df9de7af1e158f77dfdb1bcc978f2d7f922c561c2b2b"
+    },
+    {
+      "file": "apps/api/src/services/etsy/information-content.ts",
+      "sha256": "2fb12932d6e1cce4964efcaa93f8ea15943cc15878d933f500e5fd7c5a7ee4cf"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy-listing-schema.ts",
+      "sha256": "a57203d214d1c58c2effbc30b3874fcf49844e78c9f29d1008c89b749a60c97e"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/types.ts",
+      "sha256": "79cada11b7f5e96da5915422858292954b4a74fe3c9b5ad0110ef23f2a72a361"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/etsy.ts",
+      "sha256": "79fe65af2041b4558976ca5599be9d8b37e2515f065a60b74bbc30adf43fa140"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-specs/store.ts",
+      "sha256": "0b6ce5db1dff1a9c736df59b7c774552a6341a193d8632a204f49bdd39186b60"
+    },
+    {
+      "file": "apps/api/src/services/pim/sheet-values.ts",
+      "sha256": "f9272caaefe9a99baf5c7ef18ccd438c0fa72378df162d9b0bb3ff2f83cb6ad5"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-inheritance.ts",
+      "sha256": "7f073e17734ea02ecb1f983b1792ed7b3259cb670da228bb06422e48fb9fef98"
+    },
+    {
+      "file": "apps/api/src/services/shopify/linked-state-guard.ts",
+      "sha256": "8db02507ba338dd60fc1986ab2bb3c22c25d5746d9ba1d93aba97ccdcf69a2f0"
+    },
+    {
+      "file": "apps/api/src/services/pim/channel-value-mutation.ts",
+      "sha256": "9554508b30dced1838422c24b21f6db1cdbc5cf13b0eb3d1708d725edd4b0ba0"
+    },
+    {
+      "file": "apps/api/src/services/connection-resolver.service.ts",
+      "sha256": "6d1843312e83b70b29ba181488e11b352cb1aa1666b99fa20bde94b51f3aeee3"
+    },
+    {
+      "file": "apps/api/src/services/pim/workspace-destination.ts",
+      "sha256": "8a0cffb8e6439fbd7dead9a17dc5d89312260fe396e9908774d006002e2a567d"
+    },
+    {
+      "file": "apps/api/src/services/shopify/listing-information-plan.ts",
+      "sha256": "5f22558732f3b6e314a17799e1e271bc3c5429831e327ab1f9a5c5c14f8221f8"
+    },
+    {
+      "file": "apps/api/src/services/pim/mapping/expr.ts",
+      "sha256": "9bbe688e4ef7aaf37f8ff9a20f44c21525bbb228c07577290fea492c7b336926"
+    },
+    {
+      "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+      "sha256": "064de96c8bc7fab47d265bbafa0c224ec252a36beb244e609bdb269802b8e0a7"
+    },
+    {
+      "file": "apps/api/src/services/pim/global-content.ts",
+      "sha256": "c692ccc770a607d49dcee46afd4c32cfc1b4aa99c41419ad4c8729c1204a1af7"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step3-switch/accepted-reference.mjs",
+      "sha256": "6a00ca4d1da6847c76265d9cc3d9de70d74d0b17d63d03ebee73e967ac0248bd"
+    },
+    {
+      "file": "docs/audits/2026-09-12-language-axis/step3-switch/compare.ts",
+      "sha256": "016ffb85327b8ce6d8398958ed45cef281100e9d4a8e9dcf6a058972374712de"
+    },
+    {
+      "file": "packages/shared/dist/content-language.js",
+      "sha256": "547656b8fc1ccf36ae84c2867da3218b06c656b3643eb7cdcf6045a2e3911d1c"
+    },
+    {
+      "file": "packages/shared/dist/product-media.js",
+      "sha256": "d6eec7000285171d5feaa08169b506f1f251259d01d7eb4b9cdffbda3264b878"
+    }
+  ],
+  "acceptedBundleSha256": "d99c16617866b755ce384d06b4ba2eb7e7b9bb3a604f2efc6a88687d34bd0e02",
+  "bundleSha256": "405a83e62ea563681d49018fe21ddc04cd2c4ff355b623508f81175ee5ea92f9",
+  "runtimeDatabase": "throwing stub",
+  "providers": "throwing stub; no app bootstrap"
+}

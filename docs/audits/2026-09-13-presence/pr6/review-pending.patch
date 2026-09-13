@@ -1,0 +1,11 @@
+--- a/apps/web/src/app/_shared/shared-shell.css
++++ b/apps/web/src/app/_shared/shared-shell.css
+@@ -474,7 +474,7 @@
+   --nds-primary-soft: var(--nds-blue-100);
+   --nds-rail-bg: var(--nds-rail-surface);
+   --nds-rail-border: var(--nds-rail-line);
+-  --nds-rail-chev: #98a2b3;
++  --nds-rail-chev: var(--nds-grey-450);
+   --nds-rail-chip-active-bg: #dce8fb;
+   --nds-rail-chip-active-fg: #1f6fde;
+   --nds-rail-chip-bg: #e8ebf0;

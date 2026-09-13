@@ -41,6 +41,29 @@ export function SaveIndicator() {
   if (tab === 'variation-order' || tab === 'shopify-family' || tab === 'shopify-metafields') return <span className={styles.saveState}>Save draft on this page</span>
   if (tab === 'images' && (scope === 'EBAY' || scope === 'AMAZON')) return <span className={styles.saveState}>Save draft on this page</span>
 
+  /*
+   * MX.P — the Matrix autosaves like the sheet, and says so EXPLICITLY rather than by falling
+   * through to the default branch.
+   *
+   * 🔴 It is deliberately NOT part of `channelInformation` above. That branch says "Nexus draft
+   * autosave — provider delivery is confirmed through the existing synchronization workflow",
+   * which is true of channel ATTRIBUTE edits and false of every Matrix cell: a quantity, a mode, a
+   * buffer or a price written here enqueues an outbound push. Saying "draft" over a write that
+   * reaches a marketplace is the honesty rule's exact prohibition.
+   *
+   * 🔴 And while the Matrix service does not exist, the page is in PREVIEW mode and NOTHING is
+   * sent anywhere. The header does not infer that — it cannot see the read's `source`. The Matrix
+   * surface REPORTS it through `useManualSaveMessage(MATRIX_COPY.simulated)`, which is handled by
+   * the `manualMessage` branch above, so this line is only ever reached in live mode.
+   */
+  if (tab === 'matrix') {
+    return (
+      <span className={styles.saveState} title="Every Matrix cell saves on its own and enqueues the channel push it implies. There is no page Save.">
+        {d.kind === 'saving' || d.kind === 'saved' || d.kind === 'error' ? d.text : 'Autosave on'}
+      </span>
+    )
+  }
+
   if (d.kind === 'idle') {
     return (
       <span className={styles.saveState} title={channelInformation ? deliveryNote : tab === 'presentation' ? 'Product assignments save automatically. The shared theme editor has its own Save changes action.' : d.title}>

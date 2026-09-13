@@ -24,6 +24,8 @@ import { workspaceKey } from '@nexus/database/workspace-context'
 
 import type { PrismaClient } from '@prisma/client'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { closedMarketSet } from './amazon-market-offer.service.js'
 import { logger } from '../utils/logger.js'
 
 export interface PushPriceArgs {
@@ -31,6 +33,8 @@ export interface PushPriceArgs {
   channel: string
   marketplace: string
   fulfillmentMethod?: 'FBA' | 'FBM' | null
+  channelConnectionId?: string | null
+  aliasKey?: string | null
 }
 
 export interface PushPriceResult {
@@ -41,6 +45,7 @@ export interface PushPriceResult {
   pushedPrice: number | null
   currency: string | null
   error?: string
+  refusal?: { code: string; sentence: string }
   durationMs: number
 }
 
@@ -79,7 +84,7 @@ export async function pushPriceUpdate(
   }
 
   if (channel === 'AMAZON') {
-    return await pushAmazonPrice(prisma, sku, marketplace, snapshot, startedAt)
+    return await pushAmazonPrice(prisma, sku, marketplace, snapshot, startedAt, args)
   }
   if (channel === 'EBAY') {
     return await pushEbayPrice(prisma, sku, marketplace, snapshot, startedAt)
@@ -104,6 +109,7 @@ async function pushAmazonPrice(
   marketplaceCode: string,
   snapshot: any,
   startedAt: number,
+  coordinate: Pick<PushPriceArgs, 'channelConnectionId' | 'aliasKey'>,
 ): Promise<PushPriceResult> {
   const sellerId = (await getAmazonSellerId())
   if (!sellerId) {
@@ -137,16 +143,32 @@ async function pushAmazonPrice(
 
   // Need productType for the SP-API patch envelope. Pulled from the
   // ChannelListing whose price we're updating.
-  const listing = await prisma.channelListing.findFirst({
+  const listings = await prisma.channelListing.findMany({
     where: {
       channel: 'AMAZON',
       marketplace: marketplaceCode,
-      product: {
-        OR: [{ sku }, { variations: { some: { sku } } }],
-      },
+      product: { sku },
+      ...(coordinate.channelConnectionId !== undefined ? { channelConnectionId: coordinate.channelConnectionId } : {}),
+      ...(coordinate.aliasKey !== undefined ? { aliasKey: coordinate.aliasKey } : {}),
     },
-    select: { id: true, platformAttributes: true },
+    // Read all columns: syncPaused/offerClosedAt now, presenceIntent automatically
+    // after Wave 2's applied migration and generated client; never read it from JSON.
+    take: 2,
   })
+  const listing = listings.length === 1 ? listings[0] : null
+  if (!listing) return { ok: false, sku, channel: 'AMAZON', marketplace: marketplaceCode, pushedPrice: null,
+    currency: snapshot.currency, durationMs: Date.now() - startedAt,
+    error: listings.length ? 'Choose an exact account and alias before pushing this price.' : 'No listing exists for this seller SKU and market.' }
+  const closed = await closedMarketSet([listing.productId])
+  const refusal = assertPushAllowed(listing)
+    ?? (closed.has(`${listing.productId}|${marketplaceCode}`) ? assertPushAllowed({ offerClosedAt: 'closed' }) : null)
+  if (refusal) {
+    await prisma.channelListing.update({ where: { id: listing.id }, data: {
+      lastSyncStatus: 'SKIPPED', syncStatus: 'FAILED', lastSyncError: `${refusal.code}: ${refusal.sentence}`,
+    } })
+    return { ok: false, sku, channel: 'AMAZON', marketplace: marketplaceCode, pushedPrice: null,
+      currency: snapshot.currency, durationMs: Date.now() - startedAt, error: refusal.sentence, refusal }
+  }
   // platformAttributes JSON may carry productType; otherwise fall back to
   // a sensible default (LUGGAGE / OUTERWEAR depending on catalog). For v0,
   // require it — Xavia's listing wizard already sets it during publish.

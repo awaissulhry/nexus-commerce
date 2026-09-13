@@ -4,7 +4,7 @@
  * What it adds over `exportGridCsv` alone, and why each part is here rather than in the engine:
  *
  *   - **D15.2's key row.** Master keys are bare (`brand`); channel keys carry the coordinate
- *     (`brand@AMAZON:IT:it`) — the import routes a column to the coordinate its header names
+ *     (`brand@amazon:IT:it`) — the import routes a column to the coordinate its header names
  *     (D15.3). The engine writes whatever key it is given; the FORMAT of a key is the studio's.
  *   - **`sku` first, from row data.** The identity band absorbed the `sku` column (#714), so the
  *     one column the import matches rows on is no longer a grid column. Measured before this: a
@@ -24,6 +24,7 @@
  * the "Export all attributes" the Owner asked for; `'view'` writes what is displayed, in screen
  * order. Both produce importable files.
  */
+import { contentHeaderKey } from '@nexus/shared/content-header'
 import type { GridApi } from '@/design-system/grid'
 
 import { exportGridCsv, type GridCsvExtraColumn, type GridCsvResult } from '@/design-system/grid/export/exportGrid'
@@ -51,10 +52,12 @@ export const LIST_SEPARATOR = ' | '
  * its FORM before the coordinate: `key[]` (list) or `key[measure]`. Pure, tested.
  */
 export function exportKeyFor(key: string, scope: SheetExportScope, form?: SheetCellForm | null): string {
-  const declared = form === 'list' ? `${key}[]` : form === 'measure' ? `${key}[measure]` : key
-  if (scope.kind !== 'channel' || !scope.channel || !scope.marketplace) return declared
-  const locale = scope.locale ? `:${scope.locale.toLowerCase()}` : ''
-  return `${declared}@${scope.channel.toUpperCase()}:${scope.marketplace.toUpperCase()}${locale}`
+  // LX.F P2-13 / F3 — ONE grammar, shared with the API's `languageHeader` and its
+  // parser. This function used to drop the language on a NON-channel scope, so a
+  // master sheet exported while German was pressed wrote `title` and round-tripped
+  // onto the Italian SOURCE; it also upper-cased the channel and omitted the trailing
+  // `:` that the API emits. All three are gone with the delegation.
+  return contentHeaderKey(key, scope, form)
 }
 
 /**

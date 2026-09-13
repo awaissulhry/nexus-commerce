@@ -16,7 +16,8 @@
 
 import { InfoTip } from '@/design-system/primitives/InfoTip'
 import { LAYER_HINT, LAYER_LABEL, type Layer } from '../types'
-import styles from '../drawer.module.css'
+import { Pill } from '@/design-system/primitives/Pill'
+import type { Tone } from '@/design-system/primitives/tone'
 
 /** One mark per layer, none repeated. `🔗` for inherited is the mark the layout spec names. */
 const GLYPH: Record<Layer, string> = {
@@ -32,21 +33,14 @@ const GLYPH: Record<Layer, string> = {
   locale: '🌐',
   mapped: 'ƒ',
   locked: '🔒',
+  channelSnapshot: '◷',
   unknown: '?',
 }
 
-const TONE: Record<Layer, string> = {
-  master: styles.chipMaster,
-  variant: styles.chipVariant,
-  alias: styles.chipChannel,
-  aliasVariant: styles.chipChannel,
-  channel: styles.chipChannel,
-  linked: styles.chipLinked,
-  default: styles.chipDefault,
-  locale: styles.chipLocale,
-  mapped: styles.chipMapped,
-  locked: styles.chipLocked,
-  unknown: styles.chipUnknown,
+const TONE: Record<Layer, Tone> = {
+  master: 'info', variant: 'info', alias: 'info', aliasVariant: 'info', channel: 'info',
+  linked: 'info', default: 'neutral', locale: 'info', mapped: 'info', locked: 'neutral',
+  channelSnapshot: 'neutral', unknown: 'neutral',
 }
 
 export interface ProvenanceChipProps {
@@ -88,10 +82,9 @@ export function ProvenanceChip({ layer, from, rawSource }: ProvenanceChipProps) 
       {/* InfoTip with `children` deliberately adds neither a tab stop nor an accessible name, so
           the chip carries both — the hint has to reach a screen reader, which never sees the
           bubble. */}
-      <span className={`${styles.chip} ${TONE[layer]}`} tabIndex={0} aria-label={`${LAYER_LABEL[layer]}. ${hint}`}>
-        <span aria-hidden>{GLYPH[layer]}</span>
+      <Pill tone={TONE[layer]} tabIndex={0} aria-label={`${LAYER_LABEL[layer]}. ${hint}`} icon={<span aria-hidden>{GLYPH[layer]}</span>}>
         {LAYER_LABEL[layer]}
-      </span>
+      </Pill>
     </InfoTip>
   )
 }

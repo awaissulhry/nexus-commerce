@@ -1,36 +1,23 @@
-/**
- * MasterContentService — A4. The companion to MasterPriceService for master
- * CONTENT fields (Product.name=title, description, bulletPoints). The headline
- * feature ("edit master → propagate to channels") was wired through dead code
- * (outbound-sync-phase9.detectAndQueueChanges, never called), so only price +
- * status reached channels; title/description/bullets never did. This closes that
- * gap with the same proven pattern: one transactional cascade that snapshots the
- * master onto each ChannelListing, enqueues an OutboundSyncQueue CONTENT_UPDATE
- * for every listing that follows master, audits, and (post-commit) adds the
- * BullMQ job. The now-correct consumer (buildAmazonListingPatch, A4.0; eBay
- * mergeEbayInventoryItem, Phase 0.1) pushes the values to the marketplace.
- *
- * Cascade per ChannelListing × field:
- *   followMaster<field>=true  → snapshot master<field> + enqueue a push of the
- *                               new value (effective value = master).
- *   followMaster<field>=false → snapshot master<field> only (drift baseline);
- *                               the listing keeps its override, no push.
- *
- * quantity is already propagated via stock-movement (QUANTITY_UPDATE); images via
- * their own cascade. CONTENT_UPDATE is enqueued for content-capable channels —
- * Amazon, eBay, and (B3) Shopify (title → product.title, description → body_html).
+/** Shared content writes cascade only to following listings carrying that language.
+ * Language-specific follow markers mask legacy snapshots without rewriting them.
+ * The caller's transaction owns values, versions, audit and outbound queue rows.
  */
 
+import { produceReadiness } from './pim/readiness-index.service.js'
 import type { PrismaClient } from '@prisma/client'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
-import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
-import { logger } from '../utils/logger.js'
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './pim/content-locale.js'
+import { normalizeLanguage } from './pim/content-language.js'
+import { contentField, listingFollowsContent, resolveContent } from './pim/content-resolver.js'
+import { marketLanguages } from './pim/market-languages.js'
 
 const DEFAULT_HOLD_MS = 30 * 1000
 const CONTENT_CHANNELS = new Set(['AMAZON', 'EBAY', 'SHOPIFY']) // B3 — Shopify content push live (title + body_html)
 
 export interface MasterContentChanges {
+  [field: string]: unknown
   /** Product.name (the master title). */
   title?: string | null
   description?: string | null
@@ -38,6 +25,8 @@ export interface MasterContentChanges {
 }
 
 export interface MasterContentUpdateContext {
+  address?: ContentAddress
+  reviewed?: boolean
   locale?: string
   actor?: string | null
   reason?: string
@@ -111,158 +100,60 @@ export function resolveContentCascade(
 export class MasterContentService {
   constructor(private readonly client: PrismaClient = prisma) {}
 
-  async update(
-    productId: string,
-    changes: MasterContentChanges,
-    ctx: MasterContentUpdateContext = {},
-  ): Promise<MasterContentUpdateResult> {
-    const holdUntil = ctx.applyGrace === false ? null : new Date(Date.now() + DEFAULT_HOLD_MS)
-
+  async update(productId: string, changes: MasterContentChanges, ctx: MasterContentUpdateContext = {}): Promise<MasterContentUpdateResult> {
+    const address = contentAddress(ctx.address, Object.keys(changes)[0] ?? 'Content')
+    const language = address.tier === 'source' ? PRIMARY_CONTENT_LOCALE : normalizeLanguage(address.language)
+    if (address.tier === 'pin' || ctx.locale && normalizeLanguage(ctx.locale) !== language) throw Object.assign(new Error('Content cascade needs the shared language address.'), { statusCode: 400 })
+    if (!ctx.masterAlreadyWritten) {
+      const { writeContent } = await import('./pim/content-write.js')
+      await writeContent({ productId, address, values: changes, userId: ctx.actor, label: Object.keys(changes)[0] ?? 'Content' })
+      return { changed: true, changedFields: Object.keys(changes), cascadedListingIds: [], snapshottedListingIds: [], queuedSyncIds: [], auditLogId: null }
+    }
     const runner = async (tx: Prisma.TransactionClient | PrismaClient): Promise<MasterContentUpdateResult> => {
-      const product = await tx.product.findUnique({
-        where: { id: productId },
-        select: { id: true, sku: true, name: true, description: true, bulletPoints: true },
-      })
-      if (!product) throw new Error(`MasterContentService.update: product ${productId} not found`)
-
-      // Which fields to cascade. masterAlreadyWritten → cascade exactly the
-      // provided fields; otherwise diff vs the current master and skip no-ops.
-      const already = ctx.masterAlreadyWritten === true
-      const changed = {
-        title: already ? changes.title !== undefined : (changes.title !== undefined && changes.title !== product.name),
-        description: already ? changes.description !== undefined : (changes.description !== undefined && (changes.description ?? null) !== (product.description ?? null)),
-        bulletPoints: already ? changes.bulletPoints !== undefined : (changes.bulletPoints !== undefined && !arraysEqual(changes.bulletPoints, product.bulletPoints)),
-      }
-      const changedFields = Object.entries(changed).filter(([, v]) => v).map(([k]) => k)
-      if (changedFields.length === 0) {
-        return { changed: false, changedFields: [], cascadedListingIds: [], snapshottedListingIds: [], queuedSyncIds: [], auditLogId: null }
-      }
-
-      const after: Record<string, any> = {}
-      if (changed.title) after.name = changes.title
-      if (changed.description) after.description = changes.description
-      if (changed.bulletPoints) after.bulletPoints = changes.bulletPoints
-
-      const before: Record<string, any> = {}
-      if (!already) {
-        if (changed.title) before.name = product.name
-        if (changed.description) before.description = product.description
-        if (changed.bulletPoints) before.bulletPoints = product.bulletPoints
-        await tx.product.update({ where: { id: productId }, data: after })
-      }
-
-      const listings = (await tx.channelListing.findMany({
-        where: { productId },
-        select: {
-          id: true, channelConnectionId: true, aliasKey: true, channel: true, region: true, marketplace: true, externalListingId: true,
-          platformAttributes: true,
-          followMasterTitle: true, followMasterDescription: true, followMasterBulletPoints: true,
-        },
-      })) as unknown as ListingForContentCascade[]
-
-      const cascadedListingIds: string[] = []
-      const snapshottedListingIds: string[] = []
-      const queueRows: Prisma.OutboundSyncQueueCreateManyInput[] = []
-
-      const locales = ctx.locale ? await tx.marketplace.findMany({ select: { channel: true, code: true, language: true } }) : []
+      const fields = Object.keys(changes).map(contentField)
+      const product = await tx.product.findUniqueOrThrow({ where: { id: productId }, include: { translations: true } })
+      const [listings, markets] = await Promise.all([
+        tx.channelListing.findMany({ where: { product: { OR: [{ id: productId }, { parentId: productId }] } }, include: { translations: true, product: { include: { translations: true } } } }),
+        tx.marketplace.findMany({ select: { channel: true, code: true, languages: true, language: true } }),
+      ])
+      const cascadedListingIds: string[] = [], snapshottedListingIds: string[] = [], queuedSyncIds: string[] = []
       for (const listing of listings) {
-        if (ctx.locale && !locales.some(market => market.channel === listing.channel && market.code === listing.marketplace && market.language.toLowerCase() === ctx.locale!.toLowerCase())) continue
-        const { snapshot, push } = resolveContentCascade(changed, changes, listing)
-        const pushable = Object.keys(push).length > 0 && CONTENT_CHANNELS.has(listing.channel)
-
-        await tx.channelListing.update({
-          where: { id: listing.id },
-          data: pushable
-            ? { ...snapshot, lastSyncStatus: 'PENDING', lastSyncedAt: null, version: { increment: 1 } }
-            : snapshot,
+        const market = !listing.marketplace || listing.marketplace === 'DEFAULT' ? listing.region : listing.marketplace
+        if (!marketLanguages(listing.channel, market, markets).includes(language)) continue
+        const pin = listing.translations.find(row => row.language === language)
+        const following = fields.filter(field => {
+          if (listing.productId !== productId) {
+            const inherited = resolveContent({ product: listing.product as any, parent: product as any, field, localizableKeys: fields, address: { requested: language } })
+            if (inherited.ownerId !== productId) return false
+          }
+          return listingFollowsContent(listing, field, language, marketLanguages(listing.channel, market, markets))
         })
-
-        if (pushable) {
-          cascadedListingIds.push(listing.id)
-          queueRows.push({
-            productId,
-            channelListingId: listing.id,
-            targetChannel: listing.channel as any,
-            targetRegion: listing.region,
-            syncStatus: 'PENDING' as any,
-            syncType: 'CONTENT_UPDATE',
-            holdUntil,
-            externalListingId: listing.externalListingId,
-            payload: {
-              source: 'MASTER_CONTENT_CHANGE',
-              productId,
-              productSku: product.sku,
-              channel: listing.channel,
-              marketplace: listing.marketplace,
-              channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey, locale: ctx.locale ?? null,
-              productType: (listing.platformAttributes as any)?.productType ?? null,
-              ...push,
-              reason: ctx.reason ?? null,
-              idempotencyKey: ctx.idempotencyKey ?? null,
-            } as Prisma.InputJsonValue,
-          })
-        } else {
-          snapshottedListingIds.push(listing.id)
+        if (!following.length) { snapshottedListingIds.push(listing.id); continue }
+        // Language-specific following intent masks stale legacy snapshots. Never
+        // write an untagged title/description or turn an operator pin into shared text.
+        const follows = [...new Set([...(pin?.follows ?? []), ...following])]
+        if (pin) await tx.channelListingTranslation.update({ where: { id: pin.id }, data: { follows, version: { increment: 1 } } })
+        else await tx.channelListingTranslation.create({ data: { channelListingId: listing.id, language, follows, version: 1 } })
+        await tx.channelListing.update({ where: { id: listing.id }, data: { version: { increment: 1 }, lastSyncStatus: 'PENDING', lastSyncedAt: null } })
+        cascadedListingIds.push(listing.id)
+        // The existing content sync queue consumes a language-qualified payload.
+        // Caller transactions leave scheduling to the drain after commit.
+        if (CONTENT_CHANNELS.has(listing.channel) && ctx.reviewed !== false) {
+          const payload = Object.fromEntries(following.map(field => [field, resolveContent({ product: listing.product as any, parent: listing.productId === productId ? undefined : product as any, field, localizableKeys: fields, address: { requested: language } }).value]))
+          const queue = await tx.outboundSyncQueue.create({ data: { productId: listing.productId, channelListingId: listing.id, targetChannel: listing.channel as any,
+            targetRegion: listing.region, externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType: 'CONTENT_UPDATE',
+            holdUntil: ctx.applyGrace === false ? null : new Date(Date.now() + DEFAULT_HOLD_MS), payload: { source: 'MASTER_CONTENT_CHANGE', productId: listing.productId, productSku: listing.product.sku,
+              channel: listing.channel, marketplace: market, channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey,
+              locale: language, language, ...payload } as Prisma.InputJsonValue }, select: { id: true } })
+          queuedSyncIds.push(queue.id)
         }
       }
-
-      let queuedSyncIds: string[] = []
-      if (queueRows.length > 0) {
-        await tx.outboundSyncQueue.createMany({ data: queueRows })
-        const justEnqueued = await tx.outboundSyncQueue.findMany({
-          where: { channelListingId: { in: cascadedListingIds }, syncType: 'CONTENT_UPDATE', syncStatus: 'PENDING' },
-          orderBy: { createdAt: 'desc' },
-          take: cascadedListingIds.length,
-          select: { id: true },
-        })
-        queuedSyncIds = justEnqueued.map((r) => r.id)
-      }
-
-      const audit = await tx.auditLog.create({
-        data: {
-          entityType: 'Product',
-          entityId: productId,
-          action: 'update',
-          userId: ctx.actor ?? null,
-          before,
-          after,
-          metadata: {
-            fields: changedFields,
-            reason: ctx.reason ?? null,
-            idempotencyKey: ctx.idempotencyKey ?? null,
-            cascadedListingIds,
-            snapshottedListingIds,
-            queuedSyncIds,
-          },
-          createdAt: new Date(),
-        },
-        select: { id: true },
-      })
-
-      return { changed: true, changedFields, cascadedListingIds, snapshottedListingIds, queuedSyncIds, auditLogId: audit.id }
+      const audit = await tx.auditLog.create({ data: { entityType: 'Product', entityId: productId, action: 'update', userId: ctx.actor ?? null,
+        before: {}, after: changes as Prisma.InputJsonValue, metadata: { fields, language, reason: ctx.reason ?? null, cascadedListingIds, queuedSyncIds } }, select: { id: true } })
+      await produceReadiness(productId)
+      return { changed: fields.length > 0, changedFields: fields, cascadedListingIds, snapshottedListingIds, queuedSyncIds, auditLogId: audit.id }
     }
-
-    const result = ctx.tx ? await runner(ctx.tx) : await this.client.$transaction(runner)
-
-    // Post-commit BullMQ enqueue (jobId=queueId dedup). If Redis is down the DB
-    // rows stay PENDING for the next drain — never lose work. Skipped when inside
-    // a caller transaction (not yet committed); the cron drains after commit.
-    if (!ctx.tx && result.queuedSyncIds.length > 0) {
-      const delay = ctx.applyGrace === false ? 0 : DEFAULT_HOLD_MS
-      for (const queueId of result.queuedSyncIds) {
-        // Bounded + circuit-broken: unreachable Redis can't hang the request.
-        await addJobSafely(outboundSyncQueue, 'sync-job', { queueId, productId, syncType: 'CONTENT_UPDATE', source: 'MASTER_CONTENT_CHANGE' }, { delay, jobId: queueId })
-      }
-    }
-
-    if (result.changed) {
-      logger.info('MasterContentService.update', {
-        productId, fields: result.changedFields,
-        cascaded: result.cascadedListingIds.length, snapshotted: result.snapshottedListingIds.length, queued: result.queuedSyncIds.length,
-        actor: ctx.actor ?? null, reason: ctx.reason ?? null,
-      })
-    }
-    return result
+    return ctx.tx ? runner(ctx.tx) : this.client.$transaction(runner)
   }
 }
 

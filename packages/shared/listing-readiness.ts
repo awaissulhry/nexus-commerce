@@ -16,21 +16,21 @@ export interface ListingReadinessRow {
   accountName: string
   aliasKey: string
   locale: string
-  category: string | null
-  state: 'needs-attention' | 'checks-passed' | 'unavailable'
+  // LX.F F2 / R-LX-9 — the fifth member: a coordinate with no ReadinessIndex row
+  // reads `notComputed`, which the service can now return (its allowlist derives
+  // from `SCOPE_STATES`).
+  state: 'ready' | 'warn' | 'blocked' | 'absent' | 'notComputed'
+  pct: number | null
+  computedAt: string | null
+  familyId: string | null
   issues: ListingReadinessIssue[]
-  schema: { version: string | null; fetchedAt: string | null } | null
-  savedStatus: string
-  lastSyncedAt: string | null
   editorHref: string
 }
 export interface ListingReadinessPage {
-  computedAt: string
+  computedAt: string | null
   page: number
   pageSize: number
   total: number
   productCount: number
-  missingSelectionCount: number
-  withoutListing: { total: number; sample: Array<{ id: string; sku: string }> }
   rows: ListingReadinessRow[]
 }

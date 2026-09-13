@@ -24,6 +24,7 @@
  * HARD DELETE IS NEVER PERFORMED.
  */
 
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { logger } from '../utils/logger.js'
 import prismaClient from '../db.js'
 import { ebayAuthService } from './ebay-auth.service.js'
@@ -53,6 +54,8 @@ export const VALID_DELETE_INTENTS: ReadonlySet<string> = new Set([
 ] satisfies DeleteIntent[])
 
 export interface DeleteTarget {
+  channelConnectionId?: string | null
+  aliasKey?: string
   /** Nexus Product.id — preferred identifier; falls back to sku when omitted. */
   productId?: string
   /** Product.sku / SharedListingMembership.sku */
@@ -70,6 +73,7 @@ export interface DeleteTarget {
 }
 
 export interface DeleteTargetResult {
+  fanOut?: Array<ListingCoordinate & { listingId: string }>
   /** remove-channel-listing: products stamped with the per-market file
    *  exclusion (row leaves the file until the SKU is saved again). */
   excludedFromFile?: number
@@ -144,6 +148,7 @@ function buildDelistJob(
   itemId: string,
   marketplace: string,
   productId: string | null,
+  coordinate?: ListingCoordinate,
 ): ChannelDelistJob {
   return {
     // queueId is used only by applyDelistResultToQueue; passing a synthetic value
@@ -155,7 +160,8 @@ function buildDelistJob(
     targetRegion: marketplace,
     externalListingId: itemId,
     syncType: 'DELETE_LISTING',
-    payload: { channelAction: 'delete' },
+    channelConnectionId: coordinate?.channelConnectionId,
+    payload: { channelAction: 'delete', ...(coordinate ? { aliasKey: coordinate.aliasKey } : {}) },
   }
 }
 
@@ -206,11 +212,12 @@ async function tryDelist(
   itemId: string | null | undefined,
   marketplace: string,
   productId: string | null = null,
+  coordinate?: ListingCoordinate,
 ): Promise<boolean> {
   if (!itemId) return false
   try {
     const result = await dispatchChannelDelist(
-      buildDelistJob(itemId, marketplace, productId),
+      buildDelistJob(itemId, marketplace, productId, coordinate),
     )
     if (!result.success) {
       logger.warn(
@@ -223,7 +230,7 @@ async function tryDelist(
         },
       )
     }
-    return result.success
+    return result.success && !result.dryRun
   } catch (err: unknown) {
     logger.warn('ebay-flat-file-delete: delist threw (non-fatal)', {
       itemId,
@@ -606,6 +613,8 @@ async function handleRemoveChannelListing(
   target: DeleteTarget,
 ): Promise<DeleteTargetResult> {
   const { sku, marketplace, productId } = target
+  const coordinate = { productId, channel: 'EBAY', marketplace, channelConnectionId: target.channelConnectionId, aliasKey: target.aliasKey } as ListingCoordinate
+  whereCoordinate(coordinate)
 
   const product = (await prisma.product.findFirst({
     where: productId ? { id: productId } : { sku },
@@ -631,19 +640,20 @@ async function handleRemoveChannelListing(
     select: { id: true, categoryAttributes: true },
   } as any)) as Array<{ id: string; categoryAttributes?: unknown }>
   const productIds = [product.id, ...children.map((c) => c.id)]
+  const where = { OR: productIds.map(productId => whereCoordinate({ ...coordinate, productId })) }
 
   // Collect ItemIDs for best-effort delist BEFORE the listings are deleted.
   const listings = (await prisma.channelListing.findMany({
-    where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
-    select: { externalListingId: true },
-  } as any)) as Array<{ externalListingId: string | null }>
+    where,
+    select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, externalListingId: true },
+  } as any)) as Array<ListingCoordinate & { id: string; externalListingId: string | null }>
 
   let channelListingsRemoved = 0
   let excludedFromFile = 0
   const market = marketplace.toUpperCase()
   await prisma.$transaction(async (tx) => {
     const del = await tx.channelListing.deleteMany({
-      where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
+      where,
     } as any)
     channelListingsRemoved = (del as { count: number }).count
     // Incident #12 (2026-07-18): stamp a per-market FILE EXCLUSION on every
@@ -656,6 +666,9 @@ async function handleRemoveChannelListing(
       { id: product.id, categoryAttributes: product.categoryAttributes },
       ...children,
     ]) {
+      // A per-market file stamp would hide surviving accounts/aliases too.
+      const survivors = await tx.channelListing.findMany({ where: { productId: t.id, channel: 'EBAY', marketplace }, select: { id: true }, take: 1 })
+      if (survivors.length) continue
       const attrs =
         t.categoryAttributes && typeof t.categoryAttributes === 'object'
           ? { ...(t.categoryAttributes as Record<string, unknown>) }
@@ -689,7 +702,7 @@ async function handleRemoveChannelListing(
     const delistIds = new Set<string>(
       [
         ...listings.map((l) => l.externalListingId),
-        product.ebayItemId ?? null,
+        // Product.ebayItemId is unscoped; only captured coordinate identities may be ended.
       ].filter((x): x is string => Boolean(x)),
     )
     // GUARD 2 — CROSS-MARKET / SHARED ItemID. An ItemID can legitimately be
@@ -717,7 +730,7 @@ async function handleRemoveChannelListing(
       ])
       for (const iid of ids) {
         if (shared.has(iid)) { delistSkippedShared.push(iid); continue }
-        const ok = await tryDelist(iid, marketplace, product.id)
+        const ok = await tryDelist(iid, marketplace, product.id, coordinate)
         if (ok) delisted = true
       }
     }
@@ -732,5 +745,6 @@ async function handleRemoveChannelListing(
     ...(delistSkippedShared.length > 0 ? { delistSkippedShared } : {}),
     delisted,
     excludedFromFile,
+    fanOut: listings.map(l => ({ productId: l.productId, channel: l.channel, marketplace: l.marketplace, channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey, listingId: l.id })),
   }
 }

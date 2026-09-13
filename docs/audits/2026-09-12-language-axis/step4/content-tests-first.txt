@@ -1,0 +1,41 @@
+
+> @nexus/api@1.0.0 test
+> vitest run src/services/pim/content-write.vitest.test.ts --reporter=default
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api
+
+ ❯ src/services/pim/content-write.vitest.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/pim/content-write.vitest.test.ts [ src/services/pim/content-write.vitest.test.ts ]
+Error: Transform failed with 1 error:
+
+[31m[PARSE_ERROR] Error:[0m Expected `}` but found `EOF`
+    [38;5;246m╭[0m[38;5;246m─[0m[38;5;246m[[0m src/services/pim/content-write.vitest.test.ts:94:4 [38;5;246m][0m
+    [38;5;246m│[0m
+ [38;5;246m18 │[0m [38;5;249ma[0m[38;5;249ms[0m[38;5;249my[0m[38;5;249mn[0m[38;5;249mc[0m[38;5;249m [0m[38;5;249mf[0m[38;5;249mu[0m[38;5;249mn[0m[38;5;249mc[0m[38;5;249mt[0m[38;5;249mi[0m[38;5;249mo[0m[38;5;249mn[0m[38;5;249m [0m[38;5;249mr[0m[38;5;249me[0m[38;5;249ma[0m[38;5;249md[0m[38;5;249m([0m[38;5;249ml[0m[38;5;249ma[0m[38;5;249mn[0m[38;5;249mg[0m[38;5;249mu[0m[38;5;249ma[0m[38;5;249mg[0m[38;5;249me[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m'[0m[38;5;249md[0m[38;5;249me[0m[38;5;249m'[0m[38;5;249m,[0m[38;5;249m [0m[38;5;249mm[0m[38;5;249ma[0m[38;5;249mr[0m[38;5;249mk[0m[38;5;249me[0m[38;5;249mt[0m[38;5;249m [0m[38;5;249m=[0m[38;5;249m [0m[38;5;249m'[0m[38;5;249mD[0m[38;5;249mE[0m[38;5;249m'[0m[38;5;249m)[0m[38;5;249m [0m{
+ [38;5;240m   │[0m                                                     ┬  
+ [38;5;240m   │[0m                                                     ╰── Opened here
+ [38;5;240m   │[0m 
+ [38;5;246m94 │[0m [38;5;249m}[0m[38;5;249m)[0m
+ [38;5;240m   │[0m    │ 
+ [38;5;240m   │[0m    ╰─ `}` expected
+[38;5;246m────╯[0m
+
+  Plugin: vite:oxc
+  File: /Users/awais/nexus-commerce/apps/api/src/services/pim/content-write.vitest.test.ts
+ ❯ transformWithOxc ../../node_modules/vite/dist/node/chunks/node.js:3340:19
+ ❯ TransformPluginContext.transform ../../node_modules/vite/dist/node/chunks/node.js:3408:26
+ ❯ EnvironmentPluginContainer.transform ../../node_modules/vite/dist/node/chunks/node.js:30179:51
+ ❯ loadAndTransform ../../node_modules/vite/dist/node/chunks/node.js:24509:26
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  15:12:00
+   Duration  122ms (transform 0ms, setup 0ms, import 0ms, tests 0ms, environment 0ms)
+

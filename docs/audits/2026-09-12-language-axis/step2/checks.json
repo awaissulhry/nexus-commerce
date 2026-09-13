@@ -1,0 +1,102 @@
+{
+  "at": "2026-09-12T05:31:33.349651+00:00",
+  "protectedFiles": 27,
+  "protectedUnchanged": 27,
+  "sourceFiles": 70,
+  "existingFilesWithoutFullPreEditSnapshot": [
+    "apps/api/src/routes/amazon-flat-file.routes.ts",
+    "apps/api/src/services/pim/catalog-transfer.service.ts",
+    "apps/api/src/services/pim/global-content.vitest.test.ts",
+    "apps/api/src/services/pim/localized-route.vitest.test.ts",
+    "apps/api/src/services/pim/mapping-propagation.service.ts",
+    "apps/api/src/services/pim/readiness.service.ts",
+    "apps/api/src/services/pim/reconcile-divergence.service.ts",
+    "apps/api/src/services/pim/studio-sheet.service.ts",
+    "apps/api/src/services/reviews/review-insert-pdf.service.ts",
+    "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+    "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+    "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx"
+  ],
+  "noPublishRehearsal": true,
+  "noProviderCallIssuedBySession": true,
+  "noProductWriteIssuedBySession": true,
+  "schemaMigrationOnly": "20260912_lx2_marketplace_languages",
+  "browserGate": "NOT MEASURED: Chrome ERR_BLOCKED_BY_CLIENT",
+  "typecheckExitCode": 1,
+  "typecheckLogBytes": 972,
+  "inspect.mjs syntaxExitCode": 0,
+  "schema-command.mjs syntaxExitCode": 0,
+  "trackedDiffCheckExitCode": 0,
+  "trackedDiffCheckOutput": "",
+  "final-api-tests.json": {
+    "passed": 378,
+    "failed": 2,
+    "skipped": 0,
+    "total": 380,
+    "success": false,
+    "startTime": "2026-09-12T05:22:21.271000+00:00"
+  },
+  "web-scope-tests.json": {
+    "passed": 36,
+    "failed": 0,
+    "skipped": 0,
+    "total": 36,
+    "success": true,
+    "startTime": "2026-09-12T05:21:08.430000+00:00"
+  },
+  "proposed-fixture-tests.json": {
+    "passed": 42,
+    "failed": 0,
+    "skipped": 0,
+    "total": 42,
+    "success": true,
+    "startTime": "2026-09-12T00:27:15.666000+00:00"
+  },
+  "migrationFileSHA256": "8dfcd3d7294caf7f7cf1b28b1d24bf757aa9160a06321f66e01a855af67d37ad",
+  "migrationFileUnchanged": true,
+  "guardOutput": {
+    "guard": "LX.2",
+    "scanned": 1475,
+    "exempt": [
+      "services/amazon/flat-file-coerce-ai.ts",
+      "services/amazon/flat-file-coerce.ts",
+      "services/amazon/flat-file-hydrate.service.ts",
+      "services/amazon/flat-file-mapping-ai.ts",
+      "services/amazon/flat-file-mapping.ts",
+      "services/amazon/flat-file-merge.ts",
+      "services/amazon/flat-file-propagate.service.ts",
+      "services/amazon/flat-file-pull-preview.service.ts",
+      "services/amazon/flat-file-pull.service.ts",
+      "services/amazon/flat-file-schema-walk.ts",
+      "services/amazon/flat-file-verify-live.service.ts",
+      "services/amazon/flat-file.service.ts",
+      "services/channel-batch/amazon-batch-feed.service.ts"
+    ],
+    "violations": []
+  },
+  "guardExitCode": 0,
+  "apiTypeDiagnostics": {
+    "count": 2,
+    "file": "apps/api/src/lib/amazon-sp-client.ts",
+    "lines": [
+      85,
+      87
+    ],
+    "editedByThisSession": false
+  },
+  "webTypecheckExitCode": 0,
+  "information-final-tests.json": {
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "exitCode": 0,
+    "startTime": "2026-09-12T05:34:10.941000+00:00"
+  },
+  "payload-final-tests.json": {
+    "passed": 5,
+    "failed": 0,
+    "exitCode": 0,
+    "startTime": "2026-09-12T05:38:59.485000+00:00"
+  },
+  "finalEvidenceAt": "2026-09-12T05:40:41.124783+00:00"
+}

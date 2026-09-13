@@ -1,0 +1,56 @@
+{
+  "start": "2026-09-13T19:10:06.950Z",
+  "end": "2026-09-13T19:16:02.377Z",
+  "logs": [
+    {
+      "level": "info",
+      "message": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "timestamp": "2026-09-13T19:10:07.410Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "log",
+      "message": "[HMR] connected",
+      "timestamp": "2026-09-13T19:10:07.463Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "info",
+      "message": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "timestamp": "2026-09-13T19:14:11.053Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "log",
+      "message": "[HMR] connected",
+      "timestamp": "2026-09-13T19:14:11.090Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "info",
+      "message": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "timestamp": "2026-09-13T19:14:28.232Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "log",
+      "message": "[HMR] connected",
+      "timestamp": "2026-09-13T19:14:28.242Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "info",
+      "message": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "timestamp": "2026-09-13T19:14:45.490Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    },
+    {
+      "level": "log",
+      "message": "[HMR] connected",
+      "timestamp": "2026-09-13T19:14:45.499Z",
+      "url": "http://localhost:3000/_next/static/chunks/0ilk_next_dist_0h778tm._.js"
+    }
+  ],
+  "errors": 0,
+  "recompiles": 0
+}

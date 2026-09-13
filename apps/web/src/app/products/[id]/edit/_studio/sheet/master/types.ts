@@ -1,3 +1,5 @@
+import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
+import type { ContentWriteFacts as importContentWriteFacts } from '@nexus/shared/content-language'
 /**
  * PES.2 — the master sheet's wire contract.
  *
@@ -15,7 +17,16 @@
  * live response by `verifyContract()` below, so a drift is a loud message and not a blank column.
  */
 
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
+/**
+ * VT.2 (2026-09-13, additive) — `'variationTheme'` is the `Variation theme` column
+ * (`docs/vt1-contracts.md` §1): one column served on EVERY scope whose value is a `VariationThemeCell`
+ * object rather than a scalar. It is declared in this mirror because the ROUTING fact is the kind —
+ * the engine's `variationThemeColumnDef` is selected on `col.kind === 'variationTheme'`, never on the
+ * column key — and a comparison against a literal outside the union is a type error, so without it
+ * the builder below could not route at all. Same reason as every other widening in this file: a
+ * consumer that cannot name what the server sends cannot consume it.
+ */
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
 
@@ -23,6 +34,10 @@ export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' 
 export type CellLayer = 'master' | 'variant' | 'alias' | 'aliasVariant' | 'channel' | 'linked' | 'default'
 
 export interface SheetColumn {
+  /** Resolver-owned field classification used by the Languages saved view. */
+  localizable?: boolean
+  /** Set on a <key>@<locale> column in the saved Languages view. */
+  locale?: string
   managedBy?: 'productMedia'
   familyRules?: Record<string, { required: boolean; sortOrder: number }>
   validation?: Record<string, unknown>
@@ -102,7 +117,8 @@ export interface SheetColumn {
   // ── AM.1 (2026-09-05) — the shape vocabulary, mirrored from `sheet-columns.service.ts` ─────────
   // All OPTIONAL: an older server omits them and every consumer must read absence as `scalar`.
   /** Default `scalar`. A `list` column's value is an array; a `measure` column's is `{ value, unit }`. */
-  shape?: 'scalar' | 'list' | 'measure'
+  /** `'axes'` — VT.2's variation-theme projection (additive 2026-09-13). */
+  shape?: 'scalar' | 'list' | 'measure' | 'axes'
   /** list only. `max: null` = unbounded. A bounded list ≤ 10 arrives as slot columns instead. */
   cardinality?: { min: number; max: number | null }
   /** measure only. */
@@ -133,11 +149,12 @@ export interface SheetColumn {
   }>
 }
 
-export interface StudioCellValue {
-  requestedLocale?: string
-  effectiveLocale?: string
-  needsTranslation?: boolean
-  translationState?: 'current' | 'missing' | 'fallback' | 'draft' | 'reviewed' | 'outdated'
+export interface StudioCellValue extends importContentWriteFacts {
+  tier?: importResolvedContent['tier']
+  language?: importResolvedContent['language']
+  requested?: importResolvedContent['requested']
+  provenance?: importResolvedContent['provenance']
+  translation?: importResolvedContent['translation']
   value: unknown
   /**
    * The resolver's `ValueSource`. REQUIRED: PES.5 §3.2 defines `StudioCellValue` as
@@ -274,13 +291,13 @@ export interface StudioRow {
   listing?: SheetListing | null
   /** STUDIO shape: ONE verdict for this row in this scope. */
   readiness?: RowReadiness
-  /**
-   * LEGACY shape only: the catalogue-wide read answers a verdict PER channel coordinate, which the
-   * studio route does not (a master scope has one readiness, not one per channel). Kept separate
-   * rather than union-typed so a caller cannot read one shape believing it is the other, and so the
-   * sheet can render the richer per-coordinate columns when — and only when — it actually has them.
+  /*
+   * LX.FIN (R-LX-22) — `readinessByCoordinate?: Record<string, RowReadiness>` was here and is
+   * DELETED with its only producer (`adaptLegacy.ts`). The per-coordinate readiness columns are now
+   * fed from `ReadinessIndex` in the SCOPE vocabulary through the readiness contract, so nothing read
+   * this field; LX.15's rule is "fed or deleted, never left dead". Recorded rather than silently
+   * removed because the wire it came from (the catalogue read's per-coordinate verdict) still exists.
    */
-  readinessByCoordinate?: Record<string, RowReadiness>
   completeness: MasterCompleteness
 }
 

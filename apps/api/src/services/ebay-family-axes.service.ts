@@ -1,3 +1,4 @@
+import { loadStoredVariationProjection } from './pim/stored-variation-projection.js'
 /**
  * EFX — eBay Axes Consistency Layer A.
  *
@@ -36,6 +37,7 @@ import {
   buildEbayFamilyRows,
 } from './ebay-variation-push.service.js'
 import { parseThemeAxes, axisSynonymKey } from './ebay-theme-axes.js'
+import { ebayDeclaredAxes } from './pim/variation-rules.service.js'
 import { readImageAxisPreference } from './ebay-image-axis-preference.service.js'
 import { EbayCategoryService } from './ebay-category.service.js'
 import { resolveChannelConnectionId } from './connection-resolver.service.js'
@@ -227,14 +229,15 @@ export async function resolveFamilyAxes(
     ? (pa._variationAxes as unknown[]).filter((s): s is string => typeof s === 'string')
     : []
 
-  // The selected listing's theme overrides the family default. When neither declares
-  // axes, use this listing's stored order, then legacy discovery.
-  const themeAxes = parseThemeAxes(parentListing?.variationTheme ?? parent.variationTheme)
-  const declaredAxes: string[] | null = themeAxes.length > 0
-    ? themeAxes
-    : storedAxisOrder.length > 0
-      ? storedAxisOrder.slice()
-      : null
+  // VT.1 (2026-09-13, VX D1/M3) — ONE declared-axis rule, shared with the push: the COORDINATE's stored
+  // `_variationAxes` when non-empty, else `Product.variationTheme`, else legacy discovery. The listing's own
+  // `variationTheme` COLUMN is no longer consulted: no push path reads it (T5) and it is retired from the sheet in
+  // this same change. Measured over all 38 eBay parent listing rows: this READ is identical on **37 of 38**, and the
+  // one row that changes is GALE-JACKET eBay-IT (ACTIVE, item 257584954808), which read `["Color","Size"]` from that
+  // column while the push has been sending `["Colore","Taglia"]` — the read now agrees with what ships.
+  const effective = parent.variationAxes.length ? (await loadStoredVariationProjection({ productId: parentProductId, channel: 'EBAY', market: marketplace, accountId: channelConnectionId, aliasKey })).cell : null
+  const declaredAxes: string[] | null = effective ? effective.axes.filter(a => a.included).map(a => a.familyKey) : ebayDeclaredAxes(pa, parent.variationTheme)
+  if (effective) for (const axis of effective.axes.filter(a => a.included)) nameLabels[axis.familyKey] = axis.channelName
 
   // D8 — the operator's explicit image-axis pick (Product.imageAxisPreference),
   // the SAME source the push passes as pictureAxisOverride.

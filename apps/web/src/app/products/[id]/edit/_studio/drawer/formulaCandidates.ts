@@ -12,6 +12,7 @@
  * and it would show as an operator finding a column on the sheet that the drawer will not complete.
  * The shape is pinned by this module's test rather than by anyone remembering.
  */
+import { formulaCandidates } from '../sheet/formulaColumns'
 import type { FormulaCandidate } from '@/design-system/grid/editors/formulaEditing'
 import type { FormulaFunctionDoc } from '@/design-system/grid/editors/formulaPreview'
 
@@ -56,24 +57,10 @@ export function buildFormulaCandidates(
   columns: readonly CandidateColumn[],
   values: Readonly<Record<string, CandidateCell | undefined>>,
   functions: readonly FormulaFunctionDoc[],
+  fieldKey?: string,
+  locale = '',
 ): FormulaCandidate[] {
-  const cols = columns.map((col) => {
-    const raw = values[col.key]?.value
-    return {
-      name: col.key,
-      kind: 'field' as const,
-      label: col.label,
-      /* 🔴 The literal `'Columns'`, NOT the column's own group. The drawer groups its FORM by
-         `col.group` ("Identity", "Compliance", …), so passing that through here would split the
-         autocomplete into a dozen headed sections where the sheet shows exactly one — the same list,
-         shaped differently, on two surfaces. */
-      group: 'Columns',
-      /* 🔴 Absent, never `''`, for an empty cell. The editor draws no value chip for a field with
-         nothing in it, and an empty chip and a missing one look identical while meaning different
-         things — "this column is empty" vs "this candidate has no value to show". */
-      value: raw == null || raw === '' ? undefined : String(raw),
-    }
-  })
+  const cols = formulaCandidates(columns, values, fieldKey, locale)
   const fns = functions.map((f) => ({
     name: f.name,
     kind: 'function' as const,

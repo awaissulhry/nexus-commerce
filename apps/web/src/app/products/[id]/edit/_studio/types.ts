@@ -35,6 +35,11 @@ export const MASTER_SCOPE = 'master' as const
  * `visibleTabs()` in `scopes.ts` is the one place that decides which tasks a scope offers.
  * Presentation is eBay-specific; shared Needs attention explains its available checks.
  *
+ * 🔴 `'matrix'` sits DIRECTLY under Information (`STUDIO_TABS`: `sheet · matrix · variants · …`), and it is a
+ * NEW page rather than a rename of `variants` — the Owner's 2026-09-13 revision keeps the Variants page exactly
+ * as it is and builds the Matrix with what is left (`docs/2026-09-13-matrix-page-design.md`, Revision). It is
+ * offered on EVERY scope: the scope bar's chips FILTER its coordinate groups rather than choosing between pages.
+ *
  * 🔴 `'variants'` is ONE page re-projected by the scope bar, not one page per channel: family STRUCTURE on
  * master, each channel's PROJECTION on its own scope (variants spec §1.1).
  *
@@ -43,7 +48,7 @@ export const MASTER_SCOPE = 'master' as const
  * bookmarked `?tab=relationships` falls back to `sheet` in `contracts.tsx`, which reads the URL against
  * `STUDIO_TABS`.
  */
-export type StudioTabId = 'sheet' | 'variants' | 'images' | 'analytics' | 'activity' | 'errors' | 'presentation' | 'variation-order' | 'shopify-family' | 'shopify-metafields'
+export type StudioTabId = 'sheet' | 'matrix' | 'variants' | 'images' | 'analytics' | 'activity' | 'errors' | 'presentation' | 'variation-order' | 'shopify-family' | 'shopify-metafields'
 
 /**
  * How much of a publish actually reaches a channel — the SERVER's vocabulary, verbatim.
@@ -63,7 +68,7 @@ export type StudioTabId = 'sheet' | 'variants' | 'images' | 'analytics' | 'activ
 export type PublishMode = 'gated' | 'dry-run' | 'sandbox' | 'live' | (string & {})
 
 /** Declaration order IS the order of the secondary navigation drawer. Canvas artboard "Product navigation". */
-export const STUDIO_TABS: readonly StudioTabId[] = ['sheet', 'variants', 'images', 'presentation', 'variation-order', 'shopify-family', 'shopify-metafields', 'errors', 'analytics', 'activity']
+export const STUDIO_TABS: readonly StudioTabId[] = ['sheet', 'matrix', 'variants', 'images', 'presentation', 'variation-order', 'shopify-family', 'shopify-metafields', 'errors', 'analytics', 'activity']
 
 /** A channel × marketplace pair. `null` on master scope — master has no coordinate. */
 export interface StudioCoordinate {
@@ -78,7 +83,11 @@ export interface StudioCoordinate {
 export interface MarketplaceLite {
   /** Ordered Marketplace.languages authority, projected by the API. */
   languages?: string[]
-  accounts?: Array<{ id: string; label: string; primary: boolean }>
+  accounts?: Array<{ id: string; label: string; primary: boolean; health?: import('./presence/connection').ConnectionHealth }>
+  connectionHealth?: import('./presence/connection').ConnectionHealth | null
+  isParticipating?: boolean | null
+  participationStatus?: string | null
+  participationCheckedAt?: string | null
   id: string
   channel: string
   code: string
@@ -89,6 +98,7 @@ export interface MarketplaceLite {
 }
 
 export interface ChannelOption {
+  health?: import('./presence/connection').ConnectionHealth | null
   /** The API's channel key — also the scope id. */
   id: string
   label: string
@@ -127,6 +137,7 @@ export interface StudioScopeOptions {
 export type { ScopeReadinessState }
 
 export interface ScopeReadiness extends ScopeBarReadiness {
+  languages?: Array<{ language: string; pct: number | null; state: ScopeReadinessState }>
   /** The counts the percentage came from, so the chip's tooltip can show its own arithmetic. */
   required?: { filled: number; total: number }
   /**
@@ -160,12 +171,34 @@ export type ScopeReadinessQuery =
    * only while it matches — a different coordinate is a different question, and the old answer is
    * not a stale version of it (§3.6; measured IT→DE showing IT's 71% under a DE bar).
    */
-  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; at: number; coordinate: string }
+  | { status: 'ready'; byScope: Readonly<Record<string, ScopeReadiness>>; matrix: ReadinessMatrixEntry[]; at: number; coordinate: string }
   | { status: 'unavailable'; reason: string }
   | { status: 'error'; message: string }
 
 /** The wire shape PES.1 asked PES.5 for (docs/pes-claims.md). */
+export interface ReadinessMatrixEntry extends ScopeReadiness {
+  coordinateKey: string
+  channel: string | null
+  market: string | null
+  accountId: string | null
+  aliasId: string | null
+  language: string
+  label: string
+  missing: Array<{ productId: string; field: string; label: string; reason: string }>
+  computedAt: string | null
+  /**
+   * LX.FIN (R-LX-22 / design §8 LX.15) — this coordinate's verdict per PRODUCT in the family, in the
+   * SCOPE vocabulary, which is what the master sheet's per-coordinate readiness COLUMN puts in each row.
+   *
+   * 🔴 A product that is not a key here has no `ReadinessIndex` row for this coordinate and language, and
+   * its cell says `Not computed` — never a score and never `Not set up` (R-LX-9's distinction, one column
+   * over). So `{}` is a legitimate value and an absent key is a real answer, not a gap.
+   */
+  byProduct?: Record<string, { state: ScopeReadinessState; pct: number | null; note?: string }>
+}
+
 export interface ScopeReadinessResponse {
+  matrix: ReadinessMatrixEntry[]
   market: string
   scopes: Array<{ id: string } & ScopeReadiness>
 }
@@ -231,6 +264,8 @@ export interface StudioRecordValue {
  * the old edit page's five-fetch cold start back in front of a sheet that does not need it.
  */
 export interface StudioProduct {
+  /** Undefined means this older read did not report bin membership. */
+  deletedAt?: string | null
   id: string
   sku: string
   name: string | null
@@ -275,10 +310,13 @@ export interface ViewChipCells {
   byRow: Readonly<Record<string, readonly string[]>>
 }
 
+export interface ViewChipCount {
+  n: number
+  unit: 'cells' | 'rows' | 'columns' | 'variants' | 'combinations' | 'axes' | 'drafts'
+}
+
 export interface ViewChip {
   compactLabel?: string
-  /** Counted unit. Information defaults to columns; row filters declare variants. */
-  noun?: 'columns' | 'variants' | 'combinations' | 'axes'
   /** Stable, and the URL value when this chip is selected — `missing-required`, `ai-drafts`. */
   id: string
   label: string
@@ -289,7 +327,8 @@ export interface ViewChip {
    * shows `null` as a pending chip with no number and must never print `(0)` for it — that would
    * state "we checked, there are none" on the strength of not having checked.
    */
-  count: number | null
+  /** Producer-owned quantity and unit; cells describe filter breadth, never replace this count. */
+  count: ViewChipCount | null
   /** Hide the chip entirely at a REAL zero. Default true: "Missing required (0)" is noise. */
   hideWhenZero?: boolean
   /** Why the count is `null`, or what the chip means. The producer's own words. */

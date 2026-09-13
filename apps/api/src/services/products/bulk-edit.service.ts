@@ -1,8 +1,13 @@
+import { produceReadiness } from '../pim/readiness-index.service.js'
+import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { isLocalizableContent, contentField } from '../pim/content-resolver.js'
+import { applyContentBulk, type ContentEdit } from '../pim/content-bulk-write.js'
 import { variationAttributePatch } from '../pim/shared-variation-values.js'
 import type { SheetChannel } from '../pim/sheet-columns.service.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import type { FastifyBaseLogger } from 'fastify'
-import { activeDatabaseTransaction, afterDatabaseCommit } from '../../lib/database-context.js'
+import { activeDatabaseTransaction, afterDatabaseCommit, inDatabaseTransaction } from '../../lib/database-context.js'
 import { currentFormulaWrite } from '../pim/mapping/formula-write-context.js'
 import { validateShopifyField, shopifyDefinitionApplicability } from '@nexus/shared/shopify-linked-products'
 import { nativeFieldValueError, type NativeEdit } from '@nexus/shared/shopify-information'
@@ -21,7 +26,6 @@ import { validationMarketplace } from '../pim/validation-marketplace.js'
 import { auditLogService } from '../audit-log.service.js'
 import { reevaluateDependents } from '../pim/mapping/cell-formula.service.js'
 import { masterPriceService } from '../master-price.service.js'
-import { masterContentService } from '../master-content.service.js'
 import { applyStockMovement } from '../stock-movement.service.js'
 import { productEventService } from '../product-event.service.js'
 import { productReadCacheService } from '../product-read-cache.service.js'
@@ -50,6 +54,10 @@ export interface ProductBulkInput {
      */
     target?: 'master' | 'channel'
     intent?: 'set' | 'pin' | 'reset'
+    contentAddress?: ContentAddress
+    contentAcknowledged?: boolean
+    contentVersion?: number
+    contentState?: 'draft' | 'reviewed'
   }>
   marketplaceContext?: {
     accountId?: string
@@ -184,6 +192,8 @@ export class ProductBulkError extends Error {
 
 /** Validate, preview or atomically apply product edits, including their formula dependencies. */
 export async function applyProductBulkEdits(input: ProductBulkInput, context: ProductBulkContext) {
+  // Bind mutation promises before constructing them, including facts and formula cascades.
+  if (!activeDatabaseTransaction()) return inDatabaseTransaction(prisma, () => applyProductBulkEdits(input, context))
   const { changes, marketplaceContext, marketplaceContexts } =
     input ?? {}
   // Effective context list: prefer the new array, fall back to the
@@ -540,6 +550,49 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
         throw new ProductBulkError(503, { error: 'Could not load attribute requirements. Reload the sheet before saving attributes.' })
       }
     }
+  }
+  // LX.8: the sheet contract supplies both validation and the field label. All
+  // content writes leave this legacy mutation branch before it can touch a bag
+  // or an untagged listing column. Paste/fill use this identical boundary.
+  const contentEdits: ContentEdit[] = []
+  for (const change of changes) {
+    const base = parseSlotField(change.field)?.base ?? change.field
+    const key = contentField(CHANNEL_FIELD_MAP[base] === 'bulletPointsOverride' ? 'bulletPoints' : CHANNEL_FIELD_MAP[base] ?? base.replace(/^attr_/, ''))
+    const contract = (primaryContext ? rowContract : masterRowContract).get(change.id)
+    const col = [...(contract?.values() ?? [])].find(col => col.writeField === change.field || col.key === base || contentField(col.slot?.of ?? col.key) === key)
+    // LX.F F-LX-1 — the ContentAddress gate belongs to LOCALIZABLE changes only.
+    // It used to run for EVERY change, before this predicate, so a price, a
+    // quantity or a factual attribute sent without an address was refused with
+    // "Base price needs a ContentAddress before it can be saved." — a sentence
+    // about content, on a number. The studio never saw it because
+    // `studio-sheet.service.ts:1418` synthesises an address on EVERY cell, but a
+    // caller that does not (`variant-transfer.routes.ts:125` and `:173`, measured,
+    // and any client of `PATCH /products/bulk` that is not the studio) was refused
+    // on every field. Design §6's refusal is for a CONTENT write without an
+    // address, and that is exactly where it now fires.
+    // LX.F P2-12 — when a column WAS found, derive the verdict from the column
+    // exactly as `resolveWriteRouting` does (`col.slot?.of ?? col.key`); the wire
+    // field's mapped key stays the fallback for a change with no column. The two
+    // derivations could disagree for a column whose key is not a CONTENT_COLUMNS
+    // name (`item_name`) while its write field is (`amazon_title → title`), and
+    // then this branch ran while the router took its legacy path.
+    const localizable = isLocalizableContent(col ? contentField(col.slot?.of ?? col.key) : key, col?.storage)
+    if (localizable) {
+      try { contentAddress(change.contentAddress, col?.label ?? change.field) }
+      catch (error) { errors.push({ id: change.id, field: change.field, error: (error as Error).message }); continue }
+      if (!col) errors.push({ id: change.id, field: change.field, error: `Could not load the sheet label and requirements for ${change.field}. Reload before saving.` })
+      else contentEdits.push({ change, column: col })
+    }
+  }
+  if (errors.length) return { success: false, updated: 0, errors }
+  if (contentEdits.length) {
+    const addressed = new Set(contentEdits.map(edit => edit.change))
+    const remaining = changes.filter(change => !addressed.has(change))
+    return applyContentBulk(input, context, contentEdits, async () => {
+      if (!remaining.length) return { updated: 0, errors: [] }
+      const product = expectedVersion !== undefined ? await prisma.product.findUnique({ where: { id: remaining[0].id }, select: { version: true } }) : null
+      return applyProductBulkEdits({ ...input, changes: remaining, expectedVersion: product?.version }, { ...context, ifMatch: undefined })
+    })
   }
   /** `n > cap` is over; a value exactly AT the cap is accepted. */
   const capViolation = (field: string, value: unknown, id?: string): string | null => {
@@ -2416,42 +2469,6 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
       }
     }
 
-    // A4 — master CONTENT fan-out. The bulk transaction already wrote
-    // Product.name/description/bulletPoints; now cascade them to each product's
-    // ChannelListings (snapshot + queue a CONTENT_UPDATE for following listings)
-    // so master content edits actually reach the marketplaces — the headline
-    // "edit master → propagate" feature that was wired through dead code.
-    // masterAlreadyWritten skips the redundant master write; cascade=true also
-    // fans to children (whose Product content the bulk tx already updated).
-    const contentByProduct = new Map<string, { title?: string; description?: string; bulletPoints?: string[] }>()
-    const addContent = (pid: string, field: string, value: unknown) => {
-      const bag = contentByProduct.get(pid) ?? {}
-      if (field === 'name') bag.title = value == null ? '' : String(value)
-      else if (field === 'description') bag.description = value == null ? '' : String(value)
-      else if (field === 'bulletPoints') bag.bulletPoints = Array.isArray(value) ? value.map((x) => String(x)) : []
-      contentByProduct.set(pid, bag)
-    }
-    for (const v of validated) {
-      if (v.field !== 'name' && v.field !== 'description' && v.field !== 'bulletPoints') continue
-      addContent(v.id, v.field, v.value)
-      if (v.cascade) {
-        for (const childId of childrenByParent.get(v.id) ?? []) addContent(childId, v.field, v.value)
-      }
-    }
-    for (const [productId, contentChanges] of contentByProduct) {
-      try {
-        await masterContentService.update(productId, contentChanges, {
-          masterAlreadyWritten: true,
-          tx: activeDatabaseTransaction(),
-          actor: null,
-          reason: 'bulk-grid-patch',
-          idempotencyKey: `bulk:${startTs}:${productId}:content`,
-        })
-      } catch (err) {
-        errors.push({ id: productId, field: 'content', error: err instanceof Error ? err.message : String(err) })
-      }
-    }
-
     // PES.5 — the version the caller should hold NEXT, read from the row that
     // actually changed. Only for a channel-only write; a master write keeps
     // the existing `expectedVersion + 1`, which its single CAS bump makes true.
@@ -2533,6 +2550,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
           bulkOperationId: bulkOp.id,
           cascade: !!c.cascade,
           source: 'bulk-patch',
+          language: effectiveContexts[0]?.locale ?? PRIMARY_CONTENT_LOCALE,
           // `effectiveContexts`, NOT the raw body field: that one is optional,
           // and this tsconfig is not strict, so `.length` on an absent array
           // would compile clean and then crash the autosave at runtime
@@ -2582,6 +2600,7 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const cacheRefreshIds = Array.from(
       new Set<string>([...productIds, ...allAffectedChildIds]),
     )
+    for (const id of cacheRefreshIds) await produceReadiness(id)
     await afterDatabaseCommit(`product-cache:${cacheRefreshIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(cacheRefreshIds)).catch(err => {
       context.logger.warn({ err, productIds: cacheRefreshIds }, '[products/bulk] cache refresh failed')
     })

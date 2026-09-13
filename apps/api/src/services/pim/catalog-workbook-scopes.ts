@@ -1,3 +1,6 @@
+import { channelContentField } from './catalog-transfer-content.js'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { normalizeLanguage } from './content-language.js'
 import { TRANSFER_CHANNELS, transferCategoryField, transferIsStore, type TransferRow } from '@nexus/shared/catalog-transfer'
 import type { SheetColumn } from './sheet-columns.service.js'
 import type { CatalogueField } from './mapping/field-catalogue.service.js'
@@ -23,7 +26,7 @@ export type WorkbookDestination = { channel: string; accountId: string; marketpl
 const emptyScope = { channel: '', accountId: '', marketplace: '', locale: '', category: '' }
 export async function catalogWorkbookTemplate(input: { market: string; familyId: string; locales?: string[]; channels?: WorkbookDestination[] }) {
   if (input.locales !== undefined && (!Array.isArray(input.locales) || input.locales.some(l => typeof l !== 'string')) || input.channels !== undefined && !Array.isArray(input.channels)) throw new Error('Languages and channel destinations must be lists')
-  const locales = [...new Set((input.locales ?? []).map(l => l.trim().toLowerCase()))]
+  const locales = [...new Set((input.locales ?? []).map(l => normalizeLanguage(l.trim())))]
   if (input.channels?.some(c => !c || typeof c !== 'object' || ['channel', 'accountId', 'marketplace', 'category'].some(k => typeof c[k as keyof WorkbookDestination] !== 'string'))) throw new Error('Each destination needs a channel, account, marketplace and category')
   const channels = (input.channels ?? []).map(c => ({ channel: c.channel.trim().toUpperCase(), accountId: c.accountId.trim(), marketplace: c.marketplace.trim().toUpperCase(), category: c.category.trim() }))
   if (locales.length > 30 || locales.some(l => !/^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/.test(l))) throw new Error('Choose at most 30 valid language codes, such as it, de or en-gb')
@@ -34,19 +37,21 @@ export async function catalogWorkbookTemplate(input: { market: string; familyId:
   const contracts = transferContracts(input.market), cols = await contracts.master(input.familyId)
   const scopes: WorkbookScope[] = [{ ...emptyScope, sheet: 'Products', entity: 'Products', fields: [...relationshipFields, ...cols.filter(c => !c.slot && (c.storage !== 'localizedContent' || content.has(c.key))).map(masterWorkbookField)],
     rows: [{ ...emptyScope, row: 2, entity: 'Products', sku: '', aliasKey: '', field: 'family', action: 'SET', value: family.code }] }]
-  const includedLocales = new Set(locales)
+  const includedLocales = new Set(locales.filter(l => l !== PRIMARY_CONTENT_LOCALE))
   for (const [i, c] of channels.entries()) {
     const [account, market] = await Promise.all([
       prisma.channelConnection.findUnique({ where: { id: c.accountId }, select: { channelType: true, marketplace: true, isActive: true } }),
       prisma.marketplace.findFirst({ where: { channel: c.channel, code: c.marketplace, isActive: true }, select: { language: true } }),
     ])
     if (!account?.isActive || account.channelType !== c.channel || account.marketplace && !['GLOBAL', c.marketplace].includes(account.marketplace) || !market?.language) throw new Error('Choose an active account and configured marketplace that match this destination')
-    for (const language of await marketLanguages(c.channel, c.marketplace)) includedLocales.add(language)
+    const languages = await marketLanguages(c.channel, c.marketplace)
+    for (const language of languages) if (language !== PRIMARY_CONTENT_LOCALE) includedLocales.add(language)
     const contract = await contracts.channel(c.channel, c.marketplace, c.category)
     const categoryKey = transferCategoryField(c.channel)
     scopes.push({ ...c, locale: '', sheet: `${c.channel} ${c.marketplace} ${i + 1}`, entity: 'Overrides',
-      fields: [{ field: categoryKey, label: 'Channel category', type: c.channel === 'ETSY' ? 'number' : 'text', required: c.channel === 'SHOPIFY' ? 'optional' : 'required' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))],
+      fields: [{ field: categoryKey, label: 'Channel category', type: c.channel === 'ETSY' ? 'number' : 'text', required: c.channel === 'SHOPIFY' ? 'optional' : 'required' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey && !channelContentField(f)).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))],
       rows: [{ ...c, locale: '', row: 2, entity: 'Listings', sku: '', aliasKey: '', field: categoryKey, action: c.category ? 'SET' : '' as TransferRow['action'], value: c.category ? c.channel === 'ETSY' ? Number(c.category) : c.category : undefined }] })
+    for (const locale of languages) scopes.push({ ...c, locale, sheet: `${c.channel} ${c.marketplace} ${locale} ${i + 1}`, entity: 'Overrides', fields: contract.fields.filter(f => channelContentField(f)).map(channelWorkbookField), rows: [] })
   }
   if (includedLocales.size > 30) throw new Error('Choose at most 30 languages, including the languages of your listing marketplaces')
   scopes.splice(1, 0, ...[...includedLocales].map(locale => ({ ...emptyScope, sheet: `Content ${locale}`, entity: 'Products' as const, locale,
@@ -63,7 +68,7 @@ export function workbookScopesForRows(rows: TransferRow[], fieldsForRow: (row: T
     const key = JSON.stringify([row.entity === 'Products' ? 'Products' : 'Overrides', row.channel, row.accountId, row.marketplace, row.locale, category])
     let scope = scopes.get(key)
     if (!scope) {
-      scope = { ...emptyScope, sheet: row.entity === 'Products' ? row.locale ? `Content ${row.locale}` : 'Products' : `${row.channel} ${row.marketplace} ${scopes.size + 1}`,
+      scope = { ...emptyScope, sheet: row.entity === 'Products' ? row.locale ? `Content ${row.locale}` : 'Products' : `${row.channel} ${row.marketplace}${row.locale ? ` ${row.locale}` : ''} ${scopes.size + 1}`,
         entity: row.entity === 'Products' ? 'Products' : 'Overrides', channel: row.channel, accountId: row.accountId, marketplace: row.marketplace, locale: row.locale, category, fields: [], rows: [] }
       scopes.set(key, scope)
       seenFields.set(key, new Set())

@@ -18,6 +18,8 @@
  */
 
 import type { ListingRow } from './familyOps'
+import { identityHeld as isLiveOnChannel } from '@nexus/shared/listing-risk'
+export { identityHeld as isLiveOnChannel, identityHeld, sellingRisk } from '@nexus/shared/listing-risk'
 
 export type ListingRisk = 'live' | 'local'
 
@@ -44,9 +46,7 @@ const trimmed = (v: string | null | undefined): string => (typeof v === 'string'
  * The presence of an external id, and nothing else. Not status, not `isPublished` — an unpublished
  * row with an ItemID is still an eBay listing that a delete would take down.
  */
-export function isLiveOnChannel(row: ListingRow): boolean {
-  return trimmed(row.externalListingId) !== ''
-}
+
 
 export function classifyListings(rows: readonly ListingRow[]): DeletionImpact {
   const verdicts = rows.map<ListingVerdict>((row) => {
@@ -60,7 +60,7 @@ export function classifyListings(rows: readonly ListingRow[]): DeletionImpact {
       // ItemID 256789012345" is the thing they can go and look at before agreeing to lose it.
       label: live
         ? `${where} — ${status}, ${trimmed(row.externalListingId)}`
-        : `${where} — ${status}, never published to the channel`,
+        : `${where} — ${status}, no marketplace id on this record`,
     }
   })
   return {

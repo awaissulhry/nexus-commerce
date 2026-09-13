@@ -91,7 +91,13 @@ function mockPrisma(opts: MockPrismaOpts = {}) {
     },
     channelListing: {
       findFirst: vi.fn(async () => opts.parentCl ?? null),
-      findMany: vi.fn(async () => opts.familyCls ?? []),
+      findMany: vi.fn(async ({ where }: { where?: { externalListingId?: string } } = {}) => {
+        if (!where?.externalListingId) return opts.familyCls ?? []
+        const identities = new Set([opts.parentCl?.externalListingId, ...(opts.memberships ?? []).map(m => m.itemId)])
+        return identities.has(where.externalListingId)
+          ? [{ id: `control-${where.externalListingId}`, externalListingId: where.externalListingId, syncPaused: false, offerClosedAt: null }]
+          : []
+      }),
       update: vi.fn(async () => ({})),
     },
     sharedListingMembership: {

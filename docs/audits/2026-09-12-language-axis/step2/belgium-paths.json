@@ -1,0 +1,499 @@
+[
+  {
+    "file": "packages/database/prisma/schema.prisma",
+    "lines": [
+      1950
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Column absent; scalar nl.",
+    "after": "languages=[nl,fr], ordered; scalar nl retained. Legacy Product JSON default unchanged under columns-only migration rule."
+  },
+  {
+    "file": "apps/api/src/services/products/translation-resolver.service.ts",
+    "lines": [
+      36
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE=fr; inverse preference map.",
+    "after": "AMAZON/BE default nl. Inverse lookup uses configured rows, preferring a monolingual match."
+  },
+  {
+    "file": "apps/api/src/services/outbound-sync.service.ts",
+    "lines": [
+      289
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE always fr_BE.",
+    "after": "nl_BE by default, fr_BE explicitly; unsupported de refused naming nl, fr. Actual built payload tests."
+  },
+  {
+    "file": "apps/api/src/services/categories/marketplace-ids.ts",
+    "lines": [
+      20
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 en_US.",
+    "after": "BE nl_BE. Mocked reordered row produces fr_BE."
+  },
+  {
+    "file": "apps/api/src/services/categories/schema-sync.service.ts",
+    "lines": [
+      256
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE schema-label locale en_US.",
+    "after": "BE nl_BE. Separate English-label request remains English through languageTag(en,US)."
+  },
+  {
+    "file": "apps/api/src/services/categories/seller-schema.service.ts",
+    "lines": [
+      20
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE schema-label locale en_US.",
+    "after": "BE nl_BE. No provider request made."
+  },
+  {
+    "file": "apps/api/src/routes/marketplaces.routes.ts",
+    "lines": [
+      16
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Builder stamped it_IT; actual BE route lacked marketplace ID in static list.",
+    "after": "Builder defaults nl_BE, supports fr_BE; ID now from AMAZON/BE row. Seed updates preserve configured arrays. Payload-only tests; no route publication."
+  },
+  {
+    "file": "apps/api/src/routes/listings-syndication.routes.ts",
+    "lines": [
+      127
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE tag absent \u2192 first item_name entry. Scalar metadata nl.",
+    "after": "Default matches nl_BE; helper matches fr_BE when supplied fr. nl/fr metadata exposed. Existing fallback when no matching tag remains until Step 3. Wrong-first-entry positive control tested."
+  },
+  {
+    "file": "apps/api/src/routes/field-links.routes.ts",
+    "lines": [
+      288,
+      364
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Both plans and source fallback hardcoded BE=nl.",
+    "after": "Both plans and source fallback read channel-qualified row: AMAZON/BE default nl; explicit source language retained."
+  },
+  {
+    "file": "apps/api/src/routes/listing-wizard.routes.ts",
+    "lines": [
+      181
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 en content groups.",
+    "after": "nl:AMAZON groups; generation/preview receive group channel. No AI generation invoked."
+  },
+  {
+    "file": "apps/api/src/services/listing-wizard/submission.service.ts",
+    "lines": [
+      140
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 en:AMAZON group.",
+    "after": "nl:AMAZON group and language=nl review metadata. Actual composer chooses Dutch fixture over English decoy."
+  },
+  {
+    "file": "apps/api/src/services/listing-automation/triggers.ts",
+    "lines": [
+      75
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Hardcoded BE=nl helper.",
+    "after": "Map/helper deleted; actions use row authority."
+  },
+  {
+    "file": "apps/api/src/services/listing-automation/action-handlers.ts",
+    "lines": [
+      209
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Hardcoded BE=nl in grouping/result selection.",
+    "after": "AMAZON/BE nl from row, retained per listing for result selection. No automation run."
+  },
+  {
+    "file": "apps/api/src/services/reviews/review-insert-pdf.service.ts",
+    "lines": [
+      143
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 English insert.",
+    "after": "BE requests nl; explicit refusal before opening PDF because no Dutch COPY edition exists. No machine copy added. Refusal + French PDF positive control tested."
+  },
+  {
+    "file": "apps/api/src/services/listing-preflight.service.ts",
+    "lines": [
+      440
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE [fr_BE,nl_BE] hardcoded.",
+    "after": "[nl_BE,fr_BE] from supplied authority; accepts both and names ordered alternatives for mismatch. Italian warning retained with authority supplied."
+  },
+  {
+    "file": "apps/api/src/routes/amazon-flat-file.routes.ts",
+    "lines": [
+      439,
+      768
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Two GPSR contexts relied on internal map.",
+    "after": "Both load ordered row once and pass languages to preflight. Route is outside protected services glob; neither route rehearsed."
+  },
+  {
+    "file": "apps/api/src/services/pim/readiness.service.ts",
+    "lines": [
+      276
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "GPSR relied on internal map.",
+    "after": "Existing validator receives coordinate languages and derives nl_BE,fr_BE. No new readiness-index work."
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-columns.service.ts",
+    "lines": [
+      1083
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Code-only default lookup; BE scalar nl, fr refused.",
+    "after": "Channel-qualified default nl, allows nl/fr, coordinate carries ordered languages. Store GLOBAL coordinates use their actual GLOBAL row."
+  },
+  {
+    "file": "apps/api/src/services/pim/information-locale.ts",
+    "lines": [
+      7
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE accepted only nl.",
+    "after": "Accepts nl/fr; de refused naming both. Exact gate tested."
+  },
+  {
+    "file": "apps/api/src/routes/pim-global.routes.ts",
+    "lines": [
+      135
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Fixed en/source + table languages.",
+    "after": "Configured market union includes nl/fr. XAVIA GALE GET200 returns nine language slots; no write."
+  },
+  {
+    "file": "apps/api/src/services/pim/global-content.ts",
+    "lines": [
+      19
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Fixed en/source + table languages.",
+    "after": "Configured languages plus source/table languages. JSON excluded; old missing-translation fallback remains until Step 3."
+  },
+  {
+    "file": "apps/api/src/routes/product-translations.routes.ts",
+    "lines": [
+      79
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "No availableLanguages field; inverse preference map.",
+    "after": "Configured availableLanguages includes nl/fr; inverse market selection uses rows. Storage boundaries retained for Step 4."
+  },
+  {
+    "file": "apps/api/src/routes/products-ai.routes.ts",
+    "lines": [
+      257
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fr.",
+    "after": "AMAZON/BE nl; no AI or write invocation."
+  },
+  {
+    "file": "apps/api/src/routes/marketing-automation.routes.ts",
+    "lines": [
+      316
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fr.",
+    "after": "AMAZON/BE nl; existing primary rule retained; no automation run."
+  },
+  {
+    "file": "apps/api/src/services/ai/enrichment/generate.service.ts",
+    "lines": [
+      297
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fr; old helper ignored channel.",
+    "after": "Selected channel row, AMAZON/BE nl; no generation run."
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-product-transfer.ts",
+    "lines": [
+      39
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE projected fr and one market locale.",
+    "after": "AMAZON/BE default nl, both nl/fr in available locales. No transfer/export run."
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-export.ts",
+    "lines": [
+      52
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fr; template also used code-only scalar lookup.",
+    "after": "Default nl from channel-qualified row; loaded workbook metadata agrees. No export/import run."
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+    "lines": [
+      42
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Missing BE locale \u2192 fr.",
+    "after": "Missing BE locale \u2192 AMAZON/BE nl; explicit locale retained. No transfer apply."
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+    "lines": [
+      44
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE added one locale fr.",
+    "after": "Selected row contributes both nl/fr. No workbook operation."
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer.service.ts",
+    "lines": [
+      25
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Lookup by code set could cross channels.",
+    "after": "Lookup uses channel/code pairs; current BE row belongs only to AMAZON."
+  },
+  {
+    "file": "apps/api/src/services/pim/listing-readiness.service.ts",
+    "lines": [
+      102
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fr.",
+    "after": "Configured AMAZON/BE nl; missing coordinate unavailable instead of guessed language."
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/impact.service.ts",
+    "lines": [
+      266
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fallback fr.",
+    "after": "Selected channel default, nl for AMAZON/BE; explicit resolved locale retained."
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+    "lines": [
+      57
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fallback fr.",
+    "after": "AMAZON/BE fallback nl; explicit locale retained."
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+    "lines": [
+      176
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE fallback fr independent of channel.",
+    "after": "Selected channel default nl for AMAZON/BE; explicit fr retained and passed to link helper."
+  },
+  {
+    "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+    "lines": [
+      428,
+      470
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Pure link helper internally derived BE=fr.",
+    "after": "Pure helper receives resolved targetLanguage, default nl or selected fr."
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping-propagation.service.ts",
+    "lines": [
+      123
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE link target internally fr.",
+    "after": "Passes resolved locale: default nl / explicit fr."
+  },
+  {
+    "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+    "lines": [
+      1224
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE link target internally fr.",
+    "after": "Passes studio resolved locale: default nl / explicit fr. Master GPSR also receives languages from its loaded Amazon coordinate."
+  },
+  {
+    "file": "apps/api/src/services/pim/reconcile-divergence.service.ts",
+    "lines": [
+      138
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE link target internally fr.",
+    "after": "Passes selected locale to pure helper; no per-field async query."
+  },
+  {
+    "file": "apps/api/src/services/compliance-resolver.service.ts",
+    "lines": [
+      272
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Actual hosted BE manual is French, fr_BE.",
+    "after": "Same French document and fr_BE through languageTag. Document-edition map is not default market-language authority. Dutch is never stamped on French copy."
+  },
+  {
+    "file": "apps/api/src/services/images/amazon-media-client.ts",
+    "lines": [
+      74
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Explicit en_US schema-label request.",
+    "after": "Same explicit English label request through languageTag(en,US); no provider call."
+  },
+  {
+    "file": "apps/api/src/services/ai/listing-content.service.ts",
+    "lines": [
+      412,
+      444
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 English prompt.",
+    "after": "Selected channel authority; AMAZON/BE Dutch. Actual cost-preview prompt tested; no AI provider call."
+  },
+  {
+    "file": "apps/api/src/services/listing-wizard/ebay-publish.adapter.ts",
+    "lines": [
+      752
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 en-US.",
+    "after": "Current EBAY/BE absent \u2192 refusal; configured test row derives nl-BE or fr-BE in row order. DE/GB tested too; publisher never invoked."
+  },
+  {
+    "file": "apps/api/src/services/pim/ebay-value-map.service.ts",
+    "lines": [
+      35
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE language label fell back to BE; not English.",
+    "after": "Requires EBAY/BE row, absent currently. Configured nl would display Dutch; seeder never run."
+  },
+  {
+    "file": "apps/api/src/services/amazon/value-translate.service.ts",
+    "lines": [
+      76
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE source/target labels fell back to BE.",
+    "after": "Loaded AMAZON/BE row gives Dutch for both. Async public signature unchanged; no translation run."
+  },
+  {
+    "file": "apps/api/src/routes/ebay-cockpit.routes.ts",
+    "lines": [
+      1321
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 English.",
+    "after": "Requires EBAY/BE row, absent currently; configured nl would display Dutch. No AI operation."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/scopes.ts",
+    "lines": [
+      192
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Scalar language; defaults combined all channels sharing code.",
+    "after": "Ordered array and explicit channel: AMAZON/BE nl, allowed nl/fr. Collision + reordered-row positive controls pass."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+    "lines": [
+      670
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "AMAZON/BE fixed nl, fr refused; Master/Etsy added static language list.",
+    "after": "AMAZON/BE nl/fr accepted, nl default; static extra list removed. New Languages view remains Step 6."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx",
+    "lines": [
+      344,
+      1094,
+      1107,
+      2373,
+      2376
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Two pending-locale fallbacks guessed it.",
+    "after": "Uses API-resolved locale, then selected locale, then empty pending context; no invented Italian."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx",
+    "lines": [
+      153,
+      237,
+      241,
+      665
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "Older editor had fixed supported language list.",
+    "after": "Choices come from API availableLanguages including nl/fr. Older editor retained under D6."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+    "lines": [
+      80
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "MarketplaceLite had scalar only.",
+    "after": "Wire mirror includes ordered languages, preserving BE nl/fr."
+  },
+  {
+    "file": "apps/web/src/app/products/_sheet/types.ts",
+    "lines": [
+      15
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "No coordinate languages wire field.",
+    "after": "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/types.ts",
+    "lines": [
+      288
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "No coordinate languages wire field.",
+    "after": "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/drawer/types.ts",
+    "lines": [
+      39
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "No coordinate languages wire field.",
+    "after": "Optional ordered languages mirrors API; BE nl/fr when supplied."
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/list-wizard/steps/Step9Review.tsx",
+    "lines": [
+      1298
+    ],
+    "readAt": "2026-09-12T05:40:41.124783+00:00",
+    "before": "BE absent \u2192 em dash.",
+    "after": "Displays producer language, nl for AMAZON/BE. Map removed; wire parity + actual composer tested."
+  }
+]

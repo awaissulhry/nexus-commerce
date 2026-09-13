@@ -1,0 +1,17 @@
+{
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheet.tsx": "c835145a6edf2ffaa26461efcb25e3aa07316d2ebc0bb30b6dc6a389913c2e1c",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetSurface.tsx": "6959888fc45f386790ea72be6f24e0af970f68b0599fd08785513aa963eca93e",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/ProductSheetTab.tsx": "7262f8032f2043784196deeef752076b4ad62f65769c7444e3c7a4225e0ba521",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetModel.ts": "4acd344c2b95d6dbeb89cbf961fb85e3ded3fdca186e55630e5ff2a66bfcd24a",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/productSheetRows.ts": "3ecbb6cff4e532f5e331ac10296241400660f78e084c5340a7f25e4426964758",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/sheetChips.ts": "321ba6e173d3ec7b76e2e59a833546f3ab1957a1b5a3a9ff58d7cb85d3fd7ed9",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useProductSheetInteraction.ts": "61f70473c49a8a688860764e5259e32434a6aadd1a5f862864ff1d39c4eb46d2",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetChips.ts": "b9bd0036896326a9cf1caa400a03d9abac4f8384d82be9e8816295786cd3d791",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGeometry.ts": "1be510254c05889a3a9c04c8defc3ad81f3700694a755b1cb236b00e694f41d1",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetGridBindings.ts": "c2c72fc7d6c00cce452686427cb49440dcce0763eb5bf448a7f022df09796b6f",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetPreferences.ts": "63104bc2e6cb57ba1d6d8a0d8985832efdfddecc91d4030a5cafc85959285e18",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/useSheetSaveStatus.ts": "16caa280497148ba40194ef600f21f9725cd3d1c5771c3581c6615b9ae347092",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx": "8aa6b989e624139d87aeed985f5200779d7c8aca514e225cc170896d35b2cad5",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx": "cf589566e53278f510ad6aa48e4bd61fa93b8c85242d0cdfc1e47131a70b4ca2",
+  "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/cellDetailsSource.ts": "7a99ab15aecbd9c8466eb6e4f986381c6972e04ee9e7d4b6b4e7441ce636bde3"
+}

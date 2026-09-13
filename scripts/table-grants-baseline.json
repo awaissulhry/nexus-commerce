@@ -1,0 +1,19 @@
+{
+  "recorded": "2026-09-13",
+  "by": "scripts/check-table-grants.mjs --baseline (CLOSE.1, R-LX-28)",
+  "notes": [
+    "Both entries are REAL, OPEN defects of the same class as R-LX-24, not accepted behaviour. They are carried",
+    "rather than fixed because the fix belongs on PRODUCTION as well as here: 20260912_lx4_channel_listing_translations",
+    "and 20260912_lx5_readiness_index both end with a GRANT and neither enables row-level security or creates the",
+    "nexus_workspace_isolation policy, and both folders are already applied on production (commit da1078ddf). The gate",
+    "prints every carried entry on every run for that reason. The SQL is in CLOSE.1's ledger section; the Owner decides",
+    "the predicate (the simple workspace clause or the fuller one 20260911_category_taxonomies uses), which is the same",
+    "open question R-LX-24 already put in front of them.",
+    "CLOSE.1 applied no DDL: the local database is shared with a running API on :8091 and two lanes in flight, and a",
+    "local-only fix would have turned this gate green while production kept the gap."
+  ],
+  "violations": [
+    "ChannelListingTranslation: row-level security is NOT enabled, and the table carries workspaceId — a routed read returns every workspace's rows",
+    "ReadinessIndex: row-level security is NOT enabled, and the table carries workspaceId — a routed read returns every workspace's rows"
+  ]
+}

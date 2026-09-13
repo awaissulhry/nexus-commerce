@@ -131,8 +131,12 @@ describe('EDITOR_CAPS', () => {
      asserting "no editor wider than its cap" about. Select keeps the DS popover's existing 320 —
      the Owner ruled select "unchanged", and this is the number that keeps it so. */
   it('covers every popup editor kind, and keeps select at the DS popover maximum', () => {
-    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['formula', 'list', 'longtext', 'measure', 'select'])
+    /* `axes` added by VT.2 2026-09-13 — this assertion is a SET CLAIM and going stale is its whole
+       job: a new popup editor kind must either appear here or be a deliberate omission someone
+       argued for. See the note on `EDITOR_CAPS.axes` for why 420 is not a raised `list` cap. */
+    expect(Object.keys(EDITOR_CAPS).sort()).toEqual(['axes', 'formula', 'list', 'longtext', 'measure', 'select'])
     expect(EDITOR_CAPS.select.width).toBe(320)
+    expect(EDITOR_CAPS.axes.width).toBe(420)
     for (const c of Object.values(EDITOR_CAPS)) {
       expect(c.width).toBeGreaterThan(MIN_EDITOR_WIDTH)
       expect(c.height).toBeGreaterThan(0)

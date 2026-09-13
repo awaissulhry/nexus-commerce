@@ -1,0 +1,5753 @@
+[
+  {
+    "field": "athlete",
+    "language": "de",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "en",
+    "compared": 2512,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "es",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "fr",
+    "compared": 1436,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "it",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "nl",
+    "compared": 1076,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "pl",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "sv",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "athlete",
+    "language": "tr",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "band",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "de",
+    "compared": 1424,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "en",
+    "compared": 2892,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "es",
+    "compared": 1407,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "fr",
+    "compared": 1704,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "it",
+    "compared": 1424,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "nl",
+    "compared": 1336,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "pl",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "sv",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "battery__cell_composition_other_than_listed",
+    "language": "tr",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "de",
+    "compared": 2302,
+    "diffs": 556,
+    "valueDiffs": 338,
+    "languageDiffs": 218,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "en",
+    "compared": 3975,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "es",
+    "compared": 2285,
+    "diffs": 462,
+    "valueDiffs": 338,
+    "languageDiffs": 124,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "fr",
+    "compared": 2623,
+    "diffs": 492,
+    "valueDiffs": 338,
+    "languageDiffs": 154,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "it",
+    "compared": 2302,
+    "diffs": 801,
+    "valueDiffs": 339,
+    "languageDiffs": 462,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "nl",
+    "compared": 2176,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "pl",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "sv",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "bulletPoints",
+    "language": "tr",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "de",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "en",
+    "compared": 1992,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "es",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "fr",
+    "compared": 1116,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "it",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "climate_suitability",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "de",
+    "compared": 1431,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "en",
+    "compared": 2921,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "es",
+    "compared": 1431,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "fr",
+    "compared": 1729,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "it",
+    "compared": 1431,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "nl",
+    "compared": 1340,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "pl",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "sv",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "closure",
+    "language": "tr",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "de",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "en",
+    "compared": 1992,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "es",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "fr",
+    "compared": 1116,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "it",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "coat_weather_protection",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "de",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "en",
+    "compared": 1992,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "es",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "fr",
+    "compared": 1116,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "it",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collar_style",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "de",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "en",
+    "compared": 2512,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "es",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "fr",
+    "compared": 1436,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "it",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "nl",
+    "compared": 1076,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "pl",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "sv",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "collection_item",
+    "language": "tr",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "color__standardized_values",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "compatibility_options",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "de",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "en",
+    "compared": 2192,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "es",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "fr",
+    "compared": 1244,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "it",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "nl",
+    "compared": 948,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "pl",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "sv",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "configuration",
+    "language": "tr",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "cup",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "de",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "en",
+    "compared": 2192,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "es",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "fr",
+    "compared": 1244,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "it",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "nl",
+    "compared": 948,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "pl",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "sv",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "customer_package_type",
+    "language": "tr",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "de",
+    "compared": 1444,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "en",
+    "compared": 2912,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "es",
+    "compared": 1427,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "fr",
+    "compared": 1724,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "it",
+    "compared": 1444,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "nl",
+    "compared": 1336,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "pl",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "sv",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "department",
+    "language": "tr",
+    "compared": 891,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "de",
+    "compared": 2302,
+    "diffs": 172,
+    "valueDiffs": 0,
+    "languageDiffs": 172,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "en",
+    "compared": 3975,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "es",
+    "compared": 2285,
+    "diffs": 124,
+    "valueDiffs": 0,
+    "languageDiffs": 124,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "fr",
+    "compared": 2623,
+    "diffs": 124,
+    "valueDiffs": 0,
+    "languageDiffs": 124,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "it",
+    "compared": 2302,
+    "diffs": 544,
+    "valueDiffs": 222,
+    "languageDiffs": 322,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "nl",
+    "compared": 2176,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "pl",
+    "compared": 1690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "sv",
+    "compared": 1690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "description",
+    "language": "tr",
+    "compared": 1690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "edition",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "embellishment_feature",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fabric_wash",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "de",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "en",
+    "compared": 2512,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "es",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "fr",
+    "compared": 1436,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "it",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "nl",
+    "compared": 1076,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "pl",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "sv",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fit_to_size_sentiment",
+    "language": "tr",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "de",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "en",
+    "compared": 2692,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "es",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "fr",
+    "compared": 1544,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "it",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "nl",
+    "compared": 1148,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "pl",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "sv",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "flavor",
+    "language": "tr",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "front_style",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "de",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "en",
+    "compared": 1992,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "es",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "fr",
+    "compared": 1116,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "it",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "fur",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "de",
+    "compared": 85,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "en",
+    "compared": 153,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "es",
+    "compared": 68,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "fr",
+    "compared": 85,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "it",
+    "compared": 85,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "nl",
+    "compared": 68,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "pl",
+    "compared": 51,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "sv",
+    "compared": 51,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "glove_type",
+    "language": "tr",
+    "compared": 51,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grip",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "grit",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "de",
+    "compared": 1002,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "en",
+    "compared": 2165,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "es",
+    "compared": 985,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "fr",
+    "compared": 1221,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "it",
+    "compared": 1002,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "nl",
+    "compared": 944,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "pl",
+    "compared": 708,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "sv",
+    "compared": 708,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "hand_orientation",
+    "language": "tr",
+    "compared": 708,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "de",
+    "compared": 175,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "en",
+    "compared": 333,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "es",
+    "compared": 158,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "fr",
+    "compared": 193,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "it",
+    "compared": 175,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "nl",
+    "compared": 140,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "pl",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "sv",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "included_components",
+    "language": "tr",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "de",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "en",
+    "compared": 2718,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "es",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "fr",
+    "compared": 1598,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "it",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "inner",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_length_description",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "de",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "en",
+    "compared": 2192,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "es",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "fr",
+    "compared": 1244,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "it",
+    "compared": 1007,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "nl",
+    "compared": 948,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "pl",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "sv",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_shape",
+    "language": "tr",
+    "compared": 711,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "item_type_name",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "de",
+    "compared": 2302,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "en",
+    "compared": 3975,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "es",
+    "compared": 2285,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "fr",
+    "compared": 2623,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "it",
+    "compared": 2302,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "nl",
+    "compared": 2176,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "pl",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "sv",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "keywords",
+    "language": "tr",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "de",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "en",
+    "compared": 3092,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "es",
+    "compared": 1517,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "fr",
+    "compared": 1832,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "it",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "league_name",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "leg",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lens__color",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lifestyle",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "lining_description",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "metal_type",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "de",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "en",
+    "compared": 3092,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "es",
+    "compared": 1517,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "fr",
+    "compared": 1832,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "it",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "model_name",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "outer",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "de",
+    "compared": 1449,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "en",
+    "compared": 2939,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "es",
+    "compared": 1449,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "fr",
+    "compared": 1747,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "it",
+    "compared": 1449,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "nl",
+    "compared": 1340,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "pl",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "sv",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern",
+    "language": "tr",
+    "compared": 894,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pattern_type",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "de",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "en",
+    "compared": 1992,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "es",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "fr",
+    "compared": 1116,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "it",
+    "compared": 897,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "platform_for_display",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "de",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "en",
+    "compared": 2512,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "es",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "fr",
+    "compared": 1436,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "it",
+    "compared": 1167,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "nl",
+    "compared": 1076,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "pl",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "sv",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "pocket_description",
+    "language": "tr",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "de",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "en",
+    "compared": 2218,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "es",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "fr",
+    "compared": 1298,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "it",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "nl",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "pl",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "sv",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_expiration_type",
+    "language": "tr",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "product_grade",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "ring",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "rise__style",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "de",
+    "compared": 1514,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "en",
+    "compared": 3072,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "es",
+    "compared": 1497,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "fr",
+    "compared": 1812,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "it",
+    "compared": 1514,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "safety_data_sheet_url",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "de",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "en",
+    "compared": 2692,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "es",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "fr",
+    "compared": 1544,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "it",
+    "compared": 1257,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "nl",
+    "compared": 1148,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "pl",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "sv",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "scent",
+    "language": "tr",
+    "compared": 861,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "de",
+    "compared": 941,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "en",
+    "compared": 2091,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "es",
+    "compared": 941,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "fr",
+    "compared": 1171,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "it",
+    "compared": 941,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "nl",
+    "compared": 920,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "pl",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "sv",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "seasons",
+    "language": "tr",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "de",
+    "compared": 1147,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "en",
+    "compared": 2492,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "es",
+    "compared": 1147,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "fr",
+    "compared": 1416,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "it",
+    "compared": 1147,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "nl",
+    "compared": 1076,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "pl",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "sv",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sleeve__type",
+    "language": "tr",
+    "compared": 807,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "de",
+    "compared": 961,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "en",
+    "compared": 2111,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "es",
+    "compared": 961,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "fr",
+    "compared": 1191,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "it",
+    "compared": 961,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "nl",
+    "compared": 920,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "pl",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "sv",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_feature",
+    "language": "tr",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "special_size_type",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "de",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "en",
+    "compared": 1991,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "es",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "fr",
+    "compared": 1115,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "it",
+    "compared": 896,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "specific_uses_for_product",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "sport_type",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "de",
+    "compared": 1534,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "en",
+    "compared": 3092,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "es",
+    "compared": 1517,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "fr",
+    "compared": 1832,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "it",
+    "compared": 1534,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "style",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 9,
+    "valueDiffs": 9,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "de",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "en",
+    "compared": 2718,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "es",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "fr",
+    "compared": 1598,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "it",
+    "compared": 1318,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "subject_character",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "de",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "en",
+    "compared": 3092,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "es",
+    "compared": 1517,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "fr",
+    "compared": 1832,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "it",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "team_name",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "de",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "en",
+    "compared": 2218,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "es",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "fr",
+    "compared": 1298,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "it",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "nl",
+    "compared": 1068,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "pl",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "sv",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "temperature_rating",
+    "language": "tr",
+    "compared": 690,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "theme",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "de",
+    "compared": 2642,
+    "diffs": 1058,
+    "valueDiffs": 598,
+    "languageDiffs": 644,
+    "reviewDiffs": 159
+  },
+  {
+    "field": "title",
+    "language": "en",
+    "compared": 4232,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "es",
+    "compared": 2665,
+    "diffs": 830,
+    "valueDiffs": 482,
+    "languageDiffs": 471,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "fr",
+    "compared": 2995,
+    "diffs": 798,
+    "valueDiffs": 490,
+    "languageDiffs": 423,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "it",
+    "compared": 2701,
+    "diffs": 1389,
+    "valueDiffs": 222,
+    "languageDiffs": 1183,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "nl",
+    "compared": 2324,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "pl",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "sv",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title",
+    "language": "tr",
+    "compared": 1690,
+    "diffs": 338,
+    "valueDiffs": 338,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "de",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "en",
+    "compared": 3092,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "es",
+    "compared": 1517,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "fr",
+    "compared": 1832,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "it",
+    "compared": 1534,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "nl",
+    "compared": 1408,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "pl",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "sv",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "title_differentiation",
+    "language": "tr",
+    "compared": 945,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__code",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__note",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "de",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "en",
+    "compared": 180,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "es",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "fr",
+    "compared": 108,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "it",
+    "compared": 90,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "nl",
+    "compared": 72,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "pl",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "sv",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "vehicle_fitment__standard",
+    "language": "tr",
+    "compared": 54,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "de",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "en",
+    "compared": 2012,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "es",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "fr",
+    "compared": 1136,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "it",
+    "compared": 917,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "nl",
+    "compared": 876,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "pl",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "sv",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "waist__style",
+    "language": "tr",
+    "compared": 657,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "de",
+    "compared": 175,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "en",
+    "compared": 333,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "es",
+    "compared": 158,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "fr",
+    "compared": 193,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "it",
+    "compared": 175,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "nl",
+    "compared": 140,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "pl",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "sv",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "warranty_description",
+    "language": "tr",
+    "compared": 105,
+    "diffs": 0,
+    "valueDiffs": 0,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "de",
+    "compared": 1359,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "en",
+    "compared": 2759,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "es",
+    "compared": 1359,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "fr",
+    "compared": 1639,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "it",
+    "compared": 1359,
+    "diffs": 20,
+    "valueDiffs": 0,
+    "languageDiffs": 20,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "nl",
+    "compared": 1268,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "pl",
+    "compared": 840,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "sv",
+    "compared": 840,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  },
+  {
+    "field": "weave_type",
+    "language": "tr",
+    "compared": 840,
+    "diffs": 20,
+    "valueDiffs": 20,
+    "languageDiffs": 0,
+    "reviewDiffs": 0
+  }
+]

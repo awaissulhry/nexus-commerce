@@ -1,0 +1,1339 @@
+--- before/apps/api/src/services/ebay-flat-file-delete.service.ts
++++ after/apps/api/src/services/ebay-flat-file-delete.service.ts
+@@ -24,6 +24,7 @@
+  * HARD DELETE IS NEVER PERFORMED.
+  */
+ 
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+ import { logger } from '../utils/logger.js'
+ import prismaClient from '../db.js'
+ import { ebayAuthService } from './ebay-auth.service.js'
+@@ -53,6 +54,8 @@
+ ] satisfies DeleteIntent[])
+ 
+ export interface DeleteTarget {
++  channelConnectionId?: string | null
++  aliasKey?: string
+   /** Nexus Product.id — preferred identifier; falls back to sku when omitted. */
+   productId?: string
+   /** Product.sku / SharedListingMembership.sku */
+@@ -70,6 +73,7 @@
+ }
+ 
+ export interface DeleteTargetResult {
++  fanOut?: Array<ListingCoordinate & { listingId: string }>
+   /** remove-channel-listing: products stamped with the per-market file
+    *  exclusion (row leaves the file until the SKU is saved again). */
+   excludedFromFile?: number
+@@ -144,6 +148,7 @@
+   itemId: string,
+   marketplace: string,
+   productId: string | null,
++  coordinate?: ListingCoordinate,
+ ): ChannelDelistJob {
+   return {
+     // queueId is used only by applyDelistResultToQueue; passing a synthetic value
+@@ -155,7 +160,8 @@
+     targetRegion: marketplace,
+     externalListingId: itemId,
+     syncType: 'DELETE_LISTING',
+-    payload: { channelAction: 'delete' },
++    channelConnectionId: coordinate?.channelConnectionId,
++    payload: { channelAction: 'delete', ...(coordinate ? { aliasKey: coordinate.aliasKey } : {}) },
+   }
+ }
+ 
+@@ -206,11 +212,12 @@
+   itemId: string | null | undefined,
+   marketplace: string,
+   productId: string | null = null,
++  coordinate?: ListingCoordinate,
+ ): Promise<boolean> {
+   if (!itemId) return false
+   try {
+     const result = await dispatchChannelDelist(
+-      buildDelistJob(itemId, marketplace, productId),
++      buildDelistJob(itemId, marketplace, productId, coordinate),
+     )
+     if (!result.success) {
+       logger.warn(
+@@ -223,7 +230,7 @@
+         },
+       )
+     }
+-    return result.success
++    return result.success && !result.dryRun
+   } catch (err: unknown) {
+     logger.warn('ebay-flat-file-delete: delist threw (non-fatal)', {
+       itemId,
+@@ -606,6 +613,8 @@
+   target: DeleteTarget,
+ ): Promise<DeleteTargetResult> {
+   const { sku, marketplace, productId } = target
++  const coordinate = { productId, channel: 'EBAY', marketplace, channelConnectionId: target.channelConnectionId, aliasKey: target.aliasKey } as ListingCoordinate
++  whereCoordinate(coordinate)
+ 
+   const product = (await prisma.product.findFirst({
+     where: productId ? { id: productId } : { sku },
+@@ -631,19 +640,20 @@
+     select: { id: true, categoryAttributes: true },
+   } as any)) as Array<{ id: string; categoryAttributes?: unknown }>
+   const productIds = [product.id, ...children.map((c) => c.id)]
++  const where = { OR: productIds.map(productId => whereCoordinate({ ...coordinate, productId })) }
+ 
+   // Collect ItemIDs for best-effort delist BEFORE the listings are deleted.
+   const listings = (await prisma.channelListing.findMany({
+-    where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
+-    select: { externalListingId: true },
+-  } as any)) as Array<{ externalListingId: string | null }>
++    where,
++    select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, externalListingId: true },
++  } as any)) as Array<ListingCoordinate & { id: string; externalListingId: string | null }>
+ 
+   let channelListingsRemoved = 0
+   let excludedFromFile = 0
+   const market = marketplace.toUpperCase()
+   await prisma.$transaction(async (tx) => {
+     const del = await tx.channelListing.deleteMany({
+-      where: { productId: { in: productIds }, channel: 'EBAY', marketplace },
++      where,
+     } as any)
+     channelListingsRemoved = (del as { count: number }).count
+     // Incident #12 (2026-07-18): stamp a per-market FILE EXCLUSION on every
+@@ -656,6 +666,9 @@
+       { id: product.id, categoryAttributes: product.categoryAttributes },
+       ...children,
+     ]) {
++      // A per-market file stamp would hide surviving accounts/aliases too.
++      const survivors = await tx.channelListing.findMany({ where: { productId: t.id, channel: 'EBAY', marketplace }, select: { id: true }, take: 1 })
++      if (survivors.length) continue
+       const attrs =
+         t.categoryAttributes && typeof t.categoryAttributes === 'object'
+           ? { ...(t.categoryAttributes as Record<string, unknown>) }
+@@ -689,7 +702,7 @@
+     const delistIds = new Set<string>(
+       [
+         ...listings.map((l) => l.externalListingId),
+-        product.ebayItemId ?? null,
++        // Product.ebayItemId is unscoped; only captured coordinate identities may be ended.
+       ].filter((x): x is string => Boolean(x)),
+     )
+     // GUARD 2 — CROSS-MARKET / SHARED ItemID. An ItemID can legitimately be
+@@ -717,7 +730,7 @@
+       ])
+       for (const iid of ids) {
+         if (shared.has(iid)) { delistSkippedShared.push(iid); continue }
+-        const ok = await tryDelist(iid, marketplace, product.id)
++        const ok = await tryDelist(iid, marketplace, product.id, coordinate)
+         if (ok) delisted = true
+       }
+     }
+@@ -732,5 +745,6 @@
+     ...(delistSkippedShared.length > 0 ? { delistSkippedShared } : {}),
+     delisted,
+     excludedFromFile,
+-  }
+-}
++    fanOut: listings.map(l => ({ productId: l.productId, channel: l.channel, marketplace: l.marketplace, channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey, listingId: l.id })),
++  }
++}
+--- before/apps/api/src/services/amazon/amazon-flat-file-remove.service.ts
++++ after/apps/api/src/services/amazon/amazon-flat-file-remove.service.ts
+@@ -1,86 +1,65 @@
+-// apps/api/src/services/amazon/amazon-flat-file-remove.service.ts
+-/**
+- * Market-scoped Amazon listing removal. Deletes the AMAZON ChannelListing(s)
+- * for a product (and its children when it is a parent) in ONE marketplace,
+- * best-effort delists, and NEVER modifies the Product (inventory invariant).
+- */
++/** Five-level local removal. Child fan-out is enumerated and returned. */
+ import { dispatchChannelDelist } from '../channel-delist.service.js'
++import { sellerSkuForDelist } from '../outbound-enqueue.js'
++import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
+ 
+-export interface RemoveAmazonTarget { productId: string; marketplace: string }
++export interface RemoveAmazonTarget extends Omit<ListingCoordinate, 'channel'> { actor: string }
+ export interface RemoveAmazonResult {
+   productId: string
+   marketplace: string
+   channelListingsRemoved: number
+   delisted: boolean
++  fanOut: Array<ListingCoordinate & { listingId: string; externalListingId: string | null }>
+   error?: string
+ }
+-
+ interface RemovePrisma {
+-  product: {
+-    findFirst(a: unknown): Promise<unknown>
+-    findMany(a: unknown): Promise<unknown[]>
+-  }
+-  channelListing: {
+-    findMany(a: unknown): Promise<unknown[]>
+-    deleteMany(a: unknown): Promise<{ count: number }>
+-  }
+-  $transaction<T>(
+-    fn: (tx: { channelListing: { deleteMany(a: unknown): Promise<{ count: number }> } }) => Promise<T>,
+-  ): Promise<T>
++  product: { findFirst(a: any): Promise<any>; findMany(a: any): Promise<any[]> }
++  channelListing: { findMany(a: any): Promise<any[]>; deleteMany(a: any): Promise<{count: number}> }
++  $transaction<T>(fn: (tx: any) => Promise<T>): Promise<T>
+ }
+-
+-export async function removeAmazonListing(
+-  prisma: RemovePrisma,
+-  target: RemoveAmazonTarget,
+-): Promise<RemoveAmazonResult> {
+-  const { productId, marketplace } = target
+-
+-  const product = (await prisma.product.findFirst({
+-    where: { id: productId },
+-    select: { id: true },
+-  } as any)) as { id: string } | null
+-
+-  if (!product) {
+-    return { productId, marketplace, channelListingsRemoved: 0, delisted: false, error: `Product not found: ${productId}` }
+-  }
+-
+-  const children = (await prisma.product.findMany({
+-    where: { parentId: product.id, deletedAt: null },
+-    select: { id: true },
+-  } as any)) as Array<{ id: string }>
+-  const ids = [product.id, ...children.map((c) => c.id)]
+-
+-  const listings = (await prisma.channelListing.findMany({
+-    where: { productId: { in: ids }, channel: 'AMAZON', marketplace },
+-    select: { externalListingId: true },
+-  } as any)) as Array<{ externalListingId: string | null }>
+-
+-  let channelListingsRemoved = 0
+-  await prisma.$transaction(async (tx) => {
+-    const del = await tx.channelListing.deleteMany({
+-      where: { productId: { in: ids }, channel: 'AMAZON', marketplace },
+-    } as any)
+-    channelListingsRemoved = (del as { count: number }).count
+-    // Product intentionally untouched.
++export async function removeAmazonListing(prisma: RemovePrisma, target: RemoveAmazonTarget): Promise<RemoveAmazonResult> {
++  const coordinate = { ...target, channel: 'AMAZON' }
++  whereCoordinate(coordinate) // Validate before any read or mutation.
++  if (!target.actor) throw new Error('LISTING_REMOVAL_ACTOR_REQUIRED')
++  const { productId, marketplace } = coordinate
++  const result: RemoveAmazonResult = { productId, marketplace, channelListingsRemoved: 0, delisted: false, fanOut: [] }
++  const product = await prisma.product.findFirst({ where: { id: productId }, select: { id: true } })
++  if (!product) return { ...result, error: `Product not found: ${productId}` }
++  const children = await prisma.product.findMany({ where: { parentId: productId, deletedAt: null }, select: { id: true } })
++  const coordinates = [product, ...children].map(p => ({ ...coordinate, productId: p.id }))
++  // This exact OR is shared by the identity capture and the local delete.
++  const where = { OR: coordinates.map(whereCoordinate) }
++  const listings = await prisma.channelListing.findMany({ where, include: { product: { select: { sku: true } }, offers: true } })
++  result.fanOut = listings.map(l => ({
++    productId: l.productId, channel: l.channel, marketplace: l.marketplace,
++    channelConnectionId: l.channelConnectionId, aliasKey: l.aliasKey,
++    listingId: l.id, externalListingId: l.externalListingId,
++  }))
++  await prisma.$transaction(async tx => {
++    const deleted = await tx.channelListing.deleteMany({ where })
++    result.channelListingsRemoved = deleted.count
++    if (deleted.count) await tx.productEvent.create({ data: {
++      aggregateType: 'Product', aggregateId: productId, eventType: 'LISTING_REMOVED',
++      data: { coordinate: whereCoordinate(coordinate), removedCount: deleted.count, fanOut: result.fanOut },
++      metadata: { actor: target.actor, source: 'amazon-flat-file-remove' },
++    } })
+   })
+-
+-  let delisted = false
++  // W1 retains the local-first removal protocol. Wave 4 supplies durable
++  // remote orchestration; a refusal/dry run is never reported as a delist.
++  const errors: string[] = []
+   for (const l of listings) {
+     if (!l.externalListingId) continue
+     try {
+       const r = await dispatchChannelDelist({
+-        queueId: `amz-rm-${product.id}-${marketplace}`,
+-        productId: product.id,
+-        channelListingId: null,
+-        targetChannel: 'AMAZON',
+-        targetRegion: marketplace,
+-        externalListingId: l.externalListingId,
+-        syncType: 'DELETE_LISTING',
+-        payload: { channelAction: 'delete' },
+-      } as any)
+-      if ((r as { success?: boolean })?.success) delisted = true
+-    } catch { /* best-effort; never blocks the committed removal */ }
++        queueId: `amz-rm-${l.id}`, productId: l.productId, channelListingId: null,
++        targetChannel: 'AMAZON', targetRegion: l.marketplace, externalListingId: l.externalListingId,
++        sellerSku: sellerSkuForDelist(l), channelConnectionId: l.channelConnectionId,
++        syncType: 'DELETE_LISTING', payload: { channelAction: 'delete', aliasKey: l.aliasKey, originalListingId: l.id },
++      })
++      if (r.success && !r.dryRun) result.delisted = true
++      else errors.push(`${l.id}: ${r.error ?? (r.dryRun ? 'dry-run; not delisted' : 'delist refused')}`)
++    } catch (e) { errors.push(`${l.id}: ${e instanceof Error ? e.message : String(e)}`) }
+   }
+-
+-  return { productId, marketplace, channelListingsRemoved, delisted }
++  if (errors.length) result.error = errors.join('; ')
++  return result
+ }
+--- before/apps/api/src/services/amazon-market-offer.service.ts
++++ after/apps/api/src/services/amazon-market-offer.service.ts
+@@ -1,3 +1,5 @@
++import { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
++export { isFbaCoordinate } from '../lib/amazon-fulfillment.js'
+ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
+ /**
+  * SCT.6 — per-market Amazon offer CLOSE / REOPEN.
+@@ -26,20 +28,19 @@
+  */
+ 
+ import prisma from '../db.js'
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
++import { detectEuIntentConflict, EU_GUARD_REMEDY } from './amazon-eu-quantity-guard.js'
+ import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+ import { MARKETPLACE_ID_MAP } from './amazon/flat-file.service.js'
+ import { logger } from '../utils/logger.js'
+ 
+-export interface MarketOfferTarget {
+-  productId: string
+-  marketplace: string
+-}
++export interface MarketOfferTarget extends Omit<ListingCoordinate, 'channel'> {}
+ 
+ export interface MarketOfferRowResult {
+   productId: string
+   sku: string | null
+   marketplace: string
+-  action: 'CLOSED' | 'REOPENED' | 'SKIPPED_FBA' | 'SKIPPED_ALREADY' | 'SKIPPED_NOT_CLOSED' | 'SKIPPED_NO_LISTING' | 'FAILED'
++  action: 'DRY_RUN' | 'CLOSED' | 'REOPENED' | 'SKIPPED_FBA' | 'SKIPPED_ALREADY' | 'SKIPPED_NOT_CLOSED' | 'SKIPPED_NO_LISTING' | 'FAILED'
+   detail?: string
+ }
+ 
+@@ -54,19 +55,12 @@
+   remaining?: number
+ }
+ 
+-const sellerId = async () => (await getAmazonSellerId())
+-
+-function isFbaRow(cl: { fulfillmentMethod: string | null; product: { fulfillmentMethod: string | null } | null }): boolean {
+-  // Fail-closed: ANY FBA signal refuses the close/reopen. Amazon owns FBA
+-  // logistics end-to-end — these offers are never ours to close.
+-  return cl.fulfillmentMethod === 'FBA' || cl.product?.fulfillmentMethod === 'FBA'
+-}
+ 
+ async function loadRow(t: MarketOfferTarget) {
+   return prisma.channelListing.findFirst({
+-    where: { productId: t.productId, channel: 'AMAZON', marketplace: t.marketplace },
++    where: whereCoordinate({ ...t, channel: 'AMAZON' }),
+     select: {
+-      id: true, productId: true, marketplace: true, fulfillmentMethod: true,
++      id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true, fulfillmentMethod: true,
+       offerClosedAt: true, offerCloseSnapshot: true, price: true,
+       platformAttributes: true, followMasterQuantity: true, quantityOverride: true, syncPaused: true,
+       product: { select: { sku: true, fulfillmentMethod: true, productType: true } },
+@@ -87,8 +81,8 @@
+   reason?: string
+ }): Promise<MarketOfferResult> {
+   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
+-  const seller = await sellerId()
+-  if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
++  // Validate the whole batch before the first side effect.
++  opts.targets.forEach(t => whereCoordinate({ ...t, channel: 'AMAZON' }))
+ 
+   let processed = 0
+   for (const t of opts.targets) {
+@@ -101,7 +95,7 @@
+         processed++
+         continue
+       }
+-      if (isFbaRow(cl)) {
++      if (isFbaCoordinate(cl)) {
+         // Owner rule: FBA is Amazon-managed — never close it.
+         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
+         result.skippedFba++
+@@ -114,6 +108,9 @@
+         processed++
+         continue
+       }
++      if (!t.channelConnectionId) throw new Error('AMAZON_OFFER_ACCOUNT_REQUIRED')
++      const seller = await getAmazonSellerId(t.channelConnectionId)
++      if (!seller) throw new Error('AMAZON_SELLER_ID not configured for coordinate account')
+       const marketplaceId = MARKETPLACE_ID_MAP[t.marketplace.toUpperCase()]
+       if (!marketplaceId) {
+         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'FAILED', detail: `unknown marketplace ${t.marketplace}` })
+@@ -174,11 +171,17 @@
+         continue
+       }
+ 
+-      // 3 — persist the closed state + cancel racing quantity pushes.
++      if (res.dryRun) {
++        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'DRY_RUN', detail: 'Preview only; offer state unchanged.' })
++        result.unchanged++; processed++; continue
++      }
++
++      // 3 — persist only an acknowledged close; skip_offer consumes offerActive.
+       await prisma.channelListing.update({
+-        where: { id: cl.id },
++        where: { id: cl.id, ...whereCoordinate({ ...t, channel: 'AMAZON' }) },
+         data: {
+           offerClosedAt: new Date(),
++          offerActive: false,
+           offerClosedBy: opts.actor,
+           offerCloseReason: opts.reason ?? null,
+           offerCloseSnapshot: {
+@@ -197,7 +200,7 @@
+         where: { channelListingId: cl.id, syncStatus: 'PENDING' },
+         data: { syncStatus: 'CANCELLED', errorMessage: 'market offer closed (SCT.6)' },
+       })
+-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: res.dryRun ? 'dry-run' : undefined })
++      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'CLOSED', detail: undefined })
+       result.updated++
+       processed++
+     } catch (e) {
+@@ -217,8 +220,8 @@
+   actor: string
+ }): Promise<MarketOfferResult> {
+   const result: MarketOfferResult = { updated: 0, skippedFba: 0, unchanged: 0, failed: 0, results: [] }
+-  const seller = await sellerId()
+-  if (!seller) throw new Error('AMAZON_SELLER_ID not configured')
++  // Validate the whole batch before the first side effect.
++  opts.targets.forEach(t => whereCoordinate({ ...t, channel: 'AMAZON' }))
+ 
+   let processed = 0
+   for (const t of opts.targets) {
+@@ -231,7 +234,7 @@
+         processed++
+         continue
+       }
+-      if (isFbaRow(cl)) {
++      if (isFbaCoordinate(cl)) {
+         result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'SKIPPED_FBA' })
+         result.skippedFba++
+         processed++
+@@ -243,6 +246,9 @@
+         processed++
+         continue
+       }
++      if (!t.channelConnectionId) throw new Error('AMAZON_OFFER_ACCOUNT_REQUIRED')
++      const seller = await getAmazonSellerId(t.channelConnectionId)
++      if (!seller) throw new Error('AMAZON_SELLER_ID not configured for coordinate account')
+       const marketplaceId = MARKETPLACE_ID_MAP[t.marketplace.toUpperCase()]
+       const snap = cl.offerCloseSnapshot as {
+         purchasableOffer?: Array<Record<string, unknown>>
+@@ -260,6 +266,21 @@
+         continue
+       }
+ 
++      // Reopening forces FOLLOW and queues quantity. Check the shared number
++      // for this account/alias before either the patch or any local mutation.
++      const euRows = await prisma.channelListing.findMany({
++        where: { productId: t.productId, channel: 'AMAZON', channelConnectionId: t.channelConnectionId, aliasKey: t.aliasKey },
++        include: { product: { select: { fulfillmentMethod: true } } },
++      })
++      const conflict = detectEuIntentConflict(euRows.map(r => ({
++        marketplace: r.marketplace, quantity: r.quantity,
++        followMasterQuantity: r.id === cl.id ? true : r.followMasterQuantity,
++        quantityOverride: r.id === cl.id ? null : r.quantityOverride,
++        syncPaused: r.id === cl.id ? false : r.syncPaused,
++        isFba: isFbaCoordinate(r), offerClosed: r.id === cl.id ? false : !!r.offerClosedAt,
++      })))
++      if (conflict.conflict) throw new Error(`AMAZON_EU_QUANTITY_CONFLICT: ${conflict.detail}. ${EU_GUARD_REMEDY}`)
++
+       // Replay the verbatim offer (op:replace also creates it when absent).
+       const res = await amazonSpApiClient.patchPurchasableOffer({
+         sellerId: seller, sku, marketplaceId, productType, op: 'replace', value: offerValue,
+@@ -271,11 +292,17 @@
+         continue
+       }
+ 
+-      // Rejoin the pool: Follow + fresh push so quantity flows immediately.
++      if (res.dryRun) {
++        result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'DRY_RUN', detail: 'Preview only; offer state unchanged.' })
++        result.unchanged++; processed++; continue
++      }
++
++      // Rejoin the pool only after the acknowledged patch and the EU guard.
+       await prisma.channelListing.update({
+-        where: { id: cl.id },
++        where: { id: cl.id, ...whereCoordinate({ ...t, channel: 'AMAZON' }) },
+         data: {
+           offerClosedAt: null,
++          offerActive: true,
+           offerClosedBy: null,
+           offerCloseReason: null,
+           // snapshot kept for audit/history — cheap and occasionally useful.
+@@ -298,7 +325,7 @@
+           payload: { source: 'SCT6_REOPEN', productId: cl.productId, marketplace: cl.marketplace, actor: opts.actor },
+         },
+       })
+-      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: res.dryRun ? 'dry-run' : undefined })
++      result.results.push({ productId: t.productId, sku, marketplace: t.marketplace, action: 'REOPENED', detail: undefined })
+       result.updated++
+       processed++
+     } catch (e) {
+@@ -313,8 +340,8 @@
+   return result
+ }
+ 
+-/** SCT.6 belt helper — is this (productId, marketplace) closed? Used by every
+- *  Amazon write stack so nothing can silently resurrect a closed offer. */
++/** Conservative product/market refusal belt for legacy push callers. This may
++ * refuse a sibling account; it is never an authorization predicate for a write. */
+ export async function closedMarketSet(productIds: string[]): Promise<Set<string>> {
+   if (productIds.length === 0) return new Set()
+   const rows = await prisma.channelListing.findMany({
+--- before/apps/api/src/routes/sync-control.routes.ts
++++ after/apps/api/src/routes/sync-control.routes.ts
+@@ -28,7 +28,8 @@
+ import { enqueueOutboundRowsInstant } from '../services/outbound-enqueue.js'
+ import { summarizeProductSync, marketMatches, omitChildrenInList, resolveCanonicalMap, canonicalStem, INLINE_PREVIEW_ROWS, summarizeFamilies, familyKeyOf, rowMatchesScope, type SyncScope } from '../services/sync-control-product-view.js'
+ import { projectActionAndDetect, AMAZON_EU_SHARED_MARKETS, EU_GUARD_REMEDY } from '../services/amazon-eu-quantity-guard.js'
+-import { closeMarketOffers, reopenMarketOffers } from '../services/amazon-market-offer.service.js'
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
++import { closeMarketOffers, reopenMarketOffers, isFbaCoordinate } from '../services/amazon-market-offer.service.js'
+ import { pickFaceImage, FACE_IMAGE_SELECT, FACE_IMAGE_ORDER_BY } from '../services/product-read-cache.service.js'
+ import { buildSyncControlWorkbook, parseSyncControlWorkbook, normalizeModeCell } from '../services/sync-control-excel.js'
+ import { primaryConnectionIds } from '../services/connection-resolver.service.js'
+@@ -571,7 +572,7 @@
+     }
+   }
+ 
+-  interface ListingTarget { productId: string; channel: string; marketplace: string }
++  interface ListingTarget extends ListingCoordinate {}
+   interface MembershipTarget { itemId: string; marketplace: string; sku: string }
+ 
+   app.post('/stock/sync-control/actions', async (request, reply) => {
+@@ -596,7 +597,7 @@
+       expandEuAligned?: boolean
+     }
+     const actor = actorOf(request as never)
+-    const listings = body.listings ?? []
++    const listings = [...(body.listings ?? [])]
+     const memberships = body.memberships ?? []
+     if (!body.action) return reply.code(400).send({ error: 'action required' })
+     const result: {
+@@ -610,6 +611,7 @@
+     // failure (the old handler returned Fastify's naked 'Internal Server
+     // Error' — the P2028 incident shipped zero information to the operator).
+     try {
++      listings.forEach(whereCoordinate)
+       if (body.masterIds?.length) {
+         // SCD.4 — expand each selected group SERVER-side to every master folded
+         // into it. Previously this trusted the client to send memberMasterIds,
+@@ -634,7 +636,7 @@
+         const [cls, mems] = await Promise.all([
+           prisma.channelListing.findMany({
+             where: { productId: { in: pids }, isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+-            select: { productId: true, channel: true, marketplace: true },
++            select: { productId: true, channel: true, marketplace: true, channelConnectionId: true, aliasKey: true },
+           }),
+           prisma.sharedListingMembership.findMany({
+             where: { productId: { in: pids }, status: 'ACTIVE' },
+@@ -681,7 +683,7 @@
+         const LISTING_LANE = ['FOLLOW', 'PIN', 'PAUSE', 'RESUME', 'ZERO_PIN', 'BUFFER', 'CLOSE_OFFER', 'REOPEN_OFFER']
+         const SHARED_LANE = ['EXCLUDE', 'INCLUDE', 'BUFFER']
+         if (LISTING_LANE.includes(body.action)) {
+-          for (const c of clsT) listings.push({ productId: c.productId, channel: c.channel, marketplace: c.marketplace })
++          for (const c of clsT) listings.push(c)
+         }
+         if (SHARED_LANE.includes(body.action)) {
+           for (const m of memsT) memberships.push({ itemId: m.itemId, marketplace: m.marketplace, sku: m.sku })
+@@ -712,21 +714,22 @@
+           const euRows = await prisma.channelListing.findMany({
+             where: { productId: { in: pids }, channel: 'AMAZON', isPublished: true, listingStatus: { notIn: ['ENDED', 'REMOVED'] } },
+             select: {
+-              productId: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
++              productId: true, channel: true, channelConnectionId: true, aliasKey: true, marketplace: true, followMasterQuantity: true, quantityOverride: true,
+               quantity: true, syncPaused: true, fulfillmentMethod: true, offerClosedAt: true,
+               product: { select: { sku: true } },
+             },
+           })
++          const euKey = (r: { productId: string; channelConnectionId: string | null; aliasKey: string }) => JSON.stringify([r.productId, r.channelConnectionId, r.aliasKey])
+           const targetsByPid = new Map<string, Set<string>>()
+           for (const t of euTargets) {
+-            const set = targetsByPid.get(t.productId) ?? new Set<string>()
++            const set = targetsByPid.get(euKey(t)) ?? new Set<string>()
+             set.add(t.marketplace.toUpperCase())
+-            targetsByPid.set(t.productId, set)
++            targetsByPid.set(euKey(t), set)
+           }
+           const conflictedPids: string[] = []
+           for (const [pid, mkts] of targetsByPid) {
+             const prodRows = euRows
+-              .filter((r) => r.productId === pid)
++              .filter((r) => euKey(r) === pid)
+               .map((r) => ({
+                 marketplace: r.marketplace,
+                 followMasterQuantity: r.followMasterQuantity,
+@@ -741,21 +744,21 @@
+           }
+           if (conflictedPids.length > 0) {
+             // The extra rows the TRUE (EU-wide) action covers.
+-            const additions: Array<{ productId: string; channel: string; marketplace: string }> = []
++            const additions: ListingTarget[] = []
+             const previews: Array<{ sku: string; addedMarkets: string[] }> = []
+             for (const pid of conflictedPids) {
+               const targeted = targetsByPid.get(pid) ?? new Set<string>()
+               const extra = euRows.filter(
+-                (r) => r.productId === pid && r.fulfillmentMethod !== 'FBA' &&
++                (r) => euKey(r) === pid && r.fulfillmentMethod !== 'FBA' &&
+                   // SCT.6 — NEVER expand into a CLOSED market: consenting to an
+                   // EU-wide quantity action must not reopen a closed offer.
+                   !r.offerClosedAt &&
+                   AMAZON_EU_SHARED_MARKETS.has(r.marketplace.toUpperCase()) &&
+                   !targeted.has(r.marketplace.toUpperCase()),
+               )
+-              for (const r of extra) additions.push({ productId: pid, channel: 'AMAZON', marketplace: r.marketplace })
++              for (const r of extra) additions.push({ productId: r.productId, channel: 'AMAZON', marketplace: r.marketplace, channelConnectionId: r.channelConnectionId, aliasKey: r.aliasKey })
+               previews.push({
+-                sku: euRows.find((r) => r.productId === pid)?.product?.sku ?? pid,
++                sku: euRows.find((r) => euKey(r) === pid)?.product?.sku ?? pid,
+                 addedMarkets: [...new Set(extra.map((r) => r.marketplace.toUpperCase()))],
+               })
+             }
+@@ -813,7 +816,7 @@
+               result.unchanged += targets.length
+               continue
+             }
+-            const svcTargets = targets.map((t) => ({ productId: t.productId, marketplace: t.marketplace }))
++            const svcTargets = targets
+             const r = body.action === 'CLOSE_OFFER'
+               ? await closeMarketOffers({ targets: svcTargets, actor })
+               : await reopenMarketOffers({ targets: svcTargets, actor })
+@@ -845,7 +848,7 @@
+ 
+           if (body.action === 'FOLLOW' || body.action === 'PIN') {
+             const r = await setFollowMasterQuantity({
+-              productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor,
++              productIds, channel: channel as never, markets, follow: body.action === 'FOLLOW', actor, coordinates: targets,
+             })
+             result.updated += r.updated
+             result.skippedFba += r.skippedFba
+@@ -872,7 +875,7 @@
+ 
+           if (body.action === 'BUFFER') {
+             const buffer = Math.max(0, Math.trunc(body.buffer ?? 0))
+-            const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor })
++            const r = await setStockBuffer({ productIds, channel: channel as never, markets, buffer, actor, coordinates: targets })
+             result.updated += r.updated
+             result.skippedFba += r.skippedFba
+             if (r.error) {
+@@ -894,16 +897,16 @@
+           // PAUSE / RESUME / ZERO_PIN — resolve rows, fail-closed FBA exclusion.
+           const rows = await prisma.channelListing.findMany({
+             where: {
+-              OR: targets.map((t) => ({ productId: t.productId, channel: t.channel, marketplace: t.marketplace })),
++              OR: targets.map(whereCoordinate),
+             },
+             select: {
+-              id: true, productId: true, channel: true, marketplace: true, region: true,
+-              externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true,
++              id: true, productId: true, channel: true, marketplace: true, region: true, channelConnectionId: true, aliasKey: true,
++              externalListingId: true, syncPaused: true, fulfillmentMethod: true, quantity: true, platformAttributes: true,
+               product: { select: { fulfillmentMethod: true, sku: true } },
+             },
+           })
+           const eligible = rows.filter((r) => {
+-            const fba = r.fulfillmentMethod === 'FBA' || (r.fulfillmentMethod == null && r.product?.fulfillmentMethod === 'FBA') || r.product?.fulfillmentMethod === 'FBA'
++            const fba = isFbaCoordinate(r)
+             if (fba) result.skippedFba++
+             return !fba
+           })
+@@ -912,7 +915,7 @@
+             const ids = eligible.filter((r) => !r.syncPaused).map((r) => r.id)
+             result.unchanged += eligible.length - ids.length
+             if (ids.length) {
+-              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: true } })
++              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: true } })
+               result.updated += u.count
+             }
+             await audit(eligible.map((r) => ({
+@@ -923,7 +926,7 @@
+             const ids = eligible.filter((r) => r.syncPaused).map((r) => r.id)
+             result.unchanged += eligible.length - ids.length
+             if (ids.length) {
+-              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids } }, data: { syncPaused: false } })
++              const u = await prisma.channelListing.updateMany({ where: { id: { in: ids }, OR: eligible.map(whereCoordinate) }, data: { syncPaused: false } })
+               result.updated += u.count
+               for (const r of eligible) if (r.syncPaused) recascadeProducts.add(r.productId)
+             }
+@@ -938,7 +941,7 @@
+             // sequential round-trips made a 500-row Zero & Pin needlessly slow.
+             if (eligible.length) {
+               const u = await prisma.channelListing.updateMany({
+-                where: { id: { in: eligible.map((r) => r.id) } },
++                where: { OR: eligible.map(r => ({ id: r.id, ...whereCoordinate(r) })) },
+                 data: { quantity: 0, quantityOverride: 0, followMasterQuantity: false, syncPaused: false, lastSyncStatus: 'PENDING' },
+               })
+               result.updated += u.count
+--- before/apps/api/src/routes/marketplaces.routes.ts
++++ after/apps/api/src/routes/marketplaces.routes.ts
+@@ -12,7 +12,9 @@
+ import { amazonMarketplaceId } from '../services/categories/marketplace-ids.js'
+ import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
+ import { syncActivatedListings } from '../services/listing-activation-sync.service.js'
+-import { primaryConnectionIds } from '../services/connection-resolver.service.js'
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
++import { writeCoordinateOffer } from '../services/market-offer-availability.service.js'
++import { assertRequestPermission } from '../lib/auth/request-permission.js'
+ 
+ const amazonService = new AmazonService()
+ 
+@@ -265,6 +267,7 @@
+   // GET /api/products/:id/all-listings — every channel/marketplace listing for a product
+   fastify.get<{ Params: { id: string } }>(
+     '/products/:id/all-listings',
++    { preHandler: request => assertRequestPermission(request, 'products.view') },
+     async (request, reply) => {
+       try {
+         const { id } = request.params
+@@ -295,11 +298,11 @@
+ 
+   // MA.1 — PATCH /api/products/:id/offer-availability
+   // Toggle offerActive per (channel, marketplace) for a single product.
+-  // Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
++  // Body: { markets: Array<Omit<ListingCoordinate, 'productId'> & { offerActive: boolean }> }
+   // Auto-creates ChannelListing rows that don't exist yet (with offerActive set).
+   fastify.patch<{
+     Params: { id: string }
+-    Body: { markets: Array<{ channel: string; marketplace: string; offerActive: boolean }> }
++    Body: { markets: Array<Omit<ListingCoordinate, 'productId'> & { offerActive: boolean }> }
+   }>(
+     '/products/:id/offer-availability',
+     async (request, reply) => {
+@@ -309,28 +312,9 @@
+         if (!Array.isArray(markets) || markets.length === 0) {
+           return reply.code(400).send({ error: 'markets array is required' })
+         }
+-        // MAP.2b — resolved ONCE for the distinct channels in this batch, not per
+-        // row: the answer cannot change during the loop, and per-row resolution
+-        // would be one round-trip each.
+-        const connByChannel = await primaryConnectionIds(markets.map((m) => m.channel))
+-        const results = await Promise.all(
+-          markets.map(({ channel, marketplace, offerActive }) =>
+-            prisma.channelListing.upsert({
+-              where: { productId_channel_marketplace: workspaceKey({ productId: id, channel, marketplace, channelConnectionId: connByChannel.get(channel) ?? null, aliasKey: '' }) },
+-              update: { offerActive },
+-              create: {
+-                productId: id,
+-                channel,
+-                marketplace,
+-                region: marketplace,
+-                channelMarket: `${channel}_${marketplace}`,
+-                listingStatus: 'DRAFT',
+-                offerActive,
+-              },
+-              select: { id: true, channel: true, marketplace: true, offerActive: true },
+-            })
+-          )
+-        )
++        const targets = markets.map(m => ({ ...m, productId: id }))
++        targets.forEach(whereCoordinate)
++        const results = await Promise.all(targets.map(t => writeCoordinateOffer(t, t.offerActive)))
+         // Sync inventory immediately for any listing just turned active
+         const activatedIds = results.filter((r) => r.offerActive).map((r) => r.id)
+         if (activatedIds.length > 0) void syncActivatedListings(activatedIds)
+@@ -382,9 +366,9 @@
+ 
+   // MA.1 — POST /api/products/bulk-offer-availability
+   // Toggle offerActive across many products × many markets in one shot.
+-  // Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
++  // Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
+   fastify.post<{
+-    Body: { productIds: string[]; markets: Array<{ channel: string; marketplace: string }>; offerActive: boolean }
++    Body: { productIds: string[]; markets: Array<Omit<ListingCoordinate, 'productId'>>; offerActive: boolean }
+   }>(
+     '/products/bulk-offer-availability',
+     async (request, reply) => {
+@@ -399,53 +383,15 @@
+         if (typeof offerActive !== 'boolean') {
+           return reply.code(400).send({ error: 'offerActive must be a boolean' })
+         }
+-        let upserted = 0
+-        // Fan out: for each product × market, upsert the ChannelListing.
+-        // Batched in chunks of 50 to avoid overwhelming the connection pool.
+-        const pairs: Array<{ productId: string; channel: string; marketplace: string }> = []
+-        for (const productId of productIds) {
+-          for (const { channel, marketplace } of markets) {
+-            pairs.push({ productId, channel, marketplace })
+-          }
+-        }
+-        // MAP.2b — resolved once for the whole bulk operation.
+-        const bulkConnByChannel = await primaryConnectionIds(pairs.map((p) => p.channel))
+-        const CHUNK = 50
+-        for (let i = 0; i < pairs.length; i += CHUNK) {
+-          const chunk = pairs.slice(i, i + CHUNK)
+-          await Promise.all(
+-            chunk.map(({ productId, channel, marketplace }) =>
+-              prisma.channelListing.upsert({
+-                where: { productId_channel_marketplace: workspaceKey({ productId, channel, marketplace, channelConnectionId: bulkConnByChannel.get(channel) ?? null, aliasKey: '' }) },
+-                update: { offerActive },
+-                create: {
+-                  productId,
+-                  channel,
+-                  marketplace,
+-                  region: marketplace,
+-                  channelMarket: `${channel}_${marketplace}`,
+-                  listingStatus: 'DRAFT',
+-                  offerActive,
+-                },
+-                select: { id: true },
+-              })
+-            )
+-          )
+-          upserted += chunk.length
+-        }
+-        // When activating, sync inventory for every listing that just turned active
+-        if (offerActive) {
+-          const allIds = await prisma.channelListing.findMany({
+-            where: {
+-              productId: { in: productIds },
+-              channel: { in: [...new Set(markets.map((m) => m.channel))] },
+-              marketplace: { in: [...new Set(markets.map((m) => m.marketplace))] },
+-              offerActive: true,
+-            },
+-            select: { id: true },
+-          })
+-          void syncActivatedListings(allIds.map((l) => l.id))
+-        }
++        const pairs: ListingCoordinate[] = productIds.flatMap(productId => markets.map(m => ({ ...m, productId })))
++        pairs.forEach(whereCoordinate)
++        const changedIds: string[] = []
++        for (let i = 0; i < pairs.length; i += 50) {
++          const results = await Promise.all(pairs.slice(i, i + 50).map(c => writeCoordinateOffer(c, offerActive)))
++          changedIds.push(...results.map(r => r.id))
++        }
++        const upserted = changedIds.length
++        if (offerActive && changedIds.length) void syncActivatedListings(changedIds)
+         return { ok: true, upserted, offerActive }
+       } catch (error: any) {
+         return reply.code(500).send({ error: error?.message ?? String(error) })
+--- before/apps/api/src/services/listings/recovery.service.ts
++++ after/apps/api/src/services/listings/recovery.service.ts
+@@ -38,6 +38,7 @@
+  */
+ 
+ import { prisma } from '@nexus/database'
++import { whereCoordinate, type ListingCoordinate } from '../../lib/listing-coordinate.js'
+ import { amazonSpApiClient } from '../../clients/amazon-sp-api.client.js'
+ import { logger } from '../../utils/logger.js'
+ 
+@@ -48,10 +49,7 @@
+   | 'NEW_ASIN_SAME_SKU'
+   | 'FULL_RESET'
+ 
+-export interface RecoveryRequest {
+-  productId: string
+-  channel: string
+-  marketplace: string
++export interface RecoveryRequest extends ListingCoordinate {
+   action: RecoveryAction
+   /** Required for SAME_ASIN_NEW_SKU + FULL_RESET. New SKU the operator
+    *  wants on the recreated listing. Must be unique across Product.sku. */
+@@ -88,6 +86,7 @@
+ export async function previewRecovery(
+   req: RecoveryRequest,
+ ): Promise<RecoveryPreview> {
++  whereCoordinate(req)
+   const product = await prisma.product.findUnique({
+     where: { id: req.productId },
+     select: { sku: true },
+@@ -95,11 +94,7 @@
+   if (!product) throw new Error(`Product ${req.productId} not found`)
+ 
+   const listing = await prisma.channelListing.findFirst({
+-    where: {
+-      productId: req.productId,
+-      channel: req.channel,
+-      marketplace: req.marketplace,
+-    },
++    where: whereCoordinate(req),
+     select: { externalListingId: true, listingStatus: true },
+   })
+ 
+@@ -300,7 +295,7 @@
+       // env, not a per-row column. Falls back across the two legacy
+       // names.
+       const sellerId =
+-        (await getAmazonSellerId())
++        (req.channelConnectionId ? await getAmazonSellerId(req.channelConnectionId) : null)
+       if (!sellerId) {
+         throw new Error(
+           'AMAZON_SELLER_ID / AMAZON_MERCHANT_ID is not set — cannot call SP-API.',
+@@ -320,9 +315,9 @@
+         sku: preview.before.sku,
+         marketplaceId: mp.marketplaceId,
+       })
+-      if (!deleteResult.success) {
++      if (!deleteResult.success || deleteResult.dryRun) {
+         throw new Error(
+-          `Delete failed: ${deleteResult.error ?? 'unknown error'}`,
++          `Delete failed: ${deleteResult.error ?? (deleteResult.dryRun ? 'AMAZON_RECOVERY_DRY_RUN: no lifecycle change' : 'unknown error')}`,
+         )
+       }
+       if (deleteResult.submissionId) submissionIds.push(deleteResult.submissionId)
+@@ -332,11 +327,7 @@
+       // around for the wizard to re-publish against. Mark it ENDED so
+       // the operator + the publish path know it's not live.
+       await prisma.channelListing.updateMany({
+-        where: {
+-          productId: req.productId,
+-          channel: 'AMAZON',
+-          marketplace: req.marketplace,
+-        },
++        where: whereCoordinate(req),
+         data: {
+           listingStatus: 'ENDED',
+           isPublished: false,
+--- before/apps/api/src/services/ebay-label-guard.service.ts
++++ after/apps/api/src/services/ebay-label-guard.service.ts
+@@ -17,12 +17,33 @@
+  */
+ 
+ import prisma from '../db.js'
++import { assertPushAllowed } from '@nexus/shared/push-lock'
+ import { ebayAuthService } from './ebay-auth.service.js'
+ import { callTradingApi, siteIdForMarket } from './ebay-trading-api.service.js'
+ import { logger } from '../utils/logger.js'
+-import { tryResolveConnection } from './connection-resolver.service.js'
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
++
++/** Full reads let the terminal-intent check take effect when PR.5 adds the
++ * column; today's schema has no endedAt. Conservatively skip every ENDED row. */
++function terminal(row: { listingStatus?: string; presenceIntent?: string; endedAt?: unknown }): boolean {
++  return row.listingStatus === 'ENDED' || !!row.endedAt || ['ENDED', 'DISCONTINUED', 'RELEASED'].includes(row.presenceIntent ?? '')
++}
++
++export async function backfillListingIdentity(coordinate: ListingCoordinate, itemId: string): Promise<number> {
++  const where = { ...whereCoordinate(coordinate), externalListingId: null }
++  const row = await prisma.channelListing.findFirst({ where })
++  if (!row || terminal(row)) return 0
++  const updated = await prisma.channelListing.updateMany({
++    where: { ...where, id: row.id, listingStatus: row.listingStatus,
++      ...('presenceIntent' in row ? { presenceIntent: row.presenceIntent } : {}),
++    },
++    data: { externalListingId: itemId },
++  })
++  return updated.count
++}
+ 
+ export interface LabelGuardSummary {
++  refusals: Array<{ marketplace: string; itemId: string; code: string; sentence: string }>
+   checked: number
+   set: number
+   kept: number
+@@ -74,24 +95,19 @@
+ }
+ 
+ export async function ensureListingLabels(scope?: Array<{ marketplace: string; itemId: string }>): Promise<LabelGuardSummary> {
+-  const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0 }
+-
+-  // MAP.3 — DECLARED. The optional `scope` argument names items, not an account.
+-  const conn = await tryResolveConnection({ channel: 'EBAY', primary: true })
+-  if (!conn) return summary
+-  const token = await ebayAuthService.getValidToken(conn.id)
++  const summary: LabelGuardSummary = { checked: 0, set: 0, kept: 0, unsupported: 0, failed: 0, halfAdopted: 0, clLinked: 0, refusals: [] }
+ 
+   const scopeItemIds = scope?.length ? new Set(scope.map((s) => s.itemId)) : null
+ 
+-  let targets: Array<{ marketplace: string; itemId: string; parentSku: string; lane: 'membership' | 'cl' }>
++  let targets: Array<{ marketplace: string; itemId: string; parentSku: string; channelConnectionId: string | null; lane: 'membership' | 'cl' }>
+   const groups = await prisma.sharedListingMembership.groupBy({
+-    by: ['marketplace', 'itemId', 'parentSku'],
++    by: ['marketplace', 'itemId', 'parentSku', 'channelConnectionId'],
+     where: scope?.length
+-      ? { OR: scope.map((s) => ({ marketplace: s.marketplace.toUpperCase(), itemId: s.itemId })) }
+-      : {},
++      ? { status: 'ACTIVE', OR: scope.map((s) => ({ marketplace: s.marketplace.toUpperCase(), itemId: s.itemId })) }
++      : { status: 'ACTIVE' },
+   })
+   targets = groups
+-    .map((g) => ({ marketplace: g.marketplace, itemId: g.itemId, parentSku: g.parentSku ?? '', lane: 'membership' as const }))
++    .map((g) => ({ marketplace: g.marketplace, itemId: g.itemId, parentSku: g.parentSku ?? '', channelConnectionId: g.channelConnectionId, lane: 'membership' as const }))
+     // numeric parentSku = the pre-S6 first-touch fallback — not a real label
+     .filter((t) => t.parentSku && !/^\d+$/.test(t.parentSku))
+ 
+@@ -104,12 +120,10 @@
+   )
+   const laneACls = await prisma.channelListing.findMany({
+     where: { channel: 'EBAY', externalListingId: { not: null }, product: { deletedAt: null, parentId: null } },
+-    select: {
+-      externalListingId: true, marketplace: true, region: true,
+-      product: { select: { sku: true, productType: true } },
+-    },
++    include: { product: { select: { sku: true, productType: true } } },
+   })
+   for (const cl of laneACls) {
++    if (terminal(cl)) continue
+     const itemId = String(cl.externalListingId ?? '').trim()
+     if (!itemId || !/^\d+$/.test(itemId)) continue // empty/junk ItemIDs never reach GetItem
+     if (memberItemIds.has(itemId)) continue // membership target already covers it
+@@ -122,6 +136,7 @@
+       itemId,
+       parentSku: sku,
+       lane: 'cl',
++      channelConnectionId: cl.channelConnectionId,
+     })
+     if (cl.product?.productType === 'EBAY_LISTING_SHELL') {
+       // A shell bound to a live listing with ZERO memberships = half-adopted:
+@@ -146,14 +161,15 @@
+           select: { id: true },
+         })
+         if (!parentProduct) continue
+-        const updated = await prisma.channelListing.updateMany({
+-          where: {
+-            productId: parentProduct.id, channel: 'EBAY',
+-            OR: [{ marketplace: t.marketplace }, { region: t.marketplace }],
+-            externalListingId: null,
+-          },
+-          data: { externalListingId: t.itemId },
++        if (!t.channelConnectionId) continue // never guess a primary account
++        const candidates = await prisma.channelListing.findMany({
++          where: { productId: parentProduct.id, channel: 'EBAY', marketplace: t.marketplace, channelConnectionId: t.channelConnectionId },
++          take: 2,
+         })
++        // Memberships have no alias field: only an unambiguous stored row can
++        // provide that level. Even a terminal sibling makes this ambiguous.
++        if (candidates.length !== 1) continue
++        const updated = { count: await backfillListingIdentity(candidates[0], t.itemId) }
+         if (updated.count > 0) {
+           summary.clLinked += updated.count
+           logger.info('ebay-label-guard: backfilled CL externalListingId from membership', { itemId: t.itemId, parentSku: t.parentSku })
+@@ -163,8 +179,31 @@
+   }
+ 
+   for (const t of targets) {
++    const refuse = (code: string, sentence: string) => {
++      summary.failed++
++      summary.refusals.push({ marketplace: t.marketplace, itemId: t.itemId, code, sentence })
++    }
++    if (!t.channelConnectionId) { refuse('PUSH_CONTROL_UNAVAILABLE', 'The owning account is unknown; label repair was not sent.'); continue }
+     summary.checked++
++    let controls
+     try {
++      // An ItemID can be shared by several product coordinates. Every owning
++      // row must allow this push; no primary-account fallback or empty control.
++      controls = await prisma.channelListing.findMany({ where: {
++        channel: 'EBAY', externalListingId: t.itemId,
++        channelConnectionId: t.channelConnectionId, marketplace: t.marketplace.toUpperCase(),
++      } })
++      controls.forEach(whereCoordinate)
++    } catch {
++      refuse('PUSH_CONTROL_UNAVAILABLE', 'Listing controls could not be read; label repair was not sent.')
++      continue
++    }
++    if (!controls.length) { refuse('PUSH_CONTROL_UNAVAILABLE', 'No owning listing controls were found; label repair was not sent.'); continue }
++    const locked = controls.map(assertPushAllowed).find(refusal => refusal !== null)
++    if (locked) { refuse(locked.code, locked.sentence); continue }
++    if (controls.some(terminal)) { refuse('PUSH_LEGACY_ENDED', 'This listing was ended; label repair was not sent.'); continue }
++    try {
++      const token = await ebayAuthService.getValidToken(t.channelConnectionId)
+       const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="utf-8"?>
+ <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${t.itemId}</ItemID><OutputSelector>Item.SKU</OutputSelector></GetItemRequest>`,
+         { oauthToken: token, siteId: siteIdForMarket(t.marketplace) })
+--- before/apps/api/src/services/listing-reconciliation.service.ts
++++ after/apps/api/src/services/listing-reconciliation.service.ts
+@@ -27,7 +27,7 @@
+ import { ebayAuthService } from './ebay-auth.service.js'
+ import { logger } from '../utils/logger.js'
+ import { tryResolveConnection } from './connection-resolver.service.js'
+-import { primaryConnectionIds } from './connection-resolver.service.js'
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+ 
+ export type ReconChannel = 'AMAZON' | 'EBAY'
+ export type ReconStatus = 'PENDING' | 'CONFIRMED' | 'CONFLICT' | 'CREATE_NEW' | 'IGNORE'
+@@ -462,7 +462,8 @@
+  * Confirm a reconciliation row: write externalListingId + ASIN to the
+  * matching ChannelListing (upsert if not found), then mark row CONFIRMED.
+  */
+-export async function confirmReconRow(id: string, reviewedBy: string): Promise<void> {
++export async function confirmReconRow(id: string, reviewedBy: string, coordinate: ListingCoordinate): Promise<void> {
++  const where = whereCoordinate(coordinate)
+   const row = await prisma.listingReconciliation.findUniqueOrThrow({ where: { id } })
+ 
+   if (!row.matchedProductId) {
+@@ -470,6 +471,10 @@
+   }
+   if (!row.externalListingId) {
+     throw new Error('Row has no externalListingId — channel data may be incomplete')
++  }
++
++  if (coordinate.productId !== row.matchedProductId || coordinate.channel !== row.channel || coordinate.marketplace !== row.marketplace) {
++    throw new Error('RECON_COORDINATE_MISMATCH')
+   }
+ 
+   // ── Determine whether this is a variation child or standalone ──────────
+@@ -491,50 +496,26 @@
+     ? row.parentAsin!          // parent ASIN → ChannelListing
+     : row.externalListingId    // standalone ASIN → ChannelListing
+ 
+-  // MAP.2b — resolved BEFORE the transaction opens. A resolve inside would add a
+-  // query to the transaction's lifetime for an answer that does not depend on it.
+-  const reconConn = (await primaryConnectionIds([row.channel])).get(row.channel) ?? null
++  const reconConn = coordinate.channelConnectionId
++  // The legacy variation model cannot express aliases or nullable unique inputs.
++  if (isVariationChild && (coordinate.aliasKey !== '' || reconConn === null)) throw new Error('RECON_VARIATION_COORDINATE_UNSUPPORTED')
+ 
+   await prisma.$transaction(async (tx) => {
+-    // ── 1. Upsert ChannelListing (parent-level) ──────────────────────────
+-    // Use the named unique index (productId, channel, marketplace) so that
+-    // multiple variation children confirming the same parent product don't
+-    // race to create duplicate ChannelListing rows.
+-    await tx.channelListing.upsert({
+-      where: {
+-        productId_channel_marketplace: workspaceKey({
+-          productId: row.matchedProductId!,
+-          channel: row.channel,
+-          marketplace: row.marketplace,
+-          channelConnectionId: reconConn,
+-          // PES.5 — aliasKey joins the key; '' = the product's PRIMARY listing, which is what every writer here addresses. NOT NULL because Prisma cannot target a null inside a compound unique.
+-          aliasKey: '',
+-        }),
+-      },
+-      create: {
+-        productId: row.matchedProductId!,
+-        channel: row.channel,
+-        marketplace: row.marketplace,
+-        channelMarket: `${row.channel}_${row.marketplace}`,
+-        region: row.marketplace,
+-        externalListingId: listingAsin,
+-        externalParentId: row.parentAsin ?? null,
+-        listingStatus: 'ACTIVE',
+-        title: row.title ?? undefined,
+-        // Price/qty on the parent listing: for variations, this is the range;
+-        // we use the confirming row's values as an initial snapshot.
+-        price: row.channelPrice ?? undefined,
+-        masterQuantity: row.channelQuantity ?? undefined,
+-      },
+-      update: {
+-        // Keep the parent ASIN if already set; don't downgrade to a child ASIN
+-        // if another variation was confirmed first.
+-        ...(row.parentAsin
+-          ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin }
+-          : {}),
+-        listingStatus: 'ACTIVE',
+-      },
++    const existing = await tx.channelListing.findFirst({ where })
++    // PR.1 recreate guard lands with the identity schema. Until then never
++    // turn a deliberately ended coordinate ACTIVE through reconciliation.
++    if (existing?.listingStatus === 'ENDED' || ['ENDED', 'DISCONTINUED', 'RELEASED'].includes((existing as any)?.presenceIntent)) {
++      throw new Error('RECON_RECREATE_REQUIRED: ended coordinates require an explicit recreate action')
++    }
++    if (existing) await tx.channelListing.update({
++      where: { id: existing.id, ...where, listingStatus: existing.listingStatus, ...('presenceIntent' in existing ? { presenceIntent: existing.presenceIntent } : {}) },
++      data: { ...(row.parentAsin ? { externalListingId: row.parentAsin, externalParentId: row.parentAsin } : {}), listingStatus: 'ACTIVE' },
+     })
++    else await tx.channelListing.create({ data: {
++      ...where, channelMarket: `${row.channel}_${row.marketplace}`, region: row.marketplace,
++      externalListingId: listingAsin, externalParentId: row.parentAsin ?? null, listingStatus: 'ACTIVE',
++      title: row.title ?? undefined, price: row.channelPrice ?? undefined, masterQuantity: row.channelQuantity ?? undefined,
++    } })
+ 
+     // ── 2. Upsert VariantChannelListing (per-variation) ─────────────────
+     // Only when this is a variation child with a known variation ID.
+@@ -554,6 +535,7 @@
+           variantId: row.matchedVariationId!,
+           channel: row.channel,
+           marketplace: row.marketplace,
++          channelConnectionId: reconConn,
+           channelSku: row.externalSku,
+           channelProductId: row.externalListingId,  // child ASIN
+           channelPrice: row.channelPrice ?? 0,
+@@ -906,6 +888,7 @@
+ export async function bulkConfirmReconRows(
+   ids: string[],
+   reviewedBy: string,
++  coordinates: Record<string, ListingCoordinate>,
+ ): Promise<BulkActionResult> {
+   let succeeded = 0
+   let failed = 0
+@@ -918,7 +901,7 @@
+     await Promise.all(
+       batch.map(async id => {
+         try {
+-          await confirmReconRow(id, reviewedBy)
++          await confirmReconRow(id, reviewedBy, coordinates?.[id])
+           succeeded++
+         } catch (err) {
+           failed++
+--- before/apps/api/src/services/amazon-mapper.service.ts
++++ after/apps/api/src/services/amazon-mapper.service.ts
+@@ -34,6 +34,13 @@
+   parentSku: string;
+   childCount: number;
+   timestamp: string;
++}
++
++/** SP-API requirements vary by product type/market. The downstream writer
++ * always emits fulfilment, so omission here would merely invent DEFAULT later. */
++export function requireAmazonFulfillment(value: unknown): string {
++  if (typeof value !== 'string' || !value.trim()) throw new Error('AMAZON_FULFILLMENT_UNSET: set Fulfilment (product default) before building an Amazon payload')
++  return value
+ }
+ 
+ export class AmazonMapperService {
+@@ -110,7 +117,7 @@
+         description: channelListing.description || '',
+         price: channelListing.price ? Number(channelListing.price) : Number(product.basePrice),
+         quantity: channelListing.quantity || product.totalStock,
+-        fulfillmentChannel: product.fulfillmentChannel || 'FBA',
++        fulfillmentChannel: requireAmazonFulfillment(product.fulfillmentChannel),
+       };
+ 
+       // Build child items
+@@ -137,7 +144,7 @@
+           description: childChannelListing?.description || '',
+           price: childChannelListing?.price ? Number(childChannelListing.price) : Number(child.basePrice),
+           quantity: childChannelListing?.quantity || child.totalStock,
+-          fulfillmentChannel: child.fulfillmentChannel || product.fulfillmentChannel || 'FBA',
++          fulfillmentChannel: requireAmazonFulfillment(child.fulfillmentChannel || product.fulfillmentChannel),
+         };
+ 
+         childItems.push(childItem);
+--- before/apps/api/src/services/follow-master.service.ts
++++ after/apps/api/src/services/follow-master.service.ts
+@@ -1,3 +1,4 @@
++import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
+ /**
+  * Follow-Master quantity primitive (Phase 0 of the per-market inventory control
+  * plan, docs/superpowers/plans/2026-07-08-follow-master-bulk-tool.md).
+@@ -104,6 +105,8 @@
+ }
+ 
+ export interface FollowMasterOpts {
++  /** Explicit coordinate mode used by Sync Control; omission preserves legacy callers. */
++  coordinates?: ListingCoordinate[]
+   productIds: string[]
+   channel: FollowMasterChannel
+   markets: string[] | 'ALL'
+@@ -114,7 +117,8 @@
+ export async function setFollowMasterQuantity(opts: FollowMasterOpts): Promise<FollowMasterResult> {
+   const { productIds, channel, follow, actor } = opts
+   const result: FollowMasterResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
+-  if (productIds.length === 0) return result
++  const coordinateWhere = opts.coordinates?.map(whereCoordinate)
++  if (productIds.length === 0 || coordinateWhere?.length === 0) return result
+ 
+   // Resolve the exact listings by (productId, channel, marketplace).
+   const listings = await prisma.channelListing.findMany({
+@@ -123,9 +127,10 @@
+       channel,
+       ...(opts.markets === 'ALL' ? {} : { marketplace: { in: opts.markets } }),
+       listingStatus: { not: 'ENDED' },
++      ...(coordinateWhere ? { OR: coordinateWhere } : {}),
+     },
+     select: {
+-      id: true, productId: true, channel: true, region: true, marketplace: true,
++      id: true, productId: true, channel: true, region: true, marketplace: true, channelConnectionId: true, aliasKey: true,
+       quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true,
+       externalListingId: true, fulfillmentMethod: true, platformAttributes: true,
+       product: { select: { sku: true, fulfillmentMethod: true } },
+@@ -194,7 +199,7 @@
+         const freshBuffers = new Map<string, number | null>(
+           (
+             await tx.channelListing.findMany({
+-              where: { id: { in: chunk.map((c) => c.id) } },
++              where: { id: { in: chunk.map((c) => c.id) }, ...(coordinateWhere ? { OR: chunk.map(whereCoordinate) } : {}) },
+               select: { id: true, stockBuffer: true },
+             })
+           ).map((r) => [r.id, r.stockBuffer]),
+@@ -242,7 +247,7 @@
+           }
+ 
+           await tx.channelListing.update({
+-            where: { id: cl.id },
++            where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+             data: {
+               quantity: write.quantity,
+               quantityOverride: write.quantityOverride,
+@@ -389,6 +394,7 @@
+ }
+ 
+ export interface StockBufferOpts {
++  coordinates?: ListingCoordinate[]
+   productIds: string[]
+   channel: FollowMasterChannel
+   markets: string[] | 'ALL'
+@@ -399,7 +405,8 @@
+ export async function setStockBuffer(opts: StockBufferOpts): Promise<StockBufferResult> {
+   const { productIds, channel, buffer, actor } = opts
+   const result: StockBufferResult = { updated: 0, skippedFba: 0, unchanged: 0, matched: 0, results: [] }
+-  if (productIds.length === 0) return result
++  const coordinateWhere = opts.coordinates?.map(whereCoordinate)
++  if (productIds.length === 0 || coordinateWhere?.length === 0) return result
+ 
+   const listings = await prisma.channelListing.findMany({
+     where: {
+@@ -407,9 +414,10 @@
+       channel,
+       ...(opts.markets === 'ALL' ? {} : { marketplace: { in: opts.markets } }),
+       listingStatus: { not: 'ENDED' },
++      ...(coordinateWhere ? { OR: coordinateWhere } : {}),
+     },
+     select: {
+-      id: true, productId: true, channel: true, region: true, marketplace: true,
++      id: true, productId: true, channel: true, region: true, marketplace: true, channelConnectionId: true, aliasKey: true,
+       quantity: true, quantityOverride: true, followMasterQuantity: true, stockBuffer: true,
+       externalListingId: true, fulfillmentMethod: true, platformAttributes: true,
+       product: { select: { sku: true, fulfillmentMethod: true } },
+@@ -485,7 +493,7 @@
+           }
+ 
+           await tx.channelListing.update({
+-            where: { id: cl.id },
++            where: { id: cl.id, ...(coordinateWhere ? whereCoordinate(cl) : {}) },
+             data: {
+               stockBuffer: write.stockBuffer,
+               quantity: write.quantity,
+--- before/apps/api/src/routes/reconciliation.routes.ts
++++ after/apps/api/src/routes/reconciliation.routes.ts
+@@ -1,3 +1,4 @@
++import type { ListingCoordinate } from '../lib/listing-coordinate.js'
+ /**
+  * Listing Reconciliation API (Phase RECON)
+  *
+@@ -110,9 +111,9 @@
+   // ── Single-row actions ────────────────────────────────────────────────────
+   fastify.post('/reconciliation/items/:id/confirm', async (req, reply) => {
+     const { id } = req.params as { id: string }
+-    const { reviewedBy = 'operator' } = req.body as Record<string, string> ?? {}
+-    try {
+-      await confirmReconRow(id, reviewedBy)
++    const { reviewedBy = 'operator', coordinate } = req.body as { reviewedBy?: string; coordinate: ListingCoordinate } ?? {}
++    try {
++      await confirmReconRow(id, reviewedBy, coordinate)
+       return reply.send({ ok: true })
+     } catch (err) {
+       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
+@@ -150,12 +151,12 @@
+ 
+   // Confirm multiple specific rows
+   fastify.post('/reconciliation/bulk/confirm', async (req, reply) => {
+-    const { ids, reviewedBy = 'operator' } = req.body as { ids?: string[]; reviewedBy?: string } ?? {}
++    const { ids, reviewedBy = 'operator', coordinates } = req.body as { ids?: string[]; reviewedBy?: string; coordinates: Record<string, ListingCoordinate> } ?? {}
+     if (!Array.isArray(ids) || ids.length === 0) {
+       return reply.code(400).send({ error: 'ids[] required' })
+     }
+     try {
+-      const result = await bulkConfirmReconRows(ids, reviewedBy)
++      const result = await bulkConfirmReconRows(ids, reviewedBy, coordinates)
+       return reply.send({ ok: true, ...result })
+     } catch (err) {
+       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
+@@ -188,8 +189,8 @@
+   // This is the main bulk-approval path: run reconciliation → review low-confidence
+   // rows manually → confirm-all-high to sweep the rest.
+   fastify.post('/reconciliation/bulk/confirm-all-high', async (req, reply) => {
+-    const { channel = 'AMAZON', marketplace, reviewedBy = 'operator', minConfidence = 0.95 } =
+-      req.body as { channel?: string; marketplace?: string; reviewedBy?: string; minConfidence?: number } ?? {}
++    const { channel = 'AMAZON', marketplace, reviewedBy = 'operator', minConfidence = 0.95, coordinates } =
++      req.body as { channel?: string; marketplace?: string; reviewedBy?: string; minConfidence?: number; coordinates: Record<string, ListingCoordinate> } ?? {}
+ 
+     try {
+       const where: any = {
+@@ -210,7 +211,7 @@
+         channel, marketplace, minConfidence, count: pendingHighConf.length,
+       })
+ 
+-      const result = await bulkConfirmReconRows(pendingHighConf.map(r => r.id), reviewedBy)
++      const result = await bulkConfirmReconRows(pendingHighConf.map(r => r.id), reviewedBy, coordinates)
+       return reply.send({
+         ok: true,
+         eligible: pendingHighConf.length,

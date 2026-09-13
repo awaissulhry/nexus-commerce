@@ -1,0 +1,7 @@
+{
+  "at": "2026-09-13T00:08:06.659134+00:00",
+  "exitCode": 130,
+  "accepted": false,
+  "reason": "Audit harness retained full repeated Studio replies; /gate/evidence exceeded Node JSON string limit. Interrupted to bound evidence memory and rerun full gate.",
+  "measuredBeforeInterruption": "First80/80 and early60/60 open gestures, writes armed0; not a complete pass."
+}

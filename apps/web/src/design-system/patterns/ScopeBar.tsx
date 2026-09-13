@@ -2,6 +2,7 @@
 
 import { useCallback, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
+import { InfoTip } from '../primitives/InfoTip'
 
 /*
  * The scope vocabulary and its tone/label table are PES.2's, and there is exactly one of each
@@ -163,10 +164,12 @@ export function ScopeBar({
   const onKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
       if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft' && e.key !== 'Home' && e.key !== 'End') return
-      const usable = items.filter((i) => !i.disabled)
+      // Held scopes remain reachable so their refusal can be read.
+      const usable = items
       if (usable.length < 2) return
       e.preventDefault()
-      const at = usable.findIndex((i) => i.id === active)
+      const focused = (e.target as HTMLElement).closest<HTMLElement>('[data-scope-id]')?.dataset.scopeId ?? active
+      const at = usable.findIndex((i) => i.id === focused)
       const next =
         e.key === 'Home'
           ? 0
@@ -177,8 +180,8 @@ export function ScopeBar({
               : (at - 1 + usable.length) % usable.length
       const target = usable[next]
       if (!target) return
-      onChange(target.id)
-      // Move focus with the selection, as a radiogroup does.
+      if (!target.disabled) onChange(target.id)
+      // A held target receives focus without changing the selected scope.
       listRef.current
         ?.querySelector<HTMLButtonElement>(`[data-scope-id="${CSS.escape(target.id)}"]`)
         ?.focus()
@@ -207,20 +210,19 @@ export function ScopeBar({
           const loading = r === 'loading'
           const ready = r && r !== 'loading' ? r : null
           const tone = ready ? readinessMeta(ready.state, 'scope').tone : null
-          return (
+          const button = (
             <button
               key={item.id}
               type="button"
               role="radio"
               aria-checked={on}
-              // Roving tabindex: the group is one tab stop, arrows move inside it. A disabled chip
-              // never takes it, or Tab would land on a control that cannot act.
-              tabIndex={on && !item.disabled ? 0 : -1}
+              // One Tab stop; arrows also reach held scopes without selecting them.
+              tabIndex={on ? 0 : -1}
               data-scope-id={item.id}
               className={['nds-scope', on ? 'on' : ''].filter(Boolean).join(' ')}
-              disabled={item.disabled}
               aria-disabled={item.disabled || undefined}
               title={chipTitle(item)}
+              aria-description={item.disabled ? item.disabledReason : undefined}
               onClick={() => { if (!item.disabled) onChange(item.id) }}
             >
               {tone && <span className={`nds-scope-dot ${tone}`} aria-hidden />}
@@ -258,13 +260,16 @@ export function ScopeBar({
                   repeats it — `eBay · Not set up —` says the same thing twice, and the second time
                   in a glyph that elsewhere means something else. Reviewed on market DE, where
                   every scope is absent. */}
-              {ready && showPercent && !(ready.state === 'absent' && ready.pct == null) && (
+              {ready && showPercent && !((ready.state === 'absent' || ready.state === 'notComputed') && ready.pct == null) && (
                 <span className={`nds-scope-pct${ready.pct == null ? ' unknown' : ''}`}>
                   {pctLabel(ready)}
                 </span>
               )}
             </button>
           )
+          return item.disabled && item.disabledReason
+            ? <InfoTip key={item.id} tip={item.disabledReason}>{button}</InfoTip>
+            : button
         })}
         {onAdd && (
           <button type="button" className="nds-scope add" onClick={onAdd} title={addLabel} aria-label={addLabel}>

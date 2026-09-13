@@ -107,8 +107,8 @@
   --nds-info: var(--nds-blue-600);
   --nds-info-strong: var(--nds-blue-700);
   --nds-text-muted: #626c7b;
-  --nds-success-text: #146034;
-  --nds-warning-text: #6d3f10;
+  --nds-success-text: #0b4b28;
+  --nds-warning-text: #653a0f;
   --nds-warning-border: #f0d9a8;
   --nds-stale-text: var(--nds-warning-text);
   --nds-note-error-bg: #fdf0ef;
@@ -119,11 +119,11 @@
   --nds-note-warn-icon: #8a6d1f;
   --nds-note-warn-border: #e0d4a8;
   --nds-note-error-border: #eec9c4;
-  --nds-danger-text: #9c2f2a;
+  --nds-danger-text: #7d2621;
   --nds-info-text-light: #10457f;
   --nds-info-text: var(--nds-info-text-light);
   --nds-prov-ai-fg: #6d28d9;
-  --nds-prov-formula-fg: #0e7490;
+  --nds-prov-formula-fg: #094b5e;
   --nds-prov-inherited-fg: #1a60c4;
 
   /* ── Tonal ── */
@@ -461,18 +461,18 @@
   --nds-pill-neutral-bg: #26323f;
   --nds-success-soft: #173a2c;
   --nds-danger-soft: #3a1c1c;
-  --nds-danger-text: #ef9c93;
+  --nds-danger-text: #f3b7b0;
   --nds-chrome-bg: #1e3050;
   --nds-topbar-bg: var(--nds-chrome-bg);
   --nds-prov-ai-fg: #c4b5fd;
-  --nds-prov-formula-fg: #22d3ee;
+  --nds-prov-formula-fg: #39d8f0;
   --nds-prov-inherited-fg: #93c5fd;
   --nds-targeting-auto: #7fd4b0;
   --nds-targeting-manual: #c9a86a;
   --nds-imgup-surface: #1a2330;
   --nds-imgup-drag: #1c2f4d;
   --nds-success-text: var(--nds-success-strong);
-  --nds-warning-text: var(--nds-warning-strong);
+  --nds-warning-text: #f2bc79;
   --nds-warning-soft: #3a2e12;
   --nds-pill-warning-bg: #3a2e12;
   --nds-pill-success-bg: #1c2f4d;

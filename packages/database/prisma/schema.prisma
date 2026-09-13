@@ -350,6 +350,7 @@ model Product {
   channelStockEvents        ChannelStockEvent[] // CS.1: channel→us stock reconciliation
   channelLiveImages         ChannelLiveImage[] // IE.4: read-replica of channel-served images
   scheduledImagePublishes   ScheduledImagePublish[] // PB.10: future-dated publish intents
+  readinessIndex            ReadinessIndex[]
   translations              ProductTranslation[] // H.10: per-language master content
   relationsFrom             ProductRelation[]             @relation("ProductRelationFrom") // H.11
   relationsTo               ProductRelation[]             @relation("ProductRelationTo") // H.11
@@ -1507,6 +1508,7 @@ model VariantChannelListing {
 // ── PHASE 9: Channel Listing (Platform-Specific Data) ──────────────────────
 
 model ChannelListing {
+  translations ChannelListingTranslation[]
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id String @id @default(cuid())
@@ -19049,5 +19051,121 @@ model ChannelAccountRoute {
   destinationIds String[] @default([])
   @@index([destinationIds], type: Gin)
   @@index([channelType, externalAccountId])
+  @@index([workspaceId])
+}
+
+// LX.3: language-addressed pins. Legacy listing text remains read-through only.
+model ChannelListingTranslation {
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id String @id @default(cuid())
+  channelListingId String
+  channelListing ChannelListing @relation(fields: [channelListingId], references: [id], onDelete: Cascade)
+  language String
+  name String?
+  description String?
+  bulletPoints String[] @default([])
+  keywords String[] @default([])
+  attributes Json @default("{}")
+  // Explicit reset markers suppress read-through of a legacy pin without changing it.
+  follows String[] @default([])
+  source String?
+  reviewedAt DateTime?
+  version Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([workspaceId, channelListingId, language], name: "channelListingId_language")
+  @@index([channelListingId])
+  @@index([workspaceId])
+}
+
+// LX.5: materialized readiness; account and alias retain design section 3 coordinates.
+model ReadinessIndex {
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // Canonical JSON tuple prevents NULL-distinct duplicate shared/primary rows.
+  coordinateKey String
+  channel String?
+  market String?
+  accountId String?
+  aliasId String?
+  language String
+  label String
+  pct Int?
+  state String
+  requiredFilled Int
+  requiredTotal Int
+  missing Json
+  note String?
+  mappingRules Int?
+  /// VT.1b (VT.4's request) — the variation-rule PROVENANCE for this coordinate: 'derived' | 'rule' | 'overridden' |
+  /// 'none'. NULL means NOT COMPUTED (every row written before this column existed, and every child row, which has no
+  /// projection of its own) — and "not computed" must never read as 'derived', which is R-LX-9's lesson one table over.
+  /// `unset` and `collides` are NOT stored here: they are already expressible from `missing[].kind`
+  /// (`theme-unset` / `collision`), so one fact has one home.
+  /// The partial index `ReadinessIndex_variationSource_idx … WHERE "variationSource" IS NOT NULL` is SQL-only
+  /// (Prisma cannot express a partial index): see docs/audits/2026-09-13-vt1b/20260913_vt4_readiness_variation_source.sql
+  variationSource String?
+  /// LX.F2 (R-LX-17, on LX.R's P2-21) — the SORTABLE PROJECTION of the resolved per-language text, written by the same
+  /// producer that writes this row, from the same `resolveContent()` the catalogue's own projection calls. It exists so a
+  /// `title@<lang>` / `description@<lang>` page sort is ONE SQL `ORDER BY` instead of re-reading every filtered product
+  /// with its translations to order fifty rows (measured before: 101.7 ms / 86.0 ms per page at 360 products, linear in
+  /// the FILTERED set, so ~0.85 s at 3,000 and ~2.8 s at 10,000).
+  /// 🔴 NOT A CONTENT STORE. Nothing may READ these columns as a value: they are a sort key only, they are DERIVED (so a
+  /// row written before this column exists carries NULL = not computed, which sorts last, never first), and the resolver
+  /// stays the single answer to "what does this cell say". `description` is truncated to its first 512 characters, which
+  /// is a sort key's business and not a content decision.
+  /// The two indexes are SQL-only alongside `variationSource`'s:
+  /// docs/audits/2026-09-13-lx-f2/20260913_lxf2_readiness_sort_projection.sql
+  sortTitle String?
+  sortDescription String?
+  computedAt DateTime
+  @@unique([workspaceId, productId, coordinateKey, language], name: "productId_coordinateKey_language")
+  @@index([channel, market, language, state])
+  @@index([productId])
+  @@index([workspaceId])
+}
+
+/// LX.FIN (R-LX-24, on LX.R's R-LX-12) — the SELLER-OWNED reference labels, cached in the database.
+///
+/// The problem it solves, measured: `categories/reference-labels.service.ts` names a seller's shipping
+/// templates from the seller's own product-type definition, which is a LIVE SP-API call. R-LX-4 forbids a
+/// page load from making one, so LX.6 made the page-load arm cache-only — and a COLD page then shows the
+/// raw template ID (`tmpl-4f2a…`) instead of "Standard delivery", because the only cache was a 5-minute
+/// in-process `TtlCache` that an API restart empties. This table is the durable half: the live arm (a
+/// gesture, or a write's name->ID resolution) stores what it learned, and the cache-only arm reads it.
+///
+/// 🔴 IT IS A LABEL CACHE, NOT AN AUTHORITY. Nothing validates against it, nothing writes a product from
+/// it, and it never widens an option list: the allowed VALUES come from the cached `CategorySchema` /
+/// seller definition as before. It answers one question — "what does this id read as?" — and `fetchedAt`
+/// says when, as a DATABASE date, so the wire can report the age of what it served rather than the time
+/// it served it (`reference_could_not_measure_vs_measured_empty`, the step-7 `meta.schemaAge` rule).
+///
+/// 🔴 SCOPED TO THE CONNECTION, never to the workspace alone. Seller templates are the seller's; naming
+/// account B's templates from account A's definition is the defect the service's
+/// `isPrimaryChannelConnection` check already refuses, and a cache keyed without `connectionId` would
+/// reintroduce it silently.
+///
+/// Rows are DERIVED and disposable: deleting the table costs one live call per gesture.
+/// The SQL is authored OUTSIDE `prisma/migrations/` (PES.0 ruling #12) and applied to LOCAL only:
+/// docs/audits/2026-09-13-lx-fin/20260913_lxfin_seller_reference_labels.sql
+model SellerReferenceLabel {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id String @id @default(cuid())
+  /// `AMAZON` today; the column exists so a second channel's seller labels do not need a second table.
+  channel String
+  /// The verified channel connection whose credentials produced these names.
+  connectionId String
+  marketplace String
+  productType String
+  /// The schema field these labels belong to, e.g. `merchant_shipping_group`.
+  fieldKey String
+  /// `{ "<option id>": "<label>" }` — exactly what the service puts on the wire, no reshaping.
+  labels Json
+  /// When the provider answered. The wire reports THIS, never the request time.
+  fetchedAt DateTime @default(now())
+  @@unique([workspaceId, channel, connectionId, marketplace, productType, fieldKey], name: "channel_connectionId_marketplace_productType_fieldKey", map: "SellerReferenceLabel_channel_connection_market_type_field_uq")
   @@index([workspaceId])
 }

@@ -531,18 +531,18 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
           updateMany: () => { throw new Error('Product.updateMany must NOT be called') },
         },
         sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
-        channelListing: { deleteMany: async (a: any) => { deleteManyAssert(a); return { count: 1 } } },
+        channelListing: { findMany: async () => [], deleteMany: async (a: any) => { deleteManyAssert(a); return { count: 1 } } },
       }),
     }
   }
 
   it('removes only the EBAY listing for the target marketplace; Product untouched', async () => {
     const prisma = guardPrisma((a) => {
-      expect(a.where.channel).toBe('EBAY')
-      expect(a.where.marketplace).toBe('IT')
+      expect(a.where.OR[0].channel).toBe('EBAY')
+      expect(a.where.OR[0].marketplace).toBe('IT')
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(res.error).toBeUndefined()
     expect(res.intent).toBe('remove-channel-listing')
@@ -554,7 +554,7 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
     const stampCalls: any[] = []
     const prisma = guardPrisma(() => {}, stampCalls)
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(res.excludedFromFile).toBe(1)
     expect(stampCalls).toHaveLength(1)
@@ -569,7 +569,7 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
     prisma.$transaction = (async (fn: any) => fn({
       product: { update: (prisma.$transaction as any), updateMany: () => { throw new Error('no') } },
       sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
-      channelListing: { deleteMany: async () => ({ count: 0 }) },
+      channelListing: { findMany: async () => [], deleteMany: async () => ({ count: 0 }) },
     })) as any
     // rebuild tx with the guarded update capturing stamps
     prisma.$transaction = (async (fn: any) => fn({
@@ -578,10 +578,10 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
         updateMany: () => { throw new Error('no') },
       },
       sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
-      channelListing: { deleteMany: async () => ({ count: 0 }) },
+      channelListing: { findMany: async () => [], deleteMany: async () => ({ count: 0 }) },
     })) as any
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(res.channelListingsRemoved).toBe(0)   // nothing eBay-side existed…
     expect(res.excludedFromFile).toBe(1)          // …but the row still leaves the file
@@ -591,7 +591,7 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
   it('NEVER whole-listing-delists for a variation child target (family listing protection)', async () => {
     const prisma = guardPrisma(() => {})
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'GALE-BLACK-M', productId: 'p1', parentSku: 'GALE-JACKET', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'GALE-BLACK-M', productId: 'p1', parentSku: 'GALE-JACKET', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(res.error).toBeUndefined()
     expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
@@ -603,7 +603,7 @@ describe('remove-channel-listing — channel/market isolation + inventory guard'
     const prisma = guardPrisma(() => {})
     ;(prisma.product as any).findFirst = async () => null
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'GONE', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'GONE', productId: 'gone', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(res.error).toMatch(/not found/i)
     expect(res.channelListingsRemoved).toBe(0)
@@ -671,7 +671,7 @@ describe('remove-channel-listing — delist safety guards', () => {
       $transaction: async (fn: any) => fn({
         product: { update: async () => ({}), updateMany: async () => ({ count: 0 }) },
         sharedListingMembership: { deleteMany: async () => ({ count: 0 }) },
-        channelListing: { deleteMany: async () => ({ count: opts.rowsToDelete.length }) },
+        channelListing: { findMany: async () => [], deleteMany: async () => ({ count: opts.rowsToDelete.length }) },
       }),
     }
   }
@@ -682,7 +682,7 @@ describe('remove-channel-listing — delist safety guards', () => {
       survivingListings: [{ externalListingId: '257584954808' }], // …still live in IT
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
     expect(res.delisted).toBe(false)
@@ -696,7 +696,7 @@ describe('remove-channel-listing — delist safety guards', () => {
       activeMemberships: [{ itemId: 'ITEM-POOLED' }],
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'DE', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
     expect(res.delistSkippedShared).toEqual(['ITEM-POOLED'])
@@ -710,7 +710,7 @@ describe('remove-channel-listing — delist safety guards', () => {
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
       // caller supplies NO parentSku — this used to arm a whole-listing delist
-      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     expect(mockDispatchChannelDelist).not.toHaveBeenCalled()
     expect(res.delisted).toBe(false)
@@ -723,7 +723,7 @@ describe('remove-channel-listing — delist safety guards', () => {
       survivingListings: [],   // nobody else references it
     })
     const [res] = await runEbayFlatFileDelete(prisma as any, [
-      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing' },
+      { sku: 'SKU1', productId: 'p1', marketplace: 'IT', intent: 'remove-channel-listing', channelConnectionId: 'conn-1', aliasKey: '' },
     ])
     // The guard's contract is WHETHER we call delist, not whether eBay then
     // succeeds (that is dispatchChannelDelist's business). Assert the call

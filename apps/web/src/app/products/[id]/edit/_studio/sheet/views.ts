@@ -51,6 +51,7 @@
  */
 import { allColumnsPreset, type GridViewPreset } from '@/design-system/grid/views/presets'
 
+import { LANGUAGES_VIEW_ID } from './languages'
 import { flaggedColumnKeys } from './flaggedColumns'
 import type { SheetColumn } from './master/types'
 
@@ -92,9 +93,44 @@ export const RESERVED_COLUMN_IDS = ['sku'] as const
  * that quietly leaves; the failure mode of this is a preset that offers slightly less than intended,
  * which is visible in the dialog.
  */
-export function alwaysColumnsFor(addressable: readonly string[]): string[] {
+export function alwaysColumnsFor(addressable: readonly string[], structural: readonly string[] = []): string[] {
   const have = new Set(addressable)
-  return ALWAYS_COLUMNS.filter((k) => have.has(k))
+  return [...ALWAYS_COLUMNS.filter((k) => have.has(k)), ...structural.filter((k) => have.has(k) && !ALWAYS_COLUMNS.includes(k as never))]
+}
+
+/**
+ * STRUCTURAL columns — identity-class columns a SAVED VIEW may not silently drop (ruling R-VT-1,
+ * 2026-09-13).
+ *
+ * ## The defect this closes, measured
+ *
+ * `variation_theme` shipped served (`/studio/sheet` on `VX-TEST-3AX`: 27 columns, `defaultVisible:
+ * true`, group `Identity`, index 2), built by both sheet builders, and rendered NOWHERE. A verified
+ * sweep of the grid's own horizontal scroller (0 → 1601 of scrollWidth 3261) saw 26 of the 27 served
+ * columns and not this one, because the account's active view is a saved `Custom (23)` preset and a
+ * saved view stores the exact key list it was saved with. **A column that did not exist when a view
+ * was saved cannot have been excluded by anyone.**
+ *
+ * So absence from a stale saved set is NOT a choice. A structural column is re-injected at its
+ * canonical position by `alwaysColumnsFor`, which every saved and custom view already flows through
+ * (`useSheetColumns`: `[...alwaysColumns, ...visibleLayoutKeys(payload, specs)]`) and which
+ * `layoutFromPreferences` already excludes from what it STORES — so the mechanism is the one the
+ * identity block has always used, with one more member, rather than a second rule beside it.
+ *
+ * 🔴 Matched on the KIND, never on the key. `variation_theme` is one rename from dropping out of
+ * every saved view again with nothing on screen to say why — the same reason the SheetWriter routes
+ * on `column.kind`.
+ *
+ * ⚠ **What this does NOT do, stated because the ruling asks for the opposite arm too:** a saved view
+ * cannot currently record an EXPLICIT hide for a structural column. `ColumnsViewPayload` stores only
+ * the visible key list and `layoutFromPreferences` strips structural keys out of it entirely, so
+ * "hidden on purpose" and "saved before the column existed" are the same bytes. Injecting is the
+ * safe reading of an ambiguous record (the operator can always hide it again for the session), but
+ * making the distinction storable is a contract change to `ColumnsViewPayload` and is recorded as a
+ * QUESTION FOR THE OWNER rather than assumed.
+ */
+export function structuralColumnKeys(columns: readonly SheetColumn[]): string[] {
+  return columns.filter((c) => c.kind === 'variationTheme').map((c) => c.key)
 }
 
 /** The #173 rule, as a preset. Was the landing view (`'narrow'`); the id changed with the role. */
@@ -177,6 +213,23 @@ export function essentialsColumns(columns: SheetColumn[], ctx: ViewContext): str
   const flagged = new Set(ctx.flaggedKeys ?? [])
 
   const ordered = [
+    /**
+     * 🔴 VT.2 (2026-09-13, additive) — D-VT9: the `Variation theme` column is FIRST AFTER IDENTITY,
+     * **in every default view**.
+     *
+     * It has to be named here because this view is an ALLOW-LIST: identity → required → axes →
+     * name/status → spine → flagged. Measured on screen 2026-09-13 on `VX-TEST-3AX`: the server
+     * served the column (27 columns, `defaultVisible: true`, group `Identity`, index 2), both sheet
+     * builders produced it, and it still rendered NOWHERE — a full verified sweep of the horizontal
+     * scroller (0 → 1601 of 3261) found 26 of the 27 served columns and not this one. `requiredBy`
+     * is empty on it, it is not an axis column and it is not in the commerce spine, so every clause
+     * below misses it.
+     *
+     * Matched on the KIND and not on the key `variation_theme`, for the same reason the SheetWriter
+     * routes on the kind: the key is one rename away from silently dropping the column out of the
+     * view again, and nothing on screen would say why.
+     */
+    ...columns.filter((c) => c.kind === 'variationTheme').map((c) => c.key),
     /* 🔴 §9.3b (#362) — `name` and `status` are NOT identity on a family sheet, and used to sit
        here, in front of everything.
 
@@ -278,11 +331,12 @@ export function sheetViews(
   serverViews?: Array<{ id: string; label: string; columnKeys: string[] }>,
 ): SheetViewsResult {
   const all = allColumnsPreset(orderColumnKeys(columns, ctx))
+  const languages: GridViewPreset = { id: LANGUAGES_VIEW_ID, label: 'Languages', description: 'Compare shared content languages side by side, grouped by field', columns: columns.filter(column => column.localizable || !!column.locale).map(column => column.key) }
 
   if (serverViews && serverViews.length > 0) {
     return {
       source: 'server',
-      presets: [all, ...serverViews.map((v) => ({ id: v.id, label: v.label, columns: v.columnKeys }))],
+      presets: [all, languages, ...serverViews.map((v) => ({ id: v.id, label: v.label, columns: v.columnKeys }))],
     }
   }
 
@@ -304,7 +358,7 @@ export function sheetViews(
     { id: 'family-facts', label: 'Family facts', description: 'Attributes declared by this product family', columns: columns.filter(column => column.familyRules).map(column => column.key) },
     { id: 'localized-content', label: 'Localized content', description: `Content for ${ctx.locale}`, columns: columns.filter(column => column.storage === 'localizedContent' || Object.values(column.channels ?? {}).some(facts => facts.store?.kind === 'platformAttributes' && ['_etsyInformationLocales', '_shopifyInformationLocales'].includes(facts.store.path[0]))).map(column => column.key) },
   ].filter(view => view.columns.length > 0)
-  return { source: 'rules', presets: [all, ...required, ...focused] }
+  return { source: 'rules', presets: [all, ...required, languages, ...focused] }
 }
 
 /**

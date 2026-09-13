@@ -1,0 +1,73 @@
+{
+  "at": "2026-09-12T23:21:44.158Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "phases": [
+    {
+      "phase": "synthetic draft",
+      "jobId": "cmtz0drkg0000nj6vt5iothw8",
+      "delayedReadMs": 8211,
+      "source": "ai",
+      "reviewedAt": null,
+      "mark": "ai",
+      "review": [
+        {
+          "language": "de",
+          "field": "title",
+          "severity": "ERROR",
+          "message": "Review the German (de) title before publishing."
+        }
+      ],
+      "existingPinnedListingUnaffected": true,
+      "unchangedListings": true,
+      "unchangedQueue": true
+    },
+    {
+      "phase": "run revert",
+      "jobId": "cmtz0drkg0000nj6vt5iothw8",
+      "delayedReadMs": 8181,
+      "status": "REVERTED",
+      "translationValuesRestored": true
+    },
+    {
+      "phase": "workbook router",
+      "delayedReadMs": 8191,
+      "sharedAddresses": [
+        {
+          "tier": "language",
+          "language": "de"
+        },
+        {
+          "tier": "language",
+          "language": "fr"
+        }
+      ],
+      "pinAddresses": [
+        {
+          "tier": "pin",
+          "language": "de",
+          "coordinate": {
+            "channel": "AMAZON",
+            "market": "DE",
+            "accountId": "cmothu9bo0000nz01asw6wx8j"
+          }
+        }
+      ],
+      "nativeSourceUnchanged": true,
+      "legacyJsonUnchanged": true
+    },
+    {
+      "phase": "blank policy",
+      "delayedReadMs": 8235,
+      "ignoreRows": 0,
+      "clearRows": 1,
+      "clearedLanguage": "de",
+      "frenchPreserved": true
+    }
+  ],
+  "providerAttempts": 0,
+  "workbookRows": 590
+}

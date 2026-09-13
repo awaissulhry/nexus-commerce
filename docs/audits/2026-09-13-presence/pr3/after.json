@@ -1,0 +1,57 @@
+[
+  {
+    "path": "apps/api/src/services/ebay-flat-file-delete.service.ts",
+    "beforeSha256": "dfff3ead8a913aa2db8d8d24122c56dba3f02ed295814c0a269402357aa14b31",
+    "afterSha256": "c3a4f0d72ba0c88991e5d1762ab81617fe180bbdbd8ac9f867e61d141c369949"
+  },
+  {
+    "path": "apps/api/src/services/amazon/amazon-flat-file-remove.service.ts",
+    "beforeSha256": "e757e51bac95059725ce8dba46cf884bac22d5132f2990a070ac57e64e1e6ba9",
+    "afterSha256": "960bebd2ae66bc6b4704567f840eda436dab161c059237778990bff7b8c0785e"
+  },
+  {
+    "path": "apps/api/src/services/amazon-market-offer.service.ts",
+    "beforeSha256": "dd5ed0823734a4470865df7a59a3634e0bc1a5900bc580908a36015f5fcef784",
+    "afterSha256": "560ebd379e6329882ae9e8360b68575ffccc82607099d91ad93bdf8bc4ca60c9"
+  },
+  {
+    "path": "apps/api/src/routes/sync-control.routes.ts",
+    "beforeSha256": "ac77965499c990e47b439e186f68dbaafb8349c10778537325f52b4442415bea",
+    "afterSha256": "c4f12115adf3267b6b6a0a21cf22e92f6d423fd701d44915c34cbc7b1769fe00"
+  },
+  {
+    "path": "apps/api/src/routes/marketplaces.routes.ts",
+    "beforeSha256": "ec6088c1abf7045bf8cebfa0a755d016585ea24355a02b7cf4dcae3e8fe4664c",
+    "afterSha256": "38c84c50217d57fa6e1d0b1dbb4907a2436ca5defbcb242c80ab3808e4af7fa2"
+  },
+  {
+    "path": "apps/api/src/services/listings/recovery.service.ts",
+    "beforeSha256": "14cdcf8d4dd1c8b429f58bc6436c8380af77a9ab6cc1d908e3cca55fdd946ae2",
+    "afterSha256": "44d5aed09e1f51d24d44cdefcecd1463fd9586b69f5e620dd3553c221a6ae6bd"
+  },
+  {
+    "path": "apps/api/src/services/ebay-label-guard.service.ts",
+    "beforeSha256": "ad6a8c2fb5f114684cf73dc91c9cd04ca452dc1fc1df20f14f47901ec8e52a43",
+    "afterSha256": "fcd71d288870b045a10223db974e7fcb5a661273b38e3ac73c2545221d48b6af"
+  },
+  {
+    "path": "apps/api/src/services/listing-reconciliation.service.ts",
+    "beforeSha256": "a8927165eecb7a4a916037032191dbc9c6e31da995015eb5610349ef1faf62b4",
+    "afterSha256": "13f7269f520bdc339c429c3e327e300d61957f1cd999854e24a33f39f91dbb5a"
+  },
+  {
+    "path": "apps/api/src/services/amazon-mapper.service.ts",
+    "beforeSha256": "3261e9f7fde83e34b13a3bb30a40e884654a4498ec98a9376a620002a6e1d63f",
+    "afterSha256": "f17e5579e4d68e8202b7709e924bafc3a9c862a86164b031eecb4d4341c34dd9"
+  },
+  {
+    "path": "apps/api/src/services/follow-master.service.ts",
+    "beforeSha256": "860a47e223087f0903484684d2c4658773828bb8eacbae511bcd3380f2acc928",
+    "afterSha256": "24e4cebe2aab801bb885026dc9dcaae2a767b558d30af4d92601ac430f649c98"
+  },
+  {
+    "path": "apps/api/src/routes/reconciliation.routes.ts",
+    "beforeSha256": "5a583ee585bfef50c96e262f6fb33691e5f9145f02611dea7fae76536d14219d",
+    "afterSha256": "2559bc4dce241a34de731a8205b3255f16fce4c9d29e11f4d5a2f0746b8e59ee"
+  }
+]

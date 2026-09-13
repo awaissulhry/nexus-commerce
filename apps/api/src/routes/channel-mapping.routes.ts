@@ -8,6 +8,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { listMappingTemplates, listMappingPreviewProducts } from '../services/pim/mapping/editor-catalogue.service.js'
 import {
   getMappingForMarketplace,
+  getMappingForMarketplaceWithWarnings,
   findExpressionUsage,
   MarketplaceNotFoundError,
   InvalidMappingError,
@@ -27,6 +28,9 @@ import {
 import { validateExpr, exprDependencies, EXPR_FUNCTIONS } from '../services/pim/mapping/expr.js'
 import { getMappingSources } from '../services/pim/mapping/mapping-sources.service.js'
 import { resolveChannelConnectionId } from '../services/connection-resolver.service.js'
+// VT.1b — the Variations rule route (VX §11.1). The read model and the ONE blast-radius simulation.
+import { draftVariationRule, getVariationRuleView, simulateVariationRule } from '../services/pim/variation-rule-view.service.js'
+import type { StoredVariationRule } from '../services/pim/variation-rule-store.js'
 
 /** One place to turn a service throw into the right status. */
 function fail(reply: any, err: unknown) {
@@ -258,6 +262,68 @@ const channelMappingRoutes: FastifyPluginAsync = async (fastify) => {
       }
     },
   )
+
+  // ── VT.1b — the Variations rule (VX §11.1, design §3.7) ─────────
+  //
+  // GET answers the whole group in one round trip, every count server-stated. PUT is the blast-radius simulation:
+  // `dryRun: true` answers `<n> products follow this rule · <m> would gain a collision` and writes NOTHING; the
+  // committing call goes through the SAME simulation and then hands the drafted mapping to the existing review →
+  // activation path, so there is no second writer and no second simulation.
+  const variationsHandler = async (request: any, reply: any) => {
+    try {
+      const view = await getVariationRuleView({
+        channel: request.params.channel.toUpperCase(),
+        market: request.params.code,
+        categoryId: request.params.categoryId ?? null,
+      })
+      return reply.send(view)
+    } catch (err) { return fail(reply, err) }
+  }
+  fastify.get<{ Params: { channel: string; code: string } }>('/pim/channel-mapping/:channel/:code/variations', variationsHandler)
+  fastify.get<{ Params: { channel: string; code: string; categoryId: string } }>('/pim/channel-mapping/:channel/:code/variations/:categoryId', variationsHandler)
+
+  const putVariations = async (request: any, reply: any) => {
+    const channel = request.params.channel.toUpperCase()
+    const market = request.params.code
+    const categoryId: string | null = request.params.categoryId ?? null
+    const body = (request.body ?? {}) as { expectedToken?: unknown; dryRun?: unknown; rule?: unknown }
+    if (typeof body.expectedToken !== 'string' || !body.expectedToken) {
+      return reply.code(400).send({ error: 'invalid', details: ['expectedToken is required — reload the mapping before saving'] })
+    }
+    if (typeof body.dryRun !== 'boolean') {
+      // Required rather than defaulted: a commit that happened because a client forgot a field is the one mistake a
+      // rule write must not make (the same reason `family/generate` requires it).
+      return reply.code(400).send({ error: 'invalid', details: ['dryRun must be true or false'] })
+    }
+    const rule = (body.rule ?? null) as StoredVariationRule | null
+    try {
+      const { mapping } = await getMappingForMarketplaceWithWarnings(channel, market)
+      if (mappingToken(mapping) !== body.expectedToken) throw new MappingConflict()
+      // R-VT-2 (b) — the WRITE path validates and REFUSES, naming the offending key. Before the dry run too: a
+      // simulation of a rule that can never be saved is a number an operator would act on for nothing.
+      const draft = draftVariationRule(mapping, categoryId, rule, actor(request))
+      if (draft.errors.length) return reply.code(400).send({ error: 'invalid', details: draft.errors })
+
+      const simulation = await simulateVariationRule({ channel, market, categoryId, rule })
+      if (body.dryRun === true) {
+        return reply.send({ follow: simulation.follow, wouldCollide: simulation.wouldCollide })
+      }
+      // The commit goes through the EXISTING review → activation path — `createMappingImpact` with the
+      // `variationChange` kind — so every mapping write on this marketplace still has one writer, one CAS token and
+      // one audit trail. The page then activates it with `POST …/impact/:jobId/activate`, exactly as a field-rule
+      // change does. `jobId` is present ONLY on this branch, which is the contract VT.3 codes against.
+      const job = await createMappingImpact({
+        channel, market, expectedToken: body.expectedToken, userId: actor(request),
+        variationChange: { categoryId, rule },
+      })
+      return reply.code(202).send({ follow: simulation.follow, wouldCollide: simulation.wouldCollide, jobId: job.jobId })
+    } catch (err) {
+      if (err instanceof MappingConflict) return reply.code(409).send({ error: 'CONFLICT', message: err.message })
+      return fail(reply, err)
+    }
+  }
+  fastify.put<{ Params: { channel: string; code: string } }>('/pim/channel-mapping/:channel/:code/variations', putVariations)
+  fastify.put<{ Params: { channel: string; code: string; categoryId: string } }>('/pim/channel-mapping/:channel/:code/variations/:categoryId', putVariations)
 
   const reviewRequired = async (_request: unknown, reply: any) => reply.code(409).send({ error: 'REVIEW_REQUIRED', message: 'Preview the business-rule change through the mapping impact endpoint, then activate the reviewed result.' })
   fastify.put('/pim/channel-mapping/:channel/:code/expressions/:name', reviewRequired)

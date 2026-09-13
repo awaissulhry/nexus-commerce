@@ -31,7 +31,7 @@ const cells = {
 const chip = (over: Partial<ViewChip>): ViewChip => ({
   id: 'missing-required',
   label: 'Missing required',
-  count: 0,
+  count: { n: 0, unit: 'cells' },
   cells: EMPTY_VIEW_CHIP_CELLS,
   ...over,
 })
@@ -62,8 +62,8 @@ describe('the cell projection', () => {
 describe('🔴 null is not zero', () => {
   it('never labels an uncounted chip as 0', () => {
     expect(viewChipCountLabel(chip({ count: null }))).toBeNull()
-    expect(viewChipCountLabel(chip({ count: 0 }))).toBe('0')
-    expect(viewChipCountLabel(chip({ count: 7 }))).toBe('7')
+    expect(viewChipCountLabel(chip({ count: { n: 0, unit: 'cells' } }))).toBe('0 cells')
+    expect(viewChipCountLabel(chip({ count: { n: 7, unit: 'cells' } }))).toBe('7 cells')
   })
 
   it('KEEPS an uncounted chip on screen — hiding it would answer "none"', () => {
@@ -74,31 +74,40 @@ describe('🔴 null is not zero', () => {
   })
 
   it('hides only a REAL zero, and only when the producer asked', () => {
-    expect(isViewChipVisible(chip({ count: 0 }))).toBe(false)
-    expect(isViewChipVisible(chip({ count: 0, hideWhenZero: false }))).toBe(true)
-    expect(isViewChipVisible(chip({ count: 3 }))).toBe(true)
-    expect(isViewChipVisible(chip({ count: 3, hideWhenZero: true }))).toBe(true)
+    expect(isViewChipVisible(chip({ count: { n: 0, unit: 'cells' } }))).toBe(false)
+    expect(isViewChipVisible(chip({ count: { n: 0, unit: 'cells' }, hideWhenZero: false }))).toBe(true)
+    expect(isViewChipVisible(chip({ count: { n: 3, unit: 'cells' } }))).toBe(true)
+    expect(isViewChipVisible(chip({ count: { n: 3, unit: 'cells' }, hideWhenZero: true }))).toBe(true)
   })
 
   it('keeps a selected filter visible when its final match is fixed or searched away', () => {
-    expect(isViewChipVisible(chip({ count: 0 }), 'missing-required')).toBe(true)
-    expect(isViewChipVisible(chip({ count: 0 }), 'mapping-errors')).toBe(false)
+    expect(isViewChipVisible(chip({ count: { n: 0, unit: 'cells' } }), 'missing-required')).toBe(true)
+    expect(isViewChipVisible(chip({ count: { n: 0, unit: 'cells' } }), 'mapping-errors')).toBe(false)
   })
 })
 
 
 describe('visible count units', () => {
-  it('explains 63 mapping errors as three columns across 21 rows', () => {
-    const c = chip({ count: 63, cells: { byRow: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [String(i), ['fabric_type', 'country_of_origin', 'hazmat']])) } })
+  it('displays 63 cells and explains filter breadth across three columns and 21 rows', () => {
+    const c = chip({ count: { n: 63, unit: 'cells' }, cells: { byRow: Object.fromEntries(Array.from({ length: 21 }, (_, i) => [String(i), ['fabric_type', 'country_of_origin', 'hazmat']])) } })
+    expect(viewChipCountLabel(c)).toBe('63 cells')
     expect(viewChipColumnCountLabel(c)).toBe('3 columns')
     expect(viewChipSummary(c)).toBe('63 affected cells across 3 columns and 21 rows')
   })
   it('deduplicates cells and ignores empty row entries', () => {
-    const c = chip({ count: 1, cells: { byRow: { a: ['brand', 'brand'], b: [] } } })
+    const c = chip({ count: { n: 1, unit: 'cells' }, cells: { byRow: { a: ['brand', 'brand'], b: [] } } })
     expect(viewChipSummary(c)).toBe('1 affected cell across 1 column and 1 row')
   })
   it('leaves an uncounted result unknown', () => {
     expect(viewChipColumnCountLabel(chip({ count: null }))).toBeNull()
     expect(viewChipSummary(chip({ count: null }))).toBe('Not counted yet')
   })
+})
+
+
+it('keeps declared quantities independent of the cells used to narrow the view', () => {
+  expect(viewChipCountLabel(chip({ count: { n: 17, unit: 'cells' }, cells: { byRow: { a: ['one'] } } }))).toBe('17 cells')
+  expect(viewChipCountLabel(chip({ count: { n: 4, unit: 'variants' }, cells: { byRow: {} } }))).toBe('4 variants')
+  expect(viewChipCountLabel(chip({ count: { n: 1, unit: 'axes' } }))).toBe('1 axis')
+  expect(viewChipCountLabel(chip({ count: { n: 2, unit: 'axes' } }))).toBe('2 axes')
 })

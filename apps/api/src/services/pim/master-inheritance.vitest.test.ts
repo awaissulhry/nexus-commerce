@@ -17,7 +17,9 @@ describe('canonical Master inheritance', () => {
   })
   it('lets a channel override the canonical fact without changing Master', () => {
     const master = { ...product, brand: 'Shared' }
-    expect(resolveAttributes({ product: master, parent: null, channelListing: { id: 'listing', overrideData: { brand: 'Channel' } }, locale: 'it' }).brand.value).toBe('Channel')
+    // LX.F R-LX-13 — a channel-scope resolve now needs the coordinate and its
+    // market languages: one cascade, and it refuses to guess a pin address.
+    expect(resolveAttributes({ product: master, parent: null, channelListing: { id: 'listing', productId: master.id, channel: 'AMAZON', marketplace: 'IT', translations: [], overrideData: { brand: 'Channel' } }, marketLanguages: ['it'], locale: 'it' }).brand.value).toBe('Channel')
     expect(resolveAttributes({ product: master, parent: null, locale: 'it' }).brand.value).toBe('Shared')
   })
   it('inherits empty child facts from the parent', () => {

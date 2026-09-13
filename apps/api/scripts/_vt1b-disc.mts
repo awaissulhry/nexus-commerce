@@ -1,0 +1,11 @@
+import '../src/env.js'
+const { default: p } = await import('../src/db.js')
+console.log('DB:', (process.env.DATABASE_URL ?? '').replace(/:\/\/([^:]+):[^@]+@/, '://$1:***@'))
+const db = await p.$queryRawUnsafe<Array<{ db: string; host: string }>>(`SELECT current_database()::text AS db, coalesce(inet_server_addr()::text,'local socket') AS host`)
+console.log('current_database():', JSON.stringify(db[0]))
+const gale = await p.product.findFirst({ where: { sku: 'GALE-JACKET' }, select: { version: true } })
+const n = await p.product.count()
+console.log(`DISCRIMINATOR GALE-JACKET Product.version = ${gale?.version} (local 59 / Neon prod 51) · Product rows ${n} (local 355+ / prod 338)`)
+const col = await p.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*)::bigint n FROM information_schema.columns WHERE table_name='ReadinessIndex' AND column_name='variationSource'`)
+console.log('variationSource column present BEFORE:', Number(col[0]!.n) > 0)
+await p.$disconnect()

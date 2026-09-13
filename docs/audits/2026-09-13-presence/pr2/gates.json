@@ -1,0 +1,54 @@
+{
+  "at": "2026-09-13T19:01:39.056578+00:00",
+  "database": "127.0.0.1:55439/nexus_development",
+  "apiTsc": {
+    "exit": 0,
+    "diagnostics": 0
+  },
+  "apiVitest": {
+    "exit": 0,
+    "passedFiles": 19,
+    "tests": 323,
+    "optInLocalTestSkipped": 1
+  },
+  "localRehearsals": {
+    "passed": 2,
+    "delistArms": 4,
+    "notSentWriters": 3,
+    "outboundCalls": 0,
+    "cleanup": "zero residue, GALE59 unchanged"
+  },
+  "pushLock": {
+    "exit": 0,
+    "listingPushFunctions": 47,
+    "contracts": 3,
+    "missing": 0
+  },
+  "cronClustered": {
+    "exit": 0
+  },
+  "eventContract": {
+    "exit": 0
+  },
+  "routePrisma": {
+    "exit": 0
+  },
+  "gatesDone": [
+    "W1.1",
+    "W1.2",
+    "W1.3",
+    "W1.5-QUEUE",
+    "W1.7",
+    "W1.9"
+  ],
+  "remaining": "PR.1 automatic verification enqueue integration (captured deleted-row target / verified workspace / durable handoff)",
+  "atWave4": false,
+  "unknownDrainFollowup": {
+    "regressionRed": 4,
+    "positiveControls": 14,
+    "greenTests": 24,
+    "localRehearsalExit": 0,
+    "outcome": "SKIPPED with payload UNKNOWN and original transport code, retryCount unchanged, nextRetryAt null",
+    "outboundCalls": 0
+  }
+}

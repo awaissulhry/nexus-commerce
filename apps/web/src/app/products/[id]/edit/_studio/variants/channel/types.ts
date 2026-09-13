@@ -78,10 +78,30 @@ export interface ProjectionSplit {
   heldReason?: string
 }
 
-/** §4.4.4 — non-null when this coordinate has already published. Never fabricated from declared axes. */
+/**
+ * §4.4.4 — non-null when this coordinate has already published. Never fabricated from declared axes.
+ *
+ * 🔴 VT.1b unified this with the SHEET cell's lock (`variationLockFor`, ONE definition —
+ * `family-projection.service.ts:1142`), after the two disagreed: this block was derived from
+ * `platformAttributes.__lastPublishedAxes`, which only eBay's push writes, so GALE's live Amazon
+ * coordinates read UNLOCKED here and LOCKED on the cell. The three fields below are that producer's,
+ * declared rather than left to be read as `undefined` by a consumer that then guesses: VT.2c's dock
+ * section reads `orderChangeAllowed` to decide whether a reorder is a permitted commit, and the
+ * fallback it would have taken (`order.writableHere`, `false` on eBay) is the OPPOSITE answer for the
+ * one channel where a reorder on a live listing IS allowed.
+ *
+ * `lockedAxisKeys` stays beside them as the extra fact only this store can answer — WHICH axes are
+ * already published — and it is `[]` on every channel that cannot say (that is not "none locked" for
+ * a client to infer anything from; it is "this store has no per-axis answer").
+ */
 export interface ProjectionLock {
   reason: string
   lockedAxisKeys: string[]
+  /** What a SET change on this coordinate IS — the operation the plan describes (`docs/vt1-contracts.md` §1). */
+  setChangeIs: 'relist' | 'new-parent' | 'in-place'
+  /** eBay/Shopify `true`: reordering a live listing is a revise, so an order-only commit saves normally. */
+  orderChangeAllowed: boolean
+  externalId: string | null
 }
 
 /**
@@ -248,8 +268,26 @@ export interface ProjectionOrder {
 }
 
 /** `GET /api/products/:id/studio/projection` — `docs/vp2-contracts.md` §4.1. */
+/**
+ * VT.4 — the coordinate's collision report, `docs/vt1-contracts.md` §3.5, relayed verbatim.
+ *
+ * 🔴 `null` and `{ unresolved: 0 }` are DIFFERENT facts and the dock says each of them differently:
+ * `null` = this coordinate drops no axis (or the read carried no children), so there is nothing a
+ * collision could come from — NOT COMPUTED. `unresolved: 0` with `groups: []` = it was computed and
+ * came back empty. The same distinction `targetOptionsState` exists for, one field along.
+ */
+export interface ProjectionCollisions {
+  groups: Array<{ key: string[]; members: Array<{ id: string; sku: string; droppedValues: Record<string, string> }> }>
+  unresolved: number
+  /** The server's sentence. Rendered verbatim — the dock composes no count of its own. */
+  summary: string
+  resolvers: Array<{ kind: 'split' | 'fold' | 'exclude'; available: boolean; reason: string | null }>
+}
+
 export interface ProjectionPage {
   axisColumns?: Record<string, SheetColumn>
+  /** VT.4 — absent on an older server, `null` when nothing could collide. See `ProjectionCollisions`. */
+  collisions?: ProjectionCollisions | null
   /** The PARENT ChannelListing's version on this coordinate. Sent back as `expectedVersion`. */
   version: number
   coordinate: ProjectionCoordinate
@@ -257,10 +295,26 @@ export interface ProjectionPage {
   limits: ProjectionLimits
   mapping: ProjectionMapping[]
   targetOptions: ProjectionTargetOption[]
+  /**
+   * R-VT-7 — why `targetOptions` is what it is. `'ok'` is only ever sent with a NON-EMPTY list, so an empty
+   * Listbox always has a word for itself: `'freeform'` (the channel takes any name), `'unavailable'` (the
+   * schema or column set could not be read), `'no-theme'` (this Amazon product type declares no theme).
+   * Optional because an older server does not send it; `undefined` is treated as not measured, never as `ok`.
+   */
+  targetOptionsState?: 'ok' | 'freeform' | 'unavailable' | 'no-theme'
+  /** The server's sentence for that state, rendered verbatim. `null` when the list is populated. */
+  targetOptionsReason?: string | null
   /** True when the channel takes free names (Shopify) — the Listbox becomes an Input. */
   freeform: boolean
-  /** AMAZON only — the theme enum. Null on every other channel. */
-  theme?: { value: string | null; options: Array<{ code: string; label: string }> } | null
+  /**
+   * AMAZON only — the theme enum from the CACHED product-type schema (R-VT-7: it used to be read off a sheet
+   * column VT.1 retired, so it was `[]` on every coordinate). `coversAll` / `drops` / `adds` / `deprecated` are
+   * the server's grouping, so the dock groups the list exactly as the sheet cell's editor does (R-VT-9).
+   */
+  theme?: {
+    value: string | null
+    options: Array<{ code: string; label: string; deprecated?: boolean; coversAll?: boolean; drops?: string[]; adds?: string[] }>
+  } | null
   split: ProjectionSplit
   locked: ProjectionLock | null
   children: ProjectionChild[]
@@ -289,6 +343,11 @@ export interface ProjectionPage {
 /** The dock's draft — what `Save mapping` sends. */
 export interface ProjectionDraft {
   mapping: ProjectionMapping[]
+  /**
+   * R-VT-9 — AMAZON only: the theme the dock's picker chose. ABSENT (not `null`) on every draft that never
+   * touched a theme, because the route reads an explicit `null` as "clear it".
+   */
+  theme?: string | null
   split: { mode: 'single' | 'per-axis'; axisKey?: string }
   presentationOrder?: { expectedToken: string; change: { axes?: string[]; values?: Record<string, string[]> } }
 }
@@ -298,18 +357,35 @@ export interface ProjectionSaveOk {
   version: number
 }
 
+/**
+ * VT.4 — the server's own error CODE on a refusal, relayed beside the sentence.
+ *
+ * Why the code and not only the sentence: `axes_locked` is not a message to read, it is a BRANCH — a SET
+ * change on a live coordinate is an operation, so the dock opens the dry-run plan instead of reporting a
+ * failure (design §3.5). Matching on the sentence would be `reference_idempotency_guard_matched_the_quote`:
+ * the copy is Appendix A's and may be reworded, and the branch would silently stop firing.
+ *
+ * It is OPTIONAL because a transport failure and an unparseable body carry no code, and those are genuinely
+ * "we do not know which refusal this was".
+ */
+export type ProjectionRefusalCode = 'version_conflict' | 'axes_locked' | 'no_listing_here' | 'collision_unresolved' | 'bad_projection_request' | (string & {})
+
 /** 409 → repaint + refetch, exactly like the sheet (§4.4). */
 export interface ProjectionSaveConflict {
   ok: false
   conflict: true
   current: ProjectionPage
   reason: string
+  /** VT.4 — the wire's `error` field. Absent when the body carried none. */
+  code?: ProjectionRefusalCode
 }
 
 export interface ProjectionSaveFailed {
   ok: false
   conflict: false
   reason: string
+  /** VT.4 — the wire's `error` field. Absent when the body carried none. */
+  code?: ProjectionRefusalCode
 }
 
 export type ProjectionSaveResult = ProjectionSaveOk | ProjectionSaveConflict | ProjectionSaveFailed

@@ -1,0 +1,4 @@
+import fs from 'node:fs'
+import { spawnSync } from 'node:child_process'
+const checks=[['tokens-web','apps/web/src/design-system/tools/token-guard.mjs'],['tokens-factory','apps/factory/src/design-system/tools/token-guard.mjs'],['raw-primitives','scripts/check-raw-primitives-ratchet.mjs','--check'],['ds-conformance','scripts/ds-conformance-guard.mjs','--check'],['ag-grid-boundary','scripts/check-ag-grid-import-boundary.mjs']]
+for(const [name,...args] of checks){const r=spawnSync(process.execPath,args,{encoding:'utf8',maxBuffer:10e6});const receipt={at:new Date().toISOString(),command:['node',...args],exitCode:r.status,output:r.stdout+r.stderr};fs.writeFileSync(new URL(`${name}.json`,import.meta.url),JSON.stringify(receipt,null,2)+'\n');console.log(JSON.stringify({name,exitCode:r.status,output:receipt.output.slice(-1300)}));if(r.status)process.exitCode=1}

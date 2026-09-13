@@ -60,6 +60,7 @@ import { Listbox } from '@/design-system/components/Listbox'
 import { useSearchParams } from 'next/navigation'
 import { useRouter, usePathname } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { sharedContentAddress } from '@nexus/shared/content-language'
 import { cn } from '@/lib/utils'
 import {
   emitInvalidation,
@@ -4264,7 +4265,7 @@ function TranslationsTab({
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ source: 'manual' }),
+          body: JSON.stringify({ source: 'manual', contentAddress: sharedContentAddress(code) }),
         },
       )
       if (!res.ok) {
@@ -4294,7 +4295,7 @@ function TranslationsTab({
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ ...payload, contentAddress: sharedContentAddress(language) }),
         },
       )
       if (!res.ok) {
@@ -4315,7 +4316,8 @@ function TranslationsTab({
     try {
       await fetch(
         `${getBackendUrl()}/api/products/${productId}/translations/${language}/review`,
-        { method: 'POST' },
+        { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contentAddress: sharedContentAddress(language) }) },
       )
       void refresh()
     } finally {
@@ -4329,7 +4331,8 @@ function TranslationsTab({
     try {
       await fetch(
         `${getBackendUrl()}/api/products/${productId}/translations/${language}`,
-        { method: 'DELETE' },
+        { method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contentAddress: sharedContentAddress(language) }) },
       )
       void refresh()
     } finally {

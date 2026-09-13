@@ -1,3 +1,4 @@
+import { normalizeLanguage } from './content-language.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { marketLanguages } from './market-languages.js'
 import { assertInformationLocale } from './information-locale.js'
@@ -60,7 +61,12 @@ export interface SheetCoordinate {
   inMarket: boolean
 }
 
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
+/**
+ * VT.1 adds `variationTheme`: the ONE engine-owned column whose value is a structure, not a scalar
+ * (`docs/vt1-contracts.md` §1). It is the discriminator BOTH sheet builders and the SheetWriter route on, which is
+ * why it is a kind rather than a key - a key-keyed branch is the two-builders drift trap in another vocabulary.
+ */
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
 
 /**
  * Where the cell's value actually lives — decides how a write is addressed.
@@ -99,6 +105,10 @@ export interface SheetColumnChannelFacts {
 }
 
 export interface SheetColumn {
+  /** Resolver-owned field classification used by the Languages saved view. */
+  localizable?: boolean
+  /** Set on a <key>@<locale> column in the saved Languages view. */
+  locale?: string
   managedBy?: 'productMedia'
   shopifyField?: import('@nexus/shared/shopify-information').InformationField
   familyRules?: FieldDefinition['familyRules']
@@ -156,8 +166,11 @@ export interface SheetColumn {
   /** #756 — would the FORMULA writer accept this column on this scope (set by `/studio/sheet`). */
   formulaWritable?: boolean
   // ── AM.1 shape vocabulary ─────────────────────────────────────────
-  /** Default `scalar`. A `list` column's value is an array; a `measure` column's is `{ value, unit }`. */
-  shape?: FieldShape
+  /**
+   * Default `scalar`. A `list` column's value is an array; a `measure` column's is `{ value, unit }`; VT.1's
+   * `axes` column's is a `VariationThemeCell` (`docs/vt1-contracts.md` §1).
+   */
+  shape?: FieldShape | 'axes'
   /** list only. `max: null` = unbounded. A bounded list ≤ SLOT_COLUMNS_MAX is served as slot columns instead. */
   cardinality?: Cardinality
   /** measure only. */
@@ -453,6 +466,55 @@ interface Draft {
   /** Came from the master registry (its shape and kind win). */
   isMaster: boolean
   contributors: number
+}
+
+/**
+ * VT.1 - the ONE `Variation theme` column, served on EVERY scope (design §3.3, D-VT1, D-VT9).
+ *
+ * Engine-owned and produced HERE, once, so both sheet builders spread the same definition and neither can drift
+ * (`reference_two_column_builders_drift`). It replaces TWO raw columns that wrote the same fact through a second
+ * path: Amazon's schema-walked `variation_theme` and eBay's `variationTheme` listing column, both retired in
+ * `channel-specs/`.
+ *
+ * The column is STATIC - per-coordinate facts (the candidate themes or aspects, the limit, the lock, the write
+ * routing) live on the CELL, which is why the column cache stays valid across coordinates.
+ */
+export const VARIATION_THEME_KEY = 'variation_theme'
+
+/**
+ * The raw columns the engine-owned one REPLACES on the sheet: Amazon's schema property and eBay's listing field.
+ * `variation_theme` collides with the new column's own key on purpose - the engine column is unshifted after this
+ * filter runs, so the key survives while the raw definition does not, and no consumer sees two columns for one fact.
+ */
+const RAW_THEME_COLUMNS = new Set(['variation_theme', 'variationTheme'])
+
+export function variationThemeColumn(scopeKind: 'master' | 'channel'): SheetColumn {
+  return {
+    key: VARIATION_THEME_KEY,
+    // NOT a bulk-PATCH field. The write goes to `PATCH /studio/variation-axes` or `PATCH /studio/projection`,
+    // named per cell in `cell.value.write.endpoint`; `variation_theme` is in neither `CHANNEL_FIELD_MAP` nor
+    // `CHANNEL_WRITABLE`, so a bulk PATCH carrying it is refused instead of landing somewhere nothing reads.
+    writeField: VARIATION_THEME_KEY,
+    label: 'Variation theme',
+    group: MASTER_GROUPS.identity.label,
+    groupKey: MASTER_GROUPS.identity.key,
+    kind: 'variationTheme',
+    // The structure lives on the parent row and on each alias's parent row; a child row shows a dash.
+    storage: scopeKind === 'master' ? 'column' : 'listing',
+    scope: 'global',
+    requiredBy: [],
+    editable: true,
+    // R-VT-4 (orchestrator, on VT.2's §9.1 question): 160 on EVERY scope. The delivered names plus the
+    // marks fit in 160 and the `n dropped` tag only renders when something IS dropped, so the extra 40px
+    // bought nothing and cost a required column its place in the centre band. MEASURED both ways by VT.F
+    // (`LAYOUT_ONLY=9.1`): at 1440x900 eBay-IT `name` was +10px outside the 925px band at 200 and inside
+    // it at 160. Declared HERE because the wire is what the sheet reads; the engine's own default
+    // (`shapeColumn.ts` `col.width ?? 160`) is the same number for a caller that has no column.
+    width: 160,
+    defaultVisible: true,
+    shape: 'axes',
+    helpText: 'How this family varies, projected onto this scope. Set the axes on the shared product; choose a different theme here to override this coordinate only.',
+  }
 }
 
 export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: SheetColumn[]; droppedKeys: string[]; groups: SheetGroup[] } {
@@ -752,6 +814,21 @@ export function buildSheetColumns(input: BuildSheetColumnsInput): { columns: She
     if (l !== 0) return l
     return (a.slot?.index ?? 0) - (b.slot?.index ?? 0)
   })
+
+  // VT.1 - the two RAW theme columns leave the sheet here (D-VT3, "one fact, one writer"): Amazon's schema-walked
+  // `variation_theme` and eBay's `variationTheme` listing field. They are dropped from the SHEET only - both channel
+  // specs still DECLARE them, because the mapping engine's field catalogue and `evaluateSchemaRequirements` are built
+  // from the same walk, and removing the property there put "Category requirement validation is unavailable" on every
+  // Amazon cell (measured: +748,206 payload bytes on one family).
+  for (let i = columns.length - 1; i >= 0; i--) {
+    if (RAW_THEME_COLUMNS.has(columns[i].key)) columns.splice(i, 1)
+  }
+
+  // VT.1 - FIRST, before every other column, on every scope (D-VT9). The grid's identity band is its own pinned
+  // column, so index 0 of the wire IS "first after identity". Inserted after the sort rather than ranked inside
+  // it: the sort's group/required/alphabetical rules would scatter a structural column among content fields, and a
+  // column that moves depending on which schema answered is not a fixed position.
+  columns.unshift(variationThemeColumn(scopeKind))
 
   return { columns, droppedKeys, groups }
 }
@@ -1056,7 +1133,8 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
     input.locale ?? null,
   ])
   const cached = columnSetCache.get(cacheKey)
-  if (!input.accountId && cached && Date.now() - cached.at < COLUMN_SET_TTL_MS) return cached.value
+  // LX7 request: account is already part of cacheKey; a channel scope can reuse its own entry.
+  if (cached && Date.now() - cached.at < COLUMN_SET_TTL_MS) return cached.value
 
   const { default: prisma } = await import('../../db.js')
   const { getAvailableFields } = await import('./field-registry.service.js')
@@ -1081,7 +1159,7 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
 
   const coordinates = coordinatesFor(market, marketplaceRows, { present, channels: input.channels, only: input.onlyChannels })
   const languageCoordinate = coordinates[0]
-  const locale = input.locale ?? (languageCoordinate ? marketLanguages(languageCoordinate.channel, languageCoordinate.marketplace, marketplaceRows)[0] : PRIMARY_CONTENT_LOCALE)
+  const locale = normalizeLanguage(input.locale ?? (languageCoordinate ? marketLanguages(languageCoordinate.channel, languageCoordinate.marketplace, marketplaceRows)[0] : PRIMARY_CONTENT_LOCALE))
   if (scopeKind === 'channel') for (const coordinate of coordinates) assertInformationLocale(coordinate.channel, input.locale, marketLanguages(coordinate.channel, coordinate.marketplace, marketplaceRows))
   else assertInformationLocale(undefined, input.locale)
 
@@ -1143,7 +1221,23 @@ export async function getSheetColumns(input: GetSheetColumnsInput): Promise<Shee
         }
       }
     } else if (coordinate.channel === 'SHOPIFY' || coordinate.channel === 'ETSY') {
-      const spec = coordinate.channel === 'SHOPIFY' ? await (await import('./channel-specs/shopify.js')).loadShopifyProductSpec(input.accountId, input.locale) : etsyProductSpec(input.locale)
+      // LX.F R-LX-10 — a cache-only read (every Studio page load, since
+      // `getStudioSheet` runs inside `withCachedSchemas`) must REPORT a cold store
+      // schema, not throw: `channel-specs/shopify.js:16` refuses rather than
+      // fetching, which turned a first Shopify load into a 500
+      // ("Shopify requirements are not cached for this account"). Reported the same
+      // way the Amazon branch above reports an unreadable cached schema, and the
+      // store spec falls back to its schema-less shape so the sheet still renders.
+      let spec
+      if (coordinate.channel === 'SHOPIFY') {
+        const shopify = await import('./channel-specs/shopify.js')
+        try { spec = await shopify.loadShopifyProductSpec(input.accountId, input.locale) }
+        catch (error) {
+          console.error('[sheet-columns] Shopify requirements unavailable:', error instanceof Error ? error.message : error)
+          schemaMissing.push('SHOPIFY:*')
+          spec = await shopify.loadShopifyProductSpec(null, input.locale)
+        }
+      } else spec = etsyProductSpec(input.locale)
       specs.push({ coordinate, spec })
       coverage.push({ coordinate: coordinate.label, channel: coordinate.channel, category: '*',
         declared: Object.keys(spec.coverage).length, columns: 0, fetchedAt: null, unrecognised: spec.unrecognised })

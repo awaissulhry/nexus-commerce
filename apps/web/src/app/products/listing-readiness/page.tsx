@@ -1,119 +1,59 @@
 'use client'
-
-import { useEffect, useState } from 'react'
-import Link from '@/lib/workspaces/Link'
+import Link from 'next/link'
+import { useEffect, useMemo, useState } from 'react'
 import type { ListingReadinessPage, ListingReadinessRow } from '@nexus/shared/listing-readiness'
 import { PageHeader } from '@/design-system/patterns/PageHeader'
-import { Button, Textarea } from '@/design-system/primitives'
-import { Banner, Card, Disclosure, Field, Listbox, MetricStrip, Pagination } from '@/design-system/components'
-import type { TransferOptions } from '../catalog-transfer/sourceMapping'
+import { Button, Tag } from '@/design-system/primitives'
+import { Banner, Card, Disclosure, Field, Listbox, Pagination } from '@/design-system/components'
+import { DataGrid } from '@/design-system/grid/datagrid'
+import { readinessMeta, SCOPE_READINESS_STATES } from '@/design-system/grid'
 import { transferApi } from '../catalog-transfer/transferApi'
-import { channelName, languageName } from '../catalog-transfer/workbookSelection'
+import { TranslateDialog, languageLabel, useCatalogLanguages } from '../next/TranslateDialog'
 import styles from './readiness.module.css'
 
-type Selection = { familyId?: string; productIds?: string; listingIds?: string; job?: string; skus?: string }
-type Request = Selection & { accountId?: string; marketplace?: string; page: string }
-const stateLabel = { 'needs-attention': 'Needs attention', 'checks-passed': 'Local checks passed', unavailable: 'Checks incomplete' }
-const issueLabel = { missing: 'Missing fact', invalid: 'Invalid value', translation: 'Translation needed', schema: 'Requirements unavailable', account: 'Destination setup', check: 'Check incomplete', warning: 'Review warning' }
-const regionNames = new Intl.DisplayNames(['en'], { type: 'region' })
-
+type Options = { families: Array<{ id: string; label: string }>; markets: Array<{ channel: string; code: string; name: string }> }
 export default function ListingReadiness() {
-  const [options, setOptions] = useState<TransferOptions | null>(null), [optionsError, setOptionsError] = useState(''), [optionsAttempt, setOptionsAttempt] = useState(0)
-  const [selection, setSelection] = useState<Selection>({}), [selectionMode, setSelectionMode] = useState('family')
-  const [accountId, setAccountId] = useState(''), [marketplace, setMarketplace] = useState('')
-  const [request, setRequest] = useState<Request | null>(null), [result, setResult] = useState<ListingReadinessPage | null>(null)
-  const [error, setError] = useState(''), [loading, setLoading] = useState(false)
+  const [query, setQuery] = useState<Record<string, string> | null>(null), [result, setResult] = useState<ListingReadinessPage | null>(null)
+  const [options, setOptions] = useState<Options | null>(null), [error, setError] = useState(''), [loading, setLoading] = useState(false), [translate, setTranslate] = useState(false)
+  const languages = useCatalogLanguages()
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const initial: Selection = Object.fromEntries(['familyId', 'productIds', 'listingIds', 'job', 'skus'].filter(key => params.has(key)).map(key => [key, params.get(key)!]))
-    if (Object.keys(initial).length) {
-      let readableSkus = initial.skus
-      try { const parsed: unknown = JSON.parse(initial.skus ?? 'null'); if (Array.isArray(parsed) && parsed.every(v => typeof v === 'string')) readableSkus = parsed.join('\n') } catch { /* Single-SKU bookmark. */ }
-      setSelection({ ...initial, ...(readableSkus !== undefined ? { skus: readableSkus } : {}) }); setSelectionMode(initial.job || initial.productIds || initial.listingIds ? 'selection' : initial.skus ? 'skus' : 'family')
-      setAccountId(params.get('accountId') ?? ''); setMarketplace(params.get('marketplace') ?? '')
-      setRequest({ ...initial, accountId: params.get('accountId') ?? undefined, marketplace: params.get('marketplace') ?? undefined, page: params.get('page') ?? '1' })
-    }
+    setQuery(Object.fromEntries(new URLSearchParams(window.location.search)))
+    void transferApi<Options>('catalog-transfer/readiness/options').then(setOptions).catch(error => setError(error.message))
   }, [])
   useEffect(() => {
-    const abort = new AbortController(); setOptionsError('')
-    void transferApi<TransferOptions>('catalog-transfer/readiness/options', undefined, abort.signal).then(value => { if (!abort.signal.aborted) setOptions(value) })
-      .catch(e => { if (!abort.signal.aborted) setOptionsError(e.message) })
-    return () => abort.abort()
-  }, [optionsAttempt])
-  useEffect(() => {
-    if (!request) return
-    const abort = new AbortController(); setLoading(true); setResult(null); setError('')
-    const params = new URLSearchParams(Object.entries(request).filter((entry): entry is [string, string] => !!entry[1]))
+    if (!query) return
+    const controller = new AbortController(); setLoading(true); setError(''); setResult(null)
+    const params = new URLSearchParams(query)
     window.history.replaceState(null, '', `${window.location.pathname}?${params}`)
-    void transferApi<ListingReadinessPage>(`catalog-transfer/readiness?${params}`, undefined, abort.signal)
-      .then(value => { if (!abort.signal.aborted) setResult(value) })
-      .catch(e => { if (!abort.signal.aborted) setError(e.message) })
-      .finally(() => { if (!abort.signal.aborted) setLoading(false) })
-    return () => abort.abort()
-  }, [request])
-  const clearCheck = () => { setRequest(null); setResult(null); setError(''); setLoading(false) }
-  const check = () => setRequest({ ...selection, ...(selection.skus ? { skus: JSON.stringify(selection.skus.split(/\r?\n/).map(s => s.trim()).filter(Boolean)) } : {}), accountId: accountId || undefined, marketplace: marketplace || undefined, page: '1' })
-  const chosenAccount = options?.accounts.find(a => a.id === accountId)
-  const markets = [...new Map((options?.markets ?? []).filter(m => ['AMAZON', 'EBAY', 'SHOPIFY', 'ETSY'].includes(m.channel) && (!chosenAccount || m.channel === chosenAccount.channelType && (!chosenAccount.marketplace || chosenAccount.marketplace === 'GLOBAL' || chosenAccount.marketplace === m.code))).map(m => [m.code, m])).values()]
-  const groups = new Map<string, ListingReadinessRow[]>()
-  for (const row of result?.rows ?? []) {
-    const key = JSON.stringify([row.channel, row.marketplace, row.accountId])
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key)!.push(row)
-  }
+    void transferApi<ListingReadinessPage>(`catalog-transfer/readiness?${params}`, undefined, controller.signal)
+      .then(value => { if (!controller.signal.aborted) setResult(value) })
+      .catch(error => { if (!controller.signal.aborted) setError(error.message) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    return () => controller.abort()
+  }, [query])
+  const filter = (key: string, value: string) => setQuery(prior => { const next = { ...prior, page: '1' }; if (key === 'channel') delete (next as Record<string, string>).marketplace; if (value) Object.assign(next, { [key]: value }); else delete (next as Record<string, string>)[key]; return next })
+  const columns = useMemo(() => [
+    { key: 'product', label: 'Product', render: (row: ListingReadinessRow) => <Link className={styles.product} href={row.editorHref}>{row.sku}<span className={styles.productName} title={row.name ?? undefined}>{row.name}</span></Link> },
+    { key: 'destination', label: 'Destination', render: (row: ListingReadinessRow) => <span>{row.channel} {row.marketplace}<br />{row.accountName}</span> },
+    { key: 'language', label: 'Language', render: (row: ListingReadinessRow) => languageLabel(row.locale) },
+    { key: 'state', label: 'Readiness', render: (row: ListingReadinessRow) => { const meta = readinessMeta(row.state, 'scope'); return <Tag tone={meta.tone}>{meta.label} · {row.pct === null ? '—' : `${row.pct}%`}</Tag> } },
+    { key: 'missing', label: 'Needs attention', render: (row: ListingReadinessRow) => row.issues.length ? <Disclosure summary={`${row.issues.length} ${row.issues.length === 1 ? 'issue' : 'issues'} to review`}><ul className={styles.issues}>{row.issues.map((issue, i) => <li key={i} title={issue.message}>{issue.label}: {issue.message}</li>)}</ul></Disclosure> : '—' },
+    { key: 'actions', label: 'Actions', render: (row: ListingReadinessRow) => <Button asChild size="sm"><Link href={row.editorHref}>Open in studio</Link></Button> },
+  ], [])
   return <div className={styles.workspace}>
-    <PageHeader eyebrow="Products" title="Listing readiness" subtitle="Find what needs attention for each seller account and marketplace." actions={<>
-      <Button asChild><Link href="/products/catalog-transfer">Import &amp; export</Link></Button>
-      <Button asChild><Link href="/products">Back to products</Link></Button>
-    </>} />
-    <Card header={<h2>Choose products to check</h2>} description="Checks saved Amazon and eBay listings, including drafts. Shared facts are reused; each destination keeps its own category and language.">
-      <form className={styles.stack} onSubmit={e => { e.preventDefault(); check() }}>
-        {optionsError && <Banner tone="danger" action={<Button onClick={() => setOptionsAttempt(n => n + 1)}>Retry options</Button>}>{optionsError}</Banner>}
-        <div className={styles.fields}>
-          <Field label="Products"><Listbox value={selectionMode} onChange={mode => { setSelectionMode(mode); setSelection({}); clearCheck() }} options={[
-            ...(selectionMode === 'selection' ? [{ value: 'selection', label: selection.job ? 'Products saved by this import' : selection.listingIds ? 'Selected listings' : 'Selected products' }] : []),
-            { value: 'family', label: 'Product family' }, { value: 'skus', label: 'Specific SKUs' },
-          ]} width="100%" /></Field>
-          <Field label="Seller account"><Listbox value={accountId} options={[{ value: '', label: 'All accounts' }, ...(options?.accounts ?? []).map(a => ({ value: a.id, label: a.displayName ?? a.id }))]} onChange={id => { setAccountId(id); setMarketplace(''); clearCheck() }} disabled={!options} width="100%" /></Field>
-          <Field label="Marketplace"><Listbox value={marketplace} options={[{ value: '', label: 'All marketplaces' }, ...markets.map(m => ({ value: m.code, label: `${regionNames.of(m.code === 'UK' ? 'GB' : m.code) ?? m.code} · ${m.code}` }))]} onChange={value => { setMarketplace(value); clearCheck() }} disabled={!options} width="100%" /></Field>
-        </div>
-        {selectionMode === 'family' && <Field label="Product family" required><Listbox options={(options?.families ?? []).map(f => ({ value: f.id, label: f.label }))} value={selection.familyId ?? ''} onChange={familyId => { setSelection({ familyId }); clearCheck() }} disabled={!options} width="100%" /></Field>}
-        {selectionMode === 'skus' && <Field label="SKUs" required hint="Up to 200 SKUs, one per line."><Textarea rows={3} value={selection.skus ?? ''} onChange={e => { setSelection({ skus: e.target.value }); clearCheck() }} /></Field>}
-        {selectionMode === 'selection' && <p>{selection.job ? 'Checks the products successfully saved by this import across their existing destinations. Refused and excluded records remain in the import review.' : selection.listingIds ? `${selection.listingIds.split(',').length} selected ${selection.listingIds.split(',').length === 1 ? 'listing' : 'listings'}. Each seller account, marketplace and listing alias is preserved.` : `${selection.productIds?.split(',').length ?? 0} selected products. Each selected parent and variant is checked only if included in the selection.`}</p>}
-        <div><Button variant="primary" type="submit" disabled={loading || !Object.values(selection).some(v => v?.trim())}>{loading ? 'Checking listings…' : 'Check listings'}</Button></div>
-      </form>
-    </Card>
-    {loading && <p role="status">Resolving current values, category requirements and translations…</p>}
-    {error && <Banner tone="danger" title="Readiness could not be checked" action={<Button onClick={check}>Retry check</Button>}>{error}</Banner>}
-    {result && <>
-      <div className={styles.actions}><p role="status">{result.productCount.toLocaleString()} {result.productCount === 1 ? 'product' : 'products'} · {result.total.toLocaleString()} matching {result.total === 1 ? 'listing' : 'listings'}. Checked {new Date(result.computedAt).toLocaleString()}.</p><Button onClick={() => setRequest(r => r && { ...r })}>Refresh checks</Button></div>
-      {!!result.missingSelectionCount && <Banner tone="warning">{result.missingSelectionCount} selected {selection.listingIds ? 'listings' : 'products'} are missing or archived and could not be checked.</Banner>}
-      {!!result.withoutListing.total && <Banner tone="warning" title={`${result.withoutListing.total} products have no matching listing`}>
-        Open the product to choose its destination and create a listing draft.
-        <div className={styles.links}>{result.withoutListing.sample.map(p => <Button key={p.id} asChild variant="link" size="sm"><Link href={`/products/${encodeURIComponent(p.id)}/edit/studio`}>{p.sku}</Link></Button>)}</div>
-        {result.withoutListing.total > result.withoutListing.sample.length && <p>Showing the first {result.withoutListing.sample.length}. Narrow the product selection to find the others.</p>}
-      </Banner>}
-      {!!result.rows.length && <>
-        <MetricStrip metrics={[
-          { label: 'Listings on this page', value: result.rows.length },
-          { label: 'Need attention', value: result.rows.filter(r => r.state === 'needs-attention').length },
-          { label: 'Checks incomplete', value: result.rows.filter(r => r.state === 'unavailable').length },
-          { label: 'Local checks passed', value: result.rows.filter(r => r.state === 'checks-passed').length },
-        ]} />
-        <Banner title="Prepare, validate with the channel, then publish">These are local attribute checks against cached category requirements. Review pricing, stock, policies and live channel validation in the listing editor before submitting. Channel acceptance and live availability must be confirmed there.</Banner>
-        {[...groups.entries()].map(([key, rows]) => <Card key={key} header={<h2>{channelName(rows[0].channel)} · {rows[0].marketplace}</h2>} description={`${rows[0].accountName}${rows[0].accountId ? ` · ${rows[0].accountId.slice(-6)}` : ''} · ${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} on this page`}>
-          <div className={styles.stack}>{rows.map(row => <Disclosure key={row.id} summary={`${row.sku} · ${row.aliasKey || 'Primary listing'} · ${stateLabel[row.state]}${row.issues.length ? ` · ${row.issues.length} issues` : ''}`}>
-            <div className={styles.stack}>
-              <p>{row.name} · {languageName(row.locale)} · Category: {row.category ?? 'Not resolved'}</p>
-              <div className={styles.actions}><Button asChild variant="primary" size="sm"><Link href={row.editorHref}>Review {row.sku} listing</Link></Button></div>
-              {!!row.issues.length && <ul className={styles.issues}>{row.issues.map((issue, index) => <li key={index}><strong>{issue.label} · {issueLabel[issue.kind]}</strong><p>{issue.message}</p></li>)}</ul>}
-              <Disclosure summary="Check details"><p>Schema: {row.schema?.version ?? 'Version unavailable'} · Retrieved {row.schema?.fetchedAt ? new Date(row.schema.fetchedAt).toLocaleString() : 'at an unknown date'}.</p><p>Saved listing status: {row.savedStatus}. Last sync: {row.lastSyncedAt ? new Date(row.lastSyncedAt).toLocaleString() : 'not recorded'}. This check did not contact the marketplace.</p></Disclosure>
-            </div>
-          </Disclosure>)}</div>
-        </Card>)}
-      </>}
-      {!result.rows.length && <Card padded><p>{result.total ? 'This page no longer contains listings. Return to the first page to refresh the selection.' : 'No existing listings matched this selection.'}</p>{result.total > 0 && <Button onClick={() => setRequest(r => r && { ...r, page: '1' })}>First page</Button>}</Card>}
-      {result.total > result.pageSize && <div className={styles.actions}><p>Page {result.page} of {Math.ceil(result.total / result.pageSize)}. Counts above describe this page.</p><Pagination page={result.page} pageCount={Math.ceil(result.total / result.pageSize)} onPage={page => setRequest(r => r && { ...r, page: String(page) })} /></div>}
-    </>}
+    <PageHeader eyebrow="Products" title="Listing readiness" subtitle="Find what needs attention by channel, market and language." actions={<Button asChild><Link href="/products/next">Back to products</Link></Button>} />
+    <Card padded><div className={styles.fields}>
+      <Field label="Channel"><Listbox value={query?.channel ?? ''} onChange={value => filter('channel', value)} options={[{ value: '', label: 'All channels' }, { value: 'SHARED', label: 'Shared product' }, ...[...new Set(options?.markets.map(m => m.channel))].map(channel => ({ value: channel, label: channel }))]} /></Field>
+      <Field label="Market"><Listbox value={query?.marketplace ?? ''} onChange={value => filter('marketplace', value)} options={[{ value: '', label: 'All markets' }, ...[...new Map(options?.markets.filter(m => !query?.channel || m.channel === query.channel).map(m => [m.code, m])).values()].map(m => ({ value: m.code, label: m.name }))]} /></Field>
+      <Field label="Language"><Listbox value={query?.language ?? ''} onChange={value => filter('language', value)} options={[{ value: '', label: 'All languages' }, ...languages.options]} /></Field>
+      <Field label="State"><Listbox value={query?.state ?? ''} onChange={value => filter('state', value)} options={[{ value: '', label: 'All states' }, ...SCOPE_READINESS_STATES.map(state => ({ value: state, label: readinessMeta(state, 'scope').label }))]} /></Field>
+      <Field label="Family"><Listbox value={query?.familyId ?? ''} onChange={value => { setQuery(prior => { const next = { ...prior, page: '1', familyId: value }; for (const key of ['productIds', 'listingIds', 'job', 'skus']) delete (next as Record<string, string>)[key]; return next }) }} options={[{ value: '', label: 'All families' }, ...(options?.families ?? []).map(family => ({ value: family.id, label: family.label }))]} /></Field>
+    </div></Card>
+    {(error || languages.error) && <Banner tone="danger">{error || languages.error}</Banner>}
+    <div className={styles.actions}><span aria-live="polite">{loading ? 'Loading readiness…' : `${result?.total ?? '—'} ${result?.total === 1 ? 'coordinate' : 'coordinates'} · ${result?.productCount ?? '—'} ${result?.productCount === 1 ? 'product' : 'products'}`}</span>
+      <Button onClick={() => setTranslate(true)} disabled={!query?.language || loading || !result?.total} title={!query?.language ? 'Choose a language to preview translation for every matching row.' : undefined}>Translate filtered products…</Button></div>
+    {result && <><DataGrid columns={columns} rows={result.rows} rowKey={row => row.id} ariaLabel="Readiness by coordinate and language" keyboardScroll emptyState="No indexed rows match this filter." />
+      <Pagination page={result.page} pageCount={Math.max(1, Math.ceil(result.total / result.pageSize))} onPage={page => setQuery(prior => ({ ...prior, page: String(page) }))} />
+      <p>Last computed: {result.computedAt ? new Date(result.computedAt).toLocaleString() : '—'}. Readiness reflects saved information; publication checks run before publishing.</p></>}
+    {query && <TranslateDialog open={translate} onClose={() => setTranslate(false)} language={query.language ?? ''} scope={{ kind: 'readiness', query }} />}
   </div>
 }

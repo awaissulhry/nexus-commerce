@@ -24,6 +24,7 @@ export interface LoadDraftsQuery {
    * for another language must never tint the cell the operator is looking at.
    */
   locale?: string | null
+  locales?: readonly string[] | null
 }
 
 async function readError(res: Response): Promise<string> {
@@ -45,6 +46,13 @@ async function readError(res: Response): Promise<string> {
 export async function loadDrafts(q: LoadDraftsQuery, signal?: AbortSignal): Promise<AiDraftsResponse> {
   if (q.productIds.length === 0) {
     return { drafts: [], counts: { total: 0, pending: 0, failed: 0, stale: 0 } }
+  }
+  if (q.locales?.length) {
+    const responses = await Promise.all(q.locales.map(locale => loadDrafts({ ...q, locale, locales: null }, signal)))
+    return { drafts: responses.flatMap(response => response.drafts), counts: responses.reduce((counts, response) => ({
+      total: counts.total + response.counts.total, pending: counts.pending + response.counts.pending,
+      failed: counts.failed + response.counts.failed, stale: counts.stale + response.counts.stale,
+    }), { total: 0, pending: 0, failed: 0, stale: 0 }) }
   }
   const params = new URLSearchParams({
     productIds: q.productIds.join(','),

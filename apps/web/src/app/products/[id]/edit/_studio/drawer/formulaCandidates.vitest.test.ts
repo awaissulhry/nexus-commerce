@@ -214,3 +214,9 @@ describe('🔴 invariants the compiler cannot see', () => {
     expect(composer).toContain('nds-formula-pop')
   })
 })
+
+it('uses the same language-scoped reference values as both sheets', () => {
+  const candidates = buildFormulaCandidates([{key:'name@de',label:'Name'},{key:'name@fr',label:'Name'}],
+    {'name@de':{value:'Deutsch'},'name@fr':{value:'Français'}}, [], 'description@fr', 'de')
+  expect(candidates).toEqual([{name:'name',label:'Name',kind:'field',group:'Columns',value:'Français'}])
+})

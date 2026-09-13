@@ -15,6 +15,7 @@ export function AmazonMediaRoute() {
   const path = `/api/products/${encodeURIComponent(productId)}/images-workspace/amazon?${params}`
   if (scopeError) return <EmptyState title="Listing destination unavailable" description={scopeError} />
   if (destination.status !== 'ready') return <p role="status">Loading listing destination…</p>
+  const selectedAccount = accounts.find(a => a.id === accountId)
   return <AmazonMediaWorkspace key={path} path={path} productId={productId} onListingChange={setListing}
-    accountLabel={accounts.find(a => a.id === accountId)?.label ?? 'Selected account'} />
+    accountLabel={selectedAccount?.label == null ? 'Account label not reported' : selectedAccount.label} />
 }

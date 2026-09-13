@@ -1,3 +1,5 @@
+import { resolveContent, translationMissing } from './pim/content-resolver.js'
+import { PRIMARY_CONTENT_LOCALE } from './pim/content-locale.js'
 /**
  * W2.14 — FamilyCompletenessService.
  *
@@ -183,19 +185,8 @@ export class FamilyCompletenessService {
         id: true,
         familyId: true,
         categoryAttributes: true,
-        // Translation rows are loaded so localizable attrs can be
-        // checked against the operator's primary locale. For now we
-        // count the primary-locale field as filled if ANY translation
-        // row has a value for it.
-        translations: {
-          select: {
-            language: true,
-            name: true,
-            description: true,
-            bulletPoints: true,
-            keywords: true,
-          },
-        },
+        workspaceId: true, parentId: true, name: true, description: true, bulletPoints: true, keywords: true,
+        translations: true, parent: { include: { translations: true } },
       },
     })
     if (!product) {
@@ -236,22 +227,12 @@ export class FamilyCompletenessService {
     const ca = (product.categoryAttributes ?? {}) as Record<string, unknown>
     for (const [k, v] of Object.entries(ca)) values.set(k, v)
 
-    // Layer 2: localizable. ProductTranslation only has fixed columns
-    // today (name/description/bulletPoints/keywords) — those map to
-    // hard-coded attribute codes if the family declares them. Future
-    // commits expand ProductTranslation to a generic per-locale value
-    // bag (W2.x); until then this is the conservative read.
-    const HARDCODED_TRANSLATION_FIELDS: Record<string, keyof (typeof product.translations)[number]> = {
-      name: 'name',
-      description: 'description',
-      bullet_points: 'bulletPoints',
-      keywords: 'keywords',
-    }
+    // Family completeness is the shared source-language view. Other languages cannot fill it.
     for (const code of localizableCodes) {
-      const field = HARDCODED_TRANSLATION_FIELDS[code]
-      if (!field) continue
-      const anyFilled = product.translations.some((t) => isFilled(t[field]))
-      if (anyFilled) values.set(code, true)
+      const field = code === 'bullet_points' ? 'bulletPoints' : code
+      const resolved = resolveContent({ product: product as any, parent: product.parent as any, field,
+        localizableKeys: [...localizableCodes], address: { requested: PRIMARY_CONTENT_LOCALE } })
+      values.set(code, translationMissing(resolved, PRIMARY_CONTENT_LOCALE) ? null : resolved.value)
     }
 
     return {

@@ -24,15 +24,7 @@ import { StudioTabHost } from './StudioTabHost'
 import { useHeaderCollapse } from './useHeaderCollapse'
 import styles from './studio.module.css'
 
-export interface StudioFrameProps {
-  /**
-   * Kept for the caller's contract; the empty-marketplaces case is now stated by the scope bar
-   * itself rather than by a band above the grid (v2 §6.6 — nothing may push the sheet down).
-   */
-  marketplacesFailed: boolean
-}
-
-export function StudioFrame({ marketplacesFailed: _marketplacesFailed }: StudioFrameProps) {
+export function StudioFrame() {
   const frameRef = useRef<HTMLDivElement>(null)
   // 48 → 32 on GRID scroll, armed only when the scroll range can survive the collapse (§4.2).
   useHeaderCollapse(frameRef, styles.collapsed)

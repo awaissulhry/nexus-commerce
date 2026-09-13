@@ -1,0 +1,13 @@
+{
+  "command": "node scripts/check-editor-open.mjs --strict",
+  "start": "2026-09-13T00:09:22.470Z",
+  "web": "http://localhost:4121",
+  "api": "http://localhost:4122",
+  "product": "cmokmy3a40078pm0p1fvnu523",
+  "authentication": "Synthetic fixed identity; UI/data gate, not authentication verification",
+  "scriptSha256": "a5f5d218ef8af1ec24ece461f2db526efdaf3046c92e892c7e29a6c45b8525b8",
+  "writeProtection": "Gate aborts API mutations; isolated API additionally allows only reads and estimates, database enforced read-only",
+  "finish": "2026-09-13T00:26:44.281Z",
+  "code": 0,
+  "signal": null
+}

@@ -13,6 +13,8 @@
  */
 
 import { logger } from '../utils/logger.js';
+import { assertPushAllowed } from '@nexus/shared/push-lock';
+import { readPushControls } from './listing-push-controls.js';
 
 const EBAY_API_BASE = process.env.EBAY_API_BASE ?? 'https://api.ebay.com';
 
@@ -193,6 +195,22 @@ export async function uploadFeedFile(
   ndjson: string,
   token: string,
 ): Promise<void> {
+  // Feed inventory upserts are outbound listing pushes too. Resolve every
+  // payload SKU before uploading, including previously absent inventory items.
+  const unavailable = () => Object.assign(new Error('PUSH_CONTROL_UNAVAILABLE: The feed must identify every inventory item.'), { code: 'PUSH_CONTROL_UNAVAILABLE' });
+  const lines = ndjson.split('\n').filter(line => line.trim());
+  if (!lines.length) throw unavailable();
+  const skus = lines.map(line => {
+    let row: unknown;
+    try { row = JSON.parse(line); } catch { throw unavailable(); }
+    if (!row || typeof row !== 'object' || !('sku' in row) || typeof row.sku !== 'string' || !row.sku.trim()) throw unavailable();
+    return row.sku;
+  });
+  const controls = await readPushControls({ channel: 'EBAY', skus, allowAbsent: true });
+  for (const listing of controls) {
+    const refusal = assertPushAllowed(listing);
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal });
+  }
   const url = `${EBAY_API_BASE}/sell/feed/v1/task/${encodeURIComponent(taskId)}/upload_file`;
 
   const blob = new Blob([ndjson], { type: 'application/json' });

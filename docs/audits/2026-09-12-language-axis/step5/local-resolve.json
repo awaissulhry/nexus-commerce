@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T21:25:32.246Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "args": [
+    "migrate",
+    "resolve",
+    "--applied",
+    "20260912_lx5_readiness_index",
+    "--schema",
+    "/Users/awais/nexus-commerce/packages/database/prisma/schema.prisma"
+  ],
+  "status": 0,
+  "stdout": "Prisma schema loaded from packages/database/prisma/schema.prisma\nDatasource \"db\": PostgreSQL database \"nexus_development\", schema \"public\" at \"127.0.0.1:55439\"\n\nMigration 20260912_lx5_readiness_index marked as applied.\n\n",
+  "stderr": "Environment variables loaded from .env\n"
+}

@@ -21,8 +21,148 @@
  */
 
 import { randomUUID } from 'crypto'
+import type { Prisma } from '@prisma/client'
+import { sellingRisk } from '@nexus/shared/listing-risk'
+import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+
+/** Capture before deletion: Listings Items is keyed by seller SKU, never ASIN. */
+export function sellerSkuForDelist(
+  listing: { product: { sku: string | null }; offers?: Array<{ sku: string; fulfillmentMethod: string; isActive: boolean }> },
+  offerScope: 'FBM' | 'FBA' | 'all' = 'all',
+): string | null {
+  const skus = [...new Set((listing.offers ?? [])
+    .filter(offer => offer.isActive && (offerScope === 'all' || offer.fulfillmentMethod === offerScope))
+    .map(offer => offer.sku).filter(sku => typeof sku === 'string' && sku.trim()))]
+  if (skus.length > 1) return null // Naming a coordinate cannot choose one of two seller identities.
+  return skus[0] ?? (listing.product.sku?.trim() ? listing.product.sku : null)
+}
+
+export type DelistSkippedCoordinate = ListingCoordinate & { externalListingId: string | null; reason: string }
+
+/** The cascade captures its targets BEFORE deletion; only its jobs have no FKs. */
+export async function enqueueDelistCascade(
+  tx: Prisma.TransactionClient,
+  productIds: string[],
+  channelAction: 'unpublish' | 'delete',
+  actor: string,
+) {
+  const liveListings = await tx.channelListing.findMany({
+    where: {
+      productId: { in: productIds },
+      // D6: do not widen this predicate until the Wave 4 approval.
+      listingStatus: { in: ['ACTIVE', 'INACTIVE'] },
+      externalListingId: { not: null },
+    },
+    select: {
+      id: true, productId: true, channel: true, region: true, marketplace: true,
+      channelConnectionId: true, aliasKey: true, externalListingId: true, externalParentId: true,
+      fulfillmentMethod: true, product: { select: { sku: true, parentId: true } },
+      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
+    },
+  })
+  const holdUntil = new Date(Date.now() + 5 * 60_000)
+  const syncType = channelAction === 'unpublish' ? 'UNPUBLISH_LISTING' : 'DELETE_LISTING'
+  const channelSkipped: DelistSkippedCoordinate[] = []
+  const data: Prisma.OutboundSyncQueueCreateManyInput[] = []
+  const ebayTargets = new Map<string, { coordinates: ListingCoordinate[] }>()
+  for (const listing of liveListings) {
+    const coordinate: ListingCoordinate = {
+      productId: listing.productId, channel: listing.channel, marketplace: listing.marketplace,
+      channelConnectionId: listing.channelConnectionId, aliasKey: listing.aliasKey,
+    }
+    whereCoordinate(coordinate) // Missing is refused; explicit nullable account stays null.
+    const skip = (reason: string) => channelSkipped.push({ ...coordinate, externalListingId: listing.externalListingId, reason })
+    if (!['AMAZON', 'EBAY', 'SHOPIFY'].includes(listing.channel)) {
+      skip(listing.channel === 'ETSY' ? 'Etsy presence is read-only through Wave 4. The listing stays live.'
+        : 'This channel has no delist adapter. The listing stays live.')
+      continue
+    }
+    if (!sellingRisk(listing)) continue
+    // Removing one variation cannot end its entire shared ItemID. These guards
+    // must run while the products/listings still exist, never after FK cascade.
+    if (listing.channel === 'EBAY' && listing.product.parentId) {
+      skip('This is a variation child. Ending the shared eBay ItemID is refused; the listing stays live.')
+      continue
+    }
+    let sharedItemIdRefs: string[] = []
+    if (listing.channel === 'EBAY') {
+      const refs = await tx.channelListing.findMany({
+        where: { channel: 'EBAY', externalListingId: listing.externalListingId, productId: { notIn: productIds } },
+        select: { id: true },
+      })
+      const members = await tx.sharedListingMembership.findMany({
+        where: { itemId: listing.externalListingId, status: 'ACTIVE', OR: [{ productId: null }, { productId: { notIn: productIds } }] },
+        select: { id: true },
+      })
+      sharedItemIdRefs = [...refs.map(row => row.id), ...members.map(row => row.id)]
+      if (sharedItemIdRefs.length) {
+        skip('Other local coordinates still reference this eBay ItemID. Ending the shared listing is refused; it stays live.')
+        continue
+      }
+    }
+    const coordinates = [{ ...coordinate }]
+    if (listing.channel === 'EBAY') {
+      const key = JSON.stringify([listing.externalListingId, listing.channelConnectionId, listing.marketplace === 'UK' ? 'GB' : listing.marketplace])
+      const existing = ebayTargets.get(key)
+      if (existing) { existing.coordinates.push(coordinate); continue }
+      ebayTargets.set(key, { coordinates })
+    }
+    data.push({
+      productId: null, channelListingId: null,
+      targetChannel: listing.channel as 'AMAZON' | 'EBAY' | 'SHOPIFY',
+      targetRegion: listing.region ?? listing.marketplace,
+      externalListingId: listing.externalListingId, syncStatus: 'PENDING', syncType, holdUntil,
+      payload: {
+        ...coordinate, channelListingId: listing.id, source: 'products-bulk-hard-delete', actor, channelAction,
+        region: listing.region, externalListingId: listing.externalListingId, externalParentId: listing.externalParentId,
+        sellerSku: sellerSkuForDelist(listing), fulfillmentMethod: listing.fulfillmentMethod,
+        isVariationChild: Boolean(listing.product.parentId), sharedItemIdRefs, coordinates,
+      },
+    })
+  }
+  const entries = data.length ? await tx.outboundSyncQueue.createManyAndReturn({
+    data, select: { id: true, productId: true, syncType: true, holdUntil: true },
+  }) : []
+  return { entries, channelCascadeEnqueued: entries.length, channelSkipped }
+}
+
+
+/** Cancel only held cascade jobs; the same CAS competes with the worker. */
+export async function cancelDelistCascade(
+  db: { $transaction<T>(run: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> },
+  queueIds: string[],
+  actor: string,
+): Promise<string[]> {
+  return db.$transaction(async (tx: Prisma.TransactionClient) => {
+    const now = new Date()
+    const where = {
+      id: { in: queueIds }, syncStatus: 'PENDING' as const,
+      retryCount: 0, createdAt: { gt: new Date(now.getTime() - 5 * 60_000) },
+      syncType: { in: ['UNPUBLISH_LISTING', 'DELETE_LISTING'] },
+      holdUntil: { gt: now }, payload: { path: ['source'], equals: 'products-bulk-hard-delete' },
+    }
+    const candidates = await tx.outboundSyncQueue.findMany({ where })
+    const ids: string[] = []
+    for (const row of candidates) {
+      const changed = await tx.outboundSyncQueue.updateMany({
+        where: { ...where, id: row.id },
+        data: { syncStatus: 'CANCELLED', nextRetryAt: null },
+      })
+      if (!changed.count) continue
+      ids.push(row.id)
+      const payload = row.payload as Record<string, unknown>
+      await tx.productEvent.create({ data: {
+        aggregateId: String(payload.channelListingId ?? row.id), aggregateType: 'ChannelListing',
+        eventType: 'CHANNEL_DELIST_CANCELLED',
+        data: { ...payload, queueId: row.id, delistOutcome: 'NOT_SENT', reason: 'Cancelled during grace period' },
+        metadata: { source: 'OPERATOR', userId: actor },
+      } })
+    }
+    return ids
+  })
+}
 
 export interface OutboundJobEntry {
   id: string
@@ -36,6 +176,36 @@ export interface OutboundJobEntry {
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 interface OutboundEnqueueDb {
   outboundSyncQueue: { createMany: Function; findMany: Function }
+}
+
+/** Read AFTER the purge committed: only surviving queue IDs may be dispatched. */
+export async function dispatchCommittedDelistRows(
+  db: Pick<OutboundEnqueueDb, 'outboundSyncQueue'>,
+  expected: OutboundJobEntry[],
+): Promise<{ channelCascadeDispatched: number | null; channelCascadeRetained: number | null; channelCascadePartial: boolean; channelCascadeQueueIds: string[]; channelCascadeDispatchError?: string }> {
+  let survivors: Array<OutboundJobEntry & { syncStatus: string }>
+  try {
+    survivors = expected.length ? await db.outboundSyncQueue.findMany({
+      where: { id: { in: expected.map(row => row.id) }, syncType: { in: ['UNPUBLISH_LISTING', 'DELETE_LISTING'] } },
+      select: { id: true, productId: true, syncType: true, holdUntil: true, syncStatus: true },
+    }) : []
+  } catch (error) {
+    logger.error('Delist post-commit queue read unavailable', { error: error instanceof Error ? error.message : String(error) })
+    return {
+      channelCascadeDispatched: null, channelCascadeRetained: null, channelCascadePartial: true,
+      channelCascadeQueueIds: expected.map(row => row.id),
+      channelCascadeDispatchError: 'DELIST_DISPATCH_EVIDENCE_UNAVAILABLE: Local deletion committed. Delist queue status could not be read; channel removal is not confirmed. You can still cancel using these queue IDs.',
+    }
+  }
+  const pending = survivors.filter(row => row.syncStatus === 'PENDING')
+  await fireOutboundJobs(pending, { source: 'products-bulk-hard-delete' })
+  return {
+    // This is the post-commit pending-row count, never a channel acknowledgement.
+    channelCascadeDispatched: pending.length,
+    channelCascadeRetained: survivors.length,
+    channelCascadePartial: pending.length !== expected.length,
+    channelCascadeQueueIds: survivors.map(row => row.id),
+  }
 }
 
 /** Fire an instant-lane job per entry; delay = max(0, holdUntil − now). */
@@ -61,9 +231,9 @@ export async function fireOutboundJobs(
         },
       )
     } catch (err) {
-      // addJobSafely never throws by contract; belt anyway — the PENDING row
-      // is drained by the cron regardless.
-      logger.warn('fireOutboundJobs: enqueue failed (cron will drain)', {
+      // The durable row remains. Ordinary pushes have a cron backstop;
+      // lifecycle rows are explicitly refused by that dispatcher (D10).
+      logger.warn('fireOutboundJobs: enqueue failed; durable row retained', {
         queueId: e.id,
         error: err instanceof Error ? err.message : String(err),
       })

@@ -1,0 +1,10 @@
+{
+  "at": "2026-09-12T21:59:59.665Z",
+  "command": [
+    "node",
+    "scripts/ds-conformance-guard.mjs",
+    "--check"
+  ],
+  "exitCode": 0,
+  "output": "✓ DS-conformance ratchet clean (no section above baseline)\n"
+}

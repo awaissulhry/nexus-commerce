@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const s = vi.hoisted(() => ({ row: {} as any, remote: null as any, status: 'DRAFT', category: false, applied: [] as string[], childWrites: [] as any[], childLookups: [] as any[], tx: {} as any }))
+vi.mock('../pim/publish-review-gate.js', () => ({ assertListingContentReviewed: async () => {} }))
 vi.mock('../../db.js', () => ({ default: { $transaction: (fn: any) => fn(s.tx), channelListing: { findFirst: async () => s.row } } }))
 vi.mock('../pim/channel-specs/shopify.js', () => ({ readShopifyMappingSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))
 vi.mock('./linked-products-gateway.js', () => ({ readLinkedStoreSchema: async () => ({ locales: [{ locale: 'en', primary: true, published: true }] }) }))
@@ -39,6 +40,8 @@ describe('New product synchronization records final verified native status', () 
     const result = await synchronizeContent('family', scope, { expectedRevision: preview.revision, expectedRemoteRevision: preview.remoteRevision, locationId: 'location', confirmActive: true })
     expect(result.success).toBe(true)
     expect(s.row.isPublished).toBe(status === 'ACTIVE')
+    expect(s.row.listingStatus).toBe(status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE')
+    expect(s.childWrites[0].listingStatus).toBe(s.row.listingStatus)
     expect(s.childWrites).toEqual([expect.objectContaining({ channelConnectionId: 'store-b', aliasKey: 'alias-b', aliasId: 'alias-b', productId: 'child', isPublished: status === 'ACTIVE', platformAttributes: expect.objectContaining({ variantId: '2', inventoryItemId: '3', shopifyProductId: '1' }) })])
     expect(s.childLookups).toEqual([{ where: { productId: 'child', channel: 'SHOPIFY', marketplace: 'GLOBAL', channelConnectionId: 'store-b', aliasKey: 'alias-b' } }])
   })
@@ -52,3 +55,17 @@ describe('New product synchronization records final verified native status', () 
     expect(s.applied).toEqual(['category', 'status'])
     expect(s.remote.category).toBe('gid://shopify/TaxonomyCategory/aa-8')
   })
+
+it.each([{ syncPaused: true }, { offerClosedAt: new Date() }, ...['HELD', 'WITHDRAWN', 'ENDED', 'DISCONTINUED', 'RELEASED'].map(presenceIntent => ({ presenceIntent }))])('refuses preview and synchronize before remote writes for %j', async lock => {
+  Object.assign(s.row, lock)
+  const scope = { accountId: 'store-b', market: 'GLOBAL' }
+  await expect(previewContentSync('family', scope, true)).rejects.toMatchObject({ code: expect.stringMatching(/^PUSH_/) })
+  await expect(synchronizeContent('family', scope, { confirmActive: true })).rejects.toMatchObject({ code: expect.stringMatching(/^PUSH_/) })
+  expect(s.applied).toEqual([])
+  expect(s.remote).toBeNull()
+  expect(s.row.version).toBe(1)
+})
+it('names the deliberate end and its recorded date and actor even when confirmActive is true', async () => {
+  Object.assign(s.row, { presenceIntent: 'ENDED', presenceIntentAt: '2026-09-13T12:00:00Z', presenceIntentBy: 'operator-123' })
+  await expect(synchronizeContent('family', { accountId: 'store-b' }, { confirmActive: true })).rejects.toThrow('deliberately ended on 2026-09-13T12:00:00.000Z by operator-123')
+})

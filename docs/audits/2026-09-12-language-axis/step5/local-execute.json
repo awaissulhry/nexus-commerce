@@ -1,0 +1,19 @@
+{
+  "at": "2026-09-12T21:25:25.821Z",
+  "target": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "args": [
+    "db",
+    "execute",
+    "--file",
+    "/Users/awais/nexus-commerce/packages/database/prisma/migrations/20260912_lx5_readiness_index/migration.sql",
+    "--schema",
+    "/Users/awais/nexus-commerce/packages/database/prisma/schema.prisma"
+  ],
+  "status": 0,
+  "stdout": "Script executed successfully.\n",
+  "stderr": ""
+}

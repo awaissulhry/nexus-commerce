@@ -44,7 +44,7 @@ describe('honest counts (ruling #34)', () => {
   it('counts CELLS, not rows — two bad fields on one row are two', () => {
     const rows = [row('a1:x', 'variant', [{ key: 'brand', severity: 'error' }, { key: 'gtin', severity: 'error' }])]
     const chip = buildChannelChips(rows, COLS).find((c) => c.id === 'missing-required')!
-    expect(chip.count).toBe(2)
+    expect(chip.count).toEqual({ n: 2, unit: 'cells' })
     expect(chip.cells.byRow['a1:x']).toEqual(['brand', 'gtin'])
   })
 
@@ -61,7 +61,7 @@ describe('honest counts (ruling #34)', () => {
 
   it('reports a REAL zero as 0, so hideWhenZero can hide it', () => {
     const chip = buildChannelChips([row('a1:x', 'variant', [])], COLS).find((c) => c.id === 'missing-required')!
-    expect(chip.count).toBe(0)
+    expect(chip.count).toEqual({ n: 0, unit: 'cells' })
     expect(chip.hideWhenZero).toBe(true)
   })
 
@@ -71,8 +71,8 @@ describe('honest counts (ruling #34)', () => {
       { key: 'gtin', severity: 'warn' },
     ])]
     const chips = buildChannelChips(rows, COLS)
-    expect(chips.find((c) => c.id === 'missing-required')!.count).toBe(1)
-    expect(chips.find((c) => c.id === 'channel-warnings')!.count).toBe(1)
+    expect(chips.find((c) => c.id === 'missing-required')!.count).toEqual({ n: 1, unit: 'cells' })
+    expect(chips.find((c) => c.id === 'channel-warnings')!.count).toEqual({ n: 1, unit: 'cells' })
   })
 })
 
@@ -84,7 +84,7 @@ describe('a cell you cannot reach is not a cell you can count', () => {
     ])]
     const chip = buildChannelChips(rows, COLS).find((c) => c.id === 'missing-required')!
     // Counting it would promise the operator a destination the filter cannot reach.
-    expect(chip.count).toBe(1)
+    expect(chip.count).toEqual({ n: 1, unit: 'cells' })
     expect(chip.note).toContain('not_a_column')
     expect(chip.note).toMatch(/1 more/)
   })
@@ -101,14 +101,14 @@ describe('mapping errors come from the engine, never computed here', () => {
   it('counts a cell whose mapped verdict carries errors', () => {
     const bad = cell({ mapped: { value: null, status: 'mapped', provenance: null, appliedTransforms: [], warnings: [], errors: ['too long'], autoCorrected: null, requiredByRule: true, overLimit: null } })
     const chip = buildChannelChips([row('a1:x', 'variant', [], { brand: bad })], COLS).find((c) => c.id === 'mapping-errors')!
-    expect(chip.count).toBe(1)
+    expect(chip.count).toEqual({ n: 1, unit: 'cells' })
     expect(chip.cells.byRow['a1:x']).toEqual(['brand'])
   })
 
   it('does not count a clean mapping or a null one', () => {
     const clean = cell({ mapped: { value: 'v', status: 'mapped', provenance: null, appliedTransforms: [], warnings: ['soft'], errors: [], autoCorrected: null, requiredByRule: false, overLimit: null } })
     const rows = [row('a1:x', 'variant', [], { brand: clean, gtin: cell() })]
-    expect(buildChannelChips(rows, COLS).find((c) => c.id === 'mapping-errors')!.count).toBe(0)
+    expect(buildChannelChips(rows, COLS).find((c) => c.id === 'mapping-errors')!.count).toEqual({ n: 0, unit: 'cells' })
   })
 })
 
@@ -146,7 +146,7 @@ describe('count and classification regressions', () => {
     const r = row('a1:x', 'variant', [{ key: 'gtin', severity: 'error' }])
     r.completeness.required.missing = []
     const chips = buildChannelChips([r], COLS)
-    expect(chips.find((c) => c.id === 'missing-required')!.count).toBe(0)
+    expect(chips.find((c) => c.id === 'missing-required')!.count).toEqual({ n: 0, unit: 'cells' })
     expect(chips.find((c) => c.id === 'validation-errors')!.cells.byRow[r.rowId]).toEqual(['gtin'])
   })
 
@@ -160,7 +160,7 @@ describe('count and classification regressions', () => {
     const bad = cell({ mapped: { value: null, status: 'mapped', provenance: null, appliedTransforms: [], warnings: [], errors: ['Required'], autoCorrected: null, requiredByRule: true, overLimit: null } })
     const rows = Array.from({ length: 21 }, (_, i) => row(`a1:${i}`, 'variant', [], Object.fromEntries(COLS.map((c) => [c.key, bad]))))
     const chip = buildChannelChips(rows, COLS).find((c) => c.id === 'mapping-errors')!
-    expect(chip.count).toBe(63)
+    expect(chip.count).toEqual({ n: 63, unit: 'cells' })
     expect(rowsForChip(rows, chip.cells)).toHaveLength(21)
     expect(new Set(Object.values(chip.cells.byRow).flat()).size).toBe(3)
     expect(Object.values(chip.cells.byRow).flat()).toHaveLength(63)

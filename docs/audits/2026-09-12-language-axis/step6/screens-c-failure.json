@@ -1,0 +1,139 @@
+{
+  "error": "TimeoutError: page.waitForFunction: Timeout 15000ms exceeded.",
+  "readings": [],
+  "requests": [
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523%2Ccmtz1ae4f0007njixgwqfwfac%2Ccmtz1ae4p0009njix0l7rhs26%2Ccmtz1ae4s000bnjixmkixqz36%2Ccmtz1ae4x000dnjixcpgczfj2%2Ccmtz1ae51000fnjix7d6wo9lg%2Ccmtz1ae57000hnjixgg9ypzbs%2Ccmtz1ae5b000jnjix7lnrzjlc%2Ccmtz1ae5e000lnjixi5h2f975%2Ccmtz1ae5i000nnjixybnx5h5r%2Ccmtz1ae5l000pnjix1h7ugriw%2Ccmtz1ae5p000rnjixo04cnja7%2Ccmtz1ae5s000tnjixl2h00r50&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it&locales=it%2Cde%2Cen%2Ces%2Cfr%2Cnl%2Cpl%2Csv%2Ctr",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    }
+  ],
+  "blocked": [],
+  "consoleErrors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "errors": []
+}

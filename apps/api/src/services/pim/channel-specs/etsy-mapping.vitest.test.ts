@@ -15,8 +15,13 @@ import type { ChannelFieldSpec } from './types.js'
 const spec = etsyProductSpec()
 const keys = new Set([...ALLOWED_MASTER_FIELDS, 'material', 'style', 'color', 'size'])
 const field = (key: string) => spec.fields.find(f => f.key === key)!
-const parent = { id: 'p', parentId: null, name: 'Shared title', localizedContent: { it: { title: 'Titolo', keywords: ['pelle', 'regalo'] } },
-  categoryAttributes: { material: ['Leather', 'Cotton'], style: 'Minimalist' }, variantAttributes: {}, keywords: ['leather'],
+// LX.F2 R-LX-21 — the Italian text used to sit in `Product.localizedContent.it`, the store LX.6
+// RETIRES (design Appendix C), so the resolver correctly ignored it and the arm read the source
+// column `['leather']` instead of `['pelle','regalo']`. Italian IS the primary content language
+// (`PRIMARY_CONTENT_LOCALE`), so under LX its text IS the source column — the fixture says that,
+// and `localizedContent` stays EMPTY so a read-through to the retired bag cannot pass this test.
+const parent = { id: 'p', parentId: null, name: 'Titolo', localizedContent: {},
+  categoryAttributes: { material: ['Leather', 'Cotton'], style: 'Minimalist' }, variantAttributes: {}, keywords: ['pelle', 'regalo'],
   weightValue: 1.2, weightUnit: 'kg', dimLength: 35, dimWidth: 20, dimHeight: 5, dimUnit: 'cm', basePrice: 49.95, totalStock: 7 }
 const child = { id: 'c', parentId: 'p', name: 'Child', localizedContent: {}, categoryAttributes: {}, variantAttributes: { Color: 'Nero' },
   weightValue: 750, weightUnit: 'g', dimLength: null, dimUnit: null, totalStock: 0 }

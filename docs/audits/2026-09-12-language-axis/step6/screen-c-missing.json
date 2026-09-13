@@ -1,0 +1,11 @@
+{
+  "start": "2026-09-13T01:04:14.087Z",
+  "finish": "2026-09-13T01:04:43.266Z",
+  "command": "node docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs c-missing",
+  "base": "http://localhost:3000",
+  "api": "http://localhost:8091",
+  "exitCode": 0,
+  "diagnostic": "c-missing",
+  "log": "screen-c-missing.log",
+  "sha256": "c0de274bf38f22418c595a7947ba8f4fb8ebd80623658b5bb644b0bbc172f450"
+}

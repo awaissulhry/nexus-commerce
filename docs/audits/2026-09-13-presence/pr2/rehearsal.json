@@ -1,0 +1,110 @@
+{
+  "database": "127.0.0.1:55439/nexus_development",
+  "marker": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce",
+  "galeVersion": 59,
+  "at": "2026-09-13T18:55:31.511Z",
+  "afterCommit": {
+    "channelCascadeDispatched": 4,
+    "channelCascadeRetained": 4,
+    "channelCascadePartial": false,
+    "channelCascadeQueueIds": [
+      "cmu06brjc0002njla2oqmbz38",
+      "cmu06brjc0000njlae5v2u3o4",
+      "cmu06brjc0001njlal5ivljxa",
+      "cmu06brjc0003njlaq5rs5bxs"
+    ]
+  },
+  "table": [
+    {
+      "arm": "transport",
+      "queueId": "cmu06brjc0003njlaq5rs5bxs",
+      "workerStatus": "UNKNOWN",
+      "syntheticFetchCalls": 1,
+      "outboundCalls": 0,
+      "deleteListingsItemCalls": 0,
+      "syncStatus": "PENDING",
+      "outcome": "UNKNOWN",
+      "fact": "UNKNOWN",
+      "errorCode": "DELIST_TRANSPORT_UNKNOWN",
+      "holdUntil": "2026-09-13T18:56:15.031Z",
+      "afterDrain": {
+        "syncStatus": "SKIPPED",
+        "syncedAt": null,
+        "nextRetryAt": null,
+        "errorCode": "DELIST_TRANSPORT_UNKNOWN",
+        "errorMessage": "The channel connection failed before a result was received. The outcome is unknown; verify the listing before trying again. fetch failed: simulated transport disconnect This queue dispatcher cannot perform listing lifecycle actions. No channel change was sent; use the listing lifecycle worker.",
+        "retryCount": 1,
+        "payload": {
+          "actor": "pr2-fixture-operator",
+          "region": "IT",
+          "source": "products-bulk-hard-delete",
+          "channel": "EBAY",
+          "aliasKey": "",
+          "productId": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce",
+          "sellerSku": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce",
+          "channelFact": "UNKNOWN",
+          "coordinates": [
+            {
+              "channel": "EBAY",
+              "aliasKey": "",
+              "productId": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce",
+              "marketplace": "IT",
+              "channelConnectionId": "cmt142bli01vcp4010fjo2k13"
+            }
+          ],
+          "marketplace": "IT",
+          "channelAction": "delete",
+          "delistOutcome": "UNKNOWN",
+          "channelListingId": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce-transport",
+          "externalParentId": null,
+          "isVariationChild": false,
+          "sharedItemIdRefs": [],
+          "externalListingId": "PR2-DELIST-REHEARSAL-c3412af2-9d39-4132-9914-936efaf081ce-EXTERNAL-transport",
+          "fulfillmentMethod": null,
+          "channelConnectionId": "cmt142bli01vcp4010fjo2k13",
+          "delistDispatchError": "This queue dispatcher cannot perform listing lifecycle actions. No channel change was sent; use the listing lifecycle worker.",
+          "delistDispatchErrorCode": "LIFECYCLE_DISPATCH_REFUSED"
+        }
+      }
+    },
+    {
+      "arm": "access",
+      "queueId": "cmu06brjc0002njla2oqmbz38",
+      "workerStatus": "UNKNOWN",
+      "syntheticFetchCalls": 1,
+      "outboundCalls": 0,
+      "deleteListingsItemCalls": 0,
+      "syncStatus": "SKIPPED",
+      "outcome": "UNKNOWN",
+      "fact": "REFUSED",
+      "errorCode": "EBAY_DELIST_COULD_NOT_ASK",
+      "holdUntil": null
+    },
+    {
+      "arm": "unpublish",
+      "queueId": "cmu06brjc0001njlal5ivljxa",
+      "workerStatus": "FAILED",
+      "syntheticFetchCalls": 0,
+      "outboundCalls": 0,
+      "deleteListingsItemCalls": 0,
+      "syncStatus": "FAILED",
+      "outcome": "REFUSED",
+      "fact": "UNKNOWN",
+      "errorCode": "AMAZON_UNPUBLISH_NOT_IMPLEMENTED",
+      "holdUntil": null
+    },
+    {
+      "arm": "cancel",
+      "queueId": "cmu06brjc0000njlae5v2u3o4",
+      "workerStatus": "CANCELLED",
+      "syntheticFetchCalls": 0,
+      "outboundCalls": 0,
+      "deleteListingsItemCalls": 0,
+      "syncStatus": "CANCELLED",
+      "outcome": "NOT_SENT",
+      "fact": "UNKNOWN",
+      "errorCode": null,
+      "holdUntil": "2026-09-13T19:00:06.785Z"
+    }
+  ]
+}

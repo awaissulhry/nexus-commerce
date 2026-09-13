@@ -1,0 +1,714 @@
+--- apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts
++++ apps/api/src/services/amazon/flat-file-ufx6-gpsr.vitest.test.ts
+@@ -163,6 +163,7 @@
+ 
+ const ctx = (over: Partial<GpsrCheckContext> = {}): GpsrCheckContext => ({
+   marketplace: 'IT',
++  languages: ({ IT: ['it'], DE: ['de'], BE: ['nl', 'fr'] } as Record<string, string[]>)[over.marketplace ?? 'IT'] ?? [],
+   applicableColumns: ALL_GPSR_COLS,
+   contentTypeValues: CONTENT_TYPES,
+   ...over,
+--- /dev/null
++++ apps/api/src/services/pim/content-language.ts
+@@ -0,0 +1,9 @@
++/** LX.4: internal content addresses are language-only. Regional delivery tags belong to languageTag(). */
++export type ContentLanguage = string
++
++export function normalizeLanguage(tag: string): ContentLanguage {
++  if (typeof tag !== 'string') throw new Error('Content language must be a language tag.')
++  const language = tag.toLowerCase().split(/[-_]/, 1)[0]
++  if (!/^[a-z]{2,3}$/.test(language)) throw new Error(`Invalid content language: ${tag}`)
++  return language
++}
+--- /dev/null
++++ apps/api/src/services/pim/content-language.vitest.test.ts
+@@ -0,0 +1,12 @@
++import { describe, expect, it } from 'vitest'
++import { normalizeLanguage } from './content-language.js'
++
++describe('language-only content addresses', () => {
++  it.each([['de-DE', 'de'], ['DE_de', 'de'], ['nl_BE', 'nl'], ['FR-be', 'fr'], ['EN', 'en'], ['fil-PH', 'fil'], ['it', 'it']])('%s becomes %s', (tag, language) => {
++    expect(normalizeLanguage(tag)).toBe(language)
++    expect(normalizeLanguage(normalizeLanguage(tag))).toBe(language)
++  })
++  it.each(['', 'd', 'default', ' de', 'de ', '12', '-de', 'it.IT', null, undefined, 3])('rejects invalid language %s', tag => {
++    expect(() => normalizeLanguage(tag as string)).toThrow()
++  })
++})
+--- /dev/null
++++ apps/api/src/services/pim/content-resolver.ts
+@@ -0,0 +1,219 @@
++import type { CellProvenance } from '@nexus/shared/cell-provenance'
++import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE, contentHash } from './content-locale.js'
++import { normalizeLanguage, type ContentLanguage } from './content-language.js'
++import { canonicalVariantAxis } from './variant-attribute-keys.js'
++
++export type { ContentLanguage } from './content-language.js'
++export interface Coordinate { channel: string; market: string; accountId?: string; aliasId?: string }
++export type ContentAddress =
++  | { tier: 'source' }
++  | { tier: 'language'; language: ContentLanguage }
++  | { tier: 'pin'; language: ContentLanguage; coordinate: Coordinate }
++
++export interface ResolvedContent {
++  value: unknown
++  tier: 'pin' | 'language' | 'source' | 'computed'
++  language: ContentLanguage
++  requested: ContentLanguage
++  // LX.12 adds the renderer for this already-designed member in Step 6. No new UI vocabulary here.
++  provenance: { member: CellProvenance | 'outdated'; from: string | null }
++  translation?: { source: 'manual' | 'ai' | 'translated'; reviewedAt: string | null; outdated: boolean }
++}
++
++type Bag = Record<string, unknown>
++export interface ContentTranslation extends Bag {
++  language: string
++  workspaceId?: string | null
++  productId?: string
++  channelListingId?: string
++  attributes?: Bag | null
++  source?: 'manual' | 'ai' | 'translated' | null
++  sourceHash?: string | null
++  reviewedAt?: string | Date | null
++}
++export interface ContentProduct extends Bag {
++  id: string
++  workspaceId?: string | null
++  parentId?: string | null
++  categoryAttributes?: Bag | null
++  translations?: ContentTranslation[]
++}
++export interface ContentListing extends Bag {
++  id: string
++  productId: string
++  workspaceId?: string | null
++  coordinate: Coordinate
++  /** Hydrated from marketLanguages(channel, code), never inferred from a country map. */
++  languages: readonly string[]
++  translations?: ContentTranslation[]
++}
++export interface ResolveContentInput {
++  product: ContentProduct
++  parent?: ContentProduct | null
++  listing?: ContentListing | null
++  field: string
++  address: { requested: ContentLanguage; coordinate?: Coordinate }
++  /** Family-declared localizable attributes, in addition to the four native content fields. */
++  localizableKeys?: readonly string[]
++  computed?: { value: unknown; language: ContentLanguage; provenance: ResolvedContent['provenance'] }
++}
++
++/** The runtime consumers must opt in only after the production shadow gate. Default is off. */
++export const contentResolverEnabled = () => process.env.NEXUS_CONTENT_RESOLVER === 'v2'
++export const contentField = (field: string) => field === 'name' ? 'title' : field
++const present = (value: unknown) => value !== undefined && value !== null && value !== '' && (!Array.isArray(value) || value.length > 0)
++const workspace = (row: { workspaceId?: string | null }) => row.workspaceId ?? null
++const label = (language: string) => new Intl.DisplayNames(['en'], { type: 'language' }).of(language) ?? language
++const primary = () => normalizeLanguage(PRIMARY_CONTENT_LOCALE)
++
++function sourceValue(product: ContentProduct, parent: ContentProduct | null | undefined, field: string): { value: unknown; owner: ContentProduct } | null {
++  const column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
++  for (const owner of [product, parent]) {
++    if (!owner) continue
++    // Family attributes have authored presence (unlike nullable/default native columns).
++    // An explicit null/empty on the child must not resurrect a parent's value.
++    if (!column && Object.prototype.hasOwnProperty.call(owner.categoryAttributes ?? {}, field) && owner.categoryAttributes?.[field] !== undefined) return { value: owner.categoryAttributes[field], owner }
++    let value = column ? owner[column] : owner.categoryAttributes?.[field]
++    if (!column && !present(value)) {
++      const variations = owner.categoryAttributes?.variations
++      const bag = { ...(owner.variantAttributes as Bag ?? {}), ...(variations && typeof variations === 'object' && !Array.isArray(variations) ? variations : {}) }
++      value = bag[field]
++      if (value === undefined && ['color', 'size', 'style'].includes(field)) {
++        const aliases = Object.entries(bag).filter(([key, value]) => canonicalVariantAxis(key) === field && value !== undefined)
++        if (new Set(aliases.map(([, value]) => JSON.stringify(value))).size > 1) throw new Error(`Conflicting source variant attributes for ${field}`)
++        value = aliases[0]?.[1]
++      }
++      if (value !== undefined) return { value, owner }
++    }
++    if (present(value)) return { value, owner }
++  }
++  return null
++}
++
++/** One row-level source fingerprint, shared with Step 4 authoring. No legacy JSON contributes. */
++export function contentSourceHash(product: ContentProduct, parent?: ContentProduct | null, localizableKeys: readonly string[] = []): string {
++  const fields = [...new Set([...Object.keys(CONTENT_COLUMNS), ...localizableKeys.map(contentField)])].sort()
++  return contentHash(Object.fromEntries(fields.map(field => [field, sourceValue(product, parent, field)?.value ?? null])))
++}
++
++/** Normalize stored tags in memory only. Prefer a canonical key; reject ambiguous regional siblings. */
++function translationIndex(rows: ContentTranslation[] = []): Map<string, ContentTranslation> {
++  const index = new Map<string, ContentTranslation>()
++  const groups = new Map<string, ContentTranslation[]>()
++  for (const row of rows) {
++    const language = normalizeLanguage(row.language)
++    groups.set(language, [...(groups.get(language) ?? []), row])
++  }
++  for (const [language, group] of groups) {
++    const canonical = group.filter(row => row.language === language)
++    const candidates = canonical.length ? canonical : group
++    if (candidates.length !== 1) throw new Error(`Ambiguous content translations for ${language}`)
++    index.set(language, candidates[0])
++  }
++  return index
++}
++
++function coordinateMatches(a: Coordinate, b: Coordinate): boolean {
++  return a.channel === b.channel && a.market === b.market && (a.accountId ?? null) === (b.accountId ?? null) && (a.aliasId ?? null) === (b.aliasId ?? null)
++}
++
++function translationValue(row: ContentTranslation | undefined, field: string): unknown {
++  if (!row) return undefined
++  const column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
++  return column ? row[column] : row.attributes?.[field]
++}
++
++function legacyPin(listing: ContentListing, field: string): unknown {
++  const columns = {
++    title: ['titleOverride', 'title', 'followMasterTitle'],
++    description: ['descriptionOverride', 'description', 'followMasterDescription'],
++    bulletPoints: ['bulletPointsOverride', null, 'followMasterBulletPoints'],
++  } as const
++  const spec = columns[field as keyof typeof columns]
++  if (!spec) return undefined
++  // Follow-master flags govern explicit overrides; the untagged stored columns remain legacy pins (LX.3).
++  if (listing[spec[2]] !== true && present(listing[spec[0]])) return listing[spec[0]]
++  return spec[1] ? listing[spec[1]] : undefined
++}
++
++function resolver(input: Omit<ResolveContentInput, 'field' | 'address' | 'computed'>) {
++  const { product, parent, listing, localizableKeys = [] } = input
++  if (parent && (product.parentId !== parent.id || workspace(parent) !== workspace(product))) throw new Error('Content parent does not belong to this product/workspace.')
++  if (listing && (listing.productId !== product.id || workspace(listing) !== workspace(product))) throw new Error('Content listing does not belong to this product/workspace.')
++  const owners = [product, parent].filter((owner): owner is ContentProduct => !!owner)
++  const translations = owners.map(owner => translationIndex((owner.translations ?? []).filter(row => workspace(row) === workspace(owner) && (!row.productId || row.productId === owner.id))))
++  const pins = translationIndex((listing?.translations ?? []).filter(row => workspace(row) === workspace(product) && (!row.channelListingId || row.channelListingId === listing?.id)))
++  const sourceLanguage = primary()
++  const hashes = new Map<string, string>()
++  const allowed = new Set([...Object.keys(CONTENT_COLUMNS), ...localizableKeys.map(contentField)])
++
++  return (fieldInput: string, address: ResolveContentInput['address'], computed?: ResolveContentInput['computed']): ResolvedContent => {
++    const field = contentField(fieldInput), requested = normalizeLanguage(address.requested)
++    if (!allowed.has(field)) throw new Error(`Field ${field} is not declared localizable.`)
++    const result = (value: unknown, tier: ResolvedContent['tier'], language: string, member: ResolvedContent['provenance']['member'], from: string | null): ResolvedContent => ({ value, tier, language, requested, provenance: { member, from } })
++    const translated = (row: ContentTranslation, value: unknown, tier: 'pin' | 'language', owner: ContentProduct): ResolvedContent => {
++      const source = row.source ?? 'manual'
++      const reviewedAt = row.reviewedAt ? new Date(row.reviewedAt).toISOString() : null
++      if (row.sourceHash && !hashes.has(owner.id)) hashes.set(owner.id, contentSourceHash(owner, owner === product ? parent : null, localizableKeys))
++      const outdated = !!row.sourceHash && row.sourceHash !== hashes.get(owner.id)
++      const machine = source === 'ai' || source === 'translated'
++      const member = outdated ? machine && !reviewedAt ? 'aiStale' : 'outdated' : machine && !reviewedAt ? 'ai' : tier === 'pin' ? 'pinned' : address.coordinate || owner !== product ? 'inherited' : 'own'
++      return { ...result(value, tier, requested, member, tier === 'pin' ? listing!.id : `${label(requested)} · shared`), translation: { source, reviewedAt, outdated } }
++    }
++    if (address.coordinate && listing) {
++      if (!coordinateMatches(listing.coordinate, address.coordinate)) throw new Error('Content listing coordinate does not match the requested address.')
++      if (!listing.languages.length) throw new Error('Content listing needs its market languages.')
++      const pin = pins.get(requested), value = translationValue(pin, field)
++      if (present(value)) return translated(pin!, value, 'pin', product)
++      if (requested === normalizeLanguage(listing.languages[0])) {
++        const legacy = legacyPin(listing, field)
++        if (present(legacy)) return result(legacy, 'pin', requested, 'pinned', listing.id)
++      }
++    }
++    if (requested !== sourceLanguage) for (const [i, owner] of owners.entries()) {
++      const row = translations[i].get(requested), value = translationValue(row, field)
++      if (present(value)) return translated(row!, value, 'language', owner)
++    }
++    const source = sourceValue(product, parent, field)
++    if (source) return result(source.value, 'source', sourceLanguage, address.coordinate || requested !== sourceLanguage || source.owner !== product ? 'inherited' : 'own', `${label(sourceLanguage)} · source`)
++    if (computed && present(computed.value)) return { ...result(computed.value, 'computed', normalizeLanguage(computed.language), computed.provenance.member, computed.provenance.from) }
++    return result(null, 'computed', sourceLanguage, 'inherited', null)
++  }
++}
++
++/** Pure: consumes hydrated rows only. Never reads localizedContent, overrideData or outbound platformAttributes. */
++export function resolveContent(input: ResolveContentInput): ResolvedContent {
++  return resolver(input)(input.field, input.address, input.computed)
++}
++
++/** Mapping source paths keep their explicit language/link semantics, but never walk legacy JSON. */
++export function contentPathAddress(path: string, requested: string, localizableKeys: readonly string[] = []): { field: string; requested: string; tail: string[] } | null {
++  const parts = path.replace(/\{locale\}/g, requested).split('.')
++  let language = requested
++  if (parts[0] === 'localizedContent') { parts.shift(); language = parts.shift() ?? '' }
++  else if (['categoryAttributes', 'variantAttributes'].includes(parts[0])) parts.shift()
++  const field = contentField(parts.shift() ?? '')
++  if (![...Object.keys(CONTENT_COLUMNS), ...localizableKeys].includes(field)) return null
++  return { field, requested: normalizeLanguage(language), tail: parts }
++}
++
++export function resolveContentPath(input: Omit<ResolveContentInput, 'field'> & { path: string }): ResolvedContent | null {
++  const path = contentPathAddress(input.path, input.address.requested, input.localizableKeys)
++  if (!path) return null
++  const resolved = resolveContent({ ...input, field: path.field, address: { ...input.address, requested: path.requested } })
++  let value = resolved.value
++  for (const key of path.tail) value = value && typeof value === 'object' ? (value as Bag)[key] ?? null : null
++  return { ...resolved, value }
++}
++
++/** One translation index per family member; all fields × addresses reuse it. No database queries. */
++export function resolveContentBatch(input: {
++  members: Array<Omit<ResolveContentInput, 'field' | 'address' | 'computed'>>
++  fields: readonly string[]
++  addresses: ReadonlyArray<ResolveContentInput['address']>
++}): Array<{ productId: string; address: ResolveContentInput['address']; fields: Record<string, ResolvedContent> }> {
++  return input.members.flatMap(member => {
++    const resolve = resolver(member)
++    return input.addresses.map(address => ({ productId: member.product.id, address: { ...address, requested: normalizeLanguage(address.requested) }, fields: Object.fromEntries(input.fields.map(field => [field, resolve(field, address)])) }))
++  })
++}
+--- /dev/null
++++ apps/api/src/services/pim/content-resolver.vitest.test.ts
+@@ -0,0 +1,137 @@
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import { contentResolverEnabled, contentSourceHash, resolveContent, resolveContentBatch, type ContentProduct, type ResolveContentInput } from './content-resolver.js'
++
++const product = (): ContentProduct => ({ id: 'p', parentId: null, name: 'Fonte', description: 'Descrizione', bulletPoints: ['Uno'], keywords: ['fonte'], categoryAttributes: { material: 'pelle' }, translations: [] })
++const coordinate = { channel: 'AMAZON', market: 'BE', accountId: 'a' }
++const listing = () => ({ id: 'l', productId: 'p', coordinate, languages: ['nl', 'fr'], title: 'Nederlands', description: 'Beschrijving' })
++const input = (extra: Partial<ResolveContentInput> = {}): ResolveContentInput => ({ product: product(), field: 'title', address: { requested: 'de' }, ...extra })
++afterEach(() => vi.unstubAllEnvs())
++
++describe('LX.7 pure content resolution', () => {
++  it('is disabled until an explicit v2 flag is supplied', () => {
++    vi.stubEnv('NEXUS_CONTENT_RESOLVER', '')
++    expect(contentResolverEnabled()).toBe(false)
++    vi.stubEnv('NEXUS_CONTENT_RESOLVER', 'v2')
++    expect(contentResolverEnabled()).toBe(true)
++  })
++  it('returns native source with its actual language on fallback', () => {
++    expect(resolveContent(input())).toEqual({ value: 'Fonte', tier: 'source', language: 'it', requested: 'de', provenance: { member: 'inherited', from: 'Italian · source' } })
++  })
++  it('uses columns for the primary language even when a translation row exists', () => {
++    const p = product(); p.translations = [{ language: 'it', name: 'Stale copy' }]
++    expect(resolveContent(input({ product: p, address: { requested: 'it_IT' } }))).toMatchObject({ value: 'Fonte', tier: 'source', language: 'it', requested: 'it', provenance: { member: 'own' } })
++  })
++  it('reads a regional table key in memory and leaves every input byte unchanged', () => {
++    const p = product(); p.translations = [{ language: 'DE-de', name: 'Titel', source: 'manual' }]
++    const before = JSON.stringify(p)
++    expect(resolveContent(input({ product: p, address: { requested: 'de_DE' } }))).toMatchObject({ value: 'Titel', tier: 'language', language: 'de', requested: 'de', provenance: { member: 'own' } })
++    expect(JSON.stringify(p)).toBe(before)
++  })
++  it('never touches legacy JSON or the outbound and factual bags', () => {
++    const p = product(), l = listing()
++    Object.defineProperty(p, 'localizedContent', { get: () => { throw new Error('Legacy read') } })
++    for (const key of ['platformAttributes', 'overrideData']) Object.defineProperty(l, key, { get: () => { throw new Error('Outbound read') } })
++    expect(resolveContent(input({ product: p, listing: l, address: { requested: 'fr', coordinate } })).value).toBe('Fonte')
++  })
++  it.each(['nl', 'nl-BE'])('keeps the default-language listing title and description as legacy pins: %s', requested => {
++    for (const [field, value] of [['title', 'Nederlands'], ['description', 'Beschrijving']]) expect(resolveContent(input({ listing: listing(), field, address: { requested, coordinate } }))).toMatchObject({ value, tier: 'pin', language: 'nl', provenance: { member: 'pinned' } })
++  })
++  it('does not serve a Dutch legacy pin as French', () => {
++    const p = product(); p.translations = [{ language: 'fr', name: 'Français' }]
++    expect(resolveContent(input({ product: p, listing: listing(), address: { requested: 'fr', coordinate } }))).toMatchObject({ value: 'Français', tier: 'language', language: 'fr', provenance: { member: 'inherited' } })
++  })
++  it('prefers an explicit pin row to legacy pins and the language tier', () => {
++    const p = product(); p.translations = [{ language: 'nl', name: 'Shared' }]
++    const l = { ...listing(), translations: [{ language: 'nl', name: 'Pin', channelListingId: 'l' }] }
++    expect(resolveContent(input({ product: p, listing: l, address: { requested: 'nl', coordinate } }))).toMatchObject({ value: 'Pin', tier: 'pin' })
++  })
++  it('uses explicit legacy overrides when inheritance was broken', () => {
++    const l = { ...listing(), followMasterTitle: false, titleOverride: 'Override' }
++    expect(resolveContent(input({ listing: l, address: { requested: 'nl', coordinate } })).value).toBe('Override')
++    l.followMasterTitle = true
++    expect(resolveContent(input({ listing: l, address: { requested: 'nl', coordinate } })).value).toBe('Nederlands')
++  })
++  it('uses child then parent within each tier, with language ahead of source', () => {
++    const parent = product(), child = { ...product(), id: 'child', parentId: parent.id, name: 'Child source' }
++    parent.translations = [{ language: 'de', name: 'Eltern', description: 'Beschreibung' }]
++    child.translations = [{ language: 'de', name: 'Kind', description: null, bulletPoints: [] }]
++    expect(resolveContent(input({ product: child, parent })).value).toBe('Kind')
++    expect(resolveContent(input({ product: child, parent, field: 'description' }))).toMatchObject({ value: 'Beschreibung', tier: 'language', provenance: { member: 'inherited' } })
++    child.translations = []
++    expect(resolveContent(input({ product: child, parent })).value).toBe('Eltern')
++  })
++  it('falls back field by field; schema-default empty lists do not hide source', () => {
++    const p = product(); p.translations = [{ language: 'de', name: 'Titel', description: '', bulletPoints: [], keywords: null }]
++    for (const field of ['description', 'bulletPoints', 'keywords']) expect(resolveContent(input({ product: p, field })).tier).toBe('source')
++  })
++  it('limits custom translations to family-declared localizable fields', () => {
++    const p = product(); p.translations = [{ language: 'de', attributes: { material: 'Leder', price: 99 } }]
++    expect(resolveContent(input({ product: p, field: 'material', localizableKeys: ['material'] })).value).toBe('Leder')
++    expect(() => resolveContent(input({ product: p, field: 'price' }))).toThrow('not declared localizable')
++  })
++  it('preserves a family-declared field supplied by native variant attributes', () => {
++    const p = { ...product(), variantAttributes: { style: 'Da motociclista' } }
++    expect(resolveContent(input({ product: p, field: 'style', localizableKeys: ['style'] }))).toMatchObject({ value: 'Da motociclista', tier: 'source', language: 'it' })
++    expect(resolveContent(input({ product: { ...product(), variantAttributes: { Style: 'Racing' } }, field: 'style', localizableKeys: ['style'] })).value).toBe('Racing')
++  })
++  it('preserves an explicit child attribute clear instead of resurrecting parent text', () => {
++    const parent = { ...product(), categoryAttributes: { weave_type: 'Not applicable' } }
++    const child = { ...product(), id: 'child', parentId: parent.id, categoryAttributes: { weave_type: null }, variantAttributes: { weave_type: 'Obsolete alias' } }
++    expect(resolveContent(input({ product: child, parent, field: 'weave_type', localizableKeys: ['weave_type'] }))).toMatchObject({ value: null, tier: 'source', language: 'it' })
++  })
++  it('checks an inherited translation against its authoring owner’s source', () => {
++    const parent = product(), child = { ...product(), id: 'child', parentId: parent.id, name: 'Different child source' }
++    parent.translations = [{ language: 'de', name: 'Eltern', sourceHash: contentSourceHash(parent), source: 'manual' }]
++    expect(resolveContent(input({ product: child, parent })).translation?.outdated).toBe(false)
++    parent.name = 'Changed parent source'
++    expect(resolveContent(input({ product: child, parent })).translation?.outdated).toBe(true)
++  })
++  it.each(['manual', 'ai', 'translated'] as const)('carries review and source freshness for %s', source => {
++    const p = product(), sourceHash = contentSourceHash(p), reviewedAt = new Date('2026-09-01T00:00:00Z')
++    p.translations = [{ language: 'de', name: 'Titel', source, sourceHash, reviewedAt }]
++    expect(resolveContent(input({ product: p }))).toMatchObject({ translation: { source, reviewedAt: reviewedAt.toISOString(), outdated: false } })
++    p.name = 'Changed source'
++    expect(resolveContent(input({ product: p }))).toMatchObject({ provenance: { member: 'outdated' }, translation: { outdated: true } })
++  })
++  it.each(['ai', 'translated'] as const)('keeps unreviewed %s visibly machine-authored, including staleness', source => {
++    const p = product(); p.translations = [{ language: 'de', name: 'Titel', source, sourceHash: contentSourceHash(p) }]
++    expect(resolveContent(input({ product: p })).provenance.member).toBe('ai')
++    p.name = 'New'
++    expect(resolveContent(input({ product: p })).provenance.member).toBe('aiStale')
++  })
++  it('does not invent a source fingerprint or human review for historical translations', () => {
++    const p = product(); p.translations = [{ language: 'de', name: 'Titel', source: 'ai' }]
++    expect(resolveContent(input({ product: p })).translation).toEqual({ source: 'ai', reviewedAt: null, outdated: false })
++  })
++  it('lets a computed value answer only after all stored tiers are absent', () => {
++    const computed = { value: 'Formula', language: 'de-DE', provenance: { member: 'formula' as const, from: 'formula-id' } }
++    expect(resolveContent(input({ computed })).tier).toBe('source')
++    expect(resolveContent(input({ product: { id: 'p' }, computed }))).toMatchObject({ value: 'Formula', tier: 'computed', language: 'de', provenance: { member: 'formula' } })
++    expect(resolveContent(input({ product: { id: 'p' } })).value).toBeNull()
++  })
++  it('refuses foreign parents, listings and coordinates', () => {
++    expect(() => resolveContent(input({ parent: { id: 'other' } }))).toThrow('parent')
++    expect(() => resolveContent(input({ listing: { ...listing(), workspaceId: 'foreign' } }))).toThrow('listing')
++    for (const change of [{ channel: 'EBAY' }, { market: 'DE' }, { accountId: 'other' }, { aliasId: 'alias' }]) expect(() => resolveContent(input({ listing: listing(), address: { requested: 'nl', coordinate: { ...coordinate, ...change } } }))).toThrow('coordinate')
++  })
++  it('does not inherit another workspace or product translation', () => {
++    const p = product(); p.translations = [{ language: 'de', name: 'Foreign', workspaceId: 'other' }, { language: 'de', name: 'Wrong product', productId: 'other' }]
++    expect(resolveContent(input({ product: p })).tier).toBe('source')
++  })
++  it('gives canonical language keys precedence over regional keys', () => {
++    const rows = [{ language: 'de-DE', name: 'Regional' }, { language: 'de', name: 'Canonical' }]
++    for (const translations of [rows, [...rows].reverse()]) expect(resolveContent(input({ product: { ...product(), translations } })).value).toBe('Canonical')
++  })
++  it('refuses ambiguous regional-only translations instead of depending on row order', () => {
++    const p = { ...product(), translations: [{ language: 'de-DE', name: 'A' }, { language: 'de-AT', name: 'B' }] }
++    expect(() => resolveContent(input({ product: p }))).toThrow('Ambiguous')
++  })
++  it('batch returns every member × language × field with the same values as scalar resolution', () => {
++    const p = product(), child = { ...product(), id: 'child', parentId: p.id }
++    p.translations = [{ language: 'de', name: 'Titel' }]
++    const members = [{ product: p }, { product: child, parent: p }], fields = ['title', 'description', 'bulletPoints', 'keywords'], addresses = ['de-DE', 'it', 'fr'].map(requested => ({ requested }))
++    const batch = resolveContentBatch({ members, fields, addresses })
++    expect(batch).toHaveLength(6)
++    for (const row of batch) for (const field of fields) expect(row.fields[field]).toEqual(resolveContent({ ...members.find(m => m.product.id === row.productId)!, field, address: row.address }))
++  })
++})
+--- /dev/null
++++ apps/api/src/services/pim/content-resolver-shadow.ts
+@@ -0,0 +1,167 @@
++/** LX.7 comparison only. No reader switches, writes, provider calls or acceptance allow-list. */
++import { resolveAttributes, type ProductLike } from './attribute-resolver.js'
++import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE, sourceContent } from './content-locale.js'
++import { contentPathAddress, resolveContentPath, resolveContentBatch, type ContentProduct, type ContentListing, type Coordinate, type ResolvedContent } from './content-resolver.js'
++import { marketLanguages } from './market-languages.js'
++import { normalizeLanguage } from './content-language.js'
++import { etsyContentState } from '../etsy/information-content.js'
++import { resolveSourcePath } from './resolve-channel-field.js'
++import { globalContentLocales } from './global-content.js'
++import { shopifyProductSpec } from './channel-specs/store.js'
++import { storedChannelState } from './channel-value-mutation.js'
++
++type Row = Record<string, any>
++export const reclassifications = {
++  'R1-legacy-json-retired': 'Product.localizedContent no longer supplies text; no values are moved or backfilled.',
++  'R2-default-language-listing-pin': 'Existing listing title/description and broken-inheritance overrides are pins for Marketplace.languages[0] only.',
++  'R3-language-before-source': 'A parent language translation answers before a child native source value; child wins within each tier.',
++  'R4-native-source-authority': 'Native Product columns supply primary text; untagged category aliases and primary translation rows no longer override those columns.',
++  'R5-untagged-text-override-retired': 'overrideData continues to hold facts but no longer supplies language content.',
++  'R6-explicit-source-fallback': 'An exact-language sourceContent miss now returns source text with its actual source language.',
++  'R7-outbound-content-retired': 'Provider/store-specific content bags no longer supply authored language content.',
++  'R8-language-review-metadata': 'The resolved value reports its actual language and translation-row review status.',
++  'R9-regional-key-normalized': 'An existing regional table key is found in memory through the language-only normaliser; nothing is rewritten.',
++  'R10-empty-field-fallback': 'Absent/default empty text fields fall through individually rather than hiding a populated lower tier.',
++} as const
++export type Reclassification = keyof typeof reclassifications | 'UNCLASSIFIED'
++export const equalContent = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
++const object = (v: any): Row => v && typeof v === 'object' && !Array.isArray(v) ? v : {}
++const present = (v: any) => v != null && v !== '' && (!Array.isArray(v) || v.length > 0)
++const workspace = (row: Row) => row.workspaceId ?? null
++const id = (row: Row, key = row.id) => JSON.stringify([workspace(row), key])
++
++export interface ShadowDiff {
++  reader: string; productId: string; sku: string; workspaceId: string | null
++  listingId: string | null; coordinate: Coordinate | null; field: string; language: string
++  valueChanged: boolean; languageChanged: boolean; reviewChanged: boolean
++  classification: Reclassification; old: Row; next: ResolvedContent
++}
++
++/** Narrow candidate verification prevents a fabricated new value from being reclassified as a known change. */
++export function classifyContentDiff(input: { old: Row; next: ResolvedContent; product: Row; parent?: Row | null; listing?: Row | null; field: string; reader: string }): Reclassification {
++  const { old, next, product, parent, listing, field, reader } = input
++  const column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
++  const native = (owner: Row) => column ? owner[column] : owner.categoryAttributes?.[field] ?? owner.categoryAttributes?.variations?.[field] ?? owner.variantAttributes?.[field]
++  const source = column ? [product, parent].filter(Boolean).map(owner => native(owner!)).find(present) ?? null
++    : resolveAttributes({ product: { ...product, localizedContent: {}, translations: [] } as ProductLike, parent: parent ? { ...parent, localizedContent: {}, translations: [] } as ProductLike : null, locale: PRIMARY_CONTENT_LOCALE })[field]?.value ?? null
++  const translations = [product, parent].filter(Boolean).flatMap(owner => owner!.translations ?? [])
++  const tableValues = translations.filter(row => normalizeLanguage(row.language) === next.requested).map(row => column ? row[column] : row.attributes?.[field])
++  const legacyValues = field === 'title' ? [listing?.titleOverride, listing?.title] : field === 'description' ? [listing?.descriptionOverride, listing?.description] : field === 'bulletPoints' ? [listing?.bulletPointsOverride] : []
++  if (next.language !== (['source', 'computed'].includes(next.tier) ? normalizeLanguage(PRIMARY_CONTENT_LOCALE) : next.requested)
++    || next.tier === 'source' && !equalContent(next.value, source)
++    || next.tier === 'language' && !tableValues.some(value => equalContent(value, next.value))
++    || next.tier === 'pin' && !legacyValues.some(value => present(value) && equalContent(value, next.value))
++    || next.tier === 'computed' && next.value !== null) return 'UNCLASSIFIED'
++  if (equalContent(old.value, next.value)) return 'R8-language-review-metadata'
++  if (reader.startsWith('etsy') || reader.startsWith('shopify') || reader.startsWith('syndication')) return 'R7-outbound-content-retired'
++  if (next.tier === 'pin' || old.source === 'channelExplicit') return 'R2-default-language-listing-pin'
++  if (old.source === 'channelOverride') return 'R5-untagged-text-override-retired'
++  const slots = [product, parent].filter(Boolean).flatMap(owner => Object.values(object(owner!.localizedContent)))
++  if (old.value != null && slots.some(slot => Object.prototype.hasOwnProperty.call(object(slot), field) && equalContent(object(slot)[field], old.value))) return 'R1-legacy-json-retired'
++  if (translations.some(row => row.language !== normalizeLanguage(row.language) && normalizeLanguage(row.language) === next.requested)) return 'R9-regional-key-normalized'
++  if (next.tier === 'language' && old.source === 'masterColumn') return 'R3-language-before-source'
++  if (['sourceContent', 'mapping-source'].includes(reader) && old.value == null && next.tier === 'source') return 'R6-explicit-source-fallback'
++  if (next.tier === 'source' && ['master', 'variant', 'masterLocale', 'variantLocale'].includes(old.source)) return 'R4-native-source-authority'
++  if (old.value === '' || Array.isArray(old.value) && !old.value.length) return 'R10-empty-field-fallback'
++  return 'UNCLASSIFIED'
++}
++
++export function compareProductionContent(data: {
++  products: Row[]; listings: Row[]; marketplaces: Row[]; translations: Row[]
++  localizableKeysByProduct?: Record<string, string[]>
++  /** The actual existing syndication extractor, extracted and hashed by the audit builder to avoid route bootstrap. */
++  extractLocaleTitle?: (pa: unknown, marketplace: string, language: string) => string | null
++  productResolvedContent?: (product: any, language: string) => any
++}) {
++  const products: Row[] = data.products.map(product => ({ ...product, translations: data.translations.filter(row => id(row, row.productId) === id(product)) }))
++  const productMap = new Map(products.map(product => [id(product), product]))
++  const counts: Record<string, { compared: number; valueDiffs: number; languageDiffs: number; reviewDiffs: number; diffs: number }> = {}
++  const classificationCounts: Record<string, number> = {}, diffs: ShadowDiff[] = []
++  const coveredListings = new Set<string>(), coordinates = new Set<string>()
++  const observe = (reader: string, product: Row, parent: Row | undefined, listing: Row | undefined, coordinate: Coordinate | null, field: string, language: string, old: Row, next: ResolvedContent) => {
++    const key = JSON.stringify([reader, field, language])
++    const count = counts[key] ??= { compared: 0, valueDiffs: 0, languageDiffs: 0, reviewDiffs: 0, diffs: 0 }
++    count.compared++
++    const valueChanged = !equalContent(old.value, next.value)
++    const languageChanged = present(old.value) && present(next.value) && (old.effectiveLocale ?? null) !== next.language
++    const newReview = next.translation ? next.translation.outdated ? 'outdated' : next.translation.reviewedAt ? 'reviewed' : next.translation.source === 'manual' ? 'current' : 'draft' : next.language !== language ? 'fallback' : 'current'
++    const reviewChanged = present(old.value) && present(next.value) && old.translationState != null && old.translationState !== newReview
++    if (!valueChanged && !languageChanged && !reviewChanged) return
++    const classification = classifyContentDiff({ old, next, product, parent, listing, field, reader })
++    count.valueDiffs += Number(valueChanged); count.languageDiffs += Number(languageChanged); count.reviewDiffs += Number(reviewChanged); count.diffs++
++    classificationCounts[classification] = (classificationCounts[classification] ?? 0) + 1
++    diffs.push({ reader, productId: product.id, sku: product.sku, workspaceId: workspace(product), listingId: listing?.id ?? null, coordinate, field, language, valueChanged, languageChanged, reviewChanged, classification, old: { ...old, value: old.value ?? null }, next })
++  }
++  for (const product of products) {
++    const parent = product.parentId ? productMap.get(id(product, product.parentId)) : undefined
++    if (product.parentId && !parent) throw new Error(`Missing parent for ${product.id}`)
++    const localizableKeys = data.localizableKeysByProduct?.[id(product)] ?? []
++    const fields = [...Object.keys(CONTENT_COLUMNS), ...localizableKeys]
++    const markets = data.marketplaces.filter(market => workspace(market) === workspace(product))
++    const sharedLanguages = [...new Set([normalizeLanguage(PRIMARY_CONTENT_LOCALE), ...markets.flatMap(m => marketLanguages(m.channel, m.code, markets as any)), ...[product, parent].filter(Boolean).flatMap(p => p!.translations.map(row => normalizeLanguage(row.language)))])].sort()
++    const global = globalContentLocales(product as ProductLike, (parent ?? null) as ProductLike | null, sharedLanguages)
++    const scopes: Array<{ coordinate: Coordinate | null; listing?: Row; languages: string[] }> = [{ coordinate: null, languages: sharedLanguages }]
++    for (const market of markets) {
++      const marketListings = data.listings.filter(l => workspace(l) === workspace(product) && l.channel === market.channel && (l.marketplace && l.marketplace !== 'DEFAULT' ? l.marketplace : l.region) === market.code)
++      const languages = marketLanguages(market.channel, market.code, markets as any)
++      const coordinateOf = (listing?: Row): Coordinate => ({ channel: market.channel, market: market.code, ...(listing?.channelConnectionId ? { accountId: listing.channelConnectionId } : {}), ...(listing?.aliasId || listing?.aliasKey ? { aliasId: listing.aliasId ?? listing.aliasKey } : {}) })
++      const marketCoordinates = [...new Map((marketListings.length ? marketListings : [undefined]).map(listing => { const coordinate = coordinateOf(listing); return [JSON.stringify(coordinate), coordinate] })).values()]
++      // Cross EVERY product with EVERY observed account/alias coordinate in its workspace,
++      // including products with no listing there. Never replace an absent listing with a peer's row.
++      for (const coordinate of marketCoordinates) {
++        const matches = marketListings.filter(l => id(l, l.productId) === id(product) && JSON.stringify(coordinateOf(l)) === JSON.stringify(coordinate))
++        if (matches.length > 1) throw new Error(`Ambiguous listings for ${product.id} at ${JSON.stringify(coordinate)}`)
++        const listing = matches[0]
++        if (listing) coveredListings.add(id(listing))
++        scopes.push({ coordinate, listing, languages })
++      }
++    }
++    for (const scope of scopes) {
++      const { coordinate, listing, languages } = scope
++      if (coordinate) coordinates.add(JSON.stringify([workspace(product), coordinate]))
++      const hydratedListing: ContentListing | null = listing ? { ...listing, id: listing.id, productId: listing.productId, coordinate: coordinate!, languages } : null
++      const batch = resolveContentBatch({ members: [{ product: product as ContentProduct, parent: parent as ContentProduct, listing: hydratedListing, localizableKeys }], fields, addresses: languages.map(requested => ({ requested, ...(coordinate ? { coordinate } : {}) })) })
++      for (const row of batch) {
++        const language = row.address.requested
++        const old = resolveAttributes({ product: product as ProductLike, parent: (parent ?? null) as ProductLike | null, channelListing: listing as any, locale: language, localizableKeys })
++        const oldProduct = !coordinate ? data.productResolvedContent?.({ ...product, parent }, language) : undefined
++        for (const field of fields) {
++          const next = row.fields[field]
++          observe(coordinate ? 'attribute-coordinate' : 'attribute-shared', product, parent, listing, coordinate, field, language, old[field] ?? { value: null }, next)
++          if (!coordinate) observe('sourceContent', product, parent, undefined, null, field, language, { value: sourceContent({ ...product, parent }, field, language) }, next)
++          if (!coordinate && field in CONTENT_COLUMNS) {
++            observe('global-content', product, parent, undefined, null, field, language, { ...old[field], value: global[language]?.[field as keyof typeof global[string]] }, next)
++            if (oldProduct) observe('product-content', product, parent, undefined, null, field, language, oldProduct.fields[CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]], next)
++          }
++          if (listing?.channel === 'ETSY' && ['title', 'description'].includes(field)) observe('etsyContentState', product, parent, listing, coordinate, field, language, etsyContentState(listing, language, field) ?? { value: null }, next)
++          if (listing?.channel === 'AMAZON' && field === 'title' && data.extractLocaleTitle) observe('syndication-title', product, parent, listing, coordinate, field, language, { value: data.extractLocaleTitle(listing.platformAttributes, coordinate!.market, language) }, next)
++          if (listing?.channel === 'SHOPIFY' && ['title', 'description'].includes(field)) {
++            const spec = shopifyProductSpec(null, coordinate?.accountId).fields.find(spec => spec.masterKey === (field === 'title' ? 'name' : field))!
++            const stored = storedChannelState(listing, spec.channelStore, [spec.masterKey ?? spec.key, spec.key])
++            observe('shopify-information-native', product, parent, listing, coordinate, field, language, { value: stored.value }, next)
++            for (const tag of Object.keys(object(listing.platformAttributes?._shopifyInformationLocales)).filter(tag => normalizeLanguage(tag) === language)) {
++              const translated = storedChannelState(listing, { kind: 'platformAttributes', path: ['_shopifyInformationLocales', tag, spec.shopifyField!.id] }, [spec.masterKey ?? spec.key, spec.key])
++              observe('shopify-information-locale', product, parent, listing, coordinate, field, language, { value: translated.value, effectiveLocale: tag }, next)
++            }
++          }
++        }
++        if (coordinate) {
++          const market = markets.find(m => m.channel === coordinate.channel && m.code === coordinate.market)!
++          const mapping = object(market.schemaMapping), category = listing?.platformAttributes?.productType ?? product.productType
++          const rules = { ...object(mapping.fields), ...object(mapping.byProductType?.[category]) }
++          const paths = [...new Set(Object.values(rules).flatMap(rule => [rule.source, rule.fallback].filter((path): path is string => typeof path === 'string' && !!path)))]
++          for (const path of paths) {
++            const parsed = contentPathAddress(path, language, localizableKeys)
++            if (!parsed) continue
++            const next = resolveContentPath({ product: product as ContentProduct, parent: parent as ContentProduct, listing: hydratedListing, address: { requested: language, coordinate }, localizableKeys, path })!
++            const flat = Object.fromEntries(Object.entries(old).map(([field, hit]) => [field, hit.value]))
++            const value = resolveSourcePath(path, flat, product as ProductLike, language)
++            observe('mapping-source', product, parent, listing, coordinate, parsed.field, language, { ...old[parsed.field], value, path }, next)
++          }
++        }
++      }
++    }
++  }
++  if (coveredListings.size !== data.listings.length) throw new Error(`Listing coverage mismatch: ${coveredListings.size}/${data.listings.length}`)
++  return { counts: Object.entries(counts).map(([key, counts]) => { const [reader, field, language] = JSON.parse(key); return { reader, field, language, ...counts } }), classificationCounts, diffs, coveredListings: coveredListings.size, coordinates: coordinates.size }
++}
+--- /dev/null
++++ apps/api/src/services/pim/content-resolver-shadow.vitest.test.ts
+@@ -0,0 +1,84 @@
++import { describe, expect, it, vi } from 'vitest'
++vi.mock('../../db.js', () => ({ default: new Proxy({}, { get() { throw new Error('Shadow attempted a database call') } }) }))
++import { classifyContentDiff, compareProductionContent, equalContent } from './content-resolver-shadow.js'
++import { resolveContentPath } from './content-resolver.js'
++
++const fixture = () => ({
++  products: [{ id: 'p', sku: 'P', name: 'Fonte', description: 'Descrizione', parentId: null, localizedContent: {}, categoryAttributes: {}, variantAttributes: {} }],
++  listings: [{ id: 'l', productId: 'p', channel: 'AMAZON', marketplace: 'BE', title: 'Nederlands', followMasterTitle: true, channelConnectionId: 'account' }],
++  marketplaces: [{ channel: 'AMAZON', code: 'BE', languages: ['nl', 'fr'], schemaMapping: { fields: { item_name: { source: 'localizedContent.{locale}.title' } } } }],
++  translations: [],
++})
++
++describe('production shadow coverage and non-vacuous controls', () => {
++  it('covers both Belgium languages, actual mapping sources and the shared product', () => {
++    const report = compareProductionContent(fixture())
++    expect(report.coveredListings).toBe(1)
++    for (const language of ['nl', 'fr']) for (const field of ['title', 'description', 'bulletPoints', 'keywords']) expect(report.counts.find(c => c.reader === 'attribute-coordinate' && c.language === language && c.field === field)?.compared).toBe(1)
++    expect(report.counts.filter(c => c.reader === 'mapping-source').reduce((n, c) => n + c.compared, 0)).toBe(2)
++    expect(report.diffs.some(d => d.language === 'nl' && d.next.tier === 'pin' && d.next.value === 'Nederlands')).toBe(true)
++    expect(report.diffs.some(d => d.language === 'fr' && d.next.value === 'Fonte')).toBe(true)
++  })
++  it('keeps account and alias listing coordinates separate', () => {
++    const data = fixture()
++    data.listings.push({ ...data.listings[0], id: 'l2', channelConnectionId: 'another', title: 'Tweede' })
++    const report = compareProductionContent(data)
++    expect(report.coveredListings).toBe(2)
++    expect(new Set(report.diffs.filter(d => d.reader === 'attribute-coordinate' && d.field === 'title' && d.language === 'nl').map(d => d.next.value))).toEqual(new Set(['Nederlands', 'Tweede']))
++  })
++  it('includes products without a listing, and refuses unmatched listing rows', () => {
++    const data = fixture(); data.products.push({ ...data.products[0], id: 'unlisted' })
++    const report = compareProductionContent(data)
++    expect(report.counts.find(c => c.reader === 'attribute-coordinate' && c.field === 'title' && c.language === 'fr')?.compared).toBe(2)
++    data.listings[0].marketplace = 'UNKNOWN'
++    expect(() => compareProductionContent(data)).toThrow('coverage mismatch')
++  })
++  it('crosses unlisted products with every observed account coordinate', () => {
++    const data = fixture(); data.products.push({ ...data.products[0], id: 'unlisted' })
++    data.listings.push({ ...data.listings[0], id: 'l2', channelConnectionId: 'second' })
++    const report = compareProductionContent(data)
++    expect(report.counts.find(c => c.reader === 'attribute-coordinate' && c.field === 'title' && c.language === 'fr')?.compared).toBe(4)
++    expect(report.coordinates).toBe(2)
++    expect(report.coveredListings).toBe(2)
++  })
++  it('compares exact text bytes and array order', () => {
++    expect(equalContent(' title', 'title')).toBe(false)
++    expect(equalContent(['a', 'b'], ['b', 'a'])).toBe(false)
++    expect(equalContent('é', 'e\u0301')).toBe(false)
++  })
++  it('refuses to classify an injected value defect as source retirement', () => {
++    expect(classifyContentDiff({ old: { value: 'Old JSON', source: 'masterLocale' }, next: { value: 'INJECTED', tier: 'source', language: 'it', requested: 'de', provenance: { member: 'inherited', from: null } }, product: { name: 'Real source', localizedContent: { de: { title: 'Old JSON' } } }, field: 'title', reader: 'attribute-coordinate' })).toBe('UNCLASSIFIED')
++  })
++  it('rejects an injected wrong-language label even when the bytes match', () => {
++    expect(classifyContentDiff({ old: { value: 'Fonte' }, next: { value: 'Fonte', tier: 'source', language: 'de', requested: 'de', provenance: { member: 'inherited', from: null } }, product: { name: 'Fonte' }, field: 'title', reader: 'attribute-coordinate' })).toBe('UNCLASSIFIED')
++  })
++  it('classifies an exact-language miss against the established native variant alias', () => {
++    expect(classifyContentDiff({ old: { value: null }, next: { value: 'Da motociclista', tier: 'source', language: 'it', requested: 'de', provenance: { member: 'inherited', from: null } }, product: { id: 'p', parentId: null, localizedContent: {}, categoryAttributes: {}, variantAttributes: { Style: 'Da motociclista' } }, field: 'style', reader: 'sourceContent' })).toBe('R6-explicit-source-fallback')
++  })
++  it('resolves mapping paths through the new tier without reading the old JSON path', () => {
++    const product = { ...fixture().products[0], translations: [{ language: 'de', name: 'Titel', bulletPoints: ['Erster'] }] }
++    Object.defineProperty(product, 'localizedContent', { get() { throw new Error('Legacy read') } })
++    expect(resolveContentPath({ product, path: 'localizedContent.de-DE.title', address: { requested: 'fr' } })).toMatchObject({ value: 'Titel', language: 'de', requested: 'de', tier: 'language' })
++    expect(resolveContentPath({ product, path: 'localizedContent.{locale}.bulletPoints.0', address: { requested: 'de-DE' } })?.value).toBe('Erster')
++    expect(resolveContentPath({ product, path: 'price', address: { requested: 'de' } })).toBeNull()
++  })
++  it('does not mutate catalogue rows while comparing regional table keys', () => {
++    const data = { ...fixture(), translations: [{ productId: 'p', language: 'fr-FR', name: 'Français' }] }
++    const before = JSON.stringify(data)
++    compareProductionContent(data)
++    expect(JSON.stringify(data)).toBe(before)
++  })
++  it.each(['ETSY', 'SHOPIFY'])('exercises the %s locale-bag reader without a provider', channel => {
++    const data = {
++      products: fixture().products,
++      marketplaces: [{ channel, code: 'GLOBAL', languages: ['fr'] }],
++      translations: [],
++      listings: [{ id: 'store', productId: 'p', channel, marketplace: 'GLOBAL', channelConnectionId: 'account', title: 'Stored title', followMasterTitle: false,
++        platformAttributes: { _etsyInformationLocales: { fr: { title: 'Ancien Etsy' } }, _shopifyInformationLocales: { fr: { title: 'Ancien Shopify', descriptionHtml: 'Ancienne description' } } } }],
++    }
++    const report = compareProductionContent(data)
++    const reader = channel === 'ETSY' ? 'etsyContentState' : 'shopify-information-locale'
++    expect(report.counts.some(c => c.reader === reader && c.compared > 0)).toBe(true)
++    expect(report.diffs.some(d => d.reader === reader && d.field === 'title' && d.next.value === 'Stored title' && d.classification === 'R7-outbound-content-retired')).toBe(true)
++  })
++})
+--- /dev/null
++++ packages/shared/cell-provenance.ts
+@@ -0,0 +1,4 @@
++/** One cell vocabulary for backend content contracts and the Nexus design-system renderer. */
++export type CellProvenance =
++  | 'own' | 'inherited' | 'inheritedOverride' | 'pinned' | 'ai' | 'aiStale' | 'mapped' | 'mappedShared'
++  | 'formula' | 'refused'
+--- packages/shared/package.json
++++ packages/shared/package.json
+@@ -6,6 +6,10 @@
+   "main": "./dist/vault.js",
+   "types": "./dist/vault.d.ts",
+   "exports": {
++    "./cell-provenance": {
++      "types": "./dist/cell-provenance.d.ts",
++      "default": "./dist/cell-provenance.js"
++    },
+     "./shopify-information-editing": {
+       "types": "./dist/shopify-information-editing.d.ts",
+       "default": "./dist/shopify-information-editing.js"
+--- apps/web/src/design-system/grid/renderers/provenance.ts
++++ apps/web/src/design-system/grid/renderers/provenance.ts
+@@ -58,9 +58,8 @@
+  * formula's OUTPUT with no mark at all — indistinguishable from a typed value — while the cell that
+  * had just been committed showed the formula TEXT as though that were the value.
+  */
+-export type CellProvenance =
+-  | 'own' | 'inherited' | 'inheritedOverride' | 'pinned' | 'ai' | 'aiStale' | 'mapped' | 'mappedShared'
+-  | 'formula' | 'refused'
++import type { CellProvenance } from '@nexus/shared/cell-provenance'
++export type { CellProvenance } from '@nexus/shared/cell-provenance'
+ 
+ /**
+  * The minimal cell shape the classifier needs. Both apps' fuller `SheetCellValue`
+--- apps/web/src/design-system/CHANGELOG.md
++++ apps/web/src/design-system/CHANGELOG.md
+@@ -1076,3 +1076,5 @@
+ ## Monospace token parity — 2026-09-12
+ 
+ Factory now defines `--nds-font-mono` for its grid editor styles. Both apps use a monospace fallback when the host does not supply `--font-mono`; generated stylesheets are refreshed.
++
++2026-09-12 LX.7: moved the existing CellProvenance type to @nexus/shared/cell-provenance so API and grid contracts import one declaration. Renderer behavior and vocabulary unchanged; outdated rendering remains Step 6. Factory has no AG grid/provenance module.
+--- apps/web/src/design-system/catalog/README.md
++++ apps/web/src/design-system/catalog/README.md
+@@ -178,3 +178,5 @@
+ Amazon Seller migration (2026-09-08): verify an ENV-managed Amazon row, its primary **Replace environment credentials** action, the application-role permission copy, and the preserved ENV fallback note. Exercise both website authorization and private-app self-authorization import. Repeat after conversion to confirm the row reads as connected and no longer offers ENV replacement. Check narrow and desktop layouts in light and dark themes.
+ 
+ Monospace token parity (2026-09-12): grid formula/editor specimens use `--nds-font-mono` in both apps, with a fallback for hosts without a custom mono font.
++
++Cell provenance contract: `@nexus/shared/cell-provenance` is the shared type, re-exported by `grid/renderers/provenance.ts`. The existing provenance examples and renderer are unchanged by the Step 3 type extraction.
+--- .claude/DS-GAPS.md
++++ .claude/DS-GAPS.md
+@@ -4171,3 +4171,5 @@
+ ## Factory grid monospace token — 2026-09-12 · RESOLVED
+ 
+ The token-resolution guard found five Factory grid stylesheet references to undefined `--nds-font-mono`. Added the shared token to Factory and a host-font fallback in both token sources; regenerated both apps' stylesheets. Formula/editor text now has a defined monospace family in either host.
++
++2026-09-12 LX.7 — Resolved: CellProvenance was web-only, preventing the API content contract from using the same vocabulary across TypeScript rootDir boundaries. Extracted the existing type into @nexus/shared/cell-provenance; the web renderer re-exports it. Factory has no corresponding grid/provenance module; no duplicate is introduced. Step 6 retains ownership of outdated rendering.

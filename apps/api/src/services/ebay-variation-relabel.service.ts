@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * Variation SKU relabeling — put the OWNER'S pool SKUs on a live eBay listing
@@ -64,6 +66,11 @@ export async function relabelListingToPoolSkus(
   marketplace: string,
   ctx: { oauthToken: string },
 ): Promise<RelabelResult> {
+  const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const market = marketplace.toUpperCase()
   const memberships = await prisma.sharedListingMembership.findMany({
     where: { marketplace: market, itemId },
@@ -221,6 +228,11 @@ export async function adoptSkulessVariations(
   ctx: { oauthToken: string },
   preferredParentSku?: string,
 ): Promise<SkulessAdoptionResult> {
+  const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const market = marketplace.toUpperCase()
   const getXml = `<?xml version="1.0" encoding="utf-8"?>
 <GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID></GetItemRequest>`

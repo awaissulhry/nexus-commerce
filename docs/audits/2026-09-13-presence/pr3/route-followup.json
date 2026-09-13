@@ -1,0 +1,75 @@
+{
+  "at": "2026-09-13T18:39:25.961667+00:00",
+  "databaseTarget": "127.0.0.1:55439/nexus_development (guard printed; all I/O mocked in follow-up tests)",
+  "scope": "Three attributed route-Prisma failures after completed PR.3",
+  "checks": [
+    {
+      "command": "../../node_modules/.bin/vitest run src/routes/language-records.vitest.test.ts --maxWorkers=2",
+      "cwd": "apps/api",
+      "load1": 5.07,
+      "exit": 0,
+      "phase": "before source extraction",
+      "passed": 6,
+      "log": "route-followup-before-vitest.log"
+    },
+    {
+      "command": "../../node_modules/.bin/vitest run src/routes/language-records.vitest.test.ts src/services/pim/catalog-transfer-options.vitest.test.ts src/services/pim/catalog-transfer-http.vitest.test.ts src/services/pim/catalog-transfer-export.vitest.test.ts --maxWorkers=2",
+      "cwd": "apps/api",
+      "load1": 6.52,
+      "exit": 0,
+      "passed": 19,
+      "skipped": 1,
+      "durationSeconds": 1.44,
+      "log": "route-followup-vitest.log"
+    },
+    {
+      "command": "node scripts/check-route-prisma-ratchet.mjs --check",
+      "cwd": ".",
+      "load1": 6.52,
+      "exit": 0,
+      "directCalls": 3406,
+      "files": 125,
+      "baseline": 3491,
+      "log": "route-followup-ratchet.log"
+    },
+    {
+      "command": "./node_modules/.bin/tsc --noEmit -p apps/api/tsconfig.json --incremental --tsBuildInfoFile /private/tmp/nexus-pr3-presence/route-followup/api.tsbuildinfo",
+      "cwd": ".",
+      "load1": 5.58,
+      "exit": 0,
+      "log": "route-followup-tsc.log"
+    }
+  ],
+  "sources": {
+    "apps/api/src/routes/assets.routes.ts": "a0a9f57785f3fa519413da2a2fce230ece5a75247cd1c19fe63cae0945221893",
+    "apps/api/src/routes/brand-story.routes.ts": "d29e233c8c16a9404cc70d50189ad9dc35438cd2ff10b089b452033327a3aa64",
+    "apps/api/src/routes/catalog-transfer.routes.ts": "e91ebbeddb4100516441778507b466e2340466043581b37c90fe10a52ad302c1",
+    "apps/api/src/services/asset-locale-overlay-store.service.ts": "8376f798e44b6b9e3cee509d331705fe00765c4fa5e1d0b80d73a4e68a8484cc",
+    "apps/api/src/services/brand-story-records.service.ts": "86322db02f8bdaa816223d9223eb22a4fd7313d4f36962ed03907e48d63cd874",
+    "apps/api/src/services/pim/catalog-transfer-export.ts": "ef483782081e18d80dfc071b9a312bf97a81e5cb199c4265dad013e00b272b4d",
+    "apps/api/src/routes/language-records.vitest.test.ts": "d530d63a9f90cc3cf4ffb4dac211335a35f1e4705d9a8b16618e0120ddc3bc4f",
+    "apps/api/src/services/pim/catalog-transfer-options.vitest.test.ts": "b14d6e043c95a0278571d25ed3f14e8fcc04427d116022d65f311bcc140367d1"
+  },
+  "routeCalls": {
+    "assets": {
+      "before": 64,
+      "after": 62,
+      "baseline": 62
+    },
+    "brand-story": {
+      "before": 33,
+      "after": 31,
+      "baseline": 32
+    },
+    "catalog-transfer": {
+      "before": 2,
+      "after": 0,
+      "baseline": 0
+    }
+  },
+  "skip": "Existing NEXUS_SESSION_TWO_BROWSER opt-in server harness; no functional test skipped",
+  "handoff": "PR.1 applies/tested marketplaces publish and ebay-flat-file push guards, receipt18:36:19Z; PR.4 expanded sweep remains separately owned",
+  "productionWrites": 0,
+  "channelWrites": 0,
+  "commits": 0
+}

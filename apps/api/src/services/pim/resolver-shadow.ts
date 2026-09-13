@@ -1,3 +1,4 @@
+import { contentResolverEnabled } from './content-resolver.js'
 /**
  * PIM A.2 — Resolver shadow-compare.
  *
@@ -107,7 +108,8 @@ export function resetShadowBuffer(): void {
 // ────────────────────────────────────────────────────────────────────
 
 export function isShadowEnabled(): boolean {
-  return process.env.PIM_RESOLVER_SHADOW === 'true'
+  // The LX production instrument replaces this pre-language diagnostic after the switch.
+  return !contentResolverEnabled() && process.env.PIM_RESOLVER_SHADOW === 'true'
 }
 
 // ────────────────────────────────────────────────────────────────────

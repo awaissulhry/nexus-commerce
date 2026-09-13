@@ -1,0 +1,157 @@
+{
+  "at": "2026-09-13T05:10:17.186Z",
+  "phase": "after",
+  "database": {
+    "target": "local",
+    "host": "127.0.0.1",
+    "database": "nexus_development"
+  },
+  "familyProductTypes": [
+    "OUTERWEAR"
+  ],
+  "cachedAmazonRows": 170,
+  "expiredAmazonRows": 164,
+  "arms": [
+    {
+      "arm": "A master·IT·it — sheet read as the route calls it",
+      "ms": 224,
+      "providerAttempts": 0,
+      "note": {
+        "rows": 21,
+        "columns": 236,
+        "schemaMissing": []
+      },
+      "error": null,
+      "stacks": []
+    },
+    {
+      "arm": "A AMAZON·IT·it — sheet read as the route calls it",
+      "ms": 532,
+      "providerAttempts": 0,
+      "note": {
+        "rows": 21,
+        "columns": 163,
+        "schemaMissing": []
+      },
+      "error": null,
+      "stacks": []
+    },
+    {
+      "arm": "A EBAY·IT·it — sheet read as the route calls it",
+      "ms": 120,
+      "providerAttempts": 0,
+      "note": {
+        "rows": 21,
+        "columns": 51,
+        "schemaMissing": []
+      },
+      "error": null,
+      "stacks": []
+    },
+    {
+      "arm": "B master·IT — reference-labels shipping=1, no live flag",
+      "ms": 16,
+      "providerAttempts": 0,
+      "note": {
+        "labelGroups": 46,
+        "shippingLabels": 0,
+        "unavailable": [
+          "shippingTemplate"
+        ],
+        "stamp": {
+          "marketplace": "IT",
+          "productType": "OUTERWEAR",
+          "schemaFetchedAt": "2026-09-12T14:51:37.132Z",
+          "schemaVersion": "68cde7af66cd0344b4953c71572132edeebd057cc5f6a77f7329525e440120a9",
+          "cachedOnly": true,
+          "sellerTemplates": "cache-miss"
+        }
+      },
+      "error": null,
+      "stacks": []
+    },
+    {
+      "arm": "B AMAZON·DE — reference-labels shipping=1, no live flag",
+      "ms": 15,
+      "providerAttempts": 0,
+      "note": {
+        "labelGroups": 46,
+        "shippingLabels": 0,
+        "unavailable": [
+          "shippingTemplate"
+        ],
+        "stamp": {
+          "marketplace": "DE",
+          "productType": "OUTERWEAR",
+          "schemaFetchedAt": "2026-09-12T14:52:54.095Z",
+          "schemaVersion": "d3054b28091e6afc9d1a887c29182169c981069e5630d4b0f4ee01539ff59639",
+          "cachedOnly": true,
+          "sellerTemplates": "cache-miss"
+        }
+      },
+      "error": null,
+      "stacks": []
+    },
+    {
+      "arm": "B positive control — reference-labels with live=1",
+      "ms": 29,
+      "providerAttempts": 1,
+      "note": {
+        "labelGroups": 44,
+        "shippingLabels": 0,
+        "unavailable": [
+          "shippingTemplate"
+        ],
+        "stamp": {
+          "marketplace": "DE",
+          "productType": "OUTERWEAR",
+          "schemaFetchedAt": "2026-09-12T14:52:54.095Z",
+          "schemaVersion": "d3054b28091e6afc9d1a887c29182169c981069e5630d4b0f4ee01539ff59639",
+          "cachedOnly": false,
+          "sellerTemplates": "unavailable"
+        }
+      },
+      "error": null,
+      "stacks": [
+        "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:52:18) | at async amazonReferenceLabels (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:85:21) | at async <anonymous> (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:83:65)"
+      ]
+    }
+  ],
+  "forcedUncached": {
+    "forced": true,
+    "market": "PL",
+    "productType": "OUTERWEAR",
+    "ms": 93,
+    "providerAttempts": 2,
+    "note": {
+      "rows": 21,
+      "columns": 5,
+      "schemaMissing": [
+        "OUTERWEAR"
+      ]
+    },
+    "error": null,
+    "stacks": [
+      "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async getSheetColumns (/Users/awais/nexus-commerce/apps/api/src/services/pim/sheet-columns.service.ts:1196:24) | at async getStudioSheet (/Users/awais/nexus-commerce/apps/api/src/services/pim/studio-sheet.service.ts:959:21) | at async getInformationSheet (/Users/awais/nexus-commerce/apps/api/src/services/pim/information-sheet.ts:12:17)",
+      "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async getFieldCatalogue (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/field-catalogue.service.ts:233:7) | at async resolveBatch (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/resolve-batch.service.ts:263:34) | at async resolveChannelValues (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/index.ts:101:20)"
+    ]
+  },
+  "totalProviderAttempts": 3,
+  "attempts": [
+    {
+      "at": "2026-09-13T05:10:17.090Z",
+      "host": "https://api.amazon.com/auth/o2/token",
+      "stack": "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:52:18) | at async amazonReferenceLabels (/Users/awais/nexus-commerce/apps/api/src/services/categories/reference-labels.service.ts:85:21) | at async <anonymous> (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:83:65)"
+    },
+    {
+      "at": "2026-09-13T05:10:17.126Z",
+      "host": "https://api.amazon.com/auth/o2/token",
+      "stack": "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async getSheetColumns (/Users/awais/nexus-commerce/apps/api/src/services/pim/sheet-columns.service.ts:1196:24) | at async getStudioSheet (/Users/awais/nexus-commerce/apps/api/src/services/pim/studio-sheet.service.ts:959:21) | at async getInformationSheet (/Users/awais/nexus-commerce/apps/api/src/services/pim/information-sheet.ts:12:17)"
+    },
+    {
+      "at": "2026-09-13T05:10:17.182Z",
+      "host": "https://api.amazon.com/auth/o2/token",
+      "stack": "at deny (/Users/awais/nexus-commerce/docs/audits/2026-09-13-lx6/cold-load.mjs:36:18) | at getAmazonAccessToken (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:48:26) | at async getAmazonSpClient (/Users/awais/nexus-commerce/apps/api/src/lib/amazon-sp-client.ts:70:17) | at async <anonymous> (/Users/awais/nexus-commerce/apps/api/src/services/categories/seller-schema.service.ts:18:16) | at async getFieldCatalogue (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/field-catalogue.service.ts:233:7) | at async resolveBatch (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/resolve-batch.service.ts:263:34) | at async resolveChannelValues (/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/index.ts:101:20)"
+    }
+  ]
+}

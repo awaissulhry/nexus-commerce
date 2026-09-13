@@ -1,0 +1,96 @@
+{
+  "status": "INCOMPLETE \u2014 W1.5-PUSH REOPENED; SHOP-P and PR.4 AT-WAVE-4 not posted",
+  "measuredAt": "2026-09-13T18:24:11.580549+00:00",
+  "database": {
+    "host": "127.0.0.1",
+    "port": 55439,
+    "database": "nexus_development",
+    "fixture": "disposable DRAFT rows under GALE XAVIA; rollback only",
+    "productionWrites": 0,
+    "channelWrites": 0
+  },
+  "checks": {
+    "sharedBuild": {
+      "exit": 0
+    },
+    "sharedTests": {
+      "exit": 0,
+      "files": 20,
+      "passed": 219
+    },
+    "builtDistProbe": {
+      "exit": 0,
+      "imports": 4
+    },
+    "apiTsc": {
+      "exit": 0
+    },
+    "apiTests": {
+      "exit": 0,
+      "files": 23,
+      "passed": 456,
+      "maxWorkers": 2
+    },
+    "shopifyProjection": {
+      "exit": 0,
+      "passed": 3,
+      "notSelected": 13
+    },
+    "shopifyLocalDb": {
+      "exit": 0,
+      "passed": 1,
+      "durationSeconds": 24.62,
+      "readBackDelaySecondsEach": 8,
+      "statuses": [
+        "ACTIVE",
+        "INACTIVE",
+        "INACTIVE"
+      ],
+      "versionsAsserted": true,
+      "rollbackResidue": 0
+    },
+    "installedPushGate": {
+      "exit": 1,
+      "derivedListingPushFunctions": 42,
+      "explicitContracts": 3,
+      "missingGuards": 3
+    },
+    "proposedRouteGate": {
+      "exit": 0,
+      "applied": false,
+      "derivedListingPushFunctions": 42,
+      "missingGuards": 0
+    },
+    "proposedRouteTypecheck": {
+      "exit": 0,
+      "applied": false
+    },
+    "seedsOnProposedGreenSource": {
+      "removedPricingGuard": {
+        "exit": 1,
+        "missingGuards": 1
+      },
+      "newWriterOutsideOriginalSlice": {
+        "exit": 1,
+        "derivedListingPushFunctions": 43,
+        "missingGuards": 1
+      },
+      "feedBypass": {
+        "exit": 1,
+        "missingGuards": 1
+      }
+    }
+  },
+  "baselineFailures": {
+    "file": "apps/api/src/services/shopify/channel-sheet.vitest.test.ts",
+    "count": 4,
+    "verifiedOnCopiedBeforeSource": true,
+    "changedAssertions": 0
+  },
+  "pending": [
+    "PR.1/PR.3 handoff or application of the exact route patch",
+    "W2-SCHEMA-APPLIED before fact-column persistence and its DB test",
+    "SHOP-P DONE and PR.4 AT-WAVE-4 after all requirements are green"
+  ],
+  "commitCreated": false
+}

@@ -1,0 +1,155 @@
+{
+  "step": 6,
+  "lane": "LX.6",
+  "at": "2026-09-13T05:29:10.374Z",
+  "note": "Files LX.6 changed while closing step 6. Hashes are of the working tree (nothing is committed). The probe `discriminate.mjs` was written and then removed unrun: it reset the gate user password hash, a shared-resource write this environment refuses.",
+  "files": [
+    {
+      "path": "apps/api/src/services/categories/reference-labels.service.ts",
+      "sha256": "259d53c56a45ee7f0f13141a5fd650cad568447ece18b502b828724c6b937ac4",
+      "bytes": 7154,
+      "mtime": "2026-09-13T04:46:28.405Z"
+    },
+    {
+      "path": "apps/api/src/services/categories/reference-labels.service.vitest.test.ts",
+      "sha256": "ff3eace7a125d55fb6adec401d7676258521d271159bea132b0fb8c5942945e4",
+      "bytes": 9960,
+      "mtime": "2026-09-13T04:49:26.733Z"
+    },
+    {
+      "path": "apps/api/src/routes/categories.routes.ts",
+      "sha256": "f658a8c00eb6239bfb6fa19f21406ec1f3d78ecece8387e4a08d20e1e6d2c15f",
+      "bytes": 17257,
+      "mtime": "2026-09-13T04:46:47.145Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/referenceOptions.ts",
+      "sha256": "d64783185a6d869113a28890a0ea7fee8b5057c46f6c5e2f7479e13649481d99",
+      "bytes": 6444,
+      "mtime": "2026-09-13T04:47:09.683Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/referenceOptions.vitest.test.ts",
+      "sha256": "bf655a30a2fd5433350e0cc8a8bf91bfe792ab5a816bd6787751fc08990c0bd4",
+      "bytes": 7432,
+      "mtime": "2026-09-13T04:50:46.785Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/useReferenceNames.ts",
+      "sha256": "fde04dd2830e1a3cab574f55d89c426d875de4d1300dbb598fccf81351fe69f1",
+      "bytes": 8969,
+      "mtime": "2026-09-13T04:47:32.649Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/ReferenceSelectEditor.tsx",
+      "sha256": "e4eeeda7d0bb29db9040bff4cad1f598944c7b238a906f9b075c88866c3aacc8",
+      "bytes": 2525,
+      "mtime": "2026-09-13T04:47:32.649Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/sheetRecovery.ts",
+      "sha256": "174f178680015a091de98629c1bc802cf68be59c7b6cfb9d7f482f65c322c6cb",
+      "bytes": 4756,
+      "mtime": "2026-09-13T04:47:32.650Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/compareTargets.ts",
+      "sha256": "f3693df44683163c360db9467275afee9cbf230b9d2ffc911e2ff88f13dcbcad",
+      "bytes": 5664,
+      "mtime": "2026-09-13T04:59:18.009Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/compareTargets.vitest.test.ts",
+      "sha256": "aea5724c312706214515b4c04ac1b79870b0ee309cab586ef892321ebae0628d",
+      "bytes": 4345,
+      "mtime": "2026-09-13T04:59:38.213Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/master/useMasterSheetAdapter.tsx",
+      "sha256": "6d7a1d6eb6fe658fb53d533e697d8bb50eade7f68fbd17d135d4efa2c76e5cb7",
+      "bytes": 36856,
+      "mtime": "2026-09-13T04:58:55.864Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/useChannelSheetAdapter.tsx",
+      "sha256": "d5b32ba2b5fcd6041a7cb8338f1d01582989d93f5efdb688a7a29c88c2dd1426",
+      "bytes": 58547,
+      "mtime": "2026-09-13T05:00:03.259Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_studio/drawer/RecordDrawer.tsx",
+      "sha256": "6a6537363a9653fd31af1d342185ea76d7d0364a41cb9afa98ddd77f7106a562",
+      "bytes": 28903,
+      "mtime": "2026-09-13T05:00:30.629Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/ProductEditClient.tsx",
+      "sha256": "070f728fc7ac037d6985b993911d7f8c56534dc3975d6c51ef3f9beccb790e15",
+      "bytes": 76994,
+      "mtime": "2026-09-13T05:02:40.269Z"
+    },
+    {
+      "path": "apps/web/src/app/products/[id]/edit/_shared/useTabPrefs.ts",
+      "sha256": "c2e983f029d4d213af2737b584183d25a7a230eaf5b63f3f5a76284811b83ce0",
+      "bytes": 9534,
+      "mtime": "2026-09-13T05:02:40.270Z"
+    },
+    {
+      "path": "apps/web/src/components/CommandPalette.tsx",
+      "sha256": "630d2deceacfcbc918e7105881b7dbb600e595b03370274cde394fe54c8cd32f",
+      "bytes": 57016,
+      "mtime": "2026-09-13T05:03:22.468Z"
+    },
+    {
+      "path": "apps/api/src/services/shopify/channel-sheet-projection.ts",
+      "sha256": "e2f08667bcf504bd341e62dbbd86423a1d068700f863061b3df8b29f1796e3dc",
+      "bytes": 11600,
+      "mtime": "2026-09-13T05:08:39.751Z"
+    }
+  ],
+  "deleted": [
+    "apps/web/src/app/products/[id]/edit/tabs/LocalesTab.tsx"
+  ],
+  "probes": [
+    {
+      "path": "docs/audits/2026-09-13-lx6/cold-load-after.json",
+      "sha256": "bb470fbd9da8f067d0b1e80e973f7f64024fb6ef146b3c18e4e4ad73ae17ac81",
+      "bytes": 8264
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/cold-load.mjs",
+      "sha256": "a544de39c9a65d0970f908b8d700f625f56ff92401a1ea064e898435b367df7b",
+      "bytes": 8073
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/footer-note.json",
+      "sha256": "8c6b66ec950ea7ebe140e518761715f274de478a07b7e206118e7291c2f5e7a3",
+      "bytes": 4927
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/footer-note.mjs",
+      "sha256": "0c71b764cb514c4b0234b052d9b160c59925b9c2450cbbb8037dabf585054ce3",
+      "bytes": 4551
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/gateway-leak-before.json",
+      "sha256": "13f50135850f0ca096179fb9333e966b358261ae42dd4d61786d389395b0ccf7",
+      "bytes": 6650
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/gateway-leak.mjs",
+      "sha256": "aead0472315a683433b913412012ad5da2c8726092a539478518c220e1da5377",
+      "bytes": 4371
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/sheet-facts.json",
+      "sha256": "7f2d4eeb516c15ec5a21da86e8ae659de06952d5495e5b422a3670cf84e36b54",
+      "bytes": 13634
+    },
+    {
+      "path": "docs/audits/2026-09-13-lx6/sheet-facts.mjs",
+      "sha256": "e4872d1962b157c1082ac48c35c4dd7923a5e6c780ce8b4a1eefb8a146e435b6",
+      "bytes": 6531
+    }
+  ]
+}

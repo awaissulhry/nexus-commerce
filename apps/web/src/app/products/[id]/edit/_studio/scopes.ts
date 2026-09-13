@@ -22,17 +22,15 @@ import type {
  * orthography and the console spells it that way everywhere else; anything not listed falls back
  * to Title Case rather than being shown as a database constant.
  */
-const CHANNEL_LABELS: Record<string, string> = {
-  AMAZON: 'Amazon',
-  EBAY: 'eBay',
-  SHOPIFY: 'Shopify',
-  WOOCOMMERCE: 'WooCommerce',
-  ETSY: 'Etsy',
-}
-
-export function channelLabel(channel: string): string {
-  return CHANNEL_LABELS[channel] ?? channel.charAt(0) + channel.slice(1).toLowerCase()
-}
+// LX.F P2-15 — ONE definition, in `@nexus/shared/channel-label`, now that the API's
+// acknowledgement labels need the same names (they carried the four-way chain twice,
+// which labelled any fifth channel "Etsy"). Re-exported here so this module's callers
+// are unchanged and nobody grows a second map.
+// 🔴 A bare `export { x } from` re-exports WITHOUT binding `x` in this module — lines ~104 and ~130 call
+// `channelLabel(...)` here, and the bare form left every studio route on the error boundary
+// (`ReferenceError: channelLabel is not defined`, web tsc TS2304 ×2, 2026-09-13 08:40). Import, then re-export.
+import { channelLabel, CHANNEL_LABELS } from '@nexus/shared/channel-label'
+export { channelLabel, CHANNEL_LABELS }
 
 /**
  * `Intl.DisplayNames` turns `IT` into `Italy` and `it` into `Italian` — the browser's own CLDR
@@ -58,6 +56,17 @@ function displayName(kind: 'region' | 'language', code: string): string | null {
 export function marketLabel(code: string): string {
   const name = displayName('region', code)
   return name ? `${code} · ${name}` : code
+}
+
+export function languageLabel(code: string): string {
+  return displayName('language', code) ?? code
+}
+
+/** Configured source language is a server fact, separate from any market. */
+export function primaryLanguageFrom(grouped: unknown): string | null {
+  if (!grouped || typeof grouped !== 'object') return null
+  const meta = (grouped as { _meta?: { primaryLanguage?: unknown } })._meta
+  return typeof meta?.primaryLanguage === 'string' && /^[a-z]{2,3}$/.test(meta.primaryLanguage) ? meta.primaryLanguage : null
 }
 
 export function localeLabel(code: string): string {
@@ -98,32 +107,37 @@ export function flattenGrouped(grouped: unknown): MarketplaceLite[] {
         code,
         name: typeof row.name === 'string' ? row.name : `${channelLabel(channel)} ${code}`,
         language: typeof row.language === 'string' ? row.language : '',
-        languages: Array.isArray(row.languages) ? row.languages.filter((value): value is string => typeof value === 'string') : typeof row.language === 'string' ? [row.language] : [],
+        ...(row.isParticipating === null || typeof row.isParticipating === 'boolean' ? { isParticipating: row.isParticipating } : {}),
+        ...(row.participationStatus === null || typeof row.participationStatus === 'string' ? { participationStatus: row.participationStatus } : {}),
+        ...(row.participationCheckedAt === null || typeof row.participationCheckedAt === 'string' ? { participationCheckedAt: row.participationCheckedAt } : {}),
+        languages: Array.isArray(row.languages) ? row.languages.filter((value): value is string => typeof value === 'string') : [],
       })
     }
   }
   return out
 }
 
-export function deriveScopeOptions(marketplaces: MarketplaceLite[]): StudioScopeOptions {
+export function deriveScopeOptions(marketplaces: MarketplaceLite[], primaryLanguage?: string | null): StudioScopeOptions {
   const channelMarkets = new Map<string, Set<string>>()
   const marketChannels = new Map<string, Set<string>>()
-  const languages = new Set<string>()
+  const languages = new Set<string>(primaryLanguage ? [primaryLanguage] : [])
 
   for (const m of marketplaces) {
-    for (const language of m.languages ?? (m.language ? [m.language] : [])) languages.add(language.toLowerCase())
+    for (const language of m.languages ?? []) languages.add(language.toLowerCase())
     if (!marketChannels.has(m.code)) marketChannels.set(m.code, new Set())
-    if (m.connected === false) continue
+    if (m.accounts !== undefined ? m.accounts.length === 0 : m.connected === false) continue
     if (!channelMarkets.has(m.channel)) channelMarkets.set(m.channel, new Set())
     channelMarkets.get(m.channel)!.add(m.code)
     if (!marketChannels.has(m.code)) marketChannels.set(m.code, new Set())
     marketChannels.get(m.code)!.add(m.channel)
-    for (const language of m.languages ?? (m.language ? [m.language] : [])) languages.add(language.toLowerCase())
   }
 
   const channels: ChannelOption[] = [...channelMarkets.keys()]
     .sort(byChannelOrder)
-    .map((id) => ({ id, label: channelLabel(id), markets: [...channelMarkets.get(id)!].sort() }))
+    .map((id) => {
+      const health = marketplaces.find(m => m.channel === id)?.connectionHealth
+      return { id, label: channelLabel(id), markets: [...channelMarkets.get(id)!].sort(), ...(health == null ? {} : { health }) }
+    })
 
   const markets: MarketOption[] = [...marketChannels.keys()]
     .sort()
@@ -134,7 +148,7 @@ export function deriveScopeOptions(marketplaces: MarketplaceLite[]): StudioScope
     }))
 
   const locales: LocaleOption[] = [...languages]
-    .sort()
+    .sort((a, b) => a === primaryLanguage ? -1 : b === primaryLanguage ? 1 : a.localeCompare(b))
     .map((code) => ({ code, label: localeLabel(code) }))
 
   return { channels, markets, locales }
@@ -182,17 +196,15 @@ export function defaultMarket(options: StudioScopeOptions): string | null {
   )[0].code
 }
 
-/**
- * The content locale a market implies: the language its marketplaces are configured with.
- *
- * Locale is still its OWN control — master content is stored per language and an operator can
- * legitimately edit the French copy while scoped to market IT — but the market's own language is
- * where a session starts, and it is the only defensible default.
- */
-export function defaultLocaleFor(market: string, marketplaces: MarketplaceLite[], channel?: string): string | null {
-  const selectedChannel = channel ?? deriveScopeOptions(marketplaces).markets.find(option => option.code === market)?.channels[0]
-  const row = marketplaces.find(m => m.channel === selectedChannel && m.code === market)
-  return row?.languages?.[0] ?? row?.language ?? null
+/** Ordered languages supplied by the API's marketLanguages() projection. No cross-channel default. */
+export function scopeLanguages(scope: string, market: string | null, marketplaces: MarketplaceLite[], primaryLanguage: string | null): string[] {
+  return scope === 'master'
+    ? deriveScopeOptions(marketplaces, primaryLanguage).locales.map(option => option.code)
+    : marketplaces.find(row => row.channel === scope && row.code === market)?.languages ?? []
+}
+
+export function defaultLocaleFor(market: string, marketplaces: MarketplaceLite[], channel: string): string | null {
+  return scopeLanguages(channel, market, marketplaces, null)[0] ?? null
 }
 
 /** Is this channel actually sold in this market? A chip outside its markets is disabled, not hidden. */
@@ -215,6 +227,14 @@ export function channelServesMarket(
  * 🔴 `variants` is offered on EVERY scope, and deliberately: the Variants page is one page re-projected by
  * the scope bar (variants spec §1.1), so a channel reaches its projection through its scope chip, never
  * through a second navigation item (§1.2).
+ *
+ * 🔴 `matrix` is offered on EVERY scope for the SAME reason and a stronger one: it is ONE state showing
+ * every coordinate at once, and the scope bar FILTERS the coordinate groups on it — `master` shows them all,
+ * a channel chip narrows to that channel's groups, the market listbox narrows further
+ * (`docs/2026-09-13-matrix-page-design.md` Revision). So it needs no clause here, and that absence is the
+ * rule rather than an omission: a scope that stopped offering `matrix` would have no way to its own
+ * coordinate's offer cells at all. The filter itself is the page's (`matrix/filters.ts`, pure and tested) —
+ * this function decides which TASKS a scope offers, never what a task shows.
  */
 export function visibleTabs(scope: StudioScopeId): StudioTabId[] {
   // The sidebar and URL reader share availability. Presentation uses eBay’s existing services.

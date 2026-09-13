@@ -1,3 +1,4 @@
+import { categorySchemaMarkets } from './categories/category-schema-coordinate.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { Prisma } from '@prisma/client'
 import prisma from '../db.js'
@@ -54,7 +55,9 @@ export async function presentationOrderInputs(destination: PresentationDestinati
     db.marketplace.findUnique({ where: { channel_code: workspaceKey({ channel: 'EBAY', code: marketplace }) }, select: { schemaMapping: true } }),
     db.channelConnection.findUnique({ where: { id: channelConnectionId }, select: { id: true, isActive: true, channelType: true } }),
     aliasKey ? db.productListingAlias.findFirst({ where: { id: aliasKey, productId, channelConnectionId, marketplace, channel: 'EBAY', status: 'ACTIVE' }, select: { id: true, updatedAt: true } }) : null,
-    db.categorySchema.findMany({ where: { channel: 'EBAY', marketplace: { in: [marketplace, `EBAY_${marketplace}`] } }, orderBy: { id: 'asc' } }),
+    // LX.F2 R-LX-20 — this composed `EBAY_EBAY_IT` for a caller already holding `EBAY_IT` and then
+    // matched no row at all; the coordinate authority strips first.
+    db.categorySchema.findMany({ where: { channel: 'EBAY', marketplace: { in: categorySchemaMarkets('EBAY', marketplace) } }, orderBy: { id: 'asc' } }),
     db.categoryChannelMapping.findMany({ where: { channel: 'EBAY', marketplace: { in: [marketplace, '*'] } }, orderBy: { id: 'asc' } }),
     db.categoryClosure.findMany({ orderBy: [{ ancestorId: 'asc' }, { descendantId: 'asc' }] }),
   ])
@@ -137,12 +140,13 @@ export async function preparePresentationOrder(input: PresentationOrderSave) {
 
 /** Shared guarded writer. Mapping composes names and order in this transaction; no second order writer. */
 export async function writePresentationOrderInTransaction(tx: Prisma.TransactionClient, input: PresentationOrderSave,
-  view: Awaited<ReturnType<typeof readPresentationOrder>>, userId: string | null, axisNameLabels?: Record<string, string>) {
+  view: Awaited<ReturnType<typeof readPresentationOrder>>, userId: string | null, axisNameLabels?: Record<string, string>, variationAxes?: string[]) {
   const destination: PresentationDestination = { productId: view.productId, marketplace: view.marketplace, channelConnectionId: view.channelConnectionId, aliasKey: view.aliasKey }
     const current = await presentationOrderInputs(destination, tx)
     if (current.token !== input.expectedToken || current.listing.version !== input.expectedVersion) throw new MappingConflict('The reviewed destination changed before saving')
     const attrs = changePresentationOrder(current.listing.platformAttributes, input.change, view.axes)
     if (axisNameLabels) attrs._axisNameLabels = axisNameLabels
+    if (variationAxes) { attrs._variationAxes = variationAxes; attrs._variationAxesMode = 'override' }
     attrs[ORDER_RECEIPT] = { version: input.expectedVersion + 1, savedAt: new Date().toISOString(), publication: 'separate' }
     const saved = await tx.channelListing.updateMany({ where: { id: current.listing.id, version: input.expectedVersion, platformAttributes: { equals: current.listing.platformAttributes ?? Prisma.DbNull } }, data: { platformAttributes: attrs as Prisma.InputJsonValue, version: { increment: 1 } } })
     if (saved.count !== 1) throw new MappingConflict('Another change won this listing. Reload before saving')

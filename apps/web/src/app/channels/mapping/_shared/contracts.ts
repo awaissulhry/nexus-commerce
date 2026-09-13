@@ -288,3 +288,131 @@ export function isCategoryField(fieldKey: string, channel?: string): boolean {
   if (channel === 'SHOPIFY') return false
   return fieldKey === 'productType' || fieldKey === 'categoryId'
 }
+
+// ── VT.3 — the Variations group (design §3.7 · VX §11.1) ───────────
+// The rule block that VX M2 stores at `MarketplaceSchemaMapping.variations` (channel wide) and
+// `byProductType[<category>].variations` (per channel category). These types mirror the wire shape
+// requested from VT.1 in `docs/pes-claims.md` (`GET`/`PUT /pim/channel-mapping/:channel/:code/
+// variations[/:categoryId]`). EVERY count on the group comes from here — the page computes none of
+// them, because a number the page adds up is a number the wire and the screen can disagree about.
+
+export type VariationRuleSource = 'rule' | 'derived' | 'none'
+export type CollisionResolverKind = 'split' | 'fold' | 'exclude'
+export type ListingSplitMode = 'one' | 'per-axis'
+
+export interface VariationRuleAxis {
+  axisKey: string
+  /** English label — Nexus vocabulary, what the operator already knows. */
+  label: string
+  /** What the channel DELIVERS: Amazon's bound-attribute title, the eBay site aspect, the Shopify option. */
+  channelName: string
+  /** Amazon: the theme segment's attribute. eBay: the aspect. Shopify/Etsy: the option. */
+  target: string | null
+  included: boolean
+}
+
+export interface VariationThemeOption {
+  code: string
+  label: string
+  /** True when every one of the family's axes survives this choice. */
+  coversAll: boolean
+  /** axisKeys this choice DROPS. Empty when `coversAll`. */
+  drops: string[]
+  deprecated: boolean
+}
+
+export interface VariationValueMapCount {
+  axisKey: string
+  label: string
+  mapped: number
+  unreviewed: number
+}
+
+/**
+ * The Variations group's whole wire payload for one channel × market × category.
+ *
+ * `source` is the SERVER's answer, never inferred from `rule === null` on the page: "no rule, the
+ * derived theme applies" and "no rule and nothing derives either" are different sentences and the
+ * group prints different copy for them.
+ */
+export interface VariationRuleView {
+  channel: string
+  market: string
+  /** null = the channel-wide rule (no category selected). */
+  categoryId: string | null
+  /** What the Rule line names: the Amazon product type, the eBay category, the Shopify product type. */
+  categoryLabel: string
+  source: VariationRuleSource
+  /** Non-null only when `source === 'rule'`. Never composed by the page. */
+  ruleLabel: string | null
+  /**
+   * design §3.7's one addition: with no rule, the derivation for this category's most common axis
+   * set — "colour × size → COLOR/SIZE on 9 of 9 families".
+   */
+  derivation: {
+    axisSummary: string
+    themeCode: string | null
+    themeLabel: string | null
+    families: number
+    familiesTotal: number
+  } | null
+  counts: {
+    follow: number
+    override: number
+    collide: number
+    /** The blast radius the save simulation answers with: families that WOULD gain a collision. */
+    wouldCollide: number
+    total: number
+  }
+  /** Amazon only (the product type's own enum). `null` on every other channel. */
+  theme: { code: string | null; label: string | null; options: VariationThemeOption[] } | null
+  axes: VariationRuleAxis[]
+  /** axisKeys not delivered here, named — never silent (VX §6). */
+  dropped: string[]
+  collisions: {
+    resolver: CollisionResolverKind
+    foldInto: string | null
+    foldSeparator: string
+    resolvers: Array<{ kind: CollisionResolverKind; available: boolean; reason: string | null }>
+  }
+  split: { mode: ListingSplitMode; axisKey: string | null; available: boolean; reason: string | null }
+  valueMaps: VariationValueMapCount[]
+  /** Server-stated sentence — who names an axis on each channel (VX §7). */
+  axisNamesSentence: string
+  previewSkus: PreviewSku[]
+  /** Non-null = this rule cannot be saved; the sentence says why. The controls stay, the save does not. */
+  writeBlockedReason: string | null
+  /** CAS token for the PUT, the same vocabulary the field rules use. */
+  expectedToken: string
+  /**
+   * R-VT-2 (a), served by VT.1b: stored keys the read did NOT recognise, named. `[]` on this
+   * catalogue today. The group prints them, because the whole point of R-VT-2 is that an
+   * unrecognised key must be VISIBLE rather than silently costing the marketplace its rule set.
+   */
+  mappingWarnings?: string[]
+  /**
+   * The channel's own noun for the section title. VT.1b serves `{ sectionTitle }` alone; the two
+   * noun fields the CELL contract also carries are optional here because this surface never reads
+   * them — requiring them would have made the live payload fail to type on arrival.
+   */
+  vocabulary?: { sectionTitle: string; axisNoun?: string; axisNounPlural?: string }
+}
+
+/** The body the group PUTs. `dryRun: true` is the blast-radius simulation that runs before a commit. */
+export interface VariationRuleWrite {
+  expectedToken: string
+  dryRun: boolean
+  rule: {
+    theme: string | null
+    axes: Array<{ axisKey: string; target: string | null; order: number; included: boolean }>
+    collisions: { resolver: CollisionResolverKind; foldInto: string | null; foldSeparator: string }
+    split: { mode: ListingSplitMode; axisKey: string | null }
+  } | null
+}
+
+/** What a `dryRun` PUT answers with. `jobId` is present only on the committing call. */
+export interface VariationRuleSimulation {
+  follow: number
+  wouldCollide: number
+  jobId?: string
+}

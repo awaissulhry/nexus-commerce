@@ -1,0 +1,36 @@
+
+> @nexus/api@1.0.0 test
+> vitest run src/services/pim/content-write.vitest.test.ts --reporter=default
+
+
+ RUN  v4.1.5 /Users/awais/nexus-commerce/apps/api
+
+stdout | src/services/pim/content-write.vitest.test.ts
+◇ injected env (12) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+◇ injected env (28) from ../../.env // tip: ◈ encrypted .env [www.dotenvx.com]
+
+ ❯ src/services/pim/content-write.vitest.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/services/pim/content-write.vitest.test.ts [ src/services/pim/content-write.vitest.test.ts ]
+Error: [vitest] There was an error when mocking a module. If you are using "vi.mock" factory, make sure there are no top level variables inside, since this call is hoisted to top of the file. Read more: https://vitest.dev/api/vi.html#vi-mock
+ ❯ src/db.ts:7:1
+      5| // that sent tsx scripts to localhost instead of the configured databa…
+      6| import "./env.js";
+      7| import prisma from "@nexus/database";
+       | ^
+      8| import { contextualDatabase } from './lib/database-context.js';
+      9|
+
+Caused by: Error: listen EPERM: operation not permitted 127.0.0.1
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'EPERM', errno: -1, syscall: 'listen', address: '127.0.0.1' }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  no tests
+   Start at  15:12:27
+   Duration  2.89s (transform 140ms, setup 0ms, import 0ms, tests 0ms, environment 0ms)
+

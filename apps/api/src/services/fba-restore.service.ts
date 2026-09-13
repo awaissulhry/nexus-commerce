@@ -17,6 +17,8 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  * amazonSpApiClient.submitListingPayload().
  */
 
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { closedMarketSet } from './amazon-market-offer.service.js'
 import prisma from '../db.js'
 import { amazonSpApiClient } from '../clients/amazon-sp-api.client.js'
 import { logger } from '../utils/logger.js'
@@ -72,15 +74,11 @@ export async function restoreFbaListings(options?: {
       ...(skus?.length ? { product: { sku: { in: skus } } } : {}),
       ...(marketplaces?.length ? { marketplace: { in: marketplaces } } : {}),
     },
-    select: {
-      id: true,
-      marketplace: true,
-      platformAttributes: true,
-      product: { select: { id: true, sku: true, productType: true } },
-    },
+    include: { product: { select: { id: true, sku: true, productType: true } } },
     orderBy: { id: 'asc' },
   })
 
+  const closed = await closedMarketSet(listings.map(row => row.product.id))
   const results: FbaRestoreItemResult[] = []
   let processed = 0, sent = 0, skippedNoFba = 0
 
@@ -121,6 +119,11 @@ export async function restoreFbaListings(options?: {
       ],
     }
 
+    const refusal = assertPushAllowed({ ...cl, offerClosedAt: cl.offerClosedAt ?? (closed.has(`${cl.product.id}|${cl.marketplace}`) ? 'closed' : null) })
+    if (refusal) {
+      results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun, ok: false, error: `${refusal.code}: ${refusal.sentence}` })
+      continue
+    }
     if (dryRun) {
       results.push({ sku, marketplace: cl.marketplace, productType: payload.productType, dryRun: true })
       continue

@@ -45,12 +45,12 @@ describe('encodeCellKey / decodeCellKey', () => {
   it('keeps an alias and a locale distinguishable in the same key', () => {
     // The whole reason the optional segments are sigilled: without them, a
     // two-segment tail could not say which of the two it was.
-    const withAlias = encodeCellKey({ channel: 'EBAY', marketplace: 'IT', aliasId: '2', locale: null, writeField: 'ebay_title' })
-    const withLocale = encodeCellKey({ channel: 'EBAY', marketplace: 'IT', aliasId: null, locale: '2', writeField: 'ebay_title' })
+    const withAlias = encodeCellKey({ channel: 'EBAY', marketplace: 'IT', aliasId: 'de', locale: null, writeField: 'ebay_title' })
+    const withLocale = encodeCellKey({ channel: 'EBAY', marketplace: 'IT', aliasId: null, locale: 'de', writeField: 'ebay_title' })
     expect(withAlias).not.toBe(withLocale)
-    expect(decodeCellKey(withAlias).aliasId).toBe('2')
+    expect(decodeCellKey(withAlias).aliasId).toBe('de')
     expect(decodeCellKey(withAlias).locale).toBeNull()
-    expect(decodeCellKey(withLocale).locale).toBe('2')
+    expect(decodeCellKey(withLocale).locale).toBe('de')
     expect(decodeCellKey(withLocale).aliasId).toBeNull()
   })
 

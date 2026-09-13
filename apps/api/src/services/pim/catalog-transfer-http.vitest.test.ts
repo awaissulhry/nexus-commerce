@@ -7,7 +7,11 @@ import { importTestStore, fixtureColumns, fixtureFields } from './catalog-transf
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
 const state = vi.hoisted(() => ({ store: null as unknown as ReturnType<typeof importTestStore> }))
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_target, key) => state.store.db[key as string] }) }))
-vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: async () => ({ columns: fixtureColumns }), clearSheetColumnCache: vi.fn() }))
+// LX.F R-LX-13 — LX.5's readiness producer asks this module for the coordinate
+// set (`readiness-index.service.ts` → `coordinatesFor`), so the mock must export it.
+vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: async () => ({ columns: fixtureColumns }), clearSheetColumnCache: vi.fn(),
+  coordinatesFor: (market: string, markets: { channel: string; code: string; languages?: string[] }[] = []) =>
+    markets.filter(m => m.code === market).map(m => ({ channel: m.channel, marketplace: m.code, label: `${m.channel} · ${m.code}`, inMarket: true, languages: m.languages ?? ['it'] })) }))
 vi.mock('./mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } }), clearFieldCatalogueCache: vi.fn() }))
 vi.mock('./mapping/category-mapping.service.js', () => ({ resolveCategoriesForProducts: async ({ productIds }: { productIds: string[] }) => Object.fromEntries(productIds.map(id => [id, { channelCategoryId: 'COAT' }])) }))
 vi.mock('./catalog-source-fetch.js', () => ({ fetchCatalogSource: async (url: string) => {
@@ -64,7 +68,12 @@ it('runs multipart upload, source mapping, complete paginated HTTP review and ap
   expect((await app.inject({ method: 'POST', url: `${path}/apply`, payload: { reviewToken: review.reviewToken } })).statusCode).toBe(202)
   await vi.waitFor(async () => { expect((await get(path)).state).toBe('COMPLETED') })
   expect(state.store.data.product.get('p0')).toMatchObject({ name: 'HTTP shared', totalStock: 17, basePrice: 25 })
-  expect(state.store.data.channelListing.get('p0-account-a')).toMatchObject({ title: 'HTTP title', overrideData: { material: 'Protected cotton' } })
+  // LX.F2 R-LX-21 — the channel title lands on the PIN tier since LX.3; the legacy
+  // `ChannelListing.title` column keeps its pre-existing value and the override bag is
+  // untouched. Both halves asserted so neither store can silently take the other's traffic.
+  expect(state.store.data.channelListing.get('p0-account-a')).toMatchObject({ title: 'Sync snapshot', overrideData: { material: 'Protected cotton' } })
+  expect([...state.store.data.channelListingTranslation.values()].map((t: any) => ({ listing: t.channelListingId, language: t.language, name: t.name })))
+    .toEqual([{ listing: 'p0-account-a', language: 'it', name: 'HTTP title' }])
   expect((await get(`${path}/outcomes`)).rows.every((r: any) => r.status === 'SUCCESS')).toBe(true)
   expect((await app.inject({ url: `${path}/errors` })).headers['content-type']).toContain('text/csv')
 })
@@ -95,9 +104,19 @@ it('applies one wide workbook to independent languages, accounts and marketplace
   expect(review.counts.changed).toBe(4)
   expect((await app.inject({ method: 'POST', url: `${path}/apply`, payload: { reviewToken: review.reviewToken } })).statusCode).toBe(202)
   await vi.waitFor(async () => expect((await get(path)).state).toBe('COMPLETED'))
-  expect(state.store.data.product.get('p1')).toMatchObject({ name: stored.name, localizedContent: { it: { title: 'Giacca italiana' }, de: { title: 'Deutsche Jacke' } }, basePrice: 25, totalStock: 17 })
-  expect(state.store.data.channelListing.get('p1-account-a')?.title).toBe('Titolo Amazon')
-  expect(state.store.data.channelListing.get('p1-account-b')?.title).toBe('Titre Amazon')
+  // LX.F2 R-LX-21 — the four writes now land where LX routes them, and the assertions say so.
+  // `it` IS the primary content language (`PRIMARY_CONTENT_LOCALE`), so its sheet writes the
+  // SOURCE tier — `Product.name` — while `de` writes the LANGUAGE tier (`ProductTranslation`)
+  // and each channel override writes the PIN tier (`ChannelListingTranslation.name` for that
+  // coordinate's own language). `Product.localizedContent` is retired (design Appendix C, LX.6)
+  // and the legacy `ChannelListing.title` column is no longer written (LX.3) — both asserted,
+  // so a silent return to either store fails here. Measured 2026-09-13 10:05.
+  expect(state.store.data.product.get('p1')).toMatchObject({ name: 'Giacca italiana', localizedContent: {}, basePrice: 25, totalStock: 17 })
+  expect([...state.store.data.productTranslation.values()].filter((t: any) => t.productId === 'p1').map((t: any) => ({ language: t.language, name: t.name }))).toEqual([{ language: 'de', name: 'Deutsche Jacke' }])
+  expect([...state.store.data.channelListingTranslation.values()].filter((t: any) => t.channelListingId.startsWith('p1-')).map((t: any) => ({ listing: t.channelListingId, language: t.language, name: t.name })))
+    .toEqual([{ listing: 'p1-account-a', language: 'it', name: 'Titolo Amazon' }, { listing: 'p1-account-b', language: 'fr', name: 'Titre Amazon' }])
+  expect(state.store.data.channelListing.get('p1-account-a')?.title).toBe('Sync snapshot')
+  expect(state.store.data.channelListing.get('p1-account-b')?.title).toBe('Sync snapshot')
   // Reusing the old workbook cannot overwrite these newer record versions.
   const stale = await app.inject({ method: 'POST', url: '/api/catalog-transfer/preview', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
   await vi.waitFor(async () => expect((await get(`/api/catalog-transfer/jobs/${stale.json().jobId}`)).state).toBe('INVALID'))

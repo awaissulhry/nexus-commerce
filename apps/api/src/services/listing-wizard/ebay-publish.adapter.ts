@@ -1,5 +1,6 @@
 import { marketLanguages, languageTag } from '../pim/market-languages.js'
 import { assertLegacyPresentationPublishAllowed } from '../ebay-presentation-consumer.service.js'
+import { assertListingContentReviewed } from '../pim/publish-review-gate.js'
 /**
  * DD.4 — eBay publish adapter (Inventory API).
  *
@@ -293,6 +294,10 @@ export class EbayPublishAdapter {
 
     try { await assertLegacyPresentationPublishAllowed({ sku: payload.sku, marketplace: payload.marketplaceId }) }
     catch (e) { return { ok: false, sku: payload.sku, failedStep: 'presentationReview', error: e instanceof Error ? e.message : String(e) } }
+
+    // D7 / R-LX-7 — the one review verdict, beside the presentation one.
+    try { await assertListingContentReviewed({ sku: payload.sku, channel: 'EBAY', marketplace: payload.marketplaceId ?? null }) }
+    catch (e) { return { ok: false, sku: payload.sku, failedStep: 'contentReview', error: e instanceof Error ? e.message : String(e) } }
 
     // MAP.3 — DECLARED. The old comment said multi-account "keys off
     // marketplaceId once that lands"; it does not — marketplace and account are

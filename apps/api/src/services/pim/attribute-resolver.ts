@@ -1,31 +1,6 @@
-/**
- * PIM A.1 — Attribute resolver.
- *
- * Single read-path for "what is the value of attribute K for this
- * (product, variant?, channel?, marketplace?, locale?)". Layers values
- * from master → variant → channel-override → explicit *Override
- * columns, returning per-key provenance so the UI can render
- * inheritance (gray = inherited, bold = own) without a second pass.
- *
- * Pure: takes already-loaded entities, returns merged shape. No DB
- * access here — callers load via Prisma, batch as needed, pass in.
- *
- * Merge precedence, lowest → highest:
- *   1. Parent Product.categoryAttributes        (master truth)
- *   2. Parent Product.localizedContent[locale]
- *   3. Parent Product.localizedContent['en']    (locale fallback)
- *   4. Variant Product own values               (variantAttributes,
- *                                                categoryAttributes,
- *                                                localizedContent)
- *   5. ChannelListing.overrideData              (channel JSONB bag)
- *   6. ChannelListing explicit overrides        (titleOverride,
- *                                                priceOverride, etc.)
- *                                                — respecting the
- *                                                followMasterX flag.
- *
- * For SSOT-tracked fields (title, description, price, quantity,
- * bulletPoints), step 6 only applies when followMasterX === false.
- * When followMasterX === true, the master value from step 1-4 wins.
+/** Factual attributes keep the parent/variant/channel cascade.
+ * Localizable content is overlaid once by resolveContent (pin → language → source → computed).
+ * The legacy Product JSON and outbound attribute bags never supply content values.
  */
 
 // ────────────────────────────────────────────────────────────────────
@@ -34,27 +9,38 @@
 
 /** Origin of a resolved value. UI uses this to style inheritance. */
 import { ALLOWED_MASTER_FIELDS } from './master-field-gate.js'
-import { contentSlots, contentReviewState, PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
+import { normalizeLanguage } from './content-language.js'
+import { resolveContentAttributes } from './content-read.js'
+import type { Coordinate, ResolvedContent } from './content-resolver.js'
 import { canonicalVariantAxis } from './variant-attribute-keys.js'
 
 export type ValueSource =
   | 'master'           // came from parent Product.categoryAttributes
-  | 'masterLocale'     // came from parent Product.localizedContent
+  | 'masterLocale'     // shared ProductTranslation row
   | 'masterColumn'     // synthesized from a legacy Product column (A.4 compat layer)
   | 'variant'          // came from variant child Product
-  | 'variantLocale'    // came from variant child localizedContent
+  | 'variantLocale'    // variant ProductTranslation row
   | 'channelOverride'  // came from ChannelListing.overrideData
+  | 'channelSnapshot' // a following legacy listing value; drift, never an operator pin
   | 'channelExplicit'  // came from titleOverride / priceOverride / etc.
   | 'default'          // none of the above set a value
 
 /** Per-key resolution result. */
 export interface ResolvedValue<T = unknown> {
+  content?: ResolvedContent
   value: T | null
   source: ValueSource
   /** The Product/ChannelListing id this value came from. Null when
    *  source is 'default'. Used by error→editor deep linking to route
    *  the operator to the right entity. */
   inheritedFrom: string | null
+  language?: string
+  requested?: string
+  tier?: ResolvedContent['tier']
+  follows?: boolean
+  drift?: boolean
+  contentProvenance?: ResolvedContent['provenance']
   warnings?: string[]
   requestedLocale?: string
   effectiveLocale?: string
@@ -110,6 +96,8 @@ export interface ChannelListingLike {
 }
 
 export interface ResolveInput {
+  coordinate?: Coordinate
+  marketLanguages?: readonly string[]
   localizableKeys?: string[]
   /** The product (or variant child Product) being resolved. */
   product: ProductLike
@@ -119,7 +107,7 @@ export interface ResolveInput {
   /** Optional channel listing (channel × marketplace). When omitted,
    *  resolution stops at variant level. */
   channelListing?: ChannelListingLike | null
-  /** Locale code for localizedContent lookup. Defaults to 'en'. */
+  /** Requested language; defaults to PRIMARY_CONTENT_LOCALE. */
   locale?: string
   /** A.4 — Fill in missing keys from legacy Product columns
    *  (name → title, description → description, etc.). Default true.
@@ -136,7 +124,6 @@ export type ResolvedAttributes = Record<string, ResolvedValue>
 // Internal helpers
 // ────────────────────────────────────────────────────────────────────
 
-const DEFAULT_LOCALE = 'en'
 
 /** Mapping of SSOT-tracked field name → its follow-master flag +
  *  override column. Keeps the special-case logic in one table. */
@@ -158,10 +145,6 @@ const SYNTHESIS_MAP: Array<{
   resolverKey: string
   column: keyof ProductLike
 }> = [
-  { resolverKey: 'title',        column: 'name' },
-  { resolverKey: 'description',  column: 'description' },
-  { resolverKey: 'bulletPoints', column: 'bulletPoints' },
-  { resolverKey: 'keywords',     column: 'keywords' },
   { resolverKey: 'brand',        column: 'brand' },
   { resolverKey: 'manufacturer', column: 'manufacturer' },
   { resolverKey: 'basePrice',    column: 'basePrice' },
@@ -256,138 +239,34 @@ function applyCanonicalFacts(acc: ResolvedAttributes, product: ProductLike): voi
  * decides whether absence means "not applicable" or "use schema default".
  */
 export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
-  const {
-    product,
-    parent,
-    channelListing,
-    locale: requestedLocale = DEFAULT_LOCALE,
-    synthesize = true,
-  } = input
-  const locale = requestedLocale.toLowerCase()
+  const { product, parent, channelListing, synthesize = true } = input
+  const locale = normalizeLanguage(input.locale ?? PRIMARY_CONTENT_LOCALE)
   const acc: ResolvedAttributes = {}
-
-  // Legacy native content is explicitly attributed to the configured source
-  // language, including when it supplies fallback for another locale.
-  const doSynthesize = synthesize
-
-  // Layers 1-3 only apply when there's a parent (i.e. resolving a
-  // variant child). Top-level products skip straight to layer 4.
-  if (parent) {
-    // 0. Parent legacy-column synthesis (lowest precedence; any JSONB
-    //    layer for the same key in parent or variant overrides it).
-    if (doSynthesize) applySynthesisLayer(acc, parent, locale)
-    // 1. Parent categoryAttributes
-    applyLayer(acc, parent.categoryAttributes, 'master', parent.id)
-    if (synthesize) applyCanonicalFacts(acc, parent)
-    if (parent.countryOfOrigin) applyLayer(acc, { countryOfOrigin: parent.countryOfOrigin, country_of_origin: parent.countryOfOrigin }, 'masterColumn', parent.id)
-    // 2. Parent localizedContent[locale]
-    applyLayer(acc, contentSlots(parent)[locale], 'masterLocale', parent.id, locale)
-    // 3. Parent localizedContent['en'] (fallback when requested locale
-    //    didn't supply this key — applyLayer only writes if key absent
-    //    from layer, so we use a *missing-keys-only* merge here).
-    if (locale !== DEFAULT_LOCALE) {
-      applyLayerFallback(acc, contentSlots(parent)[DEFAULT_LOCALE], 'masterLocale', parent.id, locale)
-    }
+  // Language-independent facts retain their established parent/variant/override rules.
+  for (const owner of [parent, product]) {
+    if (!owner) continue
+    if (synthesize) applySynthesisLayer(acc, owner, locale)
+    if (owner === product) applyVariantLayer(acc, product)
+    applyLayer(acc, owner.categoryAttributes, owner === product && parent ? 'variant' : 'master', owner.id)
+    if (synthesize) applyCanonicalFacts(acc, owner)
+    if (owner.countryOfOrigin) applyLayer(acc, { countryOfOrigin: owner.countryOfOrigin, country_of_origin: owner.countryOfOrigin }, 'masterColumn', owner.id)
   }
-
-  // 4. Variant (or top-level product) own values. Variant-column
-  //    synthesis goes first as the lowest-precedence layer FOR THIS
-  //    entity — but it still beats every parent layer above, matching
-  //    "variant overrides master" semantics.
-  if (doSynthesize) applySynthesisLayer(acc, product, locale)
-  applyVariantLayer(acc, product)
-  applyLayer(acc, product.categoryAttributes, parent ? 'variant' : 'master', product.id)
-  if (synthesize) applyCanonicalFacts(acc, product)
-  if (product.countryOfOrigin) applyLayer(acc, { countryOfOrigin: product.countryOfOrigin, country_of_origin: product.countryOfOrigin }, 'masterColumn', product.id)
-  applyLayer(acc, contentSlots(product)[locale], parent ? 'variantLocale' : 'masterLocale', product.id, locale)
-  if (locale !== DEFAULT_LOCALE) {
-    applyLayerFallback(acc, contentSlots(product)[DEFAULT_LOCALE], parent ? 'variantLocale' : 'masterLocale', product.id, locale)
-  }
-
-  // The editor already uses shared default content when no localized value exists.
-  // Keep that same fallback in mapping/preview, with Master-column provenance.
-  if (synthesize) for (const key of ['description', 'bulletPoints', 'keywords'] as const) {
-    const present = (v: unknown) => v !== null && v !== undefined && v !== '' && (!Array.isArray(v) || v.length > 0)
-    if (acc[key] !== undefined) continue
-    const source = present(product[key]) ? product : parent && present(parent[key]) ? parent : null
-    if (source) acc[key] = { value: source[key]!, source: 'masterColumn', inheritedFrom: source.id,
-      requestedLocale: locale, effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: locale === PRIMARY_CONTENT_LOCALE ? 'current' : 'fallback' }
-  }
-
-  // One known historical alias: keep old origin facts usable until the native value is filled.
-  // A populated canonical origin always wins; provenance still identifies the original layer.
   if (synthesize) {
     const origin = acc.countryOfOrigin ?? acc.country_of_origin
     if (origin) { acc.countryOfOrigin = origin; acc.country_of_origin = origin }
   }
-
-  const localizedKeys = new Set(input.localizableKeys ?? [])
-  for (const owner of [parent, product]) if (owner) for (const slot of Object.values(contentSlots(owner))) {
-    for (const key of Object.keys(slot)) if (!key.startsWith('_')) localizedKeys.add(key)
-  }
-  for (const key of localizedKeys) {
-    if (acc[key]?.effectiveLocale) continue
-    const owner = Object.prototype.hasOwnProperty.call(contentSlots(product)[PRIMARY_CONTENT_LOCALE] ?? {}, key) ? product
-      : parent && Object.prototype.hasOwnProperty.call(contentSlots(parent)[PRIMARY_CONTENT_LOCALE] ?? {}, key) ? parent : null
-    if (owner) acc[key] = { value: contentSlots(owner)[PRIMARY_CONTENT_LOCALE][key], source: owner === parent ? 'masterLocale' : parent ? 'variantLocale' : 'masterLocale', inheritedFrom: owner.id }
-    const hit = acc[key]
-    if (hit) Object.assign(hit, { requestedLocale: locale, effectiveLocale: PRIMARY_CONTENT_LOCALE, translationState: locale === PRIMARY_CONTENT_LOCALE ? 'current' : 'fallback' })
-  }
-
-  // 5. Channel-level JSONB bag
   if (channelListing) {
     applyLayer(acc, channelListing.overrideData, 'channelOverride', channelListing.id)
-
-    // 6. Explicit *Override columns. SSOT pattern: follow flag controls
-    //    whether the override wins or the master value wins.
-    for (const ssot of SSOT_FIELDS) {
-      // Default behavior when followFlag isn't set on the row: TRUE
-      // (follow master). Mirrors the schema default.
-      const follows = (channelListing as unknown as Record<string, unknown>)[ssot.followFlag]
-      const followsMaster = follows === undefined ? true : Boolean(follows)
-      if (followsMaster) continue
-
-      // Operator broke inheritance: use the override column. Prefer
-      // *Override; fall back to the legacy direct column if the
-      // *Override field isn't present (covers older rows that never
-      // got migrated to the Phase 20 SSOT split).
-      const overrideValue = (channelListing as unknown as Record<string, unknown>)[ssot.overrideCol]
-      const directValue = ssot.directCol
-        ? (channelListing as unknown as Record<string, unknown>)[ssot.directCol]
-        : undefined
-      const winning = overrideValue !== undefined && overrideValue !== null
-        ? overrideValue
-        : directValue
-      if (winning === undefined) continue
-      acc[ssot.key] = { value: winning, source: 'channelExplicit', inheritedFrom: channelListing.id }
+    for (const ssot of SSOT_FIELDS.filter(field => ['price', 'quantity'].includes(field.key))) {
+      if ((channelListing as any)[ssot.followFlag] !== false) continue
+      const value = (channelListing as any)[ssot.overrideCol] ?? (ssot.directCol ? (channelListing as any)[ssot.directCol] : undefined)
+      if (value !== undefined) acc[ssot.key] = { value, source: 'channelExplicit', inheritedFrom: channelListing.id }
     }
   }
-
-  for (const [key, hit] of Object.entries(acc)) {
-    if (!hit.effectiveLocale || hit.translationState === 'fallback') continue
-    const owner = parent && hit.inheritedFrom === parent.id ? parent : product
-    hit.translationState = contentReviewState({ ...owner, parent: owner === product ? parent : null }, key, hit.effectiveLocale)
-  }
+  // Text has exactly one cascade. It overwrites any historical untagged text aliases in fact bags.
+  Object.assign(acc, resolveContentAttributes({ product, parent, listing: channelListing, coordinate: input.coordinate,
+    languages: input.marketLanguages, requested: locale, localizableKeys: input.localizableKeys }))
   return acc
-}
-
-/** Like applyLayer, but only writes keys that aren't already in the
- *  accumulator. Used for locale fallback (en fills gaps that the
- *  requested locale didn't provide). */
-function applyLayerFallback(
-  acc: ResolvedAttributes,
-  layer: Record<string, unknown> | null | undefined,
-  source: ValueSource,
-  inheritedFrom: string | null,
-  locale: string,
-): void {
-  if (!layer || typeof layer !== 'object') return
-  for (const [key, value] of Object.entries(layer)) {
-    if (value === undefined) continue
-    if (key in acc && acc[key].translationState !== 'fallback') continue
-    if (key.startsWith('_')) continue
-    acc[key] = { value, source, inheritedFrom, requestedLocale: locale, effectiveLocale: DEFAULT_LOCALE, translationState: 'fallback' }
-  }
 }
 
 /** Convenience wrapper: resolve and return a flat key→value map,

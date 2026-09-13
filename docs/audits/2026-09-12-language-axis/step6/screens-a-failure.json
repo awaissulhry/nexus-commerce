@@ -1,0 +1,133 @@
+{
+  "error": "AssertionError [ERR_ASSERTION]: {\"url\":\"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information\",\"documentWidth\":1440,\"viewport\":1440,\"rows\":[],\"headers\":[{\"id\":\"ag-Grid-SelectionColumn\",\"text\":\"                     \"},{\"id\":\"ag-Grid-AutoColumn\",\"text\":\"    Product            \"},{\"id\":\"productMedia\",\"text\":\"    Product media            \"},{\"id\":\"__productRole\",\"text\":\"    Product role            \"},{\"id\":\"__parentSku\",\"text\":\"    Parent SKU            \"},{\"id\":\"name\",\"text\":\"    Name *            \"},{\"id\":\"brand\",\"text\":\"    Brand            \"},{\"id\":\"manufacturer\",\"text\":\"    Manufacturer            \"}],\"marks\":[],\"scopeBar\":\"EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian (it)\",\"text\":\"ALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\\nXavia\\n—\\nC\\nGALE-JACKET-YELLOW-MEN-XS\\nGiallo · XS\\n10%\\n+5\\nChild\\nGALE-JACKET\\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\\nXavia\\n—\\nC\\nGALE-JACKET-YELLOW-MEN-XXL\\nGiallo · XXL\\n10%\\n+5\\nChild\\nGALE-JACKET\\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\\nXavia\\n—\\nC\\nGALE-JACKET-YELLOW-MEN-XXS\\nGiallo · XS\\n11%\\n+3\\nChild\\nGALE-JACKET\\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\\nXavia\\n—\\n21 rows\\nSaved column layout unavailable\\nRetry layout\"}",
+  "readings": [],
+  "requests": [
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 403
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 403
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 403
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 403
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 403
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 403
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 403
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 404
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    }
+  ],
+  "blocked": [],
+  "errors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "console: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:\n\n- A server/client branch `if (typeof window !== 'undefined')`.\n- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.\n- Date formatting in a user's locale which doesn't match the server.\n- External changing data without sending a snapshot of it along with the HTML.\n- Invalid HTML tag nesting.\n\nIt can also happen if the client has a browser extension installed which messes with the HTML before React loaded.\n\n%s%s https://react.dev/link/hydration-mismatch \n\n  ...\n    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>\n      <AppDevOverlayErrorBoundary globalError={[...]}>\n        <ReplaySsrOnlyErrors>\n        <DevRootHTTPAccessFallbackBoundary>\n          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>\n            <HTTPAccessFallbackErrorBoundary pathname=\"/products/...\" notFound={<NotAllowedRootHTTPFallbackError>} ...>\n              <RedirectBoundary>\n                <RedirectErrorBoundary router={{...}}>\n                  <Head>\n                  <__next_root_layout_boundary__>\n                    <LoadingBoundaryProvider loading={[...]}>\n                      <SegmentViewNode type=\"layout\" pagePath=\"layout.tsx\">\n                        <SegmentTrieNode>\n                        <link>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <script>\n                        <RootLayout>\n                          <html\n                            lang=\"en\"\n                            className=\"inter_19d2945c-module__e4KC9a__variable space_grotesk_e8d41e02-module__b-qUWW__...\"\n-                           data-theme=\"light\"\n                          >\n                  ...\n",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ]
+}

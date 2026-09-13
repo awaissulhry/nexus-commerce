@@ -1,0 +1,10 @@
+{
+  "start": "2026-09-12T19:14:20.170Z",
+  "finish": "2026-09-12T19:14:22.111Z",
+  "command": "node scripts/check-editor-open.mjs --strict",
+  "base": "http://localhost:3000",
+  "api": "http://localhost:8091",
+  "exitCode": 2,
+  "log": "editor-open-authenticated.log",
+  "sha256": "8dcff0a2ec7184239d375ccb60fe7e31a48d5687457118f1baf11bbf991f6d8c"
+}

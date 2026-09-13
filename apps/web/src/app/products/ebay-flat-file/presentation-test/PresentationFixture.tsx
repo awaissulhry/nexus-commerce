@@ -11,7 +11,7 @@ const accounts = [{ id: 'a', label: 'Fixture account a', primary: true }, { id: 
 const marketplaces = ['IT', 'DE'].map(code => ({ id: code, channel: 'EBAY', code, name: `eBay ${code}`, language: code === 'IT' ? 'it' : 'de', connected: true, accounts }))
 export function PresentationFixture() {
   const search = useSearchParams(), id = search.get('product') === 'f2' ? 'f2' : 'f1'
-  return <ToastProvider><StudioStateProvider key={id} product={{ id, sku: id.toUpperCase(), name: `Fixture family ${id}`, isParent: true, parentId: null, status: 'ACTIVE', productType: 'VARIATION', asin: null }} family={null} marketplaces={marketplaces}>
+  return <ToastProvider><StudioStateProvider key={id} product={{ id, sku: id.toUpperCase(), name: `Fixture family ${id}`, isParent: true, parentId: null, status: 'ACTIVE', productType: 'VARIATION', asin: null }} family={null} primaryLanguage="it" marketplaces={marketplaces}>
     <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)' }}><FixtureScope /><PresentationTab /></div>
   </StudioStateProvider></ToastProvider>
 }

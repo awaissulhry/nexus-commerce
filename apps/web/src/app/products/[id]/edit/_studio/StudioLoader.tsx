@@ -86,6 +86,7 @@ export function StudioLoader({ id }: { id: string }) {
       product={state.data.product}
       family={state.data.family}
       marketplaces={state.data.marketplaces}
+      primaryLanguage={state.data.primaryLanguage}
       marketplacesFailed={state.data.marketplacesFailed}
     />
   )

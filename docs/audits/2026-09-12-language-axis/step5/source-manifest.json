@@ -1,0 +1,205 @@
+[
+  {
+    "file": "packages/database/prisma/schema.prisma",
+    "mtime": "2026-09-12T21:24:01.325939+00:00",
+    "sha256": "3bf96b99bee3681f00a032afc3723bef0dbe5db5d3609c168f24d947b716b234",
+    "beforeSha256": "b4e46f92788bd19aa296720056488abdb5bdbd07da38885274e9eb0882d5595d",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/workspaces/model-ownership.json",
+    "mtime": "2026-09-12T21:24:40.363591+00:00",
+    "sha256": "9f20e63f890640f4bfe75080a74b738b0024b93512b245b2e0a6d77939cd8a6c",
+    "beforeSha256": "d09e960c5db9fe3813fffca08bf4a8b23402fc4bc02ba6b9137a4e4d973d0b23",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/workspaces/scoped-keys.json",
+    "mtime": "2026-09-12T21:24:40.364407+00:00",
+    "sha256": "8faa36ed3976919a8cad95b4388f8dc378b41bdf0bfa4dd5bd3f9fe641dba7f5",
+    "beforeSha256": "f83ba5b36c3123e4a0ed6f629efb4ce4f4944f2fc6dbf386018de19d2329d38b",
+    "kind": "changed"
+  },
+  {
+    "file": "packages/database/prisma/migrations/20260912_lx5_readiness_index/migration.sql",
+    "mtime": "2026-09-12T21:24:40.364661+00:00",
+    "sha256": "3e68da563016def960a125dfedffc0301c9c62080ab1a9a56c48f045f9bd86e0",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/lib/database-context.ts",
+    "mtime": "2026-09-12T21:24:41.199715+00:00",
+    "sha256": "8e77e32ff21d1ae4e060c8a9426e204413d8208050452034489408a5994238ff",
+    "beforeSha256": "b7c51a6a93a63460802666ab97e386beff54a61309f89c28bc74bc7a19a88543",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/readiness-index.service.ts",
+    "mtime": "2026-09-12T21:49:07.269927+00:00",
+    "sha256": "d6de5ca472e6518ec1a6913a9b95aa76f17304ba3e1ac576dd3edb99b10691f4",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/scope-readiness.service.ts",
+    "mtime": "2026-09-12T21:49:07.270111+00:00",
+    "sha256": "87f6523df25b4df0fcd83df1cf5dc066899682195fe54fb929a4a24e7af4e2b6",
+    "beforeSha256": "72c3c823e5471e709db870df4661d6542403c13021b27181c6b5b81e05be0d98",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/cached-schema-context.ts",
+    "mtime": "2026-09-12T21:24:41.182549+00:00",
+    "sha256": "94ff2f38a306a75e50aaf9e9257a114258218dc5e422f3d61417d5c7f665a19c",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-specs/index.ts",
+    "mtime": "2026-09-12T21:24:41.199094+00:00",
+    "sha256": "8b9db14899cc96940a9bf0b74da798a73692998cf8440391776f4ee3c6625c74",
+    "beforeSha256": "a7ecaeb3dd0937812134082f48d8de63c3e652fa67969aca085feb54f9063a8a",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-specs/shopify.ts",
+    "mtime": "2026-09-12T21:24:41.199235+00:00",
+    "sha256": "b1f28c9a1e3b0f5d7ef0b7693225c580e4b1bd2fa9ebaa2a65af56b5e057f9e1",
+    "beforeSha256": "038e21f0cc720ee50b3dfce0722536285b5f77b3a4b4b9b70093220db717ebb2",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/studio-columns.ts",
+    "mtime": "2026-09-12T21:24:41.199535+00:00",
+    "sha256": "e1fa4d55a75744fc2ea1fed09293c5d5203ba217872767a015aa8e3c5cdf5e98",
+    "beforeSha256": "e6b6b497a84e533bd16dc63b043f1a307f10a34ebb1cdee86755291af1c10e9a",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/master-content.service.ts",
+    "mtime": "2026-09-12T21:29:15.189435+00:00",
+    "sha256": "4aa7bbc293e08d63b645567fcccede3e5bed394be2ec7aac3d0288b51a783dab",
+    "beforeSha256": "ca3d08607e475466a1ad1e864746ae975b396ee7cb112d291108fa95225ca749",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-write.ts",
+    "mtime": "2026-09-12T21:29:15.189642+00:00",
+    "sha256": "4f2e71e90d41210aa08c24036508d4edc19f92c79722be4a24e13f63e9da3726",
+    "beforeSha256": "e4f4bc83ef1c1e6bc6aa6c0e68e94f22cb7d54861999b37337da68670eeea4e7",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/jobs/readiness-reconcile.job.ts",
+    "mtime": "2026-09-12T21:51:34.641398+00:00",
+    "sha256": "a420a34ef2391de18fe86bbcee676367872cfd572139357ca1c4943a13a39304",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/index.ts",
+    "mtime": "2026-09-12T21:29:15.206707+00:00",
+    "sha256": "94829a962c6e877a5553de5ba36a1669714f071f82a57cd443029d27940cbd34",
+    "beforeSha256": "ef593ec9ad697ec0d015d51702c019885aaf1080987eb8206c991e2c1ad7dcd4",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/products/bulk-edit.service.ts",
+    "mtime": "2026-09-12T21:29:15.190062+00:00",
+    "sha256": "d5b2feb54deff9763ef2dad9f05a081643b29994343766b522a47c236695b1ad",
+    "beforeSha256": "64fd5d9a6f58705bd11471f66f9e14517307bbf2e24832cf3547d99db30dccc0",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/readiness-model.ts",
+    "mtime": "2026-09-12T21:49:07.269740+00:00",
+    "sha256": "7ed99040f30fa3f89ca57bacee4c9eb678769274d1ec9b0e9600d096236ca026",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+    "mtime": "2026-09-12T21:33:17.243542+00:00",
+    "sha256": "9a86e2a6a8b87dde3e9f181024e8ff6d3d06ce4c554e6c81518b4b80c9f3e015",
+    "beforeSha256": "1d0785ae027be4dc09920600c507263762378437b612bf15cb89b0e7f978e088",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+    "mtime": "2026-09-12T21:33:17.244063+00:00",
+    "sha256": "13cf2aa3e5fc51ac82f1f3c1cdf8505bb42a07767e2ac48a42242952857d88cf",
+    "beforeSha256": "dc6b44a0972aff5b5335486dfeb920bf8bf974e21452e68f72dc13350ef3baa7",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/readiness.ts",
+    "mtime": "2026-09-12T21:33:17.243767+00:00",
+    "sha256": "0f966f298e50ac94d2cc9fcc22fa8853c6bd5e0bf8ef2a9e132701e400970206",
+    "beforeSha256": "764777c4500ca179dfef10416f7d4d3b422f0cdc980e9faeddc5c197008ef67d",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/readiness.vitest.test.ts",
+    "mtime": "2026-09-12T21:35:24.697095+00:00",
+    "sha256": "1e631075f0e69667bfe85a71450a1f64edc332bc3fccf0811bacab4ae39155a8",
+    "beforeSha256": "4e7d5d13e5871933509099db8a7273b4a82e76dc535caf3bb1846409b69ee149",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx",
+    "mtime": "2026-09-12T21:33:17.244349+00:00",
+    "sha256": "9ef7b4e5a8f7338ae45b0cd4a4970bbfb85d89012dff1ef562f741ddbf4a5004",
+    "beforeSha256": "8ee15e3b623705530f6e07b349465318066b520a3401cb5e84b1c6b9e5f47d62",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/channel-ops/ErrorsSyncTab.tsx",
+    "mtime": "2026-09-12T21:34:05.575975+00:00",
+    "sha256": "fd3438dbfebfd5158247f40050f2217af2094900c6034dbb01419ea198be7808",
+    "beforeSha256": "b317b9acd4c6d77a461c815b0e68b2911b4ead0dc0389a8e91041145f2bae7b3",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/channel-ops/ReadinessPanel.tsx",
+    "mtime": "2026-09-12T21:58:06.611076+00:00",
+    "sha256": "b3f211ac18de4bef68fb25fda7c2f56f75322a9e15cf4a481cb0cfcc88ac1476",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/channel-ops/readiness.module.css",
+    "mtime": "2026-09-12T21:55:52.524734+00:00",
+    "sha256": "c5940ae5b6ad3c0ec107b36fcf05565445acd2a1964cef9644d2b9c44f9820df",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/scope-readiness.vitest.test.ts",
+    "mtime": "2026-09-12T21:35:24.691127+00:00",
+    "sha256": "3226bf7bb1b8374b785041701e793ef5ad0c4de775fc7fb950a2d640f2235a79",
+    "beforeSha256": "ed121d7c056b5eded328153c29ebdfa93f36fbbddf463a9ddc307a5798ff5f7a",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/services/pim/readiness-index.vitest.test.ts",
+    "mtime": "2026-09-12T21:49:07.270505+00:00",
+    "sha256": "37ac87959ebd39302e9b4aa542c523abf1631ed3ad366e8d121ec243f094670f",
+    "beforeSha256": null,
+    "kind": "new"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-write.vitest.test.ts",
+    "mtime": "2026-09-12T21:39:27.875867+00:00",
+    "sha256": "fcf4b7d7802dc260de7d9714730a0ad88b1738763a5f70d05aaef5da0288aa29",
+    "beforeSha256": "e2f2c5e636927abe98207a6dc88b35ea3a06119b460e0c8faa083b91e0f81804",
+    "kind": "changed"
+  },
+  {
+    "file": "apps/api/src/jobs/readiness-reconcile.vitest.test.ts",
+    "mtime": "2026-09-12T21:50:39.202667+00:00",
+    "sha256": "5c0b9085535391bd19ecf552fe7912b2415deece447ace77a8a88fdf727d988b",
+    "beforeSha256": null,
+    "kind": "new"
+  }
+]

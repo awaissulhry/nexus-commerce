@@ -1,3 +1,6 @@
+import { contentListing } from './content-read.js'
+import { marketLanguages } from './market-languages.js'
+import { normalizeLanguage } from './content-language.js'
 /**
  * FM.14 — rule-change impact simulation.
  *
@@ -66,7 +69,8 @@ export async function simulateRuleChange(input: {
   limit?: number
   sampleSize?: number
 }): Promise<SimulateResult> {
-  const locale = input.locale ?? 'en'
+  const languages = await marketLanguages(input.channel, input.code)
+  const locale = normalizeLanguage(input.locale ?? languages[0])
   const limit = Math.min(input.limit ?? 300, 1000)
   const sampleSize = input.sampleSize ?? 20
 
@@ -80,7 +84,7 @@ export async function simulateRuleChange(input: {
     where,
     take: limit,
     orderBy: { id: 'asc' },
-    include: { product: true },
+    include: { translations: true, product: { include: { translations: true } } },
   })
   const capped = totalCandidates > listings.length
 
@@ -89,7 +93,7 @@ export async function simulateRuleChange(input: {
     ...new Set(listings.map((l) => l.product?.parentId).filter((x): x is string => !!x)),
   ]
   const parents = parentIds.length
-    ? await prisma.product.findMany({ where: { id: { in: parentIds } } })
+    ? await prisma.product.findMany({ where: { id: { in: parentIds } }, include: { translations: true } })
     : []
   const parentById = new Map(parents.map((p) => [p.id, p]))
 
@@ -111,6 +115,7 @@ export async function simulateRuleChange(input: {
       product: product as any,
       parent: parent as any,
       channelListing: l as any,
+      marketLanguages: languages,
       locale,
     })
     const { current, proposed, changed } = simulateFieldForCandidate({
@@ -118,7 +123,7 @@ export async function simulateRuleChange(input: {
       currentRule,
       proposedRule: input.rule,
       resolvedAttrs,
-      product: product as any,
+      product: { ...product, parent, contentListing: contentListing(product, l, undefined, languages) } as any,
       locale,
       transformCtx,
     })

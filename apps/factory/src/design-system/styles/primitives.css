@@ -31,7 +31,8 @@
   background: var(--nds-surface-hover);
 }
 .nds-btn:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
@@ -187,7 +188,7 @@
   /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
      composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
      already draw focus this way (measured 4.54:1 on the DS surfaces). */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 
@@ -258,6 +259,21 @@
   padding: 0 11px;
   font-size: var(--nds-font-size-sm);
   border-radius: var(--nds-radius-round);
+}
+/* R-LX-27 — icon only, because the alternative was a CLIPPED control. The words are not deleted:
+   `Pill` puts them in `.nds-vh`, so the accessible name is unchanged and the InfoTip the pill is
+   already wrapped in carries the sentence for the eye. `gap: 0` because there is nothing to space
+   from, and the horizontal padding drops to the square case — the glyph is 11px, so `md` lands at
+   11 + 2×8 = 27px against the 138.5px and 92.3px this replaces. The grid ENGINE decides WHEN
+   (`useToolbarStatusCompaction`); this class only says what it looks like. */
+.nds-pill.compact {
+  gap: 0;
+  padding-left: 7px;
+  padding-right: 7px;
+}
+.nds-pill.md.compact {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 /* ── Program / targeting badge ───────────────────────────────────── */
@@ -359,6 +375,8 @@
   border-color: var(--nds-border-strong);
 }
 .nds-field:focus-within {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
@@ -458,7 +476,8 @@
   border-color: var(--nds-border-strong);
 }
 .nds-select select:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
@@ -529,7 +548,7 @@
   /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
      composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
      already draw focus this way (measured 4.54:1 on the DS surfaces). */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 .nds-toggle:disabled {
@@ -803,7 +822,7 @@
   /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
      composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
      already draw focus this way (measured 4.54:1 on the DS surfaces). */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 .nds-seg-opt:disabled {
@@ -853,7 +872,7 @@
 /* Pressed state reads off aria-pressed, so the visual and the a11y tree cannot drift. */
 .nds-tbtn[aria-pressed='true'],
 .nds-tbtn[aria-expanded='true'] { background: var(--nds-surface-hover); color: var(--nds-text); }
-.nds-tbtn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-tbtn:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .nds-tbtn:disabled { pointer-events: none; opacity: .4; }
 
 .nds-tbtn-badge {
@@ -949,7 +968,7 @@
   background: none;
 }
 .nds-btn.inline:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -1054,7 +1073,8 @@
   border-color: var(--nds-border-strong);
 }
 .nds-fchip:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
@@ -1209,7 +1229,7 @@ button.nds-token > .t,
 }
 .nds-token > .x:focus-visible,
 .nds-token > button.t:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -2px;
   border-radius: var(--nds-radius-full);
 }
@@ -1294,7 +1314,7 @@ button.nds-token > .t,
   filter: brightness(0.96);
 }
 .nds-pill.btn:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 .nds-pill.btn:disabled {
@@ -1337,7 +1357,7 @@ button.nds-token > .t,
   cursor: default;
 }
 .nds-nstep > button:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -2px;
 }
 /* The dividers live on the INPUT, so they sit between the three parts without adding a border to
@@ -1360,7 +1380,7 @@ button.nds-token > .t,
   /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
      composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
      already draw focus this way (measured 4.54:1 on the DS surfaces). */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 /* The native spinner is ~13px, hover-only and unusable on touch — the ± buttons replace it. */
@@ -1462,7 +1482,7 @@ button.nds-token > .t,
 .nds-iconpick-opt:hover { background: var(--nds-surface-hover); }
 .nds-iconpick-opt.on { border-color: var(--nds-primary); background: var(--nds-wash-primary); }
 .nds-iconpick-opt:disabled { cursor: default; opacity: 0.5; }
-.nds-iconpick-opt:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-iconpick-opt:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 /* The glyph in a chip: the dot keeps its old shape, an icon sits on the text baseline. */
 .nds-tag-glyph { flex: none; }
 .nds-tag-glyph.dot { display: inline-block; border-radius: var(--nds-radius-round); }
@@ -1479,7 +1499,7 @@ button.nds-token > .t,
   transition: background 0.1s ease, color 0.1s ease;
 }
 .nds-expand:hover { background: var(--nds-surface-hover); color: var(--nds-text); }
-.nds-expand:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
+.nds-expand:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
 .nds-expand:disabled { cursor: default; opacity: 0.4; }
 
 /* ── Type utilities ─────────────────────────────────────────────────────────────────────────
@@ -1555,7 +1575,8 @@ button.nds-token > .t,
 /* The same focus and pressed treatment as `.nds-btn`, deliberately: this chip stands in a row of
    buttons, and a second focus idiom one control along is how a bar stops reading as one bar. */
 .nds-axischip:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }

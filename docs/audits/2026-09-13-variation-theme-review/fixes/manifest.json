@@ -1,0 +1,67 @@
+{
+  "date": "2026-09-13",
+  "environment": "local working tree; PostgreSQL nexus_development",
+  "validation": {
+    "apiTests": 227,
+    "apiFiles": 16,
+    "webTests": 202,
+    "webFiles": 11,
+    "typechecks": [
+      "api",
+      "web",
+      "factory"
+    ],
+    "publicationTested": false,
+    "deployed": false
+  },
+  "artifacts": [
+    {
+      "file": "README.md",
+      "sha256": "662b2d4c232aee43d0e5bb79537b537083a09af1762823a10a4e08351d763bea"
+    },
+    {
+      "file": "database-read.json",
+      "sha256": "751306af034b919b1beac751ca29a27e5ab4f8785e8e8521a5992b1109b21fc9"
+    },
+    {
+      "file": "editor-dark-desktop.png",
+      "sha256": "1adf606e73e231ac050bd22de82d87d791a1ba611efb6ae266f337c5a2ed27dc"
+    },
+    {
+      "file": "editor-dark-narrow.png",
+      "sha256": "0c101ab68098c62250f76b1d7d355c066521cc9a1d47103cd1f96f6d5b263059"
+    },
+    {
+      "file": "editor-ebay-narrow.png",
+      "sha256": "b4eb598ff4a80a6ce1341c653dce52e17d9762c5d93c8ef713da08fe267980cc"
+    },
+    {
+      "file": "editor-ebay.png",
+      "sha256": "96e499aff7c4b659d90c6c0ab78055a2e9305d59b0520a3e0cf9da1f15a18771"
+    },
+    {
+      "file": "editor-light-desktop.png",
+      "sha256": "1149f83f37f984e3e2ceb11eab63b32963dabd5cb9cd64c12074fd1b322f0581"
+    },
+    {
+      "file": "editor-light-narrow.png",
+      "sha256": "7b66fbd73b0fdc1292f37563d9968aba5caf1d1c1cafbfc9933a3cf3748d7d56"
+    },
+    {
+      "file": "local-read-results.json",
+      "sha256": "3cccfd7f9b38aae3386c131aa3095fa68820ab3fac5657701850cbc6689aad5f"
+    },
+    {
+      "file": "parity-checks.json",
+      "sha256": "e7ce3ea84334c97585aec056812da473435beb66a096d30d4725c1bb2a1076a3"
+    },
+    {
+      "file": "read-local.mjs",
+      "sha256": "e537000d2ac751113fcc817dde61bedc800b747e9d31913de39da0caaec32a04"
+    },
+    {
+      "file": "visual-checks.json",
+      "sha256": "7e49ea6d6ab95469776281e0d4f34a0bc1d1d71befdc7bee0829e79743071f12"
+    }
+  ]
+}

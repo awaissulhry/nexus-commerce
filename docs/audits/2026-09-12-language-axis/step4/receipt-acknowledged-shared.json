@@ -1,0 +1,27 @@
+{
+  "phase": "acknowledged-shared",
+  "writtenAt": "2026-09-12T14:58:51.547Z",
+  "readAt": "2026-09-12T14:59:11.938Z",
+  "delayMs": 20391,
+  "productVersion": [
+    1,
+    2
+  ],
+  "translationVersion": [
+    0,
+    1
+  ],
+  "listingVersion": [
+    18,
+    19
+  ],
+  "pinFollowMarkerVersion": 2,
+  "reviewedAt": "2026-09-12T14:58:51.344",
+  "legacyValuesUnchanged": true,
+  "queue": {
+    "count": 1,
+    "language": "de",
+    "heldUntil": "2099-01-01T00:00:00"
+  },
+  "providerAttempts": []
+}

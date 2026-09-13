@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 /**
  * Convert a LIVE eBay listing's variation AXIS NAMES to the operator's Italian
  * standard (Color→Colore, Size→Taglia) via ReviseFixedPriceItem.
@@ -119,6 +121,11 @@ export async function convertListingAxesToItalian(
   marketplace: string,
   ctx: { oauthToken: string },
 ): Promise<ConvertAxesResult> {
+  const pushControls = await readPushControls({ channel: 'EBAY', externalIds: [itemId] })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const siteId = siteIdForMarket(marketplace)
   const { vars, axisSet } = parseVariationsForRename((await callTradingApi('GetItem', GET_XML(itemId), { oauthToken: ctx.oauthToken, siteId })).raw)
   const renames = axisSet.map((a) => ({ from: a.name, to: italianAxisName(a.name) })).filter((r) => r.from !== r.to)

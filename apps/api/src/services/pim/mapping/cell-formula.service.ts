@@ -1,3 +1,11 @@
+import { inDatabaseTransaction } from '../../../lib/database-context.js'
+import { isLocalizableContent, contentField } from '../content-resolver.js'
+import { contentAddress, type ContentAddress } from '@nexus/shared/content-language'
+import { translationMissing } from '../content-resolver.js'
+import { contentListing } from '../content-read.js'
+import { normalizeLanguage, languageEntry } from '../content-language.js'
+import { marketLanguages } from '../market-languages.js'
+import { PRIMARY_CONTENT_LOCALE } from '../content-locale.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { formulaStorage, formulaStoragePatch } from './formula-storage.js'
 import { createHash } from 'node:crypto'
@@ -84,6 +92,8 @@ export const FORMULA_RECALC_ACTION = 'formula.recalc'
  * whenever wiring was forgotten.
  */
 export type FormulaFieldWriter = (args: {
+  contentAddress: ContentAddress
+  contentAcknowledged?: boolean
   productId: string
   /** The name that goes on the wire — `attr_color`, not `color`. */
   writeField: string
@@ -225,7 +235,7 @@ export type FormulaScope = 'master' | 'channel'
 /** Resolve legacy primary requests once; explicit accounts and aliases are never
  * replaced by a default. The ordinary writer rechecks ownership on mutation. */
 export async function assertFormulaListingScope(input: { locale?: string | null; productId?: string; scope?: string; channel?: string | null; marketplace?: string | null; aliasKey?: string | null; channelConnectionId?: string | null }) {
-  if (input.locale) input.locale = input.locale.toLowerCase()
+  if (input.locale) input.locale = normalizeLanguage(input.locale)
   if (input.scope === 'master' || !input.channel) {
     if (input.aliasKey || input.channelConnectionId) throw new Error('Shared formulas cannot target a channel account or listing.')
     return
@@ -250,6 +260,8 @@ export async function primaryFormulaListingWhere(productId: string, channel: str
 
 
 export interface CellCoordinate {
+  contentAddress?: ContentAddress
+  contentAcknowledged?: boolean
   aliasKey?: string | null
   channelConnectionId?: string | null
   productId: string
@@ -302,7 +314,7 @@ function toRow(r: any): CellFormulaRow {
     channelConnectionId: r.channelConnectionId || null, aliasKey: r.aliasKey ?? '',
     channel: orNull(r.channel),
     marketplace: orNull(r.marketplace),
-    locale: orNull(r.locale),
+    locale: r.locale ? normalizeLanguage(r.locale) : null,
     /** #732 — the sheet's market the formula was authored in; null on rows
      *  written before the column existed. */
     market: r.market ?? null,
@@ -322,11 +334,18 @@ const whereCoord = (c: CellCoordinate) => ({
     scope: c.scope,
     channel: s(c.channel),
     marketplace: s(c.marketplace),
-    locale: s(c.locale),
+    locale: c.locale ? normalizeLanguage(c.locale) : '',
     channelConnectionId: s(c.channelConnectionId), aliasKey: s(c.aliasKey),
     fieldKey: c.fieldKey,
   }),
 })
+
+/** Existing regional rows are addressed in memory; their stored keys are never folded. */
+async function findFormulaAt(input: CellCoordinate) {
+  const { locale, ...where } = whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey
+  const rows = await prisma.cellFormula.findMany({ where })
+  return locale ? languageEntry(rows.filter(row => row.locale).map(row => [row.locale, row] as const), locale) : rows.find(row => !row.locale)
+}
 
 // ────────────────────────────────────────────────────────────────────
 // Evaluation
@@ -347,19 +366,20 @@ async function loadContext(productId: string, coord: { channelConnectionId?: str
   const parent = product.parentId
     ? await prisma.product.findUnique({ where: { id: product.parentId }, include: { translations: true } })
     : null
-  const locale = coord.locale || 'en'
+  const languages = coord.channel && coord.marketplace ? await marketLanguages(coord.channel, coord.marketplace) : undefined
+  const locale = normalizeLanguage(coord.locale || languages?.[0] || PRIMARY_CONTENT_LOCALE)
   // A master formula resolves with NO listing — `resolveAttributes` stops at variant level, which
   // is exactly the master row (`sheet-rows.service.ts:397` already reads that way).
   const channelListing =
     coord.channel && coord.marketplace
-      ? await prisma.channelListing.findFirst({
+      ? await prisma.channelListing.findFirst({ include: { translations: true },
           where: await primaryFormulaListingWhere(productId, coord.channel, coord.marketplace, coord),
         })
       : null
   const resolved = resolveAttributes({
     product: product as any,
     parent: parent as any,
-    channelListing: channelListing as any,
+    channelListing: channelListing as any, marketLanguages: languages,
     locale,
   })
   const flat: Record<string, unknown> = {}
@@ -382,7 +402,7 @@ async function loadContext(productId: string, coord: { channelConnectionId?: str
   const columnSet = market ? await getFormulaColumns({ product, parent, scope: coord.scope ?? (coord.channel ? 'channel' : 'master'),
     channel: coord.channel, marketplace: coord.marketplace, channelConnectionId: coord.channelConnectionId, aliasKey: coord.aliasKey, locale, market }) : null
   if (columnSet) {
-    Object.assign(resolved, resolveAttributes({ product: product as any, parent: parent as any, channelListing: channelListing as any, locale,
+    Object.assign(resolved, resolveAttributes({ product: product as any, parent: parent as any, channelListing: channelListing as any, marketLanguages: languages, locale,
       localizableKeys: columnSet.columns.filter(c => c.storage === 'localizedContent').map(c => c.slot?.of ?? (c.key === 'name' ? 'title' : c.key)) }))
     const { formulaLookupMap } = await import('../studio-sheet.service.js')
     Object.assign(flat, formulaLookupMap(columnSet.columns, product as never, resolved as never, parent as never))
@@ -391,10 +411,10 @@ async function loadContext(productId: string, coord: { channelConnectionId?: str
       if (source) resolved[column.key] = { ...source, value: flat[column.key] }
     }
     Object.assign(flat, await formulaChannelValues({ flat, columnSet, productId,
-      onSource: (key, cell) => { resolved[key] = { value: cell.value, source: 'channelExplicit', inheritedFrom: channelListing?.id ?? null, requestedLocale: cell.requestedLocale, effectiveLocale: cell.effectiveLocale, translationState: cell.translationState } },
+      onSource: (key, cell) => { resolved[key] = { value: cell.value, source: cell.follows ? 'channelSnapshot' : 'channelExplicit', language: cell.language, requested: cell.requested, follows: cell.follows, drift: cell.drift, inheritedFrom: channelListing?.id ?? null, requestedLocale: cell.requestedLocale, effectiveLocale: cell.effectiveLocale, translationState: cell.translationState } },
       scope: coord.scope ?? (coord.channel ? 'channel' : 'master'), channel: coord.channel, marketplace: coord.marketplace, channelConnectionId: coord.channelConnectionId, aliasKey: coord.aliasKey, locale }))
   }
-  return { product, parent, channelListing, locale, resolved, flat, columnSet }
+  return { product, parent, channelListing, locale, resolved, flat, columnSet, contentListing: contentListing(product, channelListing, undefined, languages) }
 }
 
 /** A shared field has one physical value and one formula, even when viewed in
@@ -464,7 +484,7 @@ export function evaluateAgainstContext(input: {
   const staleSource = deep.attributes.find(path => {
     if (overlay && Object.prototype.hasOwnProperty.call(overlay, path)) return false
     const hit = ctx.resolved?.[path] ?? ctx.resolved?.[path.replace(/^attr_/, '').replace(/^name$/, 'title')]
-    return hit?.translationState === 'fallback' || hit?.translationState === 'outdated'
+    return !!hit?.language && translationMissing(hit, ctx.locale) || hit?.translationState === 'outdated'
   })
   if (staleSource) return { value: null, error: `Formula source ${staleSource} needs current ${ctx.locale} content. Translate or review the source before applying this formula.`, warnings: [], dependsOn: deep.attributes }
 
@@ -472,7 +492,7 @@ export function evaluateAgainstContext(input: {
     lookup: (path) => {
       if (overlay && Object.prototype.hasOwnProperty.call(overlay, path)) return overlay[path]
       if (!path.includes('.') && !(path in ctx.flat)) return undefined
-      return resolveSourcePath(path, ctx.flat, ctx.product as any, ctx.locale)
+      return resolveSourcePath(path, ctx.flat, { ...ctx.product, parent: ctx.parent, contentListing: ctx.contentListing } as any, ctx.locale)
     },
     namedExpression: (name) => expressions[name],
   })
@@ -550,6 +570,10 @@ async function writeValue(
   const contentKey = (col.slot ? `${col.slot.of}[${col.slot.index}]` : writeField).replace(/^attr_/, '').replace(/^name$/, 'title')
   const res = await fieldWriter({
     productId: coord.productId,
+    contentAddress: coord.contentAddress ?? (col.writeTarget === 'channelListing' && coord.channel && coord.marketplace
+      ? { tier: 'pin', language: normalizeLanguage(coord.locale || PRIMARY_CONTENT_LOCALE), coordinate: { channel: coord.channel, market: coord.marketplace, ...(coord.channelConnectionId ? { accountId: coord.channelConnectionId } : {}), ...(coord.aliasKey ? { aliasId: coord.aliasKey } : {}) } }
+      : (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) && normalizeLanguage(coord.locale || PRIMARY_CONTENT_LOCALE) !== PRIMARY_CONTENT_LOCALE ? { tier: 'language', language: normalizeLanguage(coord.locale!) } : { tier: 'source' }),
+    contentAcknowledged: coord.contentAcknowledged,
     updatedBy: (coord as CellCoordinate & { updatedBy?: string | null }).updatedBy,
     writeField,
     ...(col.storage === 'localizedContent' && col.writeTarget === 'master' ? { localizedField: contentKey } : {}),
@@ -616,7 +640,7 @@ async function prepareCellFormula(input: CellCoordinate & { expr: string; expect
   }
   if (deep.cycle) throw new Error(`Circular reference: ${deep.cycle.join(' → ')}`)
 
-  const siblings = await prisma.cellFormula.findMany({ where: { productId: input.productId, scope: input.scope, channel: s(input.channel), marketplace: s(input.marketplace), locale: s(input.locale), channelConnectionId: s(input.channelConnectionId), aliasKey: s(input.aliasKey) } })
+  const siblings = (await prisma.cellFormula.findMany({ where: { productId: input.productId, scope: input.scope, channel: s(input.channel), marketplace: s(input.marketplace), channelConnectionId: s(input.channelConnectionId), aliasKey: s(input.aliasKey) } })).filter(row => (row.locale ? normalizeLanguage(row.locale) : '') === (input.locale ? normalizeLanguage(input.locale) : ''))
   const proposed = { ...input, expr, dependsOn: deep.attributes }
   if (!input.allowSelfReference && formulaGraph([...siblings.filter(row => row.fieldKey !== input.fieldKey), proposed]).cycles.has(formulaCellKey(proposed))) {
     throw new Error('Circular reference. This formula creates a loop between product fields.')
@@ -692,6 +716,14 @@ export async function previewCellFormula(input: CellCoordinate & { expr: string;
   }
 }
 
+function formulaWriteCoordinate<T extends CellCoordinate>(input: T): T {
+  if (input.scope !== 'channel' || !input.contentAddress || input.contentAddress.tier === 'pin') return input
+  if (!input.contentAcknowledged) throw new Error('Choose the shared text destination before saving this formula.')
+  const key = contentField(input.fieldKey)
+  return { ...input, scope: 'master', channel: null, marketplace: null, channelConnectionId: null, aliasKey: null,
+    market: input.market ?? input.marketplace, fieldKey: key === 'title' ? 'name' : key }
+}
+
 export async function setCellFormula(input: CellCoordinate & {
   expr: string
   expectedState?: string
@@ -700,17 +732,24 @@ export async function setCellFormula(input: CellCoordinate & {
   /** #765 — the caller's address, recorded on the audit row as the bulk path does. */
   ip?: string | null
 }): Promise<SetFormulaResult> {
+  input = formulaWriteCoordinate(input)
   const { ctx, expr, outcome, col, writeField, normalisedValue, effectiveError, refusal } = await prepareCellFormula(input)
+  // LX.F F-LX-1 — a CONTENT write needs an address (design §6); a formula on a
+  // price, a quantity or a factual attribute does not. Unconditionally this
+  // refused `basePrice needs a ContentAddress before it can be saved.` The same
+  // predicate this file already uses at :575 decides it.
+  if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
   // #765 — read the version BEFORE the write, so the audit row can state what
   // moved rather than implying it. Taken from the context that was already
   // loaded; no extra query.
   const versionBefore = (ctx.product as unknown as { version?: number } | null)?.version ?? null
 
+  const existing = await findFormulaAt(input)
   const mutation = () => prisma.cellFormula.upsert({
-    where: whereCoord(input),
+    where: existing ? { id: existing.id } : whereCoord(input),
     create: {
       productId: input.productId, scope: input.scope,
-      channel: s(input.channel), marketplace: s(input.marketplace), locale: s(input.locale), channelConnectionId: s(input.channelConnectionId), aliasKey: s(input.aliasKey),
+      channel: s(input.channel), marketplace: s(input.marketplace), locale: input.locale ? normalizeLanguage(input.locale) : '', channelConnectionId: s(input.channelConnectionId), aliasKey: s(input.aliasKey),
       fieldKey: input.fieldKey, expr, dependsOn: outcome.dependsOn,
       market: input.market ? String(input.market).toUpperCase() : null,
       lastError: effectiveError, evaluatedAt: new Date(), updatedBy: input.updatedBy ?? null,
@@ -749,6 +788,7 @@ export async function setCellFormula(input: CellCoordinate & {
       version: versionAfter,
     },
     metadata: {
+      language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE),
       scope: input.scope,
       channelConnectionId: input.channelConnectionId ?? null, aliasKey: input.aliasKey ?? '',
       channel: orNull(input.channel),
@@ -809,7 +849,7 @@ export async function pinOverFormula(
 ): Promise<{ pinned: boolean; reason?: 'not_found' | 'coordinate_mismatch'; storedAt?: Array<{ locale: string; channel: string; marketplace: string }> }> {
   await assertFormulaListingScope(input)
   if (input.market || input.marketplace) await loadOwnedContext(input)
-  const existing = await prisma.cellFormula.findUnique({ where: whereCoord(input) })
+  const existing = await findFormulaAt(input)
   if (!existing) {
     // #763 — "nothing was deleted" is not one answer, it is two, and the route
     // cannot tell them apart from a bare `false`. UX.1's restore sent no
@@ -849,6 +889,7 @@ export async function pinOverFormula(
     before: { formula: existing.expr },
     after: null,
     metadata: {
+      language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE),
       fieldKey: existing.fieldKey,
       expr: existing.expr,
       scope: existing.scope,
@@ -866,7 +907,7 @@ export async function pinOverFormula(
 export async function readFormulaCell(input: CellCoordinate) {
   await assertFormulaListingScope(input)
   const ctx = await loadOwnedContext(input)
-  const formula = await prisma.cellFormula.findUnique({ where: whereCoord(input) })
+  const formula = await findFormulaAt(input)
   const col = await columnFor(input, ctx.columnSet)
   const storage = col && ctx.columnSet ? formulaStorage(input, col, ctx.columnSet, ctx.product, ctx.channelListing) : null
   return { storage, targetState: createHash('sha256').update(JSON.stringify({ storage, expr: formula?.expr ?? null, error: formula?.lastError ?? null })).digest('hex'), value: ctx.flat[input.fieldKey] ?? null, expr: formula?.expr ?? null,
@@ -878,23 +919,29 @@ export async function readFormulaCell(input: CellCoordinate) {
 export async function setCellLiteral(input: CellCoordinate & {
   value: unknown; expectedState?: string; updatedBy?: string | null; ip?: string | null
 }) {
+  input = formulaWriteCoordinate(input)
   await assertFormulaListingScope(input)
   const ctx = await loadOwnedContext(input)
-  const existing = await prisma.cellFormula.findUnique({ where: whereCoord(input) })
+  const existing = await findFormulaAt(input)
   if (input.expectedState && input.expectedState !== formulaStateToken(ctx, existing)) {
     throw new Error('This product changed after the preview. Preview again before applying.')
   }
   const col = await columnFor(input, ctx.columnSet)
   if (!col || col.editable === false || !writerAcceptsField(col.writeField)) throw new Error('This field cannot be edited in this scope.')
+  // LX.F F-LX-1 — a CONTENT write needs an address (design §6); a formula on a
+  // price, a quantity or a factual attribute does not. Unconditionally this
+  // refused `basePrice needs a ContentAddress before it can be saved.` The same
+  // predicate this file already uses at :575 decides it.
+  if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
   const verdict = optionVerdict({ column: col, catalogueField: await catalogueFieldFor(input), value: input.value })
   if (verdict.ok === false) throw new Error(verdict.error)
   const atomic = () => [
-    prisma.cellFormula.deleteMany({ where: whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey }),
+    prisma.cellFormula.deleteMany({ where: existing ? { id: existing.id } : whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey }),
     ...(existing ? [prisma.auditLog.create({ data: {
       userId: input.updatedBy ?? null, ip: input.ip ?? null, entityType: 'Product', entityId: input.productId,
       action: FORMULA_PINNED_ACTION, before: { formula: existing.expr },
       metadata: { ...whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey,
-        market: input.market ?? null, expr: existing.expr, dependsOn: existing.dependsOn },
+        market: input.market ?? null, expr: existing.expr, dependsOn: existing.dependsOn, language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE), contentAddress: input.contentAddress } as any,
     } })] : []),
   ]
   await writeValue(input, verdict.value, col, atomic,
@@ -909,18 +956,25 @@ export async function setCellLiteral(input: CellCoordinate & {
 export async function restoreFormulaSnapshot(input: CellCoordinate & {
   snapshot: Awaited<ReturnType<typeof readFormulaCell>>; expectedState: string; updatedBy?: string | null; ip?: string | null
 }) {
+  return inDatabaseTransaction(prisma, async () => {
+  input = { ...input, contentAddress: input.snapshot.storage?.content?.address ?? input.contentAddress }
   await assertFormulaListingScope(input)
   const ctx = await loadOwnedContext(input)
-  const existing = await prisma.cellFormula.findUnique({ where: whereCoord(input) })
+  const existing = await findFormulaAt(input)
   if (formulaStateToken(ctx, existing) !== input.expectedState) throw new Error('This product changed. Its newer changes were kept.')
   const col = await columnFor(input, ctx.columnSet)
   if (!col || col.editable === false || !writerAcceptsField(col.writeField)) throw new Error('This field cannot be edited in this scope.')
+  // LX.F F-LX-1 — a CONTENT write needs an address (design §6); a formula on a
+  // price, a quantity or a factual attribute does not. Unconditionally this
+  // refused `basePrice needs a ContentAddress before it can be saved.` The same
+  // predicate this file already uses at :575 decides it.
+  if (isLocalizableContent(col.slot?.of ?? col.key, col.storage)) contentAddress(input.contentAddress, col.label)
   let restored = input.snapshot.formula
   let restoredValue = input.snapshot.value
   // Restoring inheritance must also publish today's effective value to following channels.
   // Passing the old displayed snapshot to the ordinary writer would refresh them with stale
   // parent content even though the final raw field correctly returned to null/inherited.
-  if (!restored && input.snapshot.storage?.target === 'master') {
+  if (!restored && input.snapshot.storage?.target === 'master' && !input.snapshot.storage.content) {
     const product = { ...ctx.product, ...formulaStoragePatch(input.snapshot.storage, ctx.product) }
     const resolved = resolveAttributes({ product: product as never, parent: ctx.parent as never, locale: ctx.locale })
     const { formulaLookupMap } = await import('../studio-sheet.service.js')
@@ -935,22 +989,25 @@ export async function restoreFormulaSnapshot(input: CellCoordinate & {
   }
   const data = restored ? { ...restored, updatedBy: input.updatedBy ?? null, evaluatedAt: new Date() } : null
   await writeValue(input, restoredValue, col, () => [
-    ...(data ? [prisma.cellFormula.upsert({ where: whereCoord(input),
+    ...(data ? [prisma.cellFormula.upsert({ where: existing ? { id: existing.id } : whereCoord(input),
       create: { ...whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey, ...data },
-      update: { ...data, version: { increment: 1 } } })] : [prisma.cellFormula.deleteMany({ where: whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey })]),
+      update: { ...data, version: { increment: 1 } } })] : [prisma.cellFormula.deleteMany({ where: existing ? { id: existing.id } : whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey })]),
     prisma.auditLog.create({ data: { userId: input.updatedBy ?? null, ip: input.ip ?? null,
       entityType: 'Product', entityId: input.productId, action: 'formula.restored',
       after: { value: restoredValue, formula: restored?.expr ?? null } as never,
-      metadata: whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey } }),
+      metadata: { ...whereCoord(input).productId_scope_channel_marketplace_locale_fieldKey, language: normalizeLanguage(input.locale || PRIMARY_CONTENT_LOCALE), contentAddress: input.contentAddress } as any } }),
   ], col.writeTarget === 'channelListing' ? ctx.channelListing?.version : ctx.product.version)
   if (input.snapshot.storage && (!restored || restored.lastError)) {
     const storage = input.snapshot.storage
     if (storage.target !== col.writeTarget || storage.writeField !== col.writeField.replace(/\[\d+\]$/, '')) throw new Error('This field’s storage changed. Its current value was kept.')
-    if (storage.target === 'master') {
+    if (storage.content) {
+      const { writeContent } = await import('../content-write.js')
+      await writeContent({ productId: input.productId, ...storage.content, label: col.label, userId: input.updatedBy })
+    } else if (storage.target === 'master') {
       const current = await prisma.product.findUniqueOrThrow({ where: { id: input.productId } })
       await prisma.product.update({ where: { id: current.id }, data: formulaStoragePatch(storage, current) as never })
     } else {
-      const current = await prisma.channelListing.findFirstOrThrow({ where: await primaryFormulaListingWhere(input.productId, input.channel!, input.marketplace!, input) })
+      const current = await prisma.channelListing.findFirstOrThrow({ include: { translations: true }, where: await primaryFormulaListingWhere(input.productId, input.channel!, input.marketplace!, input) })
       await prisma.channelListing.update({ where: { id: current.id }, data: formulaStoragePatch(storage, current) as never })
     }
   }
@@ -958,6 +1015,7 @@ export async function restoreFormulaSnapshot(input: CellCoordinate & {
     seed: [formulaCellKey(input)], updatedBy: input.updatedBy, ip: input.ip,
     ...(col.writeTarget === 'channelListing' && input.channel && input.marketplace ? { coordinate: { channel: input.channel, marketplace: input.marketplace, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey, locale: input.locale } } : {}) })
   return { ok: true, value: restoredValue, cascaded }
+  })
 }
 
 /** Re-create a formula from its `formula.pinned` audit row and re-evaluate it. */
@@ -971,7 +1029,7 @@ export async function restoreCellFormula(input: { auditLogId: string; userId?: s
   return setCellFormula({
     productId: row.entityId,
     scope: m.scope, channel: m.channel, marketplace: m.marketplace, locale: m.locale, channelConnectionId: m.channelConnectionId, aliasKey: m.aliasKey,
-    fieldKey: m.fieldKey, expr: m.expr, updatedBy: input.userId ?? null,
+    fieldKey: m.fieldKey, expr: m.expr, contentAddress: m.contentAddress, updatedBy: input.userId ?? null,
   })
 }
 
@@ -1017,7 +1075,7 @@ export async function reevaluateDependents(input: {
 
   const done = new Set<string>(input.seed ?? [])
   const out: Array<{ productId?: string; fieldKey: string; scope: FormulaScope; value: unknown; error: string | null; sourceField: string }> = []
-  const graph = formulaGraph(input.coordinate ? all.filter(row => row.scope === 'channel' && row.channel === input.coordinate!.channel && row.marketplace === input.coordinate!.marketplace && (row.channelConnectionId ?? '') === (input.coordinate!.channelConnectionId ?? '') && (row.aliasKey ?? '') === (input.coordinate!.aliasKey ?? '') && (!input.coordinate!.locale || !row.locale || row.locale === input.coordinate!.locale)) : all)
+  const graph = formulaGraph(input.coordinate ? all.filter(row => row.scope === 'channel' && row.channel === input.coordinate!.channel && row.marketplace === input.coordinate!.marketplace && (row.channelConnectionId ?? '') === (input.coordinate!.channelConnectionId ?? '') && (row.aliasKey ?? '') === (input.coordinate!.aliasKey ?? '') && (!input.coordinate!.locale || !row.locale || normalizeLanguage(row.locale) === normalizeLanguage(input.coordinate!.locale))) : all)
   const changed = new Set(input.changedFields.flatMap(field => [field, field.replace(/^attr_/, '')]))
   const changedByScope = new Map<string, Set<string>>()
   const overlays = new Map<string, Record<string, unknown>>()
@@ -1101,6 +1159,7 @@ export async function reevaluateDependents(input: {
         before: { version: versionBefore },
         after: { version: versionAfter },
         metadata: {
+          language: normalizeLanguage(row.locale || PRIMARY_CONTENT_LOCALE),
           scope: coord.scope,
           channelConnectionId: coord.channelConnectionId ?? null, aliasKey: coord.aliasKey ?? '',
           channel: orNull(row.channel),
@@ -1175,7 +1234,7 @@ export async function cellFormulasForProducts(input: {
   })
   const out: Record<string, Record<string, CellFormulaRow>> = {}
   for (const r of rows) {
-    if (input.locale !== undefined && r.locale && r.locale.toLowerCase() !== s(input.locale).toLowerCase()) {
+    if (input.locale !== undefined && r.locale && normalizeLanguage(r.locale) !== (input.locale ? normalizeLanguage(input.locale) : '')) {
       const ctx = await loadContext(r.productId, { ...r, scope: r.scope as FormulaScope, locale: input.locale })
       const column = ctx.columnSet?.columns.find(c => c.key === r.fieldKey)
       if (!column || column.storage === 'localizedContent') continue

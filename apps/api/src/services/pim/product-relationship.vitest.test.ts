@@ -54,7 +54,13 @@ afterAll(async () => { await app.close(); await fixture.database.close() })
 
 describe('product family actions against the production Prisma schema', () => {
   it('commits imported values, Parent SKU and their cache projection together', async () => {
-    const before = await prisma.product.findUniqueOrThrow({ where: { id: 'standalone' }, include: { categories: { select: { categoryId: true, isPrimary: true } } } })
+    // LX.F2 R-LX-21 — `applyTransferTarget` reads the product with LX's own include
+    // (`catalog-transfer.service.ts:187`: `translations`, `parent.translations`, `categories`),
+    // so a hand-built `before` without those keys differs from the apply's snapshot by
+    // `translations: []` and `parent: null` alone (measured) and the target was refused
+    // "Product changed since preview". The fixture reads what the apply reads — it is the
+    // producer's own include, not a second list.
+    const before = await prisma.product.findUniqueOrThrow({ where: { id: 'standalone' }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
     await prisma.$transaction(tx => applyTransferTarget(tx, {
       key: 'standalone', identity: { row: 2, entity: 'Products', sku: 'standalone', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Imported name' },
       before: JSON.parse(JSON.stringify(before)), patch: { name: 'Imported name' }, parentSku: 'parent', cells: [], rows: [], contractHash: 'fixture', create: false,

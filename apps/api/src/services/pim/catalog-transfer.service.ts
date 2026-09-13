@@ -1,3 +1,5 @@
+import { inDatabaseTransaction, activeDatabaseTransaction } from '../../lib/database-context.js'
+import { writeContent } from './content-write.js'
 import { lockCategoryTree } from '../category-lock.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../product-read-cache.service.js'
@@ -16,13 +18,66 @@ export const safeSnapshot = (value: Record<string, unknown> | null) => value ? j
   ...('categories' in value ? { categories: (value.categories as { categoryId: string }[]).slice().sort((a, b) => a.categoryId.localeCompare(b.categoryId)) } : {}),
 }) : null
 
+/**
+ * LX.F2 R-LX-21 (F-LX-4) — the columns a SHARED-content write cascades onto a channel
+ * listing it did not otherwise change: `master-content.service.ts:137` bumps `version` and
+ * sets `lastSyncStatus: 'PENDING'` / `lastSyncedAt: null` for every listing that FOLLOWS the
+ * shared text, and Prisma stamps `updatedAt`. That is a real change to the row, so the
+ * cascade is right to make it — but it is not a change to anything the PREVIEW read.
+ *
+ * Measured, the exact difference that refused a whole job (LXF2_DIFF probe on
+ * `catalog-transfer-http.vitest.test.ts`, 2026-09-13 09:57): a workbook that sets the shared
+ * `name` AND a channel `title` on the same product applied target 1 (the product), whose
+ * cascade moved the listing `version` **8 → 9**, `updatedAt`
+ * `2026-01-01T00:00:00.000Z → 2026-09-13T07:57:53.190Z`, `lastSyncStatus` `undefined →
+ * 'PENDING'`, `lastSyncedAt` `undefined → null` — and **no other field differed at all** —
+ * then refused target 2 with "Listing changed since preview", leaving the job `PARTIAL`.
+ * A job cannot be allowed to invalidate its own preview.
+ *
+ * So the conflict detector compares what the preview DEPENDED ON. The write itself keeps its
+ * compare-and-set on the FRESHLY READ `version` + `updatedAt`
+ * (`channelListing.updateMany({ where: { id, version, updatedAt } })`), so a commit that
+ * races this transaction is still refused, and any real difference in a stored value — the
+ * case that actually means "someone edited this listing" — still fails the fingerprint.
+ */
+const CASCADE_STAMPED_LISTING_FIELDS = ['version', 'updatedAt', 'lastSyncStatus', 'lastSyncedAt'] as const
+/** The stored content of a `ChannelListingTranslation`; everything else on that row is bookkeeping. */
+const PIN_CONTENT_FIELDS = ['name', 'description', 'bulletPoints', 'keywords', 'attributes'] as const
+const pinCarriesContent = (pin: Record<string, unknown>) => PIN_CONTENT_FIELDS.some(field => {
+  const value = pin[field]
+  if (value === null || value === undefined) return false
+  if (Array.isArray(value)) return value.length > 0
+  if (typeof value === 'object') return Object.keys(value as object).length > 0
+  return value !== ''
+})
+export const listingConflictSnapshot = (value: Record<string, unknown> | null) => {
+  const snapshot = safeSnapshot(value) as Record<string, unknown> | null
+  if (!snapshot) return null
+  for (const field of CASCADE_STAMPED_LISTING_FIELDS) delete snapshot[field]
+  // The second half of the same cascade: for every language that FOLLOWS the shared text it
+  // writes a `ChannelListingTranslation` carrying only `follows` (+ its own version) — no
+  // stored content at all (`master-content.service.ts:135-136`). Measured with the harness's
+  // `translations` include repaired: the cascade created `{language:'it', follows:['title'],
+  // version:1}` on a listing whose preview snapshot had `translations: []`, and the whole job
+  // read PARTIAL again. A content-free pin row is not a change to any value the preview read,
+  // so the comparison keeps only pins that actually carry content, and compares their CONTENT
+  // (plus `language` and the `follows` set), never their ids or versions.
+  if (Array.isArray(snapshot.translations)) {
+    snapshot.translations = (snapshot.translations as Record<string, unknown>[])
+      .filter(pinCarriesContent)
+      .map(pin => ({ language: pin.language, follows: [...(pin.follows as string[] ?? [])].sort(), ...Object.fromEntries(PIN_CONTENT_FIELDS.map(field => [field, pin[field] ?? null])) }))
+      .sort((a, b) => String(a.language).localeCompare(String(b.language)))
+  }
+  return snapshot
+}
+
 export async function loadTransferContext(rows: TransferRow[], db = prisma, reference?: Pick<TransferContext, 'families' | 'categories' | 'accounts' | 'markets'>): Promise<TransferContext> {
   const skus = [...new Set(rows.flatMap(r => [r.sku, ...(r.entity === 'Products' && r.field === 'parentSku' && r.action === 'SET' ? [String(r.value)] : [])]))]
   if (skus.length > 5000) throw new Error('Import at most 5,000 products per file; split larger catalogs into separate files')
   const [products, accounts, markets, aliases] = await Promise.all([
-    db.product.findMany({ where: { OR: [{ sku: { in: skus } }, { children: { some: { sku: { in: skus } } } }] }, include: { categories: { select: { categoryId: true, isPrimary: true } }, _count: { select: { children: true } } } }),
+    db.product.findMany({ where: { OR: [{ sku: { in: skus } }, { children: { some: { sku: { in: skus } } } }] }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } }, _count: { select: { children: true } } } }),
     reference ? Promise.resolve(reference.accounts) : db.channelConnection.findMany({ where: { id: { in: [...new Set(rows.map(r => r.accountId).filter(Boolean))] } }, select: { id: true, channelType: true, marketplace: true, isActive: true } }),
-    reference ? Promise.resolve(reference.markets) : db.marketplace.findMany({ where: { isActive: true, OR: rows.filter(r => r.channel && r.marketplace).map(r => ({ channel: r.channel, code: r.marketplace })) }, select: { channel: true, code: true } }),
+    reference ? Promise.resolve(reference.markets) : db.marketplace.findMany({ where: { isActive: true, OR: rows.filter(r => r.channel && r.marketplace).map(r => ({ channel: r.channel, code: r.marketplace })) }, select: { channel: true, code: true, language: true, languages: true } }),
     db.productListingAlias.findMany({ where: { id: { in: [...new Set(rows.map(r => r.aliasKey).filter(Boolean))] } }, select: { id: true, productId: true, channel: true, marketplace: true, channelConnectionId: true, status: true } }),
   ])
   const familyIds = [...new Set(products.map(p => p.familyId).filter((id): id is string => !!id))]
@@ -43,7 +98,7 @@ export async function loadTransferContext(rows: TransferRow[], db = prisma, refe
   const relationshipBlockedProducts = await relationshipAliasConflicts(db, relationshipChanges)
   const channelRows = rows.filter(r => r.entity !== 'Products')
   const coordinates = [...new Map(channelRows.filter(r => productMap.has(r.sku)).map(r => [transferTargetKey(r), { productId: productMap.get(r.sku)!.id, channel: r.channel, marketplace: r.marketplace, channelConnectionId: r.accountId, aliasKey: r.aliasKey }])).values()]
-  const listings = coordinates.length ? await db.channelListing.findMany({ where: { OR: coordinates }, take: 10_001 }) : []
+  const listings = coordinates.length ? await db.channelListing.findMany({ where: { OR: coordinates }, include: { translations: true }, take: 10_001 }) : []
   if (listings.length > 10_000) throw new Error('This transfer batch exceeds 10,000 matching listing records')
   const byId = new Map(products.map(p => [p.id, p.sku]))
   const categoryDefaults: Record<string, string | null> = {}
@@ -126,9 +181,10 @@ export async function startCatalogTransfer(jobId: string, userId: string | null)
 
 /** Each target and its checkpoint commit together. A restart cannot replay a committed target. */
 export async function applyTransferTarget(tx: Prisma.TransactionClient, target: TransferTarget, jobId: string, userId: string | null) {
+  if (target.contentWrites?.length && !activeDatabaseTransaction()) throw new Error('Content imports require the shared transactional write boundary')
   if (target.categories) await lockCategoryTree(tx)
   const id = target.identity
-  const product = await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: id.sku }) }, include: { categories: { select: { categoryId: true, isPrimary: true } } } })
+  const product = await tx.product.findUnique({ where: { workspace_sku: workspaceKey({ sku: id.sku }) }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
   let entityId: string
   if (id.entity === 'Products') {
     if (fingerprint(safeSnapshot(product)) !== fingerprint(target.before)) throw new TransferConflict('Product changed since preview; preview this SKU again')
@@ -141,7 +197,8 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       data.parentId = parent?.id ?? null
     }
     if (data.impactProtectors === null) data.impactProtectors = Prisma.DbNull
-    if (product) {
+    if (product && !Object.keys(data).length && !target.categories) entityId = product.id
+    else if (product) {
       const updated = await tx.product.updateMany({ where: { id: product.id, version: product.version, updatedAt: product.updatedAt, deletedAt: null }, data: { ...data, version: { increment: 1 } } as Prisma.ProductUpdateManyMutationInput })
       if (!updated.count) throw new TransferConflict('Product changed during apply; preview this SKU again')
       entityId = product.id
@@ -163,11 +220,12 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       const alias = await tx.productListingAlias.findFirst({ where: { id: id.aliasKey, productId: product.parentId ?? product.id, channel: id.channel, marketplace: id.marketplace, channelConnectionId: id.accountId, status: 'ACTIVE' }, select: { id: true } })
       if (!alias) throw new TransferConflict('The listing alias changed since preview')
     }
-    const matches = await tx.channelListing.findMany({ where: { productId: product.id, channel: id.channel, marketplace: id.marketplace, channelConnectionId: id.accountId, aliasKey: id.aliasKey } })
-    if (matches.length > 1 || fingerprint(safeSnapshot(matches[0] ?? null)) !== fingerprint(target.before)) throw new TransferConflict('Listing changed since preview; preview this listing again')
+    const matches = await tx.channelListing.findMany({ where: { productId: product.id, channel: id.channel, marketplace: id.marketplace, channelConnectionId: id.accountId, aliasKey: id.aliasKey }, include: { translations: true } })
+    // LX.F2 R-LX-21 — `listingConflictSnapshot` on BOTH sides (the reason is on its definition).
+    if (matches.length > 1 || fingerprint(listingConflictSnapshot(matches[0] ?? null)) !== fingerprint(listingConflictSnapshot(target.before as Record<string, unknown> | null))) throw new TransferConflict('Listing changed since preview; preview this listing again')
     if (matches[0]) {
       const listing = matches[0]
-      const result = await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, updatedAt: listing.updatedAt }, data: { ...target.patch, version: { increment: 1 } } as Prisma.ChannelListingUpdateManyMutationInput })
+      const result = Object.keys(target.patch).length ? await tx.channelListing.updateMany({ where: { id: listing.id, version: listing.version, updatedAt: listing.updatedAt }, data: { ...target.patch, version: { increment: 1 } } as Prisma.ChannelListingUpdateManyMutationInput }) : { count: 1 }
       if (!result.count) throw new TransferConflict('Listing changed during apply; preview this listing again')
       entityId = listing.id
     } else {
@@ -179,6 +237,7 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
       entityId = listing.id
     }
   }
+  for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed' })
   await productReadCacheService.refreshInTransaction(tx, [id.entity === 'Products' ? entityId : product!.id, ...(product?.parentId ? [product.parentId] : [])])
   await tx.auditLog.create({ data: { userId, entityType: id.entity === 'Products' ? 'Product' : 'ChannelListing', entityId, action: target.create ? 'create' : 'update',
     before: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.before, state: c.beforeState }))) as Prisma.InputJsonValue,
@@ -202,16 +261,18 @@ async function runCatalogTransfer(jobId: string) {
       try {
         const context = await loadTransferContext(target.rows)
         // Use upsert for validation: this target's creation/update decision was fixed at preview.
-        const checked = await buildTransferPlan(target.rows, 'upsert', context, contracts)
+        // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
+        const checked = await buildTransferPlan(target.rows, 'upsert', context, contracts, undefined, { revalidateDeclaredVersion: false })
         const current = checked.targets[0]
         // A newly imported parent can make a formerly missing parent available; the stored patch
         // still names its SKU. All field requirements and write shapes must remain identical.
-        if (!current || current.contractHash !== target.contractHash || fingerprint(current.patch) !== fingerprint(target.patch)) throw new TransferConflict(checked.issues[0]?.message ?? 'Attribute requirements or reference choices changed since preview; upload the file again')
-        await prisma.$transaction(async tx => {
+        if (!current || current.contractHash !== target.contractHash || fingerprint([current.patch, current.contentWrites]) !== fingerprint([target.patch, target.contentWrites])) throw new TransferConflict(checked.issues[0]?.message ?? 'Attribute requirements or reference choices changed since preview; upload the file again')
+        await inDatabaseTransaction(prisma, async () => {
+          const tx = prisma
           const checkpoint = await tx.bulkOperation.updateMany({ where: { id: jobId, status: 'RUNNING', processed: index }, data: { processed: index + 1, expiresAt: new Date(Date.now() + LEASE_MS) } })
           if (!checkpoint.count) throw new TransferConflict('Job checkpoint already advanced')
           if (target.create || target.cells.some(c => c.verdict === 'changed')) await applyTransferTarget(tx, target, jobId, job.userId)
-        }, { timeout: 30_000, isolationLevel: 'Serializable' })
+        })
       } catch (e) {
         issue = { row: target.identity.row, sku: target.identity.sku, field: target.identity.field, message: e instanceof Error ? e.message : String(e) }
       }

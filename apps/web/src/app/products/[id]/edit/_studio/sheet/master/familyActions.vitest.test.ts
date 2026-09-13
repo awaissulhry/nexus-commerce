@@ -265,7 +265,7 @@ describe('F3 — delete child: severity comes from what the server found', () =>
     const impact = await find(c, 'delete-variant').preflight!([child('c1')])
     expect(impact.level).toBe('confirm')
     expect(impact.confirmPhrase).toBeUndefined()
-    expect(impact.consequences).toContain('It is not listed on any channel')
+    expect(impact.consequences).toContain('No channel listing records were returned by this check.')
   })
 
   /**
@@ -276,7 +276,7 @@ describe('F3 — delete child: severity comes from what the server found', () =>
     const c = ctx({ ops: ops({ listings: vi.fn(async () => [listed({ listingStatus: 'DRAFT' })]) }) })
     const impact = await find(c, 'delete-variant').preflight!([child('c1')])
     expect(impact.level).toBe('none')
-    expect(impact.unavailable).toContain('marketplace listing')
+    expect(impact.unavailable).toBe('c1 still holds a marketplace id on ebay · IT. This studio has no verb that ends those listings — end them on the channel, then reload.')
     expect(requiresTypedConfirm(impact)).toBe(false)
     expect(validateImpact(impact)).toEqual([])
   })
@@ -316,7 +316,7 @@ describe('F3 — delete child: severity comes from what the server found', () =>
 
   it('a parent is not deletable here — it is removed by demoting it', () => {
     const parentRow = { ...child('p'), isParent: true } as StudioRow
-    expect(find(ctx(), 'delete-variant').available([parentRow])).toMatchObject({ reason: expect.stringContaining('demoting it') })
+    expect(find(ctx(), 'delete-variant').available([parentRow])).toMatchObject({ reason: expect.stringContaining('demoting does not delete it') })
   })
 
   /** 🔴 A THIRD permission: delete is served from /api/catalog, gated products.edit. */
@@ -378,5 +378,29 @@ describe('F3 — demote parent: force is the dangerous half', () => {
   it('only a parent can be demoted, and it needs pim.manage', () => {
     expect(find(ctx({ family: family({ role: 'standalone' }) }), 'demote').available([])).toMatchObject({ reason: 'Only a parent can be demoted' })
     expect(find(ctx({ can: () => false }), 'demote').available([])).toMatchObject({ reason: expect.stringContaining(PERM_PIM) })
+  })
+})
+
+
+it('W0 published-without-identity refusal says what is known', async () => {
+  const c = ctx({ ops: ops({ listings: vi.fn(async () => [{ channel: 'ebay', marketplace: 'IT', externalListingId: null, isPublished: true, listingStatus: 'ACTIVE' }]) }) })
+  expect((await find(c, 'delete-variant').preflight!([child('c1')])).unavailable).toBe('c1 is marked as published on ebay · IT with no marketplace id recorded. Check the channel before deleting the local record.')
+})
+it('W0 parent refusal does not claim demotion deletes it', () => {
+  expect(find(ctx(), 'delete-variant').available([{ ...child('p'), isParent: true }])).toMatchObject({ reason: 'p is a parent. Demote it first — demoting does not delete it and does not change its listings.' })
+})
+
+
+describe('copying a child reports stock synchronisation honestly', () => {
+  it('names the sibling and the measured coordinate count', async () => {
+    const o = ops({ listings: vi.fn(async () => [
+      { channel: 'AMAZON', marketplace: 'IT', listingStatus: 'DRAFT', externalListingId: null, isPublished: false },
+      { channel: 'EBAY', marketplace: 'IT', listingStatus: 'DRAFT', externalListingId: null, isPublished: false },
+    ]) })
+    const c = ctx({ ops: o, pending: { newVariation: { sku: 'NEW', name: 'New', copyFromProductId: 'c1', axisValues: { Colore: 'New', Taglia: 'XXL' } } } })
+    const impact = await find(c, 'add-variation').preflight!([])
+    expect(o.listings).toHaveBeenCalledWith('c1')
+    expect(impact.sideEffects).toContain('Channel records are copied from c1 on 2 coordinates. They are not published, but stock synchronisation does not exclude them — the cascade filters on "sync paused", not on "published".')
+    expect(o.addVariation).not.toHaveBeenCalled()
   })
 })

@@ -13,8 +13,26 @@ const formulaFindMany = vi.fn()
 const formulaUpdate = vi.fn()
 const auditWrite = vi.fn()
 
+/**
+ * CLOSE.1 (the 20 attributed API reds) — `Marketplace.languages` IS the contract `market-languages.ts` reads,
+ * so the mock has to carry it. Without this model the service died on
+ * `prisma.marketplace.findFirst` with `Cannot read properties of undefined (reading 'findFirst')`:
+ * LX made the market's languages an authority every coordinate consults (`loadContext` →
+ * `marketLanguages(channel, marketplace)`), and this fixture predated it. Rows, not a code→language
+ * rule, because rows are what the table holds.
+ */
+const MARKETPLACE_ROWS = [
+  { channel: 'EBAY', code: 'IT', languages: ['it'], language: 'it' },
+  { channel: 'EBAY', code: 'DE', languages: ['de'], language: 'de' },
+  { channel: 'AMAZON', code: 'IT', languages: ['it'], language: 'it' },
+  { channel: 'AMAZON', code: 'DE', languages: ['de'], language: 'de' },
+]
+const marketplaceFindFirst = async (args: any) => MARKETPLACE_ROWS.find(row =>
+  (!args?.where?.channel || row.channel === args.where.channel) && (!args?.where?.code || row.code === args.where.code)) ?? null
+
 vi.mock('../../../db.js', () => ({
   default: {
+    marketplace: { findFirst: (...a: unknown[]) => marketplaceFindFirst(a[0]) },
     product: { findUnique: (...a: unknown[]) => productFindUnique(...a) },
     channelListing: { findFirst: (...a: unknown[]) => listingFindFirst(...a) },
     cellFormula: {

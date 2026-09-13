@@ -88,7 +88,7 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
 .nds-disclosure-summary::-webkit-details-marker { display: none; }
 .nds-disclosure-summary:hover { color: var(--nds-text); }
 .nds-disclosure-summary:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text); outline-offset: 1px;
   box-shadow: var(--nds-focus-ring);
 }
 .nds-disclosure-chevron { flex-shrink: 0; }
@@ -205,8 +205,8 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
  * one-page change; the default 'md' bar above is untouched. */
 /* A tab that cannot be entered. Dimmed AND non-interactive — the label is expected to say
    why, so hue is never the only carrier. */
-.nds-tab:disabled { opacity: .45; cursor: not-allowed; }
-.nds-tab:disabled:hover { color: inherit; }
+.nds-tab:is(:disabled, [aria-disabled="true"]) { opacity: .45; cursor: not-allowed; }
+.nds-tab:is(:disabled, [aria-disabled="true"]):hover { color: inherit; }
 
 .nds-tabs.lg {
   gap: 28px;
@@ -341,7 +341,7 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
-.nds-pgbtn:hover:not(:disabled) {
+.nds-pgbtn:hover:not(:is(:disabled, [aria-disabled="true"])) {
   background: var(--nds-surface-hover);
 }
 .nds-pgbtn.on {
@@ -349,7 +349,7 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
   border-color: var(--nds-primary);
   color: var(--nds-text-inverse);
 }
-.nds-pgbtn:disabled {
+.nds-pgbtn:is(:disabled, [aria-disabled="true"]) {
   color: var(--nds-text-disabled);
   cursor: default;
 }
@@ -667,7 +667,7 @@ button.nds-source-indicator.nds-source-indicator:hover { background: var(--nds-s
      already lights up on focus, so this was not invisible focus, but the ring itself did nothing.
      Offset INWARD: the grip sits at `left: -3px`, straddling the panel border, so a positive
      offset would draw the ring over the sheet behind it. */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -1px;
 }
 
@@ -732,6 +732,7 @@ body.nds-drawer-resizing * {
 .nds-menu a[role='menuitem']:hover {
   background: var(--nds-surface-hover);
 }
+
 /* 🔴 `--nds-text-disabled` is 2.04:1 and this rule put it on the item's NAME — measured on the
    studio's `Publish ▾`, where "Amazon · DE" and "eBay · DE" rendered rgb(174,182,194) on white at
    2.04:1 while the note beside each rendered 5.91:1. The identifying half of the row was the
@@ -741,16 +742,16 @@ body.nds-drawer-resizing * {
    #133/#231). Unavailability is already carried by `cursor: default`, the suppressed hover, and now
    by `description`; it does not also need the name to be illegible. `--nds-text-2` (5.91:1) still
    reads as clearly secondary against an enabled item's `--nds-text-strong`. */
-.nds-menu button:disabled {
+.nds-menu button:is(:disabled, [aria-disabled="true"]) {
   color: var(--nds-text-2);
   cursor: default;
 }
-.nds-menu button:disabled:hover {
+.nds-menu button:is(:disabled, [aria-disabled="true"]):hover {
   background: none;
 }
 /* An icon MAY fade where a word may not: it names nothing on its own, so losing it costs no
    information, and it keeps a disabled row visibly distinct at a glance. */
-.nds-menu button:disabled svg {
+.nds-menu button:is(:disabled, [aria-disabled="true"]) svg {
   opacity: 0.55;
 }
 
@@ -774,12 +775,12 @@ body.nds-drawer-resizing * {
   font-size: var(--nds-font-size-xs-plus);
   font-weight: var(--nds-font-weight-normal);
   line-height: 1.45;
-  color: var(--nds-text-2);
+  color: var(--nds-text);
 }
 /* The description keeps its own legible tone when the item is disabled — it is the reason the item
    is disabled, so it is the last thing that should dim with it. */
-.nds-menu button:disabled .nds-menu-item-desc {
-  color: var(--nds-text-2);
+.nds-menu button:is(:disabled, [aria-disabled="true"]) .nds-menu-item-desc {
+  color: var(--nds-text);
 }
 
 /* ── Toast ───────────────────────────────────────────────────────── */
@@ -1146,7 +1147,7 @@ body.nds-drawer-resizing * {
   /* DS1-18: was `box-shadow: var(--nds-focus-ring)` alone — that token is 12% alpha and
      composites to 1.17:1, i.e. no visible ring. Solid outline, matching the 16 DS rules that
      already draw focus this way (measured 4.54:1 on the DS surfaces). */
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 1px;
 }
 /* Engaged. The ring is what carries it — a border-colour change alone is a 1px cue that reads as
@@ -1586,9 +1587,9 @@ body.nds-drawer-resizing * {
   gap: 6px; padding: 16px; border: 1.5px dashed var(--nds-border); border-radius: 10px; background: var(--nds-imgup-surface);
   color: var(--nds-text-muted); cursor: pointer; font: inherit; transition: border-color .15s, background .15s, color .15s;
 }
-.nds-imgup-zone:hover:not(:disabled) { border-color: var(--nds-primary); color: var(--nds-text-link); background: var(--nds-imgup-hover); }
+.nds-imgup-zone:hover:not(:is(:disabled, [aria-disabled="true"])) { border-color: var(--nds-primary); color: var(--nds-text-link); background: var(--nds-imgup-hover); }
 .nds-imgup-zone.drag { border-color: var(--nds-primary); border-style: solid; background: var(--nds-imgup-drag); color: var(--nds-text-link); }
-.nds-imgup-zone:disabled { opacity: .6; cursor: not-allowed; }
+.nds-imgup-zone:is(:disabled, [aria-disabled="true"]) { opacity: .6; cursor: not-allowed; }
 .nds-imgup-zone .t { font-size: var(--nds-font-size-base); font-weight: 600; }
 .nds-imgup-zone .d { font-size: var(--nds-font-size-xs-plus); }
 .nds-imgup-spin { width: 22px; height: 22px; border: 2.5px solid var(--nds-imgup-spin-track); border-top-color: var(--nds-primary); border-radius: 50%; animation: nds-imgup-spin .7s linear infinite; }
@@ -1792,13 +1793,13 @@ body.nds-drawer-resizing * {
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-.nds-dropzone:hover:not(:disabled) {
+.nds-dropzone:hover:not(:is(:disabled, [aria-disabled="true"])) {
   border-color: var(--nds-primary);
   color: var(--nds-text-link);
   background: var(--nds-primary-soft);
 }
 .nds-dropzone:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text); outline-offset: 1px;
   border-color: var(--nds-primary);
   border-style: solid;
   box-shadow: var(--nds-focus-ring);
@@ -1809,7 +1810,7 @@ body.nds-drawer-resizing * {
   background: var(--nds-primary-soft);
   color: var(--nds-text-link);
 }
-.nds-dropzone:disabled {
+.nds-dropzone:is(:disabled, [aria-disabled="true"]) {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -1818,7 +1819,7 @@ body.nds-drawer-resizing * {
   font-weight: 600;
   color: var(--nds-text-2);
 }
-.nds-dropzone:hover:not(:disabled) .nds-dropzone-primary,
+.nds-dropzone:hover:not(:is(:disabled, [aria-disabled="true"])) .nds-dropzone-primary,
 .nds-dropzone.drag .nds-dropzone-primary {
   color: var(--nds-text-link);
 }
@@ -1848,9 +1849,9 @@ body.nds-drawer-resizing * {
   background: var(--nds-surface); cursor: pointer; text-align: left;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.nds-listbox-btn:hover:not(:disabled) { border-color: var(--nds-border-strong); }
-.nds-listbox-btn:focus-visible { outline: none; border-color: var(--nds-primary); box-shadow: var(--nds-focus-ring); }
-.nds-listbox-btn:disabled { opacity: 0.55; cursor: default; }
+.nds-listbox-btn:hover:not(:is(:disabled, [aria-disabled="true"])) { border-color: var(--nds-border-strong); }
+.nds-listbox-btn:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; border-color: var(--nds-primary); box-shadow: var(--nds-focus-ring); }
+.nds-listbox-btn:is(:disabled, [aria-disabled="true"]) { opacity: 0.55; cursor: default; }
 .nds-listbox-btn > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nds-listbox-btn > span.ph { color: var(--nds-text-muted); }
 .nds-listbox-btn .chev { flex-shrink: 0; color: var(--nds-text-3); }
@@ -1908,7 +1909,7 @@ body.nds-drawer-resizing * {
   cursor: pointer; text-decoration: none;
 }
 .nds-acct-trigger:hover { background: var(--nds-surface-hover); }
-.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; }
 .nds-acct-trigger.is-muted { color: var(--nds-text-2); font-weight: 500; }
 .nds-acct-summary { padding-left: 2px; }
 
@@ -1972,7 +1973,7 @@ body.nds-drawer-resizing * {
    row layout identical to the informational <div> so nothing shifts when a
    second account appears. */
 button.nds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
-button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-acct-row[data-selected] { background: var(--nds-surface-sunken); }
 /* The tick is never the only marker of the current account — the row is also
    tinted and carries aria-current, so the state does not depend on one glyph. */
@@ -2083,7 +2084,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   border: 2px solid transparent; cursor: pointer;
 }
 .nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
-.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: var(--nds-font-size-micro); color: var(--nds-text-2); line-height: 1; }
 
 /* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
@@ -2136,7 +2137,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 }
 .nds-cgm-grip:hover { color: var(--nds-text-3); }
 .nds-cgm-grip:active { cursor: grabbing; }
-.nds-cgm-grip:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; border-radius: var(--nds-radius-pill); }
+.nds-cgm-grip:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; border-radius: var(--nds-radius-pill); }
 
 .nds-cgm-dot { width: 10px; height: 10px; flex: none; border-radius: 50%; background: var(--nds-text-3); }
 .nds-cgm-dot[data-color='blue'],
@@ -2228,7 +2229,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   border-color: var(--nds-border);
 }
 .nds-card.btn:focus-visible {
-  outline: none;
+  outline: 2px solid var(--nds-text); outline-offset: 1px;
   border-color: var(--nds-primary);
   box-shadow: var(--nds-focus-ring);
 }
@@ -2237,7 +2238,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   border-color: var(--nds-primary);
   background: var(--nds-surface-hover);
 }
-.nds-card.btn:disabled {
+.nds-card.btn:is(:disabled, [aria-disabled="true"]) {
   cursor: default;
   opacity: 0.55;
 }
@@ -2381,7 +2382,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   text-decoration: underline;
 }
 .nds-step-hit:focus-visible {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: 2px;
   border-radius: var(--nds-radius-sm);
 }
@@ -2502,10 +2503,10 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   background: transparent; cursor: pointer; padding: 0 7px; color: var(--nds-text-muted);
 }
 .nds-savedchip-act[aria-pressed='true'] { color: var(--nds-primary); }
-.nds-savedchip-act:disabled { cursor: default; opacity: .5; }
-.nds-savedchip-main:hover, .nds-savedchip-act:not(:disabled):hover { background: var(--nds-surface-sunken); }
+.nds-savedchip-act:is(:disabled, [aria-disabled="true"]) { cursor: default; opacity: .5; }
+.nds-savedchip-main:hover, .nds-savedchip-act:not(:is(:disabled, [aria-disabled="true"])):hover { background: var(--nds-surface-sunken); }
 .nds-savedchip-main:focus-visible, .nds-savedchip-act:focus-visible {
-  outline: 2px solid var(--nds-primary); outline-offset: -2px;
+  outline: 2px solid var(--nds-text); outline-offset: -2px;
 }
 
 /* ── Thumbnail (GDS Phase 2 — lifted from app/_shared/grid-lens) ─────────────────────────────
@@ -2513,7 +2514,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    surface, the corner and the fade. `.nds-thumb-preview` portals to <body>, above the grid. */
 .nds-thumb { position: relative; flex-shrink: 0; display: inline-block; line-height: 0; }
 .nds-thumb-btn { padding: 0; border: 0; background: none; cursor: pointer; border-radius: var(--nds-radius-sm); }
-.nds-thumb-btn:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
+.nds-thumb-btn:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; } /* DS1-18: the focus-ring token is 12% alpha = 1.17:1, no visible ring */
 .nds-thumb-img { display: block; object-fit: cover; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); opacity: 0; transition: opacity 150ms ease; }
 .nds-thumb-img.is-loaded { opacity: 1; }
 .nds-thumb-skel { position: absolute; inset: 0; border-radius: var(--nds-radius-sm); background: var(--nds-surface-sunken); animation: nds-thumb-pulse 1.6s ease-in-out infinite; }
@@ -2630,7 +2631,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 /* The ring belongs on the ROW, not on the label — the hit area is what is focused. */
 .nds-prow-action:focus-visible { outline: none; }
 .nds-prow-action:focus-visible::after {
-  outline: 2px solid var(--nds-primary);
+  outline: 2px solid var(--nds-text);
   outline-offset: -2px;
   border-radius: var(--nds-radius-lg);
 }
@@ -2663,9 +2664,9 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-drawer.from-left { left: 0; right: auto; animation-name: nds-slidein-left; }
 .nds-drawer-bd.transparent { background: transparent; }
 @keyframes nds-slidein-left { from { transform: translateX(-100%); } to { transform: translateX(0); } }
-.nds-menu [role='menuitem'][data-selected='true'] { background: var(--nds-primary-soft); color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
+.nds-menu :is(button, a)[data-selected='true'] { background: var(--nds-primary-soft); color: var(--nds-text); font-weight: var(--nds-font-weight-semibold); }
 .nds-menu [role='menuitem'][data-selected='true']:hover { background: var(--nds-primary-soft); text-decoration: underline; }
-.nds-menu [role='menuitem']:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-menu [role='menuitem']:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 @media (prefers-reduced-motion: reduce) { .nds-drawer { animation: none; } }
 
 /* OrderedList: shared axis, value and priority ordering. */
@@ -2700,7 +2701,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-media-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); font-size: var(--nds-font-size-base); font-weight: var(--nds-font-weight-semibold); overflow-wrap: anywhere; }
 .nds-media-card-marker { flex-shrink: 0; padding: var(--nds-space-4) var(--nds-space-8); border-radius: var(--nds-radius-pill); background: var(--nds-surface-sunken); color: var(--nds-text); font-size: var(--nds-font-size-sm); }
 .nds-media-card-preview { display: grid; place-items: center; width: 100%; aspect-ratio: 1; padding: var(--nds-space-12); background: var(--nds-surface); color: var(--nds-text); border: 0; border-top: 1px solid var(--nds-border-subtle); border-bottom: 1px solid var(--nds-border-subtle); cursor: zoom-in; }
-.nds-media-card-preview:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -4px; }
+.nds-media-card-preview:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -4px; }
 .nds-media-card-preview img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .nds-media-card-failure { display: flex; flex-direction: column; align-items: center; gap: var(--nds-space-12); font: inherit; }
 .nds-media-card-detail { padding: var(--nds-space-10) var(--nds-space-12); color: var(--nds-text); font-size: var(--nds-font-size-sm); line-height: 1.6; overflow-wrap: anywhere; }
@@ -2760,7 +2761,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-media-preview-stage { display: grid; place-items: center; min-height: 180px; background: var(--nds-surface-sunken); border-radius: var(--nds-radius-lg); overflow: hidden; }
 .nds-media-preview-stage > img, .nds-media-preview-stage > video { display: block; width: 100%; max-height: 64dvh; object-fit: contain; }
 .nds-media-preview-stage > audio { max-width: 100%; }
-.nds-media-preview-stage > video:focus-visible, .nds-media-preview-stage > audio:focus-visible, .nds-media-preview-transcript > summary:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-preview-stage > video:focus-visible, .nds-media-preview-stage > audio:focus-visible, .nds-media-preview-transcript > summary:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-media-preview-fallback { display: grid; justify-items: center; gap: var(--nds-space-12); padding: var(--nds-space-24); text-align: center; }
 .nds-media-preview-fallback p { margin: 0; }
 .nds-media-preview-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
@@ -2780,7 +2781,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
 .nds-media-strip-move { display: inline-flex; padding: 0; border: 0; border-radius: var(--nds-radius-sm); background: transparent; color: inherit; cursor: grab; }
 .nds-media-strip-move:active { cursor: grabbing; }
 .nds-media-strip-move[data-drop-target="true"] { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
-.nds-media-strip-move:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+.nds-media-strip-move:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 
 /* Repeated records: composition, technical assemblies and other paired facts. */
 .nds-record-list, .nds-record-list-item { display: grid; gap: var(--nds-space-8); min-inline-size: 0; margin: 0; padding: 0; border: 0; }
@@ -2815,7 +2816,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   cursor: pointer; text-decoration: none;
 }
 .nds-acct-trigger:hover { background: var(--nds-surface-hover); }
-.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 2px; }
+.nds-acct-trigger:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 2px; }
 .nds-acct-trigger.is-muted { color: var(--nds-text-2); font-weight: 500; }
 .nds-acct-summary { padding-left: 2px; }
 
@@ -2879,7 +2880,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
    row layout identical to the informational <div> so nothing shifts when a
    second account appears. */
 button.nds-acct-row { width: 100%; border: none; background: none; font: inherit; text-align: left; cursor: pointer; }
-button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: -2px; }
+button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-text); outline-offset: -2px; }
 .nds-acct-row[data-selected] { background: var(--nds-surface-sunken); }
 /* The tick is never the only marker of the current account — the row is also
    tinted and carries aria-current, so the state does not depend on one glyph. */
@@ -2992,7 +2993,7 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   border: 2px solid transparent; cursor: pointer;
 }
 .nds-acctp-swatch[aria-pressed='true'] { border-color: var(--nds-text); }
-.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-primary); outline-offset: 1px; }
+.nds-acctp-swatch:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .nds-acctp-swatch.is-clear { background: none; border: 1px dashed var(--nds-border-strong); font-size: 10px; color: var(--nds-text-2); line-height: 1; }
 
 /* CX.2 — the honest row. The status pill sits on the name line; scope chips, the
@@ -3020,3 +3021,31 @@ button.nds-acct-row:focus-visible { outline: 2px solid var(--nds-primary); outli
   .nds-acctp-swatches { flex-wrap: wrap; }
   .nds-acctp-note { max-width: none; text-align: left; }
 }
+
+/* PR.6 — shared consequence review and observed presence. Shared controls retain their primitives. */
+.nds-confirm-h { font-weight: var(--nds-font-weight-semibold); color: var(--nds-text); }
+.nds-confirm-block + .nds-confirm-block { margin-top: var(--nds-space-14); }
+.nds-confirm-list { margin: var(--nds-space-6) 0 0; padding-left: var(--nds-space-18); display: grid; gap: var(--nds-space-4); }
+.nds-confirm-aside { padding-left: var(--nds-space-10); border-left: 2px solid var(--nds-warning); }
+.nds-confirm-error, .nds-inline-error { color: var(--nds-danger-text); }
+.nds-confirm-warn { color: var(--nds-warning-text); }
+.nds-confirm-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--nds-space-8); margin-top: var(--nds-space-14); }
+.nds-disclosure.warning { border-color: var(--nds-warning); }
+.nds-disclosure.danger { border-color: var(--nds-danger); }
+.nds-disclosure.warning > .nds-disclosure-summary { color: var(--nds-warning-text); }
+.nds-disclosure.danger > .nds-disclosure-summary { color: var(--nds-danger-text); }
+.nds-as-of { color: var(--nds-text); font-size: var(--nds-font-size-xs); }
+.nds-presence-mark, .nds-sheet-statuses { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-6); min-width: 0; }
+.nds-presence-sentence { color: var(--nds-text); font-size: var(--nds-font-size-xs); }
+.nds-save-mark { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; inline-size: 16px; block-size: 16px; margin-inline-start: var(--nds-space-4); border: 1px solid var(--nds-text); border-radius: var(--nds-radius-full); color: var(--nds-text); font-size: var(--nds-font-size-xs); line-height: 1; }
+.nds-save-mark[data-state="waiting"] { border-style: dashed; }
+.nds-save-mark[data-state="unknown"] { border-radius: var(--nds-radius-xs); border-width: 2px; }
+
+.nds-view-prompt { z-index: var(--nds-z-popover); width: min(var(--nds-popover-max-w), calc(100vw - 16px)); padding: var(--nds-space-12); border: 1px solid var(--nds-border); border-radius: var(--nds-radius-md); box-shadow: var(--nds-shadow-menu); background: var(--nds-surface); color: var(--nds-text); }
+.nds-view-prompt-name { display: grid; gap: var(--nds-space-6); }
+
+/* PR.6: data-tone belongs to the control. This rule also wins on a selected danger item;
+   the selected rule above ties a button's specificity instead of overriding its declared tone. */
+.nds-menu button[data-tone="danger"],
+.nds-menu a[role="menuitem"][data-tone="danger"],
+.nds-menu-danger { color: var(--nds-danger-text); }

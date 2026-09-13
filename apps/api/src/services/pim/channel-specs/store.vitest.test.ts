@@ -25,8 +25,14 @@ describe('store product information contracts', () => {
     expect(result.coordinates).toEqual([expect.objectContaining({ channel, marketplace: 'GLOBAL' })])
     expect(result.columns.map(c => c.key)).toEqual(expect.arrayContaining(['name', 'description', channel === 'ETSY' ? 'keywords' : 'tags']))
     expect(result.columns.some(c => ['amazonAsin', 'bulletPoints', 'fulfillmentChannel', 'productType'].includes(c.key))).toBe(false)
-    for (const c of result.columns.filter(c => c.editable)) expect(resolveWriteRouting(c, { channel }, null)).toMatchObject({
+    // VT.1 (2026-09-13, D-VT3): every editable store column still routes through the bulk PATCH's `attr_*` field -
+    // EXCEPT the engine-owned variation theme, which has its own endpoint (`PATCH /studio/projection`) and must
+    // never be handed a bulk field name. Asserted explicitly rather than skipped, so the exception is pinned too.
+    for (const c of result.columns.filter(c => c.editable && c.kind !== 'variationTheme')) expect(resolveWriteRouting(c, { channel }, null)).toMatchObject({
       writeVerb: 'channel', writeTarget: 'channelListing', affectsAllChannels: false, writeField: expect.stringMatching(/^attr_/) })
+    const theme = result.columns.find(c => c.kind === 'variationTheme')!
+    expect(resolveWriteRouting(theme, { channel }, null)).toMatchObject({
+      writeVerb: 'channel', writeTarget: 'channelListing', affectsAllChannels: false, writeField: 'variation_theme' })
     const validators = buildCoordinateValidators(result.columns, result.coordinates[0], { isParent: false, productType: null })
     expect(evaluateRow({}, validators).some(i => i.message.includes('no channel schema'))).toBe(false)
   })

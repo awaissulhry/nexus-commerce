@@ -1,0 +1,9 @@
+{
+  "at": "2026-09-12T21:59:57.989Z",
+  "command": [
+    "node",
+    "apps/web/src/design-system/tools/token-guard.mjs"
+  ],
+  "exitCode": 0,
+  "output": "✓ token-guard [web]: 349 files — no raw hex, no numbered ramps in component CSS,\n    no Tailwind palette in DS .tsx, no platform aliases in DS stylesheets\n"
+}

@@ -1,0 +1,626 @@
+[
+  {
+    "file": "apps/api/src/services/pim/content-language.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.979105+00:00",
+    "sha256": "3a1cd81ff1ad897cde963a7bb7fec8d8003c898d6f4f4745240069f573014982",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-resolver.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:04:37.449616+00:00",
+    "sha256": "a6f28b76872a68dfea9dc177ebcf25c905aa909cf394bc7f6884032f17fc6803",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-resolver.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:04:37.451221+00:00",
+    "sha256": "2365040de9236de3fb2340ffe871c479a46c9e12f2bf9e7590f8b93c255a4867",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/attribute-resolver.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:28:24.068688+00:00",
+    "sha256": "0a742817ac7ae6ca12730d0a9baf1d4fd1b59d2b3a8cb8f077d144401bae3e70",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-locale.ts",
+    "exists": true,
+    "mtime": "2026-09-12T06:57:14.424560+00:00",
+    "sha256": "b15d3a16658c3439bc662d0a292af831cabedd434576d95b068d954623b64cb6",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/resolve-channel-field.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:38:04.026933+00:00",
+    "sha256": "064de96c8bc7fab47d265bbafa0c224ec252a36beb244e609bdb269802b8e0a7",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/global-content.ts",
+    "exists": true,
+    "mtime": "2026-09-12T06:57:14.425751+00:00",
+    "sha256": "c692ccc770a607d49dcee46afd4c32cfc1b4aa99c41419ad4c8729c1204a1af7",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/studio-sheet.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:31:46.366177+00:00",
+    "sha256": "9e39fca32f60ddab270625f1c6ebeb8ded364f83707e874a471f2b174cb0b71c",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-rows.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:36:42.871281+00:00",
+    "sha256": "219379510b71a412aed4dcfd012f5e5598803c5126082d109049fc983ed3e007",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/readiness.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:04:37.452015+00:00",
+    "sha256": "5a41651547d93ae56aba37a5d0c4233c731de7a578d9f2965e24eaa406fc15f4",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/listing-readiness.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.816483+00:00",
+    "sha256": "f28ebf93aec6692be1e348141e06f9278049ca217cc3d14a8160cf5d3868df6a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/listing-readiness.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.816759+00:00",
+    "sha256": "415d782a817b6dded4f5d89b5df5f47a6c8abf146729f4ebd46ba609695a897b",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/information-locale.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:09:16.522990+00:00",
+    "sha256": "f9f9e68f00b6e9a1d8b595554b12687d7ba4a8f7c71179d14b8db94dc6a9e3b4",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-columns.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.980605+00:00",
+    "sha256": "dff3001c74a8ffab9a7e619f12981ff3f3381c9eef2f50c46182a5360bee7ac6",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/market-languages.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:28:54.067680+00:00",
+    "sha256": "53ba82137f48026424b4df9de7af1e158f77dfdb1bcc978f2d7f922c561c2b2b",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-product-transfer.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.151326+00:00",
+    "sha256": "641b6f4051e9eb095782ed3ccbbae91116f1ab882ac48c0a186cdcfd473723d3",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-export.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:46:54.449737+00:00",
+    "sha256": "369ad992ea3d4883635a579f60d597ea1e5c6b99b04a8b22b0c2a68d96d7118f",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-effects.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.152395+00:00",
+    "sha256": "3106235894223268457cc6a5e787289e4b9a3196fae64b81e67ba181fd128eee",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-workbook-scopes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.152609+00:00",
+    "sha256": "ae08b0bb6fda7beb6a2d3fd66658b41e1e6dd7e97f9da82cff3b7158eee1dfda",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/products/translation-resolver.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:08:24.777824+00:00",
+    "sha256": "f26731ad6ce3c286665f62d113a871a496a90dc1d6f822be5f6d304911beb14b",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/etsy/information-content.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.476336+00:00",
+    "sha256": "2fb12932d6e1cce4964efcaa93f8ea15943cc15878d933f500e5fd7c5a7ee4cf",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/shopify/listing-information-plan.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.407467+00:00",
+    "sha256": "5f22558732f3b6e314a17799e1e271bc3c5429831e327ab1f9a5c5c14f8221f8",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/images/product-media.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.980192+00:00",
+    "sha256": "1b2fd7e628a786e70d13d292200fc1649c5bab6abbba59ef4b636675793aad9c",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/ai/enrichment/draft.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.150758+00:00",
+    "sha256": "49e02d225c939f8d7ed96bd6f71647ebbf82cce4cf50f47a8488ae9cab694d67",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/ai/seo-regen.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.409208+00:00",
+    "sha256": "3d59416e7a9f92682b9b2da6ff69e4c9a17757cb37fc77c3cc3cd192b180441d",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/asset-locale-overlay.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.409448+00:00",
+    "sha256": "2e73c62a92884c7ca64071e35638cc47f45645095858cc26f44898d521b5b863",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/cell-formula.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:47:50.004238+00:00",
+    "sha256": "026e61457b1db185335a0189da2d88ab2fe4955e543c3d62dc02cae3b5d83ebb",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/formula-storage.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.154187+00:00",
+    "sha256": "3dbb4e8ea36520d41eff2ec00a119f612c6bc81ea2387c6615a5f11c0c8f5922",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/aplus-amazon.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.407760+00:00",
+    "sha256": "d7656a08d213b703f57f0ab73d6fd76d3678ca8dc331643bf3edd52f5823ef4b",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/aplus-amazon-pull.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.408306+00:00",
+    "sha256": "c6bb8dcf89d335b87151b8a375774e0650afb71aa554fc0fb434d98f389686ab",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/brand-story-amazon.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:19:59.408041+00:00",
+    "sha256": "874a12d3cc83a0b7043a97bf3f8ddff2581e0ab2cadac8fee889ed04a08ad25a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/product-translations.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.816072+00:00",
+    "sha256": "60f3c73e97feddb86ed5fca68df7ca475b60de39ecd625bee1214ab0293307e7",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/listings-syndication.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.475329+00:00",
+    "sha256": "57500e1024fa67da9a1ef1e0077e1c245c526d4a5b6f69cda802b4e8e0a5cad8",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/product-seo.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:21:39.511720+00:00",
+    "sha256": "36a1c45cb34a08f2a356c269cfc5861ddd93ebde43ed333ede19b56fa28c3297",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/product-enrichment.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.981190+00:00",
+    "sha256": "166d016854d6b32a295e780cb39e2809c403d0e8cc9b0b7a6256750a7f645fca",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/aplus-content.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:45:13.318300+00:00",
+    "sha256": "cc138291ca5513caf9775ec8206a57ba3db7071b237053db46793a317230dfe5",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/brand-story.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:45:13.318755+00:00",
+    "sha256": "4a784109fbd6e054185e646291beaba133d40f139b6009138657ee88e326aaa2",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/assets.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.986100+00:00",
+    "sha256": "0a49a2b4e721517fafd53a30870c332e340fbe7411fa55a9fe4107a22e4b29ae",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/cell-formula.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:21:39.513366+00:00",
+    "sha256": "65c4dadf2758bb95f45ad292a60fda523a61f623929a154acd6028fd27a6d841",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "packages/shared/product-media.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.979748+00:00",
+    "sha256": "097c50b51e0a9801a55ec4eb6781736e07cde1a0affb3e18b1012b9bbd5b1483",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "docs/audits/2026-09-12-language-axis/step3/boundary-integration.md",
+    "exists": true,
+    "mtime": "2026-09-12T08:07:08.337395+00:00",
+    "sha256": "fe5b9f7ecd14b361048e3b47c530402564b38a8412340b408ae97943c4e69cc6",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/localized-content.ts",
+    "exists": true,
+    "mtime": "2026-09-12T06:57:14.424855+00:00",
+    "sha256": "c912649342f33d40d8690d0392af96c5b70d0ce429b6f67fcf123ecf6e66d339",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/translation-write.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.985014+00:00",
+    "sha256": "a9b2f4a23310b95c52b6b98f42985a980936e8facd4aca6d60fcf56328e5738a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/resolve-batch.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:38:04.027376+00:00",
+    "sha256": "157ccecb2a3c9f36f2eef43c875aacdba020521cfd73049f8c4882432bf2ef36",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping-simulate.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:38:04.027786+00:00",
+    "sha256": "59c8f472af3cbb87caa78330b892d9a38b21d98e93effa7029c12eacdfbcbcd0",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/pim-global.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:09:16.523344+00:00",
+    "sha256": "ae1358e14e40166bc780254383289a27fc7799daa38529b07827ad549761b5de",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/resolver-shadow.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:22:11.179330+00:00",
+    "sha256": "df905004f20fd0ece6754adfb4fc1abed364bf3ba6266899c054c46d9e672816",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/sheet-values.ts",
+    "exists": true,
+    "mtime": "2026-09-11T01:15:28.168730+00:00",
+    "sha256": "f9272caaefe9a99baf5c7ef18ccd438c0fa72378df162d9b0bb3ff2f83cb6ad5",
+    "changedInSwitch": false,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/translation-completeness.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.779436+00:00",
+    "sha256": "9e090dbaa24c32da8c961e4f4e233a7f17b86b890a0a829657903a79557f9acb",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/products-catalog.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.815650+00:00",
+    "sha256": "f5844022e30010a5d02279b5e6a225c9c676f6d7e2fbdb10fbb72c632898405a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/routes/families.routes.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:11:26.815129+00:00",
+    "sha256": "d864591ba8b72f22e8c8de53c54f298ed736d5975255b80b60bf1e54259adace",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-plan.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:47:50.003240+00:00",
+    "sha256": "879796a198ed8d352954f364641fc4d3ce3f5516e3a7312ba38ce3fdcdc55e78",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer-file.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.153097+00:00",
+    "sha256": "b460c68563a6b5e8e416306d32702fedcfecbfe662f8caaac7cabcf619110eaf",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-amazon-workbook.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:15:16.153615+00:00",
+    "sha256": "2b2ede8b79ebd380cfca55ffd346dc6e16b602892c373343ea7e75410c0ec335",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/market-language-payloads.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.475795+00:00",
+    "sha256": "21edacee6762cc495bd6f6e8bf4d349e71901a48728b1fc1ebf2b7e1da82edbe",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "packages/shared/content-language.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.978954+00:00",
+    "sha256": "df137ef90a11a29fb1abceceaa0fe7aec4ed51013a7f517efc96c102e4f9cb2e",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "packages/shared/package.json",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.979445+00:00",
+    "sha256": "1253ebbd320dc90674a56ea55be958777b527df176577b646580495276d6c101",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/ai/enrichment/cell-key.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.980890+00:00",
+    "sha256": "2b5252da9115464ab2c63b1ff216f9e702016114eae9e0b14931f52beb3658ba",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/ai/enrichment/generate.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:13:06.981485+00:00",
+    "sha256": "44fda09651a3a08df1f3e05408b48fc8307783c835c3165b0ba56d3c93e83538",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/shopify/content-workspace.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.477086+00:00",
+    "sha256": "8c469f36aac0cf6566cb6ea0253ca2b4bdbb9978f7d3caee60a9b52579933f10",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-inheritance.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.476534+00:00",
+    "sha256": "7f073e17734ea02ecb1f983b1792ed7b3259cb670da228bb06422e48fb9fef98",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/channel-specs/store.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.477451+00:00",
+    "sha256": "0b6ce5db1dff1a9c736df59b7c774552a6341a193d8632a204f49bdd39186b60",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/global-content.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:28:24.067597+00:00",
+    "sha256": "eca67a9abf8bd844ea585d8df40478c3d2794b37463bee7292a85a836076aa42",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-resolver-shadow.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:28:24.067904+00:00",
+    "sha256": "8d9dd226dba84c764f57b91a2dc76ec9536ccb4cee8d20ed4dd2396f4e7cbc91",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-resolver-shadow.ts",
+    "exists": false,
+    "mtime": null,
+    "sha256": null,
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/shopify/channel-sheet-projection.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.986658+00:00",
+    "sha256": "f9d0b418910283485995f5f8379f9f7502c0b88177ed0590c3e4b0ae868cd216",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/family-completeness.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:33:55.866268+00:00",
+    "sha256": "7396cb561573c6961d629c8debb79e64c333e6182c68e2e5d803ad0a55d33b43",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/information-database.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.983400+00:00",
+    "sha256": "000c25c7706aea4374648fdf51b2d7e459ba54699499f144457881e64a6b694a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/master-rule.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.983874+00:00",
+    "sha256": "a99cac11956c04d66bea6be2adf3b9a7156b6c56b7d2795889a184a28073637a",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/mapping/mapping-sources.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:44:48.984452+00:00",
+    "sha256": "6e966068da732ba05115eeb4062f9c8caf83390ee766355be4f674a5de5c039d",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-read.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:17:37.475908+00:00",
+    "sha256": "ac4149474f6ab5b0f0b9e25aaf79f4ad1d4703871a4bf04be79a87c053bc61d4",
+    "changedInSwitch": true,
+    "baseline": "new file (claimed in initial switch ledger)"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-read.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:52:52.251116+00:00",
+    "sha256": "e59d9390cf8bde008d63cffc4072ba78c52805db690e270401d6de6641236df6",
+    "changedInSwitch": true,
+    "baseline": "new file (claimed in initial switch ledger)"
+  },
+  {
+    "file": "apps/api/src/services/pim/content-readiness.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:04:37.563515+00:00",
+    "sha256": "e129b17e3b1023ea95ec3155ad0d5619533976d2a3a7b04c1fdd4e3c99dfe13f",
+    "changedInSwitch": true,
+    "baseline": "new file (claimed in initial switch ledger)"
+  },
+  {
+    "file": "apps/api/src/services/pim/legacy-content-write.ts",
+    "exists": true,
+    "mtime": "2026-09-12T06:57:14.424140+00:00",
+    "sha256": "f7a82bd60c8f8ec7d5d78430d94ea9b59743fbee56534c3acac9b7394c830e30",
+    "changedInSwitch": true,
+    "baseline": "new file (claimed in initial switch ledger)"
+  },
+  {
+    "file": "apps/api/src/services/pim/catalog-transfer.service.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:49:15.831253+00:00",
+    "sha256": "1900533cc0cda73efcd9ceebddd464e85292a7cbdfd543c33b7132f5faf3e99d",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "packages/shared/product-media.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T07:49:15.830995+00:00",
+    "sha256": "c91c0bf6170cde83602bb0e2a1aa0e6e5dcbc00cab62da47d579061f59aa9022",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/channel/types.ts",
+    "exists": true,
+    "mtime": "2026-09-12T08:04:41.335239+00:00",
+    "sha256": "0a61c8beaaa8860d22d6a59030017b369690b00b96fcb74d26e22c1e00736a48",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  },
+  {
+    "file": "apps/web/src/app/products/[id]/edit/_studio/sheet/content-wire.vitest.test.ts",
+    "exists": true,
+    "mtime": "2026-09-12T08:06:14.773301+00:00",
+    "sha256": "5a0f965fcaeac75c92a4d91f76fc7afcbc65b41c56a2abb045a7585025b4f5a9",
+    "changedInSwitch": true,
+    "baseline": "step3-switch/before.json"
+  }
+]

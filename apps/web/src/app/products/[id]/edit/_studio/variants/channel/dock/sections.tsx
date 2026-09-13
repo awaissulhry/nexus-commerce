@@ -7,11 +7,13 @@
 import { Lock } from 'lucide-react'
 import { memo, useState } from 'react'
 
-import { Banner, Field, Modal, SummaryTable, Listbox, OrderedList } from '@/design-system/components'
+import { Banner, Field, Modal, SummaryTable, OrderedList } from '@/design-system/components'
+import { AxesPanel, axesCellFromProjection, projectionDraftFromAxesCell } from '@/design-system/grid/editors'
+import type { VariationThemeCell } from '@/design-system/grid/renderers/variationTheme'
 import { Button, Radio, Tag } from '@/design-system/primitives'
 
 import {
-  LOCK_TITLE, VALUES_HINT, axisNounPlural, specificsHint, splitHint, sameAsSharedNote,
+  LOCK_TITLE, VALUES_HINT, specificsHint, splitHint, sameAsSharedNote,
   splitPerAxisLabel, splitSingleLabel, usedCount,
 } from '../copy'
 import type { ProjectionDraft, ProjectionPage } from '../types'
@@ -43,29 +45,27 @@ export interface SpecificsSectionProps {
  * sentence on it, never removed. Removing it would hide the thing the banner is talking about.
  */
 export const SpecificsSection = memo(function SpecificsSection({ page, draft, onDraft }: SpecificsSectionProps) {
-  const { vocabulary, limits, coordinate, targetOptions, locked } = page
+  const { vocabulary, limits, coordinate } = page
   const channelLabel = coordinate.channelLabel ?? coordinate.channel
-  const order = draft.mapping.map(m => m.axisKey)
-  const byKey = new Map(draft.mapping.map(m => [m.axisKey, m]))
+  /* §4.4.1's tag counts MAPPED specifics, not rows — an axis with no target is not "used". */
   const used = draft.mapping.filter(m => m.target !== null).length
-  /** Axes the family has that this channel is not yet showing — what `+ Add a specific` adds. */
-  const unmapped = (page.axes ?? []).filter(a => !byKey.has(a.key))
-  /* `null` is 'no limit this repository can source', not 'zero' — so it never holds the button. */
-  const atLimit = limits.axes !== null && draft.mapping.length >= limits.axes
 
-  const reorder = (keys: string[]) => onDraft({
-    ...draft,
-    mapping: keys.map((key, index) => ({ ...byKey.get(key)!, order: index })),
-    ...(page.order?.token ? { presentationOrder: { expectedToken: page.order.token, change: { ...draft.presentationOrder?.change, axes: keys } } } : {}),
-  })
-  const retarget = (key: string, target: string) => onDraft({
-    ...draft,
-    mapping: draft.mapping.map(m => m.axisKey === key ? { ...m, target: target || null } : m),
-  })
-  const add = () => {
-    const next = unmapped[0]
-    if (!next) return
-    onDraft({ ...draft, mapping: [...draft.mapping, { axisKey: next.key, axisLabel: next.label, target: null, order: draft.mapping.length }] })
+  /**
+   * The panel reports the whole edited cell; this turns it back into the dock's draft.
+   *
+   * 🔴 `presentationOrder` is re-applied HERE and not in the adapter, because it is the DOCK's fact:
+   * §1.4's verdict is that the drag order IS the buyer-facing order, the server stores it as
+   * `_variationAxes` behind its OWN CAS token (`page.order.token`,
+   * `ebay-presentation-order.service.ts:98–126`), and `projectionDraftFromAxesCell` deliberately
+   * preserves every draft field it does not own rather than guessing at one. Dropping this would
+   * have left `Save mapping` sending the OLD axis order for the presentation order after a drag —
+   * the exact silent half-write the shared-component swap had to not introduce.
+   */
+  const onPanel = (next: VariationThemeCell) => {
+    const mapped = projectionDraftFromAxesCell(next, draft)
+    onDraft(page.order?.token
+      ? { ...mapped, presentationOrder: { expectedToken: page.order.token, change: { ...draft.presentationOrder?.change, axes: mapped.mapping.map(m => m.axisKey) } } }
+      : mapped)
   }
 
   return (
@@ -77,60 +77,25 @@ export const SpecificsSection = memo(function SpecificsSection({ page, draft, on
         <Tag tone="neutral">{usedCount(used, limits.axes)}</Tag>
       </h3>
       <p className="nds-vp-dock-hint">{specificsHint(channelLabel, vocabulary, limits.axes)}</p>
-      <OrderedList
-        keyboardGrip
-        compact
-        disabled={coordinate.channel === 'EBAY' && !page.order?.writableHere}
-        label={`The order buyers pick ${axisNounPlural(vocabulary)} in`}
-        items={order}
-        itemLabel={key => byKey.get(key)?.axisLabel ?? key}
-        onChange={reorder}
-        renderItem={key => {
-          const row = byKey.get(key)
-          if (!row) return null
-          const isLocked = !!locked?.lockedAxisKeys.includes(key)
-          return (
-            <span className="nds-vp-dock-specific">
-              <span className="nds-vp-dock-axis" title={row.axisLabel}>{row.axisLabel}</span>
-              <span className="nds-vp-dock-arrow" aria-hidden>→</span>
-              {/* §4.4.4 — a locked axis keeps its row and loses its listbox, "disabled with the same
-                  reason". The reason is the SERVER's sentence, carried on the element the operator
-                  hovers: a disabled control whose reason lives only in a banner further up is the
-                  silent-disable shape `scripts/check-silent-disabled.mjs` exists to catch. */}
-              <span
-                className="nds-vp-dock-target"
-                title={isLocked ? locked?.reason : undefined}
-              >
-                <Listbox
-                  size="sm"
-                  options={targetOptions.map(o => ({ value: o.code, label: o.label }))}
-                  value={row.target ?? ''}
-                  emptyLabel={`Choose a ${vocabulary.axisNoun}`}
-                  emptyIsPlaceholder
-                  disabled={isLocked}
-                  ariaLabel={isLocked
-                    ? `${row.axisLabel} is the ${channelLabel} ${vocabulary.axisNoun} ${row.target ?? ''}, locked: ${locked?.reason ?? ''}`
-                    : `The ${channelLabel} ${vocabulary.axisNoun} for ${row.axisLabel}`}
-                  onChange={value => retarget(key, value)}
-                  width="100%"
-                />
-              </span>
-            </span>
-          )
-        }}
+      {/**
+        * 🔴 VT.2c — section 1's rows, its `+ Add a <noun>` and its two lock states are the SHARED
+        * `AxesPanel`, the same component the sheet's variation-theme cell opens (design §3.5's last
+        * clause, D-VT4; prompt step 4). Two editors for one projection is the fork the programme's
+        * shared-component rule exists to prevent, and the two states that kept this section local
+        * until now — the per-axis lock and the endpoint's order-writability — are expressed on the
+        * panel from the WIRE (`locked.lockedAxisKeys`, `order.writableHere`), not from a flag here.
+        *
+        * 🔴 `key={page.version}` is the 409 contract. `MappingDock` re-derives its draft when the
+        * version moves (a conflict repaint replaces the operator's stale edits with the server's
+        * mapping); the panel holds its own draft for the life of its mount, so without this key a
+        * repaint would leave the rows showing the edits the server had just refused.
+        */}
+      <AxesPanel
+        key={page.version}
+        host="dock"
+        cell={axesCellFromProjection(page, draft)}
+        onChange={onPanel}
       />
-      {/* Held rather than hidden: the reason an operator cannot add one is the useful half. */}
-      <Button
-        size="sm"
-        variant="ghost"
-        disabled={unmapped.length === 0 || atLimit}
-        title={
-          atLimit ? `${channelLabel} allows up to ${limits.axes} ${axisNounPlural(vocabulary)} per listing.`
-            : unmapped.length === 0 ? `Every shared axis is already a ${vocabulary.axisNoun}. Add an axis on the shared product first.`
-              : `Show ${unmapped[0].label} as a ${vocabulary.axisNoun} on ${channelLabel}`
-        }
-        onClick={add}
-      >+ Add a {vocabulary.axisNoun}</Button>
     </section>
   )
 })
@@ -166,7 +131,7 @@ export const ValuesSection = memo(function ValuesSection({ page, draft, onDraft 
   return <section className="nds-vp-dock-section" aria-labelledby="vp-dock-values">
     <h3 id="vp-dock-values" className="nds-vp-dock-title">Values
       {page.coordinate.channel === 'EBAY' && <Button size="sm" variant="ghost" disabled={!page.order?.writableHere}
-        title={page.order?.reason || 'Choose the order buyers see each value in.'} onClick={openOrder}>Order values</Button>}
+        title={page.order?.reason != null ? page.order.reason : page.order?.writableHere ? 'Choose the order buyers see each value in.' : 'The server did not report why this action is unavailable.'} onClick={openOrder}>Order values</Button>}
     </h3>
     <p className="nds-vp-dock-hint">{VALUES_HINT}</p>
     {(page.axes ?? []).map(axis => {
@@ -223,7 +188,7 @@ export const SplitSection = memo(function SplitSection({ page, draft, onDraft }:
     ? axis.values.map(v => included.filter(c => c.sharedAxisValues?.[axis.key] === v.code).length).filter(n => n > 0)
     : []
   const held = !split.creatable
-  const heldReason = split.heldReason ?? 'Splitting into more than one listing is not available yet.'
+  const heldReason = split.heldReason == null ? 'The server did not report why this action is unavailable.' : split.heldReason
 
   return (
     <section className="nds-vp-dock-section" aria-labelledby="vp-dock-split">
@@ -252,6 +217,147 @@ export const SplitSection = memo(function SplitSection({ page, draft, onDraft }:
         />
       </span>
       {held && <span id="vp-split-held" className="sr-only">{heldReason}</span>}
+    </section>
+  )
+})
+
+/* ── 4 · Collisions (VT.4) ────────────────────────────────────────────────────────────────── */
+
+export interface CollisionsSectionProps {
+  page: ProjectionPage
+  draft: ProjectionDraft
+}
+
+/**
+ * VT.4 — VX §6's Collisions section, added beside VP.4's three.
+ *
+ * A COLLISION is two INCLUDED variants that arrive at the channel with the same key on the surviving
+ * axes. It is the one mapping failure whose remedy is not in the cell that shows it, which is why the
+ * sixth projection word `Collides` sends an operator here (`grid/renderers/projection.ts`).
+ *
+ * 🔴 **Three states, three sentences — never two.** `page.collisions` absent = this server does not
+ * report them (an older API); `null` = nothing is dropped on this coordinate, so nothing could collide
+ * (NOT COMPUTED); `unresolved: 0` = computed and empty. The section that printed "No collisions on this
+ * listing." for all three would be asserting a measurement in the two cases where none was taken —
+ * `reference_could_not_measure_vs_measured_empty`, inside a contract field.
+ *
+ * 🔴 **The resolver radios are READ-ONLY here, and the section says why.** Measured 2026-09-13: the
+ * projection PATCH accepts no resolver (it REFUSES a colliding mapping with `400 collision_unresolved`),
+ * and a resolver is stored on the category's mapping RULE (`MarketplaceSchemaMapping.variations`, VX
+ * §11.1 — VT.3's page), not per coordinate. A radio an operator could click that saved nothing would be
+ * the silent-no-op this programme's control rules exist to prevent, so each one is held with the reason
+ * it cannot run here, and the available ones say where they ARE set.
+ *
+ * 🔴 **`fold` availability is the server's, and it is wider than the write path.** Also measured: the
+ * server reports `fold: available` whenever any axis survives, but folding writes through the PIN on the
+ * child's axis cell, and on this fixture every `values[axis].write` is `null` with the server's own
+ * sentence ("…offers no options for this family yet, so there is no per-market <axis> to pin here").
+ * So the section ANDs the two: the server's availability and a writable cell. When the cells hold it,
+ * the cell's reason is shown, because that is the refusal an operator would actually hit.
+ */
+export const CollisionsSection = memo(function CollisionsSection({ page, draft }: CollisionsSectionProps) {
+  const { collisions, coordinate } = page
+  const channelLabel = coordinate.channelLabel ?? coordinate.channel
+  const mapped = draft.mapping.filter(m => m.target !== null).map(m => m.axisKey)
+  const dropped = (page.axes ?? []).filter(a => !mapped.includes(a.key))
+
+  /* Can a FOLD actually be written on this coordinate? The first surviving axis is where it would land. */
+  const foldInto = (page.axes ?? []).find(a => mapped.includes(a.key))
+  const foldCell = foldInto ? page.children.find(c => c.values?.[foldInto.key])?.values?.[foldInto.key] : undefined
+  const foldHeldByCell = foldInto && foldCell ? (!foldCell.write ? (foldCell.writeBlockedReason ?? null) : null) : null
+
+  const resolverLabel: Record<'split' | 'fold' | 'exclude', string> = {
+    split: 'Split per dropped axis',
+    fold: foldInto ? `Fold into ${foldInto.label}` : 'Fold into the surviving axis',
+    exclude: 'Exclude the duplicates',
+  }
+
+  return (
+    <section className="nds-vp-dock-section" aria-labelledby="vp-dock-collisions">
+      <h3 id="vp-dock-collisions" className="nds-vp-dock-title">Collisions</h3>
+
+      {collisions === undefined ? (
+        <p className="nds-vp-dock-hint">
+          This server does not report collisions for {channelLabel} · {coordinate.market} yet, so none are shown —
+          that is not the same as none existing.
+        </p>
+      ) : collisions === null ? (
+        <p className="nds-vp-dock-hint">
+          Every axis this family has reaches {channelLabel} · {coordinate.market}, so no two variants can arrive
+          with the same combination. Nothing was counted because there is nothing to count.
+        </p>
+      ) : (
+        <>
+          {/* The server's sentence, verbatim. The dock composes no count of its own. */}
+          <p className="nds-vp-dock-hint">{collisions.summary}</p>
+          {collisions.unresolved === 0 ? (
+            <p className="nds-vp-dock-note">
+              {dropped.length > 0
+                ? `${dropped.map(a => a.label).join(', ')} ${dropped.length === 1 ? 'is' : 'are'} dropped on this ${page.vocabulary.axisNoun === 'option' ? 'store' : 'listing'}, and the variants are still distinct without ${dropped.length === 1 ? 'it' : 'them'}.`
+                : 'No collisions on this listing.'}
+            </p>
+          ) : (
+            <SummaryTable
+              label={`Colliding variants on ${coordinate.label}`}
+              columns={['Arrives as', 'Variants', 'Told apart only by']}
+              /**
+               * 🔴 CAPPED at 6 SKUs, and the cap is STATED. Measured 2026-09-13 on GALE-JACKET, where every
+               * axis is unmapped on Amazon·IT so all 20 variants land in ONE group: printing every SKU and
+               * every dropped tuple made this section **1021px tall** inside a 420px dock. The contract caps
+               * the same fact at 10 subjects for the readiness item (`docs/vt1-contracts.md` §4); a panel that
+               * needs a page of scrolling to say "these twenty cannot be told apart" has buried the sentence
+               * it exists to deliver. The count is always exact — only the enumeration is trimmed.
+               */
+              rows={collisions.groups.map((group, index) => {
+                const shown = group.members.slice(0, 6)
+                const rest = group.members.length - shown.length
+                const axes = [...new Set(group.members.flatMap(m => Object.keys(m.droppedValues)))]
+                return {
+                  id: `${index}`,
+                  cells: [
+                    group.key.filter(Boolean).join(' · ') || '—',
+                    <>
+                      {shown.map(m => m.sku).join(', ')}
+                      {rest > 0 && <> <span className="nds-cell-muted">+{rest} more</span></>}
+                    </>,
+                    group.members.length <= 3
+                      ? group.members
+                        .map(m => Object.entries(m.droppedValues).map(([axis, value]) => `${axis} ${value}`).join(' / '))
+                        .join(' vs ')
+                      : `${axes.join(', ')} — ${group.members.length} distinct combinations`,
+                  ],
+                }
+              })}
+            />
+          )}
+
+          {collisions.unresolved > 0 && collisions.resolvers.map(resolver => {
+            const cellReason = resolver.kind === 'fold' ? foldHeldByCell : null
+            const reason = !resolver.available
+              ? (resolver.reason == null ? 'The server did not report why this action is unavailable.' : resolver.reason)
+              : cellReason
+                ?? `A resolver is a rule for the category, not for one listing — set it in Channels → Mapping for ${channelLabel}. This listing shows which rule applies.`
+            return (
+              <div key={resolver.kind}>
+                {/* The reason travels ON the control — the element an operator hovers and the one a screen
+                    reader reaches — never in a paragraph beside it that nothing associates with it. */}
+                <span className="nds-vp-dock-held" title={reason}>
+                  <Radio
+                    name="vp-collision-resolver"
+                    checked={false}
+                    disabled
+                    aria-disabled
+                    aria-describedby={`vp-collision-${resolver.kind}`}
+                    label={resolverLabel[resolver.kind]}
+                    onChange={() => { /* read-only here — see the section docblock */ }}
+                  />
+                </span>
+                <p id={`vp-collision-${resolver.kind}`} className="nds-vp-dock-note">{reason}</p>
+              </div>
+            )
+          })}
+        </>
+      )}
     </section>
   )
 })

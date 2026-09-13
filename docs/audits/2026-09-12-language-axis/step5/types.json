@@ -1,0 +1,29 @@
+{
+  "at": "2026-09-12T21:58:12.531Z",
+  "load": "23:58  9 users, load averages: 1.99 2.75 3.11\n",
+  "files": [
+    "apps/api/src/lib/database-context.ts",
+    "apps/api/src/services/pim/readiness-index.service.ts",
+    "apps/api/src/services/pim/scope-readiness.service.ts",
+    "apps/api/src/services/pim/cached-schema-context.ts",
+    "apps/api/src/services/pim/channel-specs/shopify.ts",
+    "apps/api/src/services/pim/studio-columns.ts",
+    "apps/api/src/services/master-content.service.ts",
+    "apps/api/src/services/pim/content-write.ts",
+    "apps/api/src/jobs/readiness-reconcile.job.ts",
+    "apps/api/src/services/products/bulk-edit.service.ts",
+    "apps/api/src/services/pim/readiness-model.ts",
+    "apps/web/src/app/products/[id]/edit/_studio/types.ts",
+    "apps/web/src/app/products/[id]/edit/_studio/contracts.tsx",
+    "apps/web/src/app/products/[id]/edit/_studio/readiness.ts",
+    "apps/web/src/app/products/[id]/edit/_studio/readiness.vitest.test.ts",
+    "apps/web/src/app/products/[id]/edit/_studio/StudioBar.tsx",
+    "apps/web/src/app/products/[id]/edit/_studio/channel-ops/ErrorsSyncTab.tsx",
+    "apps/web/src/app/products/[id]/edit/_studio/channel-ops/ReadinessPanel.tsx",
+    "apps/api/src/services/pim/scope-readiness.vitest.test.ts",
+    "apps/api/src/services/pim/readiness-index.vitest.test.ts",
+    "apps/api/src/services/pim/content-write.vitest.test.ts",
+    "apps/api/src/jobs/readiness-reconcile.vitest.test.ts"
+  ],
+  "exitCode": 0
+}

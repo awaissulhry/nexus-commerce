@@ -2,6 +2,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { importTestStore, fixtureColumns, fixtureFields } from './catalog-transfer-test/store.js'
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
 const state = vi.hoisted(() => ({ fetch: vi.fn(), store: null as unknown as ReturnType<typeof importTestStore>, fields: null as Array<Record<string, unknown>> | null }))
+// Orchestration tests mock the Step 4 writer; its real transaction is exercised by the LX7 local fixture.
+vi.mock('./content-write.js', () => ({ writeContent: async (input: any) => {
+  const db = state.store.db
+  if (input.address.tier === 'source') return db.product.update({ where: { id: input.productId }, data: { ...Object.fromEntries(Object.entries(input.values).map(([key, value]) => [key === 'title' ? 'name' : key, value])), version: { increment: 1 } } })
+  const c = input.address.coordinate
+  const listing = await db.channelListing.findFirst({ where: { productId: input.productId, channel: c.channel, marketplace: c.market, channelConnectionId: c.accountId, aliasKey: c.aliasId ?? '' } })
+  const translation = { language: input.address.language, ...Object.fromEntries(Object.entries(input.values).map(([key, value]) => [key === 'title' ? 'name' : key, value])), source: 'manual', reviewedAt: new Date() }
+  return db.channelListing.update({ where: { id: listing.id }, data: { translations: [translation], version: { increment: 1 } } })
+} }))
 vi.mock('../../db.js', () => ({ default: new Proxy({}, { get: (_target, key) => state.store.db[key as string] }) }))
 vi.mock('./sheet-columns.service.js', () => ({ getSheetColumns: async () => ({ columns: fixtureColumns }), clearSheetColumnCache: vi.fn() }))
 vi.mock('./mapping/field-catalogue.service.js', () => ({ getFieldCatalogue: async () => ({ fields: state.fields ?? fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } }), clearFieldCatalogueCache: vi.fn() }))
@@ -119,10 +128,10 @@ describe('durable unified catalog workflow', () => {
     const result = await apply(staged.jobId, preview.reviewToken!)
     expect(result.state).toBe('COMPLETED')
     expect(state.store.data.product.get('p0')).toMatchObject({ name: 'New shared', basePrice: 25, totalStock: 17, version: 4 })
-    expect(state.store.data.channelListing.get('p0-account-a')).toMatchObject({ title: 'Italy title', followMasterTitle: false, overrideData: { material: 'Protected cotton' }, version: 9 })
+    expect(state.store.data.channelListing.get('p0-account-a')).toMatchObject({ title: 'Sync snapshot', followMasterTitle: true, translations: [expect.objectContaining({ language: 'it', name: 'Italy title' })], overrideData: { material: 'Protected cotton' }, version: 9 })
     expect(state.store.data.channelListing.get('p0-account-b')).toMatchObject({ title: 'Sync snapshot', followMasterTitle: true, version: 8 })
     const product = state.store.data.product.get('p0')!
-    const resolved = resolveAttributes({ product: product as never, parent: null, channelListing: state.store.data.channelListing.get('p0-account-b') as never, locale: 'en' })
+    const resolved = resolveAttributes({ product: product as never, parent: null, channelListing: { ...state.store.data.channelListing.get('p0-account-b'), languages: ['fr'] } as never, locale: 'en' })
     expect(resolveChannelField({ fieldKey: 'item_name', rule: { source: 'title', transforms: [] } as never, resolvedAttrs: resolved, product: { ...product, variantAttributes: {} } as never, locale: 'en' }).value).toBe('New shared')
     const audits = [...state.store.data.auditLog.values()]
     expect(audits).toHaveLength(2)

@@ -1,3 +1,4 @@
+import type { ListingPresenceFields } from '../presence/fields'
 /**
  * PES.4 — the drawer's contracts.
  *
@@ -17,7 +18,10 @@
 // ────────────────────────────────────────────────────────────────────
 
 export type SheetChannel = 'AMAZON' | 'EBAY' | 'SHOPIFY' | 'WOOCOMMERCE' | 'ETSY'
-export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date'
+/** `'variationTheme'` — VT.2 (2026-09-13, additive): the drawer receives the sheet's columns, so a
+ *  kind this mirror cannot name makes the whole `columns` array unassignable. The drawer renders it
+ *  through its existing default path; the editor is the cell's and the dock's (design §3.5). */
+export type SheetColumnKind = 'text' | 'longtext' | 'number' | 'select' | 'boolean' | 'date' | 'variationTheme'
 /** `listing` (AM.1) — a store that exists only on the ChannelListing; such a column appears on channel scopes only. */
 export type SheetStorage = 'column' | 'categoryAttributes' | 'localizedContent' | 'listing'
 /**
@@ -109,7 +113,8 @@ export interface SheetColumn {
   // ── AM.1 (2026-09-05) — the shape vocabulary, mirrored from `sheet-columns.service.ts` ─────────
   // All OPTIONAL: an older server omits them and every consumer must read absence as `scalar`.
   /** Default `scalar`. A `list` column's value is an array; a `measure` column's is `{ value, unit }`. */
-  shape?: 'scalar' | 'list' | 'measure'
+  /** `'axes'` — VT.2's variation-theme projection (additive 2026-09-13); see `kind` above. */
+  shape?: 'scalar' | 'list' | 'measure' | 'axes'
   /** list only. `max: null` = unbounded. A bounded list ≤ 10 arrives as slot columns instead. */
   cardinality?: { min: number; max: number | null }
   /** measure only. */
@@ -154,7 +159,7 @@ export interface SheetReadiness {
   ref?: string
 }
 
-export interface SheetListing {
+export interface SheetListing extends ListingPresenceFields {
   id: string
   listingStatus: string
   /**
@@ -338,6 +343,7 @@ export type Layer =
   | 'locale' // the master's localised content for this market's language
   | 'mapped' // derived by the mapping engine from a master field
   | 'locked' // identity field pinned to master (GTIN / SKU / brand)
+  | 'channelSnapshot' // following legacy listing content; drift, never an operator pin
   | 'unknown' // a value this build does not know — shown, never guessed
 
 /**
@@ -366,6 +372,7 @@ const LAYER_OF: Record<string, Layer> = {
   fallback: 'default',
   locked: 'locked',
   missing: 'default',
+  channelSnapshot: 'channelSnapshot',
   // sheet-rows.service.ts writes this one directly
   schema: 'default',
   // PES.5 §3.2 layer values, so a `layer` string handed to this function still resolves
@@ -396,6 +403,8 @@ export function toLayer(source: string | null | undefined): Layer {
  */
 export function resolveLayer(cell: Pick<StudioCellValue, 'layer' | 'source'> | undefined): Layer {
   if (!cell) return 'default'
+  // The legacy layer fold says master; source names the stored channel value more precisely.
+  if (cell.source === 'channelSnapshot') return 'channelSnapshot'
   if (cell.layer) return toLayer(cell.layer)
   return toLayer(cell.source)
 }
@@ -412,6 +421,7 @@ export const LAYER_LABEL: Record<Layer, string> = {
   locale: 'Locale',
   mapped: 'Mapped',
   locked: 'Locked',
+  channelSnapshot: 'Channel snapshot',
   unknown: 'Unrecognised',
 }
 
@@ -427,6 +437,7 @@ export const LAYER_HINT: Record<Layer, string> = {
   locale: "From the master's localised content for this market's language.",
   mapped: 'Derived by the mapping engine from a master field. Edit the mapping, not this cell.',
   locked: 'An identity field pinned to master. It cannot diverge per channel.',
+  channelSnapshot: 'The last stored channel value. It follows legacy listing content, may differ from master, and is not an operator pin.',
   unknown: 'The server reported a provenance this build does not recognise. Shown verbatim, not guessed.',
 }
 
@@ -443,6 +454,7 @@ export function isInherited(layer: Layer): boolean {
     layer === 'locale' ||
     layer === 'linked' ||
     layer === 'mapped' ||
+    layer === 'channelSnapshot' ||
     layer === 'default'
   )
 }
@@ -517,6 +529,7 @@ export interface DrawerScope {
 export interface DrawerFormulas {
   ready?: boolean
   sourceLabel?: string
+  sourceLabelFor?: (fieldKey?: string) => string
   replace?: (rowId: string, fieldKey: string, value: unknown) => Promise<{ ok: boolean; error?: string }>
   /** The stored expression for a cell, or null. A cell that HAS one always opens in formula mode. */
   exprFor: (rowId: string, fieldKey: string) => string | null

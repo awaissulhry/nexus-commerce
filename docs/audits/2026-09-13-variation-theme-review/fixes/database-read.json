@@ -1,0 +1,82 @@
+{
+  "listings": [
+    {
+      "channel": "AMAZON",
+      "marketplace": "DE",
+      "version": 13,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "AMAZON",
+      "marketplace": "ES",
+      "version": 15,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "AMAZON",
+      "marketplace": "FR",
+      "version": 9,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "AMAZON",
+      "marketplace": "IT",
+      "version": 87,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "EBAY",
+      "marketplace": "DE",
+      "version": 7,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "EBAY",
+      "marketplace": "IT",
+      "version": 18,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "ETSY",
+      "marketplace": "GLOBAL",
+      "version": 1,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    },
+    {
+      "channel": "SHOPIFY",
+      "marketplace": "GLOBAL",
+      "version": 4,
+      "category": null,
+      "ebayCategory": null,
+      "taxonomy": null,
+      "taxonomyId": null
+    }
+  ],
+  "schemas": [],
+  "fixtures": [
+    {
+      "remaining": 0
+    }
+  ]
+}

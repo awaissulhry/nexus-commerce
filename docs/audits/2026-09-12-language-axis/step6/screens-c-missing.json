@@ -1,0 +1,3646 @@
+{
+  "at": "2026-09-13T01:04:43.181Z",
+  "readings": [
+    {
+      "at": "2026-09-13T01:04:19.399Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "nl"
+      },
+      "width": 1440,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-nl-1440-light.png"
+    },
+    {
+      "at": "2026-09-13T01:04:22.570Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "nl"
+      },
+      "width": 1440,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-nl-1440-dark.png"
+    },
+    {
+      "at": "2026-09-13T01:04:25.814Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "nl"
+      },
+      "width": 1728,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-nl-1728-light.png"
+    },
+    {
+      "at": "2026-09-13T01:04:28.991Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "nl"
+      },
+      "width": 1728,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-nl-1728-dark.png"
+    },
+    {
+      "at": "2026-09-13T01:04:32.618Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "fr"
+      },
+      "width": 1440,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=fr&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-fr-1440-light.png"
+    },
+    {
+      "at": "2026-09-13T01:04:36.033Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "fr"
+      },
+      "width": 1440,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=fr&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-fr-1440-dark.png"
+    },
+    {
+      "at": "2026-09-13T01:04:39.524Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "fr"
+      },
+      "width": 1728,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=fr&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-fr-1728-light.png"
+    },
+    {
+      "at": "2026-09-13T01:04:43.174Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "BE",
+        "language": "fr"
+      },
+      "width": 1728,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=fr&tab=information&account=cmothu9bo0000nz01asw6wx8j&locales=nl%2Cfr",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        }
+      ],
+      "marks": [],
+      "activeViews": [
+        "Dutch",
+        "French",
+        "Languages0 columns"
+      ],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked—eBayShopifyEtsyBE · BelgiumDutchFrench",
+      "text": "-BLACK-MEN-5XL\n—\nC\nGALE-JACKET-BLACK-MEN-L\n—\nC\nGALE-JACKET-BLACK-MEN-M\n—\nC\nGALE-JACKET-BLACK-MEN-S\n—\nC\nGALE-JACKET-BLACK-MEN-XL\n—\nC\nGALE-JACKET-BLACK-MEN-XS\n—\nC\nGALE-JACKET-BLACK-MEN-XXL\n—\nC\nGALE-JACKET-BLACK-MEN-XXS\n—\nC\nGALE-JACKET-YELLOW-MEN-3XL\n—\nC\nGALE-JACKET-YELLOW-MEN-4XL\n—\nC\nGALE-JACKET-YELLOW-MEN-5XL\n—\nC\nGALE-JACKET-YELLOW-MEN-L\n—\nC\nGALE-JACKET-YELLOW-MEN-M\n—\nC\nGALE-JACKET-YELLOW-MEN-S\n—\nC\nGALE-JACKET-YELLOW-MEN-XL\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\n—\nRequirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languagesView": {
+        "selected": [
+          "nl",
+          "fr"
+        ],
+        "columns": 4,
+        "localizable": 0,
+        "counts": {
+          "Needs translation": 0,
+          "AI drafts": 0,
+          "Out of date": 0
+        },
+        "buttons": {
+          "Needs translation": "Needs translation\n0",
+          "AI drafts": "AI drafts\n0",
+          "Out of date": "Out of date\n0"
+        },
+        "groups": [],
+        "selectedChips": [
+          "Dutch",
+          "French"
+        ],
+        "visibleFields": []
+      },
+      "missingContract": {
+        "empty": "Requirements incomplete\nAmazon · BE: OUTERWEAR contract not loaded. Open Requirements incomplete, then choose Refresh requirements to load the category’s fields and readiness rules.",
+        "pills": [
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—",
+          "—"
+        ]
+      },
+      "screenshot": "screen-c-missing-AMAZON-BE-fr-1728-dark.png"
+    }
+  ],
+  "requests": [
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    }
+  ],
+  "blocked": [],
+  "consoleErrors": [
+    {
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+      "location": {
+        "url": "http://localhost:3000/favicon.ico",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "location": {
+        "url": "http://localhost:8091/api/auth/me",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/notifications?limit=30",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/sidebar/counts",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    },
+    {
+      "text": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "location": {
+        "url": "http://localhost:8091/api/listing-wizard/product-types?channel=AMAZON&marketplace=BE",
+        "line": 0,
+        "column": 0,
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    }
+  ],
+  "errors": [],
+  "api": {
+    "at": "2026-09-13T01:04:43.179Z",
+    "target": {
+      "target": "local",
+      "host": "127.0.0.1",
+      "database": "nexus_development"
+    },
+    "family": [
+      {
+        "id": "cmokmy0qb000kpm0p06pmx2vt",
+        "sku": "GALE-JACKET-YELLOW-MEN-XXL"
+      },
+      {
+        "id": "cmokmy0qp000lpm0p2yxw35ku",
+        "sku": "GALE-JACKET-YELLOW-MEN-XXS"
+      },
+      {
+        "id": "cmokmy0m9000apm0pm52rd77m",
+        "sku": "GALE-JACKET-BLACK-MEN-XXL"
+      },
+      {
+        "id": "cmokmy0pk000ipm0pi8nl7pbn",
+        "sku": "GALE-JACKET-YELLOW-MEN-XL"
+      },
+      {
+        "id": "cmokmy0og000fpm0pdwckcnq0",
+        "sku": "GALE-JACKET-YELLOW-MEN-L"
+      },
+      {
+        "id": "cmokmy0p6000hpm0ptee51htd",
+        "sku": "GALE-JACKET-YELLOW-MEN-S"
+      },
+      {
+        "id": "cmokmy0k70005pm0puvz2ucxu",
+        "sku": "GALE-JACKET-BLACK-MEN-L"
+      },
+      {
+        "id": "cmokmy0n4000cpm0ptkjitr0f",
+        "sku": "GALE-JACKET-YELLOW-MEN-3XL"
+      },
+      {
+        "id": "cmokmy0ky0007pm0p3vj7q0mh",
+        "sku": "GALE-JACKET-BLACK-MEN-S"
+      },
+      {
+        "id": "cmokmy0lc0008pm0p2thzmlqq",
+        "sku": "GALE-JACKET-BLACK-MEN-XL"
+      },
+      {
+        "id": "cmokmy0o1000epm0pca79fbbf",
+        "sku": "GALE-JACKET-YELLOW-MEN-5XL"
+      },
+      {
+        "id": "cmokmy0py000jpm0pc2jcd5ul",
+        "sku": "GALE-JACKET-YELLOW-MEN-XS"
+      },
+      {
+        "id": "cmokmy0lr0009pm0p9yxk7ho0",
+        "sku": "GALE-JACKET-BLACK-MEN-XS"
+      },
+      {
+        "id": "cmokmy0jf0003pm0ppnu1b2yy",
+        "sku": "GALE-JACKET-BLACK-MEN-3XL"
+      },
+      {
+        "id": "cmokmy2ir005bpm0p0sm1rxx8",
+        "sku": "GALE-JACKET-BLACK-MEN-5XL"
+      },
+      {
+        "id": "cmokmy0jt0004pm0p0gaufo1b",
+        "sku": "GALE-JACKET-BLACK-MEN-4XL"
+      },
+      {
+        "id": "cmokmy0kl0006pm0p9auaundx",
+        "sku": "GALE-JACKET-BLACK-MEN-M"
+      },
+      {
+        "id": "cmokmy0mm000bpm0pm7k7eke4",
+        "sku": "GALE-JACKET-BLACK-MEN-XXS"
+      },
+      {
+        "id": "cmokmy0ni000dpm0p2xvcpkma",
+        "sku": "GALE-JACKET-YELLOW-MEN-4XL"
+      },
+      {
+        "id": "cmokmy0ot000gpm0p4z5vwnoo",
+        "sku": "GALE-JACKET-YELLOW-MEN-M"
+      },
+      {
+        "id": "cmokmy3a40078pm0p1fvnu523",
+        "sku": "GALE-JACKET"
+      }
+    ],
+    "transportAttempts": [],
+    "blockedGateways": [],
+    "requests": [
+      {
+        "at": "2026-09-13T01:04:14.349Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:14.373Z",
+        "method": "GET",
+        "path": "/api/marketplaces/grouped",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.249Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.541Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.552Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.758Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.761Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.766Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.771Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.857Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.932Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.934Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.938Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.943Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.971Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:16.975Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:18.223Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:18.267Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:18.271Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:19.678Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:19.980Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:19.988Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.118Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.121Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.123Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.126Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.203Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.262Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.265Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.269Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.272Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.292Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:20.296Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:21.431Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:21.474Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:21.477Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:22.870Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.172Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.179Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.308Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.310Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.313Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.315Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.393Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.453Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.456Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.459Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.463Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.491Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:23.498Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:24.669Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:24.709Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:24.713Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.070Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.374Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.382Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.520Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.522Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.525Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.528Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.595Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.655Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.658Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.661Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.663Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.683Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:26.687Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:27.836Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:27.877Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:27.881Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.314Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.658Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.665Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.789Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.793Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.795Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.797Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.869Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.936Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.940Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.945Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.950Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.969Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:29.972Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.199Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.201Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.207Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.210Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.273Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.379Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.381Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.384Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.387Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.407Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:31.411Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:32.848Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.191Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.201Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.322Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.325Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.330Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.333Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.401Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.465Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.467Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.470Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.473Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.494Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:33.497Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.648Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.651Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.656Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.658Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.722Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.824Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.826Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.829Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.831Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.968Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:34.972Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.351Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.653Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.662Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.790Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.793Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.798Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.801Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.873Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.936Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.939Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.942Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.945Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.978Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:36.981Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.135Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.138Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.143Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.145Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.208Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.308Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.310Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.312Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.315Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.336Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:38.340Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:39.820Z",
+        "method": "GET",
+        "path": "/api/connections",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.172Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.180Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.311Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.315Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.321Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.325Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.390Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.456Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=fr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.458Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.462Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.466Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.488Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:40.492Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.757Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.760Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.765Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.767Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.830Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.937Z",
+        "method": "GET",
+        "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl&locales=nl%2Cfr",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.940Z",
+        "method": "GET",
+        "path": "/api/pim/formulas/functions",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.945Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Aviews%3AAMAZON",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.948Z",
+        "method": "GET",
+        "path": "/api/saved-views?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.963Z",
+        "method": "GET",
+        "path": "/api/categories/reference-labels?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:41.966Z",
+        "method": "POST",
+        "path": "/api/pim/formulas/batch",
+        "status": 200,
+        "rolledBack": true
+      },
+      {
+        "at": "2026-09-13T01:04:43.180Z",
+        "method": "GET",
+        "path": "/gate/evidence",
+        "status": 200,
+        "rolledBack": true
+      }
+    ]
+  }
+}

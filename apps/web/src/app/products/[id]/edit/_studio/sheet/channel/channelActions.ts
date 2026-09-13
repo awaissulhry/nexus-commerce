@@ -36,6 +36,7 @@ import {
   type GridAction,
 } from '@/design-system/grid/actions/registry'
 import { getBackendUrl } from '@/lib/backend-url'
+import { coordinateSchema } from '../../presence/types'
 
 import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelSheetRow } from './types'
 
@@ -50,6 +51,19 @@ import { aliasKeyOf, type AliasGroup, type ChannelScopeChannel, type ChannelShee
  * channel verb so it needs a channel permission" would have named the wrong one in every refusal.
  */
 export const CHANNEL_VERB_PERMISSION = 'products.edit'
+
+/** Honest-copy §2 / SHOP-P5. These are local marks, not a channel takedown. */
+export function offerMarkConsequence(channel: ChannelScopeChannel, activate: boolean): string {
+  if (channel === 'WOOCOMMERCE') return 'Recorded in Nexus. Nothing is sent to WooCommerce from here.'
+  if (channel === 'ETSY') return 'Recorded as paused in Nexus. Nothing is ever sent to Etsy from here.'
+  if (channel === 'AMAZON') return activate
+    ? "The pause mark is cleared, and Nexus queues this SKU's stock to Amazon straight away."
+    : 'Recorded as paused in Nexus. Amazon is told at the next Amazon flat-file publish, which suppresses the offer.'
+  const label = channel === 'EBAY' ? 'eBay' : 'Shopify'
+  return activate
+    ? `The pause mark is cleared, and Nexus queues this SKU's stock to ${label} straight away.`
+    : `Recorded as paused in Nexus. Nothing is sent to ${label} — the offer keeps selling there until you end it on the channel itself.`
+}
 
 /**
  * What the browser knows about the operator's permissions — THREE states, not two (ruling #123).
@@ -72,6 +86,8 @@ export function permissionRefusal(state: PermissionState): string | null {
 
 export interface ChannelActionDeps {
   accountSpecific?: boolean
+  /** Explicit account reported by the sheet; null is a named legacy account, never an omitted level. */
+  channelConnectionId: string | null
   /** The operator's permission state for `products.edit`. Never assume `granted`. */
   permission: PermissionState
   channel: ChannelScopeChannel
@@ -106,6 +122,13 @@ export interface ChannelActionDeps {
    */
   openRecordId: string | null
 }
+
+function offerCoordinate(deps: ChannelActionDeps, row: ChannelSheetRow) {
+  return coordinateSchema.safeParse({ productId: row.id, channel: deps.channel, marketplace: deps.marketplace,
+    channelConnectionId: deps.channelConnectionId, aliasKey: row.aliasId === null ? '' : row.aliasId })
+}
+const coordinateRefusal = 'The listing’s account or alias was not reported. Reload before changing its offer mark.'
+const heldOfferRefusal = (count: number, channel: string) => `Refused on ${count} rows whose listing holds a channel id on ${channel}. This verb only writes a Nexus record, and this studio has no verb that can carry it to ${channel}.`
 
 /** A row is a real listing line, not the alias band. */
 const variantsOf = (rows: ChannelSheetRow[]) => rows.filter((r) => r.rowKind === 'variant')
@@ -174,7 +197,7 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
      */
     label: (rows) => {
       const { known, on, off, activate } = plan(rows)
-      const word = activate ? 'Activate' : 'Pause'
+      const word = activate ? 'Mark active' : 'Mark paused'
       if (known === 0) return `${word} offer on ${deps.scopeLabel}`
       const n = activate ? off : on
       const offers = n === 1 ? 'offer' : 'offers'
@@ -193,23 +216,24 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
        * of guessing. A row with NO listing is left offered: the endpoint creates one, and refusing
        * would hide a legitimate action behind an absence.
        */
+      if (vs.some(row => !offerCoordinate(deps, row).success)) return disabled(coordinateRefusal)
       const { known: knownCount, on, off } = plan(rows)
       const known = vs.filter((r) => r.listing)
       // 🔴 No listing = no offer. Pausing something that does not exist is not an action, and the
       // §14 upsert would create a DRAFT row purely as a side effect of asking to pause it.
       if (knownCount === 0) {
-        return disabled(`No listing on ${deps.scopeLabel} yet — there is no offer to pause or activate`)
+        return disabled(`No listing record on ${deps.scopeLabel} — there is no offer mark to change`)
       }
       // 🔴 A mixed selection is now NAMED by the label ("Activate 2 of 3 offers") rather than
       // refused — the wording says exactly what will happen to which rows, which is what the refusal
       // was standing in for while the label could not move. It stays refused only when the two
       // halves are equal, where no verb is more useful than the other.
       if (on > 0 && off > 0 && on === off) {
-        return disabled(`${on} active and ${off} paused — an even split, so pause or activate them separately`)
+        return disabled(`${on} marked active and ${off} marked paused — an even split, so mark them separately`)
       }
       const activate = plan(rows).activate
       if (known.every((r) => r.listing!.offerActive === activate)) {
-        return disabled(`Already ${activate ? 'active' : 'paused'} on ${deps.scopeLabel}`)
+        return disabled(`Already marked ${activate ? 'active' : 'paused'} on ${deps.scopeLabel}`)
       }
       return AVAILABLE
     },
@@ -220,35 +244,35 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
       // Same `plan` the label and the availability used — the confirmation cannot describe a
       // different action from the one the operator read on the menu item.
       const { activate } = plan(rows)
-      const word = activate ? 'Activate' : 'Pause'
+      const word = activate ? 'active' : 'paused'
       return {
-        level: 'confirm',
-        title: `${word} the offer for ${vs.length} ${vs.length === 1 ? 'SKU' : 'SKUs'} on ${deps.scopeLabel}?`,
+        level: live.length || vs.some(row => !offerCoordinate(deps, row).success) ? 'none' : 'confirm',
+        title: `Mark the offer ${word} for ${vs.length} ${vs.length === 1 ? 'SKU' : 'SKUs'} on ${deps.scopeLabel}?`,
         consequences: [
-          activate
-            ? 'The offer becomes buyable again on this channel and market.'
-            : 'Buyers stop seeing this offer on this channel and market. The listing itself is not ended and its reviews and identifiers are untouched.',
-          'Other markets are unaffected — this is per channel × marketplace.',
+          offerMarkConsequence(deps.channel, activate),
+          ...(vs.some(row => row.listing?.offerActiveHonoured === false)
+            ? ['This channel does not act on the Nexus offer mark.'] : []),
+          'Only the named account and alias on this channel and market are changed.',
         ],
         // The endpoint auto-creates a ChannelListing row when none exists. Naming it because the
         // verb's name does not, and an operator who paused something can be surprised to find a
         // row now exists where there was none.
         sideEffects: live.length
-          ? [`${live.length} of these are LIVE listings with a channel id — the change is visible to buyers.`]
-          : ['No live channel id on these rows — the change stays local until they are published.'],
+          ? [`Refused: ${live.length} of these belong to a listing that holds a channel id, and this verb cannot touch those. Nothing is marked.`]
+          : ['None of these hold a channel id. A listing record is created on this coordinate for any row that has none.'],
         findings: vs.map((r) => {
           const ext = externalIdFor(deps.aliases, r)
           return {
             rowId: r.rowId,
-            label: `${r.sku}${ext ? ` · ${ext}` : ' · not on the channel yet'}`,
+            label: `${r.sku}${ext ? ` · ${ext}` : ' · no channel reference recorded'}`,
             severity: ext ? ('warn' as const) : ('info' as const),
           }
         }),
         // 🔴 Wave-1: the outward-facing half does not ship. Stated in the impact so the operator
         // learns it BEFORE confirming, not from a failure afterwards.
         unavailable: live.length
-          ? `Refused for now: ${live.length} of these are live listings, and wave-1 verbs do not send to a channel. Preview only.`
-          : undefined,
+          ? heldOfferRefusal(live.length, deps.channel)
+          : vs.some(row => !offerCoordinate(deps, row).success) ? coordinateRefusal : undefined,
       }
     },
     run: async (rows): Promise<ActionResult> => {
@@ -256,9 +280,10 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
       // One plan, resolved from the same rows the label and the confirmation described.
       const { activate } = plan(rows)
       const liveKeys = liveAliasKeys(deps.aliases)
-      if (vs.some((r) => liveKeys.has(aliasKeyOf(r.aliasId)))) {
-        return { ok: false, message: 'Refused: this would change a live listing, and wave-1 channel verbs are preview-only.' }
-      }
+      const held = vs.filter(r => liveKeys.has(aliasKeyOf(r.aliasId)))
+      if (held.length) return { ok: false, message: heldOfferRefusal(held.length, deps.channel) }
+      const targets = vs.map(row => offerCoordinate(deps, row))
+      if (targets.some(target => !target.success)) return { ok: false, message: coordinateRefusal }
       try {
         const results = await Promise.all(
           vs.map((r) =>
@@ -267,7 +292,8 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
               credentials: 'include',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                markets: [{ channel: deps.channel, marketplace: deps.marketplace, offerActive: activate }],
+                markets: [{ channel: deps.channel, marketplace: deps.marketplace, channelConnectionId: deps.channelConnectionId,
+                  aliasKey: r.aliasId === null ? '' : r.aliasId, offerActive: activate }],
               }),
             }),
           ),
@@ -275,7 +301,7 @@ function offerVerb(deps: ChannelActionDeps): GridAction<ChannelSheetRow> {
         const bad = results.find((r) => !r.ok)
         if (bad) {
           const body = await bad.json().catch(() => null)
-          return { ok: false, message: body?.error ?? `Refused (HTTP ${bad.status})` }
+          return { ok: false, message: body?.refusal ?? body?.error ?? `Refused (HTTP ${bad.status})` }
         }
         // This lane has no per-row refetch, and says so rather than claiming one (#114).
         return { ok: true, invalidates: { kind: 'page' } }
@@ -327,7 +353,7 @@ export function broadcastToListings(deps: ChannelActionDeps): GridAction<Channel
       chosen = picked
       const labels = deps.siblingMarkets.filter((m) => picked.includes(m.code)).map((m) => m.label)
       return {
-        level: 'type-to-confirm',
+        level: 'none',
         title: `Broadcast ${vs.length} ${vs.length === 1 ? 'SKU' : 'SKUs'} from ${deps.scopeLabel} to ${labels.length} other ${labels.length === 1 ? 'market' : 'markets'}?`,
         consequences: [
           `Receiving markets: ${labels.join(', ')}.`,
@@ -339,21 +365,18 @@ export function broadcastToListings(deps: ChannelActionDeps): GridAction<Channel
         findings: vs.map((r) => ({ rowId: r.rowId, label: r.sku, severity: 'info' as const })),
         // The phrase is the CHANNEL, not "CONFIRM": typing the thing you are about to change is
         // what makes a typed confirm more than a slower click.
-        confirmPhrase: deps.channel,
-        unavailable: vs.some((r) => liveAliasKeys(deps.aliases).has(aliasKeyOf(r.aliasId)))
-          ? 'Refused for now: broadcasting would write to live listings, and wave-1 channel verbs are preview-only.'
-          : undefined,
+        unavailable: 'Broadcast is not built. Nothing is sent on any row, live or not.',
       }
     },
     run: async (rows): Promise<ActionResult> => {
       const vs = variantsOf(rows)
       if (vs.some((r) => liveAliasKeys(deps.aliases).has(aliasKeyOf(r.aliasId)))) {
-        return { ok: false, message: 'Refused: this would write to live listings, and wave-1 channel verbs are preview-only.' }
+        return { ok: false, message: 'Broadcast is not built. Nothing is sent on any row, live or not.' }
       }
       if (chosen.length === 0) return { ok: false, message: 'No target markets were chosen.' }
       return {
         ok: false,
-        message: `Not sent. ${vs.length} rows would have gone to ${chosen.join(', ')} via the marketplaceContexts fan-out.`,
+        message: 'Broadcast is not built. Nothing is sent on any row, live or not.',
       }
     },
   }

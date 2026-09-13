@@ -26,6 +26,35 @@ import { describe, it, expect } from 'vitest'
 import { ENTRIES, permissionForRoute } from './permissions-manifest.js'
 
 describe('permission manifest ordering', () => {
+  it.each([
+    ['POST', '/api/amazon/flat-file/remove', 'products.delete'],
+    ['POST', '/api/products/bulk-hard-delete', 'products.delete'],
+    ['POST', '/api/products/operational-impact', 'products.view'],
+    ['GET', '/api/products/operational-impact', 'products.view'],
+    ['POST', '/api/products/delist-cascade/cancel', 'products.delete'],
+    ['PUT', '/api/products/:id/matrix/channel-listing/:listingId', 'products.edit'],
+    ['POST', '/api/products/:id/recover', 'products.delete'],
+    ['POST', '/api/products/:id/recover/preview', 'products.view'],
+    ['GET', '/api/products/:id/recover/events', 'products.view'],
+    ['POST', '/etsy/sync/listings', 'products.edit'],
+    ['POST', '/etsy/sync/inventory/from-etsy', 'inventory.adjust'],
+    ['POST', '/etsy/sync/orders', 'orders.edit'],
+    ['POST', '/etsy/sync/inventory/to-etsy', 'products.publish'],
+    ['POST', '/etsy/orders/:orderId/status', 'products.publish'],
+    ['POST', '/etsy/orders/:orderId/fulfillment', 'products.publish'],
+  ])('PR.1: %s %s requires %s before a broader prefix can match', (method, path, permission) => {
+    expect(permissionForRoute(method, path)).toBe(permission)
+    expect(permissionForRoute('POST', '/api/products/bulk')).toBe('products.edit')
+  })
+
+  it('separates catalogue language reads and estimates from translation edits and model spend', () => {
+    for (const path of ['languages', 'translate/runs']) expect(permissionForRoute('GET', `/api/catalog-transfer/${path}`)).toBe('products.view')
+    expect(permissionForRoute('POST', '/api/products/grid')).toBe('products.view')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/translate/preview')).toBe('products.view')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/translate/run-id/revert')).toBe('products.translations.edit')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/translate/apply')).toBe('ai.run')
+    expect(permissionForRoute('POST', '/api/catalog-transfer/preview')).toBe('products.import')
+  })
   it('separates Shopify inspection, local edits, and publishing including shared entries', () => {
     const root = '/api/products/:productId/shopify-linked'
     expect(permissionForRoute('GET', root)).toBe('products.view')
@@ -58,6 +87,8 @@ describe('permission manifest ordering', () => {
       '/api/matrix', '/api/agents', '/api/ai-usage', '/ai',
       '/api/field-links', '/api/mapping', '/api/mapping-propagation',
       '/api/terminology',
+      // MX.1 — the Matrix routes sit under /api/products and must be the MOST specific match, never the fall-through.
+      '/api/products/:id/studio/matrix', '/api/products/:id/studio/matrix/verbs', '/api/products/:id/studio/matrix/verbs/:operationId/revert',
     ]
 
     const shadowed: string[] = []
@@ -111,6 +142,19 @@ describe('permission manifest ordering', () => {
     expect(permissionForRoute('POST', '/api/import-jobs/job/retry-failed')).toBe('products.import')
     // Rollback retains the existing explicit permission; historical unversioned imports refuse it.
     expect(permissionForRoute('POST', '/api/import-jobs/job/rollback')).toBe('bulk.rollback')
+  })
+
+  it('MX.1 — the Matrix routes read with products.view and write with products.edit, and price-edit is a cell-level gate', () => {
+    // Written from purpose: reading the Matrix is reading the catalogue; every write goes through the one door
+    // and is a catalogue edit. `products.price.edit` is the FINANCIAL permission on the price cells, enforced by
+    // the service per cell, so the route level must resolve to the catalogue pair and never to price-edit.
+    expect(permissionForRoute('GET', '/api/products/:id/studio/matrix')).toBe('products.view')
+    expect(permissionForRoute('PATCH', '/api/products/:id/studio/matrix')).toBe('products.edit')
+    expect(permissionForRoute('POST', '/api/products/:id/studio/matrix/verbs')).toBe('products.edit')
+    expect(permissionForRoute('POST', '/api/products/:id/studio/matrix/verbs/:operationId/revert')).toBe('products.edit')
+    // Positive control for the order claim: the neighbouring studio route still falls through to the prefix rule.
+    expect(permissionForRoute('GET', '/api/products/:id/studio/matrixes')).toBe('products.view')
+    expect(permissionForRoute('POST', '/api/products/:id/studio/sheet')).toBe('products.edit')
   })
 
   it('PES.5 studio routes inherit the products prefix rule', () => {

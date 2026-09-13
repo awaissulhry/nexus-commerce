@@ -1,0 +1,3945 @@
+{
+  "at": "2026-09-12T14:47:04.508Z",
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+  "data": {
+    "Product": [
+      {
+        "id": "cmokmy0lr0009pm0p9yxk7ho0",
+        "ean": null,
+        "sku": "GALE-JACKET-BLACK-MEN-XS",
+        "upc": null,
+        "gtin": null,
+        "name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni",
+        "brand": "Xavia",
+        "fnsku": null,
+        "hsCode": null,
+        "status": "ACTIVE",
+        "dimUnit": null,
+        "version": 1,
+        "abcClass": "B",
+        "b2bPrice": null,
+        "dimWidth": null,
+        "familyId": null,
+        "isBundle": false,
+        "isMaster": false,
+        "isParent": false,
+        "keywords": null,
+        "maxPrice": null,
+        "minPrice": null,
+        "parentId": "cmokmy3a40078pm0p1fvnu523",
+        "b2bMinQty": null,
+        "basePrice": 105,
+        "costPrice": null,
+        "createdAt": "2026-04-29T22:37:28.335",
+        "deletedAt": null,
+        "dimHeight": null,
+        "dimLength": null,
+        "ebayTitle": null,
+        "masterSku": null,
+        "minMargin": 0,
+        "updatedAt": "2026-09-07T04:00:02.857",
+        "amazonAsin": "B0DJ4926YX",
+        "ebayItemId": null,
+        "importedAt": null,
+        "parentAsin": "B0F7J163XJ",
+        "totalStock": 42,
+        "weightUnit": null,
+        "buyBoxPrice": null,
+        "description": null,
+        "hazmatClass": null,
+        "ppeCategory": null,
+        "productType": "OUTERWEAR",
+        "weightValue": null,
+        "workspaceId": "nexus_legacy_workspace",
+        "aPlusContent": null,
+        "bulletPoints": null,
+        "garmentClass": null,
+        "importSource": null,
+        "manufacturer": null,
+        "reviewStatus": null,
+        "syncChannels": [
+          "AMAZON"
+        ],
+        "costingMethod": "WAC",
+        "variationAxes": [
+          "Colore",
+          "Taglia"
+        ],
+        "cascadedFields": [
+          "attr_armorType",
+          "attr_waterproofRating",
+          "attr_armorType",
+          "attr_armorType",
+          "attr_armorType",
+          "attr_waterproofRating",
+          "name"
+        ],
+        "hazmatUnNumber": null,
+        "lastAmazonSync": null,
+        "variationTheme": "Colore,Taglia",
+        "amazonSyncError": null,
+        "competitorPrice": null,
+        "countryOfOrigin": null,
+        "isMasterProduct": true,
+        "masterProductId": null,
+        "workflowStageId": null,
+        "amazonSyncStatus": null,
+        "impactProtectors": null,
+        "linkedToChannels": [],
+        "localizedContent": {
+          "en": {},
+          "it": {}
+        },
+        "notifiedBodyName": null,
+        "shippingTemplate": null,
+        "shopifyProductId": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "abcClassUpdatedAt": "2026-09-07T04:00:02.491",
+        "fulfillmentMethod": "FBA",
+        "lowStockThreshold": 10,
+        "orderingCostCents": null,
+        "variantAttributes": null,
+        "categoryAttributes": {
+          "armorType": null,
+          "variations": {
+            "Size": "XS",
+            "Color": "Nero"
+          },
+          "waterproofRating": null
+        },
+        "firstInventoryDate": null,
+        "fulfillmentChannel": null,
+        "notifiedBodyNumber": null,
+        "carryingCostPctYear": null,
+        "hasChannelOverrides": false,
+        "imageAxisPreference": null,
+        "serviceLevelPercent": null,
+        "weightedAvgCostCents": 0,
+        "woocommerceProductId": null,
+        "lastChannelOverrideAt": null,
+        "declarationOfConformityUrl": null
+      }
+    ],
+    "ProductTranslation": [
+      {
+        "id": "cmp0765q3002hlb01kmy3oa22",
+        "name": null,
+        "source": "manual",
+        "version": 0,
+        "keywords": [],
+        "language": "en",
+        "createdAt": "2026-05-10T20:00:13.178",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "updatedAt": "2026-05-10T20:00:13.178",
+        "attributes": {},
+        "authoredAt": null,
+        "reviewedAt": "2026-05-10T20:00:13.177",
+        "sourceHash": null,
+        "description": null,
+        "sourceModel": null,
+        "workspaceId": "nexus_legacy_workspace",
+        "bulletPoints": []
+      }
+    ],
+    "ChannelListing": [
+      {
+        "id": "cmozxuemx000cte016lokrkvp",
+        "price": 105,
+        "title": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)",
+        "region": "IT",
+        "aliasId": null,
+        "channel": "AMAZON",
+        "version": 66,
+        "aliasKey": "",
+        "quantity": 10,
+        "createdAt": "2026-05-10T15:39:08.313",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-11T22:04:14.507",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "PENDING",
+        "description": "Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.",
+        "isPublished": false,
+        "marketplace": "IT",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": "2026-07-08T20:08:03.106",
+        "overrideData": {},
+        "channelMarket": "AMAZON_IT",
+        "lastSyncError": null,
+        "listingStatus": "ACTIVE",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": null,
+        "masterQuantity": 42,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": "",
+        "estimatedFbaFee": 18.66,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": {
+          "size": "XS",
+          "brand": "XAVIA RACING WWW.XAVIARACING.IT",
+          "color": "Nero",
+          "inner": "Poliestere",
+          "outer": "Poliestere",
+          "style": "XAVIA GALE Giacca Moto",
+          "theme": "Avventura, Sicurezza, Comfort",
+          "follow": "",
+          "closure": "Cerniera",
+          "pattern": "Gale",
+          "fit_type": "Regular",
+          "item_sku": "GALE-JACKET-BLACK-MEN-XS",
+          "item_name": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)",
+          "lifestyle": "Atletica",
+          "seasons_1": "Tutte le stagioni",
+          "seasons_2": "Estate",
+          "seasons_3": "Inverno",
+          "seasons_4": "Primavera",
+          "seasons_5": "Autunno",
+          "department": "Uomo",
+          "material_1": "Poliestere",
+          "material_2": "Nylon",
+          "model_name": "Gale",
+          "parent_sku": "GALE-JACKET",
+          "skip_offer": "false",
+          "weave_type": "Not applicable",
+          "fabric_type": "Poliestere",
+          "fabric_wash": "Scuro",
+          "part_number": "GALE-JACKET-BLACK-MEN-XS",
+          "bullet_point": "",
+          "collar_style": "Regolabile",
+          "manufacturer": "XAVIA RACING WWW.XAVIARACING.IT",
+          "model_number": "1",
+          "product_type": "OUTERWEAR",
+          "sport_type_1": "Moto",
+          "sport_type_2": "Motociclismo",
+          "record_action": "partial_update",
+          "target_gender": "male",
+          "bullet_point_1": "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena.",
+          "bullet_point_2": "VENTILAZIONE E FLESSIBILITÀ MIGLIORATE: Le Cerniere Di Ventilazione Posizionate Strategicamente Sul Petto E Sulla Schiena Migliorano Il Flusso D'aria, Mentre I Pannelli Elasticizzati Sotto Le Braccia E I Gomiti Offrono Libertà Di Movimento.",
+          "bullet_point_3": "IMPERMEABILE: Progettato Per Una Protezione Completamente Impermeabile Contro Pioggia E Umidità, Ideale Per Varie Condizioni Atmosferiche.",
+          "bullet_point_4": "ALTA VISIBILITÀ: I Pannelli Riflettenti Aumentano La Visibilità In Condizioni Di Scarsa Illuminazione Per La Sicurezza.",
+          "bullet_point_5": "VESTIBILITÀ PERSONALIZZABILE: Le Linguette Regolabili Sui Bicipiti E Le Regolazioni In Velcro Su Vita, Polsi E Colletto Garantiscono Una Vestibilità Su Misura.",
+          "condition_type": "Nuovo",
+          "is_autographed": "false",
+          "item_type_name": "Giacca Moto",
+          "generic_keyword": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+          "number_of_items": "1",
+          "occasion_type_1": "Estiva",
+          "occasion_type_2": "Casual",
+          "occasion_type_3": "Sportiva",
+          "occasion_type_4": "Touring",
+          "occasion_type_5": "Urban",
+          "parentage_level": "child",
+          "special_feature": "Impermeabile",
+          "variation_theme": "SizeName-ColorName",
+          "product_tax_code": "A_GEN_STANDARD",
+          "care_instructions": "Lavaggio in lavatrice",
+          "country_of_origin": "Pakistan",
+          "flash_point__unit": "degrees_celsius",
+          "purchasable_offer": "",
+          "special_size_type": "Standard",
+          "apparel_size__size": "x_s",
+          "batteries_included": "false",
+          "batteries_required": "false",
+          "flash_point__value": "300.0",
+          "lining_description": "Poliestere",
+          "pocket_description": "Tasche interne pratiche per oggetti essenziali",
+          "external_product_id": "B0DJ4926YX",
+          "product_description": "Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.",
+          "list_price__currency": "EUR",
+          "age_range_description": "Adulto",
+          "item_package_quantity": "1",
+          "water_resistance_level": "waterproof",
+          "apparel_size__body_type": "regular",
+          "item_length_description": "Lunghezza standard",
+          "merchant_shipping_group": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
+          "merchant_suggested_asin": "B0DJ4926YX",
+          "apparel_size__size_class": "alpha",
+          "external_product_id_type": "ASIN",
+          "fulfillment_availability": "",
+          "recommended_browse_nodes": "2420941031",
+          "apparel_size__height_type": "regular",
+          "apparel_size__size_system": "as6",
+          "item_package_weight__unit": "kilograms",
+          "target_audience_keyword_1": "Giacca Da Moto",
+          "target_audience_keyword_2": "Giacca Moto",
+          "target_audience_keyword_3": "Giubbotto Moto",
+          "target_audience_keyword_4": "Giacca Moto Uomo",
+          "target_audience_keyword_5": "Gale Jacket Xavia",
+          "item_package_weight__value": "2",
+          "list_price__value_with_tax": "128.1",
+          "main_product_image_locator": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+          "purchasable_offer__currency": "EUR",
+          "gift_options__can_be_wrapped": "false",
+          "purchasable_offer__our_price": "105",
+          "gift_options__can_be_messaged": "false",
+          "purchasable_offer__sale_price": "",
+          "item_package_dimensions__width": "30",
+          "item_package_dimensions__height": "8",
+          "item_package_dimensions__length": "45",
+          "purchasable_offer__sale_end_date": "",
+          "purchasable_offer__condition_type": "",
+          "purchasable_offer__sale_from_date": "",
+          "fulfillment_availability__quantity": "",
+          "image_locator_ps01__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "supplier_declared_dg_hz_regulation": "not_applicable",
+          "item_package_dimensions__width_unit": "centimeters",
+          "item_package_dimensions__height_unit": "centimeters",
+          "item_package_dimensions__length_unit": "centimeters",
+          "supplier_declared_material_regulation": "not_applicable",
+          "child_parent_sku_relationship__parent_sku": "GALE-JACKET",
+          "other_product_image_locator_1__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg",
+          "other_product_image_locator_3__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "fulfillment_availability__fulfillment_channel_code": "AMAZON_EU",
+          "image_locator_ps01__media_location__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "fulfillment_availability__lead_time_to_ship_max_days": "",
+          "child_parent_sku_relationship__child_relationship_type": "variation",
+          "other_product_image_locator_1__media_location__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location__media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg",
+          "other_product_image_locator_3__media_location__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "other_product_image_locator_7__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+        },
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": "B0DJ4926YX",
+        "followMasterPrice": false,
+        "followMasterTitle": false,
+        "fulfillmentMethod": "FBA",
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "attributes": {
+            "size": [
+              {
+                "value": "XS",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "brand": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "color": [
+              {
+                "value": "Nero",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "inner": [
+              {
+                "value": "Poliestere",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "outer": [
+              {
+                "value": "Poliestere",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "style": [
+              {
+                "value": "XAVIA GALE Giacca Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "theme": [
+              {
+                "value": "Avventura, Sicurezza, Comfort",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "closure": [
+              {
+                "value": "Cerniera",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "pattern": [
+              {
+                "value": "Gale",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "fit_type": [
+              {
+                "value": "Regular",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "material": [
+              {
+                "value": "Poliestere",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              },
+              {
+                "value": "Nylon",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_name": [
+              {
+                "value": "XAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Nero)",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "lifestyle": [
+              {
+                "value": "Atletica",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "seasons_1": [
+              {
+                "value": "Tutte le stagioni",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "seasons_2": [
+              {
+                "value": "Estate",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "seasons_3": [
+              {
+                "value": "Inverno",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "seasons_4": [
+              {
+                "value": "Primavera",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "seasons_5": [
+              {
+                "value": "Autunno",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "department": [
+              {
+                "value": "Uomo",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "list_price": [
+              {
+                "currency": "EUR",
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "value_with_tax": 128.1
+              }
+            ],
+            "model_name": [
+              {
+                "value": "Gale",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "skip_offer": [
+              {
+                "value": "false",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "weave_type": [
+              {
+                "value": "Not applicable",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "fabric_type": [
+              {
+                "value": "Poliestere",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "fabric_wash": [
+              {
+                "value": "Scuro",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "part_number": [
+              {
+                "value": "GALE-JACKET-BLACK-MEN-XS",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "bullet_point": [
+              {
+                "value": "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              },
+              {
+                "value": "VENTILAZIONE E FLESSIBILITÀ MIGLIORATE: Le Cerniere Di Ventilazione Posizionate Strategicamente Sul Petto E Sulla Schiena Migliorano Il Flusso D'aria, Mentre I Pannelli Elasticizzati Sotto Le Braccia E I Gomiti Offrono Libertà Di Movimento.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              },
+              {
+                "value": "IMPERMEABILE: Progettato Per Una Protezione Completamente Impermeabile Contro Pioggia E Umidità, Ideale Per Varie Condizioni Atmosferiche.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              },
+              {
+                "value": "ALTA VISIBILITÀ: I Pannelli Riflettenti Aumentano La Visibilità In Condizioni Di Scarsa Illuminazione Per La Sicurezza.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              },
+              {
+                "value": "VESTIBILITÀ PERSONALIZZABILE: Le Linguette Regolabili Sui Bicipiti E Le Regolazioni In Velcro Su Vita, Polsi E Colletto Garantiscono Una Vestibilità Su Misura.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "collar_style": [
+              {
+                "value": "Regolabile",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "gift_options": [
+              {
+                "can_be_wrapped": "false",
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "can_be_messaged": "false"
+              }
+            ],
+            "manufacturer": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "model_number": [
+              {
+                "value": "1",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "sport_type_1": [
+              {
+                "value": "Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "sport_type_2": [
+              {
+                "value": "Motociclismo",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_gender": [
+              {
+                "value": "male",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "condition_type": [
+              {
+                "value": "Nuovo",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "is_autographed": [
+              {
+                "value": "false",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_type_name": [
+              {
+                "value": "Giacca Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "generic_keyword": [
+              {
+                "value": "Giacca moto soft-shell protezioni sicurezza resistente acqua traspirante motociclisti protezione avventura touring estivo invernale",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "number_of_items": [
+              {
+                "value": "1",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "occasion_type_1": [
+              {
+                "value": "Estiva",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "occasion_type_2": [
+              {
+                "value": "Casual",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "occasion_type_3": [
+              {
+                "value": "Sportiva",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "occasion_type_4": [
+              {
+                "value": "Touring",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "occasion_type_5": [
+              {
+                "value": "Urban",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "parentage_level": [
+              {
+                "value": "child",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "special_feature": [
+              {
+                "value": "Impermeabile",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "product_tax_code": [
+              {
+                "value": "A_GEN_STANDARD",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "care_instructions": [
+              {
+                "value": "Lavaggio in lavatrice",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "country_of_origin": [
+              {
+                "value": "Pakistan",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "flash_point__unit": [
+              {
+                "value": "degrees_celsius",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "purchasable_offer": [
+              {
+                "currency": "EUR",
+                "our_price": [
+                  {
+                    "schedule": [
+                      {
+                        "value_with_tax": 105
+                      }
+                    ]
+                  }
+                ],
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "special_size_type": [
+              {
+                "value": "Standard",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "apparel_size__size": [
+              {
+                "value": "x_s",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "batteries_included": [
+              {
+                "value": "false",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "batteries_required": [
+              {
+                "value": "false",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "flash_point__value": [
+              {
+                "value": "300.0",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "lining_description": [
+              {
+                "value": "Poliestere",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "pocket_description": [
+              {
+                "value": "Tasche interne pratiche per oggetti essenziali",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "external_product_id": [
+              {
+                "value": "B0DJ4926YX",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_package_weight": [
+              {
+                "unit": "kilograms",
+                "value": 2,
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "product_description": [
+              {
+                "value": "Scopri comfort e protezione senza precedenti con la giacca da moto Gale, realizzata meticolosamente per i motociclisti che danno priorità alla sicurezza e alle prestazioni su strada. Questa giacca combina una robusta struttura impermeabile con caratteristiche protettive avanzate, tra cui protezioni per gomiti, spalle e schiena, garantendo resistenza agli urti e sicurezza superiori durante ogni corsa. Progettata per versatilità e durata, la giacca Gale è dotata di imbottitura aggiuntiva sull'addome e sulla schiena per una maggiore protezione nelle aree critiche. Le cerniere di ventilazione posizionate strategicamente sul petto e sulla schiena forniscono un flusso d'aria ottimale, mantenendoti fresco e comodo durante le lunghe pedalate in condizioni meteorologiche variabili. I pannelli elasticizzati sotto le braccia e i gomiti offrono flessibilità e libertà di movimento, ottimizzando il comfort. I pannelli riflettenti su tutta la giacca aumentano la visibilità in condizioni di scarsa illuminazione, migliorando la sicurezza durante le corse notturne o in condizioni meteorologiche avverse. Le linguette regolabili sui bicipiti e le regolazioni in velcro su vita, polsi e colletto offrono una vestibilità personalizzata, garantendo comfort e funzionalità. Che si tratti di navigare per le strade cittadine o di intraprendere avventure attraverso il paese, la giacca da moto Gale offre prestazioni e stile senza compromessi per i motociclisti che cercano affidabilità in tutte le condizioni di guida.",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "age_range_description": [
+              {
+                "value": "Adulto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_package_quantity": [
+              {
+                "value": "1",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "water_resistance_level": [
+              {
+                "value": "waterproof",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "apparel_size__body_type": [
+              {
+                "value": "regular",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_length_description": [
+              {
+                "value": "Lunghezza standard",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "item_package_dimensions": [
+              {
+                "width": {
+                  "unit": "centimeters",
+                  "value": 30
+                },
+                "height": {
+                  "unit": "centimeters",
+                  "value": 8
+                },
+                "length": {
+                  "unit": "centimeters",
+                  "value": 45
+                },
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "merchant_shipping_group": [
+              {
+                "value": "8cc2289f-371f-4c94-bdbb-5b63cded9b00",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "merchant_suggested_asin": [
+              {
+                "value": "B0DJ4926YX",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "apparel_size__size_class": [
+              {
+                "value": "alpha",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "external_product_id_type": [
+              {
+                "value": "ASIN",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "fulfillment_availability": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "fulfillment_channel_code": "AMAZON_EU"
+              }
+            ],
+            "recommended_browse_nodes": [
+              {
+                "value": "2420941031",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "apparel_size__height_type": [
+              {
+                "value": "regular",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "apparel_size__size_system": [
+              {
+                "value": "as6",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_audience_keyword_1": [
+              {
+                "value": "Giacca Da Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_audience_keyword_2": [
+              {
+                "value": "Giacca Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_audience_keyword_3": [
+              {
+                "value": "Giubbotto Moto",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_audience_keyword_4": [
+              {
+                "value": "Giacca Moto Uomo",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "target_audience_keyword_5": [
+              {
+                "value": "Gale Jacket Xavia",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "main_product_image_locator": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship": [
+              {
+                "parent_sku": "GALE-JACKET",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "image_locator_ps01__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "supplier_declared_material_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "child_parent_sku_relationship__parent_sku": [
+              {
+                "value": "GALE-JACKET",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "other_product_image_locator_1__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "image_locator_ps01__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship__child_relationship_type": [
+              {
+                "value": "variation",
+                "language_tag": "it_IT",
+                "marketplace_id": "APJ6JRA9NG5V4"
+              }
+            ],
+            "other_product_image_locator_1__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "other_product_image_locator_7__media_location__media_location": [
+              {
+                "marketplace_id": "APJ6JRA9NG5V4",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ]
+          },
+          "browseNodeId": "2420941031"
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": [
+          "PROTEZIONE: Protezioni Per Gomiti, Spalle E Schiena Garantiscono Una Resistenza Agli Urti Superiore, Con Imbottitura Aggiuntiva Sull'addome E Sulla Schiena.",
+          "VENTILAZIONE E FLESSIBILITÀ MIGLIORATE: Le Cerniere Di Ventilazione Posizionate Strategicamente Sul Petto E Sulla Schiena Migliorano Il Flusso D'aria, Mentre I Pannelli Elasticizzati Sotto Le Braccia E I Gomiti Offrono Libertà Di Movimento.",
+          "IMPERMEABILE: Progettato Per Una Protezione Completamente Impermeabile Contro Pioggia E Umidità, Ideale Per Varie Condizioni Atmosferiche.",
+          "ALTA VISIBILITÀ: I Pannelli Riflettenti Aumentano La Visibilità In Condizioni Di Scarsa Illuminazione Per La Sicurezza.",
+          "VESTIBILITÀ PERSONALIZZABILE: Le Linguette Regolabili Sui Bicipiti E Le Regolazioni In Velcro Su Vita, Polsi E Colletto Garantiscono Una Vestibilità Su Misura."
+        ],
+        "followMasterQuantity": false,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": false
+      },
+      {
+        "id": "cmp00tsac0037s101ijg2of6x",
+        "price": 99,
+        "title": "XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Schwarz)",
+        "region": "DE",
+        "aliasId": null,
+        "channel": "AMAZON",
+        "version": 18,
+        "aliasKey": "",
+        "quantity": 18,
+        "createdAt": "2026-05-10T17:02:38.196",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-12T14:46:56.244",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "SYNCED",
+        "description": "Erleben Sie beispiellosen Komfort und Schutz mit der Gale-Motorradjacke, die sorgfältig für Fahrer gefertigt wurde, denen Sicherheit und Leistung auf der Straße am wichtigsten sind. Diese Jacke kombiniert eine robuste, wasserdichte Konstruktion mit fortschrittlichen Schutzfunktionen, darunter Ellbogen-, Schulter- und Rückenprotektoren, und sorgt so für überragende Aufprallfestigkeit und Sicherheit bei jeder Fahrt. Die Gale-Jacke wurde für Vielseitigkeit und Haltbarkeit entwickelt und verfügt über zusätzliche Polsterung an Bauch und Rücken für zusätzlichen Schutz in kritischen Bereichen. Strategisch platzierte Belüftungsreißverschlüsse an Brust und Rücken sorgen für optimale Luftzirkulation und halten Sie bei langen Fahrten bei wechselnden Wetterbedingungen kühl und komfortabel. Stretcheinsätze unter den Armen und Ellbogen bieten Flexibilität und Bewegungsfreiheit und optimieren den Komfort. Reflektierende Einsätze in der gesamten Jacke erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und verbessern die Sicherheit bei Nachtfahrten oder widrigen Wetterbedingungen. Verstellbare Laschen an den Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine individuelle Passform und gewährleisten Komfort und Funktionalität. Ob beim Navigieren durch die Straßen der Stadt oder bei Abenteuern quer durchs Land, die Gale-Motorradjacke bietet kompromisslose Leistung und Stil für Fahrer, die bei allen Fahrbedingungen Zuverlässigkeit suchen.",
+        "isPublished": true,
+        "marketplace": "DE",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "AMAZON_DE",
+        "lastSyncError": null,
+        "listingStatus": "ACTIVE",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": "PENDING",
+        "masterQuantity": 42,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": "SIZE/COLOR",
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": {
+          "size": "XS",
+          "brand": "XAVIA RACING WWW.XAVIARACING.IT",
+          "color": "Schwarz",
+          "style": "XAVIA GALE Giacca Moto",
+          "theme": "Avventura, Sicurezza, Comfort",
+          "pattern": "Gale",
+          "fit_type": "Normal",
+          "item_sku": "GALE-JACKET-BLACK-MEN-XS",
+          "material": "Polyester",
+          "item_name": "XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Schwarz)",
+          "seasons_1": "Tutte le stagioni",
+          "seasons_2": "Estate",
+          "seasons_3": "Inverno",
+          "seasons_4": "Primavera",
+          "seasons_5": "Autunno",
+          "department": "Herren",
+          "material_1": "Poliestere",
+          "material_2": "Nylon",
+          "model_name": "Gale",
+          "parent_sku": "GALE-JACKET",
+          "skip_offer": "false",
+          "weave_type": "Plain",
+          "fabric_type": "Polyester",
+          "fabric_wash": "Scuro",
+          "bullet_point": "UMFASSENDER SCHUTZ: Ellbogen-, Schulter- und Rückenprotektoren sorgen für höchste Aufprallfestigkeit, mit zusätzlicher Polsterung an Bauch und Rücken.",
+          "collar_style": "Regolabile",
+          "manufacturer": "XAVIA RACING WWW.XAVIARACING.IT",
+          "model_number": "1",
+          "product_type": "OUTERWEAR",
+          "sport_type_1": "Moto",
+          "sport_type_2": "Motociclismo",
+          "record_action": "partial_update",
+          "target_gender": "male",
+          "bullet_point_2": "VERBESSERTE BELÜFTUNG UND FLEXIBILITÄT: Strategisch platzierte Belüftungsreißverschlüsse auf Brust und Rücken verbessern die Luftzirkulation, während Stretcheinsätze unter den Armen und Ellbogen Bewegungsfreiheit bieten.",
+          "bullet_point_3": "WASSERDICHTES DESIGN: Entwickelt für vollständigen wasserdichten Schutz gegen Regen und Feuchtigkeit, ideal für verschiedene Wetterbedingungen.",
+          "bullet_point_4": "HOHE SICHTBARKEIT: Reflektierende Einsätze erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und sorgen so für mehr Sicherheit.",
+          "bullet_point_5": "ANPASSBARE PASSFORM: Verstellbare Laschen am Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine maßgeschneiderte Passform.",
+          "condition_type": "new_new",
+          "is_autographed": "false",
+          "item_type_name": "Motorradjacke Herren",
+          "generic_keyword": "Motorradjacke Protektoren wasserdicht atmungsaktiv abriebfest winddicht reflektierend verstellbar Komfort Touring Sicherheit Herren Damen",
+          "occasion_type_1": "Estiva",
+          "occasion_type_2": "Casual",
+          "occasion_type_3": "Sportiva",
+          "occasion_type_4": "Touring",
+          "occasion_type_5": "Urban",
+          "parentage_level": "Kind",
+          "special_feature": "Impermeabile",
+          "variation_theme": "",
+          "product_tax_code": "A_GEN_STANDARD",
+          "care_instructions": "Lavaggio in lavatrice",
+          "country_of_origin": "PK",
+          "flash_point__unit": "degrees_celsius",
+          "purchasable_offer": "",
+          "apparel_size__size": "x_s",
+          "batteries_included": "false",
+          "batteries_required": "false",
+          "flash_point__value": "300.0",
+          "lining_description": "Poliestere",
+          "pocket_description": "Tasche interne pratiche per oggetti essenziali",
+          "product_description": "Erleben Sie beispiellosen Komfort und Schutz mit der Gale-Motorradjacke, die sorgfältig für Fahrer gefertigt wurde, denen Sicherheit und Leistung auf der Straße am wichtigsten sind. Diese Jacke kombiniert eine robuste, wasserdichte Konstruktion mit fortschrittlichen Schutzfunktionen, darunter Ellbogen-, Schulter- und Rückenprotektoren, und sorgt so für überragende Aufprallfestigkeit und Sicherheit bei jeder Fahrt. Die Gale-Jacke wurde für Vielseitigkeit und Haltbarkeit entwickelt und verfügt über zusätzliche Polsterung an Bauch und Rücken für zusätzlichen Schutz in kritischen Bereichen. Strategisch platzierte Belüftungsreißverschlüsse an Brust und Rücken sorgen für optimale Luftzirkulation und halten Sie bei langen Fahrten bei wechselnden Wetterbedingungen kühl und komfortabel. Stretcheinsätze unter den Armen und Ellbogen bieten Flexibilität und Bewegungsfreiheit und optimieren den Komfort. Reflektierende Einsätze in der gesamten Jacke erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und verbessern die Sicherheit bei Nachtfahrten oder widrigen Wetterbedingungen. Verstellbare Laschen an den Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine individuelle Passform und gewährleisten Komfort und Funktionalität. Ob beim Navigieren durch die Straßen der Stadt oder bei Abenteuern quer durchs Land, die Gale-Motorradjacke bietet kompromisslose Leistung und Stil für Fahrer, die bei allen Fahrbedingungen Zuverlässigkeit suchen.",
+          "list_price__currency": "EUR",
+          "age_range_description": "Erwachsener",
+          "water_resistance_level": "waterproof",
+          "apparel_size__body_type": "regular",
+          "item_length_description": "Lunghezza standard",
+          "merchant_shipping_group": "97f45510-00f4-4777-9ed2-36e5f60d1316",
+          "merchant_suggested_asin": "B0DJ4926YX",
+          "apparel_size__size_class": "alpha",
+          "fulfillment_availability": "",
+          "recommended_browse_nodes": "82838031",
+          "apparel_size__height_type": "regular",
+          "apparel_size__size_system": "as3",
+          "item_package_weight__unit": "kilograms",
+          "target_audience_keyword_1": "Motorradjacke",
+          "target_audience_keyword_2": "Herren Motorradjacke",
+          "target_audience_keyword_3": "Giubbotto Moto",
+          "target_audience_keyword_4": "Giacca Moto Uomo",
+          "target_audience_keyword_5": "Gale Jacket Xavia",
+          "item_package_weight__value": "2",
+          "list_price__value_with_tax": "128.1",
+          "main_product_image_locator": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+          "purchasable_offer__currency": "EUR",
+          "gift_options__can_be_wrapped": "false",
+          "purchasable_offer__our_price": "99",
+          "gift_options__can_be_messaged": "false",
+          "purchasable_offer__sale_price": "",
+          "item_package_dimensions__width": "45",
+          "item_package_dimensions__height": "8",
+          "item_package_dimensions__length": "30",
+          "purchasable_offer__sale_end_date": "",
+          "purchasable_offer__condition_type": "",
+          "purchasable_offer__sale_from_date": "",
+          "fulfillment_availability__quantity": "",
+          "image_locator_ps01__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "supplier_declared_dg_hz_regulation": "not_applicable",
+          "item_package_dimensions__width_unit": "centimeters",
+          "item_package_dimensions__height_unit": "centimeters",
+          "item_package_dimensions__length_unit": "centimeters",
+          "supplier_declared_dg_hz_regulation_1": "not_applicable",
+          "supplier_declared_dg_hz_regulation_2": "not_applicable",
+          "supplier_declared_dg_hz_regulation_3": "not_applicable",
+          "supplier_declared_dg_hz_regulation_4": "not_applicable",
+          "supplier_declared_dg_hz_regulation_5": "not_applicable",
+          "supplier_declared_material_regulation": "not_applicable",
+          "child_parent_sku_relationship__parent_sku": "GALE-JACKET",
+          "other_product_image_locator_1__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg",
+          "other_product_image_locator_3__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "fulfillment_availability__fulfillment_channel_code": "AMAZON_EU",
+          "image_locator_ps01__media_location__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "fulfillment_availability__lead_time_to_ship_max_days": "",
+          "child_parent_sku_relationship__child_relationship_type": "variation",
+          "other_product_image_locator_1__media_location__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location__media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg",
+          "other_product_image_locator_3__media_location__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "other_product_image_locator_7__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+        },
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": "B0DJ4926YX",
+        "followMasterPrice": false,
+        "followMasterTitle": false,
+        "fulfillmentMethod": "FBA",
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "attributes": {
+            "size": [
+              {
+                "value": "XS",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "brand": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "color": [
+              {
+                "value": "Schwarz",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "style": [
+              {
+                "value": "XAVIA GALE Giacca Moto",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "theme": [
+              {
+                "value": "Avventura, Sicurezza, Comfort",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "pattern": [
+              {
+                "value": "Gale",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "fit_type": [
+              {
+                "value": "Normal",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "material": [
+              {
+                "value": "Poliestere",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              },
+              {
+                "value": "Nylon",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "item_name": [
+              {
+                "value": "XAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Schwarz)",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "seasons_1": [
+              {
+                "value": "Tutte le stagioni",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "seasons_2": [
+              {
+                "value": "Estate",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "seasons_3": [
+              {
+                "value": "Inverno",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "seasons_4": [
+              {
+                "value": "Primavera",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "seasons_5": [
+              {
+                "value": "Autunno",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "department": [
+              {
+                "value": "Herren",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "list_price": [
+              {
+                "currency": "EUR",
+                "marketplace_id": "A1PA6795UKMFR9",
+                "value_with_tax": 128.1
+              }
+            ],
+            "model_name": [
+              {
+                "value": "Gale",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "skip_offer": [
+              {
+                "value": "false",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "weave_type": [
+              {
+                "value": "Plain",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "fabric_type": [
+              {
+                "value": "Polyester",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "fabric_wash": [
+              {
+                "value": "Scuro",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "bullet_point": [
+              {
+                "value": "VERBESSERTE BELÜFTUNG UND FLEXIBILITÄT: Strategisch platzierte Belüftungsreißverschlüsse auf Brust und Rücken verbessern die Luftzirkulation, während Stretcheinsätze unter den Armen und Ellbogen Bewegungsfreiheit bieten.",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              },
+              {
+                "value": "WASSERDICHTES DESIGN: Entwickelt für vollständigen wasserdichten Schutz gegen Regen und Feuchtigkeit, ideal für verschiedene Wetterbedingungen.",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              },
+              {
+                "value": "HOHE SICHTBARKEIT: Reflektierende Einsätze erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und sorgen so für mehr Sicherheit.",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              },
+              {
+                "value": "ANPASSBARE PASSFORM: Verstellbare Laschen am Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine maßgeschneiderte Passform.",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "collar_style": [
+              {
+                "value": "Regolabile",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "gift_options": [
+              {
+                "can_be_wrapped": "false",
+                "marketplace_id": "A1PA6795UKMFR9",
+                "can_be_messaged": "false"
+              }
+            ],
+            "manufacturer": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "model_number": [
+              {
+                "value": "1",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "sport_type_1": [
+              {
+                "value": "Moto",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "sport_type_2": [
+              {
+                "value": "Motociclismo",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_gender": [
+              {
+                "value": "male",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "condition_type": [
+              {
+                "value": "new_new",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "is_autographed": [
+              {
+                "value": "false",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "item_type_name": [
+              {
+                "value": "Motorradjacke Herren",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "generic_keyword": [
+              {
+                "value": "Motorradjacke Protektoren wasserdicht atmungsaktiv abriebfest winddicht reflektierend verstellbar Komfort Touring Sicherheit Herren Damen",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "occasion_type_1": [
+              {
+                "value": "Estiva",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "occasion_type_2": [
+              {
+                "value": "Casual",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "occasion_type_3": [
+              {
+                "value": "Sportiva",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "occasion_type_4": [
+              {
+                "value": "Touring",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "occasion_type_5": [
+              {
+                "value": "Urban",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "special_feature": [
+              {
+                "value": "Impermeabile",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "product_tax_code": [
+              {
+                "value": "A_GEN_STANDARD",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "care_instructions": [
+              {
+                "value": "Lavaggio in lavatrice",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "country_of_origin": [
+              {
+                "value": "PK",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "flash_point__unit": [
+              {
+                "value": "degrees_celsius",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "purchasable_offer": [
+              {
+                "currency": "EUR",
+                "our_price": [
+                  {
+                    "schedule": [
+                      {
+                        "value_with_tax": 99
+                      }
+                    ]
+                  }
+                ],
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "apparel_size__size": [
+              {
+                "value": "x_s",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "batteries_included": [
+              {
+                "value": "false",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "batteries_required": [
+              {
+                "value": "false",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "flash_point__value": [
+              {
+                "value": "300.0",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "lining_description": [
+              {
+                "value": "Poliestere",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "pocket_description": [
+              {
+                "value": "Tasche interne pratiche per oggetti essenziali",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "item_package_weight": [
+              {
+                "unit": "kilograms",
+                "value": 2,
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "product_description": [
+              {
+                "value": "Erleben Sie beispiellosen Komfort und Schutz mit der Gale-Motorradjacke, die sorgfältig für Fahrer gefertigt wurde, denen Sicherheit und Leistung auf der Straße am wichtigsten sind. Diese Jacke kombiniert eine robuste, wasserdichte Konstruktion mit fortschrittlichen Schutzfunktionen, darunter Ellbogen-, Schulter- und Rückenprotektoren, und sorgt so für überragende Aufprallfestigkeit und Sicherheit bei jeder Fahrt. Die Gale-Jacke wurde für Vielseitigkeit und Haltbarkeit entwickelt und verfügt über zusätzliche Polsterung an Bauch und Rücken für zusätzlichen Schutz in kritischen Bereichen. Strategisch platzierte Belüftungsreißverschlüsse an Brust und Rücken sorgen für optimale Luftzirkulation und halten Sie bei langen Fahrten bei wechselnden Wetterbedingungen kühl und komfortabel. Stretcheinsätze unter den Armen und Ellbogen bieten Flexibilität und Bewegungsfreiheit und optimieren den Komfort. Reflektierende Einsätze in der gesamten Jacke erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und verbessern die Sicherheit bei Nachtfahrten oder widrigen Wetterbedingungen. Verstellbare Laschen an den Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine individuelle Passform und gewährleisten Komfort und Funktionalität. Ob beim Navigieren durch die Straßen der Stadt oder bei Abenteuern quer durchs Land, die Gale-Motorradjacke bietet kompromisslose Leistung und Stil für Fahrer, die bei allen Fahrbedingungen Zuverlässigkeit suchen.",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "age_range_description": [
+              {
+                "value": "Erwachsener",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "water_resistance_level": [
+              {
+                "value": "waterproof",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "apparel_size__body_type": [
+              {
+                "value": "regular",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "item_length_description": [
+              {
+                "value": "Lunghezza standard",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "item_package_dimensions": [
+              {
+                "width": {
+                  "unit": "centimeters",
+                  "value": 45
+                },
+                "height": {
+                  "unit": "centimeters",
+                  "value": 8
+                },
+                "length": {
+                  "unit": "centimeters",
+                  "value": 30
+                },
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "merchant_shipping_group": [
+              {
+                "value": "97f45510-00f4-4777-9ed2-36e5f60d1316",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "merchant_suggested_asin": [
+              {
+                "value": "B0DJ4926YX",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "apparel_size__size_class": [
+              {
+                "value": "alpha",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "fulfillment_availability": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "fulfillment_channel_code": "AMAZON_EU"
+              }
+            ],
+            "recommended_browse_nodes": [
+              {
+                "value": "82838031",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "apparel_size__height_type": [
+              {
+                "value": "regular",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "apparel_size__size_system": [
+              {
+                "value": "as3",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_audience_keyword_1": [
+              {
+                "value": "Motorradjacke",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_audience_keyword_2": [
+              {
+                "value": "Herren Motorradjacke",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_audience_keyword_3": [
+              {
+                "value": "Giubbotto Moto",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_audience_keyword_4": [
+              {
+                "value": "Giacca Moto Uomo",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "target_audience_keyword_5": [
+              {
+                "value": "Gale Jacket Xavia",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "main_product_image_locator": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg"
+              }
+            ],
+            "image_locator_ps01__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation_1": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation_2": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation_3": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation_4": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation_5": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "supplier_declared_material_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "child_parent_sku_relationship__parent_sku": [
+              {
+                "value": "GALE-JACKET",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "other_product_image_locator_1__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "image_locator_ps01__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship__child_relationship_type": [
+              {
+                "value": "variation",
+                "language_tag": "de_DE",
+                "marketplace_id": "A1PA6795UKMFR9"
+              }
+            ],
+            "other_product_image_locator_1__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "other_product_image_locator_7__media_location__media_location": [
+              {
+                "marketplace_id": "A1PA6795UKMFR9",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ]
+          }
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": [
+          "UMFASSENDER SCHUTZ: Ellbogen-, Schulter- und Rückenprotektoren sorgen für höchste Aufprallfestigkeit, mit zusätzlicher Polsterung an Bauch und Rücken.",
+          "VERBESSERTE BELÜFTUNG UND FLEXIBILITÄT: Strategisch platzierte Belüftungsreißverschlüsse auf Brust und Rücken verbessern die Luftzirkulation, während Stretcheinsätze unter den Armen und Ellbogen Bewegungsfreiheit bieten.",
+          "WASSERDICHTES DESIGN: Entwickelt für vollständigen wasserdichten Schutz gegen Regen und Feuchtigkeit, ideal für verschiedene Wetterbedingungen.",
+          "HOHE SICHTBARKEIT: Reflektierende Einsätze erhöhen die Sichtbarkeit bei schlechten Lichtverhältnissen und sorgen so für mehr Sicherheit.",
+          "ANPASSBARE PASSFORM: Verstellbare Laschen am Bizeps und Klettverschlüsse an Taille, Handgelenken und Kragen sorgen für eine maßgeschneiderte Passform."
+        ],
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": false
+      },
+      {
+        "id": "cmp27hek3015znv01heu9lmj3",
+        "price": 105,
+        "title": "XAVIA GALE Veste De Moto Homme - Blouson Moto Imperméable Et Ventilé Avec Protection De Niveau 2 | Pour Toutes Les Saisons (XS, Noir)",
+        "region": "FR",
+        "aliasId": null,
+        "channel": "AMAZON",
+        "version": 12,
+        "aliasKey": "",
+        "quantity": 18,
+        "createdAt": "2026-05-12T05:44:30.195",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-07-19T19:22:43.872",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "PENDING",
+        "description": "Découvrez un confort et une protection inégalés avec le blouson de moto Gale, méticuleusement conçu pour les motards qui privilégient la sécurité et la performance sur la route. Cette veste combine une construction imperméable robuste avec des caractéristiques de protection avancées, notamment des protections de niveau 2 pour les coudes, les épaules et le dos, assurant une résistance aux chocs et une sécurité supérieures à chaque sortie. Conçu pour être polyvalent et durable, le manteau Gale est doté d’un rembourrage supplémentaire sur l’abdomen et le dos pour une protection accrue dans les zones critiques. Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos assurent une circulation d’air optimale, vous gardant au frais et à l’aise pendant les longues sorties dans des conditions météorologiques variables. Les panneaux extensibles sous les bras et les coudes offrent flexibilité et liberté de mouvement, optimisant ainsi le confort. Des panneaux réfléchissants dans toute la veste augmentent la visibilité dans des conditions de faible luminosité, améliorant ainsi la sécurité lors des trajets de nuit ou dans des conditions météorologiques défavorables. Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col offrent un ajustement personnalisé, assurant confort et fonctionnalité. Qu’il sillonne les rues de la ville ou qu’il se lance dans des aventures à travers le pays, le blouson de moto Gale offre des performances et un style sans compromis pour les motards à la recherche de fiabilité dans toutes les conditions de conduite.",
+        "isPublished": false,
+        "marketplace": "FR",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "AMAZON_FR",
+        "lastSyncError": null,
+        "listingStatus": "DISCOVERABLE",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": "PENDING",
+        "masterQuantity": 42,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": null,
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": {
+          "size": "XS",
+          "brand": "XAVIA RACING WWW.XAVIARACING.IT",
+          "color": "Noir",
+          "fit_type": "Normal",
+          "item_sku": "GALE-JACKET-BLACK-MEN-XS",
+          "item_name": "XAVIA GALE Veste De Moto Homme - Blouson Moto Imperméable Et Ventilé Avec Protection De Niveau 2 | Pour Toutes Les Saisons (XS, Noir)",
+          "department": "Hommes",
+          "model_name": "Gale",
+          "parent_sku": "GALE-JACKET",
+          "fabric_type": "Polyester",
+          "bullet_point": "PROTECTION : Les protections de niveau 2 pour les coudes, les épaules et le dos garantissent une résistance supérieure aux chocs, avec un rembourrage supplémentaire sur l’abdomen et le dos.",
+          "manufacturer": "XAVIA RACING WWW.XAVIARACING.IT",
+          "model_number": "1",
+          "product_type": "OUTERWEAR",
+          "record_action": "partial_update",
+          "target_gender": "male",
+          "bullet_point_2": "AMÉLIORATION DE LA VENTILATION ET DE LA FLEXIBILITÉ : Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos améliorent la circulation de l’air, tandis que des panneaux extensibles sous les bras et les coudes offrent une liberté de mouvement.",
+          "bullet_point_3": "IMPERMÉABLE : Conçu pour une protection entièrement imperméable contre la pluie et l’humidité, idéal pour diverses conditions météorologiques.",
+          "bullet_point_4": "HAUTE VISIBILITÉ : Les panneaux réfléchissants augmentent la visibilité dans des conditions de faible luminosité pour la sécurité.",
+          "bullet_point_5": "AJUSTEMENT PERSONNALISABLE : Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col assurent un ajustement sur mesure.",
+          "condition_type": "new_new",
+          "generic_keyword": "Protections de veste de moto imperméable respirant résistant à l'abrasion coupe-vent réfléchissant réglable confort touring sécurité hommes femmes",
+          "parentage_level": "Enfant",
+          "variation_theme": "",
+          "country_of_origin": "PK",
+          "purchasable_offer": "",
+          "apparel_size__size": "x_s",
+          "batteries_included": "false",
+          "batteries_required": "false",
+          "product_description": "Découvrez un confort et une protection inégalés avec le blouson de moto Gale, méticuleusement conçu pour les motards qui privilégient la sécurité et la performance sur la route. Cette veste combine une construction imperméable robuste avec des caractéristiques de protection avancées, notamment des protections de niveau 2 pour les coudes, les épaules et le dos, assurant une résistance aux chocs et une sécurité supérieures à chaque sortie. Conçu pour être polyvalent et durable, le manteau Gale est doté d’un rembourrage supplémentaire sur l’abdomen et le dos pour une protection accrue dans les zones critiques. Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos assurent une circulation d’air optimale, vous gardant au frais et à l’aise pendant les longues sorties dans des conditions météorologiques variables. Les panneaux extensibles sous les bras et les coudes offrent flexibilité et liberté de mouvement, optimisant ainsi le confort. Des panneaux réfléchissants dans toute la veste augmentent la visibilité dans des conditions de faible luminosité, améliorant ainsi la sécurité lors des trajets de nuit ou dans des conditions météorologiques défavorables. Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col offrent un ajustement personnalisé, assurant confort et fonctionnalité. Qu’il sillonne les rues de la ville ou qu’il se lance dans des aventures à travers le pays, le blouson de moto Gale offre des performances et un style sans compromis pour les motards à la recherche de fiabilité dans toutes les conditions de conduite.",
+          "list_price__currency": "EUR",
+          "age_range_description": "Adulte",
+          "apparel_size__body_type": "regular",
+          "merchant_suggested_asin": "B0DJ4926YX",
+          "apparel_size__size_class": "alpha",
+          "fulfillment_availability": "",
+          "recommended_browse_nodes": "2429656031",
+          "apparel_size__height_type": "regular",
+          "apparel_size__size_system": "as4",
+          "item_package_weight__unit": "kilograms",
+          "item_package_weight__value": "2.00",
+          "list_price__value_with_tax": "128.1",
+          "main_product_image_locator": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+          "purchasable_offer__currency": "EUR",
+          "purchasable_offer__our_price": "105",
+          "purchasable_offer__sale_price": "",
+          "item_package_dimensions__width": "45.00",
+          "item_package_dimensions__height": "8.00",
+          "item_package_dimensions__length": "30.00",
+          "purchasable_offer__sale_end_date": "",
+          "purchasable_offer__condition_type": "",
+          "purchasable_offer__sale_from_date": "",
+          "fulfillment_availability__quantity": "",
+          "image_locator_ps01__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "supplier_declared_dg_hz_regulation": "not_applicable",
+          "item_package_dimensions__width_unit": "centimeters",
+          "item_package_dimensions__height_unit": "centimeters",
+          "item_package_dimensions__length_unit": "centimeters",
+          "child_parent_sku_relationship__parent_sku": "GALE-JACKET",
+          "other_product_image_locator_1__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg",
+          "other_product_image_locator_3__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "other_product_image_locator_7__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "fulfillment_availability__fulfillment_channel_code": "AMAZON_EU",
+          "fulfillment_availability__lead_time_to_ship_max_days": "",
+          "child_parent_sku_relationship__child_relationship_type": "variation"
+        },
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": "B0DJ4926YX",
+        "followMasterPrice": false,
+        "followMasterTitle": false,
+        "fulfillmentMethod": "FBA",
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "attributes": {
+            "size": [
+              {
+                "value": "XS",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "brand": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "color": [
+              {
+                "value": "Noir",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "fit_type": [
+              {
+                "value": "Normal",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "item_name": [
+              {
+                "value": "XAVIA GALE Veste De Moto Homme - Blouson Moto Imperméable Et Ventilé Avec Protection De Niveau 2 | Pour Toutes Les Saisons (XS, Noir)",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "department": [
+              {
+                "value": "Hommes",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "list_price": [
+              {
+                "currency": "EUR",
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "value_with_tax": 128.1
+              }
+            ],
+            "model_name": [
+              {
+                "value": "Gale",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "skip_offer": [
+              {
+                "value": false,
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "fabric_type": [
+              {
+                "value": "Polyester",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "bullet_point": [
+              {
+                "value": "AMÉLIORATION DE LA VENTILATION ET DE LA FLEXIBILITÉ : Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos améliorent la circulation de l’air, tandis que des panneaux extensibles sous les bras et les coudes offrent une liberté de mouvement.",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              },
+              {
+                "value": "IMPERMÉABLE : Conçu pour une protection entièrement imperméable contre la pluie et l’humidité, idéal pour diverses conditions météorologiques.",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              },
+              {
+                "value": "HAUTE VISIBILITÉ : Les panneaux réfléchissants augmentent la visibilité dans des conditions de faible luminosité pour la sécurité.",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              },
+              {
+                "value": "AJUSTEMENT PERSONNALISABLE : Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col assurent un ajustement sur mesure.",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "manufacturer": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "model_number": [
+              {
+                "value": "1",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "target_gender": [
+              {
+                "value": "male",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "condition_type": [
+              {
+                "value": "new_new",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "generic_keyword": [
+              {
+                "value": "Protections de veste de moto imperméable respirant résistant à l'abrasion coupe-vent réfléchissant réglable confort touring sécurité hommes femmes",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "country_of_origin": [
+              {
+                "value": "PK",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "purchasable_offer": [
+              {
+                "currency": "EUR",
+                "our_price": [
+                  {
+                    "schedule": [
+                      {
+                        "value_with_tax": 105
+                      }
+                    ]
+                  }
+                ],
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "apparel_size__size": [
+              {
+                "value": "x_s",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "batteries_included": [
+              {
+                "value": "false",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "batteries_required": [
+              {
+                "value": "false",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "item_package_weight": [
+              {
+                "unit": "kilograms",
+                "value": 2,
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "product_description": [
+              {
+                "value": "Découvrez un confort et une protection inégalés avec le blouson de moto Gale, méticuleusement conçu pour les motards qui privilégient la sécurité et la performance sur la route. Cette veste combine une construction imperméable robuste avec des caractéristiques de protection avancées, notamment des protections de niveau 2 pour les coudes, les épaules et le dos, assurant une résistance aux chocs et une sécurité supérieures à chaque sortie. Conçu pour être polyvalent et durable, le manteau Gale est doté d’un rembourrage supplémentaire sur l’abdomen et le dos pour une protection accrue dans les zones critiques. Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos assurent une circulation d’air optimale, vous gardant au frais et à l’aise pendant les longues sorties dans des conditions météorologiques variables. Les panneaux extensibles sous les bras et les coudes offrent flexibilité et liberté de mouvement, optimisant ainsi le confort. Des panneaux réfléchissants dans toute la veste augmentent la visibilité dans des conditions de faible luminosité, améliorant ainsi la sécurité lors des trajets de nuit ou dans des conditions météorologiques défavorables. Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col offrent un ajustement personnalisé, assurant confort et fonctionnalité. Qu’il sillonne les rues de la ville ou qu’il se lance dans des aventures à travers le pays, le blouson de moto Gale offre des performances et un style sans compromis pour les motards à la recherche de fiabilité dans toutes les conditions de conduite.",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "age_range_description": [
+              {
+                "value": "Adulte",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "apparel_size__body_type": [
+              {
+                "value": "regular",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "item_package_dimensions": [
+              {
+                "width": {
+                  "unit": "centimeters",
+                  "value": 45
+                },
+                "height": {
+                  "unit": "centimeters",
+                  "value": 8
+                },
+                "length": {
+                  "unit": "centimeters",
+                  "value": 30
+                },
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "merchant_suggested_asin": [
+              {
+                "value": "B0DJ4926YX",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "apparel_size__size_class": [
+              {
+                "value": "alpha",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "fulfillment_availability": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "fulfillment_channel_code": "AMAZON_EU"
+              }
+            ],
+            "recommended_browse_nodes": [
+              {
+                "value": "2429656031",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "apparel_size__height_type": [
+              {
+                "value": "regular",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "apparel_size__size_system": [
+              {
+                "value": "as4",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "main_product_image_locator": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg"
+              }
+            ],
+            "image_locator_ps01__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "child_parent_sku_relationship__parent_sku": [
+              {
+                "value": "GALE-JACKET",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ],
+            "other_product_image_locator_1__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "other_product_image_locator_7__media_location": [
+              {
+                "marketplace_id": "A13V1IB3VIYZZH",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship__child_relationship_type": [
+              {
+                "value": "variation",
+                "language_tag": "fr_FR",
+                "marketplace_id": "A13V1IB3VIYZZH"
+              }
+            ]
+          }
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": [
+          "PROTECTION : Les protections de niveau 2 pour les coudes, les épaules et le dos garantissent une résistance supérieure aux chocs, avec un rembourrage supplémentaire sur l’abdomen et le dos.",
+          "AMÉLIORATION DE LA VENTILATION ET DE LA FLEXIBILITÉ : Des fermetures éclair de ventilation stratégiquement placées sur la poitrine et le dos améliorent la circulation de l’air, tandis que des panneaux extensibles sous les bras et les coudes offrent une liberté de mouvement.",
+          "IMPERMÉABLE : Conçu pour une protection entièrement imperméable contre la pluie et l’humidité, idéal pour diverses conditions météorologiques.",
+          "HAUTE VISIBILITÉ : Les panneaux réfléchissants augmentent la visibilité dans des conditions de faible luminosité pour la sécurité.",
+          "AJUSTEMENT PERSONNALISABLE : Des languettes réglables sur les biceps et des ajustements velcro sur la taille, les poignets et le col assurent un ajustement sur mesure."
+        ],
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": false
+      },
+      {
+        "id": "cmp27iq8i01jgnv0148no82nt",
+        "price": 105,
+        "title": "XAVIA GALE Chaqueta De Moto Para Hombre - Chaqueta De Moto Impermeable Y Ventilada Con Protección De Nivel 2 | Para Todas Las Estaciones (XS, Negro)",
+        "region": "ES",
+        "aliasId": null,
+        "channel": "AMAZON",
+        "version": 16,
+        "aliasKey": "",
+        "quantity": 10,
+        "createdAt": "2026-05-12T05:45:31.986",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-07-19T19:22:43.683",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "SYNCED",
+        "description": "\"Descubre una comodidad y protección incomparables con la chaqueta de moto Gale, meticulosamente diseñada para los conductores que priorizan la seguridad y el rendimiento en la carretera. Esta chaqueta combina una construcción impermeable resistente con características de protección avanzadas, que incluyen protectores de codos, hombros y espalda, lo que garantiza una resistencia superior a los impactos y seguridad durante cada viaje. Diseñada para brindar versatilidad y durabilidad, la chaqueta Gale cuenta con acolchado adicional en el abdomen y la espalda para mayor protección en áreas críticas. Las cremalleras de ventilación estratégicamente colocadas en el pecho y la espalda proporcionan un flujo de aire óptimo, manteniéndote fresco y cómodo durante los viajes largos en condiciones climáticas variables. Los paneles elásticos debajo de los brazos y los codos brindan flexibilidad y libertad de movimiento, optimizando la comodidad. Los paneles reflectantes en toda la chaqueta aumentan la visibilidad en condiciones de poca luz, mejorando la seguridad durante los paseos nocturnos o en condiciones climáticas adversas. Las lengüetas ajustables en los bíceps y los ajustes de velcro en la cintura, las muñecas y el cuello proporcionan un ajuste personalizado, lo que garantiza la comodidad y la funcionalidad. Ya sea que recorra las calles de la ciudad o se embarque en aventuras a campo traviesa, la chaqueta de motocicleta Gale ofrece un rendimiento y un estilo sin concesiones para los conductores que buscan confiabilidad en todas las condiciones de conducción\".",
+        "isPublished": true,
+        "marketplace": "ES",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": "2026-06-09T13:54:05.63",
+        "overrideData": {},
+        "channelMarket": "AMAZON_ES",
+        "lastSyncError": null,
+        "listingStatus": "ACTIVE",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": "SUCCESS",
+        "masterQuantity": 42,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": null,
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": {
+          "size": "XS",
+          "brand": "XAVIA RACING WWW.XAVIARACING.IT",
+          "color": "Negro",
+          "style": "XAVIA GALE Giacca Moto",
+          "theme": "Avventura, Sicurezza, Comfort",
+          "pattern": "Gale",
+          "fit_type": "Regular",
+          "item_sku": "GALE-JACKET-BLACK-MEN-XS",
+          "item_name": "XAVIA GALE Chaqueta De Moto Para Hombre - Chaqueta De Moto Impermeable Y Ventilada Con Protección De Nivel 2 | Para Todas Las Estaciones (XS, Negro)",
+          "seasons_1": "Tutte le stagioni",
+          "seasons_2": "Estate",
+          "seasons_3": "Inverno",
+          "seasons_4": "Primavera",
+          "seasons_5": "Autunno",
+          "department": "Hombre",
+          "material_1": "Poliestere",
+          "material_2": "Nylon",
+          "model_name": "GALE",
+          "parent_sku": "GALE-JACKET",
+          "skip_offer": "false",
+          "weave_type": "Not applicable",
+          "fabric_type": "Poliéster",
+          "fabric_wash": "Scuro",
+          "bullet_point": "PROTECCIÓN: Los Protectores De Codos, Hombros Y Espalda Proporcionan Una Resistencia Superior A Los Impactos, Con Acolchado Adicional En El Abdomen Y La Espalda.",
+          "collar_style": "Regolabile",
+          "manufacturer": "XAVIA RACING WWW.XAVIARACING.IT",
+          "model_number": "1",
+          "product_type": "OUTERWEAR",
+          "sport_type_1": "Moto",
+          "sport_type_2": "Motociclismo",
+          "record_action": "partial_update",
+          "target_gender": "male",
+          "bullet_point_2": "VENTILACIÓN Y FLEXIBILIDAD MEJORADAS: Las Cremalleras De Ventilación Estratégicamente Ubicadas En El Pecho Y La Espalda Mejoran El Flujo De Aire, Mientras Que Los Paneles Elásticos Debajo De Los Brazos Y Los Codos Brindan Libertad De Movimiento.",
+          "bullet_point_3": "IMPERMEABLE: Diseñado Para Una Protección Totalmente Impermeable Contra La Lluvia Y La Humedad, Ideal Para Diversas Condiciones Climáticas.",
+          "bullet_point_4": "ALTA VISIBILIDAD: Los Paneles Reflectantes Aumentan La Visibilidad En Condiciones De Poca Luz Para Mayor Seguridad.",
+          "bullet_point_5": "AJUSTE PERSONALIZABLE: Las Lengüetas Ajustables En Los Bíceps Y Los Ajustes De Velcro En La Cintura, Las Muñecas Y El Cuello Garantizan Un Ajuste A Medida.",
+          "condition_type": "new_new",
+          "is_autographed": "false",
+          "item_type_name": "Giacca Moto",
+          "generic_keyword": "Chaqueta de moto DeChaqueta de moto Protectores de seguridad softshell Resistente al agua Transpirable Protección de motociclistas Adventure Touring Verano Invierno Moto Hombres Mujeres Carreras",
+          "occasion_type_1": "Estiva",
+          "occasion_type_2": "Casual",
+          "occasion_type_3": "Sportiva",
+          "occasion_type_4": "Touring",
+          "occasion_type_5": "Urban",
+          "parentage_level": "Child",
+          "special_feature": "Impermeabile",
+          "variation_theme": "",
+          "product_tax_code": "A_GEN_STANDARD",
+          "care_instructions": "Lavado a máquina",
+          "country_of_origin": "PK",
+          "flash_point__unit": "degrees_celsius",
+          "purchasable_offer": "",
+          "apparel_size__size": "x_s",
+          "batteries_included": "false",
+          "batteries_required": "false",
+          "flash_point__value": "300.0",
+          "lining_description": "Poliestere",
+          "pocket_description": "Tasche interne pratiche per oggetti essenziali",
+          "product_description": "\"Descubre una comodidad y protección incomparables con la chaqueta de moto Gale, meticulosamente diseñada para los conductores que priorizan la seguridad y el rendimiento en la carretera. Esta chaqueta combina una construcción impermeable resistente con características de protección avanzadas, que incluyen protectores de codos, hombros y espalda, lo que garantiza una resistencia superior a los impactos y seguridad durante cada viaje. Diseñada para brindar versatilidad y durabilidad, la chaqueta Gale cuenta con acolchado adicional en el abdomen y la espalda para mayor protección en áreas críticas. Las cremalleras de ventilación estratégicamente colocadas en el pecho y la espalda proporcionan un flujo de aire óptimo, manteniéndote fresco y cómodo durante los viajes largos en condiciones climáticas variables. Los paneles elásticos debajo de los brazos y los codos brindan flexibilidad y libertad de movimiento, optimizando la comodidad. Los paneles reflectantes en toda la chaqueta aumentan la visibilidad en condiciones de poca luz, mejorando la seguridad durante los paseos nocturnos o en condiciones climáticas adversas. Las lengüetas ajustables en los bíceps y los ajustes de velcro en la cintura, las muñecas y el cuello proporcionan un ajuste personalizado, lo que garantiza la comodidad y la funcionalidad. Ya sea que recorra las calles de la ciudad o se embarque en aventuras a campo traviesa, la chaqueta de motocicleta Gale ofrece un rendimiento y un estilo sin concesiones para los conductores que buscan confiabilidad en todas las condiciones de conducción\".",
+          "list_price__currency": "EUR",
+          "age_range_description": "Adulto",
+          "water_resistance_level": "waterproof",
+          "apparel_size__body_type": "regular",
+          "item_length_description": "Lunghezza standard",
+          "merchant_shipping_group": "d58f923e-7fc4-460f-b301-20979179af41",
+          "merchant_suggested_asin": "B0DJ4926YX",
+          "apparel_size__size_class": "alpha",
+          "fulfillment_availability": "",
+          "recommended_browse_nodes": "2425315031",
+          "apparel_size__height_type": "regular",
+          "apparel_size__size_system": "as4",
+          "item_package_weight__unit": "kilograms",
+          "target_audience_keyword_1": "motocicleta",
+          "target_audience_keyword_2": "chaqueta de moto",
+          "target_audience_keyword_3": "hombres mujeres",
+          "target_audience_keyword_4": "carreras",
+          "target_audience_keyword_5": "Gale Jacket Xavia",
+          "item_package_weight__value": "2",
+          "list_price__value_with_tax": "128.1",
+          "main_product_image_locator": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+          "purchasable_offer__currency": "EUR",
+          "gift_options__can_be_wrapped": "false",
+          "purchasable_offer__our_price": "105",
+          "gift_options__can_be_messaged": "false",
+          "purchasable_offer__sale_price": "",
+          "item_package_dimensions__width": "30",
+          "item_package_dimensions__height": "8",
+          "item_package_dimensions__length": "45",
+          "purchasable_offer__sale_end_date": "",
+          "purchasable_offer__condition_type": "",
+          "purchasable_offer__sale_from_date": "",
+          "fulfillment_availability__quantity": "10",
+          "supplier_declared_dg_hz_regulation": "not_applicable",
+          "item_package_dimensions__width_unit": "centimeters",
+          "item_package_dimensions__height_unit": "centimeters",
+          "item_package_dimensions__length_unit": "centimeters",
+          "supplier_declared_material_regulation": "not_applicable",
+          "child_parent_sku_relationship__parent_sku": "GALE-JACKET",
+          "fulfillment_availability__fulfillment_channel_code": "AMAZON_EU",
+          "image_locator_ps01__media_location__media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg",
+          "image_locator_ps02__media_location__media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg",
+          "image_locator_ps03__media_location__media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg",
+          "image_locator_ps04__media_location__media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg",
+          "fulfillment_availability__lead_time_to_ship_max_days": "",
+          "child_parent_sku_relationship__child_relationship_type": "variation",
+          "other_product_image_locator_1__media_location__media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+          "other_product_image_locator_2__media_location__media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg",
+          "other_product_image_locator_3__media_location__media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+          "other_product_image_locator_4__media_location__media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+          "other_product_image_locator_5__media_location__media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg",
+          "other_product_image_locator_6__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+          "other_product_image_locator_7__media_location__media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+        },
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": "B0DJ4926YX",
+        "followMasterPrice": false,
+        "followMasterTitle": false,
+        "fulfillmentMethod": "FBA",
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "attributes": {
+            "size": [
+              {
+                "value": "XS",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "brand": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "color": [
+              {
+                "value": "Negro",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "style": [
+              {
+                "value": "XAVIA GALE Giacca Moto",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "theme": [
+              {
+                "value": "Avventura, Sicurezza, Comfort",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "pattern": [
+              {
+                "value": "Gale",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "fit_type": [
+              {
+                "value": "Regular",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "material": [
+              {
+                "value": "Poliestere",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              },
+              {
+                "value": "Nylon",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "item_name": [
+              {
+                "value": "XAVIA GALE Chaqueta De Moto Para Hombre - Chaqueta De Moto Impermeable Y Ventilada Con Protección De Nivel 2 | Para Todas Las Estaciones (XS, Negro)",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "seasons_1": [
+              {
+                "value": "Tutte le stagioni",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "seasons_2": [
+              {
+                "value": "Estate",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "seasons_3": [
+              {
+                "value": "Inverno",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "seasons_4": [
+              {
+                "value": "Primavera",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "seasons_5": [
+              {
+                "value": "Autunno",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "department": [
+              {
+                "value": "Hombre",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "list_price": [
+              {
+                "currency": "EUR",
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "value_with_tax": 128.1
+              }
+            ],
+            "model_name": [
+              {
+                "value": "GALE",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "skip_offer": [
+              {
+                "value": "false",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "weave_type": [
+              {
+                "value": "Not applicable",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "fabric_type": [
+              {
+                "value": "Poliéster",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "fabric_wash": [
+              {
+                "value": "Scuro",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "bullet_point": [
+              {
+                "value": "VENTILACIÓN Y FLEXIBILIDAD MEJORADAS: Las Cremalleras De Ventilación Estratégicamente Ubicadas En El Pecho Y La Espalda Mejoran El Flujo De Aire, Mientras Que Los Paneles Elásticos Debajo De Los Brazos Y Los Codos Brindan Libertad De Movimiento.",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              },
+              {
+                "value": "IMPERMEABLE: Diseñado Para Una Protección Totalmente Impermeable Contra La Lluvia Y La Humedad, Ideal Para Diversas Condiciones Climáticas.",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              },
+              {
+                "value": "ALTA VISIBILIDAD: Los Paneles Reflectantes Aumentan La Visibilidad En Condiciones De Poca Luz Para Mayor Seguridad.",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              },
+              {
+                "value": "AJUSTE PERSONALIZABLE: Las Lengüetas Ajustables En Los Bíceps Y Los Ajustes De Velcro En La Cintura, Las Muñecas Y El Cuello Garantizan Un Ajuste A Medida.",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "collar_style": [
+              {
+                "value": "Regolabile",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "gift_options": [
+              {
+                "can_be_wrapped": "false",
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "can_be_messaged": "false"
+              }
+            ],
+            "manufacturer": [
+              {
+                "value": "XAVIA RACING WWW.XAVIARACING.IT",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "model_number": [
+              {
+                "value": "1",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "sport_type_1": [
+              {
+                "value": "Moto",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "sport_type_2": [
+              {
+                "value": "Motociclismo",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_gender": [
+              {
+                "value": "male",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "condition_type": [
+              {
+                "value": "new_new",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "is_autographed": [
+              {
+                "value": "false",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "item_type_name": [
+              {
+                "value": "Giacca Moto",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "generic_keyword": [
+              {
+                "value": "Chaqueta de moto DeChaqueta de moto Protectores de seguridad softshell Resistente al agua Transpirable Protección de motociclistas Adventure Touring Verano Invierno Moto Hombres Mujeres Carreras",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "occasion_type_1": [
+              {
+                "value": "Estiva",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "occasion_type_2": [
+              {
+                "value": "Casual",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "occasion_type_3": [
+              {
+                "value": "Sportiva",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "occasion_type_4": [
+              {
+                "value": "Touring",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "occasion_type_5": [
+              {
+                "value": "Urban",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "parentage_level": [
+              {
+                "value": "child",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "special_feature": [
+              {
+                "value": "Impermeabile",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "product_tax_code": [
+              {
+                "value": "A_GEN_STANDARD",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "care_instructions": [
+              {
+                "value": "Lavado a máquina",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "country_of_origin": [
+              {
+                "value": "PK",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "flash_point__unit": [
+              {
+                "value": "degrees_celsius",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "purchasable_offer": [
+              {
+                "currency": "EUR",
+                "our_price": [
+                  {
+                    "schedule": [
+                      {
+                        "value_with_tax": 105
+                      }
+                    ]
+                  }
+                ],
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "apparel_size__size": [
+              {
+                "value": "x_s",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "batteries_included": [
+              {
+                "value": "false",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "batteries_required": [
+              {
+                "value": "false",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "flash_point__value": [
+              {
+                "value": "300.0",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "lining_description": [
+              {
+                "value": "Poliestere",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "pocket_description": [
+              {
+                "value": "Tasche interne pratiche per oggetti essenziali",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "item_package_weight": [
+              {
+                "unit": "kilograms",
+                "value": 2,
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "product_description": [
+              {
+                "value": "\"Descubre una comodidad y protección incomparables con la chaqueta de moto Gale, meticulosamente diseñada para los conductores que priorizan la seguridad y el rendimiento en la carretera. Esta chaqueta combina una construcción impermeable resistente con características de protección avanzadas, que incluyen protectores de codos, hombros y espalda, lo que garantiza una resistencia superior a los impactos y seguridad durante cada viaje. Diseñada para brindar versatilidad y durabilidad, la chaqueta Gale cuenta con acolchado adicional en el abdomen y la espalda para mayor protección en áreas críticas. Las cremalleras de ventilación estratégicamente colocadas en el pecho y la espalda proporcionan un flujo de aire óptimo, manteniéndote fresco y cómodo durante los viajes largos en condiciones climáticas variables. Los paneles elásticos debajo de los brazos y los codos brindan flexibilidad y libertad de movimiento, optimizando la comodidad. Los paneles reflectantes en toda la chaqueta aumentan la visibilidad en condiciones de poca luz, mejorando la seguridad durante los paseos nocturnos o en condiciones climáticas adversas. Las lengüetas ajustables en los bíceps y los ajustes de velcro en la cintura, las muñecas y el cuello proporcionan un ajuste personalizado, lo que garantiza la comodidad y la funcionalidad. Ya sea que recorra las calles de la ciudad o se embarque en aventuras a campo traviesa, la chaqueta de motocicleta Gale ofrece un rendimiento y un estilo sin concesiones para los conductores que buscan confiabilidad en todas las condiciones de conducción\".",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "age_range_description": [
+              {
+                "value": "Adulto",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "water_resistance_level": [
+              {
+                "value": "waterproof",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "apparel_size__body_type": [
+              {
+                "value": "regular",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "item_length_description": [
+              {
+                "value": "Lunghezza standard",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "item_package_dimensions": [
+              {
+                "width": {
+                  "unit": "centimeters",
+                  "value": 30
+                },
+                "height": {
+                  "unit": "centimeters",
+                  "value": 8
+                },
+                "length": {
+                  "unit": "centimeters",
+                  "value": 45
+                },
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "merchant_shipping_group": [
+              {
+                "value": "d58f923e-7fc4-460f-b301-20979179af41",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "merchant_suggested_asin": [
+              {
+                "value": "B0DJ4926YX",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "apparel_size__size_class": [
+              {
+                "value": "alpha",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "fulfillment_availability": [
+              {
+                "quantity": 10,
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "fulfillment_channel_code": "AMAZON_EU"
+              }
+            ],
+            "recommended_browse_nodes": [
+              {
+                "value": "2425315031",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "apparel_size__height_type": [
+              {
+                "value": "regular",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "apparel_size__size_system": [
+              {
+                "value": "as4",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_audience_keyword_1": [
+              {
+                "value": "motocicleta",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_audience_keyword_2": [
+              {
+                "value": "chaqueta de moto",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_audience_keyword_3": [
+              {
+                "value": "hombres mujeres",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_audience_keyword_4": [
+              {
+                "value": "carreras",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "target_audience_keyword_5": [
+              {
+                "value": "Gale Jacket Xavia",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "main_product_image_locator": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship": [
+              {
+                "parent_sku": "GALE-JACKET",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "supplier_declared_dg_hz_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "supplier_declared_material_regulation": [
+              {
+                "value": "not_applicable",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "child_parent_sku_relationship__parent_sku": [
+              {
+                "value": "GALE-JACKET",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "image_locator_ps01__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/81Hp8-ByBOL.jpg"
+              }
+            ],
+            "image_locator_ps02__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/71TMBnaQSvL.jpg"
+              }
+            ],
+            "image_locator_ps03__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/81BXKnoqnPL.jpg"
+              }
+            ],
+            "image_locator_ps04__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/71Z+e+JnYDL.jpg"
+              }
+            ],
+            "child_parent_sku_relationship__child_relationship_type": [
+              {
+                "value": "variation",
+                "language_tag": "es_ES",
+                "marketplace_id": "A1RKKUPIHCS9HS"
+              }
+            ],
+            "other_product_image_locator_1__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg"
+              }
+            ],
+            "other_product_image_locator_2__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/71lpdWKiSjL.jpg"
+              }
+            ],
+            "other_product_image_locator_3__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg"
+              }
+            ],
+            "other_product_image_locator_4__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg"
+              }
+            ],
+            "other_product_image_locator_5__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/91x4vzVKTZL.jpg"
+              }
+            ],
+            "other_product_image_locator_6__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ],
+            "other_product_image_locator_7__media_location__media_location": [
+              {
+                "marketplace_id": "A1RKKUPIHCS9HS",
+                "media_location": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg"
+              }
+            ]
+          }
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmothu9bo0000nz01asw6wx8j",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": [
+          "PROTECCIÓN: Los Protectores De Codos, Hombros Y Espalda Proporcionan Una Resistencia Superior A Los Impactos, Con Acolchado Adicional En El Abdomen Y La Espalda.",
+          "VENTILACIÓN Y FLEXIBILIDAD MEJORADAS: Las Cremalleras De Ventilación Estratégicamente Ubicadas En El Pecho Y La Espalda Mejoran El Flujo De Aire, Mientras Que Los Paneles Elásticos Debajo De Los Brazos Y Los Codos Brindan Libertad De Movimiento.",
+          "IMPERMEABLE: Diseñado Para Una Protección Totalmente Impermeable Contra La Lluvia Y La Humedad, Ideal Para Diversas Condiciones Climáticas.",
+          "ALTA VISIBILIDAD: Los Paneles Reflectantes Aumentan La Visibilidad En Condiciones De Poca Luz Para Mayor Seguridad.",
+          "AJUSTE PERSONALIZABLE: Las Lengüetas Ajustables En Los Bíceps Y Los Ajustes De Velcro En La Cintura, Las Muñecas Y El Cuello Garantizan Un Ajuste A Medida."
+        ],
+        "followMasterQuantity": false,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": false
+      },
+      {
+        "id": "cmqrogz72000fnjpk6gq7h7yo",
+        "price": 105,
+        "title": "test",
+        "region": "IT",
+        "aliasId": null,
+        "channel": "EBAY",
+        "version": 9,
+        "aliasKey": "",
+        "quantity": 42,
+        "createdAt": "2026-06-24T06:14:00.495",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-10T18:36:05.927",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "IDLE",
+        "description": "test",
+        "isPublished": true,
+        "marketplace": "IT",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "EBAY_IT",
+        "lastSyncError": null,
+        "listingStatus": "ACTIVE",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": "test",
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": "PENDING",
+        "masterQuantity": 42,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": "Color,Size",
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": {
+          "ean": "",
+          "mpn": "",
+          "sku": "GALE-JACKET-BLACK-MEN-XS",
+          "title": "Giubbotto Impermeabile e Traspirante Con Protezione Livello 2 | Giacca Moto Uomo",
+          "it_qty": 42,
+          "image_1": "",
+          "image_2": "",
+          "image_3": "",
+          "image_4": "",
+          "image_5": "",
+          "image_6": "",
+          "it_price": 105,
+          "quantity": 42,
+          "subtitle": "",
+          "vat_rate": "22",
+          "video_id": "",
+          "condition": "NEW",
+          "it_buffer": 0,
+          "it_follow": "Follow",
+          "it_status": "ACTIVE",
+          "parentage": "child",
+          "it_item_id": "256566103703",
+          "parent_sku": "GALE-JACKET-ALT3",
+          "row_action": "",
+          "category_id": "177104",
+          "description": "",
+          "sync_status": "IDLE",
+          "weight_unit": "KILOGRAM",
+          "aspect_Marca": "Xavia Racing",
+          "aspect_Stile": "Da motociclista",
+          "package_type": "",
+          "aspect_Colore": "Nero",
+          "aspect_Genere": "Uomo",
+          "aspect_Taglia": "XS",
+          "handling_time": 3,
+          "it_listing_id": "",
+          "package_width": 30,
+          "aspect_Athlete": "Unisex",
+          "dimension_unit": "CENTIMETER",
+          "last_pushed_at": "2026-07-07T09:39:12.548Z",
+          "listing_format": "FIXED_PRICE",
+          "listing_status": "ACTIVE",
+          "package_height": 8,
+          "package_length": 45,
+          "package_weight": 2,
+          "aspect_Adatto_a": "Uomo",
+          "aspect_Chiusura": "Cerniera",
+          "aspect_Stagione": "Tutte le stagioni",
+          "variation_theme": "Colore,Taglia",
+          "aspect_Body_type": "Regolare",
+          "aspect_Larghezza": "",
+          "aspect_Lunghezza": "",
+          "aspect_Materiale": "Poliestere, Nylon",
+          "aspect_Quantità": "1",
+          "aspect_Team_name": "Giacca",
+          "best_offer_floor": 0,
+          "listing_duration": "GTC",
+          "return_policy_id": "",
+          "aspect_Protezione": "CE Livello 2",
+          "aspect_Scollatura": "Colletto alla coreana",
+          "description_theme": "",
+          "payment_policy_id": "",
+          "best_offer_ceiling": 0,
+          "best_offer_enabled": false,
+          "shared_sku_listing": true,
+          "aspect_Colore_esatto": "Nero",
+          "aspect_Tipo_di_giacca": "Da moto",
+          "fulfillment_policy_id": "",
+          "item_location_country": "IT",
+          "merchant_location_key": "",
+          "aspect_Caratteristiche": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "aspect_Colore_specifico": "Nero",
+          "aspect_Paese_di_origine": "Pakistan",
+          "aspect_Unità_di_misura": "",
+          "quantity_limit_per_buyer": "",
+          "aspect_Cura_dell'indumento": "Lavabile in lavatrice",
+          "aspect_Garanzia_produttore": "",
+          "aspect_Livello_di_protezione": "CE Livello 2",
+          "aspect_Paese_di_fabbricazione": "Pakistan"
+        },
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": "257584954808",
+        "followMasterPrice": true,
+        "followMasterTitle": false,
+        "fulfillmentMethod": "FBM",
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "vatRate": "22",
+          "videoId": "",
+          "subtitle": "",
+          "bestOffer": false,
+          "imageUrls": [],
+          "__offerIds": {
+            "EBAY_IT": "193677053011"
+          },
+          "categoryId": "177104",
+          "weightUnit": "KILOGRAM",
+          "conditionId": "NEW",
+          "packageType": "",
+          "handlingTime": 3,
+          "packageWidth": 30,
+          "dimensionUnit": "CENTIMETER",
+          "itemSpecifics": {
+            "Marca": "Xavia Racing",
+            "Stile": "Da motociclista",
+            "Colore": "Nero",
+            "Genere": "Uomo",
+            "Taglia": "XS",
+            "Athlete": "Unisex",
+            "Adatto a": [
+              "Adulto unisex"
+            ],
+            "Chiusura": "Cerniera",
+            "Stagione": "Tutte le stagione",
+            "Body type": "Regolare",
+            "Materiale": "Poliestere, Nylon",
+            "Quantità": "1",
+            "Team name": "Giacca",
+            "Protezione": "CE Livello 2",
+            "Scollatura": "Colletto alla coreana",
+            "Colore esatto": "Nero",
+            "Tipo di giacca": "Da moto",
+            "Caratteristiche": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+            "Colore specifico": "Nero",
+            "Paese di origine": "Pakistan",
+            "Cura dell'indumento": "Lavabile in lavatrice",
+            "Livello di protezione": "CE Livello 2",
+            "Paese di fabbricazione": "Pakistan"
+          },
+          "listingFormat": "FIXED_PRICE",
+          "packageHeight": 8,
+          "packageLength": 45,
+          "packageWeight": 2,
+          "bestOfferFloor": 0,
+          "returnPolicyId": "",
+          "listingDuration": "GTC",
+          "paymentPolicyId": "",
+          "bestOfferCeiling": 0,
+          "sharedSkuListing": true,
+          "descriptionThemeId": "",
+          "fulfillmentPolicyId": "",
+          "itemLocationCountry": "IT",
+          "merchantLocationKey": "",
+          "quantityLimitPerBuyer": null
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+        "competitorFetchedAt": null,
+        "descriptionOverride": "test",
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": null,
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": true
+      },
+      {
+        "id": "cmtvv9ihk001knjpxjig0h3jc",
+        "price": null,
+        "title": "tets",
+        "region": "DE",
+        "aliasId": null,
+        "channel": "EBAY",
+        "version": 3,
+        "aliasKey": "",
+        "quantity": null,
+        "createdAt": "2026-09-10T18:34:21.246",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-10T18:35:10.076",
+        "syncLocked": false,
+        "syncPaused": false,
+        "syncStatus": "IDLE",
+        "description": "test",
+        "isPublished": false,
+        "marketplace": "DE",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "EBAY_DE",
+        "lastSyncError": null,
+        "listingStatus": "DRAFT",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": "tets",
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": null,
+        "masterQuantity": null,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": null,
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": null,
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": null,
+        "followMasterPrice": true,
+        "followMasterTitle": false,
+        "fulfillmentMethod": null,
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": {
+          "conditionId": "NEW"
+        },
+        "referralFeePercent": null,
+        "channelConnectionId": "cmr4aaqb00025nz016k18rup9",
+        "competitorFetchedAt": null,
+        "descriptionOverride": "test",
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": null,
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": false,
+        "followMasterBulletPoints": true
+      },
+      {
+        "id": "cmtxkjj7e000snj56xl9lttpo",
+        "price": null,
+        "title": null,
+        "region": "GLOBAL",
+        "aliasId": null,
+        "channel": "ETSY",
+        "version": 1,
+        "aliasKey": "",
+        "quantity": null,
+        "createdAt": "2026-09-11T23:09:45.338",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-11T23:09:45.338",
+        "syncLocked": false,
+        "syncPaused": true,
+        "syncStatus": "IDLE",
+        "description": null,
+        "isPublished": false,
+        "marketplace": "GLOBAL",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "ETSY_GLOBAL",
+        "lastSyncError": null,
+        "listingStatus": "DRAFT",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": null,
+        "masterQuantity": null,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": null,
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": null,
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": null,
+        "followMasterPrice": true,
+        "followMasterTitle": true,
+        "fulfillmentMethod": null,
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": null,
+        "referralFeePercent": null,
+        "channelConnectionId": "cmtvy3wta00fjnjpxl22lly3k",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": null,
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": true,
+        "followMasterBulletPoints": true
+      },
+      {
+        "id": "cmtxkjscx000tnj56c7jj0x03",
+        "price": null,
+        "title": null,
+        "region": "GLOBAL",
+        "aliasId": null,
+        "channel": "SHOPIFY",
+        "version": 1,
+        "aliasKey": "",
+        "quantity": null,
+        "createdAt": "2026-09-11T23:09:57.202",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "salePrice": null,
+        "updatedAt": "2026-09-11T23:09:57.202",
+        "syncLocked": false,
+        "syncPaused": true,
+        "syncStatus": "IDLE",
+        "description": null,
+        "isPublished": false,
+        "marketplace": "GLOBAL",
+        "masterPrice": null,
+        "masterTitle": null,
+        "offerActive": true,
+        "pricingRule": "FIXED",
+        "stockBuffer": 0,
+        "workspaceId": "nexus_legacy_workspace",
+        "feeFetchedAt": null,
+        "lastSyncedAt": null,
+        "overrideData": {},
+        "channelMarket": "SHOPIFY_GLOBAL",
+        "lastSyncError": null,
+        "listingStatus": "DRAFT",
+        "offerClosedAt": null,
+        "offerClosedBy": null,
+        "priceOverride": null,
+        "titleOverride": null,
+        "bestOfferFloor": null,
+        "lastOverrideAt": null,
+        "lastOverrideBy": null,
+        "lastSyncStatus": null,
+        "masterQuantity": null,
+        "syncFromMaster": false,
+        "syncRetryCount": 0,
+        "variationTheme": null,
+        "estimatedFbaFee": null,
+        "syncRetryLastAt": null,
+        "externalParentId": null,
+        "flatFileSnapshot": null,
+        "offerCloseReason": null,
+        "quantityOverride": null,
+        "validationErrors": null,
+        "validationStatus": "VALID",
+        "variationMapping": null,
+        "externalListingId": null,
+        "followMasterPrice": true,
+        "followMasterTitle": true,
+        "fulfillmentMethod": null,
+        "masterDescription": null,
+        "platformProductId": null,
+        "variationExcluded": false,
+        "followMasterImages": true,
+        "masterBulletPoints": null,
+        "offerCloseSnapshot": null,
+        "platformAttributes": null,
+        "referralFeePercent": null,
+        "channelConnectionId": "cmtugfpaa0006njhq8m2nvnxx",
+        "competitorFetchedAt": null,
+        "descriptionOverride": null,
+        "sourceLocationCodes": [],
+        "bulletPointsOverride": null,
+        "followMasterQuantity": true,
+        "lowestCompetitorPrice": null,
+        "priceAdjustmentPercent": null,
+        "followMasterDescription": true,
+        "followMasterBulletPoints": true
+      }
+    ],
+    "ChannelListingTranslation": [
+      {
+        "id": "cmtyi0r9i0006njcw0cz3trjj",
+        "name": "XAVIA LX4 channel-pin control",
+        "source": "manual",
+        "follows": [],
+        "version": 1,
+        "keywords": [],
+        "language": "de",
+        "createdAt": "2026-09-12T14:46:56.262",
+        "updatedAt": "2026-09-12T14:46:56.262",
+        "attributes": {},
+        "reviewedAt": "2026-09-12T14:46:56.262",
+        "description": null,
+        "workspaceId": "nexus_legacy_workspace",
+        "bulletPoints": [],
+        "channelListingId": "cmp00tsac0037s101ijg2of6x"
+      }
+    ],
+    "CellFormula": [],
+    "OutboundSyncQueue": [
+      {
+        "id": "cmrs6nl3o063to101cbjf7nxp",
+        "diedAt": "2026-07-19T21:00:01.944",
+        "isDead": true,
+        "offerId": null,
+        "payload": {
+          "change": -42,
+          "reason": "MANUAL_ADJUSTMENT",
+          "source": "STOCK_MOVEMENT",
+          "channel": "EBAY",
+          "quantity": 42,
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+          "marketplace": "IT",
+          "oldQuantity": 84,
+          "referenceId": "cmrs6nfhn062qo101uh36gtra",
+          "stockBuffer": 0,
+          "referenceType": "BulkImport",
+          "masterQuantity": 42
+        },
+        "syncType": "QUANTITY_UPDATE",
+        "syncedAt": null,
+        "createdAt": "2026-07-19T19:22:44.245",
+        "errorCode": "MAX_RETRIES_EXCEEDED",
+        "holdUntil": "2026-07-19T19:23:13.682",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "updatedAt": "2026-07-19T21:00:01.945",
+        "maxRetries": 3,
+        "retryCount": 3,
+        "syncStatus": "FAILED",
+        "nextRetryAt": "2026-07-19T19:56:43.544",
+        "workspaceId": "nexus_legacy_workspace",
+        "errorMessage": "eBay publish circuit open after 3 consecutive failures. Retry in 158s.",
+        "targetRegion": "IT",
+        "targetChannel": "EBAY",
+        "channelListingId": "cmqrogz72000fnjpk6gq7h7yo",
+        "externalListingId": "257584954808"
+      },
+      {
+        "id": "cmrs6nlbe063xo1010j07ohqw",
+        "diedAt": "2026-07-19T21:00:01.944",
+        "isDead": true,
+        "offerId": null,
+        "payload": {
+          "sku": "GALE-JACKET-BLACK-MEN-XS",
+          "itemId": "257584954808",
+          "market": "IT",
+          "source": "STOCK_MOVEMENT_SHARED",
+          "pushVia": "TRADING",
+          "quantity": 42,
+          "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+          "oldQuantity": 84,
+          "marketplaceId": "EBAY_IT"
+        },
+        "syncType": "QUANTITY_UPDATE",
+        "syncedAt": null,
+        "createdAt": "2026-07-19T19:22:44.522",
+        "errorCode": "MAX_RETRIES_EXCEEDED",
+        "holdUntil": "2026-07-19T19:23:13.682",
+        "productId": "cmokmy0lr0009pm0p9yxk7ho0",
+        "updatedAt": "2026-07-19T21:00:01.945",
+        "maxRetries": 3,
+        "retryCount": 3,
+        "syncStatus": "FAILED",
+        "nextRetryAt": "2026-07-19T19:56:50.103",
+        "workspaceId": "nexus_legacy_workspace",
+        "errorMessage": "eBay publish circuit open after 3 consecutive failures. Retry in 148s.",
+        "targetRegion": "IT",
+        "targetChannel": "EBAY",
+        "channelListingId": null,
+        "externalListingId": "257584954808"
+      }
+    ]
+  }
+}

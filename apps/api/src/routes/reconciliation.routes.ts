@@ -1,3 +1,4 @@
+import type { ListingCoordinate } from '../lib/listing-coordinate.js'
 /**
  * Listing Reconciliation API (Phase RECON)
  *
@@ -110,9 +111,9 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
   // ── Single-row actions ────────────────────────────────────────────────────
   fastify.post('/reconciliation/items/:id/confirm', async (req, reply) => {
     const { id } = req.params as { id: string }
-    const { reviewedBy = 'operator' } = req.body as Record<string, string> ?? {}
+    const { reviewedBy = 'operator', coordinate } = req.body as { reviewedBy?: string; coordinate: ListingCoordinate } ?? {}
     try {
-      await confirmReconRow(id, reviewedBy)
+      await confirmReconRow(id, reviewedBy, coordinate)
       return reply.send({ ok: true })
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : String(err) })
@@ -150,12 +151,12 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
 
   // Confirm multiple specific rows
   fastify.post('/reconciliation/bulk/confirm', async (req, reply) => {
-    const { ids, reviewedBy = 'operator' } = req.body as { ids?: string[]; reviewedBy?: string } ?? {}
+    const { ids, reviewedBy = 'operator', coordinates } = req.body as { ids?: string[]; reviewedBy?: string; coordinates: Record<string, ListingCoordinate> } ?? {}
     if (!Array.isArray(ids) || ids.length === 0) {
       return reply.code(400).send({ error: 'ids[] required' })
     }
     try {
-      const result = await bulkConfirmReconRows(ids, reviewedBy)
+      const result = await bulkConfirmReconRows(ids, reviewedBy, coordinates)
       return reply.send({ ok: true, ...result })
     } catch (err) {
       return reply.code(500).send({ error: err instanceof Error ? err.message : String(err) })
@@ -188,8 +189,8 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
   // This is the main bulk-approval path: run reconciliation → review low-confidence
   // rows manually → confirm-all-high to sweep the rest.
   fastify.post('/reconciliation/bulk/confirm-all-high', async (req, reply) => {
-    const { channel = 'AMAZON', marketplace, reviewedBy = 'operator', minConfidence = 0.95 } =
-      req.body as { channel?: string; marketplace?: string; reviewedBy?: string; minConfidence?: number } ?? {}
+    const { channel = 'AMAZON', marketplace, reviewedBy = 'operator', minConfidence = 0.95, coordinates } =
+      req.body as { channel?: string; marketplace?: string; reviewedBy?: string; minConfidence?: number; coordinates: Record<string, ListingCoordinate> } ?? {}
 
     try {
       const where: any = {
@@ -210,7 +211,7 @@ export default async function reconciliationRoutes(fastify: FastifyInstance) {
         channel, marketplace, minConfidence, count: pendingHighConf.length,
       })
 
-      const result = await bulkConfirmReconRows(pendingHighConf.map(r => r.id), reviewedBy)
+      const result = await bulkConfirmReconRows(pendingHighConf.map(r => r.id), reviewedBy, coordinates)
       return reply.send({
         ok: true,
         eligible: pendingHighConf.length,

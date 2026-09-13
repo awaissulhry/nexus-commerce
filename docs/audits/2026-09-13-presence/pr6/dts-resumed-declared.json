@@ -1,0 +1,80 @@
+{
+  "all_counts": {
+    "web": 260,
+    "factory": 191
+  },
+  "files": [
+    {
+      "app": "web",
+      "source": "apps/web/src/design-system/patterns/ScopeBar.tsx",
+      "target": "apps/web/src/design-system/patterns/ScopeBar.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-web-resumed/patterns/ScopeBar.d.ts",
+      "mtime": 1789324416.1374037,
+      "age": 1481.5,
+      "changed": false
+    },
+    {
+      "app": "web",
+      "source": "apps/web/src/design-system/components/PresenceMark.tsx",
+      "target": "apps/web/src/design-system/components/PresenceMark.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-web-resumed/components/PresenceMark.d.ts",
+      "mtime": 1789325770.1764457,
+      "age": 127.48,
+      "changed": true
+    },
+    {
+      "app": "web",
+      "source": "apps/web/src/design-system/grid/editors/AxesPanelEditor.tsx",
+      "target": "apps/web/src/design-system/grid/editors/AxesPanelEditor.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-web-resumed/grid/editors/AxesPanelEditor.d.ts",
+      "mtime": 1789324416.1378865,
+      "age": 1481.56,
+      "changed": false
+    },
+    {
+      "app": "web",
+      "source": "apps/web/src/design-system/grid/toolbars/SheetStatus.tsx",
+      "target": "apps/web/src/design-system/grid/toolbars/SheetStatus.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-web-resumed/grid/toolbars/SheetStatus.d.ts",
+      "mtime": 1789325644.009026,
+      "age": 253.73,
+      "changed": true
+    },
+    {
+      "app": "factory",
+      "source": "apps/factory/src/design-system/patterns/ScopeBar.tsx",
+      "target": "apps/factory/src/design-system/patterns/ScopeBar.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-factory-resumed/patterns/ScopeBar.d.ts",
+      "mtime": 1789324416.1383095,
+      "age": 1481.61,
+      "changed": false
+    },
+    {
+      "app": "factory",
+      "source": "apps/factory/src/design-system/components/PresenceMark.tsx",
+      "target": "apps/factory/src/design-system/components/PresenceMark.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-factory-resumed/components/PresenceMark.d.ts",
+      "mtime": 1789325770.1765869,
+      "age": 127.6,
+      "changed": true
+    },
+    {
+      "app": "factory",
+      "source": "apps/factory/src/design-system/grid/editors/AxesPanelEditor.tsx",
+      "target": "apps/factory/src/design-system/grid/editors/AxesPanelEditor.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-factory-resumed/grid/editors/AxesPanelEditor.d.ts",
+      "mtime": 1789324416.1388733,
+      "age": 1481.66,
+      "changed": false
+    },
+    {
+      "app": "factory",
+      "source": "apps/factory/src/design-system/grid/toolbars/SheetStatus.tsx",
+      "target": "apps/factory/src/design-system/grid/toolbars/SheetStatus.d.ts",
+      "emitted": "/private/tmp/nexus-pr6-presence/dts-factory-resumed/grid/toolbars/SheetStatus.d.ts",
+      "mtime": 1789325644.0092056,
+      "age": 253.79,
+      "changed": true
+    }
+  ]
+}

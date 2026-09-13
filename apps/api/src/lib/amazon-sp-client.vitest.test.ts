@@ -40,6 +40,7 @@ describe('Amazon seller grant resolution outside workspace mode', () => {
     workspace.id = null
     oauthAccount.managedBy = 'oauth'
     vi.clearAllMocks()
+    getAccessToken.mockResolvedValue('database-access-token')
     readRefreshToken.mockResolvedValue('database-refresh-token')
   })
   afterEach(() => vi.unstubAllEnvs())
@@ -77,6 +78,26 @@ describe('Amazon seller grant resolution outside workspace mode', () => {
     expect(client.access_token).toBe('database-access-token')
     expect(readRefreshToken).toHaveBeenCalledWith(oauthAccount.id)
     expect(client._refresh_token).toBe('database-refresh-token')
+    expect(client._options.auto_request_tokens).toBe(false)
+  })
+
+  it('loads product type definitions through the real SDK with the refreshed token', async () => {
+    const client = await getAmazonSpClient(oauthAccount.id)
+    const definition = { schema: { link: { resource: 'https://schema.test/outerwear' } } }
+    const execute = vi.spyOn(client._request, 'execute').mockResolvedValue({
+      statusCode: 200, headers: {}, body: JSON.stringify(definition),
+    })
+    getAccessToken.mockResolvedValue('refreshed-access-token')
+
+    await expect(client.callAPI({
+      operation: 'getDefinitionsProductType', endpoint: 'productTypeDefinitions',
+      path: { productType: 'OUTERWEAR' }, query: { marketplaceIds: ['APJ6JRA9NG5V4'] },
+    })).resolves.toEqual(definition)
+
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+      headers: expect.objectContaining({ 'x-amz-access-token': 'refreshed-access-token' }),
+    }), expect.anything())
+    expect(client.access_token).toBe('refreshed-access-token')
     expect(client._options.auto_request_tokens).toBe(false)
   })
 

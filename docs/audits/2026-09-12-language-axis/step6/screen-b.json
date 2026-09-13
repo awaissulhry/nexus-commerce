@@ -1,0 +1,11 @@
+{
+  "start": "2026-09-12T22:55:25.939Z",
+  "finish": "2026-09-12T22:56:29.852Z",
+  "command": "node docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs b",
+  "base": "http://localhost:3000",
+  "api": "http://localhost:8091",
+  "exitCode": 0,
+  "diagnostic": "b",
+  "log": "screen-b.log",
+  "sha256": "8919ea6bbcf7f1dea1e4bf4151929cdc8c9b3edd81c035951b5ffb35c157f4ef"
+}

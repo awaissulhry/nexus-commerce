@@ -40,7 +40,6 @@ import {
   ExternalLink,
   X,
   Trash2,
-  AlertTriangle,
   RotateCcw,
   Calendar,
   Pencil,
@@ -49,6 +48,13 @@ import {
   Image as ImageIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
+import { Button as NexusButton } from '@/design-system/primitives/Button'
+import { Input as NexusInput } from '@/design-system/primitives/Input'
+import { Radio } from '@/design-system/primitives/Radio'
+import { Modal } from '@/design-system/components/Modal'
+import { Field } from '@/design-system/components/Field'
+import { Banner } from '@/design-system/components/Banner'
+import { hardDeleteConfirmation, parseHardDeletePreflight, type PreflightWarnings } from './hardDelete'
 import { IconButton } from '@/components/ui/IconButton'
 import { useToast } from '@/components/ui/Toast'
 import { emitInvalidation } from '@/lib/sync/invalidation-channel'
@@ -1060,20 +1066,8 @@ export function BulkActionBar({
   )
 }
 
-interface PreflightWarnings {
-  channelListings: Array<{ productId: string; channel: string; marketplace: string | null; externalListingId: string }>
-  openOrders: Array<{ productId: string; orderId: string; channelOrderId: string; channel: string; status: string }>
-  activeBundles: Array<{ productId: string; bundleId: string; role: 'master' | 'component' }>
-  fbaInventory: Array<{ productId: string; marketplaceId: string; fulfillmentCenterId: string; quantity: number; condition: string }>
-}
-
-// D.4 — hard-delete confirm. Three-channelAction radio (Local-only /
-// Unpublish / Delete-on-channel), pre-flight warnings panel (channel
-// listings + open orders + active bundles + FBA stranded inventory),
-// and a typed-DELETE confirmation. The radio defaults to 'unpublish'
-// when any channel listing exists, 'none' otherwise (no listings to
-// touch). All paths still walk the same backend cascade — only the
-// payload differs.
+// D19: the typed acknowledgement names one actual SKU. D22 preserves the existing
+// default radio until PD-2; none of these options makes local deletion reversible.
 function HardDeleteConfirmModal({
   count,
   productIds,
@@ -1102,18 +1096,17 @@ function HardDeleteConfirmModal({
     setPreflightError(null)
     fetch(
       `${getBackendUrl()}/api/products/hard-delete-preflight?ids=${productIds.join(',')}`,
-      { cache: 'no-store' },
+      { cache: 'no-store', credentials: 'include' },
     )
       .then(async (res) => {
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? `${res.status} ${res.statusText}`)
         return res.json()
       })
-      .then((data: PreflightWarnings) => {
+      .then((raw: unknown) => {
         if (cancelled) return
+        const data = parseHardDeletePreflight(raw)
         setPreflight(data)
-        // Sensible default: if there are no channel listings, "Local-only"
-        // is the right choice; if there are listings, "Unpublish" is the
-        // safer non-destructive default.
+        // D22: preserve this selection rule until the PD-2 widening lands.
         setChannelAction(data.channelListings.length === 0 ? 'none' : 'unpublish')
       })
       .catch((e) => {
@@ -1126,7 +1119,10 @@ function HardDeleteConfirmModal({
     return () => { cancelled = true }
   }, [productIds.join(',')])
 
-  const armed = typed.trim().toUpperCase() === 'DELETE'
+  const { armed, phrase, reason } = hardDeleteConfirmation({
+    productIds, products: productLookup, preflight, loading: preflightLoading,
+    error: preflightError, busy, typed,
+  })
   const preview = productLookup.slice(0, 8)
   const overflow = Math.max(0, count - preview.length)
 
@@ -1146,226 +1142,59 @@ function HardDeleteConfirmModal({
   const hasFba = (preflight?.fbaInventory.length ?? 0) > 0
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={busy ? undefined : onCancel}
-        aria-hidden
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="hard-delete-title"
-        className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-rose-200 dark:border-rose-900 w-full max-w-2xl max-h-[90vh] flex flex-col"
-      >
-        <div className="px-5 py-4 border-b border-default dark:border-slate-700 flex-shrink-0">
-          <h2
-            id="hard-delete-title"
-            className="text-lg font-semibold text-rose-700 dark:text-rose-300 inline-flex items-center gap-2"
-          >
-            <Trash2 size={16} />
-            {t(
-              count === 1
-                ? 'products.hardDelete.title.one'
-                : 'products.hardDelete.title.other',
-              { count },
-            )}
-          </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-            {t('products.hardDelete.body')}
-          </p>
+    <Modal
+      open
+      size="lg"
+      onClose={() => { if (!busy) onCancel() }}
+      title={t(count === 1 ? 'products.hardDelete.title.one' : 'products.hardDelete.title.other', { count })}
+      subtitle={t('products.hardDelete.body')}
+      footer={<>
+        <NexusButton size="sm" onClick={onCancel} disabled={busy}>{t('products.hardDelete.cancel')}</NexusButton>
+        <NexusButton size="sm" variant="danger" disabled={!armed} title={reason ?? undefined} aria-busy={busy}
+          onClick={() => { if (armed) onConfirm(channelAction) }}>
+          {busy ? 'Deleting…' : channelAction === 'delete' ? t('products.hardDelete.submit.delete') :
+            channelAction === 'unpublish' ? t('products.hardDelete.submit.unpublish') : t('products.hardDelete.submit.none')}
+        </NexusButton>
+      </>}
+    >
+      <div style={{ display: 'grid', gap: 'var(--nds-space-16)' }}>
+        <div>
+          <strong>{t('products.hardDelete.affectedSkus')}</strong>
+          <ul>{preview.map(p => <li key={p.id}><code>{p.sku}</code> · {p.name}</li>)}</ul>
+          {overflow > 0 && <p>{t('products.hardDelete.andNMore', { count: overflow })}</p>}
         </div>
-
-        <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
-          {/* Affected SKUs */}
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
-              {t('products.hardDelete.affectedSkus')}
-            </div>
-            <div className="max-h-32 overflow-y-auto rounded border border-default dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
-              {preview.map((p) => (
-                <div
-                  key={p.id}
-                  className="px-3 py-1.5 text-sm flex items-center justify-between gap-2"
-                >
-                  <span className="font-mono text-slate-700 dark:text-slate-300 shrink-0">{p.sku}</span>
-                  <span className="text-slate-500 dark:text-slate-400 truncate">{p.name}</span>
-                </div>
-              ))}
-              {overflow > 0 && (
-                <div className="px-3 py-1.5 text-xs text-slate-500 dark:text-slate-400">{t('products.hardDelete.andNMore', { count: overflow })}</div>
-              )}
-            </div>
-          </div>
-
-          {/* Pre-flight warnings */}
-          {preflightLoading && (
-            <div className="text-sm text-slate-500 dark:text-slate-400">{t('products.hardDelete.preflightLoading')}</div>
-          )}
-          {preflightError && (
-            <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
-              {t('products.hardDelete.preflightError', { error: preflightError })}
-            </div>
-          )}
-          {!preflightLoading && preflight && (
-            <div className="space-y-2">
-              {hasListings && (
-                <div className="rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2">
-                  <div className="text-sm font-medium text-blue-900 dark:text-blue-200">
-                    {t(
-                      preflight!.channelListings.length === 1
-                        ? 'products.hardDelete.warning.listings.one'
-                        : 'products.hardDelete.warning.listings.other',
-                      { count: preflight!.channelListings.length },
-                    )}
-                  </div>
-                  <ul className="mt-1 text-xs text-blue-900 dark:text-blue-200 space-y-0.5">
-                    {Object.entries(channelSummary).map(([key, n]) => (
-                      <li key={key}>
-                        <span className="font-mono">{key}</span> · {t(
-                          n === 1
-                            ? 'products.hardDelete.warning.skusSuffix.one'
-                            : 'products.hardDelete.warning.skusSuffix.other',
-                          { count: n },
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {hasOpenOrders && (
-                <div className="rounded border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2">
-                  <div className="text-sm font-medium text-rose-900 dark:text-rose-200 inline-flex items-center gap-1.5">
-                    <AlertTriangle size={13} />
-                    {t(
-                      preflight!.openOrders.length === 1
-                        ? 'products.hardDelete.warning.openOrders.one'
-                        : 'products.hardDelete.warning.openOrders.other',
-                      { count: preflight!.openOrders.length },
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-rose-900 dark:text-rose-200">
-                    {t('products.hardDelete.warning.openOrdersBody')}
-                  </p>
-                </div>
-              )}
-              {hasBundles && (
-                <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
-                  <div className="text-sm font-medium text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5">
-                    <AlertTriangle size={13} />
-                    {t(
-                      preflight!.activeBundles.length === 1
-                        ? 'products.hardDelete.warning.bundles.one'
-                        : 'products.hardDelete.warning.bundles.other',
-                      { count: preflight!.activeBundles.length },
-                    )}
-                  </div>
-                  <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
-                    {t('products.hardDelete.warning.bundlesBody')}
-                  </p>
-                </div>
-              )}
-              {hasFba && (
-                <div className="rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
-                  <div className="text-sm font-medium text-amber-900 dark:text-amber-200 inline-flex items-center gap-1.5">
-                    <AlertTriangle size={13} />
-                    {t('products.hardDelete.warning.fba')}
-                  </div>
-                  <p className="mt-1 text-xs text-amber-900 dark:text-amber-200">
-                    {t('products.hardDelete.warning.fbaBody')}
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Channel-action radio */}
-          {hasListings && (
-            <fieldset className="space-y-2">
-              <legend className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1">
-                {t('products.hardDelete.channelAction.legend')}
-              </legend>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'unpublish' ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/40' : 'border-default dark:border-slate-700'}`}>
-                <input
-                  type="radio"
-                  name="channelAction"
-                  value="unpublish"
-                  checked={channelAction === 'unpublish'}
-                  onChange={() => setChannelAction('unpublish')}
-                  className="mt-0.5"
-                  disabled={busy}
-                />
-                <span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('products.hardDelete.channelAction.unpublish.label')}</span>
-                  <span className="block text-xs text-slate-600 dark:text-slate-400">{t('products.hardDelete.channelAction.unpublish.body')}</span>
-                </span>
-              </label>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'delete' ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-950/40' : 'border-default dark:border-slate-700'}`}>
-                <input
-                  type="radio"
-                  name="channelAction"
-                  value="delete"
-                  checked={channelAction === 'delete'}
-                  onChange={() => setChannelAction('delete')}
-                  className="mt-0.5"
-                  disabled={busy}
-                />
-                <span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('products.hardDelete.channelAction.delete.label')}</span>
-                  <span className="block text-xs text-slate-600 dark:text-slate-400">{t('products.hardDelete.channelAction.delete.body')}</span>
-                </span>
-              </label>
-              <label className={`flex items-start gap-2 rounded border p-2 cursor-pointer ${channelAction === 'none' ? 'border-slate-400 bg-slate-50 dark:border-slate-500 dark:bg-slate-800' : 'border-default dark:border-slate-700'}`}>
-                <input
-                  type="radio"
-                  name="channelAction"
-                  value="none"
-                  checked={channelAction === 'none'}
-                  onChange={() => setChannelAction('none')}
-                  className="mt-0.5"
-                  disabled={busy}
-                />
-                <span>
-                  <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{t('products.hardDelete.channelAction.none.label')}</span>
-                  <span className="block text-xs text-slate-600 dark:text-slate-400">{t('products.hardDelete.channelAction.none.body')}</span>
-                </span>
-              </label>
-            </fieldset>
-          )}
-
-          <label className="block text-sm text-slate-700 dark:text-slate-300">
-            {t('products.hardDelete.confirmTypePrefix')} <span className="font-mono font-semibold">{t('products.hardDelete.confirmPlaceholder')}</span> {t('products.hardDelete.confirmTypeSuffix')}
-            <input
-              type="text"
-              autoFocus
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              disabled={busy}
-              className="mt-1 w-full px-3 py-1.5 border border-slate-300 rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-500 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
-              placeholder={t('products.hardDelete.confirmPlaceholder')}
-            />
-          </label>
-        </div>
-
-        <div className="px-5 py-3 border-t border-default dark:border-slate-700 flex justify-end gap-2 flex-shrink-0">
-          <Button variant="ghost" size="sm" onClick={onCancel} disabled={busy}>
-            {t('products.hardDelete.cancel')}
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => onConfirm(channelAction)}
-            disabled={!armed || busy}
-            loading={busy}
-            className="bg-rose-600 hover:bg-rose-700 border-rose-600 text-white disabled:bg-rose-300 disabled:border-rose-300"
-            icon={<Trash2 size={12} />}
-          >
-            {channelAction === 'delete' ? t('products.hardDelete.submit.delete') :
-             channelAction === 'unpublish' ? t('products.hardDelete.submit.unpublish') :
-             t('products.hardDelete.submit.none')}
-          </Button>
-        </div>
+        {preflightLoading && <p role="status">{t('products.hardDelete.preflightLoading')}</p>}
+        {preflightError != null && <Banner tone="danger">{t('products.hardDelete.preflightError', { error: preflightError })}</Banner>}
+        {!preflightLoading && preflight && <>
+          {hasListings && <Banner tone="info"
+            title={t(preflight.channelListings.length === 1 ? 'products.hardDelete.warning.listings.one' : 'products.hardDelete.warning.listings.other', { count: preflight.channelListings.length })}>
+            <ul>{Object.entries(channelSummary).map(([key, n]) => <li key={key}>{key} · {t(n === 1 ? 'products.hardDelete.warning.skusSuffix.one' : 'products.hardDelete.warning.skusSuffix.other', { count: n })}</li>)}</ul>
+          </Banner>}
+          {hasOpenOrders && <Banner tone="danger"
+            title={t(preflight.openOrders.length === 1 ? 'products.hardDelete.warning.openOrders.one' : 'products.hardDelete.warning.openOrders.other', { count: preflight.openOrders.length })}>
+            {t('products.hardDelete.warning.openOrdersBody')}
+          </Banner>}
+          {hasBundles && <Banner tone="warning"
+            title={t(preflight.activeBundles.length === 1 ? 'products.hardDelete.warning.bundles.one' : 'products.hardDelete.warning.bundles.other', { count: preflight.activeBundles.length })}>
+            {t('products.hardDelete.warning.bundlesBody')}
+          </Banner>}
+          {hasFba && <Banner tone="warning" title={t('products.hardDelete.warning.fba')}>{t('products.hardDelete.warning.fbaBody')}</Banner>}
+        </>}
+        {hasListings && <fieldset style={{ display: 'grid', gap: 'var(--nds-space-12)' }}>
+          <legend>{t('products.hardDelete.channelAction.legend')}</legend>
+          {(['unpublish', 'delete', 'none'] as const).map(action => <Radio key={action}
+            name="channelAction" value={action} checked={channelAction === action}
+            onChange={() => setChannelAction(action)} disabled={busy}
+            label={<span><strong>{t(`products.hardDelete.channelAction.${action}.label`)}</strong><br />{t(`products.hardDelete.channelAction.${action}.body`)}</span>}
+          />)}
+          <Banner tone="warning">{t('products.hardDelete.channelAction.note')}</Banner>
+        </fieldset>}
+        {phrase != null && <Field label={<>{t('products.hardDelete.confirmTypePrefix')} <code>{phrase}</code> {t('products.hardDelete.confirmTypeSuffix')}</>}>
+          <NexusInput autoFocus value={typed} onChange={e => setTyped(e.target.value)} disabled={busy} />
+        </Field>}
+        {reason != null && <p role="status">{reason}</p>}
       </div>
-    </div>
+    </Modal>
   )
 }
 

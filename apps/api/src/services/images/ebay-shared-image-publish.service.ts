@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 /**
  * EB-IMG Phase 1 — image publish for SHELL / adopted eBay listings.
  *
@@ -226,6 +228,11 @@ export async function publishEbaySharedListingImages(
     success: false, message, pictureCount: 0, colorSetCount: 0, error,
   })
 
+  const pushControls = await readPushControls({ channel: 'EBAY', productIds: [productId] })
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   const product = await prisma.product.findUnique({
     where: { id: productId },
     select: { id: true, sku: true, ebayItemId: true, imageAxisPreference: true, productType: true },

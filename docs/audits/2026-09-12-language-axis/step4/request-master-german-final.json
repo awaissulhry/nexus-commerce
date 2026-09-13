@@ -1,0 +1,34 @@
+{
+  "writtenAt": "2026-09-12T14:45:57.478Z",
+  "label": "Name",
+  "body": {
+    "changes": [
+      {
+        "id": "cmokmy0lr0009pm0p9yxk7ho0",
+        "field": "name",
+        "value": "XAVIA LX4 master-german-final control",
+        "contentAddress": {
+          "tier": "language",
+          "language": "de"
+        },
+        "contentVersion": 0,
+        "target": "master"
+      }
+    ],
+    "expectedVersion": 1,
+    "marketplaceContexts": [
+      {
+        "marketplace": "DE",
+        "locale": "de"
+      }
+    ]
+  },
+  "status": 200,
+  "result": {
+    "updated": 1,
+    "errors": [],
+    "success": true,
+    "currentVersion": 2,
+    "versionOf": "product"
+  }
+}

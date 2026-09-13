@@ -61,21 +61,17 @@ describe('commitMasterRow — routing', () => {
     const result = await commitMasterRow(req([{ colId: 'attr_colour', value: [] }] as never), ctx())
     expect(cellsOf(result).attr_colour).toEqual({ ok: false, reason: 'Composition percentages must total 100' })
   })
-  it('sends Product columns and attr_* to the bulk endpoint, and a locale slot to the global patch', async () => {
+  it('sends primary and localized fields through the one addressed bulk router', async () => {
     fetchMock.mockResolvedValue(json(200, { errors: [] }))
-    await commitMasterRow(req([
-      { colId: 'name', value: 'Jacket' },
-      { colId: 'description', value: 'Ciao' },
-    ] as never), ctx())
-
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    const [bulkUrl, bulkInit] = fetchMock.mock.calls[0]
-    const [globalUrl, globalInit] = fetchMock.mock.calls[1]
-    expect(String(bulkUrl)).toContain('/api/products/bulk')
-    expect(String(globalUrl)).toContain('/api/products/p1/global')
-    // 🔴 The locale slot is keyed by the CONTEXT's locale, not by the column key.
-    expect(JSON.parse(globalInit.body).patch).toEqual({ it: { description: 'Ciao' } })
-    expect(JSON.parse(bulkInit.body).changes).toEqual([{ id: 'p1', field: 'name', value: 'Jacket' }])
+    const row = { values: { name: { contentAddress: { tier: 'source' } }, description: { contentAddress: { tier: 'source' } } } } as unknown as StudioRow
+    await commitMasterRow(req([{ colId: 'name', value: 'Jacket' }, { colId: 'description', value: 'Ciao' }] as never, { row }), ctx())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toContain('/api/products/bulk')
+    expect(JSON.parse(init.body).changes).toEqual([
+      { id: 'p1', field: 'name', value: 'Jacket', contentAddress: { tier: 'source' } },
+      { id: 'p1', field: 'description', value: 'Ciao', contentAddress: { tier: 'source' } },
+    ])
   })
 
   it('🔴 sends the SHEET\'s marketplace context — without it every attr_* write is refused', async () => {
@@ -128,7 +124,7 @@ describe('commitMasterRow — a reset and an empty string both mean "store nothi
   })
 })
 
-describe('commitMasterRow — a reset and an empty string mean "store nothing" on BOTH routes', () => {
+describe('commitMasterRow — a reset and an empty string retain their intent on the addressed bulk route', () => {
   it('the localized reset removes its own slot so inheritance can resume', () => {
     // The bulk route was covered and this one was not, so deleting the whole ternary here kept the
     // suite green. A reset that silently wrote the string "" into a locale slot would look like a
@@ -137,14 +133,14 @@ describe('commitMasterRow — a reset and an empty string mean "store nothing" o
     return commitMasterRow(req([
       { colId: 'description', intent: 'reset', value: 'ignored' },
     ] as never), ctx()).then(() => {
-      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ patch: { it: {} }, reset: { it: ['description'] } })
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({ changes: [{ id: 'p1', field: 'description', value: null, intent: 'reset' }] })
     })
   })
 
   it('and an empty string on the localized route is null, not ""', async () => {
     fetchMock.mockResolvedValue(json(200, {}))
     await commitMasterRow(req([{ colId: 'description', value: '' }] as never), ctx())
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body).patch).toEqual({ it: { description: null } })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).changes).toEqual([{ id: 'p1', field: 'description', value: null }])
   })
 })
 
@@ -318,23 +314,23 @@ describe('commitMasterRow — failures and reporting', () => {
     expect(onWriteEnd.mock.calls[0][3]).toBe('p1')
   })
 
-  it('surfaces a localized-route refusal with the first detail', async () => {
-    fetchMock
-      .mockResolvedValueOnce(json(200, { errors: [] }))
-      .mockResolvedValueOnce(json(400, { details: ['description must be under 2000 characters'] }))
-    const r = await commitMasterRow(req([
-      { colId: 'name', value: 'x' },
-      { colId: 'description', value: 'y' },
-    ] as never), ctx())
+  it('surfaces a localized-field refusal with the server sentence', async () => {
+    fetchMock.mockResolvedValue(json(200, { errors: [{ id: 'p1', field: 'description', error: 'description must be under 2000 characters' }] }))
+    const r = await commitMasterRow(req([{ colId: 'name', value: 'x' }, { colId: 'description', value: 'y' }] as never), ctx())
     expect(cellsOf(r).name).toEqual({ ok: true })
     expect(cellsOf(r).description.reason).toBe('description must be under 2000 characters')
   })
 
-  it('uses the returned bulk version for a subsequent localized edit', async () => {
+  it('uses each language column address and advances CAS from the prior language response', async () => {
     fetchMock.mockResolvedValueOnce(json(200, { errors: [], currentVersion: 8, versionOf: 'product' }))
-      .mockResolvedValueOnce(json(200, { currentVersion: 9, versionOf: 'product' }))
-    const result = await commitMasterRow(req([{ colId: 'name', value: 'x' }, { colId: 'description', value: 'y' }] as never, { expectedVersion: 7 }), ctx())
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body).expectedVersion).toBe(8)
+      .mockResolvedValueOnce(json(200, { errors: [], currentVersion: 9, versionOf: 'product' }))
+    const row = { values: { 'name@it': { contentAddress: { tier: 'source' }, contentVersion: 1 }, 'name@de': { contentAddress: { tier: 'language', language: 'de' }, contentVersion: 4 } } } as unknown as StudioRow
+    const translated = { ...sheet, columns: [col('name@it', { writeField: 'name', locale: 'it' }), col('name@de', { writeField: 'name', locale: 'de' })] }
+    const result = await commitMasterRow(req([{ colId: 'name@it', value: 'Italian' }, { colId: 'name@de', value: 'German' }] as never, { expectedVersion: 7, row }), ctx({ sheet: translated }))
+    const bodies = fetchMock.mock.calls.map(call => JSON.parse(call[1].body))
+    expect(bodies.map(body => body.marketplaceContexts[0].locale)).toEqual(['it', 'de'])
+    expect(bodies[1].expectedVersion).toBe(8)
+    expect(bodies[1].changes[0]).toMatchObject({ field: 'name', value: 'German', contentVersion: 4, contentAddress: { tier: 'language', language: 'de' } })
     expect(result.version).toBe(9)
   })
 })

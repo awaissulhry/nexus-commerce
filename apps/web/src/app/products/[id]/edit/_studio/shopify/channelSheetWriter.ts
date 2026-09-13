@@ -7,7 +7,7 @@ import type { ShopifySheetWrite } from '@nexus/shared/shopify-information'
 export async function commitShopifySheetRow(req: SheetWriteRequest<ChannelSheetRow>, coord: { accountId?: string; locale?: string }): Promise<SheetWriteResult> {
   const row = req.row
   if (!row?.shopify || !coord.accountId) return { ok: false, reason: 'The Shopify listing identity is unavailable. Reload the sheet.' }
-  const cells = req.cells.map(cell => ({ ...row.values[cell.colId]?.shopifyWrite, colId: cell.colId, intent: cell.intent,
+  const cells = req.cells.map(cell => ({ ...row.values[cell.colId]?.shopifyWrite, colId: cell.colId, intent: cell.intent, contentAddress: row.values[cell.colId]?.contentAddress,
     value: cell.value == null ? null : typeof cell.value === 'object' ? JSON.stringify(cell.value) : String(cell.value) }))
   if (cells.some(cell => !cell.token)) return { ok: false, reason: 'The cell has no Shopify draft write address. Reload before editing.' }
   try {

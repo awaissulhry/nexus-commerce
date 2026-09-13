@@ -1,0 +1,15 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: {"url":"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information","documentWidth":1440,"viewport":1440,"rows":[],"headers":[{"id":"ag-Grid-SelectionColumn","text":"                     "},{"id":"ag-Grid-AutoColumn","text":"    Product            "},{"id":"productMedia","text":"    Product media            "},{"id":"__productRole","text":"    Product role            "},{"id":"__parentSku","text":"    Parent SKU            "},{"id":"name","text":"    Name *            "},{"id":"brand","text":"    Brand            "},{"id":"manufacturer","text":"    Manufacturer            "}],"marks":[],"scopeBar":"EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian (it)","text":"ALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\nGiallo · XS\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\n+3\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\nXavia\n—\n21 rows\nSaved column layout unavailable\nRetry layout"}
+    at file:///Users/awais/nexus-commerce/docs/audits/2026-09-12-language-axis/step6/screen-gate.mjs:57:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v25.9.0

@@ -1,0 +1,6 @@
+apps/web/src/app/design/variation-projection/VariationProjectionClient.tsx
+apps/web/src/app/design/variation-projection/fixtures.ts
+apps/web/src/app/design/variation-projection/page.tsx
+apps/web/src/app/design/variation-projection/variation-projection.module.css
+docs/2026-09-12-variation-projection-design.md
+docs/vx-prompts.md

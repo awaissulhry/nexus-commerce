@@ -1,0 +1,2780 @@
+{
+  "error": "AssertionError [ERR_ASSERTION]: {\"url\":\"http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=BE&locale=nl&tab=information&account=cmothu9bo0000nz01asw6wx8j\",\"documentWidth\":1440,\"viewport\":1440,\"rows\":[],\"headers\":[{\"id\":\"ag-Grid-SelectionColumn\",\"text\":\"                     \"},{\"id\":\"ag-Grid-AutoColumn\",\"text\":\"    Product            \"}],\"marks\":[],\"scopeBar\":\"EditingShared productAmazoneBayShopifyEtsyBE · BelgiumDutchFrench\",\"text\":\"Skip to main content\\nN\\n⌘\\nK\\nLanguage axis editor gate\\nHome\\nProducts\\nListings\\nStock\\nInbound\\nOutbound\\nReplenishment\\nPurchase Orders\\nSuppliers\\nCarriers\\nReturns\\nOrders\\nPricing\\nInsights\\nAdvertising\\nCalendar\\nContent\\nReviews\\nAgent Fleet\\nInbox\\nSync Logs\\nProducts\\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\\nGALE-JACKET\\nB0F7J163XJ\\nActive\\nParent\\nNexus draft autosave\\nEDITING\\nShared product\\nAmazon\\neBay\\nShopify\\nEtsy\\nBE · Belgium\\nDutch\\nFrench\\nLoading information…\\nAll attributes\\nCustomise\\nExport\\nImport\\nProduct\"}",
+  "readings": [
+    {
+      "at": "2026-09-12T22:51:47.961Z",
+      "requested": {
+        "scope": "master",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1440,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "cmokmy3a40078pm0p1fvnu523",
+        "cmokmy0jf0003pm0ppnu1b2yy",
+        "cmokmy0jt0004pm0p0gaufo1b",
+        "cmokmy2ir005bpm0p0sm1rxx8",
+        "cmokmy0k70005pm0puvz2ucxu",
+        "cmokmy0kl0006pm0p9auaundx",
+        "cmokmy0ky0007pm0p3vj7q0mh",
+        "cmokmy0lc0008pm0p2thzmlqq",
+        "cmokmy0lr0009pm0p9yxk7ho0",
+        "cmokmy0m9000apm0pm52rd77m",
+        "cmokmy0mm000bpm0pm7k7eke4",
+        "cmokmy0n4000cpm0ptkjitr0f",
+        "cmokmy0ni000dpm0p2xvcpkma",
+        "cmokmy0o1000epm0pca79fbbf",
+        "cmokmy0og000fpm0pdwckcnq0",
+        "cmokmy0ot000gpm0p4z5vwnoo",
+        "cmokmy0p6000hpm0ptee51htd",
+        "cmokmy0pk000ipm0pi8nl7pbn",
+        "cmokmy0py000jpm0pc2jcd5ul",
+        "cmokmy0qb000kpm0p06pmx2vt",
+        "cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "productMedia",
+          "text": "    Product media            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "name",
+          "text": "    Name *            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian · sourceGermanEnglishSpanishFrenchDutchPolishSwedishTurkish",
+      "text": "mpermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\nGiallo · XS\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\n+3\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\nXavia\n—\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "Italian · source",
+          "pressed": "true",
+          "box": {
+            "x": 755.28125,
+            "y": 110.5,
+            "width": 105.359375,
+            "height": 28,
+            "top": 110.5,
+            "right": 860.640625,
+            "bottom": 138.5,
+            "left": 755.28125
+          },
+          "background": "rgb(238, 245, 255)",
+          "color": "rgb(10, 75, 168)"
+        },
+        {
+          "text": "German",
+          "pressed": "false",
+          "box": {
+            "x": 866.640625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 934.734375,
+            "bottom": 138.5,
+            "left": 866.640625
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "English",
+          "pressed": "false",
+          "box": {
+            "x": 940.734375,
+            "y": 110.5,
+            "width": 64.5703125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1005.3046875,
+            "bottom": 138.5,
+            "left": 940.734375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Spanish",
+          "pressed": "false",
+          "box": {
+            "x": 1011.3046875,
+            "y": 110.5,
+            "width": 68.78125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1080.0859375,
+            "bottom": 138.5,
+            "left": 1011.3046875
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "French",
+          "pressed": "false",
+          "box": {
+            "x": 1086.0859375,
+            "y": 110.5,
+            "width": 62.3984375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1148.484375,
+            "bottom": 138.5,
+            "left": 1086.0859375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Dutch",
+          "pressed": "false",
+          "box": {
+            "x": 1154.484375,
+            "y": 110.5,
+            "width": 57.0390625,
+            "height": 28,
+            "top": 110.5,
+            "right": 1211.5234375,
+            "bottom": 138.5,
+            "left": 1154.484375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Polish",
+          "pressed": "false",
+          "box": {
+            "x": 1217.5234375,
+            "y": 110.5,
+            "width": 57.7109375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1275.234375,
+            "bottom": 138.5,
+            "left": 1217.5234375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Swedish",
+          "pressed": "false",
+          "box": {
+            "x": 1281.234375,
+            "y": 110.5,
+            "width": 71.3125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1352.546875,
+            "bottom": 138.5,
+            "left": 1281.234375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Turkish",
+          "pressed": "false",
+          "box": {
+            "x": 1358.546875,
+            "y": 110.5,
+            "width": 65.453125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1424,
+            "bottom": 138.5,
+            "left": 1358.546875
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        }
+      ],
+      "screenshot": "screen-b-master-IT-it-1440-light.png"
+    },
+    {
+      "at": "2026-09-12T22:51:50.155Z",
+      "requested": {
+        "scope": "master",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1440,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "cmokmy3a40078pm0p1fvnu523",
+        "cmokmy0jf0003pm0ppnu1b2yy",
+        "cmokmy0jt0004pm0p0gaufo1b",
+        "cmokmy2ir005bpm0p0sm1rxx8",
+        "cmokmy0k70005pm0puvz2ucxu",
+        "cmokmy0kl0006pm0p9auaundx",
+        "cmokmy0ky0007pm0p3vj7q0mh",
+        "cmokmy0lc0008pm0p2thzmlqq",
+        "cmokmy0lr0009pm0p9yxk7ho0",
+        "cmokmy0m9000apm0pm52rd77m",
+        "cmokmy0mm000bpm0pm7k7eke4",
+        "cmokmy0n4000cpm0ptkjitr0f",
+        "cmokmy0ni000dpm0p2xvcpkma",
+        "cmokmy0o1000epm0pca79fbbf",
+        "cmokmy0og000fpm0pdwckcnq0",
+        "cmokmy0ot000gpm0p4z5vwnoo",
+        "cmokmy0p6000hpm0ptee51htd",
+        "cmokmy0pk000ipm0pi8nl7pbn",
+        "cmokmy0py000jpm0pc2jcd5ul",
+        "cmokmy0qb000kpm0p06pmx2vt",
+        "cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "productMedia",
+          "text": "    Product media            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "name",
+          "text": "    Name *            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian · sourceGermanEnglishSpanishFrenchDutchPolishSwedishTurkish",
+      "text": "mpermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\nGiallo · XS\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\n+3\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\nXavia\n—\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "Italian · source",
+          "pressed": "true",
+          "box": {
+            "x": 755.28125,
+            "y": 110.5,
+            "width": 105.359375,
+            "height": 28,
+            "top": 110.5,
+            "right": 860.640625,
+            "bottom": 138.5,
+            "left": 755.28125
+          },
+          "background": "rgb(204, 213, 226)",
+          "color": "rgb(46, 101, 180)"
+        },
+        {
+          "text": "German",
+          "pressed": "false",
+          "box": {
+            "x": 866.640625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 934.734375,
+            "bottom": 138.5,
+            "left": 866.640625
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "English",
+          "pressed": "false",
+          "box": {
+            "x": 940.734375,
+            "y": 110.5,
+            "width": 64.5703125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1005.3046875,
+            "bottom": 138.5,
+            "left": 940.734375
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "Spanish",
+          "pressed": "false",
+          "box": {
+            "x": 1011.3046875,
+            "y": 110.5,
+            "width": 68.78125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1080.0859375,
+            "bottom": 138.5,
+            "left": 1011.3046875
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "French",
+          "pressed": "false",
+          "box": {
+            "x": 1086.0859375,
+            "y": 110.5,
+            "width": 62.3984375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1148.484375,
+            "bottom": 138.5,
+            "left": 1086.0859375
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "Dutch",
+          "pressed": "false",
+          "box": {
+            "x": 1154.484375,
+            "y": 110.5,
+            "width": 57.0390625,
+            "height": 28,
+            "top": 110.5,
+            "right": 1211.5234375,
+            "bottom": 138.5,
+            "left": 1154.484375
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "Polish",
+          "pressed": "false",
+          "box": {
+            "x": 1217.5234375,
+            "y": 110.5,
+            "width": 57.7109375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1275.234375,
+            "bottom": 138.5,
+            "left": 1217.5234375
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "Swedish",
+          "pressed": "false",
+          "box": {
+            "x": 1281.234375,
+            "y": 110.5,
+            "width": 71.3125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1352.546875,
+            "bottom": 138.5,
+            "left": 1281.234375
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        },
+        {
+          "text": "Turkish",
+          "pressed": "false",
+          "box": {
+            "x": 1358.546875,
+            "y": 110.5,
+            "width": 65.453125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1424,
+            "bottom": 138.5,
+            "left": 1358.546875
+          },
+          "background": "rgb(217, 219, 223)",
+          "color": "rgb(86, 95, 108)"
+        }
+      ],
+      "screenshot": "screen-b-master-IT-it-1440-dark.png"
+    },
+    {
+      "at": "2026-09-12T22:51:52.571Z",
+      "requested": {
+        "scope": "master",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1728,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "cmokmy3a40078pm0p1fvnu523",
+        "cmokmy0jf0003pm0ppnu1b2yy",
+        "cmokmy0jt0004pm0p0gaufo1b",
+        "cmokmy2ir005bpm0p0sm1rxx8",
+        "cmokmy0k70005pm0puvz2ucxu",
+        "cmokmy0kl0006pm0p9auaundx",
+        "cmokmy0ky0007pm0p3vj7q0mh",
+        "cmokmy0lc0008pm0p2thzmlqq",
+        "cmokmy0lr0009pm0p9yxk7ho0",
+        "cmokmy0m9000apm0pm52rd77m",
+        "cmokmy0mm000bpm0pm7k7eke4",
+        "cmokmy0n4000cpm0ptkjitr0f",
+        "cmokmy0ni000dpm0p2xvcpkma",
+        "cmokmy0o1000epm0pca79fbbf",
+        "cmokmy0og000fpm0pdwckcnq0",
+        "cmokmy0ot000gpm0p4z5vwnoo",
+        "cmokmy0p6000hpm0ptee51htd",
+        "cmokmy0pk000ipm0pi8nl7pbn",
+        "cmokmy0py000jpm0pc2jcd5ul",
+        "cmokmy0qb000kpm0p06pmx2vt",
+        "cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "productMedia",
+          "text": "    Product media            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "name",
+          "text": "    Name *            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        },
+        {
+          "id": "status",
+          "text": "    Status            "
+        },
+        {
+          "id": "description",
+          "text": "    Description            "
+        },
+        {
+          "id": "bulletPoints",
+          "text": "    Bullet points            "
+        }
+      ],
+      "marks": [
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        }
+      ],
+      "scopeBar": "EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian · sourceGermanEnglishSpanishFrenchDutchPolishSwedishTurkish",
+      "text": "vello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\nGiallo · XS\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\n+3\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\nXavia\n—\nACTIVE\n—\n—\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "Italian · source",
+          "pressed": "true",
+          "box": {
+            "x": 1043.28125,
+            "y": 110.5,
+            "width": 105.359375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1148.640625,
+            "bottom": 138.5,
+            "left": 1043.28125
+          },
+          "background": "rgb(238, 245, 255)",
+          "color": "rgb(10, 75, 168)"
+        },
+        {
+          "text": "German",
+          "pressed": "false",
+          "box": {
+            "x": 1154.640625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1222.734375,
+            "bottom": 138.5,
+            "left": 1154.640625
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "English",
+          "pressed": "false",
+          "box": {
+            "x": 1228.734375,
+            "y": 110.5,
+            "width": 64.5703125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1293.3046875,
+            "bottom": 138.5,
+            "left": 1228.734375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Spanish",
+          "pressed": "false",
+          "box": {
+            "x": 1299.3046875,
+            "y": 110.5,
+            "width": 68.78125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1368.0859375,
+            "bottom": 138.5,
+            "left": 1299.3046875
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "French",
+          "pressed": "false",
+          "box": {
+            "x": 1374.0859375,
+            "y": 110.5,
+            "width": 62.3984375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1436.484375,
+            "bottom": 138.5,
+            "left": 1374.0859375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Dutch",
+          "pressed": "false",
+          "box": {
+            "x": 1442.484375,
+            "y": 110.5,
+            "width": 57.0390625,
+            "height": 28,
+            "top": 110.5,
+            "right": 1499.5234375,
+            "bottom": 138.5,
+            "left": 1442.484375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Polish",
+          "pressed": "false",
+          "box": {
+            "x": 1505.5234375,
+            "y": 110.5,
+            "width": 57.7109375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1563.234375,
+            "bottom": 138.5,
+            "left": 1505.5234375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Swedish",
+          "pressed": "false",
+          "box": {
+            "x": 1569.234375,
+            "y": 110.5,
+            "width": 71.3125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1640.546875,
+            "bottom": 138.5,
+            "left": 1569.234375
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        },
+        {
+          "text": "Turkish",
+          "pressed": "false",
+          "box": {
+            "x": 1646.546875,
+            "y": 110.5,
+            "width": 65.453125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1712,
+            "bottom": 138.5,
+            "left": 1646.546875
+          },
+          "background": "rgb(255, 255, 255)",
+          "color": "rgb(58, 68, 82)"
+        }
+      ],
+      "screenshot": "screen-b-master-IT-it-1728-light.png"
+    },
+    {
+      "at": "2026-09-12T22:51:54.913Z",
+      "requested": {
+        "scope": "master",
+        "market": "IT",
+        "language": "it"
+      },
+      "width": 1728,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=master&market=IT&locale=it&tab=information",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "cmokmy3a40078pm0p1fvnu523",
+        "cmokmy0jf0003pm0ppnu1b2yy",
+        "cmokmy0jt0004pm0p0gaufo1b",
+        "cmokmy2ir005bpm0p0sm1rxx8",
+        "cmokmy0k70005pm0puvz2ucxu",
+        "cmokmy0kl0006pm0p9auaundx",
+        "cmokmy0ky0007pm0p3vj7q0mh",
+        "cmokmy0lc0008pm0p2thzmlqq",
+        "cmokmy0lr0009pm0p9yxk7ho0",
+        "cmokmy0m9000apm0pm52rd77m",
+        "cmokmy0mm000bpm0pm7k7eke4",
+        "cmokmy0n4000cpm0ptkjitr0f",
+        "cmokmy0ni000dpm0p2xvcpkma",
+        "cmokmy0o1000epm0pca79fbbf",
+        "cmokmy0og000fpm0pdwckcnq0",
+        "cmokmy0ot000gpm0p4z5vwnoo",
+        "cmokmy0p6000hpm0ptee51htd",
+        "cmokmy0pk000ipm0pi8nl7pbn",
+        "cmokmy0py000jpm0pc2jcd5ul",
+        "cmokmy0qb000kpm0p06pmx2vt",
+        "cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "productMedia",
+          "text": "    Product media            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "name",
+          "text": "    Name *            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        },
+        {
+          "id": "status",
+          "text": "    Status            "
+        },
+        {
+          "id": "description",
+          "text": "    Description            "
+        },
+        {
+          "id": "bulletPoints",
+          "text": "    Bullet points            "
+        }
+      ],
+      "marks": [
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-BLACK-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-3XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-4XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-5XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-L — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-M — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-S — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXL — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        },
+        {
+          "class": "nds-cell-prov nds-cell-prov-inherited",
+          "title": "Inherited from GALE-JACKET-YELLOW-MEN-XXS — edit to give this row its own value",
+          "width": 11
+        }
+      ],
+      "scopeBar": "EditingShared product·Warnings100%Amazon·Blocked44%eBay·Blocked100%ShopifyEtsyItalian · sourceGermanEnglishSpanishFrenchDutchPolishSwedishTurkish",
+      "text": "vello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XS\nGiallo · XS\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n10%\n+5\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni\nXavia\n—\nACTIVE\n—\n—\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\n+3\nChild\nGALE-JACKET\nXAVIA GALE Giacca Da Moto Da Uomo - Giubbotto Moto Impermeabile E Ventilata Con Protezione Di Livello 2 | Per Tutte Le Stagioni (XS, Giallo)\nXavia\n—\nACTIVE\n—\n—\n21 rows\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "Italian · source",
+          "pressed": "true",
+          "box": {
+            "x": 1043.28125,
+            "y": 110.5,
+            "width": 105.359375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1148.640625,
+            "bottom": 138.5,
+            "left": 1043.28125
+          },
+          "background": "rgb(207, 215, 228)",
+          "color": "rgb(43, 99, 179)"
+        },
+        {
+          "text": "German",
+          "pressed": "false",
+          "box": {
+            "x": 1154.640625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1222.734375,
+            "bottom": 138.5,
+            "left": 1154.640625
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "English",
+          "pressed": "false",
+          "box": {
+            "x": 1228.734375,
+            "y": 110.5,
+            "width": 64.5703125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1293.3046875,
+            "bottom": 138.5,
+            "left": 1228.734375
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "Spanish",
+          "pressed": "false",
+          "box": {
+            "x": 1299.3046875,
+            "y": 110.5,
+            "width": 68.78125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1368.0859375,
+            "bottom": 138.5,
+            "left": 1299.3046875
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "French",
+          "pressed": "false",
+          "box": {
+            "x": 1374.0859375,
+            "y": 110.5,
+            "width": 62.3984375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1436.484375,
+            "bottom": 138.5,
+            "left": 1374.0859375
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "Dutch",
+          "pressed": "false",
+          "box": {
+            "x": 1442.484375,
+            "y": 110.5,
+            "width": 57.0390625,
+            "height": 28,
+            "top": 110.5,
+            "right": 1499.5234375,
+            "bottom": 138.5,
+            "left": 1442.484375
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "Polish",
+          "pressed": "false",
+          "box": {
+            "x": 1505.5234375,
+            "y": 110.5,
+            "width": 57.7109375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1563.234375,
+            "bottom": 138.5,
+            "left": 1505.5234375
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "Swedish",
+          "pressed": "false",
+          "box": {
+            "x": 1569.234375,
+            "y": 110.5,
+            "width": 71.3125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1640.546875,
+            "bottom": 138.5,
+            "left": 1569.234375
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        },
+        {
+          "text": "Turkish",
+          "pressed": "false",
+          "box": {
+            "x": 1646.546875,
+            "y": 110.5,
+            "width": 65.453125,
+            "height": 28,
+            "top": 110.5,
+            "right": 1712,
+            "bottom": 138.5,
+            "left": 1646.546875
+          },
+          "background": "rgb(220, 223, 226)",
+          "color": "rgb(84, 93, 106)"
+        }
+      ],
+      "screenshot": "screen-b-master-IT-it-1728-dark.png"
+    },
+    {
+      "at": "2026-09-12T22:51:58.044Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1440,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "productType",
+          "text": "    Product type            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "name",
+          "text": "    Title            "
+        },
+        {
+          "id": "externally_assigned_product_identifier",
+          "text": "    External Product ID            "
+        },
+        {
+          "id": "supplier_declared_has_product_identifier_exemption",
+          "text": "    Has GTIN exemption?            "
+        },
+        {
+          "id": "merchant_suggested_asin",
+          "text": "    Merchant Suggested ASIN            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked37%eBay·Blocked—ShopifyEtsyDE · GermanyGerman",
+      "text": "KET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Gelb)\n●\n—\nYes\nB0F7J163XJ\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n15%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXL, Gelb)\n●\n—\nYes\nB0F7J163XJ\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n21 rows\n1 of 165 columns write the shared master record — every channel sees those edits\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "German",
+          "pressed": "true",
+          "box": {
+            "x": 1355.90625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1424,
+            "bottom": 138.5,
+            "left": 1355.90625
+          },
+          "background": "rgb(238, 245, 255)",
+          "color": "rgb(10, 75, 168)"
+        }
+      ],
+      "screenshot": "screen-b-AMAZON-DE-de-1440-light.png"
+    },
+    {
+      "at": "2026-09-12T22:52:00.631Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1440,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j",
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "productType",
+          "text": "    Product type            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "name",
+          "text": "    Title            "
+        },
+        {
+          "id": "externally_assigned_product_identifier",
+          "text": "    External Product ID            "
+        },
+        {
+          "id": "supplier_declared_has_product_identifier_exemption",
+          "text": "    Has GTIN exemption?            "
+        },
+        {
+          "id": "merchant_suggested_asin",
+          "text": "    Merchant Suggested ASIN            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked37%eBay·Blocked—ShopifyEtsyDE · GermanyGerman",
+      "text": "KET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Gelb)\n●\n—\nYes\nB0F7J163XJ\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n15%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXL, Gelb)\n●\n—\nYes\nB0F7J163XJ\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n21 rows\n1 of 165 columns write the shared master record — every channel sees those edits\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "German",
+          "pressed": "true",
+          "box": {
+            "x": 1355.90625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1424,
+            "bottom": 138.5,
+            "left": 1355.90625
+          },
+          "background": "rgb(238, 245, 255)",
+          "color": "rgb(10, 75, 168)"
+        }
+      ],
+      "screenshot": "screen-b-AMAZON-DE-de-1440-dark.png"
+    },
+    {
+      "at": "2026-09-12T22:52:03.398Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1728,
+      "theme": "light",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "productType",
+          "text": "    Product type            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "name",
+          "text": "    Title            "
+        },
+        {
+          "id": "externally_assigned_product_identifier",
+          "text": "    External Product ID            "
+        },
+        {
+          "id": "supplier_declared_has_product_identifier_exemption",
+          "text": "    Has GTIN exemption?            "
+        },
+        {
+          "id": "merchant_suggested_asin",
+          "text": "    Merchant Suggested ASIN            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked37%eBay·Blocked—ShopifyEtsyDE · GermanyGerman",
+      "text": "R\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n15%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXL, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\n21 rows\n1 of 165 columns write the shared master record — every channel sees those edits\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "German",
+          "pressed": "true",
+          "box": {
+            "x": 1643.90625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1712,
+            "bottom": 138.5,
+            "left": 1643.90625
+          },
+          "background": "rgb(238, 245, 255)",
+          "color": "rgb(10, 75, 168)"
+        }
+      ],
+      "screenshot": "screen-b-AMAZON-DE-de-1728-light.png"
+    },
+    {
+      "at": "2026-09-12T22:52:06.637Z",
+      "requested": {
+        "scope": "AMAZON",
+        "market": "DE",
+        "language": "de"
+      },
+      "width": 1728,
+      "theme": "dark",
+      "url": "http://localhost:3000/products/cmokmy3a40078pm0p1fvnu523/edit/studio?scope=AMAZON&market=DE&locale=de&tab=information&account=cmothu9bo0000nz01asw6wx8j",
+      "documentWidth": 1728,
+      "viewport": 1728,
+      "rows": [
+        "primary:cmokmy3a40078pm0p1fvnu523",
+        "primary:cmokmy0jf0003pm0ppnu1b2yy",
+        "primary:cmokmy0jt0004pm0p0gaufo1b",
+        "primary:cmokmy2ir005bpm0p0sm1rxx8",
+        "primary:cmokmy0k70005pm0puvz2ucxu",
+        "primary:cmokmy0kl0006pm0p9auaundx",
+        "primary:cmokmy0ky0007pm0p3vj7q0mh",
+        "primary:cmokmy0lc0008pm0p2thzmlqq",
+        "primary:cmokmy0lr0009pm0p9yxk7ho0",
+        "primary:cmokmy0m9000apm0pm52rd77m",
+        "primary:cmokmy0mm000bpm0pm7k7eke4",
+        "primary:cmokmy0n4000cpm0ptkjitr0f",
+        "primary:cmokmy0ni000dpm0p2xvcpkma",
+        "primary:cmokmy0o1000epm0pca79fbbf",
+        "primary:cmokmy0og000fpm0pdwckcnq0",
+        "primary:cmokmy0ot000gpm0p4z5vwnoo",
+        "primary:cmokmy0p6000hpm0ptee51htd",
+        "primary:cmokmy0pk000ipm0pi8nl7pbn",
+        "primary:cmokmy0py000jpm0pc2jcd5ul",
+        "primary:cmokmy0qb000kpm0p06pmx2vt",
+        "primary:cmokmy0qp000lpm0p2yxw35ku"
+      ],
+      "headers": [
+        {
+          "id": "ag-Grid-SelectionColumn",
+          "text": "                     "
+        },
+        {
+          "id": "ag-Grid-AutoColumn",
+          "text": "    Product            "
+        },
+        {
+          "id": "__productRole",
+          "text": "    Product role            "
+        },
+        {
+          "id": "__parentSku",
+          "text": "    Parent SKU            "
+        },
+        {
+          "id": "productType",
+          "text": "    Product type            "
+        },
+        {
+          "id": "brand",
+          "text": "    Brand            "
+        },
+        {
+          "id": "name",
+          "text": "    Title            "
+        },
+        {
+          "id": "externally_assigned_product_identifier",
+          "text": "    External Product ID            "
+        },
+        {
+          "id": "supplier_declared_has_product_identifier_exemption",
+          "text": "    Has GTIN exemption?            "
+        },
+        {
+          "id": "merchant_suggested_asin",
+          "text": "    Merchant Suggested ASIN            "
+        },
+        {
+          "id": "manufacturer",
+          "text": "    Manufacturer            "
+        }
+      ],
+      "marks": [],
+      "scopeBar": "EditingShared product·Blocked0%Amazon·Blocked37%eBay·Blocked—ShopifyEtsyDE · GermanyGerman",
+      "text": "R\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\nC\nGALE-JACKET-YELLOW-MEN-XXL\nGiallo · XXL\n15%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXL, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\nC\nGALE-JACKET-YELLOW-MEN-XXS\nGiallo · XS\n11%\nChild\nGALE-JACKET\nOUTERWEAR\nXavia\nXAVIA GALE Herren-motorradjacke – Wasserdichte Und Belüftete Motorradjacke Mit Schutzstufe 2 | Für Alle Jahreszeiten (XXS, Gelb)\n●\n—\nYes\nB0F7J163XJ\n—\n!\n21 rows\n1 of 165 columns write the shared master record — every channel sees those edits\nEnter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z\n?",
+      "languageChips": [
+        {
+          "text": "German",
+          "pressed": "true",
+          "box": {
+            "x": 1643.90625,
+            "y": 110.5,
+            "width": 68.09375,
+            "height": 28,
+            "top": 110.5,
+            "right": 1712,
+            "bottom": 138.5,
+            "left": 1643.90625
+          },
+          "background": "rgb(203, 212, 225)",
+          "color": "rgb(47, 102, 180)"
+        }
+      ],
+      "screenshot": "screen-b-AMAZON-DE-de-1728-dark.png"
+    }
+  ],
+  "requests": [
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/family/cmokmy3a40078pm0p1fvnu523",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3Amaster",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3Amaster%3AIT",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=IT&locale=it",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=IT&productType=OUTERWEAR&shipping=1",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/products/ai/drafts",
+      "query": "?productIds=cmokmy0jf0003pm0ppnu1b2yy%2Ccmokmy0jt0004pm0p0gaufo1b%2Ccmokmy0k70005pm0puvz2ucxu%2Ccmokmy0kl0006pm0p9auaundx%2Ccmokmy0ky0007pm0p3vj7q0mh%2Ccmokmy0lc0008pm0p2thzmlqq%2Ccmokmy0lr0009pm0p9yxk7ho0%2Ccmokmy0m9000apm0pm52rd77m%2Ccmokmy0mm000bpm0pm7k7eke4%2Ccmokmy0n4000cpm0ptkjitr0f%2Ccmokmy0ni000dpm0p2xvcpkma%2Ccmokmy0o1000epm0pca79fbbf%2Ccmokmy0og000fpm0pdwckcnq0%2Ccmokmy0ot000gpm0p4z5vwnoo%2Ccmokmy0p6000hpm0ptee51htd%2Ccmokmy0pk000ipm0pi8nl7pbn%2Ccmokmy0py000jpm0pc2jcd5ul%2Ccmokmy0qb000kpm0p06pmx2vt%2Ccmokmy0qp000lpm0p2yxw35ku%2Ccmokmy2ir005bpm0p0sm1rxx8%2Ccmokmy3a40078pm0p1fvnu523&status=pending%2Cfailed&channel=master&locale=it&marketplace=master",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=DE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=DE",
+      "status": 403
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=DE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=DE&locale=de&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=DE&accountId=cmothu9bo0000nz01asw6wx8j&locale=de",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ADE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=DE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j&browseNodeIds=2420941031",
+      "status": 200
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=DE&productType=OUTERWEAR&shipping=1&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/notifications",
+      "query": "?limit=30",
+      "status": 403
+    },
+    {
+      "path": "/api/sidebar/counts",
+      "query": "",
+      "status": 403
+    },
+    {
+      "path": "/api/connections",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/destination",
+      "query": "?channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=nl&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "query": "?scope=channel&channel=AMAZON&market=BE&accountId=cmothu9bo0000nz01asw6wx8j&locale=nl",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/functions",
+      "query": "",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "path": "/api/listing-wizard/product-types",
+      "query": "?channel=AMAZON&marketplace=BE",
+      "status": 403
+    },
+    {
+      "path": "/api/categories/reference-labels",
+      "query": "?marketplace=BE&productType=OUTERWEAR&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    },
+    {
+      "path": "/api/pim/formulas/batch",
+      "query": "",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Aviews%3AAMAZON",
+      "status": 200
+    },
+    {
+      "path": "/api/saved-views",
+      "query": "?surface=product-edit%3Alayout%3AAMAZON%3ABE",
+      "status": 200
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/studio/sheet",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "failed": true,
+      "path": "/api/pim/formulas/functions",
+      "reason": "net::ERR_ABORTED"
+    },
+    {
+      "path": "/api/products/cmokmy3a40078pm0p1fvnu523/readiness",
+      "query": "?market=BE&locale=fr&channel=AMAZON&accountId=cmothu9bo0000nz01asw6wx8j",
+      "status": 200
+    }
+  ],
+  "blocked": [],
+  "consoleErrors": [
+    "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "console: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+    "console: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "errors": []
+}

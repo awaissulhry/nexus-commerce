@@ -12,6 +12,8 @@
  * publisher both route through.
  */
 import prisma from '../db.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from './listing-push-controls.js'
 import { logger } from '../utils/logger.js'
 import { EbayAuthService } from './ebay-auth.service.js'
 import { tryResolveConnection } from './connection-resolver.service.js'
@@ -29,6 +31,37 @@ export interface EbayMarketingPostResult {
   raw?: unknown
 }
 
+/** Read promotion inventory controls without selecting a transport account.
+ * INVENTORY_ANY cannot exclude held listings, so every stored eBay row is checked. */
+export async function readEbayPromotionPushControls(payload: unknown) {
+  const unavailable = () => Object.assign(new Error('PUSH_CONTROL_UNAVAILABLE: The promotion inventory could not be established.'), { code: 'PUSH_CONTROL_UNAVAILABLE' })
+  if (!payload || typeof payload !== 'object') throw unavailable()
+  const input = payload as Record<string, any>
+  if (input.inventoryCriterion?.inventoryCriterionType === 'INVENTORY_ANY') {
+    const rows = await prisma.channelListing.findMany({ where: { channel: 'EBAY' } }).catch(() => { throw unavailable() })
+    if (!rows.length) throw unavailable()
+    return rows
+  }
+  const externalIds: string[] = [], skus: string[] = []
+  const add = (target: string[], values: unknown) => {
+    if (!Array.isArray(values) || !values.length || values.some(v => typeof v !== 'string' || !v.trim())) throw unavailable()
+    target.push(...values)
+  }
+  if (Array.isArray(input.selectedInventoryDiscounts)) {
+    for (const discount of input.selectedInventoryDiscounts) add(externalIds, discount?.discountSpecification?.listingIds)
+  } else if (input.inventoryCriterion?.inventoryCriterionType === 'INVENTORY_BY_VALUE') {
+    const items = input.inventoryCriterion.inventoryItems
+    if (!Array.isArray(items) || items.some(item => item?.inventoryReferenceType !== 'INVENTORY_ITEM')) throw unavailable()
+    add(skus, items.map(item => item.inventoryReferenceId))
+  } else throw unavailable()
+  // Validate each target separately: one known item must not mask an unknown one.
+  const controls = []
+  for (const id of externalIds) controls.push(...await readPushControls({ channel: 'EBAY', externalIds: [id] }))
+  for (const sku of skus) controls.push(...await readPushControls({ channel: 'EBAY', skus: [sku] }))
+  if (!controls.length) throw unavailable()
+  return controls
+}
+
 /**
  * POST a payload to an eBay Sell Marketing API resource — e.g.
  * '/sell/marketing/v1/item_price_markdown_promotion' (markdown) or
@@ -41,6 +74,15 @@ export async function postEbayMarketing(
   path: string,
   payload: unknown,
 ): Promise<EbayMarketingPostResult> {
+  try {
+    const controls = await readEbayPromotionPushControls(payload)
+    for (const listing of controls) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) return { ok: false, status: 409, errorMessage: `${refusal.code}: ${refusal.sentence}` }
+    }
+  } catch (error) {
+    return { ok: false, status: 409, errorMessage: (error as Error).message }
+  }
   // MAP.3 — DECLARED. A generic POST helper takes a path and a payload; there is
   // no row here to derive an account from. 🔴 MAP.7: callers that DO know their
   // account should pass it through rather than letting this pick.

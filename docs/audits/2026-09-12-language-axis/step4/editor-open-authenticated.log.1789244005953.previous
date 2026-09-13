@@ -1,0 +1,175 @@
+
+📌 BUILD STAMP — every file whose change can invalidate a reading below (sha1, first 8):
+   21:08:48  sha1:7332af83  docs/2026-09-03-cell-editing-contract.md
+   10:50:36  sha1:22b88761  apps/web/src/design-system/grid/NexusGrid.tsx
+   11:51:12  sha1:2f6b33f0  apps/web/src/design-system/grid/editors/openGesture.ts
+   01:51:51  sha1:10b69d50  apps/web/src/design-system/grid/editors/editorBox.ts
+   00:53:48  sha1:1ee0bc55  apps/web/src/design-system/grid/theme/grid.css
+   00:09:09  sha1:a3fb04f6  apps/web/src/design-system/grid/hosts/GridSheet.tsx
+   03:23:01  sha1:e63dbd62  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx
+   21:32:46  sha1:c5aa2bb5  scripts/check-editor-open.mjs
+
+🕐 21:32:48 · WHAT ELSE COULD BE SHARING THIS API — a snapshot, not a window
+   gate processes (node, this script), incl. this one: 1
+     pid 90837 ppid 90822  /opt/homebrew/Cellar/node/25.9.0_2/bin/node scripts/check-editor-open.mjs --strict
+   browser processes owned by a gate: 0
+   (a snapshot cannot see a run that already exited or one that starts later — read as "at least these, at this instant")
+
+── first (one gesture per page load — the arm the defect lived in)
+   21:33:38 ✅ text      brand        opened 20/20   popup:formula×20               writes-armed 0
+   21:34:27 ✅ longtext  name         opened 20/20   popup:formula×20               writes-armed 0
+   21:35:02 ❌ number    basePrice    opened  0/ 0                                  writes-armed 0   ABSTAINED 20
+   21:35:52 ✅ select    status       opened 20/20   popup:listbox×16 popup:formula×4 writes-armed 0
+
+── early
+   21:36:06 ✅ text      brand        opened 20/20   popup:formula×20               writes-armed 0
+   21:36:18 ✅ longtext  name         opened 20/20   popup:formula×20               writes-armed 0
+   21:36:18 ❌ number    basePrice    opened  0/ 0                                  writes-armed 0   ABSTAINED 20
+   21:36:30 ✅ select    status       opened 20/20   popup:listbox×16 popup:formula×4 writes-armed 0
+
+── settled
+   21:37:01 ✅ text      brand        opened 20/20   popup:formula×20               writes-armed 0
+   21:37:13 ✅ longtext  name         opened 20/20   popup:formula×20               writes-armed 0
+   21:37:14 ❌ number    basePrice    opened  0/ 0                                  writes-armed 0   ABSTAINED 20
+   21:37:26 ✅ select    status       opened 20/20   popup:listbox×16 popup:formula×4 writes-armed 0
+
+── geometry (the sizing rule, each kind parked against the right edge)
+   caps read from source: longtext 560×320 · formula 560×360 · select 320×320 · list 360×360 · measure 360×220
+   ✅ 1728 select    status                cell 110px@1428  popup 110px@1428 (Δ0) right=1538/1728 outline=2 under·value visible room=300<cap
+
+── contract (docs/2026-09-03-cell-editing-contract.md, asserted line by line on both scopes)
+   16 rows × 5 gestures parsed from the document
+
+   ── scope master
+   21:38:04 ❌ text      fresh      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:38:23 ❌ text      batch      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:38:41 ❌ text      flush      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:39:04 ❌ longtext  fresh      name                     dblclick=pop:fx enter=none f2=pop:fx type=none equals=none
+   21:39:27 ❌ longtext  batch      name                     dblclick=pop:fx enter=none f2=pop:fx type=none equals=none
+   21:39:51 ❌ longtext  flush      name                     dblclick=pop:fx enter=none f2=pop:fx type=none equals=none
+   21:40:12 ❌ number    fresh      basePrice                dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:40:34 ❌ number    batch      basePrice                dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:41:00 ❌ number    flush      basePrice                dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:41:21 ✅ select    fresh      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:41:39 ✅ select    batch      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:42:00 ✅ select    flush      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:42:30 ❌ text      locked     __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:43:01 ❌ text      fxblocked  __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:43:25 ✅ list      fresh      supplier_declared_dg_hz_regulation dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   ·  measure   fresh      n/a — master declares no fresh measure column
+
+   ── scope AMAZON·IT
+   21:43:59 ❌ text      fresh      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:44:17 ❌ text      batch      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:44:35 ❌ text      flush      brand                    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:44:55 ❌ longtext  fresh      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:45:14 ❌ longtext  batch      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:45:31 ❌ longtext  flush      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:45:51 ❌ number    fresh      item_package_quantity (for basePrice) dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:46:06 ❌ number    batch      item_package_quantity (for basePrice) dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:46:24 ❌ number    flush      item_package_quantity (for basePrice) dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:46:39 ✅ select    fresh      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:46:53 ✅ select    batch      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:47:10 ✅ select    flush      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:47:33 ❌ text      locked     __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:47:56 ❌ text      fxblocked  __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:48:13 ✅ list      fresh      supplier_declared_dg_hz_regulation dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   21:48:28 ✅ measure   fresh      item_weight              dblclick=pop:measure enter=pop:measure f2=pop:measure type=pop:measure equals=pop:fx
+
+   ── scope EBAY·IT
+   21:48:36 ❌ text      fresh      categoryId (for brand)   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:48:44 ❌ text      batch      categoryId (for brand)   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:48:53 ❌ text      flush      categoryId (for brand)   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:49:01 ❌ longtext  fresh      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:09 ❌ longtext  batch      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:18 ❌ longtext  flush      name                     dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:28 ❌ number    fresh      price (for basePrice)    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:38 ❌ number    batch      price (for basePrice)    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:50 ❌ number    flush      price (for basePrice)    dblclick=pop:fx enter=pop:fx f2=pop:fx type=pop:fx equals=pop:fx
+   21:49:59 ✅ select    fresh      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:50:08 ✅ select    batch      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:50:18 ✅ select    flush      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   21:50:36 ❌ text      locked     __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:50:54 ❌ text      fxblocked  __productRole (for amazonAsin) dblclick=none enter=none f2=none type=none equals=none
+   21:51:03 ✅ list      fresh      closure_fastening (for supplier_declared_dg_hz_regulation) dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   21:51:13 ✅ measure   fresh      packageWeight (for item_weight) dblclick=pop:measure enter=pop:measure f2=pop:measure type=pop:measure equals=pop:fx
+
+── refused (a stored formula whose result the server refused, stubbed on the wire)
+      stub served 1× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height ag-cell-value nds-cell-is-formula-refused nds-ag-cell nds-cell-is-editable
+   21:51:18 ✅ master     refusedClass=true ƒ-gone=true mark="⚠" tooltip=server sentence verbatim
+      stub served 2× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=primary:cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height nds-cell-is-editable ag-cell-value nds-cell-is-formula-refused nds-ag-cell
+   21:51:25 ❌ AMAZON·IT  refusedClass=true ƒ-gone=true mark="" tooltip=DIFFERS
+      stub served 3× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=primary:cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height nds-cell-is-editable ag-cell-value nds-cell-is-formula-refused nds-ag-cell
+   21:51:31 ❌ EBAY·IT    refusedClass=true ƒ-gone=true mark="" tooltip=DIFFERS
+
+── negative control (the run above is worthless if this opens an editor)
+   ✅ a header double-click opens nothing — the detector can report a miss
+
+── wire
+   API hosts the page dialled: loopback:8091 · expected loopback:8091
+
+── API writes armed across the whole run: 0 (aborted at the network layer; none reached a database)
+── expected saves HELD open to produce the `flush` state: 12 (on name, XAVIA fixture, never completed)
+   announced at: tooltip=DIFFERS`; the token lookup resolved `FIXTURE-REGISTER-B0-FLUSH` and would fail on its absence
+
+── parity (master·DE, AMAZON·IT, EBAY·IT — one chrome, one footer, one cell)
+   master     {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   AMAZON·IT  {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"1 of 163 columns write the shared master record — every channel sees those edits Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   EBAY·IT    {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   ·  AMAZON·IT · opt_listChip: n/a — master renders no such cell in its landing view
+   ·  AMAZON·IT · opt_listCellNotSelect: n/a — master renders no such cell in its landing view
+   ·  EBAY·IT · opt_listChip: n/a — master renders no such cell in its landing view
+   ·  EBAY·IT · opt_listCellNotSelect: n/a — master renders no such cell in its landing view
+
+🔴 60 GESTURE(S) NOT MEASURED — "could not measure" is not "measured green":
+   · first/number/dblclick/centre: column basePrice is not on the sheet
+   · first/number/dblclick/corner: column basePrice is not on the sheet
+   · first/number/enter/centre: column basePrice is not on the sheet
+   · first/number/enter/corner: column basePrice is not on the sheet
+   · first/number/f2/centre: column basePrice is not on the sheet
+   · first/number/f2/corner: column basePrice is not on the sheet
+   · first/number/type/centre: column basePrice is not on the sheet
+   · first/number/type/corner: column basePrice is not on the sheet
+   · first/number/equals/centre: column basePrice is not on the sheet
+   · first/number/equals/corner: column basePrice is not on the sheet
+   · first/number/dblclick/centre: column basePrice is not on the sheet
+   · first/number/dblclick/corner: column basePrice is not on the sheet
+
+❌ OPEN-GESTURE GATE FAILED — 253 finding(s):
+   · first · text · dblclick · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · dblclick · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · enter · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · enter · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · f2 · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · f2 · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · type · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · type · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · dblclick · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · dblclick · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · enter · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · enter · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · f2 · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · f2 · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · type · centre: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · text · type · corner: opened popup:formula, expected inline (one editor mode per kind — ruling 2)
+   · first · longtext · dblclick · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · dblclick · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · enter · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · enter · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · f2 · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · f2 · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · type · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · type · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · dblclick · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · dblclick · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · enter · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · enter · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · f2 · centre: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   · first · longtext · f2 · corner: opened popup:formula, expected popup:largetext (one editor mode per kind — ruling 2)
+   … and 223 more

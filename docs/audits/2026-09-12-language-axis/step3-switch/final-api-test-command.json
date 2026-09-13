@@ -1,0 +1,26 @@
+{
+  "startedAt": "2026-09-12T07:59:06.692Z",
+  "finishedAt": "2026-09-12T07:59:15.126Z",
+  "files": [
+    "/Users/awais/nexus-commerce/apps/api/src/services/images/product-media.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/catalog-transfer-export.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/content-language.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/content-read.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/content-readiness.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/content-resolver-shadow.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/content-resolver.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/global-content.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/information-database.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/information-sheet.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/listing-readiness.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/market-language-consumers.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/market-language-payloads.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/market-languages-guard.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/market-languages.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/readiness.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/formula-storage.vitest.test.ts",
+    "/Users/awais/nexus-commerce/apps/api/src/services/pim/mapping/mapping-sources.vitest.test.ts"
+  ],
+  "load": " 9:59  up 15 days, 11:07, 14 users, load averages: 5.37 4.55 4.91\n",
+  "exitCode": 0
+}

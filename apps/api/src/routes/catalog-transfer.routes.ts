@@ -1,8 +1,10 @@
+import type {} from '@fastify/multipart'
+import { catalogTranslationRuns, previewCatalogTranslation, requireTranslationGeneration, revertCatalogTranslation } from '../services/pim/catalog-translate.js'
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
 import type { TransferMode, ProductTransferSelection } from '@nexus/shared/catalog-transfer'
 import { Readable } from 'node:stream'
 import { readTransferFile, transferErrorsCsv, TRANSFER_MAX_FILE_BYTES } from '../services/pim/catalog-transfer-file.js'
-import { catalogDestinationOptions, catalogTransferOptions, catalogTransferTemplate, exportCatalogTransfer } from '../services/pim/catalog-transfer-export.js'
+import { catalogTransferLanguages, catalogReadinessOptions, catalogTransferOptions, catalogTransferTemplate, exportCatalogTransfer } from '../services/pim/catalog-transfer-export.js'
 import { readCatalogTransfer, startCatalogTransfer, catalogTransferStatus, recoverCatalogTransfers, TransferConflict } from '../services/pim/catalog-transfer.service.js'
 import { stageTransferJob, readTransferJob, transferJobStatus, transferJobOutcomes, applyTransferJob, retryTransferJob, recoverTransferJobs, recentProductTransferJobs } from '../services/pim/catalog-transfer-jobs.js'
 import { inspectCatalogSource, previewCatalogSource, listSourcePresets, listSourceHistory, saveSourcePreset, deleteSourcePreset, sourceMappingFields } from '../services/pim/catalog-source.service.js'
@@ -73,7 +75,12 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     const boundary = await resolveProductTransferBoundary((request.params as { productId: string }).productId, body?.selection)
     return reply.code(201).send(await previewCatalogSource({ ...body, userId: actor(request), boundary }))
   })
-  fastify.get('/catalog-transfer/readiness/options', async () => catalogDestinationOptions())
+  fastify.get('/catalog-transfer/languages', async () => catalogTransferLanguages())
+  fastify.post('/catalog-transfer/translate/preview', async request => previewCatalogTranslation(request.body as import('@nexus/shared/products-grid').CatalogTranslateInput, actor(request)))
+  fastify.post('/catalog-transfer/translate/apply', async () => requireTranslationGeneration())
+  fastify.get('/catalog-transfer/translate/runs', async request => catalogTranslationRuns((request.query as { language: string }).language, actor(request)))
+  fastify.post('/catalog-transfer/translate/:jobId/revert', async request => revertCatalogTranslation((request.params as { jobId: string }).jobId, actor(request)))
+  fastify.get('/catalog-transfer/readiness/options', async () => catalogReadinessOptions())
   fastify.get('/catalog-transfer/readiness', async (request, reply) => {
     reply.header('Cache-Control', 'no-store')
     return listingReadiness(request.query as Record<string, unknown>, actor(request))
@@ -120,7 +127,8 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     }
     if (!buffer) throw new Error('Choose a CSV or XLSX file')
     if (!['create', 'update', 'upsert'].includes(fields.mode)) throw new Error('Choose Create, Update or Create or update')
-    const parsed = fields.format === 'amazon' ? await readAmazonCatalogWorkbook(buffer, fields.accountId, marketOf(fields.market), { familyId: fields.familyId, mode: fields.mode }) : await readTransferFile(buffer, filename)
+    if (fields.blankPolicy && !['ignore', 'clear'].includes(fields.blankPolicy)) throw new Error('Blank cells must be ignored or cleared')
+    const parsed = fields.format === 'amazon' ? await readAmazonCatalogWorkbook(buffer, fields.accountId, marketOf(fields.market), { familyId: fields.familyId, mode: fields.mode }) : await readTransferFile(buffer, filename, { blankPolicy: fields.blankPolicy as 'ignore' | 'clear' | undefined })
     return reply.code(201).send(await stageTransferJob({ ...parsed, mode: fields.mode as TransferMode, market: marketOf(fields.market), filename, userId: actor(request) }))
   })
   fastify.get('/catalog-transfer/jobs/:jobId', async (request, reply) => {

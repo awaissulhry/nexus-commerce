@@ -11,8 +11,7 @@ type Classification = {
   categories: Array<{ id: string; label: string; suggestedFamilyId: string | null; mappings: Array<{ channel: string; marketplace: string; channelCategoryId: string; reviewedAt: string | null }> }>
 }
 
-export function ClassificationDialog({ productId, disabled, onChanged }: { productId: string; disabled: boolean; onChanged: () => void }) {
-  const [open, setOpen] = useState(false)
+export function ClassificationDialog({ productId, open, onClose, onChanged }: { productId: string; open: boolean; onClose: () => void; onChanged: () => void }) {
   const [data, setData] = useState<Classification | null>(null)
   const [familyId, setFamilyId] = useState('')
   const [primaryId, setPrimaryId] = useState('')
@@ -45,14 +44,13 @@ export function ClassificationDialog({ productId, disabled, onChanged }: { produ
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error ?? 'Could not save classification')
-      setOpen(false); onChanged()
+      onClose(); onChanged()
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save classification') }
     finally { setSaving(false) }
   }
   return <>
-    <Button size="sm" variant="ghost" disabled={disabled} onClick={() => setOpen(true)}>Classification</Button>
-    <Modal open={open} onClose={() => { if (!saving) setOpen(false) }} title="Product classification" size="md" footer={<>
-      <Button variant="secondary" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button>
+    <Modal open={open} onClose={() => { if (!saving) onClose() }} title="Product classification" size="md" footer={<>
+      <Button variant="secondary" disabled={saving} onClick={() => onClose()}>Cancel</Button>
       <Button variant="primary" disabled={!data || saving || categoryIds.length > 0 && !primaryId} onClick={() => void save()}>{saving ? 'Saving…' : 'Save classification'}</Button>
     </>}>
       {error && <p role="alert">{error} <Button variant="ghost" size="sm" disabled={saving} onClick={() => setRevision(v => v + 1)}>Reload</Button></p>}

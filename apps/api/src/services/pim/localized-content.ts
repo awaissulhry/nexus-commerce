@@ -1,4 +1,5 @@
-import { contentSlots } from './content-locale.js'
+import { legacyContentSlotsForWrite } from './legacy-content-write.js'
+
 import { coerceForShape, type ShapeWriteFacts } from './sheet-values.js'
 
 export const isContentLocale = (key: string) => /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i.test(key)
@@ -10,7 +11,7 @@ const CORE: Record<string, ShapeWriteFacts> = {
 
 /** Locale edits and numbered list edits share one lossless merge. */
 export function mergeLocalizedContent(current: unknown, patch: Record<string, unknown> | undefined, custom: Record<string, ShapeWriteFacts> = {}, reset: Record<string, string[]> = {}): Record<string, Record<string, unknown>> {
-  const merged = contentSlots({ localizedContent: current && typeof current === 'object' && !Array.isArray(current) ? current : {} })
+  const merged = legacyContentSlotsForWrite({ localizedContent: current && typeof current === 'object' && !Array.isArray(current) ? current : {} })
   for (const [tag, raw] of Object.entries(patch ?? {})) {
     const locale = tag.toLowerCase()
     if (!isContentLocale(locale) || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue

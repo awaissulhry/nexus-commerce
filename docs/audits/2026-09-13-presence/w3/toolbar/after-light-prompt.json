@@ -1,0 +1,155 @@
+{
+  "bar": {
+    "bottom": 186,
+    "height": 40,
+    "left": 67,
+    "right": 1439,
+    "top": 146,
+    "width": 1372,
+    "x": 67,
+    "y": 146
+  },
+  "controls": [
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 700.1328125,
+        "right": 824.2734375,
+        "top": 151.5,
+        "width": 124.140625,
+        "x": 700.1328125,
+        "y": 151.5
+      },
+      "text": "Custom (227) "
+    },
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 832.2734375,
+        "right": 964.625,
+        "top": 151.5,
+        "width": 132.3515625,
+        "x": 832.2734375,
+        "y": 151.5
+      },
+      "text": "Required1 column"
+    },
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 972.625,
+        "right": 1130.3515625,
+        "top": 151.5,
+        "width": 157.7265625,
+        "x": 972.625,
+        "y": 151.5
+      },
+      "text": "Languages64 columns"
+    },
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 1138.3515625,
+        "right": 1238.28125,
+        "top": 151.5,
+        "width": 99.9296875,
+        "x": 1138.3515625,
+        "y": 151.5
+      },
+      "text": "Filters4"
+    },
+    {
+      "rect": {
+        "bottom": 0,
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      "text": " Warnings21 cells"
+    },
+    {
+      "rect": {
+        "bottom": 0,
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      "text": " Needs translation0 cells"
+    },
+    {
+      "rect": {
+        "bottom": 0,
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      "text": " Out of date0 cells"
+    },
+    {
+      "rect": {
+        "bottom": 0,
+        "height": 0,
+        "left": 0,
+        "right": 0,
+        "top": 0,
+        "width": 0,
+        "x": 0,
+        "y": 0
+      },
+      "text": " AI drafts0 cells"
+    },
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 1298.5859375,
+        "right": 1387,
+        "top": 151.5,
+        "width": 88.4140625,
+        "x": 1298.5859375,
+        "y": 151.5
+      },
+      "text": "Customise"
+    },
+    {
+      "rect": {
+        "bottom": 179.5,
+        "height": 28,
+        "left": 1395,
+        "right": 1433,
+        "top": 151.5,
+        "width": 38,
+        "x": 1395,
+        "y": 151.5
+      },
+      "text": ""
+    }
+  ],
+  "inBar": false,
+  "prompt": {
+    "bottom": 309.5,
+    "height": 126,
+    "left": 700.1328125,
+    "right": 1020.1328125,
+    "top": 183.5,
+    "width": 320,
+    "x": 700.1328125,
+    "y": 183.5
+  }
+}

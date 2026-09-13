@@ -44,7 +44,8 @@
 
 import type { PrismaClient } from '@prisma/client'
 import { logger } from '../utils/logger.js'
-import { postEbayMarketing } from './ebay-marketing-dispatch.service.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { postEbayMarketing, readEbayPromotionPushControls } from './ebay-marketing-dispatch.service.js'
 
 export interface PushMarkdownResult {
   ok: boolean
@@ -191,6 +192,18 @@ export async function pushMarkdownToEbay(
       ],
       durationMs: Date.now() - startedAt,
     }
+  }
+
+  try {
+    const controls = await readEbayPromotionPushControls(payload)
+    for (const listing of controls) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw new Error(`${refusal.code}: ${refusal.sentence}`)
+    }
+  } catch (error) {
+    const message = (error as Error).message
+    await prisma.ebayMarkdown.update({ where: { id: markdownId }, data: { lastSyncStatus: 'FAILED', lastSyncedAt: new Date(), lastSyncError: message } })
+    return { ok: false, markdownId, liveMode, warnings, error: message, durationMs: Date.now() - startedAt }
   }
 
   // Live path — dispatch via the connection-aware Sell-Marketing client (VP.0).

@@ -1,4 +1,8 @@
-import { etsyContentState } from '../../etsy/information-content.js'
+import { contentListing, resolveContentAttributes, contentWireValue } from '../content-read.js'
+import { contentField, translationMissing } from '../content-resolver.js'
+import { normalizeLanguage } from '../content-language.js'
+import { PRIMARY_CONTENT_LOCALE, CONTENT_COLUMNS } from '../content-locale.js'
+import { marketLanguages } from '../market-languages.js'
 import { presentationContexts } from './presentation-context.js'
 import { effectivePresentationRule, resolvePresentationOrder } from './presentation-rules.js'
 import { primaryConnectionIds } from '../../connection-resolver.service.js'
@@ -35,7 +39,6 @@ import { evaluateSchemaRequirements } from './schema-requirements.js'
  */
 
 import prisma from '../../../db.js'
-import { languageForMarketplace } from '../../products/translation-resolver.service.js'
 import { resolveAttributes } from '../attribute-resolver.js'
 import { getMappingForMarketplace, getRulesFor, type FieldMappingRule, type MarketplaceSchemaMapping } from '../schema-mapping.service.js'
 import {
@@ -45,6 +48,7 @@ import { getFieldCatalogue, type CatalogueField, type FieldCatalogue } from './f
 import { categoryForListing, resolveCategoriesForProducts, type ResolvedCategory, type MappingRow } from './category-mapping.service.js'
 
 export interface ResolvedCell {
+  content?: import('../content-resolver.js').ResolvedContent
   sourceOwner?: CatalogueField['sourceOwner']
 
   label?: string
@@ -56,6 +60,10 @@ export interface ResolvedCell {
   raw?: unknown
   legacySource?: 'source' | 'fallback' | 'default' | 'missing'
   needsTranslation?: boolean
+  language?: string
+  requested?: string
+  follows?: boolean
+  drift?: boolean
   requestedLocale?: string
   effectiveLocale?: string
   translationState?: import('../attribute-resolver.js').ResolvedValue['translationState']
@@ -173,7 +181,8 @@ export async function resolveBatch(input: {
 }): Promise<ResolveBatchResult> {
   const channel = input.channel.toUpperCase()
   const { marketplace } = input
-  const locale = input.locale ?? await languageForMarketplace(marketplace, channel)
+  const languages = await marketLanguages(channel, marketplace)
+  const locale = normalizeLanguage(input.locale ?? languages[0])
   // Listing ownership alone does not exempt an Information field. Only these
   // workflow-owned values are assembled later; Shopify validates its projected
   // remote/draft owners after the common mapping pass.
@@ -220,7 +229,7 @@ export async function resolveBatch(input: {
     parentIds.length
       ? prisma.product.findMany({ where: { id: { in: parentIds } }, include: { translations: true } })
       : Promise.resolve([]),
-    prisma.channelListing.findMany({
+    prisma.channelListing.findMany({ include: { translations: true },
       where: { productId: { in: [...found] }, channel, marketplace, aliasKey: input.aliasKey ?? '', channelConnectionId: connectionId },
       orderBy: { id: 'asc' },
     }),
@@ -264,9 +273,11 @@ export async function resolveBatch(input: {
     if ('title' in changes) changes.name = changes.title
     else if ('name' in changes) changes.title = changes.name
     if (Object.keys(changes).length) {
-      const localized = (full.localizedContent ?? {}) as Record<string, Record<string, unknown>>
-      const copy = Object.fromEntries(['title', 'description', 'bulletPoints', 'keywords'].filter(key => key in changes).map(key => [key, changes[key]]))
-      full = { ...full, localizedContent: { ...localized, [locale]: { ...localized[locale], ...copy } } as any }
+      const copy = Object.fromEntries(Object.entries(CONTENT_COLUMNS).filter(([key]) => key in changes).map(([key, column]) => [column, changes[key]]))
+      full = locale === PRIMARY_CONTENT_LOCALE ? { ...full, ...copy } : { ...full, translations: [
+        ...(full.translations ?? []).filter(row => normalizeLanguage(row.language) !== locale),
+        { ...(full.translations ?? []).find(row => normalizeLanguage(row.language) === locale), productId: full.id, language: locale, ...copy } as any,
+      ] }
     }
     const cat = categoryFor(p.id)
     const catalogue = catalogueByCategory.get(cat)!
@@ -286,8 +297,12 @@ export async function resolveBatch(input: {
       resolvedAttrs[key] ??= { value: null, source: 'default', inheritedFrom: null }
     }
     for (const [key, value] of Object.entries(changes)) {
-      resolvedAttrs[key] = { value, source: 'master', inheritedFrom: null }
+      resolvedAttrs[key] = { ...resolvedAttrs[key], value, source: 'master', inheritedFrom: null }
     }
+
+    const parent = full.parentId ? parentById.get(full.parentId) : null
+    const content = resolveContentAttributes({ product: full, parent, listing: listingByProduct.get(p.id), languages,
+      requested: locale, localizableKeys: catalogue.masterLocalizableKeys })
 
     // Conditions can depend on a field outside the requested projection.
     const fields: CatalogueField[] = catalogue.fields
@@ -305,8 +320,9 @@ export async function resolveBatch(input: {
       }, new Set(Object.keys(resolvedAttrs))))
       const listing = listingByProduct.get(p.id)
       const store = field.channelStore
-      const storedState = storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
-      const stored = storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
+      const contentHit = content[contentField(field.sheetKey ?? field.fieldKey)]
+      const storedState = contentHit ? { state: 'inherited' as const } : storedChannelState(listing as unknown as Record<string, unknown> ?? {}, store, [...new Set([field.sheetKey ?? field.fieldKey, field.fieldKey])])
+      const stored = !contentHit && storedState.state === 'stored' && !(input.inheritMappedFields && rule && !field.sourceOwner)
         ? storedState.value : undefined
       const systemValue = channel === 'AMAZON' && field.fieldKey === 'parentage_level'
         ? full.isParent ? 'parent' : full.parentId ? 'child' : undefined
@@ -319,7 +335,7 @@ export async function resolveBatch(input: {
       const directRaw = channel === 'EBAY' ? normalizeEbayListingValue(field.sheetKey ?? field.fieldKey, effectiveStored) : effectiveStored
       const directValue = projectCellValue({ shape: field.shape }, directRaw)
 
-      if (!hasStored && !rule) {
+      if (!contentHit && !hasStored && !rule) {
         const errors: string[] = []
         if (!deferred(field) && (field.priority === 'required' && field.requiredInParent !== false)) {
           errors.push(`Field '${field.label}' is required.`)
@@ -337,13 +353,16 @@ export async function resolveBatch(input: {
       }
 
       const link = linkForCoordinate(linkGroups, field.fieldKey, channel, marketplace, null, locale)
-      const etsyContent = channel === 'ETSY' && store?.kind === 'platformAttributes' && store.path[0] === '_etsyInformationLocales'
-        ? etsyContentState(listing, locale, store.path[2]) : null
-      const r = hasStored ? { value: directValue, raw: directValue, source: stored === undefined ? 'default' : 'override', legacySource: 'source' as const, needsTranslation: false, requestedLocale: undefined, effectiveLocale: undefined, translationState: undefined, ...(etsyContent ? { requestedLocale: locale, effectiveLocale: etsyContent.effectiveLocale, translationState: etsyContent.translationState, needsTranslation: etsyContent.needsTranslation } : {}), warnings: [] as string[], appliedTransforms: [] as string[] } : resolveChannelField({
+      const r: import('../resolve-channel-field.js').ResolvedChannelField = contentHit && (contentHit.tier === 'pin' || !rule)
+        ? { content: contentHit.content, fieldKey: field.fieldKey, value: contentHit.value, raw: contentHit.value, source: contentHit.tier === 'pin' && !contentHit.follows ? 'override' : 'catalogRule',
+            legacySource: 'source', required: rule?.required === true, language: contentHit.language, requested: locale,
+            requestedLocale: locale, effectiveLocale: contentHit.language, translationState: contentHit.translationState,
+            follows: contentHit.follows, drift: contentHit.drift, needsTranslation: translationMissing(contentHit, locale), warnings: [], appliedTransforms: [] }
+        : hasStored ? { fieldKey: field.fieldKey, required: rule?.required === true, value: directValue, raw: directValue, source: stored === undefined ? 'default' : 'override', legacySource: 'source', needsTranslation: false, warnings: [], appliedTransforms: [] } : resolveChannelField({
         fieldKey: field.fieldKey,
         rule: rule!,
         resolvedAttrs,
-        product: full as any,
+        product: { ...full, parent, contentListing: contentListing(full, listing, undefined, languages) } as any,
         locale,
         link,
         transformCtx: {
@@ -354,7 +373,7 @@ export async function resolveBatch(input: {
         },
       })
 
-      const projected = field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value
+      const projected = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape)
       const { value, errors, autoCorrected, overLimit } = validateChannelValue(field, projected)
       errors.push(...r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning)))
       const mappingErrors = !hasStored && rule ? [...errors] : []
@@ -365,7 +384,7 @@ export async function resolveBatch(input: {
         errors.push(`Field '${field.label}' is required.`)
         requiredMissing++
       }
-      if (r.needsTranslation) {
+      if (r.requested && translationMissing(r, r.requested)) {
         const message = r.effectiveLocale
           ? `Showing ${r.effectiveLocale} fallback; ${locale} content ${r.translationState === 'outdated' ? 'is outdated' : 'is missing'}.`
           : `Translation into ${locale} is pending.`
@@ -383,9 +402,9 @@ export async function resolveBatch(input: {
           op.type === 'expr' ? exprDependenciesDeep(op.expr ?? `rule(${JSON.stringify(op.ref)})`, mapping.expressions ?? {})?.attributes ?? []
           : op.type === 'template' ? [...(op.expr ?? '').matchAll(/\{\{\s*([^{}\s]+)\s*\}\}/g)].map(match => match[1]) : []),
         ].filter((key): key is string => !!key).map(key => key.replace(/^(categoryAttributes|variantAttributes)\./, '').replace(/^localizedContent\.[^.]+\./, '').replace(/^name$/, 'title')))],
-        rule, raw: r.raw, legacySource: r.legacySource, needsTranslation: r.needsTranslation,
-        ...(r.effectiveLocale ? { requestedLocale: r.requestedLocale, effectiveLocale: r.effectiveLocale, translationState: r.translationState } : {}),
-        value: value ?? null,
+        content: r.content, rule, raw: r.raw, legacySource: r.legacySource, needsTranslation: r.needsTranslation,
+        ...(r.effectiveLocale ? { language: r.language, requested: r.requested, follows: r.follows, drift: r.drift, requestedLocale: r.requestedLocale, effectiveLocale: r.effectiveLocale, translationState: r.translationState } : {}),
+        value: contentWireValue(value ?? null, field.shape),
         status: 'mapped',
         sourceOwner: rule ? null : field.sourceOwner,
         provenance: r.source,
@@ -441,7 +460,7 @@ export async function resolveBatch(input: {
     }
     const completeCells = Object.values(cells)
     const invalid = completeCells.filter(c => c.errors.length).length
-    const translationPending = completeCells.filter(c => c.needsTranslation).length
+    const translationPending = completeCells.filter(c => c.requested && translationMissing(c, c.requested)).length
     const schemaValidation = requirements.unavailable ? 'unavailable' as const : catalogue.schema?.present ? 'evaluated' as const : 'missing' as const
     const readiness: NonNullable<ResolvedProduct['readiness']> = {
       state: invalid || translationPending || schemaValidation !== 'evaluated' ? 'blocked' : 'locally-valid',

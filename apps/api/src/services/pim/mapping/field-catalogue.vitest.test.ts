@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../db.js', () => ({ default: { channelSchema: { findMany: mocks.schemaRows }, customAttribute: { findMany: async () => [{ code: 'material' }] } } }))
 vi.mock('../schema-mapping.service.js', () => ({
   getMappingForMarketplace: mocks.mapping,
+  // LX.F R-LX-13 (mock drift, another lane's export landed 08:43 today):
+  // `field-catalogue.service.ts:224` now reads the warnings-carrying form.
+  getMappingForMarketplaceWithWarnings: async (...args: unknown[]) => ({ mapping: await mocks.mapping(...args), warnings: [] }),
   getRulesFor: (m: any, pt: string) => ({ ...m.fields, ...m.byProductType?.[pt] }),
   MarketplaceNotFoundError: class extends Error {},
 }))

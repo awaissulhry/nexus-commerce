@@ -9,10 +9,11 @@
  *
  * **ROW level** — `ready | missing | errors | live | unlisted`. One row against one channel
  * coordinate: what would happen if this SKU were published to Amazon · IT right now. `live` is not
- * a degree of readiness at all — it means the listing already exists on the channel — and `unlisted`
+ * a degree of readiness at all — it means our record holds a channel reference — and `unlisted`
  * means the question has never been asked. Computed per row by the sheet read.
  *
- * **SCOPE level** — `ready | warn | blocked | absent`. A whole scope chip: Amazon ●92%, eBay ⚠71%.
+ * **SCOPE level** — `ready | warn | blocked | absent | notComputed`. A whole scope chip: Amazon ●92%,
+ * eBay ⚠71%.
  * It summarises a family across every row and every required field, and its job is to tell an
  * operator which tab to open next.
  *
@@ -31,7 +32,7 @@
 export type RowReadinessState = 'ready' | 'missing' | 'errors' | 'live' | 'unlisted'
 
 /** A whole scope: the chips on the studio's scope bar. */
-export type ScopeReadinessState = 'ready' | 'warn' | 'blocked' | 'absent'
+export type ScopeReadinessState = 'ready' | 'warn' | 'blocked' | 'absent' | 'notComputed'
 
 export type ReadinessStateName = RowReadinessState | ScopeReadinessState
 
@@ -50,19 +51,36 @@ export interface ReadinessMeta {
 
 const ROW: Record<RowReadinessState, ReadinessMeta> = {
   ready: { tone: 'success', label: 'Ready', vocabulary: 'row', hint: 'Every field this channel requires is filled — this row can be published' },
-  live: { tone: 'success', label: 'Live', vocabulary: 'row', hint: 'Already published on this channel' },
+  live: { tone: 'info', label: 'Listed', vocabulary: 'row', hint: 'Our record holds a channel reference. Whether it is selling is on the presence line.' },
   missing: { tone: 'warning', label: 'Missing', vocabulary: 'row', hint: 'Required fields are empty — publishing would be refused' },
   errors: { tone: 'danger', label: 'Errors', vocabulary: 'row', hint: 'A value breaks this channel’s rules — publishing would be refused' },
-  unlisted: { tone: 'neutral', label: 'Not listed', vocabulary: 'row', hint: 'This row has no listing on this channel' },
+  unlisted: { tone: 'neutral', label: 'No listing here', vocabulary: 'row', hint: 'We hold no listing record for this coordinate. Nothing has been checked against the channel.' },
 }
 
+/**
+ * DECLARED IN SEVERITY ORDER, most attention first — and that order is the
+ * contract, not a formatting choice (LX.F F6).
+ *
+ * `SCOPE_READINESS_STATES = Object.keys(SCOPE)` below is what the `/products/next`
+ * readiness filter and the listing-readiness page offer, and what the studio's
+ * parser accepts; the API sorts the catalogue by the SAME rank
+ * (`readiness-model.ts` `SCOPE_STATES` / `scopeStateRank`, asserted equal by
+ * `scope-readiness.vitest.test.ts`). It used to be `ORDER BY r.state` in SQL —
+ * alphabetical — which put `ready` above `warn` and buried `blocked`.
+ */
 const SCOPE: Record<ScopeReadinessState, ReadinessMeta> = {
-  ready: { tone: 'success', label: 'Ready', vocabulary: 'scope', hint: 'Nothing is blocking this scope' },
-  warn: { tone: 'warning', label: 'Warnings', vocabulary: 'scope', hint: 'Publishable, with fields this channel may reject' },
   blocked: { tone: 'danger', label: 'Blocked', vocabulary: 'scope', hint: 'Required fields are missing or invalid — this scope cannot publish' },
+  warn: { tone: 'warning', label: 'Warnings', vocabulary: 'scope', hint: 'Publishable, with fields this channel may reject' },
+  // R-LX-9 — absent is not empty. `absent` says an operator has set nothing up
+  // here; `notComputed` says nobody has ASKED yet (no `ReadinessIndex` row for
+  // this coordinate and language). Rendering the two the same let an unmeasured
+  // scope read as a measured one — the "could not measure vs measured empty"
+  // failure on a chip. Neutral like `absent`, and deliberately a different word.
+  notComputed: { tone: 'neutral', label: 'Not computed', vocabulary: 'scope', hint: 'Readiness has not been computed for this scope and language yet — this is not a score of zero' },
   // Scope-neutral wording, deliberately: this table also renders the MASTER chip, which is not a
   // channel. "Not on this channel yet" read as a category error there (caught by PES.1).
   absent: { tone: 'neutral', label: 'Not set up', vocabulary: 'scope', hint: 'Nothing has been set up for this scope yet' },
+  ready: { tone: 'success', label: 'Ready', vocabulary: 'scope', hint: 'Nothing is blocking this scope' },
 }
 
 /**

@@ -1,3 +1,6 @@
+import { normalizeLanguage } from '../pim/content-language.js'
+import { resolveContent } from '../pim/content-resolver.js'
+import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { mediaObject, readMediaCollection, productMediaSaveSchema, productMediaCopySchema, resolveMediaCollection, writeMediaCollection,
@@ -8,7 +11,7 @@ import { resolveWorkspaceDestination, WorkspaceScopeError } from '../pim/workspa
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 type Input = ProductMediaQuery & { productId: string }
 type Tx = Prisma.TransactionClient
-const productSelect = { id: true, parentId: true, name: true, sku: true, version: true, localizedContent: true } as const
+const productSelect = { workspaceId: true, translations: true, id: true, parentId: true, name: true, sku: true, version: true, localizedContent: true } as const
 
 export async function validateProductMediaDestination(input: Input) {
   if (input.scope === 'MASTER') return
@@ -17,6 +20,7 @@ export async function validateProductMediaDestination(input: Input) {
 }
 
 async function snapshot(input: Input, tx: Tx) {
+  input = { ...input, locale: normalizeLanguage(input.locale) }
   const product = await tx.product.findFirst({ where: { id: input.productId, deletedAt: null }, select: productSelect })
   if (!product) throw new WorkspaceScopeError('This product is unavailable.', 404)
   const [parent, files, listing] = await Promise.all([
@@ -36,7 +40,7 @@ async function snapshot(input: Input, tx: Tx) {
     ownIds: files.filter(file => file.productId === product.id).map(file => file.id),
     parentIds: files.filter(file => file.productId === parent?.id).map(file => file.id) })
   const { productId, ...context } = input
-  const workspace: ProductMediaWorkspace = { ...resolved, productId, context, title: product.name || product.sku, assets,
+  const workspace: ProductMediaWorkspace = { ...resolved, productId, context, title: String(resolveContent({ product: product as any, parent: parent as any, field: 'title', address: { requested: input.locale === 'und' ? PRIMARY_CONTENT_LOCALE : input.locale } }).value ?? product.sku), assets,
     missingAssetIds: resolved.collection.items.filter(item => !assets.some(asset => asset.id === item.assetId)).map(item => item.assetId),
     revision: hash([[input.productId, input.scope, input.market, input.locale, input.accountId ?? null, input.listingId ?? null, input.aliasKey ?? null], product, parent, listing, files.map(file => [file.id, file.updatedAt, file.url, file.alt, file.sortOrder])]) }
   return { workspace, product, parent, listing, files }

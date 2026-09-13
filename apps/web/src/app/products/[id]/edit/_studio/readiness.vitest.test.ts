@@ -149,3 +149,56 @@ describe('mappingRules — the no-rules discriminator (PES.5 §11)', () => {
     }
   })
 })
+
+import { parseReadinessMatrix } from './readiness'
+it('keeps matrix, pressed-language chip and other-language tooltip on the same wire values', () => {
+ const entry = { id: 'AMAZON', coordinateKey: '["AMAZON","BE","a",null]', channel: 'AMAZON', market: 'BE', accountId: 'a', aliasId: null,
+  language: 'nl', label: 'Amazon · BE', pct: null, state: 'blocked', note: 'Dutch title is missing.', missing: [{ productId: 'p', field: 'name', label: 'Title', reason: 'Dutch title is missing.' }], computedAt: '2026-09-12T00:00:00Z',
+  languages: [{ language: 'nl', pct: null, state: 'blocked' }, { language: 'fr', pct: 100, state: 'ready' }] }
+ const response = { scopes: [entry], matrix: [entry] }
+ const chip = parseReadinessResponse(response).AMAZON, matrix = parseReadinessMatrix(response)[0]
+ expect(matrix.pct).toBe(chip.pct); expect(matrix.state).toBe(chip.state)
+ expect(matrix.missing[0].reason).toBe(chip.note)
+ expect(chip.languages?.[1]).toEqual({ language: 'fr', pct: 100, state: 'ready' })
+ expect(parseReadinessMatrix({ matrix: [{ ...entry, accountId: 1 }] })).toEqual([])
+})
+
+/**
+ * LX.FIN (R-LX-22) — `byProduct`, parsed with the SAME strictness as the chip's percentage.
+ *
+ * These values become a CELL in every row of the master sheet's per-coordinate readiness column, so a
+ * coerced one asserts a measurement nobody took, one row at a time. A dropped entry reads
+ * `Not computed` at the call site, which is the truth about an entry the parser could not understand.
+ */
+it('parses byProduct strictly and drops what it cannot read, rather than guessing', () => {
+ const base = { id: 'AMAZON', coordinateKey: '["AMAZON","IT",null,null]', channel: 'AMAZON', market: 'IT', accountId: null, aliasId: null,
+  language: 'it', label: 'Amazon · IT', pct: 100, state: 'blocked', missing: [], computedAt: '2026-09-13T09:00:00Z' }
+ const parsed = parseReadinessMatrix({ matrix: [{ ...base, byProduct: {
+   good: { state: 'ready', pct: 100 },
+   noPct: { state: 'blocked', pct: null },
+   withNote: { state: 'notComputed', pct: null, note: 'Readiness has not been computed for this language.' },
+   stringPct: { state: 'warn', pct: '71' },
+   nanPct: { state: 'warn', pct: Number.NaN },
+   badState: { state: 'live', pct: 100 },
+   notAnObject: 5,
+ } }] })[0]
+ // 🔴 POSITIVE CONTROL first: the good entries survive with their exact values.
+ expect(parsed.byProduct?.good).toEqual({ state: 'ready', pct: 100 })
+ expect(parsed.byProduct?.noPct).toEqual({ state: 'blocked', pct: null })
+ expect(parsed.byProduct?.withNote?.note).toBe('Readiness has not been computed for this language.')
+ // A numeric string and a NaN are NOT percentages — kept as `null`, never coerced to 71 or 0.
+ expect(parsed.byProduct?.stringPct).toEqual({ state: 'warn', pct: null })
+ expect(parsed.byProduct?.nanPct).toEqual({ state: 'warn', pct: null })
+ // `live` belongs to the ROW vocabulary; a scope cell must never render it (PES.0 #3, no converter).
+ expect(parsed.byProduct?.badState).toBeUndefined()
+ expect(parsed.byProduct?.notAnObject).toBeUndefined()
+ expect(Object.keys(parsed.byProduct ?? {})).toEqual(['good', 'noPct', 'withNote', 'stringPct', 'nanPct'])
+})
+
+it('byProduct is an empty object, never undefined, when the server sends nothing usable', () => {
+ const base = { id: 'AMAZON', coordinateKey: 'k', channel: 'AMAZON', market: 'IT', accountId: null, aliasId: null,
+  language: 'it', label: 'Amazon · IT', pct: null, state: 'notComputed', missing: [], computedAt: null }
+ for (const value of [undefined, null, [], 'x', 3]) {
+  expect(parseReadinessMatrix({ matrix: [{ ...base, byProduct: value }] })[0].byProduct).toEqual({})
+ }
+})

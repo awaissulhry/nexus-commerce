@@ -6,12 +6,12 @@ import { Modal } from '@/design-system/components'
 import { getBackendUrl } from '@/lib/backend-url'
 import { channelLabel } from '../../scopes'
 
-export function SchemaStatus({ channel, market, accountId, categories, missing, ages, onRefreshed }: {
+export function SchemaStatus({ channel, market, accountId, categories, missing, ages, open, onClose, onRefreshed }: {
   channel: string; market: string; categories: string[]; missing: string[]
   accountId?: string | null
+  open: boolean; onClose: () => void
   ages: Array<{ productType: string; fetchedAt: string }>; onRefreshed: () => void
 }) {
-  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const store = channel === 'SHOPIFY'
@@ -25,13 +25,12 @@ export function SchemaStatus({ channel, market, accountId, categories, missing, 
     }))
     const errors = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
     if (errors.length) setError(errors.map(r => String(r.reason.message ?? r.reason)).join('; '))
-    else { setOpen(false); onRefreshed() }
+    else { onClose(); onRefreshed() }
     setBusy(false)
   }
   return <>
-    <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>{missing.length ? 'Requirements incomplete' : 'Requirements'}</Button>
-    <Modal open={open} onClose={() => { if (!busy) setOpen(false) }} title={`${channelLabel(channel)} · ${market} requirements`} size="md" footer={<>
-      <Button variant="secondary" disabled={busy} onClick={() => setOpen(false)}>Close</Button>
+    <Modal open={open} onClose={() => { if (!busy) onClose() }} title={`${channelLabel(channel)} · ${market} requirements`} size="md" footer={<>
+      <Button variant="secondary" disabled={busy} onClick={() => onClose()}>Close</Button>
       {!store && <Button variant="primary" disabled={busy || !categories.length} onClick={() => void refresh()}>{busy ? 'Refreshing…' : 'Refresh requirements'}</Button>}
     </>}>
       {store ? <>

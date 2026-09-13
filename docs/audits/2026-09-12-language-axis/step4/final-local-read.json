@@ -1,0 +1,192 @@
+{
+  "target": "local",
+  "host": "127.0.0.1",
+  "database": "nexus_development",
+  "receipt": {
+    "at": "2026-09-12T15:12:45.048Z",
+    "database": "nexus_development",
+    "read_only": "on"
+  },
+  "rolledBack": true,
+  "auditCount": 11,
+  "auditLanguages": {
+    "de": 10,
+    "it": 1
+  },
+  "audits": [
+    {
+      "id": "cmtyhqbb40002njp4mwzh6x2g",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "fields": [
+          "title"
+        ],
+        "reason": "language-content-write",
+        "language": "de",
+        "queuedSyncIds": [],
+        "cascadedListingIds": []
+      },
+      "createdAt": "2026-09-12T12:38:49.025Z"
+    },
+    {
+      "id": "cmtyhqbbd0003njp4zb5oh7hz",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "layer": "language",
+        "intent": "set",
+        "source": "manual",
+        "language": "de"
+      },
+      "createdAt": "2026-09-12T12:38:49.033Z"
+    },
+    {
+      "id": "cmtyhyr1w0000njcw3vj804n1",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "fields": [
+          "title"
+        ],
+        "reason": null,
+        "language": "it",
+        "queuedSyncIds": [],
+        "cascadedListingIds": []
+      },
+      "createdAt": "2026-09-12T12:45:22.677Z"
+    },
+    {
+      "id": "cmtyhzhwd0003njcwtu1dddmn",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "fields": [
+          "title"
+        ],
+        "reason": "language-content-write",
+        "language": "de",
+        "queuedSyncIds": [],
+        "cascadedListingIds": []
+      },
+      "createdAt": "2026-09-12T12:45:57.469Z"
+    },
+    {
+      "id": "cmtyhzhwe0004njcwzjyc200y",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "layer": "language",
+        "intent": "set",
+        "source": "manual",
+        "language": "de"
+      },
+      "createdAt": "2026-09-12T12:45:57.471Z"
+    },
+    {
+      "id": "cmtyi0r9p0007njcw4od27x3t",
+      "entityType": "ChannelListing",
+      "entityId": "cmp00tsac0037s101ijg2of6x",
+      "action": "update",
+      "metadata": {
+        "layer": "pin",
+        "language": "de",
+        "coordinate": {
+          "market": "DE",
+          "channel": "AMAZON",
+          "accountId": "cmothu9bo0000nz01asw6wx8j"
+        }
+      },
+      "createdAt": "2026-09-12T12:46:56.270Z"
+    },
+    {
+      "id": "cmtyi23rb000anjcwlxu65bqc",
+      "entityType": "ChannelListing",
+      "entityId": "cmp00tsac0037s101ijg2of6x",
+      "action": "update",
+      "metadata": {
+        "layer": "pin",
+        "language": "de",
+        "coordinate": {
+          "market": "DE",
+          "channel": "AMAZON",
+          "accountId": "cmothu9bo0000nz01asw6wx8j"
+        }
+      },
+      "createdAt": "2026-09-12T12:47:59.112Z"
+    },
+    {
+      "id": "cmtyig353000fnjcwsp6de09k",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "fields": [
+          "title"
+        ],
+        "reason": "language-content-write",
+        "language": "de",
+        "queuedSyncIds": [
+          "cmtyig34j000enjcwuseaiqrm"
+        ],
+        "cascadedListingIds": [
+          "cmp00tsac0037s101ijg2of6x"
+        ]
+      },
+      "createdAt": "2026-09-12T12:58:51.495Z"
+    },
+    {
+      "id": "cmtyig35h000gnjcwk1oekq5j",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "layer": "language",
+        "intent": "set",
+        "source": "manual",
+        "language": "de"
+      },
+      "createdAt": "2026-09-12T12:58:51.509Z"
+    },
+    {
+      "id": "cmtyijzej000nnjcwcttndi3s",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "fields": [
+          "title"
+        ],
+        "reason": "language-content-write",
+        "language": "de",
+        "queuedSyncIds": [
+          "cmtyijzeb000mnjcwrs8pcpcb"
+        ],
+        "cascadedListingIds": [
+          "cmp00tsac0037s101ijg2of6x"
+        ]
+      },
+      "createdAt": "2026-09-12T13:01:53.275Z"
+    },
+    {
+      "id": "cmtyijzes000onjcwnx8ftx2n",
+      "entityType": "Product",
+      "entityId": "cmokmy0lr0009pm0p9yxk7ho0",
+      "action": "update",
+      "metadata": {
+        "layer": "language",
+        "intent": "set",
+        "source": "manual",
+        "language": "de"
+      },
+      "createdAt": "2026-09-12T13:01:53.284Z"
+    }
+  ],
+  "remainingRehearsalQueues": 0,
+  "readonlyTrigger": []
+}

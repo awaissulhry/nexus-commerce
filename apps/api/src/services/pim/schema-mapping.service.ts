@@ -21,6 +21,14 @@ import { Prisma } from '@prisma/client'
 
 import prisma from '../../db.js'
 import { validateExpr } from './mapping/expr.js'
+// VT.1b / R-VT-2 — the variation rule's stored shape and validator live in a LEAF so this module can shape-check it
+// without importing the variation resolver (and the resolver can read it without importing the mapping engine).
+import {
+  looksLikeVariationRule,
+  validateStoredVariationRule,
+  VARIATION_RULE_KEY,
+  type StoredVariationRule,
+} from './variation-rule-store.js'
 
 // ────────────────────────────────────────────────────────────────────
 // Schema (locked)
@@ -115,6 +123,21 @@ export interface MarketplaceSchemaMapping {
    *  rollback that the whole mapping already has. Optional so pre-PES.6 rows type-check;
    *  emptyMapping()/parseMapping() always normalize it to a present object. */
   expressions?: Record<string, string>
+  /**
+   * VT.1b (VX §11.1 / M2) — the CHANNEL-WIDE variation rule, and the per-category map.
+   *
+   * Both live at the TOP LEVEL, deliberately: the per-category rule does NOT go inside
+   * `byProductType[<category>]`, because that bucket is a field-rule map and six consumers iterate its keys as field
+   * names. VT.3 measured the cost of putting it there — one non-field sibling made `validateMapping` report
+   * `…variations.source must be a string` and `parseMapping` return the EMPTY mapping, so the marketplace lost all 65
+   * of its rules with a 200 response (`mappingVersion 12 → 1`, coverage `100 → 88`).
+   *
+   * A rule already stored in the bucket under the reserved key `variations` is still READ and still VALIDATED (see
+   * `validateMapping` and `getVariationRule`) so no existing document is orphaned — it is simply never resolved as a
+   * field rule.
+   */
+  variations?: StoredVariationRule
+  variationsByProductType?: Record<string, StoredVariationRule>
   /** ISO timestamp of the last D.1 live-schema sync against this
    *  marketplace, or null when never synced. */
   lastSyncedAt: string | null
@@ -217,6 +240,13 @@ export function validateMapping(
           continue
         }
         for (const [fieldKey, rule] of Object.entries(bucket)) {
+          // VT.1b / R-VT-2 (c) — `variations` inside a category bucket is a VARIATION rule, not a field rule. It is
+          // shape-checked with its own validator so a document written that way validates cleanly instead of
+          // reporting "…variations.source must be a string" and costing the marketplace every rule it has.
+          if (fieldKey === VARIATION_RULE_KEY) {
+            errors.push(...validateStoredVariationRule(rule, `byProductType.${productType}.${VARIATION_RULE_KEY}`))
+            continue
+          }
           errors.push(...validateRuleShape(rule, `byProductType.${productType}.${fieldKey}`))
         }
       }
@@ -253,6 +283,22 @@ export function validateMapping(
       }
     }
   }
+  // VT.1b / R-VT-2 (c) — the canonical homes of the variation rule. Shape-checked on BOTH paths (the read path
+  // wants the same answer so it can warn), and every error names the key so the write can refuse by name.
+  if (input.variations !== undefined && input.variations !== null) {
+    errors.push(...validateStoredVariationRule(input.variations, 'mapping.variations'))
+  }
+  if (input.variationsByProductType !== undefined && input.variationsByProductType !== null) {
+    if (!isPlainObject(input.variationsByProductType)) {
+      errors.push('mapping.variationsByProductType must be an object')
+    } else {
+      for (const [productType, rule] of Object.entries(input.variationsByProductType)) {
+        if (rule === null) continue // an explicit "no rule for this category" is a legal stored value
+        errors.push(...validateStoredVariationRule(rule, `mapping.variationsByProductType.${productType}`))
+      }
+    }
+  }
+
   // lastSyncedAt: string | null
   if (input.lastSyncedAt !== null && typeof input.lastSyncedAt !== 'string') {
     errors.push('mapping.lastSyncedAt must be string or null')
@@ -365,23 +411,75 @@ function validateRuleShape(rule: unknown, prefix: string): string[] {
   return errors
 }
 
-/** Parse a raw JSONB value into a typed mapping. Returns the empty
- *  mapping when input is missing/invalid (callers downstream don't
- *  need to null-check). Pair with validateMapping() before writes. */
+/**
+ * Parse a raw JSONB value into a typed mapping. A STORED DOCUMENT IS NEVER PARSED TO EMPTY (R-VT-2 (a)).
+ *
+ * 🔴 What this replaced, and why. Until 2026-09-13 this returned `emptyMapping()` whenever `validateMapping`
+ * reported anything at all. VT.3 measured the cost on the live local catalogue: ONE unrecognised key inside one
+ * category bucket — the variation rule VX M2 asks for — and the marketplace served **no rules at all**:
+ * `mappingVersion 12 → 1`, mapped `65 → 57`, unmapped `0 → 8`, coverage `100 → 88`, with a **200** response and a
+ * plausible-looking screen. Eight fields whose only rule lived in the overlay lost it silently. The same
+ * all-or-nothing behaviour was already documented as a hazard one layer up (see `validateMapping`'s
+ * `checkExpressions`, which exists because one malformed formula used to do exactly this) — the structural half was
+ * never closed.
+ *
+ * The rule now: **the read serves what is stored and REPORTS what it does not recognise; the WRITE path refuses.**
+ * `parseMappingWithWarnings` returns those sentences so a route can surface them; `parseMapping` keeps its signature
+ * for the ~40 existing callers.
+ *
+ * The only thing that still yields `emptyMapping()` is a raw value that is not an object at all — there is nothing
+ * stored to serve.
+ */
 export function parseMapping(raw: unknown): MarketplaceSchemaMapping {
-  if (!isPlainObject(raw)) return emptyMapping()
-  // Shape only. A broken expression BODY is reported per-expression by the read routes; it must
-  // not cost the marketplace its entire rule set (see validateMapping's `checkExpressions`).
-  const errors = validateMapping(raw, { checkExpressions: false })
-  if (errors.length > 0) return emptyMapping()
-  const m = raw as unknown as MarketplaceSchemaMapping
-  // FM.1 — normalize the optional overlay so every downstream caller can
-  // rely on mapping.byProductType being a present object.
+  return parseMappingWithWarnings(raw).mapping
+}
+
+/**
+ * `parseMapping` plus the sentences the read could not vouch for. Empty `warnings` = every key was recognised.
+ *
+ * Containers are normalised (`fields` / `byProductType` / `expressions` are always present objects downstream, as
+ * before). Individual entries are served AS STORED — a malformed field rule is reported per field by the resolver and
+ * by the catalogue read, which is a sentence an operator can act on; dropping it here would silently change what a
+ * later read-modify-write writes back.
+ */
+export function parseMappingWithWarnings(raw: unknown): { mapping: MarketplaceSchemaMapping; warnings: string[] } {
+  if (!isPlainObject(raw)) return { mapping: emptyMapping(), warnings: [] }
+  const m = raw as unknown as MarketplaceSchemaMapping & Record<string, unknown>
+  const warnings: string[] = []
+  const empty = emptyMapping()
+
+  // Shape only, exactly as before: a broken expression BODY is reported per-expression by the read routes.
+  for (const error of validateMapping(raw, { checkExpressions: false })) warnings.push(error)
+
+  // An unrecognised key in a field-rule bucket is named, once, in the vocabulary it looks like it belongs to.
+  if (isPlainObject(m.byProductType)) {
+    for (const [productType, bucket] of Object.entries(m.byProductType)) {
+      if (!isPlainObject(bucket)) continue
+      for (const [fieldKey, rule] of Object.entries(bucket)) {
+        if (fieldKey === VARIATION_RULE_KEY) continue
+        if (!looksLikeVariationRule(rule)) continue
+        warnings.push(
+          `byProductType.${productType}.${fieldKey} looks like a variation rule, not a field rule. `
+          + `Store it at variationsByProductType.${productType}; it is served but never resolved as a field.`,
+        )
+      }
+    }
+  }
+
   return {
-    ...m,
-    byProductType: isPlainObject(m.byProductType) ? m.byProductType : {},
-    // PES.6 — same normalisation as byProductType: downstream never null-checks.
-    expressions: isPlainObject(m.expressions) ? m.expressions : {},
+    mapping: {
+      ...m,
+      version: typeof m.version === 'number' ? m.version : empty.version,
+      fields: isPlainObject(m.fields) ? m.fields : {},
+      // FM.1 — normalize the optional overlay so every downstream caller can
+      // rely on mapping.byProductType being a present object.
+      byProductType: isPlainObject(m.byProductType) ? m.byProductType : {},
+      // PES.6 — same normalisation as byProductType: downstream never null-checks.
+      expressions: isPlainObject(m.expressions) ? m.expressions : {},
+      lastSyncedAt: typeof m.lastSyncedAt === 'string' || m.lastSyncedAt === null ? m.lastSyncedAt : null,
+      schemaSnapshotVersion: typeof m.schemaSnapshotVersion === 'string' || m.schemaSnapshotVersion === null ? m.schemaSnapshotVersion : null,
+    },
+    warnings,
   }
 }
 
@@ -400,7 +498,67 @@ export function getRulesFor(
 ): Record<string, FieldMappingRule> {
   const base = mapping.fields ?? {}
   const overlay = productType ? mapping.byProductType?.[productType] : undefined
-  return overlay ? { ...base, ...overlay } : { ...base }
+  if (!overlay) return { ...base }
+  // VT.1b / R-VT-2 — `variations` in a category bucket is the variation RULE, never a field rule. Skipped here, which
+  // is the one place that decides what resolution sees, so a document written that way (VX M2's original placement)
+  // cannot put a phantom `variations` field into a payload.
+  const fields: Record<string, FieldMappingRule> = { ...base }
+  for (const [key, rule] of Object.entries(overlay)) {
+    if (key === VARIATION_RULE_KEY) continue
+    fields[key] = rule
+  }
+  return fields
+}
+
+/**
+ * VT.1b — the variation rule that applies to a coordinate, in R-VT-2's precedence: the CATEGORY's rule, else the
+ * channel-wide one, else `null`. Both canonical homes are read, and so is VX M2's original in-bucket placement, so a
+ * rule stored either way answers.
+ */
+export function getVariationRule(
+  mapping: MarketplaceSchemaMapping,
+  productType?: string | null,
+): { rule: StoredVariationRule; scope: 'category' | 'channel'; storedAt: string } | null {
+  const category = productType?.trim() || null
+  if (category) {
+    const canonical = mapping.variationsByProductType?.[category]
+    if (canonical) return { rule: canonical, scope: 'category', storedAt: `variationsByProductType.${category}` }
+    const legacy = (mapping.byProductType?.[category] as unknown as Record<string, unknown> | undefined)?.[VARIATION_RULE_KEY]
+    if (legacy) return { rule: legacy as StoredVariationRule, scope: 'category', storedAt: `byProductType.${category}.${VARIATION_RULE_KEY}` }
+  }
+  if (mapping.variations) return { rule: mapping.variations, scope: 'channel', storedAt: 'variations' }
+  return null
+}
+
+/**
+ * VT.1b — the mapping with one variation rule set or cleared, as a NEW object (the caller decides whether to write).
+ *
+ * `rule: null` removes it from the canonical home AND from VX M2's in-bucket placement, so "clear the rule" does not
+ * leave a second copy behind that the next read would resolve.
+ */
+export function setVariationRuleInMapping(
+  mapping: MarketplaceSchemaMapping,
+  productType: string | null,
+  rule: StoredVariationRule | null,
+): MarketplaceSchemaMapping {
+  const category = productType?.trim() || null
+  const next: MarketplaceSchemaMapping = { ...mapping }
+  if (!category) {
+    if (rule) next.variations = rule
+    else delete next.variations
+    return next
+  }
+  const byType = { ...(mapping.variationsByProductType ?? {}) }
+  if (rule) byType[category] = rule
+  else delete byType[category]
+  next.variationsByProductType = byType
+  const bucket = mapping.byProductType?.[category] as unknown as Record<string, unknown> | undefined
+  if (bucket && VARIATION_RULE_KEY in bucket) {
+    const cleaned = { ...bucket }
+    delete cleaned[VARIATION_RULE_KEY]
+    next.byProductType = { ...(mapping.byProductType ?? {}), [category]: cleaned as Record<string, FieldMappingRule> }
+  }
+  return next
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -432,12 +590,23 @@ export async function getMappingForMarketplace(
   channel: string,
   code: string,
 ): Promise<MarketplaceSchemaMapping> {
+  return (await getMappingForMarketplaceWithWarnings(channel, code)).mapping
+}
+
+/**
+ * VT.1b / R-VT-2 (a) — the same read, plus the sentences it could not vouch for, so a route can SAY what it did not
+ * recognise instead of serving a silently smaller answer. Empty `warnings` = every key was recognised.
+ */
+export async function getMappingForMarketplaceWithWarnings(
+  channel: string,
+  code: string,
+): Promise<{ mapping: MarketplaceSchemaMapping; warnings: string[] }> {
   const row = await prisma.marketplace.findUnique({
     where: { channel_code: workspaceKey({ channel, code }) },
     select: { schemaMapping: true },
   })
   if (!row) throw new MarketplaceNotFoundError(channel, code)
-  return parseMapping(row.schemaMapping)
+  return parseMappingWithWarnings(row.schemaMapping)
 }
 
 /** DB convenience: load a marketplace's mapping and resolve the effective

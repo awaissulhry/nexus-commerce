@@ -1,0 +1,1849 @@
+{
+  "scope": {
+    "kind": "channel",
+    "channel": "SHOPIFY",
+    "marketplace": "GLOBAL",
+    "label": "Shopify \u00b7 GLOBAL",
+    "connectionId": "shopify",
+    "locale": "en"
+  },
+  "family": {
+    "id": "store-demo",
+    "sku": "TRAVEL-BAG",
+    "name": "Canvas travel bag",
+    "productType": null,
+    "variationAxes": [],
+    "axes": []
+  },
+  "columns": [
+    {
+      "key": "__productRole",
+      "label": "Product role",
+      "width": 135,
+      "helpText": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+      "writeField": "attr___productRole",
+      "group": "Product relationships",
+      "groupKey": "master:relationships",
+      "kind": "text",
+      "storage": "column",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": false,
+      "defaultVisible": true,
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": false,
+      "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+      "formulaWritable": false,
+      "axis": false
+    },
+    {
+      "key": "__parentSku",
+      "label": "Parent SKU",
+      "width": 220,
+      "helpText": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+      "writeField": "attr___parentSku",
+      "group": "Product relationships",
+      "groupKey": "master:relationships",
+      "kind": "text",
+      "storage": "column",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": false,
+      "defaultVisible": true,
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": false,
+      "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+      "formulaWritable": false,
+      "axis": false
+    },
+    {
+      "key": "sku",
+      "writeField": "sku",
+      "label": "SKU",
+      "group": "Identity",
+      "groupKey": "master:identity",
+      "kind": "text",
+      "storage": "column",
+      "scope": "per_variant",
+      "requiredBy": [],
+      "editable": false,
+      "width": 220,
+      "helpText": "Unique product identifier; not editable in bulk",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "writeVerb": "master",
+      "writeTarget": "master",
+      "affectsAllChannels": true,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": false
+    },
+    {
+      "key": "name",
+      "writeField": "attr_name",
+      "label": "Title",
+      "group": "Content",
+      "groupKey": "SHOPIFY:content",
+      "kind": "longtext",
+      "storage": "column",
+      "scope": "global",
+      "requiredBy": [
+        "Shopify \u00b7 GLOBAL"
+      ],
+      "editable": true,
+      "width": 220,
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "title",
+          "attribute": "title",
+          "path": [],
+          "label": "Title",
+          "requirement": "required",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "listingColumn",
+            "column": "title",
+            "followFlag": "followMasterTitle"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "title",
+              "attribute": "title",
+              "path": [],
+              "label": "Title",
+              "requirement": "required",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "listingColumn",
+                "column": "title",
+                "followFlag": "followMasterTitle"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "description",
+      "writeField": "attr_description",
+      "label": "Description",
+      "group": "Content",
+      "groupKey": "SHOPIFY:content",
+      "kind": "longtext",
+      "storage": "localizedContent",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 110,
+      "helpText": "Product description. Supports HTML formatting for listings.",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "descriptionHtml",
+          "attribute": "descriptionHtml",
+          "path": [],
+          "label": "Description",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "listingColumn",
+            "column": "description",
+            "followFlag": "followMasterDescription"
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "descriptionHtml",
+              "attribute": "descriptionHtml",
+              "path": [],
+              "label": "Description",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "listingColumn",
+                "column": "description",
+                "followFlag": "followMasterDescription"
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "templateSuffix",
+      "writeField": "attr_templateSuffix",
+      "label": "Theme template",
+      "group": "Content",
+      "groupKey": "SHOPIFY:content",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "The product template suffix in the store\u2019s theme. Leave empty to use its default.",
+      "defaultVisible": true,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "templateSuffix",
+          "attribute": "templateSuffix",
+          "path": [],
+          "label": "Theme template",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "templateSuffix"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "templateSuffix",
+              "attribute": "templateSuffix",
+              "path": [],
+              "label": "Theme template",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "templateSuffix"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "category",
+      "writeField": "attr_category",
+      "label": "Product category",
+      "group": "Classification",
+      "groupKey": "SHOPIFY:classification",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "pattern": "^gid://shopify/TaxonomyCategory/[a-zA-Z0-9-]+$"
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "Shopify taxonomy category ID, for example gid://shopify/TaxonomyCategory/aa-1.",
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "category",
+          "attribute": "category",
+          "path": [],
+          "label": "Product category",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "category"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "category",
+              "attribute": "category",
+              "path": [],
+              "label": "Product category",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "category"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "shopify_product_type",
+      "writeField": "attr_shopify_product_type",
+      "label": "Product type",
+      "group": "Classification",
+      "groupKey": "SHOPIFY:classification",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "Master Amazon productType \u2014 drives category-specific attribute fields. Per-channel overrides happen in the per-product editor.",
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "productType",
+          "attribute": "productType",
+          "path": [],
+          "label": "Product type",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "productType"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "productType",
+              "attribute": "productType",
+              "path": [],
+              "label": "Product type",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "productType"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "vendor",
+      "writeField": "attr_vendor",
+      "label": "Vendor",
+      "group": "Classification",
+      "groupKey": "SHOPIFY:classification",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "The vendor shown on this store. This does not change the shared product brand.",
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "vendor",
+          "attribute": "vendor",
+          "path": [],
+          "label": "Vendor",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "vendor"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "vendor",
+              "attribute": "vendor",
+              "path": [],
+              "label": "Vendor",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "vendor"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "seo_description",
+      "writeField": "attr_seo_description",
+      "label": "SEO description",
+      "group": "Search",
+      "groupKey": "SHOPIFY:search",
+      "kind": "longtext",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 110,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "seo_description",
+          "attribute": "seo_description",
+          "path": [],
+          "label": "SEO description",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "seo",
+              "description"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "seo_description",
+              "attribute": "seo_description",
+              "path": [],
+              "label": "SEO description",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "seo",
+                  "description"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "seo_title",
+      "writeField": "attr_seo_title",
+      "label": "SEO title",
+      "group": "Search",
+      "groupKey": "SHOPIFY:search",
+      "kind": "longtext",
+      "storage": "listing",
+      "scope": "global",
+      "requiredBy": [],
+      "editable": true,
+      "width": 110,
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "seo_title",
+          "attribute": "seo_title",
+          "path": [],
+          "label": "SEO title",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "seo",
+              "title"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "seo_title",
+              "attribute": "seo_title",
+              "path": [],
+              "label": "SEO title",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "seo",
+                  "title"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "tags",
+      "writeField": "attr_tags",
+      "label": "Tags",
+      "group": "Search",
+      "groupKey": "SHOPIFY:search",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "uniqueItems": true
+      },
+      "requiredBy": [],
+      "maxLength": 255,
+      "capFrom": "Shopify \u00b7 GLOBAL",
+      "editable": true,
+      "width": 160,
+      "helpText": "Searchable store tags, up to 255 characters each. Shopify\u2019s tag count depends on the store plan.",
+      "defaultVisible": false,
+      "shape": "list",
+      "cardinality": {
+        "min": 0,
+        "max": null
+      },
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "tags",
+          "attribute": "tags",
+          "path": [],
+          "label": "Tags",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": null
+          },
+          "maxLength": 255,
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "tags"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "tags",
+              "attribute": "tags",
+              "path": [],
+              "label": "Tags",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": null
+              },
+              "maxLength": 255,
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "tags"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    },
+    {
+      "key": "handle",
+      "writeField": "attr_handle",
+      "label": "URL handle",
+      "group": "Search",
+      "groupKey": "SHOPIFY:search",
+      "kind": "text",
+      "storage": "listing",
+      "scope": "global",
+      "validation": {
+        "pattern": "^[a-zA-Z0-9-]+$"
+      },
+      "requiredBy": [],
+      "editable": true,
+      "width": 160,
+      "helpText": "The product URL handle, using letters, numbers and hyphens.",
+      "defaultVisible": false,
+      "shape": "scalar",
+      "channels": {
+        "Shopify \u00b7 GLOBAL": {
+          "key": "handle",
+          "attribute": "handle",
+          "path": [],
+          "label": "URL handle",
+          "requirement": "optional",
+          "cardinality": {
+            "min": 0,
+            "max": 1
+          },
+          "store": {
+            "kind": "platformAttributes",
+            "path": [
+              "handle"
+            ]
+          },
+          "hidden": false,
+          "editableOnExisting": true,
+          "categories": [
+            "*"
+          ],
+          "byCategory": {
+            "*": {
+              "key": "handle",
+              "attribute": "handle",
+              "path": [],
+              "label": "URL handle",
+              "requirement": "optional",
+              "cardinality": {
+                "min": 0,
+                "max": 1
+              },
+              "store": {
+                "kind": "platformAttributes",
+                "path": [
+                  "handle"
+                ]
+              },
+              "hidden": false,
+              "editableOnExisting": true,
+              "categories": [
+                "*"
+              ]
+            }
+          }
+        }
+      },
+      "writeVerb": "channel",
+      "writeTarget": "channelListing",
+      "affectsAllChannels": false,
+      "writable": true,
+      "writeBlockedReason": null,
+      "axis": false,
+      "formulaWritable": true
+    }
+  ],
+  "groups": [
+    {
+      "key": "master:relationships",
+      "label": "Product relationships",
+      "channelLabel": null,
+      "order": -1
+    },
+    {
+      "key": "master:identity",
+      "label": "Identity",
+      "channelLabel": null,
+      "order": 0
+    },
+    {
+      "key": "SHOPIFY:content",
+      "label": "Content",
+      "channelLabel": null,
+      "order": 1
+    },
+    {
+      "key": "SHOPIFY:classification",
+      "label": "Classification",
+      "channelLabel": null,
+      "order": 2
+    },
+    {
+      "key": "SHOPIFY:search",
+      "label": "Search",
+      "channelLabel": null,
+      "order": 3
+    }
+  ],
+  "aliases": [
+    {
+      "id": null,
+      "label": "Primary",
+      "position": 0,
+      "status": "ACTIVE",
+      "externalListingId": null,
+      "listingStatus": "DRAFT",
+      "isPublished": false,
+      "readiness": {
+        "percent": 100,
+        "state": "unlisted",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      },
+      "rowIds": [
+        "store-demo",
+        "store-child-1",
+        "store-child-2"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "id": "store-demo",
+      "sku": "TRAVEL-BAG",
+      "name": "Canvas travel bag",
+      "parentId": null,
+      "productRole": "parent",
+      "parentSku": null,
+      "isParent": true,
+      "rowKind": "parent",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 0,
+      "childCount": 2,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "templateSuffix": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_templateSuffix",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "category": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_category",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "vendor": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_vendor",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_description": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_title": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_title",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "handle": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_handle",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Parent",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": null,
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        },
+        "shopify_product_type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shopify_product_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        }
+      },
+      "listing": {
+        "id": "shopify-listing-0",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "unlisted",
+        "issues": []
+      },
+      "completeness": {
+        "overall": {
+          "filled": 1,
+          "total": 10,
+          "pct": 10
+        },
+        "required": {
+          "filled": 1,
+          "total": 1,
+          "missing": []
+        },
+        "byGroup": [
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 3
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "store-child-1",
+      "sku": "TRAVEL-BAG-1",
+      "name": "Canvas travel bag",
+      "parentId": "store-demo",
+      "productRole": "child",
+      "parentSku": "TRAVEL-BAG",
+      "isParent": false,
+      "rowKind": "variant",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 105,
+      "childCount": 0,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG-1",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "templateSuffix": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_templateSuffix",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "category": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_category",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "vendor": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_vendor",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_description": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_title": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_title",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "handle": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_handle",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Child",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        },
+        "shopify_product_type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shopify_product_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        }
+      },
+      "listing": {
+        "id": "shopify-listing-1",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "unlisted",
+        "issues": []
+      },
+      "completeness": {
+        "overall": {
+          "filled": 2,
+          "total": 11,
+          "pct": 18
+        },
+        "required": {
+          "filled": 1,
+          "total": 1,
+          "missing": []
+        },
+        "byGroup": [
+          {
+            "group": "Identity",
+            "filled": 1,
+            "total": 1
+          },
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 3
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 4
+          }
+        ]
+      }
+    },
+    {
+      "id": "store-child-2",
+      "sku": "TRAVEL-BAG-2",
+      "name": "Canvas travel bag",
+      "parentId": "store-demo",
+      "productRole": "child",
+      "parentSku": "TRAVEL-BAG",
+      "isParent": false,
+      "rowKind": "variant",
+      "status": "DRAFT",
+      "productType": null,
+      "familyId": null,
+      "version": 1,
+      "basePrice": 105,
+      "childCount": 0,
+      "imageUrl": null,
+      "photoCount": 0,
+      "imageInherited": false,
+      "axisValues": {},
+      "aliasId": null,
+      "values": {
+        "sku": {
+          "value": "TRAVEL-BAG-2",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "sku",
+          "writeVerb": "master",
+          "writeTarget": "master",
+          "affectsAllChannels": true,
+          "writable": false,
+          "writeBlockedReason": "Read-only on this channel \u2014 the marketplace does not accept a value for this field."
+        },
+        "name": {
+          "value": "Canvas travel bag",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_name",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "description": {
+          "value": "A durable canvas bag for weekend travel.",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "templateSuffix": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_templateSuffix",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "category": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_category",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "vendor": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_vendor",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_description": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_description",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "seo_title": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_seo_title",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "tags": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_tags",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "handle": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_handle",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        },
+        "__productRole": {
+          "value": "Child",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__productRole",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "Calculated from the shared product relationship: Standalone, Parent or Child. The percentage measures attribute completeness separately.",
+          "mapped": null
+        },
+        "__parentSku": {
+          "value": "TRAVEL-BAG",
+          "source": "master",
+          "inheritedFrom": null,
+          "inherited": false,
+          "layer": "master",
+          "pinned": false,
+          "follows": true,
+          "editable": false,
+          "linkGroupId": null,
+          "writeField": "__parentSku",
+          "writeTarget": "master",
+          "writeVerb": "master",
+          "affectsAllChannels": false,
+          "writable": false,
+          "writeBlockedReason": "The shared parent of this child, used by every listing alias. Change relationships with Parent SKU in Catalog import & export; preview before applying.",
+          "mapped": null
+        },
+        "shopify_product_type": {
+          "value": null,
+          "source": null,
+          "inheritedFrom": null,
+          "inherited": false,
+          "mapped": null,
+          "layer": "default",
+          "pinned": false,
+          "follows": true,
+          "editable": true,
+          "linkGroupId": null,
+          "writeField": "attr_shopify_product_type",
+          "writeVerb": "channel",
+          "writeTarget": "channelListing",
+          "affectsAllChannels": false,
+          "writable": true,
+          "writeBlockedReason": null
+        }
+      },
+      "listing": {
+        "id": "shopify-listing-2",
+        "version": 1,
+        "listingStatus": "DRAFT",
+        "isPublished": false,
+        "price": 45,
+        "quantity": 4,
+        "externalListingId": null,
+        "offerActive": true,
+        "lastSyncedAt": null,
+        "follows": {}
+      },
+      "readiness": {
+        "state": "unlisted",
+        "issues": []
+      },
+      "completeness": {
+        "overall": {
+          "filled": 2,
+          "total": 11,
+          "pct": 18
+        },
+        "required": {
+          "filled": 1,
+          "total": 1,
+          "missing": []
+        },
+        "byGroup": [
+          {
+            "group": "Identity",
+            "filled": 1,
+            "total": 1
+          },
+          {
+            "group": "Content",
+            "filled": 1,
+            "total": 3
+          },
+          {
+            "group": "Classification",
+            "filled": 0,
+            "total": 3
+          },
+          {
+            "group": "Search",
+            "filled": 0,
+            "total": 4
+          }
+        ]
+      }
+    }
+  ],
+  "counts": {
+    "total": 39,
+    "filled": 15,
+    "empty": 0,
+    "notWritable": 9,
+    "pinned": 0,
+    "mapped": 0
+  },
+  "schema": {
+    "marketplace": "GLOBAL",
+    "locale": "en",
+    "productTypes": []
+  },
+  "meta": {
+    "schemaMissing": [],
+    "schemaAge": [],
+    "droppedKeys": [
+      "brand",
+      "manufacturer",
+      "status",
+      "basePrice",
+      "costPrice",
+      "minMargin",
+      "minPrice",
+      "maxPrice",
+      "buyBoxPrice",
+      "competitorPrice",
+      "totalStock",
+      "lowStockThreshold",
+      "fulfillmentChannel",
+      "shippingTemplate",
+      "upc",
+      "ean",
+      "gtin",
+      "amazonAsin",
+      "parentAsin",
+      "ebayItemId",
+      "weightValue",
+      "weightUnit",
+      "dimLength",
+      "dimWidth",
+      "dimHeight",
+      "dimUnit",
+      "armorType",
+      "ceCertification",
+      "waterproofRating",
+      "bulletPoints",
+      "keywords"
+    ],
+    "availableMarkets": [],
+    "coverage": [
+      {
+        "coordinate": "Shopify \u00b7 GLOBAL",
+        "channel": "SHOPIFY",
+        "category": "*",
+        "declared": 10,
+        "columns": 10,
+        "fetchedAt": null,
+        "unrecognised": []
+      }
+    ],
+    "mapping": null
+  }
+}

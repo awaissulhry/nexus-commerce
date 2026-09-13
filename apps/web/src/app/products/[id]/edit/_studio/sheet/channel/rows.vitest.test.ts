@@ -13,6 +13,7 @@ import * as rowsModule from './rows'
    (reference_test_scoping_and_hidden_assertions). `readiness.ts` is plain TS. */
 import { readyPillTone } from '@/design-system/grid/renderers/readiness'
 import {
+  rowReadinessPill,
   affordanceOf,
   isCellEditable,
   isOperatorEdit,
@@ -349,4 +350,15 @@ describe('filtered rows keep the affected listing visible', () => {
     const parent = rows.find(row => row.rowKind === 'parent' && row.aliasId === 'a1')!
     expect(rowsModule.filterRowsWithBands(rows, row => row.rowId === child.rowId)).toEqual([parent, child])
   })
+})
+
+// Q-LX6-1: a missing contract cannot inherit 100% from four structural columns.
+it('keeps every row unscorable when the server alias percentage is null', () => {
+  const child = row(null, 'GALE-BLACK-M', 'variant')
+  child.completeness.overall = { filled: 4, total: 4, pct: 100 }
+  child.readiness = { state: 'errors', issues: [{ key: 'productType', label: 'Channel requirements', severity: 'error', message: 'OUTERWEAR requirements on Amazon · BE are unavailable.' }] }
+  const unscorable = alias(null, 0)
+  unscorable.readiness.percent = null
+  expect(rowReadinessPill(child, unscorable)).toEqual({ pct: null, state: 'errors', tip: 'GALE-BLACK-M — OUTERWEAR requirements on Amazon · BE are unavailable.' })
+  expect(rowReadinessPill(child, alias(null, 0)).pct).toBe(100)
 })

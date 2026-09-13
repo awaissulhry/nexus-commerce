@@ -1,3 +1,6 @@
+import { translationCoverage } from '../services/translation-completeness.service.js'
+import { availableContentLanguages } from '../services/pim/market-languages.js'
+import { contentLanguages } from '../services/pim/content-read.js'
 /**
  * W2.5 — ProductFamily CRUD.
  *
@@ -338,41 +341,13 @@ const familiesRoutes: FastifyPluginAsync = async (fastify) => {
           .code(400)
           .send({ error: 'productIds cannot exceed 200 per call' })
 
-      const rows = await prisma.productTranslation.findMany({
-        where: { productId: { in: body.productIds } },
-        select: {
-          productId: true,
-          language: true,
-          name: true,
-          description: true,
-          bulletPoints: true,
-          keywords: true,
-          reviewedAt: true,
-        },
-      })
-
-      // Group by productId → language → coverage shape.
-      const results: Record<
-        string,
-        Record<
-          string,
-          { hasContent: boolean; fieldCount: number; reviewed: boolean }
-        >
-      > = {}
-      for (const id of body.productIds) results[id] = {}
-      for (const r of rows) {
-        let count = 0
-        if (r.name && r.name.trim()) count++
-        if (r.description && r.description.trim()) count++
-        if (Array.isArray(r.bulletPoints) && r.bulletPoints.length > 0) count++
-        if (Array.isArray(r.keywords) && r.keywords.length > 0) count++
-        if (results[r.productId]) {
-          results[r.productId][r.language] = {
-            hasContent: count > 0,
-            fieldCount: count,
-            reviewed: !!r.reviewedAt,
-          }
-        }
+      const [products, configured] = await Promise.all([
+        prisma.product.findMany({ where: { id: { in: body.productIds } }, include: { translations: true, parent: { include: { translations: true } } } }),
+        availableContentLanguages(),
+      ])
+      const results: Record<string, Record<string, ReturnType<typeof translationCoverage>>> = Object.fromEntries(body.productIds.map(id => [id, {}]))
+      for (const product of products) for (const requested of new Set([...configured, ...contentLanguages(product, product.parent)])) {
+        results[product.id][requested] = translationCoverage(product as any, requested)
       }
       return { results }
     },

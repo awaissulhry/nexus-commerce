@@ -14,18 +14,20 @@
  * same cell.
  */
 import { StructuredAttributeEditor, parseRecordValue, recordSummary } from '../StructuredAttributeEditor'
-import { SourceIndicator } from '@/design-system/components'
 import { ImpactProtectorsEditor, protectorSummary } from '../ImpactProtectorsInput'
 import { AttributeShapeEditor } from '../AttributeShapeInput'
 import { formulaAvailability, formulaCellEditorSelector, SelectPanelEditor, suppressFormulaKeys, type FormulaWiring } from '@/design-system/grid'
 import { CellSaveReason, composeCellTooltip, longTextTooltipLine, EmptyValue, RequiredValue, LongTextCell, ShapeValue, isEmptyShape, shapeColumnDef, shapeEditorSpec, shapeTooltipLine, ProvenanceMark, classifyProvenance, longTextEditor, numericColumn, provenanceClassRules, provenanceTooltip, roundTripClassRules, selectEditor, SelectChevron, SELECT_CELL_CLASS, sheetValidationFor, composeSheetCellClassRules, type CellSaveTracker, type ColDef, type ColGroupDef, type ICellRendererParams, type ValueGetterParams, type ValueSetterParams } from '@/design-system/grid'
+import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 import type { CellClassParams } from '@/design-system/grid'
 
+import { variationThemeColumnDef } from '@/design-system/grid'
 import { scalarColumnDef, booleanLabel, BOOLEAN_OPTIONS, SHEET_NUMBER_EDITOR_PARAMS } from '@/design-system/grid/editors/scalarValue'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 
 import { cellIsEditable, cellOf, sourceLabel, validationApplies, widthFor } from './columnRules'
 import { optionLabel } from '../optionLabel'
+import { languageColumn } from '../languages'
 import { parseReferenceOrScalarValue, referenceColumnDef, referenceTooltip } from '../referenceLabels'
 import { isReferenceField } from '../referenceOptions'
 import { ReferenceSelectEditor } from '../ReferenceSelectEditor'
@@ -189,14 +191,10 @@ export function buildMasterColumns(
               hub-ruled) — no prefix, no field name, no client-side label logic, because the server
               is being fixed to name the field by the sheet's own label and a second voice here
               would put two labels back. */}
-          {cellOf(p.data, col.key)?.translationState && cellOf(p.data, col.key)?.translationState !== 'current' && !draft && !refusedReason ? <SourceIndicator
-            kind={cellOf(p.data, col.key)?.needsTranslation ? 'warning' : 'override'} tabIndex={-1}
-            label={cellOf(p.data, col.key)?.translationState === 'fallback' ? 'Language fallback' : `${cellOf(p.data, col.key)?.translationState} content`}
-            description={`Requested ${cellOf(p.data, col.key)?.requestedLocale}; showing ${cellOf(p.data, col.key)?.effectiveLocale}. ${cellOf(p.data, col.key)?.needsTranslation ? 'This content does not satisfy the requested language requirement.' : ''}`}
-          /> : <ProvenanceMark
+          <ProvenanceMark
             provenance={provenance}
             from={provenance === 'refused' ? refusedReason : draft ? undefined : sourceLabel(p.data, col.key, rowsRef.current)}
-          />}
+          />
           <span className="nds-cell-value-text">{shown}</span>
           {/* A SIBLING of the text, so it is a flex item of `.nds-cell-value` and the value
               truncates before it moves. */}
@@ -204,6 +202,7 @@ export function buildMasterColumns(
           {/* The tooltip's first paragraph, as text — for anything that cannot hover (#662). Same
               source as the getter reads, so the two cannot drift into two wordings. */}
           <CellSaveReason reason={tracker.get(p.data.id, col.key)?.reason} />
+          <CellSaveMark state={tracker.get(p.data.id, col.key)?.state} />
         </span>
       )
     }
@@ -349,6 +348,24 @@ export function buildMasterColumns(
       },
     }
 
+    /**
+     * 🔴 VT.2 — the `Variation theme` column, from the ENGINE, spread by BOTH builders.
+     *
+     * ONE line here and one in `channelColumns.tsx`, because that is the whole lesson of
+     * `reference_two_column_builders_drift`: the two sheets assembled their columns separately and the
+     * channel silently lacked six things master had. Everything about this column — renderer, editor,
+     * popup, copy/export/filter text, change equality, editability, the fill-handle refusal and the
+     * tooltip — is `variationThemeColumnDef`, so neither sheet owns a piece the other can lose.
+     *
+     * FIRST in the branch chain, before the shape family: the cell's value is an object and every
+     * branch below would format it as a scalar. Spread AFTER `def` so the engine's pieces win.
+     */
+    if (col.kind === 'variationTheme') {
+      /* `def.cellClassRules` is what THIS builder composed (validation → provenance → round-trip →
+         its own); the engine extends it rather than replacing it — see `variationThemeColumnDef`. */
+      return { ...def, ...variationThemeColumnDef<StudioRow>(col, (d) => cellOf(d, col.key)?.value, def.cellClassRules as never) }
+    }
+
     if (Array.isArray(col.validation?.recordFields)) return { ...def,
       cellEditor: StructuredAttributeEditor, cellEditorPopup: true, cellEditorParams: { attributeColumn: col },
       ...(opts.formula ? formulaSelector(opts.formula, col, { component: StructuredAttributeEditor, popup: true, params: { attributeColumn: col } }) : {}),
@@ -374,8 +391,8 @@ export function buildMasterColumns(
         ...def,
         ...(col.shape === 'measure' ? numericColumn : {}),
         ...shapeColumnDef<StudioRow>(col, (d) => cellOf(d, col.key)?.value),
-        ...(col.key === 'bulletPoints' ? { cellEditor: AttributeShapeEditor, cellEditorPopup: true, cellEditorParams: { attributeColumn: col } } : {}),
-        ...(opts.formula ? formulaSelector(opts.formula, col, col.key === 'bulletPoints' ? { component: AttributeShapeEditor, popup: true, params: { attributeColumn: col } } : shapeEditorSpec(col)!) : {}),
+        ...(languageColumn(col.key).fieldKey === 'bulletPoints' ? { cellEditor: AttributeShapeEditor, cellEditorPopup: true, cellEditorParams: { attributeColumn: col } } : {}),
+        ...(opts.formula ? formulaSelector(opts.formula, col, languageColumn(col.key).fieldKey === 'bulletPoints' ? { component: AttributeShapeEditor, popup: true, params: { attributeColumn: col } } : shapeEditorSpec(col)!) : {}),
         editable,
         cellClass: (p) => [...(col.shape === 'measure' ? numericColumn.cellClass : ['nds-ag-cell']), cellIsEditable(col, p.data) ? 'nds-cell-is-editable' : 'nds-cell-is-locked'].join(' '),
         cellRenderer: (p: ICellRendererParams<StudioRow>) =>

@@ -46,7 +46,10 @@
 import { readFileSync } from 'node:fs'
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '')
-const TOKENS_CSS = `${ROOT}/apps/web/src/design-system/styles/tokens.css`
+// A scratch token file permits a seeded-red rehearsal without editing shared tokens.
+const tokensArg = process.argv.indexOf('--tokens-css')
+if (tokensArg >= 0 && !process.argv[tokensArg + 1]) throw new Error('--tokens-css requires a path')
+const TOKENS_CSS = tokensArg >= 0 ? process.argv[tokensArg + 1] : `${ROOT}/apps/web/src/design-system/styles/tokens.css`
 const COLORS_TS = `${ROOT}/apps/web/src/design-system/tokens/colors.ts`
 const PALETTE_TS = `${ROOT}/apps/web/src/design-system/grid/editors/formulaPalette.ts`
 
@@ -76,18 +79,23 @@ const composite = (tint, alpha, base) => tint.map((c, i) => Math.round(alpha * c
 
 // ── the token maps, straight from the file the app loads ────────────────────────────────────────
 const css = readFileSync(TOKENS_CSS, 'utf8')
-function blockOf(re) {
-  const m = css.match(re)
-  if (!m) throw new Error(`check-grid-swatch-contrast: ${TOKENS_CSS} has no block matching ${re}`)
+function blockOf(selector) {
+  // Generated tokens use a selector list for the responsive dark scope. Match a
+  // complete member, so `.dark body` alone cannot masquerade as the `.dark` tier.
+  const blocks = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+  const matching = blocks.filter((m) => m[1].split(',').some((part) => part.trim() === selector))
+  if (!matching.length) throw new Error(`check-grid-swatch-contrast: ${TOKENS_CSS} has no block with selector ${selector}`)
   const map = new Map()
-  for (const line of m[1].split('\n')) {
-    const kv = line.match(/^\s*(--[a-z0-9-]+)\s*:\s*(.+?);\s*$/i)
-    if (kv) map.set(kv[1], kv[2].trim())
+  for (const m of matching) {
+    for (const line of m[2].split('\n')) {
+      const kv = line.match(/^\s*(--[a-z0-9-]+)\s*:\s*(.+?);\s*$/i)
+      if (kv) map.set(kv[1], kv[2].trim())
+    }
   }
   return map
 }
-const LIGHT = blockOf(/:root \{([\s\S]*?)\n\}/)
-const DARK = blockOf(/\.dark \{([\s\S]*?)\n\}/)
+const LIGHT = blockOf(':root')
+const DARK = blockOf('.dark')
 
 const rawValue = (name, mode) => (mode === 'dark' ? DARK.get(name) ?? LIGHT.get(name) : LIGHT.get(name))
 /** Follow a var() chain to a literal. A dark lookup falls back to :root, exactly as the cascade does. */

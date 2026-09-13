@@ -6093,5 +6093,61 @@
         ]
       }
     ]
+  },
+  "ChannelListingTranslation": {
+    "scalar": {},
+    "compound": {
+      "channelListingId_language": [
+        "channelListingId",
+        "language"
+      ]
+    },
+    "relations": [
+      {
+        "field": "channelListing",
+        "model": "ChannelListing",
+        "from": [
+          "channelListingId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "ReadinessIndex": {
+    "scalar": {},
+    "compound": {
+      "productId_coordinateKey_language": [
+        "productId",
+        "coordinateKey",
+        "language"
+      ]
+    },
+    "relations": [
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
+  },
+  "SellerReferenceLabel": {
+    "scalar": {},
+    "compound": {
+      "channel_connectionId_marketplace_productType_fieldKey": [
+        "channel",
+        "connectionId",
+        "marketplace",
+        "productType",
+        "fieldKey"
+      ]
+    },
+    "relations": []
   }
 }

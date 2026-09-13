@@ -30,3 +30,23 @@ export * from './copy'
 
 /** §2's measured dock width, so a gate can assert it without reading the component. */
 export { MAPPING_DOCK_W } from './MappingDock'
+
+/**
+ * VT.4 — the dry-run theme-change plan modal, and the one client call that fetches it.
+ *
+ * VT.2's `AxesPanelEditor` imports these for its locked-commit path (design §3.5: a SET change on a live
+ * coordinate opens the plan and writes nothing). ONE import, agreed in `docs/pes-claims.md`.
+ */
+export {
+  ThemeChangePlanModal,
+  fetchThemeChangePlan,
+  planAsText,
+  ThemeChangePlanError,
+  type ThemeChangePlan,
+  type ThemeChangeStep,
+  type ThemeChangeRequest,
+  type ThemeChangePlanModalProps,
+} from './ThemeChangePlanModal'
+
+/** VT.4 — the coordinate's collision report, as the dock's Collisions section reads it. */
+export type { ProjectionCollisions } from './types'

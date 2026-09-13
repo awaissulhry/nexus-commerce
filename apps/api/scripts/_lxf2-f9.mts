@@ -1,0 +1,10 @@
+import { PrismaClient } from '@prisma/client';
+const p = new PrismaClient({ datasources: { db: { url: process.argv[2] } } });
+const r: any = await p.$queryRawUnsafe(`select current_database() as db`);
+const rows = await p.categorySchema.findMany({ where: { channel: 'EBAY' }, select: { marketplace: true, productType: true, isActive: true, fetchedAt: true }, orderBy: [{ marketplace: 'asc' }, { productType: 'asc' }] });
+const byMk: Record<string, string[]> = {};
+for (const row of rows) (byMk[row.marketplace] ??= []).push(row.productType);
+const onlyPrefixed = (byMk['EBAY_IT'] ?? []).filter(t => !(byMk['IT'] ?? []).includes(t));
+const onlyBare = (byMk['IT'] ?? []).filter(t => !(byMk['EBAY_IT'] ?? []).includes(t));
+console.log(JSON.stringify({ db: r[0].db, byMk, onlyPrefixed, onlyBare, marketplaceCodes: (await p.marketplace.findMany({ where: { channel: 'EBAY' }, select: { code: true } })).map(m => m.code) }, null, 2));
+await p.$disconnect();

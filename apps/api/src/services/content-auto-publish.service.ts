@@ -14,6 +14,7 @@
 
 import prisma from '../db.js'
 import { logger } from '../utils/logger.js'
+import { assertListingContentReviewed } from './pim/publish-review-gate.js'
 
 /**
  * For each listing in `listingIds` that has _autoPublishContent=true,
@@ -59,6 +60,17 @@ export async function enqueueContentSyncIfEnabled(listingIds: string[]): Promise
       const title = l.title ?? l.product?.name ?? null
       const description = l.description ?? l.product?.description ?? null
       const images = (l.product?.images ?? []).map((i) => i.url).filter(Boolean)
+
+      // D7 / R-LX-7 — an unreviewed machine draft is not auto-published. The
+      // drain refuses it too; refusing at enqueue keeps the queue honest and
+      // names the language in the log instead of a dead-lettered row later.
+      try {
+        await assertListingContentReviewed({ productId: l.productId, channel: l.channel, listingId: l.id, fields: ['title', 'description'] })
+      } catch (err: any) {
+        if ((err as { code?: string })?.code !== 'content_review_required') throw err
+        logger.warn('[content-auto-publish] listing skipped — content awaiting review', { listingId: l.id, reason: err.message })
+        continue
+      }
 
       rows.push({
         productId: l.productId,

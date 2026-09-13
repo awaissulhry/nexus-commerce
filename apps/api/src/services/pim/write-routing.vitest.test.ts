@@ -15,6 +15,7 @@
  */
 import { describe, it, expect } from 'vitest'
 import { resolveWriteRouting } from './studio-sheet.service.js'
+import { isChannelWritable } from './channel-field-map.js'
 
 const col = (key: string, writeField = key, storage: any = 'categoryAttributes') => ({ key, writeField, storage })
 const EBAY = { channel: 'EBAY' }
@@ -34,7 +35,34 @@ describe('channel scope — the six routable fields', () => {
   it('uses the right prefix per channel', () => {
     expect(resolveWriteRouting(col('item_name'), AMAZON, null).writeField).toBe('amazon_title')
     expect(resolveWriteRouting(col('product_description'), EBAY, null).writeField).toBe('ebay_description')
-    expect(resolveWriteRouting(col('variationTheme'), AMAZON, null).writeField).toBe('amazon_variationTheme')
+  })
+
+  /**
+   * VT.1 (2026-09-13, D-VT3) - the variation theme left the bulk PATCH. It used to be the third prefixed route
+   * (`amazon_variationTheme` / `ebay_variationTheme`); the assertion for it lived one line above this block. It now
+   * has ONE writer with a lock, a keys-the-variants check and a collision rule - `PATCH /studio/projection` on a
+   * coordinate, `PATCH /studio/variation-axes` on master - named per cell in `cell.value.write.endpoint`.
+   */
+  it('the variation theme is NOT a bulk-PATCH field any more, and the write gate says so', () => {
+    // The gate: both prefixed names are refused by the ordinary channel writer.
+    expect(isChannelWritable('amazon_variationTheme')).toBe(false)
+    expect(isChannelWritable('ebay_variationTheme')).toBe(false)
+    // The positive control in the same run: the two surviving prefixed routes are still accepted.
+    expect(isChannelWritable('amazon_title')).toBe(true)
+    expect(isChannelWritable('ebay_description')).toBe(true)
+    // And the engine column routes to its OWN field name, never a prefixed one, on every channel.
+    const theme = { key: 'variation_theme', writeField: 'variation_theme', storage: 'listing' as const, kind: 'variationTheme' as const }
+    for (const coordinate of [AMAZON, EBAY, SHOPIFY]) {
+      const r = resolveWriteRouting(theme, coordinate, null)
+      expect(r.writeField).toBe('variation_theme')
+      expect(r.writeTarget).toBe('channelListing')
+      expect(r.writeVerb).toBe('channel')
+      expect(r.affectsAllChannels).toBe(false)
+    }
+    // On master it is the shared structure.
+    const master = resolveWriteRouting(theme, null, null)
+    expect(master.writeTarget).toBe('master')
+    expect(master.writeVerb).toBe('master')
   })
 
   it('an attribute now routes to the LISTING via the override bag (#169)', () => {

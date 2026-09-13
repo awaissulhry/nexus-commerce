@@ -1,21 +1,23 @@
 'use client'
 
 /** The resolved channel value and its source. Source controls open details before any change. */
-import { memo } from 'react'
+import { memo, useCallback, useSyncExternalStore } from 'react'
 import { CellAction } from '@/design-system/components'
 import { SourceIndicator } from '@/design-system/components/SourceIndicator'
 
-import type { ICellRendererParams } from '@/design-system/grid'
-import { EmptyValue, LongTextCell, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
+import type { CellSaveTracker, ICellRendererParams } from '@/design-system/grid'
+import { CellSaveReason, EmptyValue, LongTextCell, RequiredValue, ShapeValue, classifyProvenance, isEmptyShape, isShaped, SelectChevron } from '@/design-system/grid'
+import { CellSaveMark } from '@/design-system/grid/renderers/CellSaveMark'
 
 import { hasValue } from './provenance'
 import { withMappingRun } from './rows'
 import { isReferenceField } from '../referenceOptions'
-import { describeValueSource } from './value-source'
+import { describeValueSource } from './cellDetailsSource'
 import { columnRequiredByAny, isProductRelationshipColumn } from '@nexus/shared/master-sheet'
 import type { ChannelSheetRow, SheetColumn } from './types'
 
 export interface CascadeCellParams {
+  tracker?: CellSaveTracker
   formattedPreview?: boolean
   openEditor?: (row: ChannelSheetRow, column: SheetColumn, anchor: HTMLElement | null) => void
   column: SheetColumn
@@ -43,6 +45,11 @@ export const CascadeCell = memo(function CascadeCell(
 ) {
   const row = p.data
   const { column, onDetails, productLevelOnly } = p
+  // The tracker mutates independently of AG's memoized value props. Subscribe to this cell's
+  // stable entry so waiting/unknown becomes visible even when its value has not changed.
+  const subscribe = useCallback((changed: () => void) => p.tracker?.subscribe(changed) ?? (() => {}), [p.tracker])
+  const snapshot = useCallback(() => row ? p.tracker?.get(row.rowId, column.key) : undefined, [p.tracker, row, column.key])
+  const save = useSyncExternalStore(subscribe, snapshot, snapshot)
 
   const cell = row?.values?.[column.key]
   /* A list or a measure is "present" by its own rule — an empty array is not a value. */
@@ -126,7 +133,7 @@ export const CascadeCell = memo(function CascadeCell(
       {mapped && mapped.errors.length > 0 && (
         <span className="nds-cascade-maperr" aria-label={mappingNote ?? 'Mapping error'}>!</span>
       )}
-      {p.openEditor && <CellAction label={`${p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Edit' : 'Details'}: ${row.sku}, ${column.label}`} description={cell?.writeBlockedReason ?? 'Enter or F2 opens the editor.'}
+      {p.openEditor && <CellAction label={`${p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Edit' : 'Details'}: ${row.sku}, ${column.label}`} description={cell?.writeBlockedReason != null ? cell.writeBlockedReason : p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Enter or F2 opens the editor.' : 'Read-only cell. The reason was not reported.'}
         onFocusCell={() => { if (p.node.rowIndex != null) { p.api.setFocusedCell(p.node.rowIndex, column.key); p.api.clearCellSelection(); p.api.addCellRange({ rowStartIndex: p.node.rowIndex, rowEndIndex: p.node.rowIndex, columns: [column.key] }) } }}
         onActivate={anchor => p.openEditor?.(row, column, anchor)} />}
       <SourceIndicator
@@ -136,6 +143,8 @@ export const CascadeCell = memo(function CascadeCell(
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
       />
+      <CellSaveReason reason={save?.reason} />
+      <CellSaveMark state={save?.state} />
     </span>
   )
 })

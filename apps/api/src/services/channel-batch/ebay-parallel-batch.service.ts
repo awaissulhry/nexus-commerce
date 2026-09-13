@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 /**
  * W12.3 — eBay parallel-batch wrapper.
  *
@@ -116,6 +118,18 @@ async function runOne(
   accessToken: string,
   maxRetries: number,
 ): Promise<EbayBatchOpResult> {
+  // Withdraw is a lifecycle operation. Price and stock are ordinary pushes.
+  if (op.type !== 'withdraw') {
+    try {
+      const controls = await readPushControls({ channel: 'EBAY', skus: [op.sku] })
+      for (const listing of controls) {
+        const refusal = assertPushAllowed(listing)
+        if (refusal) return { sku: op.sku, status: 'failed', attempts: 0, errorMessage: `${refusal.code}: ${refusal.sentence}`, httpStatus: null }
+      }
+    } catch (error) {
+      return { sku: op.sku, status: 'failed', attempts: 0, errorMessage: error instanceof Error ? error.message : String(error), httpStatus: null }
+    }
+  }
   const call = operationToCall(op)
   let attempt = 0
   let lastErr: string | null = null

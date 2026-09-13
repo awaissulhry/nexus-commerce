@@ -59,7 +59,7 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
     // A persisted Shopify ID proves linkage, not publication. A provider draft
     // or archived product must never acquire a Live label from that ID alone.
     const providerStatus = identity.product?.values.status
-    if (row.listing && (providerStatus === 'DRAFT' || providerStatus === 'ARCHIVED')) row.listing = { ...row.listing, isPublished: false, listingStatus: providerStatus }
+    if (row.listing && ['ACTIVE', 'DRAFT', 'ARCHIVED'].includes(String(providerStatus))) row.listing = { ...row.listing, isPublished: providerStatus === 'ACTIVE', listingStatus: providerStatus === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE', channelFactDetail: { ...row.listing.channelFactDetail, shopifyStatus: String(providerStatus) }, offerActiveHonoured: false }
     const inapplicable = new Set<string>()
     const refreshed = new Set<string>()
     const fieldIssues: StudioRow['readiness']['issues'] = []
@@ -78,6 +78,24 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
           : 'This Nexus row has no persisted Shopify variant identity. Link or publish the variant before editing its Shopify value.' }
         continue
       }
+      /**
+       * 🔴 LX.6 — step 6's content-cell shortcut is REMOVED, not renamed.
+       *
+       * It read `base.requestedLocale && base.effectiveLocale` and set `needsTranslation`. LX.12
+       * removed all four of those from `StudioCellValue` (`studio-sheet.service.ts:133` Omits
+       * `requestedLocale` / `effectiveLocale` / `translationState` / `needsTranslation`), so:
+       *   • it never COMPILED — `apps/api` tsc reported 5 errors on these two lines, invisible to
+       *     steps 6 and 7 because both typechecked only their own files plus transitive imports and
+       *     neither scope imports this projection;
+       *   • it never RAN — `base` comes from `getStudioSheet` through `enrichShopifyChannelSheet`,
+       *     and the step-6 (d) gate measured `Object.hasOwn(cell,'requestedLocale') === false` on
+       *     that wire (`step6/screen-gate.mjs:188`, exit 1 for an unrelated reason at 01:31Z).
+       * Its only unique effect would have been a second `needsTranslation` boolean; the write/CAS
+       * address it installed is installed by the path below for every field anyway (`shopifyWrite`,
+       * a few lines down). Deleting dead code that never compiled restores the build and changes no
+       * behaviour — the 8 pre-existing `services/shopify` test failures are byte-identical before
+       * and after (they are about "Shopify content requires hydrated pro…", a separate defect).
+       */
       const pending = informationPendingValue(remote, field, workspace.draft), baseline = informationStoredValue(remote, field)
       const saved = workspace.draft.sheetValues?.find(v => v.ownerId === remote.id && v.fieldId === field.id && v.locale === (remote.locale ?? ''))
       const pin = saved && !saved.inherited ? saved : undefined
@@ -85,15 +103,13 @@ export function projectShopifyChannelSheet(page: StudioSheet, workspace: Shopify
       const reason = pin && pin.type !== field.type ? 'This definition changed type. The saved override is preserved; review and migrate it before editing.' : informationRestriction(remote, field, workspace.draft, active(workspace))
       const value = pending !== undefined ? pending : pin ? pin.value : mapped ? informationSheetValue(field, base.value) : baseline
       const ownValue = pending !== undefined || !!pin || !mapped
-      const localized = column.storage === 'localizedContent' || !!remote.translations?.[field.id]
-      const translation = remote.translations?.[field.id]
-      const translationState = pending !== undefined || !!pin ? 'draft' : translation?.outdated ? 'outdated' : translation && translation.value === null ? 'missing' : 'current'
+      // Remaining fields are provider-owned facts. Only the content resolver above assigns language readiness.
       const pinned = !!pin || pending !== undefined && !saved?.inherited || !saved && !!base?.pinned
       row.values[column.key] = { ...base, value, nexusDraft: pending !== undefined || !!pin, source: pinned || !mapped ? 'channelExplicit' : base.source,
         layer: pinned || !mapped ? 'channel' : base.layer, pinned,
         inherited: !pinned && mapped, inheritedFrom: mapped ? base.inheritedFrom : null, follows: pinned ? false : mapped ? true : null,
         resettable: !!pin || pending !== undefined || mapped, linkGroupId: null, mapped: ownValue ? null : base.mapped, affectsAllChannels: false,
-        ...(ownValue ? { needsTranslation: localized && ['outdated', 'missing'].includes(translationState), requestedLocale: localized ? page.scope.locale ?? undefined : undefined, effectiveLocale: localized ? remote.locale ?? schema.locales.find(l => l.primary)?.locale : undefined, translationState: localized ? translationState : undefined } : {}),
+        ...(ownValue ? { needsTranslation: false, requestedLocale: undefined, effectiveLocale: undefined, translationState: undefined } : {}),
         writeField: column.writeField, writeTarget: 'channelListing', writeVerb: 'channel', editable: !reason, writable: !reason, writeBlockedReason: reason,
         shopifyWrite: { ownerId: remote.id, fieldId: field.id, token: shopifyCellToken(workspace, remote.id, field, remote.locale), baseline },
       }

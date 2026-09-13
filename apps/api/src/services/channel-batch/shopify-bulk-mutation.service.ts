@@ -1,3 +1,5 @@
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 /**
  * W12.2 — Shopify Admin GraphQL bulkOperationRunMutation wrapper.
  *
@@ -179,6 +181,24 @@ export async function submitShopifyBulkMutation(
     }
   }
 
+  // Each bulk line must establish its own stored listing controls before upload.
+  for (const operation of input.operations) {
+    const externalIds: string[] = []
+    const collect = (value: unknown): void => {
+      if (Array.isArray(value)) { value.forEach(collect); return }
+      if (!value || typeof value !== 'object') return
+      for (const [key, child] of Object.entries(value)) {
+        if (['id', 'productId', 'inventoryItemId', 'ownerId'].includes(key) && typeof child === 'string') externalIds.push(child)
+        else if (child && typeof child === 'object') collect(child)
+      }
+    }
+    collect(operation)
+    const controls = await readPushControls({ channel: 'SHOPIFY', externalIds })
+    for (const listing of controls) {
+      const refusal = assertPushAllowed(listing)
+      if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+    }
+  }
   const { shopName, accessToken, apiVersion } = resolveShop(input)
 
   // Step 1: stagedUploadsCreate — get a presigned upload target.

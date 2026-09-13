@@ -13,7 +13,8 @@ import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/pa
 import { loadWorkingLayout, saveWorkingLayout, type StoredSheetLayout } from '@/design-system/grid/views/savedViewTransport'
 import { viewChipColumns, type ViewChip } from '../contracts'
 import type { SheetColumn } from './master/types'
-import { alwaysColumnsFor, orderColumnKeys, sheetViews, type ViewContext } from './views'
+import { columnLanguages, languageProjectionReady, LANGUAGES_VIEW_ID } from './languages'
+import { alwaysColumnsFor, orderColumnKeys, sheetViews, structuralColumnKeys, type ViewContext } from './views'
 import { layoutFromPreferences, preferencesFromLayout, visibleLayoutKeys, mergeVisibleColumnOrder } from '@/design-system/grid/views/columnLayout'
 
 /** Widths and sort remain lightweight browser preferences. Complete layouts are saved explicitly. */
@@ -25,6 +26,7 @@ export type ActiveColumns =
   | { kind: 'custom'; count: number }
 
 export interface UseSheetColumnsArgs<TRow, TPage> {
+  languages?: { selected: string[] | null; available: string[]; set: (languages: string[] | null) => void }
   apiRef: MutableRefObject<GridApi<TRow> | null>
   gridReady: GridApi<TRow> | null
   columns: SheetColumn[]
@@ -71,6 +73,8 @@ export interface SheetColumnsApi<TPage> {
 
 export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>): SheetColumnsApi<TPage> {
   const { apiRef, gridReady, columns, viewCtx, serverViews, identityColumn, prefsBridge, activeChip, setChip, layoutSurface } = a
+  const languageView = a.languages
+  const pendingLanguageView = useRef<{ payload?: ColumnsViewPayload; view?: SavedGridView<TPage>; preset?: GridViewPreset } | null>(null)
   const baseUrl = a.grid.baseUrl
   const scopeRef = useRef(layoutSurface)
   scopeRef.current = layoutSurface
@@ -78,7 +82,10 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
   const attributeKeys = useMemo(() => new Set(orderedKeys), [orderedKeys])
   const addressable = useMemo(() => [identityColumn, ...orderedKeys], [identityColumn, orderedKeys])
   const addressableSet = useMemo(() => new Set(addressable), [addressable])
-  const alwaysColumns = useMemo(() => alwaysColumnsFor(addressable), [addressable])
+  /* R-VT-1 (2026-09-13): a STRUCTURAL column joins the always-columns, so a saved view that predates
+     it cannot silently drop it. Derived from the live column set by KIND — see `structuralColumnKeys`. */
+  const structural = useMemo(() => structuralColumnKeys(columns), [columns])
+  const alwaysColumns = useMemo(() => alwaysColumnsFor(addressable, structural), [addressable, structural])
   const allColumnKeys = useMemo(() => [...alwaysColumns, ...orderedKeys.filter((k) => !alwaysColumns.includes(k))], [alwaysColumns, orderedKeys])
   const specs = useMemo<PreferencesColumnSpec[]>(() => {
     // The modal receives this schema order too. Required-first grid ranking must not reorder groups on Save.
@@ -152,15 +159,33 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     gridState.markDirty()
   }, [alwaysColumns, specs, applyToGrid, gridState])
   const applyPreset = useCallback((preset: GridViewPreset) => {
+    if (languageView) {
+      if (preset.id === LANGUAGES_VIEW_ID && !languageView.selected) {
+        pendingLanguageView.current = { preset }
+        languageView.set(languageView.available)
+        return
+      }
+      if (preset.id !== LANGUAGES_VIEW_ID && languageView.selected) {
+        pendingLanguageView.current = { preset }
+        languageView.set(null)
+        return
+      }
+    }
     const resolved = resolvePreset(preset, addressable, alwaysColumns)
     gridState.markActive(null)
     activate(preset.id === ALL_VIEW_ID ? { kind: 'all' } : { kind: 'preset', id: preset.id, label: preset.label }, columnsViewPayload(resolved.columns.filter((k) => attributeKeys.has(k))), false)
     setChip?.(null)
-  }, [addressable, alwaysColumns, gridState, activate, attributeKeys, setChip])
+  }, [addressable, alwaysColumns, gridState, activate, attributeKeys, setChip, languageView])
   const applySaved = useCallback((payload: ColumnsViewPayload, view: SavedGridView<TPage>) => {
+    const languages = columnLanguages(payload.columns)
+    if (languageView && JSON.stringify(languages) !== JSON.stringify(languageView.selected ?? [])) {
+      pendingLanguageView.current = { payload, view }
+      languageView.set(languages.length ? languages : null)
+      return
+    }
     activate({ kind: 'saved', id: view.id, name: view.name, missing: payload.columns.filter((k) => !attributeKeys.has(k)) }, payload)
     setChip?.(payload.chip ?? null)
-  }, [activate, attributeKeys, setChip])
+  }, [activate, attributeKeys, setChip, languageView])
   applySavedRef.current = applySaved
   const applyCustom = useCallback((keys: readonly string[], locks?: readonly string[]) => {
     const prefs = preferencesFromLayout(layoutRef.current, specs)
@@ -190,16 +215,22 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     const dv = gridState.defaultView
     const l = resolveLanding({ orderedKeys, always: alwaysColumns, defaultView: dv ? { id: dv.id, name: dv.name, payload: dv.payload } : null })
     setLanding(l)
-    if (working) {
+    // A language URL is an explicit projection. A previous one-language working layout
+    // must not remove it on reload; a matching saved layout still keeps its membership.
+    const matchesSelection = (keys: readonly string[]) => !languageView?.selected || JSON.stringify(columnLanguages(keys)) === JSON.stringify(languageView.selected)
+    if (working && matchesSelection(working.filters.columns)) {
+      const languages = columnLanguages(working.filters.columns)
+      if (languageView && JSON.stringify(languages) !== JSON.stringify(languageView.selected ?? [])) { languageView.set(languages.length ? languages : null); return }
       const named = gridState.views.find((v) => JSON.stringify(v.payload) === JSON.stringify(working.filters))
       activate(named ? { kind: 'saved', id: named.id, name: named.name, missing: working.filters.columns.filter((k) => !attributeKeys.has(k)) } : { kind: 'custom', count: visibleLayoutKeys(working.filters, specs).length }, working.filters)
       gridState.markActive(named?.id ?? null)
       setChip?.(working.filters.chip ?? null)
-    } else if (dv && isColumnsViewPayload(dv.payload)) {
+    } else if (dv && isColumnsViewPayload(dv.payload) && matchesSelection(dv.payload.columns)) {
       applySaved(dv.payload, dv)
       gridState.markActive(dv.id)
     } else {
-      activate({ kind: 'all' }, columnsViewPayload(orderedKeys), false)
+      const languagePreset = languageView?.selected ? views.presets.find(preset => preset.id === LANGUAGES_VIEW_ID) : null
+      activate(languagePreset ? { kind: 'preset', id: languagePreset.id, label: languagePreset.label } : { kind: 'all' }, columnsViewPayload(languagePreset?.columns ?? orderedKeys), false)
       gridState.markActive(null)
     }
     setLandedScope(layoutSurface)
@@ -237,6 +268,20 @@ export function useSheetColumns<TRow, TPage>(a: UseSheetColumnsArgs<TRow, TPage>
     // A chip changes membership only, preserving the chosen layout's order and pins.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChip, landed])
+
+  // Run after grid landing and registry reconciliation: those effects must not overwrite
+  // the explicit view the operator requested while the language projection was loading.
+  useEffect(() => {
+    const pending = pendingLanguageView.current
+    const api = apiRef.current
+    if (!pending || !languageView || !landed || !api || api.isDestroyed()) return
+    if (!languageProjectionReady(columns, languageView.selected)) return
+    const registered = new Set(api.getColumnState().map(column => column.colId))
+    if (columns.some(column => column.locale && !registered.has(column.key))) return
+    pendingLanguageView.current = null
+    if (pending.payload && pending.view) applySaved(pending.payload, pending.view)
+    else if (pending.preset) applyPreset(views.presets.find(preset => preset.id === pending.preset!.id) ?? pending.preset)
+  }, [columns, languageView, landed, apiRef, applySaved, applyPreset, views.presets])
 
   const visibleAttributeKeys = useCallback(() => {
     const api = apiRef.current

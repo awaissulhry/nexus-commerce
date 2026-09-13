@@ -375,6 +375,7 @@ export function familyActions(ctx: FamilyActionContext): GridAction<StudioRow>[]
         const copyFrom = d.copyFromProductId
           ? family?.children.find((c) => c.id === d.copyFromProductId)?.sku ?? d.copyFromProductId
           : null
+        const copiedListings = d.copyFromProductId ? await ops.listings(d.copyFromProductId) : null
         return {
           level: 'confirm',
           title: `Add ${d.sku} to ${family?.self.sku}?`,
@@ -385,7 +386,9 @@ export function familyActions(ctx: FamilyActionContext): GridAction<StudioRow>[]
           ],
           sideEffects: [
             // 🔴 The thing the verb's name hides, and the reason this has a confirm at all.
-            'It is created as a draft with channel sync disabled. Review it before publishing.',
+            copyFrom && copiedListings
+              ? `Channel records are copied from ${copyFrom} on ${copiedListings.length} coordinates. They are not published, but stock synchronisation does not exclude them — the cascade filters on "sync paused", not on "published".`
+              : 'The child is created as a local draft. Review it before publishing.' ,
             ...warnings(validateNewVariation(d, family)).map((w) => w.message),
           ],
           payload: { parentId: family?.self.id, draft: d },
@@ -425,7 +428,7 @@ export function familyActions(ctx: FamilyActionContext): GridAction<StudioRow>[]
         if (rows.length === 0) return disabled('Select the child to delete')
         if (rows.length > 1) return disabled('Delete one child at a time, so the confirmation can name what it destroys')
         const [row] = rows
-        if (row.isParent) return disabled(`${row.sku} is a parent — a parent is removed by demoting it`)
+        if (row.isParent) return disabled(`${row.sku} is a parent. Demote it first — demoting does not delete it and does not change its listings.`)
         if (!row.parentId) return disabled('Only a child can be deleted here')
         if (!can(PERM_DELETE)) return needs(PERM_DELETE, 'Deleting a child')
         return AVAILABLE
@@ -451,7 +454,17 @@ export function familyActions(ctx: FamilyActionContext): GridAction<StudioRow>[]
         }
         const impact = classifyListings(listings)
         const live = impact.live.length
-        if (live || listings.some(listing => listing.isPublished)) return { level: 'none', title: `Delete ${row.sku}?`, unavailable: 'This product still has a marketplace listing. Resolve that listing before deleting its local record.', findings: impact.verdicts.map(verdict => ({ rowId: row.id, label: verdict.label, severity: 'error' as const })) }
+        if (live || listings.some(listing => listing.isPublished)) {
+          const held = live ? impact.live.map(v => v.row) : listings.filter(listing => listing.isPublished)
+          const coordinates = [...new Set(held.map(listing => `${listing.channel} · ${listing.marketplace}`))].join(', ')
+          return {
+            level: 'none', title: `Delete ${row.sku}?`,
+            unavailable: live
+              ? `${row.sku} still holds a marketplace id on ${coordinates}. This studio has no verb that ends those listings — end them on the channel, then reload.`
+              : `${row.sku} is marked as published on ${coordinates} with no marketplace id recorded. Check the channel before deleting the local record.`,
+            findings: impact.verdicts.map(verdict => ({ rowId: row.id, label: verdict.label, severity: 'error' as const })),
+          }
+        }
         return {
           // Severity decided by FACT, not by a flag someone set once.
           level: 'confirm',
@@ -460,7 +473,7 @@ export function familyActions(ctx: FamilyActionContext): GridAction<StudioRow>[]
           // dialog renders under its own heading — filling both printed every listing twice.
           consequences: [
             `${row.sku} is deleted permanently — there is no undo and no trash`,
-            ...(impact.verdicts.length === 0 ? ['It is not listed on any channel'] : []),
+            ...(impact.verdicts.length === 0 ? ['No channel listing records were returned by this check.'] : []),
           ],
           sideEffects: [
             'Its channel listings are deleted with it, by database cascade',

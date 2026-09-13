@@ -202,46 +202,27 @@
   line-height: 1.45;
 }
 
-/* §4.4.1's row: axis name in a 92px slot · arrow · the target listbox taking the rest. */
-.nds-vp-dock-specific {
-  display: flex;
-  align-items: center;
-  gap: var(--nds-space-8);
-  min-width: 0;
-  width: 100%;
-}
+/* VT.F item A9 — §4.4.1's OWN row rules are DELETED here: `.nds-vp-dock-specific`, `.nds-vp-dock-axis`,
+   `.nds-vp-dock-arrow`, `.nds-vp-dock-target` and `.nds-vp-dock-pinned` (below).
 
-.nds-vp-dock-axis {
-  flex: 0 0 92px;
-  width: 92px;
-  font-size: var(--nds-font-size-sm-plus);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+   VT.2c swapped section 1 to the shared `AxesPanel`, which brings its own `.nds-axes-row*` rules from the
+   engine (`design-system/grid/theme/grid.css`), and measured `oldRowsStillRendered: 0` on screen. Nothing
+   emits these class names any more: the only remaining mention of `.nds-vp-dock-specific` in the tree is an
+   assertion in `AxesPanelEditor.vitest.test.ts` that the dock does NOT render it, which is the proof they are
+   dead rather than a use of them.
 
-.nds-vp-dock-arrow {
-  flex: none;
-  font-size: 12px;
-  line-height: 1;
-  color: var(--nds-text-3);
-}
-
-.nds-vp-dock-target {
-  flex: 1;
-  min-width: 0;
-}
+   Deleted rather than left: a stale rule is the fork the shared-component rule exists to prevent — the next
+   person to give the dock a 92px axis column would find TWO definitions of it and no way to tell which the
+   screen is using. The `.nds-vp-dock-*` classes that ARE still emitted (`-section`, `-title`, `-hint`,
+   `-note`, `-values`, `-held`, `-footer`, `-state`, `-header`, `-identity`, `-name`, `-sub`, `-body`) stay
+   exactly as they are — each was checked for a non-CSS reference before this hunk, with `-section` as the
+   positive control (2 call sites in `dock/sections.tsx`). */
 
 /* §4.4.2's per-axis summary. */
 .nds-vp-dock-values {
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-4, 4px);
-}
-
-.nds-vp-dock-pinned {
-  color: var(--nds-text-link);
 }
 
 /* A held control keeps its label and its counts; only the reason is added. */

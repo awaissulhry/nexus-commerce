@@ -1,0 +1,18 @@
+[
+  {
+    "label": "Warnings: 21 affected cells across 1 column and 21 rows. A value the channel would accept but flag — the same rule the channel scopes count",
+    "text": " Warnings21 cells"
+  },
+  {
+    "label": "Needs translation: 0 affected cells across 0 columns and 0 rows",
+    "text": " Needs translation0 cells"
+  },
+  {
+    "label": "Out of date: 0 affected cells across 0 columns and 0 rows",
+    "text": " Out of date0 cells"
+  },
+  {
+    "label": "AI drafts: 0 affected cells across 0 columns and 0 rows. Cells an AI has proposed a value for. Nothing applies until you approve it.",
+    "text": " AI drafts0 cells"
+  }
+]

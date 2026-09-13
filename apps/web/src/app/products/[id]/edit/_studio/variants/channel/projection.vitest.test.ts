@@ -461,6 +461,12 @@ function projectionFixture(): ProjectionPage {
     locked: {
       reason: 'Item 257584954808 is live with Colore and Taglia. Adding or removing a specific relists it; reordering and adding values do not.',
       lockedAxisKeys: ['Colore', 'Taglia'],
+      /* VT.2c — VT.1b's unified lock serves these three on every coordinate (`variationLockFor`).
+         eBay: a SET change ends and relists the item, while a REORDER is a revise — which is why
+         `orderChangeAllowed` is `true` on the same coordinate whose axes are both locked. */
+      setChangeIs: 'relist' as const,
+      orderChangeAllowed: true,
+      externalId: '257584954808',
     },
     /* VP.2's read does NOT carry a parent row (REQUEST A6) — the fixture matches the wire rather
        than the proposal, so the surface's derived-parent path is the one this exercises. */

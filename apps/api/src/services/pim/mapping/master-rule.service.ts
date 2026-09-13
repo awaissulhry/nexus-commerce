@@ -1,3 +1,5 @@
+import { normalizeLanguage } from '../content-language.js'
+import { PRIMARY_CONTENT_LOCALE } from '../content-locale.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 /**
  * PES.6 wave-4 §1.6(C) — MASTER field rules.
@@ -175,7 +177,7 @@ export async function evaluateMasterRulesForProduct(input: {
   locale?: string
   fieldKeys?: string[]
 }): Promise<MasterRuleValue[]> {
-  const product = await prisma.product.findUnique({ where: { id: input.productId } })
+  const product = await prisma.product.findUnique({ where: { id: input.productId }, include: { translations: true } })
   if (!product) throw new Error(`Product not found: ${input.productId}`)
   const rules = await listMasterRules(product.productType)
   if (rules.length === 0) return []
@@ -189,9 +191,9 @@ export async function evaluateMasterRulesForProduct(input: {
 
   const wanted = input.fieldKeys?.length ? new Set(input.fieldKeys) : null
   const parent = product.parentId
-    ? await prisma.product.findUnique({ where: { id: product.parentId } })
+    ? await prisma.product.findUnique({ where: { id: product.parentId }, include: { translations: true } })
     : null
-  const locale = input.locale ?? 'en'
+  const locale = normalizeLanguage(input.locale ?? PRIMARY_CONTENT_LOCALE)
   const resolved = resolveAttributes({ product: product as any, parent: parent as any, locale })
   const flat: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(resolved)) flat[k] = v.value
@@ -202,7 +204,7 @@ export async function evaluateMasterRulesForProduct(input: {
     const res = evaluateExpr(rule.expr, {
       lookup: (path) => {
         if (!path.includes('.') && !(path in flat)) return undefined
-        return resolveSourcePath(path, flat, product as any, locale)
+        return resolveSourcePath(path, flat, { ...product, parent } as any, locale)
       },
     })
     out.push({

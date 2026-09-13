@@ -52,7 +52,7 @@ function rawSessionToken(req: FastifyRequest): string | undefined {
  * Plain function so it can be called both as a hook and inline from the
  * require* guards without Fastify `this`-binding issues.
  */
-async function ensureLoaded(req: FastifyRequest): Promise<void> {
+export async function ensureLoaded(req: FastifyRequest): Promise<void> {
   if (req.__sessionLoaded) return
   req.__sessionLoaded = true
   const token = rawSessionToken(req)

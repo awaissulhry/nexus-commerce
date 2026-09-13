@@ -281,42 +281,12 @@ export class EstySyncService {
     variantId: string,
     quantity: number
   ): Promise<void> {
-    try {
-      const variant = await (prisma as any).productVariation.findUnique({
-        where: { id: variantId },
-        include: { product: true },
-      });
-
-      if (!variant || !variant.product.etsyListingId) {
-        throw new Error("Variant or Etsy listing not found");
-      }
-
-      if (variant.etsyListingId) {
-        // Update variation quantity
-        await this.estyService.updateVariationQuantity(
-          variant.product.etsyListingId,
-          variant.etsyListingId,
-          quantity
-        );
-      } else {
-        // Update listing quantity
-        await this.estyService.updateListingQuantity(
-          variant.product.etsyListingId,
-          quantity
-        );
-      }
-
-      console.log(
-        `[EstySyncService] Synced inventory to Etsy: variant ${variantId} = ${quantity}`
-      );
-    } catch (error) {
-      throw new MarketplaceSyncError(
-        "ETSY",
-        "VALIDATION",
-        `Failed to sync inventory to Etsy: ${error instanceof Error ? error.message : String(error)}`,
-        { variantId, quantity }
-      );
-    }
+    throw new MarketplaceSyncError(
+      "ETSY",
+      "VALIDATION",
+      "Etsy presence is READ-ONLY through Wave 4 by decision D9.",
+      { variantId, quantity }
+    );
   }
 
   /**

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { Prisma, PrismaClient } from '@prisma/client'
 
-type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>> }
+type Context = { client: Prisma.TransactionClient; effects: Map<string, () => Promise<unknown>>; producers: Map<string, () => Promise<unknown>> }
 const context = new AsyncLocalStorage<Context>()
 
 /** Formula operations reuse the ordinary writers inside one outer transaction. */
@@ -36,13 +36,28 @@ export async function afterDatabaseCommit(key: string, effect: () => Promise<unk
   await effect()
 }
 
+/** Deduplicated synchronous producers: failure rolls the entire content transaction back. */
+export async function beforeDatabaseCommit(key: string, producer: () => Promise<unknown>) {
+  const active = context.getStore()
+  if (!active) throw new Error('A readiness producer requires the content transaction.')
+  active.producers.set(key, producer)
+}
+
 export async function inDatabaseTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
   if (context.getStore()) return work()
   for (let attempt = 0; ; attempt++) {
     const effects = new Map<string, () => Promise<unknown>>()
+    const producers = new Map<string, () => Promise<unknown>>()
     let result: T
     try {
-      result = await client.$transaction(tx => context.run({ client: tx, effects }, work), {
+      result = await client.$transaction(tx => context.run({ client: tx, effects, producers }, async () => {
+        const value = await work()
+        while (producers.size) {
+          const pending = [...producers.values()]; producers.clear()
+          for (const produce of pending) await produce()
+        }
+        return value
+      }), {
         isolationLevel: 'Serializable', maxWait: 10_000, timeout: 60_000,
       })
     } catch (error) {

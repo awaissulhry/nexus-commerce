@@ -17,11 +17,12 @@
  * 2026-09-04 (design V.4/V.9): the menu manages views as a first-class object — New view… (opens
  * the sheet's builder, which is its Customise dialog), Save as view…, Update, Rename…, Duplicate…,
  * Make default / Clear default, Delete with a confirm — and a saved view can carry a NOTE from the
- * surface (the columns it names that this product type lacks). The inline slot beside the trigger
- * hosts every one of those small conversations (a name, a confirm) so nothing needs a second
- * dialog for one field.
+ * surface (the columns it names that this product type lacks). The anchored popover hosts each small conversation while the Views trigger keeps its place.
  */
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
+import { usePopoverPosition } from '../../components/usePopoverPosition'
+import { useClickAway } from '../../components/useClickAway'
 import { AlertTriangle, ChevronDown } from 'lucide-react'
 
 import { Button, Input } from '@/design-system/primitives'
@@ -33,7 +34,7 @@ import { isColumnsViewPayload } from '../views/viewPayload'
 import type { GridViewPreset } from '../views/presets'
 
 export interface GridViewsMenuProps<TPage> {
-  views: GridStateApi<TPage>
+  views: Pick<GridStateApi<TPage>, 'views' | 'activeId' | 'save' | 'apply' | 'remove' | 'rename' | 'duplicate' | 'setDefault' | 'clearDefault'>
   /** Named column sets this surface ships with. Omit for a surface that has none. */
   presets?: readonly GridViewPreset[]
   /** The preset currently applied, if any — shown ticked, and named on the trigger. */
@@ -97,7 +98,7 @@ function useSafeToast(): {
   return { toast: (message, tone) => setInline({ message, tone }), inline }
 }
 
-/** The small conversation the inline slot is hosting, if any. */
+/** The small conversation the anchored popover is hosting, if any. */
 type Prompt =
   | { mode: 'save' }
   | { mode: 'rename'; view: SavedGridView<unknown> }
@@ -122,6 +123,15 @@ export function GridViewsMenu<TPage>({
   const [prompt, setPrompt] = useState<Prompt | null>(null)
   const [name, setName] = useState('')
   const [busy, setBusy] = useState(false)
+  const anchorRef = useRef<HTMLSpanElement>(null)
+  const { popRef, style: promptStyle } = usePopoverPosition(!!prompt, anchorRef, { width: 'auto', align: 'start' })
+  const closePrompt = () => { setPrompt(null); anchorRef.current?.querySelector<HTMLButtonElement>('button')?.focus() }
+  useClickAway([anchorRef, popRef], () => { if (!busy) closePrompt() }, !!prompt)
+  useEffect(() => {
+    if (!prompt) return
+    popRef.current?.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    return () => { anchorRef.current?.querySelector<HTMLButtonElement>('button')?.focus() }
+  }, [prompt, popRef])
   const active = views.views.find((v) => v.id === views.activeId) ?? null
   const activePreset = presets.find((p) => p.id === activePresetId) ?? null
 
@@ -195,57 +205,54 @@ export function GridViewsMenu<TPage>({
       : []),
   ]
 
-  if (prompt) {
-    const trimmed = name.trim()
-    const inlineStyle = { display: 'inline-flex', gap: 6, alignItems: 'center' } as const
-    if (prompt.mode === 'delete') {
-      return (
-        <span style={inlineStyle} role="group" aria-label={`Delete view ${prompt.view.name}`}>
-          <span className="nds-cell-muted" style={{ fontSize: 12 }}>Delete “{prompt.view.name}”?</span>
-          <Button size="sm" variant="danger" disabled={busy} onClick={() => void run('View deleted', () => views.remove(prompt.view.id))}>Delete</Button>
-          <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPrompt(null)}>Cancel</Button>
-        </span>
-      )
-    }
-    const verb = prompt.mode === 'save' ? 'Save view' : prompt.mode === 'rename' ? 'Rename' : 'Duplicate'
-    const submit = () => {
-      if (!trimmed) return
-      if (prompt.mode === 'save') return void run('View saved', () => (onSaveCurrent ? onSaveCurrent(trimmed) : views.save(trimmed)))
-      if (prompt.mode === 'rename') return void run('View renamed', () => views.rename(prompt.view.id, trimmed))
-      return void run('View duplicated', () => views.duplicate(prompt.view as SavedGridView<TPage>, trimmed))
-    }
-    return (
-      <span style={inlineStyle}>
-        <Input
-          autoFocus
-          size="xs"
-          placeholder="View name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setPrompt(null)
-            if (e.key === 'Enter') submit()
-          }}
-          style={{ width: 180 }}
-          aria-label="View name"
-        />
-        <Button size="sm" variant="primary" disabled={!trimmed || busy} onClick={submit}>
-          {verb}
-        </Button>
-        <Button size="sm" variant="ghost" disabled={busy} onClick={() => setPrompt(null)}>Cancel</Button>
-      </span>
-    )
+  const trimmed = name.trim()
+  const verb = prompt?.mode === 'save' ? 'Save view' : prompt?.mode === 'rename' ? 'Rename' : 'Duplicate'
+  const submit = () => {
+    if (!prompt || busy || !trimmed || prompt.mode === 'delete') return
+    if (prompt.mode === 'save') return void run('View saved', () => (onSaveCurrent ? onSaveCurrent(trimmed) : views.save(trimmed)))
+    if (prompt.mode === 'rename') return void run('View renamed', () => views.rename(prompt.view.id, trimmed))
+    return void run('View duplicated', () => views.duplicate(prompt.view as SavedGridView<TPage>, trimmed))
   }
+  const promptPanel = prompt && typeof document !== 'undefined' ? createPortal(
+    <div ref={popRef} style={promptStyle} className={`nds-view-prompt${anchorRef.current?.closest('.dark') ? ' dark' : ''}`}
+      role="dialog" aria-label={prompt.mode === 'delete' ? `Delete view ${prompt.view.name}` : verb}
+      onKeyDown={event => {
+        if (event.key === 'Escape' && !busy) { event.preventDefault(); event.stopPropagation(); closePrompt() }
+        if (event.key === 'Enter' && event.target instanceof HTMLInputElement) { event.preventDefault(); submit() }
+        if (event.key === 'Tab') {
+          const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled)')]
+          const first = controls[0], last = controls[controls.length - 1]
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
+        }
+      }}>
+      {prompt.mode === 'delete' ? <>
+        <div>Delete “{prompt.view.name}”?</div>
+        <div className="nds-confirm-actions">
+          <Button size="sm" data-autofocus disabled={busy} onClick={closePrompt}>Cancel</Button>
+          <Button size="sm" variant="danger" disabled={busy} onClick={() => { if (!busy) void run('View deleted', () => views.remove(prompt.view.id)) }}>Delete</Button>
+        </div>
+      </> : <>
+        <label className="nds-view-prompt-name">View name
+          <Input data-autofocus size="sm" placeholder="View name" value={name} onChange={e => setName(e.target.value)} disabled={busy} />
+        </label>
+        <div className="nds-confirm-actions">
+          <Button size="sm" disabled={busy} onClick={closePrompt}>Cancel</Button>
+          <Button size="sm" variant="primary" disabled={!trimmed || busy} onClick={submit}>{verb}</Button>
+        </div>
+      </>}
+    </div>, document.body) : null
   return (
     <span className="nds-grid-views" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-      <Menu
+      <span ref={anchorRef}><Menu
         label={<>{active ? `${active.name}${countOf(active)}` : activePreset ? `${activePreset.label}${count(activePreset.columns.length)}` : emptyLabel} <ChevronDown size={11} /></>}
         items={items}
-        triggerProps={{ className: 'nds-btn sm' }}
-      />
+        triggerProps={{ className: 'nds-btn sm', disabled: !!prompt || busy }}
+      /></span>
+      {promptPanel}
       {inline && (
         <span
-          className={inline.tone === 'danger' ? 'nds-cell-stock-out' : 'nds-cell-muted'}
+          className={inline.tone === 'danger' ? 'nds-inline-error' : 'nds-cell-muted'}
           role="status"
           title={inline.message}
           style={{ display: 'inline-flex', gap: 4, alignItems: 'center', fontSize: 12 }}

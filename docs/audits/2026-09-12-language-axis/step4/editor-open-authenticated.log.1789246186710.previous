@@ -1,0 +1,150 @@
+
+📌 BUILD STAMP — every file whose change can invalidate a reading below (sha1, first 8):
+   21:59:08  sha1:5b14ac42  docs/2026-09-03-cell-editing-contract.md
+   10:50:36  sha1:22b88761  apps/web/src/design-system/grid/NexusGrid.tsx
+   11:51:12  sha1:2f6b33f0  apps/web/src/design-system/grid/editors/openGesture.ts
+   01:51:51  sha1:10b69d50  apps/web/src/design-system/grid/editors/editorBox.ts
+   21:59:08  sha1:ffab68b1  apps/web/src/design-system/grid/theme/grid.css
+   00:09:09  sha1:a3fb04f6  apps/web/src/design-system/grid/hosts/GridSheet.tsx
+   03:23:01  sha1:e63dbd62  apps/web/src/app/products/[id]/edit/_studio/sheet/master/columns.tsx
+   21:59:08  sha1:48371754  scripts/check-editor-open.mjs
+   21:17:29  sha1:c1b8148a  scripts/studio-browser-auth.mjs
+   07:53:52  sha1:11b41029  apps/web/src/design-system/grid/editors/FormulaCellEditor.tsx
+   21:59:08  sha1:95cc79d6  apps/web/src/design-system/components/SourceIndicator.tsx
+   21:59:08  sha1:8bfc2f04  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/CascadeCell.tsx
+   16:56:18  sha1:9101293e  apps/web/src/app/products/[id]/edit/_studio/sheet/channel/ChannelSheet.tsx
+
+🕐 22:13:26 · WHAT ELSE COULD BE SHARING THIS API — a snapshot, not a window
+   gate processes (node, this script), incl. this one: 1
+     pid 92879 ppid 92863  /opt/homebrew/Cellar/node/25.9.0_2/bin/node scripts/check-editor-open.mjs --strict
+   browser processes owned by a gate: 0
+   (a snapshot cannot see a run that already exited or one that starts later — read as "at least these, at this instant")
+
+── first (one gesture per page load — the arm the defect lived in)
+   22:14:00 ❌ text      brand        opened 20/20   popup:value×15 popup:formula×4 popup:UNCLASSIFIED:nds-formula-editor×1 writes-armed 0
+   22:14:34 ✅ longtext  name         opened 20/20   popup:largetext×16 popup:formula×4 writes-armed 0
+   22:16:22 ✅ number    basePrice    opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:16:56 ❌ select    status       opened 19/19   popup:listbox×15 popup:formula×4 writes-armed 0   ABSTAINED 1
+
+── early
+   22:17:09 ✅ text      brand        opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:17:20 ✅ longtext  name         opened 20/20   popup:largetext×16 popup:formula×4 writes-armed 0
+   22:17:36 ✅ number    basePrice    opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:17:48 ✅ select    status       opened 20/20   popup:listbox×16 popup:formula×4 writes-armed 0
+
+── settled
+   22:18:15 ✅ text      brand        opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:18:27 ✅ longtext  name         opened 20/20   popup:largetext×16 popup:formula×4 writes-armed 0
+   22:18:42 ✅ number    basePrice    opened 20/20   popup:value×16 popup:formula×4 writes-armed 0
+   22:18:54 ✅ select    status       opened 20/20   popup:listbox×16 popup:formula×4 writes-armed 0
+
+── geometry (the sizing rule, each kind parked against the right edge)
+   caps read from source: longtext 560×320 · formula 560×360 · select 320×320 · list 360×360 · measure 360×220
+   ✅ 1728 longtext  description           cell 110px@1428  popup 300px@1428 (Δ0) right=1728/1728 outline=2 over room=300<cap
+   ✅ 1728 select    status                cell 110px@1428  popup 110px@1428 (Δ0) right=1538/1728 outline=2 under·value visible room=300<cap
+   ✅ 1728 formula   description           cell 110px@1428  popup 300px@1428 (Δ0) right=1728/1728 outline=2 over room=300<cap
+   ✅ 1440 longtext  description           cell 110px@1140  popup 300px@1140 (Δ0) right=1440/1440 outline=2 over room=300<cap
+   ✅ 1440 select    status                cell 110px@1140  popup 110px@1140 (Δ0) right=1250/1440 outline=2 under·value visible room=300<cap
+   ✅ 1440 formula   description           cell 110px@1140  popup 300px@1140 (Δ0) right=1440/1440 outline=2 over room=300<cap
+   ✅ 1280 longtext  description           cell 110px@ 951  popup 329px@ 951 (Δ0) right=1280/1280 outline=2 over room=329<cap
+   ✅ 1280 select    status                cell 110px@ 980  popup 110px@ 980 (Δ0) right=1090/1280 outline=2 under·value visible room=300<cap
+   ✅ 1280 formula   description           cell 110px@ 980  popup 300px@ 980 (Δ0) right=1280/1280 outline=2 over room=300<cap
+
+── contract (docs/2026-09-03-cell-editing-contract.md, asserted line by line on both scopes)
+   16 rows × 5 gestures parsed from the document
+
+   ── scope master
+   22:19:27 ✅ text      fresh      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:19:43 ✅ text      batch      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:19:59 ✅ text      flush      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:20:15 ✅ longtext  fresh      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:20:31 ✅ longtext  batch      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:20:48 ✅ longtext  flush      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:21:07 ✅ number    fresh      basePrice                dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:21:27 ✅ number    batch      basePrice                dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:21:51 ✅ number    flush      basePrice                dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:22:08 ✅ select    fresh      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:22:24 ✅ select    batch      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:22:42 ✅ select    flush      status                   dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:23:01 ✅ text      locked     __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:23:19 ✅ text      fxblocked  __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:23:38 ✅ list      fresh      supplier_declared_dg_hz_regulation dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   ·  measure   fresh      n/a — master declares no fresh measure column
+
+   ── scope AMAZON·IT
+   22:24:05 ✅ text      fresh      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:24:18 ✅ text      batch      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:24:32 ✅ text      flush      brand                    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:24:45 ✅ longtext  fresh      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:24:58 ✅ longtext  batch      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:25:12 ✅ longtext  flush      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:25:27 ✅ number    fresh      item_package_quantity (for basePrice) dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:25:43 ✅ number    batch      item_package_quantity (for basePrice) dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:26:01 ✅ number    flush      item_package_quantity (for basePrice) dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:26:16 ✅ select    fresh      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:26:30 ✅ select    batch      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:26:47 ✅ select    flush      material_1 (for status)  dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:27:03 ✅ text      locked     __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:27:18 ✅ text      fxblocked  __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:27:35 ✅ list      fresh      supplier_declared_dg_hz_regulation dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   22:27:50 ✅ measure   fresh      item_weight              dblclick=pop:measure enter=pop:measure f2=pop:measure type=pop:measure equals=pop:fx
+
+   ── scope EBAY·IT
+   22:28:00 ✅ text      fresh      videoId (for brand)      dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:28:10 ✅ text      batch      videoId (for brand)      dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:28:22 ✅ text      flush      videoId (for brand)      dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:28:30 ✅ longtext  fresh      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:28:38 ✅ longtext  batch      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:28:47 ✅ longtext  flush      name                     dblclick=pop:text enter=pop:text f2=pop:text type=pop:text equals=pop:fx
+   22:28:57 ✅ number    fresh      price (for basePrice)    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:29:07 ✅ number    batch      price (for basePrice)    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:29:20 ✅ number    flush      price (for basePrice)    dblclick=pop:value enter=pop:value f2=pop:value type=pop:value equals=pop:fx
+   22:29:29 ✅ select    fresh      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:29:37 ✅ select    batch      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:29:48 ✅ select    flush      brand (for status)       dblclick=pop:list enter=pop:list f2=pop:list type=pop:list equals=pop:fx
+   22:29:59 ✅ text      locked     __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:30:09 ✅ text      fxblocked  __productRole (for amazonAsin) dblclick=none+say enter=none+say f2=none+say type=none+say equals=none+say
+   22:30:18 ✅ list      fresh      closure_fastening (for supplier_declared_dg_hz_regulation) dblclick=pop:multi enter=pop:multi f2=pop:multi type=pop:multi equals=pop:fx
+   22:30:28 ✅ measure   fresh      packageWeight (for item_weight) dblclick=pop:measure enter=pop:measure f2=pop:measure type=pop:measure equals=pop:fx
+
+── refused (a stored formula whose result the server refused, stubbed on the wire)
+      stub served 1× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height ag-cell-value nds-cell-is-formula-refused nds-ag-cell nds-cell-is-editable
+   22:30:34 ✅ master     refusedClass=true ƒ-gone=true mark="⚠" tooltip=server sentence verbatim
+      stub served 2× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=primary:cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height nds-cell-is-editable ag-cell-value nds-cell-is-formula-refused nds-ag-cell
+   22:31:13 ❌ AMAZON·IT  refusedClass=true ƒ-gone=true mark="warning icon" tooltip=DIFFERS
+      stub served 3× · productId=cmokmy3a40078pm0p1fvnu523 · rowId=primary:cmokmy3a40078pm0p1fvnu523
+        after cell recreate: refusedClass=true
+        classes: ag-cell ag-cell-not-inline-editing ag-cell-normal-height nds-cell-is-editable ag-cell-value nds-cell-is-formula-refused nds-ag-cell
+   22:31:51 ❌ EBAY·IT    refusedClass=true ƒ-gone=true mark="warning icon" tooltip=DIFFERS
+
+── negative control (the run above is worthless if this opens an editor)
+   ✅ a header double-click opens nothing — the detector can report a miss
+
+── wire
+   API hosts the page dialled: loopback:8091 · expected loopback:8091
+
+── API writes armed across the whole run: 0 (aborted at the network layer; none reached a database)
+── expected saves HELD open to produce the `flush` state: 12 (on name, XAVIA fixture, never completed)
+   announced at: tooltip=DIFFERS`; the token lookup resolved `FIXTURE-REGISTER-B0-FLUSH` and would fail on its absence
+
+── parity (master·DE, AMAZON·IT, EBAY·IT — one chrome, one footer, one cell)
+   master     {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   AMAZON·IT  {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   EBAY·IT    {"headerH":29,"rowH":36,"cellPad":"9px/9px","cellFont":"13px 500","floatingFilterRow":false,"footerNote":"Enter to edit · Enter again to save · ↓↑ to move · Tab → · drag the corner to fill · ⌘Z ?","identityHeader":"Product","everyCellHasBase":true,"selectHasChevron":true,"opt_listChip":null,"opt_listCellNotSelect":null,"parentBand":{"pic":true,"sub":false,"mark":false,"trail":"nds-readypill"}}
+   ·  AMAZON·IT · opt_listChip: n/a — master renders no such cell in its landing view
+   ·  AMAZON·IT · opt_listCellNotSelect: n/a — master renders no such cell in its landing view
+   ·  EBAY·IT · opt_listChip: n/a — master renders no such cell in its landing view
+   ·  EBAY·IT · opt_listCellNotSelect: n/a — master renders no such cell in its landing view
+
+🔴 1 GESTURE(S) NOT MEASURED — "could not measure" is not "measured green":
+   · first/select/dblclick/corner: the point is over nothing — off screen?
+
+❌ OPEN-GESTURE GATE FAILED — 4 finding(s):
+   · first · text · type · centre: opened popup:UNCLASSIFIED:nds-formula-editor, expected popup:value (one editor mode per kind — ruling 2)
+   · refused AMAZON·IT · name: the mark's tooltip is not the server's sentence verbatim — got null
+   · refused EBAY·IT · name: the mark's tooltip is not the server's sentence verbatim — got null
+   · 1 gesture(s) could not be measured

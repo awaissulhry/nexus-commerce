@@ -3,7 +3,11 @@ type Row = Record<string, any>
 const clone = <T>(v: T): T => structuredClone(v)
 const eq = (a: any, b: any) => a instanceof Date || b instanceof Date ? new Date(a).getTime() === new Date(b).getTime() : a === b
 export function importTestStore(options: { recordQueries?: boolean } = {}) {
-  const data: Record<string, Map<string, Row>> = Object.fromEntries(['product', 'channelListing', 'channelConnection', 'productFamily', 'category', 'categorySchema', 'categoryChannelMapping', 'marketplace', 'productListingAlias', 'productCategory', 'bulkOperation', 'importJob', 'importJobRow', 'scheduledImport', 'auditLog', 'ebayDescriptionTheme', 'cellFormula', 'fieldValueMap', 'sizeScaleMap', 'fieldLinkGroup'].map(k => [k, new Map()]))
+  const data: Record<string, Map<string, Row>> = Object.fromEntries(['product', 'channelListing', 'channelConnection', 'productFamily', 'category', 'categorySchema', 'categoryChannelMapping', 'marketplace', 'productListingAlias', 'productCategory', 'bulkOperation', 'importJob', 'importJobRow', 'scheduledImport', 'auditLog', 'ebayDescriptionTheme', 'cellFormula', 'fieldValueMap', 'sizeScaleMap', 'fieldLinkGroup',
+    // LX.F R-LX-13 — the three stores LX added. Without them an apply failed with
+    // "Cannot read properties of undefined (reading 'create')" and the job read
+    // PARTIAL, with the real cause invisible in the outcome rows.
+    'productTranslation', 'channelListingTranslation', 'readinessIndex', 'outboundSyncQueue'].map(k => [k, new Map()]))
   const queries: { model: string; method: string; args: Row; returned: number }[] = []
   const failures = new Map<string, Error>()
   let sequence = 0, undo: (() => void)[] | null = null
@@ -14,6 +18,16 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     if (key === 'AND') return expected.every((w: Row) => matches(row, w))
     if (key.startsWith('workspace_')) return matches(row, expected)
     if (key === 'channel_code') return matches(row, expected)
+    // LX.F2 R-LX-21 — a COMPOUND UNIQUE arrives as ONE key whose value names the real
+    // columns. Two were special-cased by name above and the third threw: measured,
+    // `content-write.ts`'s closing
+    // `channelListingTranslation.findUniqueOrThrow({ where: { channelListingId_language: … } })`
+    // answered `Not found` for a row it had created five lines earlier, and the transfer job
+    // read PARTIAL with "Not found" as its only word. The rule is now DERIVED instead of
+    // listed (`reference_a_list_of_members_is_a_set_claim`): a key the row does not carry,
+    // whose value is a plain object naming only keys the row DOES carry, is a compound unique.
+    if (!(key in row) && expected && typeof expected === 'object' && !(expected instanceof Date) && !Array.isArray(expected)
+      && Object.keys(expected).length > 0 && Object.keys(expected).every(k => k in row)) return matches(row, expected)
     if (key === 'children') return [...data.product.values()].some(p => p.parentId === row.id && matches(p, expected.some))
     if (key === 'parent') return !!data.product.get(row.parentId) && matches(data.product.get(row.parentId)!, expected)
     if (key === 'product') return !!data.product.get(row.productId) && matches(data.product.get(row.productId)!, expected)
@@ -28,12 +42,39 @@ export function importTestStore(options: { recordQueries?: boolean } = {}) {
     const old = data[model].get(id)
     if (undo) undo.push(() => { if (old) data[model].set(id, old); else data[model].delete(id) })
   }
+  /** LX.F2 — the one place that answers a `translations` include, for either owner. */
+  const translationsOf = (model: string, row: Row): Row[] =>
+    model === 'channelListing' ? [...data.channelListingTranslation.values()].filter(t => t.channelListingId === row.id).map(clone)
+    : model === 'product' ? [...data.productTranslation.values()].filter(t => t.productId === row.id).map(clone)
+    : clone(row.translations ?? [])
   const db: Row = {}
   for (const model of Object.keys(data)) {
     const result = (row: Row | undefined, args: Row = {}) => {
       if (!row) return null
       const out = clone(row)
       if (args.select?.product) out.product = row.productId ? { parentId: data.product.get(row.productId)?.parentId ?? null } : null
+      // LX.F R-LX-13 — a selected TO-MANY relation is always an array in Prisma's
+      // answer, never undefined. LX reads `translations` on products and listings
+      // (`catalog-product-transfer.ts:36,41`), and this store returned `undefined`
+      // for any row whose fixture predates the relation, which read as
+      // "Cannot read properties of undefined (reading 'map')" — a 400 on export.
+      // LX.F2 R-LX-21 — and it must be the REAL relation, not the row's own field. This
+      // returned `row.translations ?? []`, which no writer ever sets, so `translations` was
+      // permanently `[]`: `content-write.ts`'s `prior = listing.translations.find(...)` never
+      // found the pin row the SAME-LANGUAGE CASCADE had just created, took its `create`
+      // branch, and left **two `ChannelListingTranslation` rows for one
+      // `(channelListingId, language)`** — a pair the production unique index makes
+      // impossible, so the harness was hiding the update path instead of exercising it
+      // (measured: `fixture-6 {follows:['title']}` and `fixture-130 {name:'HTTP title'}`, both
+      // `p0-account-a`/`it`, in one apply).
+      if (args.select?.translations || args.include?.translations) out.translations = translationsOf(model, row)
+      // LX's same-language cascade loads each listing WITH its product and that
+      // product's translations (`master-content.service.ts:116`), a nested include
+      // this store did not answer — `listing.product.sku` then threw.
+      if (args.include?.product) {
+        const owner = row.productId ? data.product.get(row.productId) : undefined
+        out.product = owner ? { ...clone(owner), translations: translationsOf('product', owner) } : null
+      }
       if (args.include?.parent) out.parent = row.parentId ? clone(data.product.get(row.parentId) ?? null) : null
       if (args.include?._count) out._count = { children: [...data.product.values()].filter(p => p.parentId === row.id).length }
       if (args.select) return Object.fromEntries(Object.keys(args.select).map(k => [k, out[k]]))

@@ -1,0 +1,27 @@
+{
+  "phase": "drift-cell",
+  "writtenAt": "2026-09-12T15:01:53.315Z",
+  "readAt": "2026-09-12T15:02:42.137Z",
+  "delayMs": 48822,
+  "productVersion": [
+    1,
+    2
+  ],
+  "translationVersion": [
+    0,
+    1
+  ],
+  "listingVersion": [
+    18,
+    19
+  ],
+  "pinFollowMarkerVersion": 1,
+  "reviewedAt": "2026-09-12T15:01:53.198",
+  "legacyValuesUnchanged": true,
+  "queue": {
+    "count": 1,
+    "language": "de",
+    "heldUntil": "2099-01-01T00:00:00"
+  },
+  "providerAttempts": []
+}

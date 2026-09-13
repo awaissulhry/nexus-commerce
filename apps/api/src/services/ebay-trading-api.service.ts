@@ -15,8 +15,18 @@ const SITE_ID_BY_MARKET: Record<string, string> = {
   UK: '3',
 }
 
+export function ebaySiteMarket(market: string): string {
+  const code = (market ?? '').toUpperCase()
+  return code === 'GB' ? 'UK' : code
+}
+
+export function ebayListingRegion(market: string): string {
+  const code = (market ?? '').toUpperCase()
+  return code === 'UK' ? 'GB' : code
+}
+
 export function siteIdForMarket(market: string): string {
-  const id = SITE_ID_BY_MARKET[(market ?? '').toUpperCase()]
+  const id = SITE_ID_BY_MARKET[ebaySiteMarket(market)]
   if (!id) throw new Error(`unknown eBay market: ${market}`)
   return id
 }

@@ -1,3 +1,6 @@
+import { closedMarketSet } from '../amazon-market-offer.service.js'
+import { assertPushAllowed } from '@nexus/shared/push-lock'
+import { readPushControls } from '../listing-push-controls.js'
 import { amazonSpClient } from '../../lib/amazon-sp-client.js'
 /**
  * W12.1 — Amazon JSON_LISTINGS_FEED batch submission.
@@ -55,13 +58,14 @@ export const MARKETPLACE_IDS: Record<string, string> = {
   UK: 'A1F83G8C2ARO7P',
 }
 
-export const MARKETPLACE_LOCALE: Record<string, string> = {
-  IT: 'it_IT',
-  DE: 'de_DE',
-  FR: 'fr_FR',
-  ES: 'es_ES',
-  UK: 'en_GB',
-}
+// LX.F P2-20 — Appendix A's market→locale map, DELETED. It had exactly one reference
+// in the whole repo (`images/amazon-image-feed.service.ts` imported it and never read
+// it: 0 hits for `MARKETPLACE_LOCALE[`, against 8 for a sibling export as the positive
+// control), and it carried no `BE` key while the authority says Belgium speaks
+// `['nl','fr']` — so any future content use of it would have returned `undefined` for
+// Belgium. Nothing in this file publishes localized text (the operations are
+// price/stock/status/image), so nothing needs a replacement; a caller that ever does
+// must read `languageTag(language, code)` with a language from `Marketplace.languages`.
 
 export type AmazonBatchOperation =
   | { type: 'price'; sku: string; currency: string; value: number }
@@ -269,6 +273,13 @@ export async function submitAmazonListingsBatch(
     }
   }
 
+  const pushControls = await readPushControls({ channel: 'AMAZON', skus: input.operations.map(operation => operation.sku), allowAbsent: true })
+  const closed = await closedMarketSet(pushControls.map(row => row.productId))
+  for (const row of pushControls) {
+    const refusal = assertPushAllowed(row)
+      ?? (closed.has(`${row.productId}|${row.marketplace.toUpperCase()}`) ? assertPushAllowed({offerClosedAt:'closed'}) : null)
+    if (refusal) throw Object.assign(new Error(`${refusal.code}: ${refusal.sentence}`), { code: refusal.code, refusal })
+  }
   // Lazy-load the SP-API client so dry-run paths never pay the
   // import cost (the client pulls in AWS auth chain + a 1MB+ tree).
   const sp: any = amazonSpClient()
