@@ -596,12 +596,16 @@ const armHeldSave = async (rowId) => {
 const load = async () => {
   inFlight = 'load'
   await page.goto(STUDIO, { waitUntil: 'domcontentloaded' })
-  const ok = await page.waitForFunction(() => document.querySelectorAll('.ag-row[row-id]').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
-  if (!ok) {
+  // Pinned rows can render before the center body. Wait for the exact row this
+  // gate will address, and capture its identity in that same successful read.
+  const ready = await page.waitForFunction(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') || false, null, { timeout: ROWS_MS }).catch(() => null)
+  if (!ready) {
     const visible = (await page.locator('body').innerText()).slice(0, 800)
     throw new Error(`Editor rows were not rendered at ${page.url()}; visible page: ${visible}`)
   }
-  return page.evaluate(() => document.querySelector('.ag-grid-scrolling-container .ag-row[row-id]')?.getAttribute('row-id') ?? null)
+  const rowId = await ready.jsonValue()
+  await ready.dispose()
+  return rowId
 }
 
 /** One gesture, with its positive control. Returns `{opened, shape}` or `{abstain}`. */
@@ -742,7 +746,13 @@ for (const timing of GESTURE_TIMINGS) {
       const before = armedWrites.length
       inFlight = `${timing}/${k.kind}/${gesture}/${spot}/${i}`
       const res = await fire(rowId, k.colId, gesture, spot)
-      if (res.abstain) { abst++; abstentions.push(`${timing}/${k.kind}/${gesture}/${spot}: ${res.abstain}`); continue }
+      if (res.abstain) {
+        abst++
+        const reason = `${timing}/${k.kind}/${gesture}/${spot}: ${res.abstain}`
+        abstentions.push(reason)
+        console.error(`   NOT MEASURED: ${reason}`)
+        continue
+      }
       n++
       if (res.opened) opened++
       else failures.push(`${timing} · ${k.kind} (${k.colId}) · ${gesture} · ${spot}${res.on === 'fill-handle' ? ' (ON THE FILL HANDLE — the 2026-09-03 P0)' : ''}: NO EDITOR within 250ms; detail=${JSON.stringify(res.detail)}`)
