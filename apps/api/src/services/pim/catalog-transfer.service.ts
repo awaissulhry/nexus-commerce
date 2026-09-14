@@ -1,5 +1,6 @@
 import { inDatabaseTransaction, activeDatabaseTransaction } from '../../lib/database-context.js'
 import { writeContent } from './content-write.js'
+import { produceReadiness } from './readiness-index.service.js'
 import { lockCategoryTree } from '../category-lock.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
 import { productReadCacheService } from '../product-read-cache.service.js'
@@ -238,6 +239,7 @@ export async function applyTransferTarget(tx: Prisma.TransactionClient, target: 
     }
   }
   for (const write of target.contentWrites ?? []) await writeContent({ ...write, productId: id.entity === 'Products' ? entityId : product!.id, label: `Import ${id.sku} · ${write.address.tier === 'source' ? 'source' : write.address.language}`, userId, state: 'reviewed' })
+  await produceReadiness(id.entity === 'Products' ? entityId : product!.id, id.entity === 'Products' ? undefined : { channel: id.channel, market: id.marketplace, accountId: id.accountId })
   await productReadCacheService.refreshInTransaction(tx, [id.entity === 'Products' ? entityId : product!.id, ...(product?.parentId ? [product.parentId] : [])])
   await tx.auditLog.create({ data: { userId, entityType: id.entity === 'Products' ? 'Product' : 'ChannelListing', entityId, action: target.create ? 'create' : 'update',
     before: json(target.cells.map(c => ({ field: c.field, locale: c.locale, value: c.before, state: c.beforeState }))) as Prisma.InputJsonValue,

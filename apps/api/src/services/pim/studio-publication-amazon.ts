@@ -56,7 +56,16 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   if (products.length > 1) {
     const stored = await loadStoredVariationProjection({ productId: parent.id, channel: scope.channel, market: scope.marketplace, accountId: scope.accountId, aliasKey: facts.destination.aliasKey ?? '' })
     variationInput = stored.input
-    variationInput.family.variants = variationInput.family.variants?.map(v => ({ ...v, included: products.some(p => p.id === v.id) }))
+    variationInput.family.variants = variationInput.family.variants?.map(v => {
+      const cells = resolved[0]?.products.find(p => p.productId === v.id)?.cells ?? {}
+      const axisValues = { ...v.axisValues }
+      for (const axis of stored.cell.axes.filter(a => a.included)) {
+        const field = resolved[0]?.catalogue?.fields.find(f => f.sheetKey === axis.axisKey || f.fieldKey === axis.target)
+        const value = field ? cells[field.fieldKey]?.value : undefined
+        if (value !== undefined) axisValues[axis.familyKey] = value == null ? '' : String(value)
+      }
+      return { ...v, axisValues, included: products.some(p => p.id === v.id) }
+    })
     projection = resolveVariationProjection(variationInput)
     const errors = variationReadinessItems(projection, `AMAZON ${scope.marketplace}`).filter(i => i.severity === 'error')
     if (!projection.theme || errors.length) throw new Error(errors.map(i => i.message).join('; ') || 'Set the Amazon variation theme in Information before publishing.')
@@ -91,12 +100,16 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
         delete row[slot.attribute]
         if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
       }
-    } else {
+    } else if (row._isNew || object(listing?.platformAttributes)._productMediaLocales) {
       const images = publicationImages(facts, product)
       if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
       if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
       row.main_product_image_locator = images[0]
       for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+    } else {
+      // A partial content update has no gallery edit to publish. The shared
+      // asset library can include several colours and is not a selected gallery.
+      for (const slot of amazonImageSlots) delete row[slot.attribute]
     }
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
     const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, hints)

@@ -5,6 +5,7 @@ import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { normalizeLanguage } from './content-language.js'
 import { contentField, contentSourceHash } from './content-resolver.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
+import { contentStorageValue } from './content-read.js'
 
 export interface TranslationWrite {
   productId: string; locale: string; address: ContentAddress; values: Record<string, unknown>
@@ -31,9 +32,10 @@ export async function writeTranslation(input: TranslationWrite) {
     const attributes = { ...(prior?.attributes as Record<string, unknown> ?? {}) }
     const data: Record<string, any> = {}
     const changed: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(input.values)) {
+    for (const [key, incoming] of Object.entries(input.values)) {
       if (['source', 'sourceModel', 'reviewedAt'].includes(key)) continue
       const field = contentField(key), column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
+      const value = contentStorageValue(field, incoming)
       changed[field] = value
       if (column) { data[column] = value ?? (['bulletPoints','keywords'].includes(column) ? [] : null); delete attributes[field]; if (value === null || Array.isArray(value) && !value.length || value === '') attributes[field] = value }
       else attributes[field] = value

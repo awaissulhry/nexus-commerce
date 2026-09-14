@@ -31,6 +31,9 @@ import { prepareAmazonPublication, sendAmazonPublication, readAmazonPublication,
 import { ebayPublicationXml, sendEbayPublication } from './studio-publication-ebay.js'
 import { publicationImages } from './studio-publication-media.js'
 import { writeMediaCollection } from '@nexus/shared/product-media'
+import { loadStoredVariationProjection } from './stored-variation-projection.js'
+import { resolveVariationProjection } from './variation-rules.service.js'
+import { limitsFor, vocabularyFor } from './family-projection-limits.js'
 
 const amazon: AmazonPublication = { kind: 'amazon', sellerId: 'SELLER', marketplaceId: 'MARKET', feed: { header: {}, messages: [
   { messageId: 1, sku: 'PARENT', operationType: 'UPDATE', requirements: 'LISTING_PRODUCT_ONLY', productType: 'COAT', attributes: { parentage_level: [{ value: 'parent' }] } },
@@ -115,8 +118,43 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
     listings: [{ productId: 'p', externalListingId: 'ASIN', offers: [{ isActive: true, sku: 'ALIAS-SKU', fulfillmentMethod: 'FBM' }], followMasterPrice: false, priceOverride: 35, stockBuffer: 2 }],
     resolved: [{ products: [{ productId: 'p', category: { channelCategoryId: 'COAT' }, cells: {} }], catalogue: { schema: { present: true }, fields: [] } }] }
   const prepared = await prepareAmazonPublication(facts)
-  expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00', fulfillment_availability__quantity: 3, main_product_image_locator: 'https://example.test/image' }))
+  expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00', fulfillment_availability__quantity: 3 }))
+  expect(m.row.mock.calls[0][0]).not.toHaveProperty('main_product_image_locator')
   expect(prepared.feed.messages[0]).toMatchObject({ sku: 'ALIAS-SKU', operationType: 'PARTIAL_UPDATE', attributes: { item_name: [{ value: 'Saved localized title', language_tag: 'it_IT' }] } })
+  // A content update keeps the existing Amazon gallery, even when the shared
+  // library contains more images than a single product gallery permits.
+  product.images = Array.from({ length: 24 }, (_, i) => ({ id: String(i), url: `https://example.test/${i}` }))
+  await expect(prepareAmazonPublication(facts)).resolves.toBeDefined()
+  facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [{ assetId: '4' }] }) }
+  await prepareAmazonPublication(facts)
+  expect(m.row.mock.calls.at(-1)![0].main_product_image_locator).toBe('https://example.test/4')
+  facts.listings[0].platformAttributes = { _productMediaLocales: writeMediaCollection({}, 'it', { version: 1, items: [] }) }
+  await expect(prepareAmazonPublication(facts)).rejects.toThrow('add a product image')
   facts.listings[0].offers = []
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('own Amazon seller SKU')
+})
+
+it('checks Amazon variation collisions against saved channel sizes instead of stale shared sizes', async () => {
+  const theme = 'SIZE/COLOR'
+  const input: any = {
+    coordinate: { channel: 'AMAZON', market: 'IT', accountId: 'account-b', aliasKey: '', label: 'Amazon IT' },
+    family: { familyAxes: ['Color', 'Size'], productVersion: 1, childIds: ['xs', 'xxs'], variants: ['xs', 'xxs'].map(id => ({ id, sku: id, included: true, axisValues: { Color: 'Black', Size: 'XS' } })) },
+    listing: { version: 1, variationTheme: theme, variationMapping: null, platformAttributes: {}, externalListingId: 'ASIN', listingStatus: 'ACTIVE' }, rule: null,
+    schema: { amazon: { facts: { themes: [theme], deprecated: [], properties: { color: { title: 'Color' }, apparel_size: { items: { properties: { size: { type: 'string' } } } } } }, fetchedAt: null } },
+    limits: limitsFor('AMAZON', [theme]), vocabulary: vocabularyFor('AMAZON'),
+  }
+  const original = structuredClone(input)
+  vi.mocked(loadStoredVariationProjection).mockImplementation(async () => ({ input: structuredClone(original), cell: resolveVariationProjection(original) }))
+  const parent = { id: 'p', sku: 'PARENT', isParent: true, images: [], basePrice: 99, totalStock: 0 }
+  const children = ['xs', 'xxs'].map(id => ({ ...parent, id, sku: id, parentId: 'p', isParent: false, fulfillmentMethod: 'FBA' }))
+  const products = [parent, ...children]
+  const facts: any = { scope: { channel: 'AMAZON', marketplace: 'IT', accountId: 'account-b' }, parent, products, languages: ['it'], destination: {},
+    listings: products.map(p => ({ productId: p.id, externalListingId: `ASIN-${p.id}`, offers: [] })),
+    resolved: [{ products: products.map(p => ({ productId: p.id, category: { channelCategoryId: 'COAT' }, cells: {
+      color: { value: 'Black', errors: [] }, apparel_size__size: { value: p.id === 'xxs' ? 'xx_s' : 'x_s', errors: [] },
+    } })), catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color', sheetKey: 'color' }, { fieldKey: 'apparel_size__size', sheetKey: 'size' }] } }],
+  }
+  await expect(prepareAmazonPublication(facts)).resolves.toMatchObject({ feed: { messages: expect.any(Array) } })
+  facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
+  await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
 })

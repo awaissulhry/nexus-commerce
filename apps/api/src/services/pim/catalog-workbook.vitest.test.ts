@@ -262,6 +262,17 @@ function amazon(): AmazonTemplateParse {
 }
 const map = (p = amazon()) => mapAmazonWorkbook(p, new Map([['COAT', spec]]), { accountId: 'amazon-a', marketplace: 'IT', language: 'it' })
 describe('Amazon workbook automatic mapping', () => {
+  it('imports only an explicitly typed ASIN into the channel reference field', () => {
+    const p = amazon(), type = 'amzn1.volt.ca.product_id_type', value = 'amzn1.volt.ca.product_id_value'
+    p.headers.push(type, value); p.rows[0][type] = 'ASIN'; p.rows[0][value] = 'B0H7W8PH1F'; p.valueAliases[type] = { ASIN: 'asin' }
+    const copy = structuredClone(spec); copy.fields.push({ ...copy.fields[0], key: 'merchant_suggested_asin', attribute: 'merchant_suggested_asin', masterKey: undefined, channelStore: undefined })
+    const run = () => mapAmazonWorkbook(p, new Map([['COAT', copy]]), { accountId: 'a', marketplace: 'IT', language: 'it' })
+    expect(run().rows).toContainEqual(expect.objectContaining({ field: 'merchant_suggested_asin', value: 'B0H7W8PH1F' }))
+    p.rows[0][type] = 'Unknown'
+    expect(run().rows.some(row => row.field === 'merchant_suggested_asin')).toBe(false)
+    p.rows[0][type] = 'ASIN'; p.rows[0][value] = 'invalid'
+    expect(run().issues).toContainEqual(expect.objectContaining({ field: value }))
+  })
   it('maps provider wire values, ordered lists, typed booleans and paired measures with original row numbers', () => {
     const result = map()
     expect(result.issues).toEqual([])

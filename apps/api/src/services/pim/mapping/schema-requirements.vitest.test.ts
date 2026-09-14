@@ -19,6 +19,18 @@ function check(definition: object, values: Record<string, unknown>) {
   return evaluateSchemaRequirements(catalogue, values)
 }
 describe('product-aware channel requirements', () => {
+  it('keeps a supplied ASIN even when value is also an Amazon uniqueness selector', () => {
+    const definition = { properties: { merchant_suggested_asin: { ...attribute({ minLength: 10 }), selectors: ['marketplace_id', 'value'], minItems: 1 } }, required: ['merchant_suggested_asin'] }
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: definition })
+    expect(attributesFromCells(spec, { merchant_suggested_asin: 'B0H7W8PH1F' })).toEqual({ merchant_suggested_asin: [{ value: 'B0H7W8PH1F' }] })
+    expect(check(definition, { merchant_suggested_asin: 'B0H7W8PH1F' }).issues).toEqual([])
+    expect(check(definition, {}).issues).toHaveLength(1)
+  })
+  it('omits empty optional lists but still refuses a missing required list', () => {
+    const definition = { properties: { seasons: { ...attribute(), minItems: 1 }, bullet_point: { ...attribute(), minItems: 1 } }, required: ['bullet_point'] }
+    expect(check(definition, { seasons: [], bullet_point: ['Warm jacket'] }).issues).toEqual([])
+    expect(check(definition, { seasons: [''], bullet_point: [] }).issues.map(issue => issue.fieldKey)).toEqual(['bullet_point'])
+  })
   it('enforces conditional Amazon UTF-8 limits on serialized values', () => {
     const definition = { properties: { mode: attribute(), description: attribute() }, allOf: [{
       if: { required: ['mode'], properties: { mode: { contains: { properties: { value: { const: 'restricted' } } } } } },

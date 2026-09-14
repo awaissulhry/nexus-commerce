@@ -98,6 +98,22 @@ describe('catalog file contract', () => {
 })
 
 describe('channel ownership operations', () => {
+  it('routes dictionary-localized Amazon attributes to the reviewed market language', async () => {
+    const field = { ...titleField, fieldKey: 'model_name', sheetKey: 'model_name', channelStore: undefined }
+    const contract: TransferContracts = { ...contracts, channel: async () => ({ fields: [field], masterLocalizableKeys: ['model_name'] }) }
+    const result = await buildTransferPlan([channelRow({ field: 'model_name', value: 'GALE' })], 'update', context(), contract)
+    expect(result.issues).toEqual([])
+    expect(result.targets[0].patch).toEqual({})
+    expect(result.targets[0].contentWrites).toEqual([{ address: { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT', accountId: 'seller-a' } }, values: { model_name: 'GALE' }, reset: [] }])
+  })
+  it('recognizes unchanged scalar Amazon search terms saved in the keyword list', async () => {
+    const field = { ...titleField, fieldKey: 'generic_keyword', sheetKey: 'keywords', maxLength: 500, channelStore: undefined }
+    const c = context(); c.listings.set(transferTargetKey(channelRow()), [{ ...listing, translations: [{ language: 'it', keywords: ['giacca moto uomo'], attributes: {}, follows: [] }] }])
+    const result = await buildTransferPlan([channelRow({ field: 'generic_keyword', value: 'giacca moto uomo' })], 'update', c, { ...contracts, channel: async () => ({ fields: [field] }) })
+    expect(result.issues).toEqual([])
+    expect(result.targets[0].cells[0].verdict).toBe('unchanged')
+    expect(result.targets[0].contentWrites).toBeUndefined()
+  })
   it('clears a non-nullable bullet list while keeping its explicit override state', () => {
     const store = { kind: 'listingColumn' as const, column: 'bulletPointsOverride', followFlag: 'followMasterBulletPoints' }
     const cleared = channelValuePatch({}, store, ['bullet_point'], 'CLEAR')

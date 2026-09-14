@@ -495,6 +495,10 @@ export class AmazonPublishAdapter {
     } = args
 
     const wrap = (value: unknown) => ({ marketplace_id: marketplaceId, value })
+    const axisEnvelope = (attribute: string, value: unknown) => {
+      const binding = schemaProperties && segments.map(segment => bindSegmentToAttribute(segment, schemaProperties)).find(bound => bound?.attribute === attribute)
+      return binding?.valuePath ? { marketplace_id: marketplaceId, [binding.valuePath[0]]: value } : wrap(value)
+    }
 
     const out: Record<string, unknown> = {
       parentage_level: [wrap('child')],
@@ -523,7 +527,7 @@ export class AmazonPublishAdapter {
       if (explicit) {
         const valid = schemaProperties && segments.some(segment => bindSegmentToAttribute(segment, schemaProperties)?.attribute === explicit)
         if (!valid) { unbound.push({ axis, segment: explicit }); continue }
-        out[explicit] = [wrap(value)]; continue
+        out[explicit] = [axisEnvelope(explicit, value)]; continue
       }
       if (hasVariationMappingOverride(variationMapping)) continue
       if (!schemaProperties) {
@@ -540,7 +544,7 @@ export class AmazonPublishAdapter {
       const bound = (segment ? bindSegmentToAttribute(segment, schemaProperties) : null)
         ?? bindSegmentToAttribute(axis, schemaProperties)
       if (!bound) { unbound.push({ axis, segment }); continue }
-      out[bound.attribute] = [wrap(value)]
+      out[bound.attribute] = [axisEnvelope(bound.attribute, value)]
     }
 
     // Pricing — purchasable_offer envelope if we have a price.

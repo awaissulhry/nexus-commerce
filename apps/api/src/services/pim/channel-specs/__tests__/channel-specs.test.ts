@@ -25,6 +25,11 @@ const amazon = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'OUTER
 const byKey = new Map(amazon.fields.map((f) => [f.key, f]))
 
 describe('Amazon adapter — conformance', () => {
+  it('maps the declared apparel size member to the shared size concept', () => {
+    const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { apparel_size: { type: 'array', maxItems: 1, items: { type: 'object', properties: { size: { type: 'string' }, size_class: { type: 'string' } } } } } } })
+    expect(spec.fields.find(f => f.key === 'apparel_size__size')?.masterKey).toBe('size')
+    expect(spec.fields.find(f => f.key === 'apparel_size__size_class')?.masterKey).toBeUndefined()
+  })
   it('classifies EVERY top-level property (no exclusion path exists)', () => {
     const properties = Object.keys(amazonDef.properties).filter((k) => !k.startsWith('__'))
     const uncovered = properties.filter((p) => !amazon.coverage[p] || amazon.coverage[p].length === 0)
@@ -211,7 +216,7 @@ describe('Amazon adapter — shapes, measured against the real definition', () =
   it('one concept, one column: the content trio and keywords link to their master keys', () => {
     expect(byKey.get('item_name')!.masterKey).toBe('name')
     expect(byKey.get('item_name')!.channelStore).toEqual({ kind: 'listingColumn', column: 'title', followFlag: 'followMasterTitle' })
-    expect(Object.keys(AMAZON_MASTER_LINKS).sort()).toEqual(['bullet_point', 'generic_keyword', 'item_name', 'product_description'])
+    expect(Object.keys(AMAZON_MASTER_LINKS).sort()).toEqual(['apparel_size__size', 'bullet_point', 'generic_keyword', 'item_name', 'product_description'])
   })
 
   it('image locators are columns (Owner: no exclusions), as uri text', () => {

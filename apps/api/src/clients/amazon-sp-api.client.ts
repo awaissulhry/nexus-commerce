@@ -1235,14 +1235,14 @@ export class AmazonSpApiClient {
       const accessToken = await this.getAccessToken()
 
       const url = new URL(
-        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(this.boundAccount?.id)}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(
           sku,
         )}`,
       )
       url.searchParams.set('marketplaceIds', marketplaceId)
-      for (const d of includedData) {
-        url.searchParams.append('includedData', d)
-      }
+      // SP-API uses one comma-delimited array parameter. Repeated keys returned
+      // only summaries, silently omitting attributes needed by reconciliation.
+      url.searchParams.set('includedData', includedData.join(','))
 
       const response = await this.fetchWithRetry(
         url.toString(),
@@ -1271,7 +1271,8 @@ export class AmazonSpApiClient {
       }
 
       const data = (await response.json()) as SPAPIResponse
-      const errorMessage = this.parseErrors(data)
+      // Listing issues describe the successfully read product, not a failed GET.
+      const errorMessage = this.parseErrors({ ...data, issues: undefined }) || (!response.ok ? `Amazon listing read failed (${response.status})` : null)
       if (errorMessage) {
         return {
           success: false,

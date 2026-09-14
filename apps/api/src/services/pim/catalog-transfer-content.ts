@@ -7,9 +7,9 @@ import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { normalizeLanguage } from './content-language.js'
 
 export interface TransferContentWrite { address: ContentAddress; values: Record<string, unknown>; reset: string[] }
-export function channelContentField(field: CatalogueField): string | null {
+export function channelContentField(field: CatalogueField, localizableKeys: readonly string[] = []): string | null {
   for (const key of [field.sheetKey, field.fieldKey, field.channelStore?.kind === 'listingColumn' ? field.channelStore.column : null]) {
-    if (key && isLocalizableContent(key)) return contentField(key)
+    if (key && (isLocalizableContent(key) || localizableKeys.includes(contentField(key)))) return contentField(key)
   }
   return null
 }
@@ -36,7 +36,7 @@ export function planContentWrite(writes: TransferContentWrite[], address: Conten
 }
 export function channelContentState(product: Record<string, any>, listing: Record<string, any>, field: string, language: string, languages: readonly string[]) {
   const coordinate = { channel: listing.channel, market: listing.marketplace, accountId: listing.channelConnectionId, aliasId: listing.aliasKey || null }
-  const resolved = resolveContent({ product: product as ContentProduct, parent: product.parent as ContentProduct | null, listing: contentListing(product, listing, coordinate, languages), field, address: { requested: normalizeLanguage(language), coordinate } })
+  const resolved = resolveContent({ product: product as ContentProduct, parent: product.parent as ContentProduct | null, listing: contentListing(product, listing, coordinate, languages), field, localizableKeys: [field], address: { requested: normalizeLanguage(language), coordinate } })
   return resolved.tier === 'pin' && resolved.follows === false ? { state: 'stored' as const, value: resolved.value } : { state: 'inherited' as const, value: null }
 }
 /** Preview graph mutation only; effective values still come from the single resolver. */

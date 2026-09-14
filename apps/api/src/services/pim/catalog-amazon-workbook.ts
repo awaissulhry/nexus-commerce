@@ -35,6 +35,7 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
     if (!spec || spec.absent) { issue(typeHeader, `Refresh the ${destination.marketplace} / ${category} category schema first`); continue }
     const identity = { row, sku, entity: 'Overrides' as const, channel: 'AMAZON', accountId: destination.accountId, marketplace: destination.marketplace, aliasKey: '', locale: '', action: 'SET' as const }
     rows.push({ ...identity, entity: 'Listings', field: 'productType', value: category })
+    const identifierType = sourceValue(parsed, 'amzn1.volt.ca.product_id_type', record['amzn1.volt.ca.product_id_type'] ?? '')
     const grouped = new Map<string, { field: ChannelFieldSpec; values: { header: string; path: string[]; value: string; slots: number[] }[] }>()
     for (const header of parsed.headers) {
       const raw = record[header]
@@ -47,7 +48,12 @@ export function mapAmazonWorkbook(parsed: AmazonTemplateParse, specs: Map<string
         issue(header, 'The attribute carries a different marketplace or language from the workbook destination'); continue
       }
       if (['parentage_level', 'child_parent_sku_relationship'].includes(root)) { exclude(header, 'Amazon variation relationship retained as source evidence; shared parentSku is managed on the Products sheet.'); continue }
-      if (header.startsWith('amzn1.volt.ca.')) { exclude(header, 'Amazon catalog identifier/reference. It is not a shared GTIN and is not inferred from the identifier label.'); continue }
+      if (header === 'amzn1.volt.ca.product_id_value' && identifierType === 'asin') {
+        if (!/^[A-Z0-9]{10}$/.test(raw.trim()) || !spec.fields.some(f => f.key === 'merchant_suggested_asin')) issue(header, 'The declared ASIN needs a valid ten-character value and a Merchant Suggested ASIN schema field')
+        else rows.push({ ...identity, field: 'merchant_suggested_asin', value: raw.trim() })
+        continue
+      }
+      if (header.startsWith('amzn1.volt.ca.')) { exclude(header, 'Amazon catalog identifier/reference. A declared ASIN is imported as Merchant Suggested ASIN; confirmed remote links are reconciled from Amazon.'); continue }
       const candidates = spec.fields.filter(f => {
         const base = [f.attribute, ...f.path]
         return path.join('.') === base.join('.') || path.join('.') === [...base, 'value'].join('.') || f.shape === 'measure' && path.join('.') === [...base, 'unit'].join('.')

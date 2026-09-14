@@ -104,6 +104,13 @@ describe("normaliseStoredTheme - '' is not a theme (T16)", () => {
 })
 
 describe('bindSegmentToAttribute - against properties, never by convention', () => {
+  it('binds a structured size only when its schema declares one unambiguous size member', () => {
+    const apparel = { items: { properties: { size: { type: 'string' }, size_system: { type: 'string' } } } }
+    expect(bindSegmentToAttribute('SIZE', { apparel_size: apparel })).toEqual({ attribute: 'apparel_size', via: 'member', valuePath: ['size'] })
+    expect(bindSegmentToAttribute('SIZE_NAME', { apparel_size: apparel })).toEqual({ attribute: 'apparel_size', via: 'member', valuePath: ['size'] })
+    expect(bindSegmentToAttribute('SIZE', { apparel_size: {} })).toBeNull()
+    expect(bindSegmentToAttribute('SIZE', { apparel_size: apparel, shoe_size: apparel })).toBeNull()
+  })
   const props = OUTERWEAR_IT.properties as Record<string, unknown>
 
   it('binds the bare spelling exactly', () => {

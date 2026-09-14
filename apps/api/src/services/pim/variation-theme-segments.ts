@@ -105,7 +105,7 @@ export function themeSchemaFacts(schemaDefinition: unknown): ThemeSchemaFacts {
 export function bindSegmentToAttribute(
   segment: string,
   properties: Record<string, unknown>,
-): { attribute: string; via: 'exact' | 'name-suffix' | 'prefix' | 'canonical' } | null {
+): { attribute: string; via: 'exact' | 'name-suffix' | 'prefix' | 'canonical' | 'member'; valuePath?: string[] } | null {
   const has = (k: string) => k.length > 0 && Object.prototype.hasOwnProperty.call(properties ?? {}, k)
   const lower = String(segment ?? '').trim().toLowerCase()
   if (!lower) return null
@@ -126,6 +126,15 @@ export function bindSegmentToAttribute(
     if (key.startsWith('__')) continue
     if (canonicalVariantAxis(key) === wanted) return { attribute: key, via: 'canonical' }
   }
+  // Structured sizes (apparel_size.size, shoe_size.size) declare the axis as a
+  // member instead of a value envelope. Accept only one schema-backed candidate.
+  const structured = Object.entries(properties ?? {}).flatMap(([attribute, raw]) => {
+    const node = raw as { items?: { properties?: Record<string, unknown> } } | undefined
+    if (!attribute.endsWith(`_${withoutName}`)) return []
+    const members = Object.keys(node?.items?.properties ?? {}).filter(key => canonicalVariantAxis(key) === wanted)
+    return members.map(member => ({ attribute, via: 'member' as const, valuePath: [member] }))
+  })
+  if (structured.length === 1) return structured[0]
   return null
 }
 

@@ -4,9 +4,10 @@ import type { ValidateFunction } from 'ajv'
 import type { ChannelSpec, ChannelFieldSpec } from '../channel-specs/types.js'
 import { isPresent } from '../resolve-channel-field.js'
 import { addAmazonVocabulary } from './amazon-schema-vocabulary.js'
+import { isBlankValue } from '../sheet-values.js'
 
 type Node = Record<string, any>
-const serializedValue = (value: unknown) => value !== undefined && value !== null && value !== ''
+const serializedValue = (value: unknown) => !isBlankValue(value)
 const validators = new WeakMap<object, ValidateFunction>()
 const schemaEngines = new WeakMap<object, Ajv2019>()
 const specs = new WeakMap<object, ChannelSpec>()
@@ -49,7 +50,8 @@ export function attributesFromCells(spec: ChannelSpec, values: Record<string, un
         for (const [key, child] of Object.entries(node.properties ?? {})) {
           const definition = deref(child as Node)
           let value: unknown
-          if (['marketplace_id', 'language_tag'].includes(key) || (fields.some(f => f.selectors?.includes(key)) && !fields.some(f => f.path.join('/') === [...path, key].join('/')))) {
+          if (key === 'value' && exact && exact.shape !== 'measure') value = read(exact)
+          else if (['marketplace_id', 'language_tag'].includes(key) || (fields.some(f => f.selectors?.includes(key)) && !fields.some(f => f.path.join('/') === [...path, key].join('/')))) {
             value = definition.const ?? (definition.enum?.length === 1 ? definition.enum[0] : definition.default)
             if (value !== undefined && definition.enum && !definition.enum.includes(value)) throw new Error(`The schema has an invalid ${key} selector for ${attribute}.`)
           } else if (exact?.shape === 'measure' && ['value', 'unit'].includes(key)) {

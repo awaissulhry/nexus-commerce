@@ -9,6 +9,7 @@ import { getSheetColumns, type SheetColumn } from './sheet-columns.service.js'
 import { savedAttributeFields } from './family-sheet-schema.js'
 import { getFieldCatalogue, type CatalogueField } from './mapping/field-catalogue.service.js'
 import { validateChannelValue } from './mapping/validate-channel-value.js'
+import { contentWireValue } from './content-read.js'
 import { coerceForShape } from './sheet-values.js'
 import { channelValuePatch, jsonRecord, storedChannelState, type ValueRecord } from './channel-value-mutation.js'
 import type { SourceMapping, SourceExclusion } from './catalog-source-mapping.js'
@@ -63,7 +64,7 @@ export interface TransferPlan { targets: TransferTarget[]; issues: TransferIssue
 export interface TransferContracts {
   reference?: ReferenceResolver
   master: (familyId: string | null, product?: TransferProduct) => Promise<SheetColumn[]>
-  channel: (channel: string, marketplace: string, category: string) => Promise<{ fields: CatalogueField[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
+  channel: (channel: string, marketplace: string, category: string) => Promise<{ fields: CatalogueField[]; masterLocalizableKeys?: string[]; warning?: string; schemaVersion?: string | null; fetchedAt?: string | null }>
 }
 
 export function transferContracts(market: string, options: { allowIncompleteSchema?: boolean } = {}): TransferContracts {
@@ -80,7 +81,7 @@ export function transferContracts(market: string, options: { allowIncompleteSche
       const key = JSON.stringify([channel, marketplace, category])
       if (!channels.has(key)) channels.set(key, getFieldCatalogue({ channel, marketplace, productType: category }).then(c => {
         if (!c.schema.present && !options.allowIncompleteSchema) throw new Error(`No cached ${channel} schema for ${marketplace} / ${category}. Refresh the channel category first.`)
-        return { fields: c.fields, schemaVersion: c.schema.version, fetchedAt: c.schema.fetchedAt, warning: !c.schema.present
+        return { fields: c.fields, masterLocalizableKeys: c.masterLocalizableKeys, schemaVersion: c.schema.version, fetchedAt: c.schema.fetchedAt, warning: !c.schema.present
           ? `${channel} ${marketplace}: ${category ? `category ${category} has no cached requirements` : 'no category is selected'}. Available field definitions and stored values are exported. Select a category and refresh its requirements before importing changes.`
           : transferIsStore(channel) ? `${channel} ${marketplace}: core product field definitions; category-specific requirements and publish readiness must be checked separately.` : `${channel} ${marketplace} / ${category}: requirements from ${c.schema.fetchedAt ?? 'an undated cached schema'}; publish readiness is checked separately.` }
       }))
@@ -350,7 +351,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
         const working = clone(before ?? { overrideData: {}, platformAttributes: {} })
         const resolvedFields = new Set<string>()
         const languageRows = context.markets.filter(m => m.channel === first.channel && m.code === first.marketplace)
-        const languages = group.some(row => contract.fields.some(f => (f.fieldKey === row.field || f.sheetKey === row.field) && channelContentField(f))) ? marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] }))) : []
+        const languages = group.some(row => contract.fields.some(f => (f.fieldKey === row.field || f.sheetKey === row.field) && channelContentField(f, contract.masterLocalizableKeys))) ? marketLanguages(first.channel, first.marketplace, languageRows.map(m => ({ ...m, languages: m.languages ?? [] }))) : []
         for (const row of group) {
           if (row.entity === 'Listings' && row.field === categoryKey) {
             if (row.action === 'CLEAR' && !transferIsStore(first.channel)) { error(row, 'A listing category cannot be cleared; use INHERIT when a category mapping is configured'); continue }
@@ -372,7 +373,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (row.entity !== 'Overrides') { error(row, `Listings accepts ${categoryKey}; put channel attribute values in Overrides`); continue }
           const field = contract.fields.find(f => f.fieldKey === row.field || f.sheetKey === row.field)
           if (!field) { error(row, 'This attribute is not declared by the listing category'); continue }
-          const textField = channelContentField(field)
+          const textField = channelContentField(field, contract.masterLocalizableKeys)
           if (textField) (target.contentFields ??= {})[row.field] = textField
           if (row.locale && !textField) { error(row, 'This channel attribute does not vary by language; use the facts sheet'); continue }
           const destination = textField ? transferContentAddress(row, languages) : null
@@ -383,6 +384,7 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           if (field.fieldKey === categoryKey || field.sheetKey === categoryKey) { error(row, 'Set the listing category in Listings'); continue }
           const keys = [...new Set([field.fieldKey, field.sheetKey].filter((s): s is string => !!s))]
           const old = textField && address && existingProduct ? channelContentState(existingProduct, working, textField, address.language, languages) : storedChannelState(working, field.channelStore, keys)
+          if (textField) old.value = contentWireValue(old.value, field.shape, textField)
           if (preserve(row, old.state === 'stored')) continue
           const state = row.action === 'INHERIT' ? 'inherited' : 'stored'
           let value = row.action === 'SET' ? row.value : null

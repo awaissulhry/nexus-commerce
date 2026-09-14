@@ -245,6 +245,8 @@ function coerceShape(facts: ShapeWriteFacts | undefined, raw: unknown): ShapeWri
       } else cleaned.push(String(item).trim())
     }
     const max = facts?.cardinality?.max ?? null
+    // An empty list clears the optional attribute. Requiredness is checked separately.
+    if (cleaned.length === 0) return { ok: true, value: null }
     if (max !== null && cleaned.length > max) {
       return { ok: false, error: `${cleaned.length} values — ${named(facts!)} takes at most ${max}` }
     }

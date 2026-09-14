@@ -11,15 +11,17 @@ import { coordinatesFor, VARIATION_THEME_KEY } from './sheet-columns.service.js'
 import { variationSourceFor, type VariationThemeCell } from './variation-rules.service.js'
 import { readinessLanguages, readinessCoordinateKey, readinessFromSheet, type ReadinessCoordinate } from './readiness-model.js'
 
+type ReadinessScope = { channel: string; market: string; accountId: string | null }
+
 /** One family refresh per outer write, after cascades/formulas and before commit. */
-export async function produceReadiness(productId: string) {
+export async function produceReadiness(productId: string, scope?: ReadinessScope) {
   const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
   const rootId = product.parentId ?? product.id
-  await beforeDatabaseCommit(`readiness:${rootId}`, () => reconcileFamilyReadiness(rootId))
+  await beforeDatabaseCommit(`readiness:${rootId}${scope ? `:${JSON.stringify(scope)}` : ''}`, () => reconcileFamilyReadiness(rootId, scope))
 }
 
 /** The only materializer. Schema misses are honest absent rows; persistence failures roll back. */
-export async function reconcileFamilyReadiness(productId: string): Promise<number> {
+export async function reconcileFamilyReadiness(productId: string, scope?: ReadinessScope): Promise<number> {
   return inDatabaseTransaction(prisma, () => withCachedSchemas(async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { id: true, parentId: true } })
     const rootId = product.parentId ?? product.id
@@ -67,6 +69,9 @@ export async function reconcileFamilyReadiness(productId: string): Promise<numbe
     }
     const rows: Prisma.ReadinessIndexCreateManyInput[] = []
     for (const { coordinate, language, label } of destinations) {
+      // A listing edit cannot change shared content or another account/market.
+      // Rebuilding every destination here made imports exceed their transaction deadline.
+      if (scope && (coordinate.channel !== scope.channel || coordinate.market !== scope.market || coordinate.accountId !== scope.accountId)) continue
       let sheet: Awaited<ReturnType<typeof getStudioSheet>> | undefined
       let unavailable: string | undefined
       try {
@@ -115,7 +120,7 @@ export async function reconcileFamilyReadiness(productId: string): Promise<numbe
       }
     }
     // Only the derived index is replaced; content, versions and legacy bags are untouched.
-    await prisma.readinessIndex.deleteMany({ where: { productId: { in: products.map(p => p.id) } } })
+    await prisma.readinessIndex.deleteMany({ where: { productId: { in: products.map(p => p.id) }, ...(scope ? { channel: scope.channel, market: scope.market, accountId: scope.accountId } : {}) } })
     if (rows.length) await prisma.readinessIndex.createMany({ data: rows })
     return rows.length
   }))

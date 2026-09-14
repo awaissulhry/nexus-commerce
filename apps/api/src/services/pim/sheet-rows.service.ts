@@ -474,7 +474,7 @@ export async function getSheetRows(input: GetSheetRowsInput): Promise<SheetPage>
       const baseKey = contentField(col.slot?.of ?? col.key)
       const contentHit = resolved[baseKey]?.language ? resolved[baseKey] : null
       if (contentHit) {
-        values[col.key] = { value: contentWireValue(projectCellValue(col, contentHit.value), col.slot ? undefined : col.shape),
+        values[col.key] = { value: contentWireValue(projectCellValue(col, contentHit.value), col.slot ? undefined : col.shape, col.slot?.of ?? col.key),
           source: contentHit.source, inheritedFrom: contentHit.inheritedFrom, inherited: contentHit.contentProvenance?.member === 'inherited',
           // R-LX-15 — the §3 fields travel on this wire too, from the same resolved row,
           // so a consumer can migrate off the legacy four without a second read.

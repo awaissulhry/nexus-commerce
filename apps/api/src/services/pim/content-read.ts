@@ -43,8 +43,15 @@ export function resolveContentAttributes(input: { product: Row; parent?: Row | n
 }
 
 /** R10: raw resolver absence must not change an established list-shaped sheet/API wire. */
-export function contentWireValue(value: unknown, shape?: string): unknown {
+export function contentWireValue(value: unknown, shape?: string, field?: string): unknown {
+  // Amazon exposes one search-term string; the shared content store uses String[].
+  if (shape === 'scalar' && field === 'keywords' && Array.isArray(value)) return value.join(' ')
   return shape === 'list' && value == null ? [] : value
+}
+
+/** Preserve a scalar channel search-term phrase as one item, without splitting its words. */
+export function contentStorageValue(field: string, value: unknown): unknown {
+  return field === 'keywords' && typeof value === 'string' ? value ? [value] : [] : value
 }
 
 /** Store readers require the same hydrated product and market authority as the sheet. */

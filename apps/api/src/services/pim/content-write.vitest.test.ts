@@ -41,6 +41,12 @@ beforeAll(async () => {
 }, 30000)
 afterAll(async () => { await state.db?.close() })
 describe('LX.8 addressed writes, real disposable PostgreSQL, no provider', () => {
+ it('saves a channel search-term phrase in String[] storage without splitting it', async () => {
+  await prisma.product.create({ data: { id: 'keyword-child', sku: 'KEYWORD-CHILD', name: 'Keywords', basePrice: 10 } })
+  await prisma.channelListing.create({ data: { id: 'keyword-de', productId: 'keyword-child', channel: 'AMAZON', channelMarket: 'AMAZON_DE', marketplace: 'DE', region: 'EU', channelConnectionId: 'lx-amazon' } })
+  await writeContent({ productId: 'keyword-child', address: pin, values: { keywords: 'giacca moto; touring' }, label: 'Search terms' })
+  expect(await prisma.channelListingTranslation.findFirst({ where: { channelListingId: 'keyword-de', language: 'de' } })).toMatchObject({ keywords: ['giacca moto; touring'] })
+ })
  it('refuses a missing address with the sheet label and no write', async () => {
   const before = await read(); const result = await bulk('Missing address', undefined)
   expect(result.errors[0].error).toBe('Product title needs a ContentAddress before it can be saved.')
@@ -138,6 +144,16 @@ it('LX.5 reconcile repairs a missing index without touching content or legacy JS
  expect(await read()).toEqual(before)
  expect(await prisma.readinessIndex.count({ where: { productId: 'lx-child', channel: null, language: 'sv' } })).toBe(0)
  expect(await prisma.readinessIndex.count({ where: { productId: 'lx-child', channel: null, language: 'de' } })).toBe(1)
+})
+
+it('a channel pin refreshes only its account and marketplace, preserving every other index row', async () => {
+ await reconcileFamilyReadiness('keyword-child')
+ const where = { productId: 'keyword-child', NOT: { channel: 'AMAZON', market: 'DE', accountId: 'lx-amazon' } }
+ const before = await prisma.readinessIndex.findMany({ where, orderBy: { id: 'asc' } })
+ expect(before.length).toBeGreaterThan(0)
+ await writeContent({ productId: 'keyword-child', address: pin, values: { keywords: 'updated search terms' }, label: 'Search terms' })
+ expect(await prisma.readinessIndex.findMany({ where, orderBy: { id: 'asc' } })).toEqual(before)
+ expect(await prisma.readinessIndex.count({ where: { productId: 'keyword-child', channel: 'AMAZON', market: 'DE', accountId: 'lx-amazon' } })).toBe(1)
 })
 
 it('LX.F P1-4/P2-14 — one fallback issue per field, carrying the machine-readable kind', async () => {

@@ -327,7 +327,9 @@ export async function resolveBatch(input: {
       const systemValue = channel === 'AMAZON' && field.fieldKey === 'parentage_level'
         ? full.isParent ? 'parent' : full.parentId ? 'child' : undefined
         : channel === 'AMAZON' && field.fieldKey === 'child_parent_sku_relationship__parent_sku' && full.parentId
-          ? parentById.get(full.parentId)?.sku : undefined
+          ? parentById.get(full.parentId)?.sku
+          : channel === 'AMAZON' && field.fieldKey === 'child_parent_sku_relationship__child_relationship_type' && (full.isParent || full.parentId)
+            ? 'variation' : undefined
       const effectiveStored = isBlankValue(stored) && ((channel === 'AMAZON' && field.fieldKey === 'productType') || (channel === 'EBAY' && field.fieldKey === 'categoryId'))
         ? categories[p.id]?.channelCategoryId : stored === undefined ? systemValue : stored
       // A deliberately cleared override is still an override; it must not revive Master.
@@ -373,7 +375,7 @@ export async function resolveBatch(input: {
         },
       })
 
-      const projected = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape)
+      const projected = contentWireValue(field.shape === 'list' ? projectCellValue({ shape: 'list' }, r.value) : r.value, field.shape, contentField(field.sheetKey ?? field.fieldKey))
       const { value, errors, autoCorrected, overLimit } = validateChannelValue(field, projected)
       errors.push(...r.warnings.filter(warning => /^(expr (?:failed|skipped)|Conflicting variant attributes)/.test(warning)))
       const mappingErrors = !hasStored && rule ? [...errors] : []

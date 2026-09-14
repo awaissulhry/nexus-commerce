@@ -7,6 +7,7 @@ import { CONTENT_COLUMNS, PRIMARY_CONTENT_LOCALE } from './content-locale.js'
 import { contentField } from './content-resolver.js'
 import { writeTranslation } from './translation-write.js'
 import { marketLanguages } from './market-languages.js'
+import { contentStorageValue } from './content-read.js'
 
 export interface ContentWrite {
   productId: string; address: ContentAddress; values: Record<string, unknown>; reset?: string[]
@@ -21,7 +22,7 @@ export async function writeContent(input: ContentWrite) {
   if (address.tier === 'language') return writeTranslation({ ...input, address, locale: address.language, state: input.state ?? 'reviewed', expectedTranslationVersion: input.expectedContentVersion })
   return inDatabaseTransaction(prisma, async () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: input.productId } })
-    const values = Object.fromEntries(Object.entries(input.values).map(([key,value]) => [contentField(key), value]))
+    const values = Object.fromEntries(Object.entries(input.values).map(([key,value]) => [contentField(key), contentStorageValue(contentField(key), value)]))
     const resets = (input.reset ?? []).map(contentField)
     if (address.tier === 'source') {
       if (input.expectedVersion !== undefined && product.version !== input.expectedVersion) throw refuse(input.label)
@@ -80,7 +81,7 @@ export async function writeContent(input: ContentWrite) {
     } else await prisma.channelListingTranslation.create({ data: { ...data, channelListingId: listing.id, language: address.language, version: 1 } })
     await prisma.auditLog.create({ data: { entityType: 'ChannelListing', entityId: listing.id, action: 'update', userId: input.userId ?? null, ip: input.ip,
       before: prior as any ?? {}, after: { values, reset: resets } as any, metadata: { layer: 'pin', language: address.language, coordinate: c as any } } })
-    await produceReadiness(product.id)
+    await produceReadiness(product.id, { channel: listing.channel, market: listing.marketplace, accountId: listing.channelConnectionId })
     return prisma.channelListingTranslation.findUniqueOrThrow({ where: { channelListingId_language: workspaceKey({ channelListingId: listing.id, language: address.language }) } })
   })
 }

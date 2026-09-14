@@ -402,14 +402,15 @@ export function checkGpsrCompliance(row: Record<string, any>, ctx: GpsrCheckCont
   const cmVal = (c: string): string => (val(c) !== '' ? val(c) : String(af[c] ?? '').trim())
   const cmPresent = rowCmPresent || [CM_TYPE, CM_SRC, CM_LANG].some((c) => String(af[c] ?? '').trim() !== '')
   const sdsPresent = has(SDS) && val(SDS) !== ''
-  if (attTruthy && cmPresent) {
+  const safetyImages = Object.keys(row).filter(key => /^image_locator_ps\d{2}(?:__media_location)?$/.test(key) && has(key) && /^https:\/\//i.test(val(key)))
+  if (attTruthy && (cmPresent || sdsPresent || safetyImages.length > 0)) {
     issues.push({
       field: ATT,
       severity: 'warning',
       message: 'GPSR: safety attestation says no safety documentation is needed, but compliance media is attached — mutually inconsistent; clear one of the two',
     })
   }
-  if (has(ATT) && !attTruthy && !cmPresent && !sdsPresent) {
+  if (has(ATT) && !attTruthy && !cmPresent && !sdsPresent && !safetyImages.length) {
     issues.push({
       field: ATT,
       severity: 'warning',

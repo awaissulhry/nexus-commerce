@@ -47,6 +47,7 @@ export const AMAZON_MASTER_LINKS: Record<string, { masterKey: string; channelSto
   product_description: { masterKey: 'description', channelStore: { kind: 'listingColumn', column: 'description', followFlag: 'followMasterDescription' } },
   bullet_point: { masterKey: 'bulletPoints', channelStore: { kind: 'listingColumn', column: 'bulletPointsOverride', followFlag: 'followMasterBulletPoints' } },
   generic_keyword: { masterKey: 'keywords' },
+  apparel_size__size: { masterKey: 'size' },
 }
 
 /**
@@ -66,6 +67,9 @@ export const AMAZON_MASTER_LINKS: Record<string, { masterKey: string; channelSto
  */
 export const AMAZON_LISTING_STORES: Record<string, ChannelStore> = {
   variation_theme: { kind: 'listingColumn', column: 'variationTheme' },
+  brand: { kind: 'platformAttributes', path: ['brand'], legacyPaths: [['attributes', 'brand', '0', 'value']] },
+  condition_type: { kind: 'platformAttributes', path: ['condition_type'], legacyPaths: [['attributes', 'condition_type', '0', 'value']] },
+  list_price: { kind: 'platformAttributes', path: ['list_price', 'value_with_tax'], legacyPaths: [['attributes', 'list_price', '0', 'value_with_tax']] },
 }
 
 /** Product type selects the schema, so it must remain editable even before a schema is cached. */
@@ -104,7 +108,6 @@ export function amazonSpecFromDefinition(input: AmazonSpecInput): ChannelSpec {
   for (const [name, prop] of Object.entries(properties)) {
     if (name.startsWith('__')) continue
     const requirement: Requirement = rootRequired.has(name) ? 'required' : conditional.has(name) ? 'requiredIfRelevant' : 'optional'
-    const link = AMAZON_MASTER_LINKS[name]
     const produced = walkNode(name, prop, {
       attribute: name,
       path: [],
@@ -117,7 +120,8 @@ export function amazonSpecFromDefinition(input: AmazonSpecInput): ChannelSpec {
       unrecognised,
     })
     for (const f of produced) {
-      if (link && f.path.length === 0) {
+      const link = AMAZON_MASTER_LINKS[f.key]
+      if (link) {
         f.masterKey = link.masterKey
         if (link.channelStore) f.channelStore = link.channelStore
       }

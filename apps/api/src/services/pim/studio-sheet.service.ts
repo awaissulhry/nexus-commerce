@@ -786,7 +786,7 @@ export function sheetValueForColumn(
 
   }
   if (base === undefined) base = null
-  return contentWireValue(projectCellValue(col, base), col.slot ? undefined : col.shape)
+  return contentWireValue(projectCellValue(col, base), col.slot ? undefined : col.shape, col.slot?.of ?? col.key)
 }
 
 /**
@@ -1371,7 +1371,8 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
         const blockedByAxis = isParent && col.scope === 'per_variant'
         const shopifyOwnerApplies = !col.shopifyField || (col.shopifyField.owner === 'PRODUCT' ? !product.parentId : !isParent)
         const shopifyApplicability = col.shopifyField?.definition ? shopifyDefinitionApplicability(col.shopifyField.definition, rowShape.productType) : null
-        const cellEditable = col.editable && shopifyOwnerApplies && !shopifyApplicability && columnApplies(col, rowShape)
+        const immutableListingField = !!listingRow?.externalListingId && channelFacts?.editableOnExisting === false
+        const cellEditable = col.editable && !immutableListingField && shopifyOwnerApplies && !shopifyApplicability && columnApplies(col, rowShape)
         // The COLUMN's own refusal speaks first, because it applies on every row.
         // Measured while verifying this: `sku` is both per-variant scoped AND
         // read-only, and putting the axis rule first made the parent row say
@@ -1389,6 +1390,7 @@ async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet>
             : coordinate
             ? 'Read-only on this channel — the marketplace does not accept a value for this field.'
             : 'Read-only on the master record — this field is not editable by hand in this market.')
+          : immutableListingField ? 'The channel marks this field read-only on an existing listing.'
           : !shopifyOwnerApplies ? `This Shopify field belongs to ${col.shopifyField?.owner === 'PRODUCT' ? 'the product row' : 'a variant row'}.`
           : shopifyApplicability ? shopifyApplicability
           : !columnApplies(col, rowShape) && !blockedByAxis

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
+vi.mock('./readiness-index.service.js', () => ({ produceReadiness: vi.fn() }))
 const mocks = vi.hoisted(() => ({ findFirst: vi.fn(), updateMany: vi.fn(), findUnique: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { bulkOperation: mocks } }))
 vi.mock('./catalog-transfer-plan.js', async original => {
@@ -10,6 +11,7 @@ vi.mock('./sheet-columns.service.js', () => ({ clearSheetColumnCache: vi.fn(), g
 vi.mock('./mapping/field-catalogue.service.js', () => ({ clearFieldCatalogueCache: vi.fn(), getFieldCatalogue: vi.fn() }))
 import { applyTransferTarget, readCatalogTransfer, startCatalogTransfer } from './catalog-transfer.service.js'
 import type { TransferTarget } from './catalog-transfer-plan.js'
+import { produceReadiness } from './readiness-index.service.js'
 
 const before = { id: 'p1', sku: 'SKU', name: 'Old', version: 5, updatedAt: new Date('2026-01-01'), deletedAt: null, categories: [] }
 const target = (): TransferTarget => ({ key: 'p1', identity: { row: 2, entity: 'Products', sku: 'SKU', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'New' }, before: JSON.parse(JSON.stringify(before)), patch: { name: 'New' }, cells: [], rows: [], contractHash: 'x', create: false })
@@ -66,6 +68,7 @@ describe('catalog transaction boundaries', () => {
     t.identity = { ...t.identity, entity: 'Listings', channel: 'AMAZON', accountId: 'account-a', marketplace: 'IT' }; t.before = null; t.create = true; t.patch = { platformAttributes: { productType: 'COAT' } }
     await applyTransferTarget(tx as never, t, 'job', null)
     expect(tx.channelListing.create).toHaveBeenCalledWith({ data: expect.objectContaining({ channelConnectionId: 'account-a', aliasKey: '', marketplace: 'IT', listingStatus: 'DRAFT', isPublished: false }) })
+    expect(produceReadiness).toHaveBeenCalledWith('p1', { channel: 'AMAZON', market: 'IT', accountId: 'account-a' })
   })
   it('does not expose or apply another user’s job', async () => {
     mocks.findFirst.mockResolvedValue(null)

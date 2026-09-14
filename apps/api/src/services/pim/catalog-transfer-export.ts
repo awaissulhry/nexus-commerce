@@ -1,6 +1,6 @@
 import { channelContentField, channelContentState } from './catalog-transfer-content.js'
 import { PRIMARY_CONTENT_LOCALE } from './content-locale.js'
-import { contentLanguages } from './content-read.js'
+import { contentLanguages, contentWireValue } from './content-read.js'
 import { normalizeLanguage } from './content-language.js'
 import { listActiveConnections } from '../connection-resolver.service.js'
 import type { Prisma } from '@prisma/client'
@@ -173,9 +173,10 @@ async function catalogRows(
       for (const field of contract.fields) {
         if (field.fieldKey === categoryKey) continue
         if (input.boundary && managedChannelField(field)) continue
-        const textField = channelContentField(field)
+        const textField = channelContentField(field, contract.masterLocalizableKeys)
         for (const locale of textField ? listingLanguages : ['']) {
           const own = textField ? channelContentState(products.find(p => p.id === listing.productId)!, listing, textField, locale, listingLanguages) : storedChannelState(listing, field.channelStore, [field.fieldKey, field.sheetKey].filter((k): k is string => !!k))
+          if (textField) own.value = contentWireValue(own.value, field.shape, textField)
           const value = typeof own.value === 'object' && own.value && 'toNumber' in own.value ? (own.value as { toNumber(): number }).toNumber() : own.value
           rows.push({ ...identity, locale, field: field.fieldKey, action: own.state === 'inherited' ? 'INHERIT' : value === null ? 'CLEAR' : 'SET', value })
         }
@@ -183,7 +184,7 @@ async function catalogRows(
     }
     if (workbookMeta) {
       const fields = [{ field: categoryKey, label: 'Channel category', type: listing.channel === 'ETSY' ? 'number' : 'text' }, ...contract.fields.filter(f => f.fieldKey !== categoryKey && (!input.boundary || !managedChannelField(f))).map(f => ({ ...channelWorkbookField(f), schemaVersion: contract.schemaVersion, help: `${channelWorkbookField(f).help} ${contract.fetchedAt ? `Schema retrieved ${contract.fetchedAt}.` : `Field definition ${contract.schemaVersion ?? 'unversioned'}.`}` }))]
-      const textFields = new Set(contract.fields.filter(f => channelContentField(f)).map(f => f.fieldKey))
+      const textFields = new Set(contract.fields.filter(f => channelContentField(f, contract.masterLocalizableKeys)).map(f => f.fieldKey))
       const facts = fields.filter(f => !textFields.has(f.field)), text = fields.filter(f => textFields.has(f.field))
       for (const row of rows.slice(start)) workbookMeta.set(row, { category, fields: row.locale ? text : facts, note: contract.warning })
     }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { importTestStore, fixtureColumns, fixtureFields } from './catalog-transfer-test/store.js'
 vi.mock('../product-read-cache.service.js', () => ({ productReadCacheService: { refreshInTransaction: vi.fn() } }))
+vi.mock('./readiness-index.service.js', () => ({ produceReadiness: vi.fn() }))
 const state = vi.hoisted(() => ({ fetch: vi.fn(), store: null as unknown as ReturnType<typeof importTestStore>, fields: null as Array<Record<string, unknown>> | null }))
 // Orchestration tests mock the Step 4 writer; its real transaction is exercised by the LX7 local fixture.
 vi.mock('./content-write.js', () => ({ writeContent: async (input: any) => {

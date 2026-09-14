@@ -178,6 +178,12 @@ const validRow = () => ({
 })
 
 describe('UFX P6f — checkGpsrCompliance', () => {
+  it('recognizes schema-declared product safety images without inventing an attestation', () => {
+    const row = { ...validRow(), gpsr_safety_attestation: '', image_locator_ps01: 'https://example.com/safety.jpg' }
+    expect(checkGpsrCompliance(row, { marketplace: 'IT', applicableColumns: new Set(Object.keys(row)) })).toEqual([])
+    expect(checkGpsrCompliance({ ...row, image_locator_ps01: '' }, { marketplace: 'IT' })).toContainEqual(expect.objectContaining({ field: 'gpsr_safety_attestation' }))
+    expect(checkGpsrCompliance({ ...row, gpsr_safety_attestation: 'true' }, { marketplace: 'IT' })).toContainEqual(expect.objectContaining({ message: expect.stringContaining('mutually inconsistent') }))
+  })
   it('valid row (contact + attestation) → no issues', () => {
     expect(checkGpsrCompliance(validRow(), ctx())).toEqual([])
   })
