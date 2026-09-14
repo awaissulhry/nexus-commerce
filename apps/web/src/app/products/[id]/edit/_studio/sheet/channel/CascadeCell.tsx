@@ -140,6 +140,7 @@ export const CascadeCell = memo(function CascadeCell(
         kind={source.kind}
         label={source.label}
         description={description}
+        tooltip={provenance === 'refused' ? refusedReason ?? undefined : undefined}
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
       />

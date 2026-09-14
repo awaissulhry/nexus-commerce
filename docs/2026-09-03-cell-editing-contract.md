@@ -285,3 +285,9 @@ The visibility control uses the actual center or corner point for each gesture; 
 Diagnostic correction: removing Playwright’s stable-element wait caused first-load geometry to shift between the visibility check and the gesture (19 select abstentions in the focused run). The wait is restored and the exact point is revalidated afterward. Failed opens record their hit target and focused element.
 
 The fixture token must resolve to its ledger heading, not a quoted earlier diagnostic. Focused runs label their closing result as a focused block, never a full-gate pass.
+
+## September 14 release measurements
+
+The live Matrix's Amazon inventory cells can all be FBA-guarded even when the stored method says FBM. The gate now searches every horizontal viewport for the required editable/locked state; eBay's editable quantity cells remain measured through all five gestures. Select chevrons are also measured after scrolling, rather than reported absent from the initial viewport.
+
+Matrix parity follows its explicit design (`2026-09-13-matrix-page-design.md` §3.3, §3.9, D-MX7): the extra coordinate strip is 30px, the leaf header and cell typography match Information, the footer reports variants, and the parent identity includes its variant count. Variation theme remains required at 160px on all three Information scopes and is forbidden on the all-coordinate Matrix. Matrix's operational footer and parent subtitle are asserted separately; shared identity slots still match. Refused channel formulas pass the exact server sentence to SourceIndicator's existing tooltip/native-title prop.

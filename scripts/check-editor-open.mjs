@@ -450,6 +450,28 @@ const renderedCols = async (rowId) => {
   return [...seen]
 }
 
+/** Inspect every horizontal viewport before declaring a rendered cell state absent. */
+const scanHorizontal = async (read) => {
+  const dims = await page.evaluate(() => {
+    const v = document.querySelector('.ag-grid-viewport, .ag-body-horizontal-scroll-viewport')
+    return v ? { width: v.clientWidth, max: Math.max(0, v.scrollWidth - v.clientWidth) } : null
+  })
+  if (!dims) return read()
+  const step = Math.max(200, Math.round(dims.width * 0.7))
+  for (let left = 0; left <= dims.max + step; left += step) {
+    const position = Math.min(left, dims.max)
+    await page.evaluate(x => {
+      const v = document.querySelector('.ag-grid-viewport, .ag-body-horizontal-scroll-viewport')
+      if (v) v.scrollLeft = x
+    }, position)
+    await page.waitForTimeout(320)
+    const hit = await read()
+    if (hit != null) return hit
+    if (position === dims.max) break
+  }
+  return null
+}
+
 /**
  * Scroll until the cell for `colId` actually EXISTS, and leave it there.
  *
@@ -1003,14 +1025,14 @@ if (RUN.includes('contract')) {
         /* MX.G — the Matrix host: resolve by col-id SUFFIX and pick the row whose cell wears the state's class. */
         if (scope.matrix) {
           await page.waitForTimeout(1500)
-          const hit = await page.evaluate(([kind, state]) => {
+          const hit = await scanHorizontal(() => page.evaluate(([kind, state]) => {
             const cls = state === 'locked' ? 'nds-cell-is-locked' : (kind === 'listing' || kind === 'syncState') ? null : 'nds-cell-is-editable'
             for (const r of document.querySelectorAll('.ag-row[row-id]')) {
               const cell = [...r.querySelectorAll('.ag-cell[col-id]')].find((c) => (c.getAttribute('col-id') || '').endsWith(`.${kind}`) && (!cls || c.classList.contains(cls)))
               if (cell) return { rowId: r.getAttribute('row-id'), colId: cell.getAttribute('col-id') }
             }
             return null
-          }, [row.kind, row.state])
+          }, [row.kind, row.state]))
           if (!hit) {
             const any = await page.evaluate((kind) => [...document.querySelectorAll('.ag-header-cell[col-id]')].some((h) => (h.getAttribute('col-id') || '').endsWith(`.${kind}`)), row.kind)
             if (!any) { console.log(`   ·  ${row.kind.padEnd(9)} ${row.state.padEnd(10)} n/a — MATRIX renders no ${row.kind} column`); continue }
@@ -1382,24 +1404,40 @@ if (RUN.includes('parity')) {
     const ok = await page.waitForFunction(() => document.querySelectorAll('.ag-row[row-id]').length > 0, null, { timeout: ROWS_MS }).then(() => true).catch(() => false)
     if (!ok) { failures.push(`parity ${sc.key}: NOT MEASURED — no rows rendered`); continue }
     await page.waitForTimeout(3000)
-    const r = await page.evaluate(() => {
+    const selectReading = await scanHorizontal(() => page.evaluate(() => {
+      const select = document.querySelector('.ag-row[row-id] .ag-cell.nds-cell-is-editable.nds-cell-is-select')
+      return select ? { chevron: !!select.querySelector('.nds-ag-chev, .nds-select-chevron, [class*="chevron"]') } : null
+    }))
+    await page.evaluate(() => {
+      const v = document.querySelector('.ag-grid-viewport, .ag-body-horizontal-scroll-viewport')
+      if (v) v.scrollLeft = 0
+    })
+    await page.waitForTimeout(350)
+    const r = await page.evaluate((selectReading) => {
       const hdr = document.querySelector('.ag-header'); const row = document.querySelector('.ag-row[row-id]')
+      const matrix = !!document.querySelector('[data-matrix-surface]')
       const editable = [...document.querySelectorAll('.ag-row[row-id] .ag-cell[col-id].nds-cell-is-editable')]
       const text = editable.find((c) => !c.classList.contains('nds-cell-is-select') && !c.classList.contains('nds-ag-num') && !c.querySelector('.nds-cell-longtext-text'))
+        ?? (matrix ? editable.find(c => !c.classList.contains('nds-cell-is-select')) : null)
       const cs = text ? getComputedStyle(text) : null
-      const select = editable.find((c) => c.classList.contains('nds-cell-is-select'))
       const footer = (document.querySelector('.nds-grid-sheet-status .nds-grid-sheet-noteslot')?.innerText || '').replace(/\s+/g, ' ').trim()
+      const groupHeight = matrix ? document.querySelector('.ag-header-row-group')?.getBoundingClientRect().height ?? 0 : 0
       return {
-        headerH: hdr ? Math.round(hdr.getBoundingClientRect().height) : null,
+        headerH: hdr ? Math.round(hdr.getBoundingClientRect().height - groupHeight) : null,
         rowH: row ? Math.round(row.getBoundingClientRect().height) : null,
         cellPad: cs ? `${cs.paddingLeft}/${cs.paddingRight}` : null,
         cellFont: cs ? `${cs.fontSize} ${cs.fontWeight}` : null,
         floatingFilterRow: !!document.querySelector('.ag-floating-filter'),
         /* The footer minus its row count — the hint, the `?`, whatever occupies the note slot. */
         footerNote: footer ? footer.replace(/^\d+ rows?\s*/, '') : null,
-        identityHeader: document.querySelector('.ag-header-cell[col-id="ag-Grid-AutoColumn"] .ag-header-cell-text')?.textContent?.trim() ?? null,
+        identityHeader: document.querySelector('.ag-header-cell[col-id="ag-Grid-AutoColumn"] .ag-header-cell-text, .ag-header-cell[col-id="identity"] .ag-header-cell-text')?.textContent?.trim() ?? null,
         everyCellHasBase: editable.length ? editable.every((c) => c.classList.contains('nds-ag-cell')) : null,
-        selectHasChevron: select ? !!select.querySelector('svg, .nds-select-chevron, [class*="chevron"]') : null,
+        selectHasChevron: selectReading?.chevron ?? null,
+        ...(matrix ? { matrixProjection: {
+          groupHeight,
+          footer: document.querySelector('.nds-grid-sheet-status')?.innerText?.replace(/\s+/g, ' ').trim() ?? null,
+          parentSubtitle: document.querySelector('.ag-row[row-index="0"] .nds-identity-band-sub')?.textContent?.trim() ?? null,
+        } } : {}),
         /* 🔴 VT.2 — the `Variation theme` column, REQUIRED on all three scopes.
            It is one engine definition (`variationThemeColumnDef`) spread by BOTH sheet builders, and
            it is a STRUCTURAL column (ruling R-VT-1) so a saved view may not drop it — which is
@@ -1464,7 +1502,7 @@ if (RUN.includes('parity')) {
           return { pic: !!band.querySelector('.nds-identity-band-pic img'), sub: !!band.querySelector('.nds-identity-band-sub'), mark: !!band.querySelector('.nds-alias-mark'), trail }
         })(),
       }
-    })
+    }, selectReading)
     readings.set(sc.key, r)
     console.log(`   ${sc.key.padEnd(10)} ${JSON.stringify(r)}`)
   }
@@ -1475,6 +1513,16 @@ if (RUN.includes('parity')) {
      moved. A ruling nothing measures is a doc entry. */
   const VARIATION_THEME_WIDTH = 160
   for (const [key, r] of readings) {
+    if (r.selectHasChevron !== true) failures.push(`${key} closed-list affordance: no select chevron measured`)
+    if (key === 'MATRIX') {
+      // Matrix design §3.3/§3.9 and D-MX7: coordinate strip, operational footer,
+      // parent/variant identity, and explicitly NO variation-theme cells.
+      if (r.variationTheme !== null) failures.push('MATRIX D-MX7: variation theme must remain on Information, not the all-coordinate Matrix')
+      if (r.matrixProjection?.groupHeight !== 30) failures.push(`MATRIX coordinate strip: expected 30px, got ${r.matrixProjection?.groupHeight}`)
+      if (!/\b\d+ variants?\b/.test(r.matrixProjection?.footer ?? '')) failures.push('MATRIX footer: variant count not rendered')
+      if (!/^Parent · \d+ variants?$/.test(r.matrixProjection?.parentSubtitle ?? '')) failures.push('MATRIX parent identity: variant count not rendered')
+      continue
+    }
     if (r.variationTheme == null) { failures.push(`R-VT-4 ${key} · variation theme width: NOT MEASURED — the column did not render on this scope`); continue }
     if (r.variationTheme.width !== VARIATION_THEME_WIDTH) {
       failures.push(
@@ -1492,6 +1540,14 @@ if (RUN.includes('parity')) {
     for (const [key, r] of readings) {
       if (key === 'master') continue
       for (const k of Object.keys(ref)) {
+        if (key === 'MATRIX' && ['variationTheme', 'footerNote'].includes(k)) continue // asserted against the Matrix design above
+        if (key === 'MATRIX' && k === 'parentBand' && ref[k] && r[k]) {
+          for (const slot of ['pic', 'mark', 'trail']) {
+            if (JSON.stringify(r[k][slot]) !== JSON.stringify(ref[k][slot])) failures.push(`parity MATRIX · parentBand.${slot}: ${JSON.stringify(r[k][slot])} — master reads ${JSON.stringify(ref[k][slot])}`)
+            else parityChecked++
+          }
+          continue // Matrix's parent subtitle is asserted above, as specified by VariantIdentity.
+        }
         if (k.startsWith('opt_') && (ref[k] == null || r[k] == null)) { console.log(`   ·  ${key} · ${k}: n/a — ${ref[k] == null ? 'master' : key} renders no such cell in its landing view`); continue }
         if (ref[k] == null) { failures.push(`parity ${key} · ${k}: NOT MEASURED — master read null, so an equal null would pass for the wrong reason`); continue }
         if (JSON.stringify(r[k]) !== JSON.stringify(ref[k])) failures.push(`parity ${key} · ${k}: ${JSON.stringify(r[k])} — master reads ${JSON.stringify(ref[k])}`)
