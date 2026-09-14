@@ -6,6 +6,8 @@ const { tabRedirects, bareIndexRedirect } = require('./src/app/marketing/ads/rul
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Repository instructions are maintained at the root; dev startup must not generate new ones.
+  agentRules: false,
   // Preserve the profile URL and origin while middleware rewrites the page tree.
   skipProxyUrlNormalize: process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1',
   // Local-dev build-dir isolation. When several sessions edit this app at once,
@@ -67,18 +69,10 @@ const nextConfig = {
     // `npx`, which any predev/npm-script janitor would have missed entirely. The cost is a
     // cold compile per `next dev` start; HMR within a session is unaffected.
     turbopackFileSystemCacheForDev: false,
-    // Backstop for in-session growth. Next calls this a "target memory limit … in bytes", so
-    // it is not a hard cap — but it is the only lever that reaches Turbopack's NATIVE (Rust)
-    // allocation, which NODE_OPTIONS=--max-old-space-size cannot touch.
-    //
-    // DEV ONLY, deliberately. Next threads this same value into the PRODUCTION build as well
-    // (`build/turbopack-build/impl.js` → sharedTurboOptions), where a 4 GB target would make
-    // Turbopack GC its in-memory cache earlier on a Vercel builder we neither own nor measured.
-    // The runaway this guards against is a long-lived dev server, not a one-shot build, so the
-    // limit is scoped to where the risk actually is.
-    ...(process.env.NODE_ENV === 'development'
-      ? { turbopackMemoryLimit: 4 * 1024 * 1024 * 1024 }
-      : {}),
+    // Next 16.3 removed turbopackMemoryLimit. Its new memory eviction requires the
+    // filesystem cache, so it cannot replace that numeric target while the cache stays
+    // disabled. Preserve the measured protection against accumulated disk cache above;
+    // do not retain an ignored setting or claim that native memory has a fixed cap.
   },
   async redirects() {
     const redirects = [

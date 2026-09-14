@@ -5,7 +5,7 @@
 # on a Redis hiccup). This workflow takes over: every push to main
 # builds and ships the new container via Railway CLI. The container
 # applies migrations at startup, after the image has finished building,
-# and Railway waits for /api/health before switching traffic.
+# and Railway waits for /api/health/ready before switching traffic.
 #
 # Required secrets (set under repo Settings → Secrets and variables
 # → Actions):
@@ -82,13 +82,14 @@ jobs:
         # The build must finish before polling the public database health route.
         run: |
           set -e
+          expected="${GITHUB_SHA:0:8}"
           for i in $(seq 1 36); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://nexusapi-production-b7bb.up.railway.app/api/health")
-            if [ "$code" = "200" ]; then
-              echo "✓ Railway is serving"
+            body=$(curl --max-time 10 -fsS "https://nexusapi-production-b7bb.up.railway.app/api/health/ready") || body='{}'
+            if jq -e --arg build "$expected" '.status == "healthy" and .build == $build' <<< "$body" >/dev/null; then
+              echo "✓ Railway is serving $expected"
               exit 0
             fi
             sleep 5
           done
-          echo "✗ Railway did not respond within 3 minutes"
+          echo "✗ Railway did not serve the expected build after 36 readiness attempts"
           exit 1

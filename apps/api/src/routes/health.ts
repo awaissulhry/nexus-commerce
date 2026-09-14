@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { createHash } from 'node:crypto'
 import prisma from '../db.js'
 import { getRedisRuntimeStatus } from '../lib/queue.js'
+import { checkDatabaseReadiness } from '../services/health.service.js'
 
 // AS.0 debugging — a stable, non-reversible fingerprint of the Amazon refresh
 // token the RUNNING process actually holds (first 8 hex of sha256). Lets us
@@ -14,6 +15,22 @@ function amazonTokenFingerprint(): string {
 }
 
 const healthRoutes: FastifyPluginAsync = async (fastify) => {
+  // Cutover depends on the database being reachable. Operational diagnostics on
+  // /health can scan queue/ads history and must not delay the infrastructure probe.
+  fastify.get('/health/ready', async (_request, reply) => {
+    reply.header('cache-control', 'no-store')
+    try {
+      await checkDatabaseReadiness()
+      return {
+        status: 'healthy',
+        build: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
+        services: { database: 'connected', api: 'operational' },
+      }
+    } catch {
+      return reply.code(503).send({ status: 'unhealthy', error: 'Database is unavailable' })
+    }
+  })
+
   fastify.get('/health', async (request, reply) => {
     try {
       // Test database connection

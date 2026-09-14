@@ -16,7 +16,7 @@ The requested release promotes the complete development checkout to GitHub main,
 
 LX4/LX5 had already been applied to production before the workspace runtime role existed. Their conditional grants had therefore done nothing, and the workspace migration predates those tables. `20260914_runtime_projection_access` converges their grants, membership-aware RLS, and reference guards to the canonical workspace policy generator; it also completes the seller-label cache's isolation. Existing migration checksums are unchanged.
 
-Railway builds the container before its startup command applies migrations through the direct Neon endpoint. The workflow no longer pre-applies migrations while Railway is still building. Railway's configured `/api/health` check must pass before traffic switches.
+Railway builds the container before its startup command applies migrations through the direct Neon endpoint. The workflow no longer pre-applies migrations while Railway is still building. Railway's configured `/api/health/ready` check must pass before traffic switches, and the GitHub workflow verifies the serving commit.
 
 ## Existing deployment conditions
 
@@ -31,3 +31,21 @@ The private backup, detailed test logs, migration receipts, and runtime evidence
 The first push stopped at the census without uploading. Amazon image navigation now uses the existing `sm` Input/Select/Button sizes; Generate uses `sm` inputs, and its SKU-pattern wrapper no longer shrinks vertically inside Field. No shared design-system component changed.
 
 The census now measures the record drawer against the visible global header (AppShell renders it on Studio), recognizes the explicit empty attributed-activity state, and waits for the separate family response before pressing Generate. Variant selection is measured once per logical row across AG's pinned/center fragments, after NexusGrid's deferred pinning and AG's opening animation settle. The entire 43px selection cell must precede identity; selecting rows must still leave channel inclusion unchanged. The full unfiltered census passed with all API writes blocked except the existing dry-run combination preview.
+
+## Hosted install and framework follow-up
+
+The complete development release reached GitHub as `d8677ae9a` after the normal pre-push gate passed. GitHub's clean installation then exposed `postinstall-postinstall`: the helper chooses Yarn merely because `yarnpkg` is installed, despite this repository declaring npm. Removing that Yarn-only helper retains the root `postinstall: patch-package` hook. A separate clean source copy passed `npm ci` with the hosted runner's Node 22.23.2 and npm 10.9.8, including the AG Grid patch.
+
+The hosted audit also reported the framework's [AVIF image optimization vulnerability](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4) and [Windows server vulnerability](https://github.com/advisories/GHSA-p293-qw3h-jr36). Web, Factory, and the database package now pin Next.js 16.3.5. The follow-up production dependency audit reports zero critical findings and no Next.js finding; 55 other advisories remain (30 high, 24 moderate, one low), so this is not a claim that the dependency tree has no outstanding advisories.
+
+Next 16.3 removed the numeric Turbopack memory option. Both app configurations retain disabled development filesystem caching and remove the ignored option; the new eviction mechanism requires filesystem caching, so it is not represented as a replacement cap. Automatic generation of app-level agent instruction files is disabled to preserve the maintained repository instructions.
+
+Vercel promotion remains held while the corrected release is validated. A supplemental Product/ChannelListing data backup completed at 13:51 UTC and passed a complete `pg_restore` read without database writes, supplementing the earlier full production backup. The product and listing identity baseline remains 338/977.
+
+## Railway readiness correction
+
+Railway built `d8677ae9a` and successfully applied all 15 migrations, but rejected the container after its five-minute health-check timeout. The prior healthy container continued serving. A read-only production inspection found no long-running SQL or locks; the runtime shared one database connection between workspace transactions, cron tasks, workers, and health diagnostics.
+
+The API now defaults to a bounded pool of eight connections, with an explicit deployment override available through `NEXUS_DATABASE_POOL_MAX` (1–20). Serverless consumers retain the database library's one-connection default. The existing workspace adapter still establishes role and scope with `SET LOCAL` inside every transaction. A new public readiness endpoint checks database access without scanning queue or advertising history; the existing detailed health endpoint remains available. Regression coverage verifies readiness success, database failure, private error handling, and public authorization.
+
+The corrected API suite passed 8,950 tests across 723 files, with 28 existing skips. The readiness and permission suites passed again after moving the probe query into its service; the route architecture ratchet also passed. The local API answered the new readiness route successfully. Hosted cutover and the complete pre-push gate remain required before promotion.

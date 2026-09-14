@@ -79,6 +79,7 @@ describe('permission matrix: exact allow/deny per role', () => {
 describe('PUBLIC routes allow everyone (incl. anonymous)', () => {
   for (const [method, path] of [
     ['GET', '/api/health'],
+    ['GET', '/api/health/ready'],
     ['POST', '/api/auth/login'],
     ['POST', '/webhooks/shopify/orders/create'],
     ['GET', '/api/r/abc123'],

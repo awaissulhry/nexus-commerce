@@ -17,3 +17,8 @@ import { config } from "dotenv";
 
 config();
 config({ path: resolve(new URL(".", import.meta.url).pathname, "../../../.env") });
+
+// Each workspace query owns a transaction and several database round trips.
+// The API also runs workers and crons; one shared connection queues interactive
+// requests behind that work. Web/serverless consumers retain the library's default of one.
+process.env.NEXUS_DATABASE_POOL_MAX ??= '8';

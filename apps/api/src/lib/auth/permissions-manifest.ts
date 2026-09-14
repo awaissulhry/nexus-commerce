@@ -54,7 +54,7 @@ export const ENTRIES: Entry[] = [
   // Workspace routes require a live session and enforce membership within their plugin.
   P(PUBLIC, (_m, p) => p === '/api/workspaces' || p.startsWith('/api/workspaces/')),
   // ── PUBLIC: health / infra ──────────────────────────────────────
-  P(PUBLIC, (_m, p) => p === '/api/health' || p === '/admin/health' || p === '/health'),
+  P(PUBLIC, (_m, p) => ['/api/health', '/api/health/ready', '/admin/health', '/health', '/health/ready'].includes(p)),
   P(PUBLIC, pfx('/api/monitoring')),
   P(PUBLIC, pfx('/monitoring')),
 

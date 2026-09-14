@@ -10,6 +10,8 @@ import { fileURLToPath } from "node:url";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Keep the repository's maintained instructions instead of generating files on startup.
+  agentRules: false,
   // Dev runs in .next-dev so a concurrent `next build` (verification, CI,
   // another session) can never clobber the live dev server's assets — the
   // multi-session lesson apps/web learned with NEXT_DEV_ISOLATED (gate
@@ -41,12 +43,9 @@ const nextConfig = {
   // Off here too, so the failure cannot simply move apps.
   experimental: {
     turbopackFileSystemCacheForDev: false,
-    // A "target" limit in bytes, not a hard cap — but the only lever that reaches Turbopack's
-    // native Rust allocation. DEV ONLY: Next threads the same value into the production build,
-    // and this is guarding a long-lived dev server, not a one-shot build. See apps/web's copy.
-    ...(process.env.NODE_ENV === "development"
-      ? { turbopackMemoryLimit: 4 * 1024 * 1024 * 1024 }
-      : {}),
+    // Next 16.3 removed the numeric turbopackMemoryLimit. Memory eviction requires
+    // filesystem caching, which remains disabled after the incident above. Match the
+    // web app's supported configuration without claiming a native-memory cap.
   },
 };
 
