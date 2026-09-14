@@ -108,7 +108,7 @@ export async function submitStudioPublication(productId: string, id: string, bod
   const input = object(body)
   if (plan.prepared.kind === 'shopify' && !plan.review.locations?.some(l => l.id === input.locationId)) throw new WorkspaceScopeError('Choose an inventory location from this Shopify store.', 400)
   const claimed = await prisma.$transaction(async tx => {
-    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', `studio-publication:${data.publicationKey}`)
+    await tx.$queryRawUnsafe('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))::text', `studio-publication:${data.publicationKey}`)
     const other = await tx.bulkOperation.findFirst({ where: { id: { not: id }, status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: data.publicationKey } }, select: { id: true } })
     if (other) throw new WorkspaceScopeError('Another publication is in progress or awaits verification. Check its result before sending again.')
     return (await tx.bulkOperation.updateMany({ where: { id, userId, status: 'PREVIEW' }, data: { status: 'PUBLISHING' } })).count === 1

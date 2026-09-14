@@ -16,6 +16,7 @@ The Modello worksheet imports existing GALE listings into the current product st
 - Preserve structured Amazon HTTP validation errors; clear attributes using schema selector values instead of deleting by name alone.
 - Keep the condition attribute outside the price envelope, serialize saved RRP, and retain the variation relationship type when substituting the selected parent's seller SKU.
 - Hash publication review objects independently of JSON key order. PostgreSQL JSONB reorders the saved scope keys; unchanged values must survive the preview/submit round trip while real changes still invalidate the review.
+- Cast the publication advisory-lock result to text so Prisma can deserialize PostgreSQL's void-returning lock call. The transaction lock and duplicate-send checks stay enforced.
 
 ## Data repair
 
