@@ -178,6 +178,11 @@ describe('editor, preview and validation share channel inheritance', () => {
 
 import { validateChannelValue } from './validate-channel-value.js'
 describe('channel value constraints', () => {
+  it('treats an optional empty list as absent without rewriting its stored value', () => {
+    const optional = field('seasons', { priority: 'optional', shape: 'list', cardinality: { min: 1, max: 4 } })
+    expect(validateChannelValue(optional, [])).toMatchObject({ value: [], errors: [] })
+    expect(validateChannelValue({ ...optional, priority: 'required' }, []).errors).toEqual([expect.stringContaining('needs at least 1')])
+  })
   it('checks each enum member and reports corrections without flattening the list', () => {
     const result = validateChannelValue(field('colors', { shape: 'list', options: ['Red', 'Blue'], selectionOnly: true }), [' red ', 'Blue'])
     expect(result.value).toEqual(['Red', 'Blue'])

@@ -55,7 +55,7 @@ export function validateChannelValue(field: CatalogueField, input: unknown) {
   // Coercion is used for validation only. Preview never converts structured records to text.
   const checked = coerceForShape({ key: field.fieldKey, label: field.label, kind: field.kind,
     shape: field.shape, cardinality: field.cardinality, unitOptions: field.unitOptions, validation: field.validation }, value)
-  if (!info?.definition && checked.ok === false) errors.push(checked.error)
+  if (!info?.definition && checked.ok === false && (!isBlankValue(value) || field.priority === 'required')) errors.push(checked.error)
   const strings = (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
   const chars = Math.max(0, ...strings.map(v => v.length))
   const bytes = Math.max(0, ...strings.map(v => Buffer.byteLength(v, 'utf8')))

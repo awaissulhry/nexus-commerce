@@ -12,6 +12,7 @@ The Modello worksheet imports existing GALE listings into the current product st
 - Recover existing Amazon brand, condition and list price from their saved attribute envelopes. Respect fields Amazon marks immutable on existing listings.
 - Keep existing Amazon gallery images during partial content updates unless an explicit gallery selection was saved. A shared library is not a selected channel gallery.
 - Recognize safety-image documentation without inventing an attestation. Empty optional lists produce no invalid empty Amazon envelope.
+- Preserve explicit empty lists in the content writer. Readiness checks treat absent optional fields separately from shape validation, so a missing optional Amazon field does not block publication or change Etsy's stored empty-list semantics.
 - Read all requested Amazon listing sections using its comma-separated query format and the selected account's region. Listing issues remain visible on successful GET responses.
 - Preserve structured Amazon HTTP validation errors; clear attributes using schema selector values instead of deleting by name alone.
 - Keep the condition attribute outside the price envelope, serialize saved RRP, and retain the variation relationship type when substituting the selected parent's seller SKU.
@@ -33,7 +34,7 @@ The complete publication-facts resolver then reported zero local issues for all 
 
 ## Verification
 
-Targeted importer, content, schema, variation, readiness and publication regressions pass (401 tests, one existing skip across the selected suites). API TypeScript checking passes. Repository pre-push gates and deployment verification are performed separately.
+The full CI selection for importer, content, schema, variation, readiness, mapping and publication regressions passes locally (1,790 tests, four existing skips across 161 suites). API TypeScript checking passes. Repository pre-push gates and deployment verification are performed separately.
 
 ## Channel evidence requiring follow-up
 

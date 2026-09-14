@@ -10,6 +10,7 @@ vi.mock('@nexus/database', async () => {
 vi.mock('../../lib/queue.js', () => ({ addJobSafely: vi.fn(), outboundSyncQueue: null, readCacheQueue: null, searchIndexQueue: null, redis: null }))
 vi.mock('../audit-log.service.js', () => ({ auditLogService: { write: vi.fn() } }))
 import prisma from '../../db.js'
+import { inDatabaseTransaction } from '../../lib/database-context.js'
 import pimRoutes from '../../routes/pim.routes.js'
 import { catalogRoutes } from '../../routes/catalog.routes.js'
 import amazonRoutes from '../../routes/amazon.routes.js'
@@ -61,10 +62,10 @@ describe('product family actions against the production Prisma schema', () => {
     // "Product changed since preview". The fixture reads what the apply reads — it is the
     // producer's own include, not a second list.
     const before = await prisma.product.findUniqueOrThrow({ where: { id: 'standalone' }, include: { translations: true, parent: { include: { translations: true } }, categories: { select: { categoryId: true, isPrimary: true } } } })
-    await prisma.$transaction(tx => applyTransferTarget(tx, {
+    await inDatabaseTransaction(prisma, () => applyTransferTarget(prisma, {
       key: 'standalone', identity: { row: 2, entity: 'Products', sku: 'standalone', channel: '', accountId: '', marketplace: '', aliasKey: '', locale: '', field: 'name', action: 'SET', value: 'Imported name' },
       before: JSON.parse(JSON.stringify(before)), patch: { name: 'Imported name' }, parentSku: 'parent', cells: [], rows: [], contractHash: 'fixture', create: false,
-    }, 'fixture-import', null), { isolationLevel: 'Serializable' })
+    }, 'fixture-import', null))
     expect(await row('standalone')).toMatchObject({ name: 'Imported name', parentId: 'parent', version: 4 })
     expect(await prisma.productReadCache.findUniqueOrThrow({ where: { id: 'standalone' } })).toMatchObject({ name: 'Imported name', parentId: 'parent', version: 4 })
     expect(await prisma.productReadCache.findUniqueOrThrow({ where: { id: 'parent' } })).toMatchObject({ childCount: 3 })

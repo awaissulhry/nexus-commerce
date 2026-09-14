@@ -305,6 +305,9 @@ export function evaluateRow(row: FlatRow, v: CoordinateValidators, content?: {
       const condition = column.validation!.requiredWhen as { field: string }
       issues.push({ field: column.key, severity: 'error', message: `${column.label} is required by this family when ${condition.field} has its selected value.` })
     }
+    // Presence is checked above. An absent optional value has no shape to validate;
+    // keeping this here preserves explicit empty lists in the content writer.
+    if (isBlankValue(row[column.key])) continue
     const result = coerceForShape(column, row[column.key])
     if (result.ok === false && !issues.some(issue => issue.field === column.key && issue.severity === 'error')) {
       issues.push({ field: column.key, severity: 'error', message: result.error })

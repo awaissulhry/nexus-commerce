@@ -31,6 +31,20 @@ const val = (value: unknown): SheetCellValue => ({ value, source: 'master', inhe
 const run = (columns: SheetColumn[], values: Record<string, SheetCellValue>, coordinate = AMAZON_IT) =>
   computeReadiness({ columns, values, row: CHILD, coordinate, listing: null })
 
+describe('optional list readiness', () => {
+  const nodes = col({ key: 'recommended_browse_nodes', shape: 'list', cardinality: { min: 1, max: 2 }, validation: { minItems: 1, maxItems: 2 } })
+  it('does not require an optional list merely because populated lists have a minimum', () => {
+    expect(evaluateRow({ recommended_browse_nodes: [] }, buildCoordinateValidators([nodes], AMAZON_IT, CHILD))).toEqual([])
+  })
+  it('still requires a list declared mandatory and validates populated lists', () => {
+    const required = { ...nodes, requiredBy: [AMAZON_IT.label] }
+    expect(evaluateRow({ recommended_browse_nodes: [] }, buildCoordinateValidators([required], AMAZON_IT, CHILD)))
+      .toContainEqual(expect.objectContaining({ field: nodes.key, severity: 'error', message: expect.stringContaining('required') }))
+    expect(evaluateRow({ recommended_browse_nodes: ['1', '2', '3'] }, buildCoordinateValidators([nodes], AMAZON_IT, CHILD)))
+      .toContainEqual(expect.objectContaining({ field: nodes.key, severity: 'error', message: expect.stringContaining('at most 2') }))
+  })
+})
+
 describe('GTIN mod-10 — added by the delegation', () => {
   // 5012345678900 is a real, hand-verified valid EAN-13:
   //   odd  positions 5+1+3+5+7+9  = 30
