@@ -206,7 +206,8 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).localizedContent).toEqual(legacyContent)
     expect(await prisma.productTranslation.count()).toBe(0)
   })
-  it('keeps two accounts, three listings and two languages independent through formula save and reload', async () => {
+  // This verifies twelve independent database write/read cycles, not a 10s latency budget.
+  it('keeps two accounts, three listings and two languages independent through formula save and reload', { timeout: 30_000 }, async () => {
     await prisma.marketplace.upsert({ where: { channel_code: { channel: 'ETSY', code: 'GLOBAL' } } as any,
       create: { id: 'etsy-market', channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', region: 'GLOBAL', currency: 'EUR', language: 'en', languages: ['en', 'de'] }, update: { languages: ['en', 'de'] } })
     await prisma.channelConnection.createMany({ data: ['etsy-a', 'etsy-b'].map(id => ({ id, channelType: 'ETSY', isActive: true, isPrimary: id === 'etsy-a' })) })

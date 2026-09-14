@@ -44,10 +44,23 @@ jobs:
     name: Schema drift + i18n parity + API build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     env:
       # Disposable PostgreSQL tests provide their own sockets. The guard still
       # requires an explicit local target; CI has no developer catalogue.
       DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
+      REDIS_URL: redis://127.0.0.1:6379
+      NEXUS_DISABLE_BACKGROUND_JOBS: '1'
+      ENABLE_QUEUE_WORKERS: '0'
 
     steps:
       - name: Checkout
