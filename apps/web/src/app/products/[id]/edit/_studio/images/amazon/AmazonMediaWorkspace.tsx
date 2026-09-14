@@ -240,14 +240,14 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
     </header>
     <div className={styles.body}>
       <aside className={styles.navigation} aria-label="Amazon image galleries">
-        <Field label="Listing"><Select value={workspace.destination.listingId} disabled={locked} onChange={event => onListingChange(event.target.value)}>
+        <Field label="Listing"><Select size="sm" value={workspace.destination.listingId} disabled={locked} onChange={event => onListingChange(event.target.value)}>
           {workspace.destination.listings.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
         </Select></Field>
         <PressableRow label="Common images" current={active === 'common'} onClick={() => setActive('common')} description="Images shared by SKUs in this market; SKU overrides take precedence."><Tag>{Object.values(draft.common).filter(Boolean).length}</Tag></PressableRow>
         <Disclosure summary={`SKU galleries · ${items.length}`} open={groupsOpen} onToggle={event => setGroupsOpen(event.currentTarget.open)}>
           <div className={styles.navControls}>
-            {axes.length > 0 && <Field label="Group variations by"><Select value={axes.includes(axis) ? axis : ''} onChange={event => setAxis(event.target.value)}><option value="">All SKUs</option>{axes.map(a => <option key={a} value={a}>{axisLabel(a)}</option>)}</Select></Field>}
-            <Input aria-label="Search Amazon SKUs and variations" placeholder="Search SKU or variation" leadingIcon={<Search size={16} />} value={query} onChange={event => setQuery(event.target.value)} />
+            {axes.length > 0 && <Field label="Group variations by"><Select size="sm" value={axes.includes(axis) ? axis : ''} onChange={event => setAxis(event.target.value)}><option value="">All SKUs</option>{axes.map(a => <option key={a} value={a}>{axisLabel(a)}</option>)}</Select></Field>}
+            <Input size="sm" aria-label="Search Amazon SKUs and variations" placeholder="Search SKU or variation" leadingIcon={<Search size={16} />} value={query} onChange={event => setQuery(event.target.value)} />
           </div>
           <GridDensityProvider value="compact"><div className={styles.groupList}>
             {groups.map(group => <section key={group.label} className={styles.group} aria-label={group.label}>
@@ -267,7 +267,7 @@ export function AmazonMediaWorkspace({ path, productId, accountLabel, onListingC
           <div className={styles.actions}>
             <Button disabled={disabled || !emptyCodes.length} onClick={() => setPickerSlot('batch')}>Add images</Button>
             <Button disabled={disabled || dirty} onClick={() => setMarketCopyOpen(true)}>Copy from market</Button>
-            <Button disabled={disabled} onClick={() => setCopyOpen(true)}><Copy size={16} />Apply to SKUs</Button>
+            <Button size="sm" disabled={disabled} onClick={() => setCopyOpen(true)}><Copy size={16} />Apply to SKUs</Button>
             {section === 'gallery' && <Button disabled={locked || dirty || !canEdit} onClick={() => void checkAmazon()}>Check Amazon</Button>}
           </div>
         </div>

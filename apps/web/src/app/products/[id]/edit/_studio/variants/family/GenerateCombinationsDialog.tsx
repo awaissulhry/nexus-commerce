@@ -96,21 +96,21 @@ export function GenerateCombinationsDialog({ open, productId, version, parentSku
           <div className={styles.valueRow}>
             {axis.values.map(value => <Tag key={value.code} tone="neutral">{value.label}</Tag>)}
             {(added[axis.key] ?? []).map(value => <TokenChip key={value} removeLabel={`Remove ${value}`} onRemove={() => setAdded(current => ({ ...current, [axis.key]: current[axis.key].filter(v => v !== value) }))}>+ {value}</TokenChip>)}
-            <Input size="xs" fieldClassName={styles.addValue} aria-label={`Add a ${axis.label} value`} placeholder="Add a value…" value={drafts[axis.key] ?? ''} disabled={busy}
+            <Input size="sm" fieldClassName={styles.addValue} aria-label={`Add a ${axis.label} value`} placeholder="Add a value…" value={drafts[axis.key] ?? ''} disabled={busy}
               onChange={e => setDrafts(current => ({ ...current, [axis.key]: e.target.value }))} onBlur={() => add(axis.key)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(axis.key) } }} />
           </div>
         </Field>
       </div>)}
       <div className={styles.axisSection}>
         <Field label="SKU pattern" hint={derived.derived ? undefined : derived.reason}>
-          <Input size="xs" fieldClassName={styles.patternField} aria-label="SKU pattern" value={pattern} disabled={busy} onChange={e => setPatternEdit(e.target.value)} />
+          <Input size="sm" fieldClassName={styles.patternField} aria-label="SKU pattern" value={pattern} disabled={busy} onChange={e => setPatternEdit(e.target.value)} />
         </Field>
         <span className={styles.preview}>
           {Object.entries(preview?.codes ?? {}).map(([axis, codes]) => <span key={axis}>Codes: {Object.entries(codes).map(([value, code]) => `${value} → ${code}`).join(', ')} · </span>)}
           {preview?.plan[0] && <>first new SKU <code>{preview.plan[0].sku}</code> · title, price and stock copy from the nearest sibling</>}
         </span>
         {axes.flatMap(axis => (added[axis.key] ?? []).map(value => <Field key={`${axis.key}:${value}`} label={`Code for ${value}`}>
-          <Input size="xs" aria-label={`Code for ${value}`} value={codeEdit[axis.key]?.[value] ?? defaultCode(value)} disabled={busy}
+          <Input size="sm" aria-label={`Code for ${value}`} value={codeEdit[axis.key]?.[value] ?? defaultCode(value)} disabled={busy}
             onChange={e => setCodeEdit(current => ({ ...current, [axis.key]: { ...current[axis.key], [value]: e.target.value } }))} />
         </Field>))}
         {!!preview?.skuConventionWarnings.length && <span className={styles.preview}>Check the SKU convention: {preview.skuConventionWarnings.map(w => `${w.value} → ${w.code}; existing ${w.exampleSku}`).join(' · ')}</span>}

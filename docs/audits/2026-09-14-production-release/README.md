@@ -6,7 +6,7 @@ The requested release promotes the complete development checkout to GitHub main,
 
 - API: 8,947 tests passed, 28 existing skips; 722 test files passed, six skipped. The four live-catalog characterization files run in successive Vitest projects to avoid observing each other's temporary rows.
 - Web: 4,447 tests passed, one existing skip; production web and API builds passed. The normal pre-push hook must still pass on the release commit.
-- Browser: full first/early/settled gesture and geometry checks passed. Focused parity and refused-formula checks passed after correcting virtualized-column measurements and passing the exact refusal reason into the existing SourceIndicator tooltip prop. The full hook remains the push gate.
+- Browser: all 14 control-census surfaces passed, including both Variants states, the mapping dock and Generate modal. Full first/early/settled gesture and geometry checks passed. Focused parity and refused-formula checks passed after correcting virtualized-column measurements and passing the exact refusal reason into the existing SourceIndicator tooltip prop. The full hook remains the push gate.
 - A complete custom-format production backup was restored into disposable local PostgreSQL databases. The final fresh restore ran all 15 pending migrations through `prisma migrate deploy`, including the production migration history.
 - All 338 products and 977 listings retained identical identity and original-column content hashes before and after migrations. No catalog or listing-ID backfill ran during this preflight.
 - The current API's routed Prisma client read full Product and ChannelListing records and a live Matrix with 21 family rows and 20 coordinates from the migrated clone.
@@ -25,3 +25,9 @@ The Vercel production alias `https://nexus-commerce-three.vercel.app` and Railwa
 The restored production ReadinessIndex and ListingIdentity tables both contained zero rows. Their derived-data and identity backfills require a post-deployment audit against production records. Development's additional products include fixtures and must not be copied wholesale.
 
 The private backup, detailed test logs, migration receipts, and runtime evidence are retained outside the repository under `/private/tmp/nexus-release-20260913`; credentials and production dumps are excluded from version control.
+
+## Control census follow-up
+
+The first push stopped at the census without uploading. Amazon image navigation now uses the existing `sm` Input/Select/Button sizes; Generate uses `sm` inputs, and its SKU-pattern wrapper no longer shrinks vertically inside Field. No shared design-system component changed.
+
+The census now measures the record drawer against the visible global header (AppShell renders it on Studio), recognizes the explicit empty attributed-activity state, and waits for the separate family response before pressing Generate. Variant selection is measured once per logical row across AG's pinned/center fragments, after NexusGrid's deferred pinning and AG's opening animation settle. The entire 43px selection cell must precede identity; selecting rows must still leave channel inclusion unchanged. The full unfiltered census passed with all API writes blocked except the existing dry-run combination preview.

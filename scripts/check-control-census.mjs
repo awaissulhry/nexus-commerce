@@ -26,7 +26,7 @@
  *      30 md), and a filter chip in a bar is the `md` 28.
  *
  * Plus two facts that are cheap to assert and expensive to lose: the "Ask AI" FAB is ABSENT on
- * every studio surface (it opted out with the top bar), and the record panel starts at y = 0.
+ * every studio surface, and the record panel starts immediately below the visible global header.
  *
  * What it deliberately does NOT assert: anything inside AG Grid (`.ag-root`) — cells, header
  * buttons, editors — which is the open-gesture gate's ground; and the drawer's field controls,
@@ -317,6 +317,10 @@ function censusInPage({ ALLOWED, SM, TOOLBAR_H, keepFormControls, DOCK_ROOT }) {
   return {
     controls: out,
     fab,
+    headerBottom: (() => {
+      const header = document.querySelector('.nds-topbar')
+      return header && header.getBoundingClientRect().height > 0 ? Math.round(header.getBoundingClientRect().bottom) : 0
+    })(),
     panelTop: panel ? Math.round(panel.getBoundingClientRect().top) : null,
     drawerStripH: tabsStrip ? Math.round(tabsStrip.parentElement.getBoundingClientRect().height) : null,
     dockW: (() => {
@@ -396,7 +400,7 @@ function judge(surface, c) {
   }
   if (surface.kind === 'drawer') {
     if (c.panelTop == null) fails.push('RECORD PANEL NOT FOUND')
-    else if (c.panelTop !== 0) fails.push(`RECORD PANEL TOP ${c.panelTop} (want 0 — this route has no top bar)`)
+    else if (c.panelTop !== c.headerBottom) fails.push(`RECORD PANEL TOP ${c.panelTop} (want ${c.headerBottom} — immediately below the visible global header)`)
     if (c.drawerStripH != null && c.drawerStripH !== TOOLBAR_H) fails.push(`DRAWER STRIP h${c.drawerStripH} (want ${TOOLBAR_H})`)
   }
   return { fails, seen }
@@ -499,6 +503,13 @@ for (const s of SURFACES) {
     url = drawerUrl
   }
   thrown = []; failedRequests = []; consoleErrors = []
+  // The sheet and family requests resolve independently. Rows alone do not make the
+  // Generate control ready: it needs the family axes as well.
+  const familyRead = s.open?.witness === '.nds-modal'
+    ? page.waitForResponse(response => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith('/studio/family'), { timeout: ROWS_MS })
+        .then(async response => ({ ok: response.ok(), body: await response.json() }))
+        .catch(error => ({ ok: false, error: error.message }))
+    : null
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   let ready = true
   if (s.kind === 'sheet' || s.kind === 'drawer' || s.kind === 'overlay') {
@@ -537,7 +548,9 @@ for (const s of SURFACES) {
         .filter((e) => !e.closest('.h10-rail') && !e.closest('.nds-topbar') && !e.closest('.ag-root')).length
       const w = window
       if (w.__censusLast === n) { w.__censusStable = (w.__censusStable || 0) + 1 } else { w.__censusLast = n; w.__censusStable = 0 }
-      return n > 0 && w.__censusStable >= 3
+      // An attributed-activity scope can legitimately have no events or controls.
+      const emptyActivity = panel.getAttribute('aria-label') === 'Activity' && /No attributed activity has been recorded in this scope/.test(panel.textContent ?? '')
+      return (n > 0 || emptyActivity) && w.__censusStable >= 3
     }, null, { timeout: ROWS_MS, polling: 400 }).then(() => true).catch(() => false)
     // Let a late fetch land: a panel still "Loading…" has settled at the wrong count otherwise.
     await page.waitForTimeout(2500)
@@ -563,6 +576,16 @@ for (const s of SURFACES) {
      witness that never appears are different failures and must not share a message, and neither
      may pass. */
   if (s.kind === 'overlay') {
+    if (familyRead) {
+      const family = await familyRead
+      if (!family.ok) {
+        summary.push(`✗ ${s.key}: family read failed — NOT MEASURED`); exit = 1; continue
+      }
+      if (family.body.axes?.length) {
+        await page.getByRole('button', { name: s.open.label }).waitFor({ state: 'visible', timeout: ROWS_MS })
+        await page.waitForFunction(() => [...document.querySelectorAll('button')].some(button => button.textContent?.trim() === 'Generate combinations' && !button.disabled), null, { timeout: ROWS_MS }).catch(() => {})
+      }
+    }
     const src = s.open.label.source
     /* 🔴 THREE OUTCOMES, NOT TWO. The first version pressed and then waited, so a control that
        REFUSED and a witness that never appeared shared one line — the exact conflation this gate
@@ -589,7 +612,7 @@ for (const s of SURFACES) {
       return { ok: true }
     }, src)
     if (!found.ok && found.why === 'refused') {
-      summary.push(`✗ ${s.key}: the control matching ${s.open.label} REFUSED the press (${found.how}) — NOT MEASURED, and this is NOT evidence the surface is unbuilt. It says: "${found.reason}". A local browser session is \`anon\`, so a control gated on a permission is held here.`)
+      summary.push(`✗ ${s.key}: the control matching ${s.open.label} REFUSED the press (${found.how}) — NOT MEASURED, and this is NOT evidence the surface is unbuilt. It says: "${found.reason}".`)
       exit = 1
       continue
     }

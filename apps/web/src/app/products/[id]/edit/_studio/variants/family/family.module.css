@@ -59,7 +59,6 @@
 /* The bordered `.nds-field` wrapper, through the DS's own `fieldClassName` hook. */
 .patternField {
   display: flex;
-  flex: 1;
   min-width: 0;
 }
 
