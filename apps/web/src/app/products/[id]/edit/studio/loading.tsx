@@ -1,9 +1,8 @@
 /**
  * PES.1 — the studio's own route skeleton.
  *
- * 🔴 It has to exist. `edit/loading.tsx` is a Suspense boundary for the `edit` segment AND every
- * segment nested under it, and it draws the OLD page's shape — a max-width form column with a
- * thirteen-tab strip. Without this file the studio flashes a skeleton of the page it replaces.
+ * This boundary draws the studio's frame while its data loads. The parent edit entry point
+ * only redirects and has no loading UI of its own.
  *
  * The shape drawn here is the frame's: two fixed bands over one full-height body.
  */

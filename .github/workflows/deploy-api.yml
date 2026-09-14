@@ -72,6 +72,9 @@ jobs:
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
+          # CLI uploads have no GitHub-trigger variables. Carry the checkout's SHA
+          # with the uploaded source so readiness can identify this exact build.
+          printf '%s\n' "$GITHUB_SHA" > apps/api/.release-sha
           if [ -n "${{ secrets.RAILWAY_SERVICE }}" ]; then
             railway up --service "${{ secrets.RAILWAY_SERVICE }}" --ci --message "GitHub ${{ github.sha }}"
           else

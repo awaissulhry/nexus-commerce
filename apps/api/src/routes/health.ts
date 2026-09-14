@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { createHash } from 'node:crypto'
 import prisma from '../db.js'
 import { getRedisRuntimeStatus } from '../lib/queue.js'
-import { checkDatabaseReadiness } from '../services/health.service.js'
+import { checkDatabaseReadiness, servingBuild } from '../services/health.service.js'
 
 // AS.0 debugging — a stable, non-reversible fingerprint of the Amazon refresh
 // token the RUNNING process actually holds (first 8 hex of sha256). Lets us
@@ -23,7 +23,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       await checkDatabaseReadiness()
       return {
         status: 'healthy',
-        build: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
+        build: servingBuild(),
         services: { database: 'connected', api: 'operational' },
       }
     } catch {
@@ -89,7 +89,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         // Deploy/version markers — so we can verify which build + which Amazon
         // publish-gate state is actually live. The FBA→FBM flip incident showed we
         // were toggling the gate blind to whether the fix had deployed.
-        build: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8) ?? 'unknown',
+        build: servingBuild(),
         marker: 'fba-flip-fix-2026-06-18',
         amazonPublish: process.env.NEXUS_ENABLE_AMAZON_PUBLISH === 'true' ? 'ENABLED' : 'gated',
         // RT.1 — remotely-verifiable dispatch mode: 'immediate-bullmq' means

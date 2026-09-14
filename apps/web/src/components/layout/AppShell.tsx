@@ -52,9 +52,8 @@ const NO_RAIL_PREFIXES = ['/marketing/ads-console', '/marketing/ads', '/products
  * the list above. PES.1 (the Product Edit Studio frame) needs the /products/next shell exactly:
  * `h10-shell` + its own rail + the top bar.
  *
- * Deliberately scoped to `/edit/studio`, not `/edit`: the studio is built BESIDE the old
- * `ProductEditClient`, which stays routable at `/edit` with its chrome untouched until the Owner
- * swaps them. At swap this pattern loses its `/studio` tail and nothing else changes.
+ * The studio owns its rail at `/edit/studio`. The historical `/edit` entry point redirects
+ * there without rendering an editor, keeping existing bookmarks usable.
  */
 const NO_RAIL_PATTERNS = [/^\/products\/[^/]+\/edit\/studio(\/|$)/]
 

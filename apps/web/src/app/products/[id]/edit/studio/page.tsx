@@ -1,10 +1,8 @@
 /**
  * PES.1 — `/products/[id]/edit/studio`.
  *
- * The rebuilt edit page, mounted BESIDE the old one. `/products/[id]/edit` still renders
- * `ProductEditClient` with its chrome untouched, and stays the live route until the Owner swaps
- * them. The swap is then: mount `StudioClient` from `edit/page.tsx`, delete this folder, and drop
- * `/studio` from `NO_RAIL_PATTERNS` in `AppShell.tsx`.
+ * The production product editor. Historical `/products/[id]/edit` URLs redirect here,
+ * preserving their product identity, market, and supported destination/tab state.
  */
 
 import { Suspense } from 'react'
