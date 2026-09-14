@@ -9,7 +9,11 @@ import { resolveBatch } from './mapping/resolve-batch.service.js'
 import { marketLanguages } from './market-languages.js'
 import { publishContentIssues, resolvePublishContent, requireReviewedContent } from './publish-review-gate.js'
 
-export const publicationDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+// JSONB can return object keys in a different order from the preview request.
+// Preserve semantic array order and JSON/toJSON values while hashing objects canonically.
+export const publicationDigest = (value: unknown) => createHash('sha256').update(JSON.stringify(value, (_key, entry) =>
+  entry && typeof entry === 'object' && !Array.isArray(entry)
+    ? Object.fromEntries(Object.keys(entry).sort().map(key => [key, entry[key]])) : entry)).digest('hex')
 export const object = (value: unknown): Record<string, any> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, any> : {}
 
 export function publicationScope(body: unknown): StudioPublishScope {

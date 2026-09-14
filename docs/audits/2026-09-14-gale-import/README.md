@@ -15,6 +15,7 @@ The Modello worksheet imports existing GALE listings into the current product st
 - Read all requested Amazon listing sections using its comma-separated query format and the selected account's region. Listing issues remain visible on successful GET responses.
 - Preserve structured Amazon HTTP validation errors; clear attributes using schema selector values instead of deleting by name alone.
 - Keep the condition attribute outside the price envelope, serialize saved RRP, and retain the variation relationship type when substituting the selected parent's seller SKU.
+- Hash publication review objects independently of JSON key order. PostgreSQL JSONB reorders the saved scope keys; unchanged values must survive the preview/submit round trip while real changes still invalidate the review.
 
 ## Data repair
 
