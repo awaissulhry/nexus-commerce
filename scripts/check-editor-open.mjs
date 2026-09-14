@@ -976,6 +976,7 @@ if (RUN.includes('contract')) {
      * reading against a substituted column is only honest if it says so.
      */
     const contractsByScope = new Map()
+    const cellsByScope = new Map()
     for (const sc of SCOPES_TO_RUN) {
       if (!sc.apiQ) continue /* the Matrix host has no column contract on the sheet route */
       /* MX.F — "could not read" must say WHY: the status the page-context fetch got, or the error it threw.
@@ -984,11 +985,12 @@ if (RUN.includes('contract')) {
         try {
           const response = await fetch(url, { credentials: 'include' })
           const body = response.ok ? await response.json().catch(() => null) : null
-          return { status: response.status, cols: body?.columns ?? null, keys: body && typeof body === 'object' ? Object.keys(body).slice(0, 8) : null }
+          return { status: response.status, cols: body?.columns ?? null, rows: body?.rows?.map(r => ({ id: r.id, aliasId: r.aliasId, values: r.values })), keys: body && typeof body === 'object' ? Object.keys(body).slice(0, 8) : null }
         } catch (e) { return { status: null, cols: null, error: String(e).slice(0, 160) } }
       }, `${API}/api/products/${PRODUCT}/studio/sheet?${sc.apiQ}`).catch((e) => ({ status: null, cols: null, error: `evaluate: ${String(e).slice(0, 160)}` }))
       const cols = got?.cols ?? null
       contractsByScope.set(sc.key, cols)
+      cellsByScope.set(sc.key, got?.rows ?? [])
       if (!cols) failures.push(`contract ${sc.key}: NOT MEASURED — could not read the column contract from the API (HTTP ${got?.status ?? 'none'}${got?.error ? ` · ${got.error}` : ''}${got?.keys ? ` · body keys ${got.keys.join(',')}` : ''}), so no column can be resolved by kind`)
     }
     for (const scope of SCOPES_TO_RUN) {
@@ -1055,6 +1057,15 @@ if (RUN.includes('contract')) {
           row.candidates = [hit.colId]
         }
         const scopeCols = contractsByScope.get(scope.key)
+        const rowFacts = (cellsByScope.get(scope.key) ?? []).find(r => r.id === rowId || `${r.aliasId ?? 'primary'}:${r.id}` === rowId)
+        if (!scope.matrix && !rowFacts) {
+          failures.push(`contract ${scope.key}: NOT MEASURED — no API row permissions for ${rowId}`)
+          continue
+        }
+        // A category can accept a field on creation while an existing listing
+        // cannot edit it (for example Amazon brand). Use the row's API contract
+        // to choose the fixture; keep the gesture expectations unchanged.
+        const editable = c => c.editable !== false && rowFacts?.values?.[c.key]?.editable !== false && rowFacts?.values?.[c.key]?.writable !== false
         const wantLocked = row.state === 'locked' || row.state === 'fxblocked'
         /* Which columns of this kind does this scope declare, and which are RENDERED right now? */
         /* A row's `kind` is a SHAPE for list/measure (AM.1) and a scalar kind otherwise — and a scalar
@@ -1063,9 +1074,9 @@ if (RUN.includes('contract')) {
         /* `shape: 'scalar'` is set EXPLICITLY on ordinary columns — a truthiness test excluded every one of them (run 2026-09-05 02:16). */
         const kindMatches = (c) => (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind : c.kind === row.kind && (!c.shape || c.shape === 'scalar'))
         const declared = (scopeCols ?? []).filter((c) => kindMatches(c)
-          && (row.state === 'locked' ? c.editable === false
+          && (row.state === 'locked' ? !editable(c)
             : row.state === 'fxblocked' ? c.formulaWritable === false
-            : c.editable !== false))
+            : editable(c)))
         const rendered = await renderedCols(rowId)
         /* 🔴 The NAMED column drives the row only while it still SATISFIES the row on this scope. AM.1
            made `condition_type` editable (the channel accepts it) and turned eBay's `brand` into the
