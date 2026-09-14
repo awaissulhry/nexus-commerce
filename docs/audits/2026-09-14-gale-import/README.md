@@ -13,6 +13,8 @@ The Modello worksheet imports existing GALE listings into the current product st
 - Keep existing Amazon gallery images during partial content updates unless an explicit gallery selection was saved. A shared library is not a selected channel gallery.
 - Recognize safety-image documentation without inventing an attestation. Empty optional lists produce no invalid empty Amazon envelope.
 - Read all requested Amazon listing sections using its comma-separated query format and the selected account's region. Listing issues remain visible on successful GET responses.
+- Preserve structured Amazon HTTP validation errors; clear attributes using schema selector values instead of deleting by name alone.
+- Keep the condition attribute outside the price envelope, serialize saved RRP, and retain the variation relationship type when substituting the selected parent's seller SKU.
 
 ## Data repair
 
@@ -33,6 +35,6 @@ Targeted importer, content, schema, variation, readiness and publication regress
 
 ## Channel evidence requiring follow-up
 
-Amazon's existing listing responses report issue `100230` for safety image PS05 across the family: alleged offensive text, with the image attribute suppressed. The supplied PS05 is a scanned safety booklet; no replacement, safety attestation or responsible-person contact has been invented. The workbook and current Amazon attributes provide no manufacturer/responsible-person contact. Channel validation and a processing receipt are required before reporting the family as published.
+Amazon's existing listing responses report issue `100230` for safety image PS05 across the family: alleged offensive text, with the image attribute suppressed. The supplied PS05 is a scanned safety booklet; no replacement, safety attestation or responsible-person contact has been invented. The workbook and current Amazon attributes provide no manufacturer/responsible-person contact. [Amazon's media API documentation](https://developer-docs.amazon/sp-api/docs/submit-media) limits programmatic image variants to MAIN, PT01–PT08 and SWCH; safety-image follow-up remains in Seller Central. Channel validation and a processing receipt are required before reporting the family as published.
 
 The workbook's EUR 99 selling prices are managed by the dedicated pricing workflow, not the generic catalog importer. FBA inventory remains under its existing owner.

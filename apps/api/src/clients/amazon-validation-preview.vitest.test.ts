@@ -27,6 +27,10 @@ it.each([{}, { sku: 'OTHER', status: 'VALID' }, { sku: request.sku, status: 'ACC
 it('does not mistake an HTTP error with no issues array for a valid result', async () => {
   expect(await fixture({ errors: [{ message: 'Forbidden' }] }, 403).client.validateListing(request)).toMatchObject({ ok: false, available: false, errors: expect.stringContaining('403') })
 })
+it('retains Amazon request errors even when their details property is empty', async () => {
+  const body = { errors: [{ code: 'InvalidInput', message: 'Invalid empty value provided in patch at index of 35.', details: '' }] }
+  expect(await fixture(body, 400).client.validateListing(request)).toMatchObject({ ok: false, available: false, errors: expect.stringContaining('Invalid empty value'), rawResponse: body })
+})
 it('retains nonblocking warnings on a valid preview', async () => {
   const result = await fixture({ sku: request.sku, status: 'VALID', issues: [{ code: 'TIP', message: 'Improve image quality', severity: 'WARNING' }] }).client.validateListing(request)
   expect(result.ok).toBe(true)

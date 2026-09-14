@@ -1,6 +1,6 @@
 import type { ChannelSpec } from '../pim/channel-specs/types.js'
 import type { ResolveBatchResult } from '../pim/mapping/resolve-batch.service.js'
-import { attributesFromCells, validateSchemaAttributes } from '../pim/mapping/schema-requirements.js'
+import { attributeDeleteValue, attributesFromCells, validateSchemaAttributes } from '../pim/mapping/schema-requirements.js'
 import { isPresent } from '../pim/resolve-channel-field.js'
 
 export interface AttributePatch { op: 'replace' | 'delete'; path: string; value?: unknown }
@@ -49,7 +49,7 @@ export function applyResolvedMappingToAmazonFeed(feedBody: string, result: Resol
     message.operationType = 'PATCH'
     message.patches = [
       ...Object.entries(next).map(([key, value]) => ({ op: 'replace', path: `/attributes/${key}`, value })),
-      ...[...removed].map(key => ({ op: 'delete', path: `/attributes/${key}` })),
+      ...[...removed].map(key => ({ op: 'delete', path: `/attributes/${key}`, value: attributeDeleteValue(spec, key) })),
     ]
     delete message.attributes
   } else message.attributes = next

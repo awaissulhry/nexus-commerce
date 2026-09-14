@@ -108,7 +108,7 @@ export async function readAmazonCatalogWorkbook(buffer: Buffer, accountId: strin
   if (!market?.language) throw new Error('Configure the Amazon marketplace language first')
   const { loadAmazonSpec } = await import('./channel-specs/index.js')
   const specs = new Map<string, ChannelSpec>()
-  for (const category of parsed.meta.productTypes) specs.set(category, await loadAmazonSpec(marketplace, category))
+  for (const category of parsed.meta.productTypes) specs.set(category, await loadAmazonSpec(marketplace, category, accountId))
   const listingRows = await prisma.channelListing.findMany({ where: { channel: 'AMAZON', marketplace, channelConnectionId: accountId, aliasKey: '', product: { sku: { in: parsed.rows.map(r => r['contribution_sku#1.value']?.trim()).filter(Boolean) } } }, select: { product: { select: { sku: true } } } })
   const result = mapAmazonWorkbook(parsed, specs, { accountId, marketplace, language: market.language, existingListingSkus: new Set(listingRows.map(l => l.product.sku)) })
   // A native template creates only missing shared products. Existing shared content is never

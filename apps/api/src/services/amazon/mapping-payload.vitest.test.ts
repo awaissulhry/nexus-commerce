@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { amazonSpecFromDefinition } from '../pim/channel-specs/amazon.js'
 import { applyResolvedMappingToAmazonFeed } from './mapping-payload.js'
 import type { ResolveBatchResult } from '../pim/mapping/resolve-batch.service.js'
-const attr = (type = 'string') => ({ type: 'array', items: { type: 'object', properties: { value: { type } } } })
+const attr = (type = 'string') => ({ type: 'array', selectors: ['marketplace_id'], items: { type: 'object', properties: { value: { type }, marketplace_id: { const: 'IT' } } } })
 const spec = amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: { item_name: attr(), bullet_point: attr(), weight: { type: 'array', items: { type: 'object', properties: { value: { type: 'number' }, unit: { enum: ['kg'] } } } } } } })
 const values = { item_name: 'Mapped title', bullet_point: ['One', 'Two', 'Three', 'Four', 'Five', 'Six'], weight: { value: 0, unit: 'kg' } }
 function resolution(extra: Record<string, unknown> = {}) {
@@ -17,19 +17,24 @@ describe('actual Amazon feed envelope uses canonical mapping values', () => {
     const output = JSON.parse(applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution(), spec))
     expect(output.messages[0].productType).toBe('COAT')
     expect(output.messages[0].attributes).toEqual({ ...original.messages[0].attributes,
-      item_name: [{ value: 'Mapped title' }], bullet_point: values.bullet_point.map(value => ({ value })), weight: [{ value: 0, unit: 'kg' }] })
+      item_name: [{ value: 'Mapped title', marketplace_id: 'IT' }], bullet_point: values.bullet_point.map(value => ({ value, marketplace_id: 'IT' })), weight: [{ value: 0, unit: 'kg' }] })
   })
   it('serializes intentional clears as deletes instead of resurrecting legacy values', () => {
     const output = JSON.parse(applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution({ item_name: null }), spec))
     expect(output.messages[0].operationType).toBe('PATCH')
     expect(output.messages[0].attributes).toBeUndefined()
-    expect(output.messages[0].patches).toContainEqual({ op: 'delete', path: '/attributes/item_name' })
+    expect(output.messages[0].patches).toContainEqual({ op: 'delete', path: '/attributes/item_name', value: [{ marketplace_id: 'IT' }] })
     expect(output.messages[0].patches.filter((p: any) => p.path === '/attributes/item_name')).toHaveLength(1)
   })
   it('blocks pending translations and missing schemas before transport', () => {
     const result = resolution(); result.products[0].cells.item_name.needsTranslation = true
     expect(() => applyResolvedMappingToAmazonFeed(JSON.stringify(original), result, spec)).toThrow('translation is pending')
     expect(() => applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution(), { ...spec, absent: true })).toThrow('schema')
+  })
+  it('refuses a clear whose selector cannot be determined from the category schema', () => {
+    const ambiguous = structuredClone(spec)
+    ;(ambiguous.validationSchema as any).properties.item_name.items.properties.marketplace_id = { enum: ['IT', 'DE'] }
+    expect(() => applyResolvedMappingToAmazonFeed(JSON.stringify(original), resolution({ item_name: null }), ambiguous)).toThrow('selector needs an explicit existing attribute value')
   })
   it('validates the completed full payload, including listing-owned required attributes', () => {
     const full = { ...original, messages: [{ ...original.messages[0], operationType: 'UPDATE' }] }

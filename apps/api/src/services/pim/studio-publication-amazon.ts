@@ -78,6 +78,9 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const current = { ...listing, priceOverride: listing?.followMasterPrice !== false ? product.basePrice : listing.priceOverride ?? listing.price,
       quantityOverride: listing?.followMasterQuantity !== false ? product.totalStock : listing.quantityOverride ?? listing.quantity }
     const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id) })
+    // Condition belongs to its own attribute, not the purchasable_offer object.
+    // The legacy row builder can otherwise stringify an attribute envelope here.
+    delete row.purchasable_offer__condition_type
     row.purchasable_offer__currency = facts.destination.currency
     row.item_sku = sellerSkus.get(product.id)
     row.product_type = data.category.channelCategoryId ?? row.product_type
@@ -124,8 +127,12 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     // Preserve the owning pricing/inventory/media builder; serialize the other
     // saved listing settings with their schema paths, including policies.
     const ownedKeys = new Set(resolved[0].catalogue?.fields.filter(f => f.sourceOwner && !['Pricing', 'Inventory', 'Media', 'Product media', 'Channel-reported data'].includes(f.sourceOwner.label)).map(f => f.fieldKey))
+    // RRP is a saved pricing fact; serialize it without changing selling prices.
+    for (const field of spec.fields.filter(f => f.attribute === 'list_price')) ownedKeys.add(field.key)
     const owned = attributesFromCells(spec, Object.fromEntries(Object.entries(values).filter(([key]) => ownedKeys.has(key))))
-    delete owned.child_parent_sku_relationship // parent identity is the selected alias's seller SKU
+    if (product.parentId && Array.isArray(owned.child_parent_sku_relationship)) {
+      owned.child_parent_sku_relationship = owned.child_parent_sku_relationship.map(value => ({ ...value, parent_sku: sellerSkus.get(parent.id) }))
+    } else delete owned.child_parent_sku_relationship
     delete owned.variation_theme // the shared variation resolver is authoritative
     Object.assign(base.messages[0].attributes, owned)
     const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))

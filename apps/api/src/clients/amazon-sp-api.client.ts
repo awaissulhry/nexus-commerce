@@ -1090,8 +1090,10 @@ export class AmazonSpApiClient {
         `validateListing(${sku})`,
       )
 
-      if (!response.ok) throw new Error(`Amazon validation preview returned HTTP ${response.status}`)
       const data = (await response.json()) as SPAPIResponse
+      if (!response.ok) return { ok: false, available: false,
+        errors: `Amazon validation preview returned HTTP ${response.status}: ${this.parseErrors(data) || JSON.stringify(data).slice(0, 1000) || response.statusText}`,
+        warnings: this.parseWarnings(data), issues: data.issues, rawResponse: data }
       // An empty/error response is not affirmative channel validation. Only the
       // preview statuses for this exact SKU can authorize a subsequent submit.
       if (!data || data.sku !== sku || !['VALID', 'INVALID'].includes(data.status ?? '') ||

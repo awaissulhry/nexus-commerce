@@ -88,6 +88,23 @@ function validator(schema: Node) {
   return validate
 }
 
+/** Amazon deletes identify attribute instances by their schema selector values. */
+export function attributeDeleteValue(spec: ChannelSpec, attribute: string): Record<string, unknown>[] {
+  const root = spec.validationSchema as Node | undefined
+  const node = root?.properties?.[attribute]
+  const selectors: string[] = node?.selectors ?? []
+  if (!selectors.length) throw new Error(`Cannot clear ${attribute}: the category schema declares no attribute selectors.`)
+  const values: Record<string, unknown> = {}
+  for (const key of selectors) {
+    let definition = node.items?.properties?.[key] ?? {}
+    if (definition.$ref?.startsWith('#/')) definition = definition.$ref.slice(2).split('/').reduce((v: any, k: string) => v?.[k.replace(/~1/g, '/').replace(/~0/g, '~')], root) ?? {}
+    const value = definition.const ?? (definition.enum?.length === 1 ? definition.enum[0] : definition.default)
+    if (!serializedValue(value) || (definition.enum && !definition.enum.includes(value))) throw new Error(`Cannot clear ${attribute}: its ${key} selector needs an explicit existing attribute value.`)
+    values[key] = value
+  }
+  return [values]
+}
+
 /** Attribute requiredness must remain present after a value is filled. AJV's
  * error list only names missing values. Required envelope members constrain an
  * existing optional attribute; they do not make that attribute mandatory. */

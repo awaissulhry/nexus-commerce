@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn() }))
+const m = vi.hoisted(() => ({ validate: vi.fn(), call: vi.fn(), region: vi.fn(), client: vi.fn(), trading: vi.fn(), row: vi.fn(), spec: vi.fn() }))
 vi.mock('../../db.js', () => ({ default: { stockLevel: { findMany: async () => [] } } }))
 vi.mock('../images/amazon-media-workspace.service.js', () => ({ readAmazonMedia: vi.fn(), desiredAmazonImages: vi.fn() }))
 vi.mock('../images/ebay-media-workspace.service.js', () => ({ readEbayMediaGallery: vi.fn() }))
@@ -13,7 +13,7 @@ vi.mock('../amazon/flat-file.service.js', () => ({ AmazonFlatFileService: class 
 } }))
 vi.mock('../categories/schema-sync.service.js', () => ({ CategorySchemaService: class {} }))
 vi.mock('../marketplaces/amazon.service.js', () => ({ AmazonService: class {} }))
-vi.mock('./channel-specs/index.js', () => ({ loadAmazonSpec: async () => ({ fields: [], validationSchema: { type: 'object', properties: {} } }), loadEbaySpec: vi.fn() }))
+vi.mock('./channel-specs/index.js', () => ({ loadAmazonSpec: m.spec, loadEbaySpec: vi.fn() }))
 vi.mock('./stored-variation-projection.js', () => ({ loadStoredVariationProjection: vi.fn() }))
 vi.mock('./amazon-content-payload.js', () => ({ buildAmazonContentAttributes: async () => ({ item_name: [{ value: 'Saved localized title', language_tag: 'it_IT' }] }) }))
 vi.mock('../amazon-market-offer.service.js', () => ({ closedMarketSet: async () => new Set() }))
@@ -34,6 +34,7 @@ import { writeMediaCollection } from '@nexus/shared/product-media'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection } from './variation-rules.service.js'
 import { limitsFor, vocabularyFor } from './family-projection-limits.js'
+import { amazonSpecFromDefinition } from './channel-specs/amazon.js'
 
 const amazon: AmazonPublication = { kind: 'amazon', sellerId: 'SELLER', marketplaceId: 'MARKET', feed: { header: {}, messages: [
   { messageId: 1, sku: 'PARENT', operationType: 'UPDATE', requirements: 'LISTING_PRODUCT_ONLY', productType: 'COAT', attributes: { parentage_level: [{ value: 'parent' }] } },
@@ -41,6 +42,7 @@ const amazon: AmazonPublication = { kind: 'amazon', sellerId: 'SELLER', marketpl
 ] } }
 beforeEach(() => {
   vi.clearAllMocks(); m.region.mockResolvedValue('eu'); m.client.mockResolvedValue({ callAPI: m.call }); m.validate.mockResolvedValue({ ok: true, available: true })
+  m.spec.mockResolvedValue({ fields: [], validationSchema: { type: 'object', properties: {} } })
   m.call.mockImplementation(async ({ operation }: any) => operation === 'createFeedDocument' ? { feedDocumentId: 'doc', url: 'https://example.test/feed' } : { feedId: 'feed' })
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 200 })))
   vi.stubEnv('NEXUS_EBAY_REAL_API', 'true'); vi.stubEnv('EBAY_SANDBOX', 'false')
@@ -120,6 +122,7 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
   const prepared = await prepareAmazonPublication(facts)
   expect(m.row).toHaveBeenCalledWith(expect.objectContaining({ item_sku: 'ALIAS-SKU', _isNew: false, record_action: 'partial_update', purchasable_offer__our_price: '35.00', fulfillment_availability__quantity: 3 }))
   expect(m.row.mock.calls[0][0]).not.toHaveProperty('main_product_image_locator')
+  expect(m.row.mock.calls[0][0]).not.toHaveProperty('purchasable_offer__condition_type')
   expect(prepared.feed.messages[0]).toMatchObject({ sku: 'ALIAS-SKU', operationType: 'PARTIAL_UPDATE', attributes: { item_name: [{ value: 'Saved localized title', language_tag: 'it_IT' }] } })
   // A content update keeps the existing Amazon gallery, even when the shared
   // library contains more images than a single product gallery permits.
@@ -135,6 +138,10 @@ it('updates an existing Amazon alias by seller SKU without a destructive full re
 })
 
 it('checks Amazon variation collisions against saved channel sizes instead of stale shared sizes', async () => {
+  m.spec.mockResolvedValue(amazonSpecFromDefinition({ marketplace: 'IT', productType: 'COAT', schemaDefinition: { properties: {
+    list_price: { type: 'array', selectors: ['marketplace_id', 'currency'], items: { properties: { value_with_tax: { type: 'number' }, currency: { const: 'EUR' }, marketplace_id: { const: 'MARKET' } } } },
+    child_parent_sku_relationship: { type: 'array', items: { properties: { parent_sku: { type: 'string' }, child_relationship_type: { type: 'string' }, marketplace_id: { const: 'MARKET' } } } },
+  } } }))
   const theme = 'SIZE/COLOR'
   const input: any = {
     coordinate: { channel: 'AMAZON', market: 'IT', accountId: 'account-b', aliasKey: '', label: 'Amazon IT' },
@@ -152,9 +159,11 @@ it('checks Amazon variation collisions against saved channel sizes instead of st
     listings: products.map(p => ({ productId: p.id, externalListingId: `ASIN-${p.id}`, offers: [] })),
     resolved: [{ products: products.map(p => ({ productId: p.id, category: { channelCategoryId: 'COAT' }, cells: {
       color: { value: 'Black', errors: [] }, apparel_size__size: { value: p.id === 'xxs' ? 'xx_s' : 'x_s', errors: [] },
-    } })), catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color', sheetKey: 'color' }, { fieldKey: 'apparel_size__size', sheetKey: 'size' }] } }],
+      list_price: { value: 128.1, errors: [] }, child_parent_sku_relationship__parent_sku: { value: 'WRONG-PARENT', errors: [] }, child_parent_sku_relationship__child_relationship_type: { value: 'variation', errors: [] },
+    } })), catalogue: { schema: { present: true }, fields: [{ fieldKey: 'color', sheetKey: 'color' }, { fieldKey: 'apparel_size__size', sheetKey: 'size' }, { fieldKey: 'list_price', sourceOwner: { label: 'Pricing' } }, ...['parent_sku', 'child_relationship_type'].map(key => ({ fieldKey: `child_parent_sku_relationship__${key}`, sourceOwner: { label: 'Family' } }))] } }],
   }
-  await expect(prepareAmazonPublication(facts)).resolves.toMatchObject({ feed: { messages: expect.any(Array) } })
+  const prepared = await prepareAmazonPublication(facts)
+  expect(prepared.feed.messages[1].attributes).toMatchObject({ list_price: [{ value_with_tax: 128.1, currency: 'EUR', marketplace_id: 'MARKET' }], child_parent_sku_relationship: [{ parent_sku: 'PARENT', child_relationship_type: 'variation', marketplace_id: 'MARKET' }] })
   facts.resolved[0].products[2].cells.apparel_size__size.value = 'x_s'
   await expect(prepareAmazonPublication(facts)).rejects.toThrow('2 variants cannot be told apart')
 })
