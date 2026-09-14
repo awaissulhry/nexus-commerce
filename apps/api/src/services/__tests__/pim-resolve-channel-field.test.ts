@@ -24,10 +24,10 @@ import {
 // ── fixtures ────────────────────────────────────────────────────────
 const PROD = { localizedContent: null, categoryAttributes: null, variantAttributes: null }
 
-function attrs(map: Record<string, { value: unknown; source?: ValueSource }>): ResolvedAttributes {
+function attrs(map: Record<string, { value: unknown; source?: ValueSource; language?: string }>): ResolvedAttributes {
   const out: ResolvedAttributes = {}
   for (const [k, v] of Object.entries(map)) {
-    out[k] = { value: v.value, source: v.source ?? 'master', inheritedFrom: null }
+    out[k] = { ...v, source: v.source ?? 'master', inheritedFrom: null }
   }
   return out
 }
@@ -61,13 +61,13 @@ describe('resolveSourcePath', () => {
     expect(resolveSourcePath('title', { title: 'Hi' }, PROD, 'en')).toBe('Hi')
   })
 
-  it('substitutes {locale} and walks raw product for multi-segment paths', () => {
+  it('refuses retired localized JSON paths', () => {
     const product = {
       localizedContent: { it: { title: 'Ciao' }, en: { title: 'Hi' } },
       categoryAttributes: null,
       variantAttributes: null,
     }
-    expect(resolveSourcePath('localizedContent.{locale}.title', {}, product, 'it')).toBe('Ciao')
+    expect(resolveSourcePath('localizedContent.{locale}.title', {}, product, 'it')).toBeNull()
   })
 
   it('returns null for a missing deep path', () => {
@@ -123,8 +123,8 @@ describe('resolveChannelField — provenance', () => {
   it('fallback when source is absent but fallback resolves', () => {
     const r = resolveChannelField({
       fieldKey: 'item_name',
-      rule: rule({ fallback: 'name' }),
-      resolvedAttrs: attrs({ name: { value: 'Backup' } }),
+      rule: rule({ fallback: 'description' }),
+      resolvedAttrs: attrs({ description: { value: 'Backup' } }),
       product: PROD,
       locale: 'en',
     })
@@ -200,7 +200,7 @@ describe('resolveChannelField — needsTranslation', () => {
 
   it('flags a cross-language TRANSLATE member', () => {
     const link: FieldLinkMembership = { translatePolicy: 'TRANSLATE', sourceLanguage: 'it', targetLanguage: 'de' }
-    expect(resolveChannelField({ ...base, link }).needsTranslation).toBe(true)
+    expect(resolveChannelField({ ...base, locale: 'de', resolvedAttrs: attrs({ title: { value: 'Ciao', language: 'it' } }), link }).needsTranslation).toBe(true)
   })
 
   it('does NOT flag a same-language TRANSLATE member', () => {
@@ -398,7 +398,7 @@ describe('resolveChannelField — FM.3 integration', () => {
     expect(r.value).toBe('XAVIA Touring Jacket')
   })
 
-  it('a translate op forces needsTranslation even without a link group', () => {
+  it('a translate op does not mark native-language text as missing a translation', () => {
     const r = resolveChannelField({
       fieldKey: 'item_name',
       rule: { source: 'title', transforms: [{ type: 'translate' }] },
@@ -406,7 +406,7 @@ describe('resolveChannelField — FM.3 integration', () => {
       product: PROD,
       locale: 'it',
     })
-    expect(r.needsTranslation).toBe(true)
+    expect(r.needsTranslation).toBe(false)
   })
 
   it('FM.4 — a valueMap op resolves through transformCtx.lookupValueMap', () => {

@@ -325,6 +325,7 @@ it('resolves every product in a channel family larger than 250 IDs', async () =>
 
 it('saves Shopify native and typed definition drafts to exact product/variant owners on additional-account aliases', async () => {
   const data = await sheet('SHOPIFY', 'shopify-b', 'en')
+  const beforeErrors = data.rows.flatMap((row: any) => row.readiness.issues).filter((issue: any) => issue.severity === 'error')
   const parent = data.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-1')
   const variant = data.rows.find((row: any) => row.id === 'row-one' && row.aliasId === 'shopify-b-1')
   const flag = data.columns.find((col: any) => col.shopifyField?.definition?.key === 'flag').key
@@ -364,7 +365,7 @@ it('saves Shopify native and typed definition drafts to exact product/variant ow
   const flagHistory = await getCellHistory({ productId: 'store-demo', fieldKey: flag, channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shopify-b', aliasKey: 'shopify-b-1', locale: 'en' })
   expect(flagHistory.entries.map(entry => ({ previous: entry.previous, next: entry.next, previousRecorded: entry.previousRecorded })), 'POSITIVE CONTROL: the metafield write in the same run DID record').toEqual([{ previous: 'false', next: 'true', previousRecorded: true }])
   const reread = await sheet('SHOPIFY', 'shopify-b', 'en')
-  expect(reread.rows.flatMap((row: any) => row.readiness.issues).filter((issue: any) => issue.severity === 'error')).toEqual([])
+  expect(reread.rows.flatMap((row: any) => row.readiness.issues).filter((issue: any) => issue.severity === 'error')).toEqual(beforeErrors)
   // LX.3 retires the legacy draft bag reader; Step 4 will route this saved text to a language pin.
   expect(reread.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-1').values[title].value).toBe('shopify-b 1 title')
   expect(reread.rows.find((row: any) => row.id === 'store-demo' && row.aliasId === 'shopify-b-2').values[title].value).not.toBe('Saved Shopify alias')

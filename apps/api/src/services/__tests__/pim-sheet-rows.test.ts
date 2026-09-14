@@ -225,7 +225,7 @@ describe('computeReadiness', () => {
 describe('completenessFor', () => {
   it('counts evaluated conditional requirements while preserving applicability and fallback semantics', () => {
     const columns = [col({ key: 'care' }), col({ key: 'size', scope: 'per_variant' })]
-    const values = { care: val('Source text', { needsTranslation: true, mapped: { requiredByRule: true } }), size: val(null, { mapped: { requiredByRule: true } }) }
+    const values = { care: val('Source text', { needsTranslation: true, requestedLocale: 'de', effectiveLocale: 'it', mapped: { requiredByRule: true } }), size: val(null, { mapped: { requiredByRule: true } }) }
     expect(completenessFor(columns, PARENT, values).required).toMatchObject({ total: 1, filled: 0, missing: [{ key: 'care' }] })
     expect(completenessFor(columns, CHILD, values).required.total).toBe(2)
   })

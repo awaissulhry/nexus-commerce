@@ -40,6 +40,7 @@ function page() {
   const columns = informationRegistry(s.schema).map(field => ({ key: field.id, label: field.label, shopifyField: field, writeField: `attr_${field.id}` }))
   const values = Object.fromEntries(columns.map(c => [c.key, { value: null, writable: true, editable: true, writeTarget: 'channelListing', source: 'master', layer: 'master', mapped: null }]))
   values.title = { ...values.title, value: 'Shared title', mapped: { status: 'mapped', value: 'Shared title' } as any }
+  values.vendor = { ...values.vendor, value: 'Shared vendor', mapped: { status: 'mapped', value: 'Shared vendor' } as any }
   return { columns, scope: { channel: 'SHOPIFY', connectionId: 'store-a' }, rows: [{ id: 'family', sku: 'NEXUS', name: 'Shared title', aliasId: 'alias-a', parentId: null, version: 5, values, listing: { id: 'listing-a', version: 7 }, readiness: { state: 'ready', issues: [] } }, { id: 'child', sku: 'S', aliasId: 'alias-a', parentId: 'family', version: 2, values, listing: { id: 'variant-listing', version: 2 } }] } as any
 }
 describe('Shopify behind the common channel sheet', () => {
@@ -97,18 +98,18 @@ describe('Shopify behind the common channel sheet', () => {
     expect(rows[0].values.media.shopifyWrite).toBeUndefined()
   })
   it('saves exact owner intent without a Shopify mutation and preserves the first baseline', async () => {
-    await saveShopifySheetCells('family', scope, { cells: [change()] }, 'editor')
-    await saveShopifySheetCells('family', scope, { cells: [change('title', 'Second title')] }, 'editor')
-    expect(s.workspace.draft.nativeEdits).toEqual([expect.objectContaining({ ownerId: product, value: 'Listed title', nextValue: 'Second title' })])
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor')] }, 'editor')
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor', 'Second title')] }, 'editor')
+    expect(s.workspace.draft.nativeEdits).toEqual([expect.objectContaining({ ownerId: product, value: 'Vendor', nextValue: 'Second title' })])
     expect(s.writes[0].destination).toMatchObject({ accountId: 'store-a', aliasKey: 'alias-a' })
     expect(s.audit).toHaveBeenCalledTimes(2)
   })
   it('retains a conflicting cell while saving a different valid cell', async () => {
-    const title = change(), vendor = change('vendor', 'Another vendor')
-    await saveShopifySheetCells('family', scope, { cells: [change('title', 'Other editor')] }, 'other')
-    const result = await saveShopifySheetCells('family', scope, { cells: [title, vendor] }, 'editor')
-    expect(result.ok).toBe(false); expect(result.cells.title.ok).toBe(false); expect(result.cells.vendor.ok).toBe(true)
-    expect(s.workspace.draft.nativeEdits.find((e: any) => e.field === 'title').nextValue).toBe('Other editor')
+    const title = change('vendor'), other = change('metafield:PRODUCT:custom.flag', 'true')
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor', 'Other editor')] }, 'other')
+    const result = await saveShopifySheetCells('family', scope, { cells: [title, other] }, 'editor')
+    expect(result.ok).toBe(false); expect(result.cells.vendor.ok).toBe(false); expect(result.cells['metafield:PRODUCT:custom.flag'].ok).toBe(true)
+    expect(s.workspace.draft.nativeEdits.find((e: any) => e.field === 'vendor').nextValue).toBe('Other editor')
   })
   it('refuses a stale remote baseline, wrong owner, and another store token', async () => {
     const stale = change(); s.snapshot.rows[0].values.title = 'Changed in Shopify'
@@ -128,23 +129,19 @@ describe('Shopify behind the common channel sheet', () => {
     await saveShopifySheetCells('family', scope, { cells: [{ ...change(field, null), intent: 'reset' }] }, 'editor')
     expect(s.workspace.draft.edits).toEqual([])
   })
-  it('isolates locale tokens and preserves primary-language intent when clearing a translation', async () => {
+  it('refuses legacy title writes in both languages without changing existing drafts', async () => {
     s.schema.locales.push({ locale: 'fr', primary: false, published: true })
     s.schema.native = { scopes: ['read_products', 'write_products', 'read_translations', 'write_translations'], inputs: { product: ['title'] }, enums: {} }
-    const primary = change()
     s.workspace.draft.nativeEdits = [{ ownerId: product, productId: product, ownerLabel: 'Listed title', field: 'title', value: 'Listed title', nextValue: 'Primary draft' }]
-    s.snapshot.rows[0].locale = 'fr'
-    s.snapshot.rows[0].translations = { title: { resourceId: product, fieldId: 'title', key: 'title', locale: 'fr', digest: 'fr-digest', value: 'Titre', sourceValue: 'Listed title', outdated: false } }
-    expect((await saveShopifySheetCells('family', { ...scope, locale: 'fr' }, { cells: [primary] }, 'editor')).cells.title.ok).toBe(false)
-    const translated = change('title', null)
-    expect((await saveShopifySheetCells('family', { ...scope, locale: 'fr' }, { cells: [translated] }, 'editor')).ok).toBe(true)
-    expect(s.workspace.draft.nativeEdits).toEqual(expect.arrayContaining([
-      expect.objectContaining({ field: 'title', nextValue: 'Primary draft' }),
-      expect.objectContaining({ field: 'translation', nextValue: null, translation: expect.objectContaining({ locale: 'fr', digest: 'fr-digest' }) }),
-    ]))
-    await saveShopifySheetCells('family', { ...scope, locale: 'fr' }, { cells: [{ ...change('title', null), intent: 'reset' }] }, 'editor')
-    expect(s.workspace.draft.nativeEdits).toHaveLength(2)
-    expect(s.workspace.draft.nativeEdits).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'title', nextValue: 'Primary draft' }), expect.objectContaining({ field: 'translation', nextValue: 'Shared title' })]))
+    const before = structuredClone(s.workspace.draft)
+    for (const locale of ['en', 'fr']) {
+      s.snapshot.rows[0].locale = locale
+      s.snapshot.rows[0].translations = { title: { resourceId: product, fieldId: 'title', key: 'title', locale, digest: 'digest', value: 'Titre', sourceValue: 'Listed title', outdated: false } }
+      const result = await saveShopifySheetCells('family', { ...scope, locale }, { cells: [change('title', null)] }, 'editor')
+      expect(result.cells.title).toMatchObject({ ok: false, reason: expect.stringContaining('content address writer') })
+    }
+    expect(s.workspace.draft).toEqual(before)
+    expect(s.writes).toHaveLength(0)
   })
   it('rejects a changed destination, changed definition and overlapping batch commands', async () => {
     const first = change()
@@ -162,17 +159,17 @@ describe('Shopify behind the common channel sheet', () => {
     expect(s.writes).toHaveLength(0)
   })
   it('keeps equal-value pins and saved overrides after pending synchronization commands clear', async () => {
-    await saveShopifySheetCells('family', scope, { cells: [{ ...change('title', 'Listed title'), intent: 'pin' }] }, 'editor')
+    await saveShopifySheetCells('family', scope, { cells: [{ ...change('vendor', 'Vendor'), intent: 'pin' }] }, 'editor')
     expect(s.workspace.draft.nativeEdits).toEqual([])
-    expect(s.workspace.draft.sheetValues[0]).toMatchObject({ value: 'Listed title', locale: '' })
+    expect(s.workspace.draft.sheetValues[0]).toMatchObject({ value: 'Vendor', locale: '' })
     const identities = [{ id: 'listing-a', productId: 'family', externalListingId: '10', platformAttributes: {} }]
-    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.title).toMatchObject({ value: 'Listed title', pinned: true, inherited: false })
-    await saveShopifySheetCells('family', scope, { cells: [change('title', 'A durable override')] }, 'editor')
+    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.vendor).toMatchObject({ value: 'Vendor', pinned: true, inherited: false })
+    await saveShopifySheetCells('family', scope, { cells: [change('vendor', 'A durable override')] }, 'editor')
     s.workspace.draft.nativeEdits = []
-    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.title).toMatchObject({ value: 'A durable override', pinned: true })
-    const reset = await saveShopifySheetCells('family', scope, { cells: [{ ...change('title', 'Untrusted client reset value'), intent: 'reset' }] }, 'editor')
+    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.vendor).toMatchObject({ value: 'A durable override', pinned: true })
+    const reset = await saveShopifySheetCells('family', scope, { cells: [{ ...change('vendor', 'Untrusted client reset value'), intent: 'reset' }] }, 'editor')
     expect(reset.ok).toBe(true)
-    expect(s.workspace.draft.nativeEdits[0].nextValue).toBe('Shared title')
-    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.title).toMatchObject({ value: 'Shared title', pinned: false, inherited: true })
+    expect(s.workspace.draft.nativeEdits[0].nextValue).toBe('Shared vendor')
+    expect(projectShopifyChannelSheet(page(), s.workspace, s.snapshot, s.schema, identities, 'alias-a')[0].values.vendor).toMatchObject({ value: 'Shared vendor', pinned: false, inherited: true })
   })
 })

@@ -35,7 +35,7 @@ async function buildReview(productId: string, scope: StudioPublishScope) {
       if (!locations.length) issues.push({ severity: 'error', message: 'This Shopify store has no active inventory location.' })
       visibility = String(preview.changes.newProductStatus)
       prepared = { kind: 'shopify', revision: preview.revision, remoteRevision: preview.remoteRevision, initialized: preview.initialized, draft: preview.draft }
-    } else issues.push({ severity: 'error', message: `${scope.channel === 'ETSY' ? 'Etsy' : scope.channel} does not have a product publication adapter yet. Your saved information is available in the studio.` })
+    } else issues.push({ severity: 'error', message: `Direct publishing to ${scope.channel === 'ETSY' ? 'Etsy' : scope.channel === 'WOOCOMMERCE' ? 'WooCommerce' : scope.channel} is not available yet. Your product changes are saved in the studio.` })
   } catch (error) { issues.push({ severity: 'error', message: error instanceof Error ? error.message : String(error) }) }
   if (mode !== 'live') issues.push({ severity: 'error', message: mode === 'unavailable' ? 'Publication is unavailable for this channel.' : `Live publishing is ${mode === 'gated' ? 'disabled' : `in ${mode} mode`} for this channel. Enable live publishing in the channel configuration to send this product.` })
   const review: StudioPublishReview = {
@@ -60,11 +60,11 @@ export async function previewStudioPublication(productId: string, scope: StudioP
     if (!workspace.initialized) await saveContentWorkspace(productId, contentScope, { draft: workspace.draft, expectedRevision: workspace.revision })
   }
   const plan = await buildReview(productId, scope)
-  if (!plan.prepared || plan.review.issues.some(i => i.severity === 'error')) return plan.review
   const id = randomUUID()
   const key = publicationDigest([workspaceIdForQuery(), plan.facts.destination.familyId, scope.channel, scope.accountId, scope.marketplace, plan.facts.destination.aliasKey])
   const unresolved = await prisma.bulkOperation.findFirst({ where: { status: { in: IN_FLIGHT }, changes: { path: ['publicationKey'], equals: key } }, select: { id: true, userId: true } })
   if (unresolved) return { ...plan.review, ...(unresolved.userId === userId ? { previousPublicationId: unresolved.id } : {}), issues: [...plan.review.issues, { severity: 'error', message: `A previous publication still needs a result (${unresolved.id}). ${unresolved.userId === userId ? 'Check its status before publishing again.' : 'Ask the colleague who submitted it to check its status.'}` }] }
+  if (!plan.prepared || plan.review.issues.some(i => i.severity === 'error')) return plan.review
   await prisma.bulkOperation.create({ data: { id, userId, status: 'PREVIEW', productCount: plan.review.rows.length, changeCount: 0,
     expiresAt: new Date(plan.review.expiresAt), changes: json({ kind: KIND, publicationKey: key, productId, scope, revision: plan.revision, review: { ...plan.review, id } }) } })
   return { ...plan.review, id }

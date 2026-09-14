@@ -1061,7 +1061,7 @@ export class AmazonSpApiClient {
       // VALIDATION_PREVIEW must hit the PRODUCTION host — the sandbox returns
       // canned responses, not a real validation of our payload.
       const url = new URL(
-        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion()}.amazon.com/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`,
+        `https://sellingpartnerapi-${await (await import('../lib/amazon-sp-client.js')).getAmazonRegion(this.boundAccount?.id)}.amazon.com/listings/2021-08-01/items/${encodeURIComponent(sellerId)}/${encodeURIComponent(sku)}`,
       )
       url.searchParams.set('marketplaceIds', marketplaceId)
       url.searchParams.set('mode', 'VALIDATION_PREVIEW')

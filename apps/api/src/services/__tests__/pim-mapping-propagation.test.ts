@@ -18,10 +18,10 @@ import type { FieldMappingRule } from '../pim/schema-mapping.service.js'
 
 const PROD = { localizedContent: null, categoryAttributes: null, variantAttributes: null }
 
-function attrs(map: Record<string, { value: unknown; source?: ValueSource }>): ResolvedAttributes {
+function attrs(map: Record<string, { value: unknown; source?: ValueSource; language?: string }>): ResolvedAttributes {
   const out: ResolvedAttributes = {}
   for (const [k, v] of Object.entries(map)) {
-    out[k] = { value: v.value, source: v.source ?? 'master', inheritedFrom: null }
+    out[k] = { ...v, source: v.source ?? 'master', inheritedFrom: null }
   }
   return out
 }
@@ -133,8 +133,8 @@ describe('buildCoordinateEntries', () => {
         members: [{ channel: 'AMAZON', marketplace: 'DE' }],
       },
     ]
-    const base = attrs({ title: { value: 'Giacca' } })
-    const proposed = attrs({ title: { value: 'Giacca' } }) // unchanged
+    const base = attrs({ title: { value: 'Giacca', language: 'it' } })
+    const proposed = attrs({ title: { value: 'Giacca', language: 'it' } }) // unchanged
     const entries = buildCoordinateEntries({ ...baseArgs, rules, baseAttrs: base, proposedAttrs: proposed, links })
     expect(entries).toHaveLength(1)
     expect(entries[0].flags.needsTranslation).toBe(true)

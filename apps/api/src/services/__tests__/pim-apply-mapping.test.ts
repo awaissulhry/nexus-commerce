@@ -2,8 +2,8 @@
  * FM.6 — apply engine verifier.
  *
  * Pure helpers (translatableTarget / toAuditString / payloadValueFor) +
- * a mocked-orchestration test: translate needed languages, write BOTH
- * localizedContent and ProductTranslation, enqueue one push per coordinate
+ * a mocked-orchestration test: translate needed languages, save translated
+ * drafts through the common content writer, enqueue one push per coordinate
  * (price fields skipped), audit. prisma / translate / queue / planner are
  * mocked so the suite stays pure/fast.
  */
@@ -32,7 +32,12 @@ const { mockPrisma, txMock, mockPlan, mockTranslate, mockQueueAdd } = vi.hoisted
   }
 })
 
-vi.mock('../../db.js', () => ({ default: mockPrisma }))
+vi.mock('../../db.js', async () => {
+  const { contextualDatabase } = await import('../../lib/database-context.js')
+  return { default: contextualDatabase(mockPrisma as never) }
+})
+const mockWriteTranslation = vi.fn(async () => ({}))
+vi.mock('../pim/translation-write.js', () => ({ writeTranslation: (...args: unknown[]) => mockWriteTranslation(...args) }))
 vi.mock('../pim/mapping-propagation.service.js', () => ({ planMappingPropagation: mockPlan }))
 vi.mock('../ai/translate.service.js', () => ({ translateProductCopy: mockTranslate }))
 vi.mock('../../lib/queue.js', () => ({ outboundSyncQueue: { add: mockQueueAdd } }))
@@ -121,47 +126,43 @@ describe('applyCatalogCascade', () => {
   })
 
   it('translates only the needed language with the changed source text', async () => {
-    await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })
+    await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } })
     expect(mockTranslate).toHaveBeenCalledTimes(1)
     expect(mockTranslate).toHaveBeenCalledWith(expect.objectContaining({ targetLanguage: 'de', source: { name: 'Giacca' } }))
   })
 
-  it('writes BOTH localizedContent and ProductTranslation for the translated language', async () => {
-    await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })
-    expect(txMock.product.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ localizedContent: { de: { title: 'Jacke' } } }) }),
-    )
-    expect(txMock.productTranslation.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { productId_language: { productId: 'p1', language: 'de' } },
-        create: expect.objectContaining({ name: 'Jacke', reviewedAt: null }),
-      }),
-    )
+  it('stores translated content through the common writer as an unreviewed language draft', async () => {
+    await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } })
+    expect(mockWriteTranslation).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      productId: 'p1', locale: 'de', address: { tier: 'language', language: 'de' }, state: 'draft',
+      values: expect.objectContaining({ title: 'Jacke' }),
+    }))
+    expect(txMock.product.update).not.toHaveBeenCalled()
   })
 
-  it('enqueues one push per content coordinate, skips the price field', async () => {
-    const result = await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })
-    expect(result.queuedCoordinates).toBe(2) // DE + IT; UK price skipped
+  it('queues reviewed source content while withholding translated drafts and price fields', async () => {
+    const result = await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } })
+    expect(result.queuedCoordinates).toBe(1) // IT only; DE is an unreviewed draft.
     expect(result.skippedPriceFields).toBe(1)
     expect(result.translatedLanguages).toEqual(['de'])
-    // DE push carries the translated value; IT carries the proposed source value.
+    // Translation drafts must be reviewed before they can enter a channel queue.
     const createPayloads = txMock.outboundSyncQueue.create.mock.calls.map((c) => c[0].data.payload)
     const de = createPayloads.find((p: any) => p.marketplace === 'DE')
     const it = createPayloads.find((p: any) => p.marketplace === 'IT')
-    expect(de.fields.item_name).toBe('Jacke')
+    expect(de).toBeUndefined()
     expect(it.fields.item_name).toBe('Giacca')
   })
 
   it('rides the holdUntil grace window and enqueues BullMQ after commit', async () => {
-    await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })
+    await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } })
     const created = txMock.outboundSyncQueue.create.mock.calls[0][0].data
     expect(created.holdUntil).toBeInstanceOf(Date)
     expect(created.syncType).toBe('ATTRIBUTE_UPDATE')
-    expect(mockQueueAdd).toHaveBeenCalledTimes(2)
+    expect(mockQueueAdd).toHaveBeenCalledTimes(1)
   })
 
   it('applyGrace=false → no hold window', async () => {
-    await applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } }, { applyGrace: false })
+    await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } }, { applyGrace: false })
     const created = txMock.outboundSyncQueue.create.mock.calls[0][0].data
     expect(created.holdUntil).toBeNull()
   })
@@ -172,7 +173,7 @@ describe('applyCatalogCascade', () => {
     ]
     mockPrisma.channelListing.findMany.mockResolvedValue(listings)
     mockPlan.mockResolvedValue({ productId: 'p1', sku: 'SKU1', entries: listings.map(l => ({ ...l, listingId: l.id, fieldKey: 'color', current: l.id, proposed: l.id, action: 'update', language: 'it', flags: flags() })) })
-    await applyCatalogCascade({ productId: 'p1', changes: { color: 'new' } })
+    await applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { color: 'new' } })
     expect(txMock.outboundSyncQueue.create.mock.calls.map(([q]) => [q.data.channelListingId, q.data.payload.channelConnectionId, q.data.payload.aliasKey, q.data.payload.fields.color])).toEqual([
       ['a', 'account-a', '', 'a'], ['b', 'account-b', 'outlet', 'b'],
     ])
@@ -180,12 +181,12 @@ describe('applyCatalogCascade', () => {
   it('rejects an ambiguous account before entering the write transaction', async () => {
     mockPlan.mockResolvedValue({ productId: 'p1', sku: 'SKU1', entries: [{ channel: 'EBAY', marketplace: 'IT', fieldKey: 'color', current: 'red', proposed: 'red', action: 'update', flags: flags() }] })
     mockPrisma.channelListing.findMany.mockResolvedValue(['a', 'b'].map(id => ({ id, channel: 'EBAY', marketplace: 'IT', channelConnectionId: id, aliasKey: '' })))
-    await expect(applyCatalogCascade({ productId: 'p1', changes: { color: 'red' } })).rejects.toThrow('exact listing')
+    await expect(applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { color: 'red' } })).rejects.toThrow('exact listing')
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
   })
   it('writes nothing when translation fails', async () => {
     mockTranslate.mockRejectedValue(new Error('translator unavailable'))
-    await expect(applyCatalogCascade({ productId: 'p1', changes: { title: 'Giacca' } })).rejects.toThrow('Translation is pending')
+    await expect(applyCatalogCascade({ contentAddress: { tier: 'source' }, productId: 'p1', changes: { title: 'Giacca' } })).rejects.toThrow('Translation is pending')
     expect(mockPrisma.$transaction).not.toHaveBeenCalled()
     expect(mockQueueAdd).not.toHaveBeenCalled()
   })

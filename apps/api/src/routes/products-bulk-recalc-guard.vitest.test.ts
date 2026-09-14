@@ -123,13 +123,13 @@ const patch = (headers?: Record<string, string>) =>
 describe('the bulk route READS the formula-cascade header', () => {
   it.each(['account-a', 'account-b'])('recalculates only the edited account coordinate: %s', async accountId => {
     const res = await app.inject({ method: 'PATCH', url: '/products/bulk', payload: {
-      changes: [{ id: PRODUCT_ID, field: 'ebay_title', value: 'Account title', target: 'channel' }],
+      changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
       marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', accountId }],
     } })
     expect(res.statusCode, res.body).toBe(200)
     expect(res.json()).toMatchObject({ updated: 1 })
     expect(reevaluate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-      productId: PRODUCT_ID, changedFields: ['ebay_title'],
+      productId: PRODUCT_ID, changedFields: ['ebay_price'],
       coordinate: expect.objectContaining({ channel: 'EBAY', marketplace: 'IT', channelConnectionId: accountId, aliasKey: '' }),
     }))
   })

@@ -187,3 +187,20 @@ it('LX.F F8 — a byte-identical language write is a NO-OP, and a real change st
   expect(after.resolved.value).toBe('Anderer Titel')
   expect(once.product.version).toBeGreaterThan(before.product.version)
 })
+
+it('addressed list resets cannot discard a slot edit or reset unselected siblings', async () => {
+  const before = await read()
+  const listColumn = { ...column, key: 'bulletPoints', writeField: 'bulletPoints', shape: 'list' }
+  for (const changes of [
+    [{ id: 'lx-child', field: 'bulletPoints[1]', value: null, intent: 'reset' as const, contentAddress: shared }],
+    [{ id: 'lx-child', field: 'bulletPoints', value: null, intent: 'reset' as const, contentAddress: shared },
+     { id: 'lx-child', field: 'bulletPoints[2]', value: 'Keep me', contentAddress: shared }],
+  ]) {
+    const result = await applyContentBulk({ changes, marketplaceContexts: [{ marketplace: 'DE', locale: 'de' } as any] }, context,
+      changes.map(change => ({ change, column: listColumn })), async () => ({ updated: 0 }))
+    expect(result).toMatchObject({ success: false, updated: 0 })
+    expect(result.errors).toHaveLength(changes.length)
+    expect(result.errors.every(error => /whole list|separately/.test(error.error))).toBe(true)
+    expect(await read()).toEqual(before)
+  }
+})

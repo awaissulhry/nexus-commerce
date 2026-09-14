@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "npm run build --workspace=@nexus/shared",
     "build": "next build",
   "typecheck": "tsc --noEmit -p tsconfig.json",
     "start": "next start",

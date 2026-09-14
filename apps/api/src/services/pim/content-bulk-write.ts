@@ -15,6 +15,11 @@ import type { SheetColumn } from './sheet-columns.service.js'
 import type { ProductBulkInput, ProductBulkContext } from '../products/bulk-edit.service.js'
 
 type Change = ProductBulkInput['changes'][number]
+const addressKey = (value: unknown, label: string) => {
+  const address = contentAddress(value, label)
+  return JSON.stringify(address.tier === 'source' ? ['source'] : address.tier === 'language' ? ['language', address.language]
+    : ['pin', address.language, address.coordinate.channel, address.coordinate.market, address.coordinate.accountId ?? '', address.coordinate.aliasId ?? ''])
+}
 export interface ContentEdit { change: Change; column: SheetColumn }
 export async function applyContentBulk(input: ProductBulkInput, context: ProductBulkContext, edits: ContentEdit[], facts: () => Promise<any>) {
   const errors: Array<{ id: string; field: string; error: string }> = []
@@ -26,6 +31,14 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
       const address = contentAddress(change.contentAddress, column.label)
       const scope = contexts[0], requested = normalizeLanguage(scope?.locale ?? (address.tier === 'source' ? PRIMARY_CONTENT_LOCALE : address.language))
       const field = contentField(column.slot?.of ?? column.key)
+      const slot = parseSlotField(change.field)?.index ?? column.slot?.index
+      if (change.intent === 'reset' && slot) throw new Error(`${column.label}: reset the whole list to preserve other slot overrides.`)
+      const siblings = edits.filter(other => other !== edit && other.change.id === change.id
+        && contentField(other.column.slot?.of ?? other.column.key) === field
+        && addressKey(other.change.contentAddress, other.column.label) === addressKey(address, column.label))
+      if (siblings.some(other => change.intent === 'reset' || other.change.intent === 'reset')) {
+        throw new Error(`${column.label}: reset and edit this field separately.`)
+      }
       if (contexts.length > 1) throw new Error(`${column.label} needs one language and coordinate per write.`)
       if (address.tier === 'source' ? requested !== PRIMARY_CONTENT_LOCALE : address.language !== requested) throw new Error(`${column.label} needs the ${requested} content address shown by the sheet.`)
       if (!column.editable) throw new Error(column.helpText || `${column.label} is read-only.`)
@@ -52,7 +65,6 @@ export async function applyContentBulk(input: ProductBulkInput, context: Product
         if (!acknowledgement) throw new Error(`${column.label} has no shared/pin choice on this coordinate; reload the sheet before saving it.`)
         throw new Error(`${column.label} needs a choice: ${acknowledgement.shared.label} or ${acknowledgement.pin.label}.`)
       }
-      const slot = parseSlotField(change.field)?.index ?? column.slot?.index
       const checked = coerceForShape({ ...column, shape: slot ? 'scalar' : column.shape }, change.value)
       if (checked.ok === false) throw new Error(checked.error)
       const value = checked.value

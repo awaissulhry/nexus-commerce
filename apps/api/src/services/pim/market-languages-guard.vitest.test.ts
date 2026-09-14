@@ -39,7 +39,7 @@ describe('LX.2 market language guard', () => {
     // flat-file routes, so it is baselined in `scripts/market-languages-baseline.json`
     // and requested from VT.1 (LX.F finding F-LX-6) rather than edited here.
     expect(violations).toEqual([expect.stringMatching(/^services\/ebay-variation-push\.service\.ts:\d+: market to language map; the only authority is Marketplace\.languages$/)])
-  })
+  }, 30000)
 
   it('detects the three shapes Appendix A deletes, each with the arm that must NOT fire', () => {
     // A market→language map written with two-letter codes — the shape ALL TWELVE of

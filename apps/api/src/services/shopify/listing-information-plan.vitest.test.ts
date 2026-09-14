@@ -4,7 +4,7 @@ import { channelValuePatch } from '../pim/channel-value-mutation.js'
 import { validateListingInformationOverrides } from './listing-information-plan.js'
 import type { ShopifyStoreSchema } from '@nexus/shared/shopify-linked-products'
 const schema: ShopifyStoreSchema = { definitions: [{ id: 'definition-1', namespace: 'custom', key: 'copy', ownerType: 'PRODUCT', name: 'Copy', type: 'single_line_text_field', description: null, access: { admin: 'PUBLIC_READ_WRITE', storefront: null }, validations: [] }], metaobjectDefinitions: [], types: [{ name: 'single_line_text_field', category: 'TEXT' }], locales: [{ locale: 'en', primary: true, published: true }, { locale: 'it', primary: false, published: true }], native: { scopes: ['write_products', 'write_translations'], enums: {}, inputs: { variant: ['price'] } }, revision: '1' }
-const listing = { productId: 'family', channelConnectionId: 'store-a', platformAttributes: {} }
+const listing = { id: 'listing', channel: 'SHOPIFY', marketplace: 'GLOBAL', languages: ['en', 'it'], product: { id: 'family', translations: [] }, productId: 'family', channelConnectionId: 'store-a', platformAttributes: {} }
 describe('Channel sheet schema, storage and publication validation', () => {
   it('requires a category before creation and defers inherited existing categories to the remote plan', () => {
     const constrained = { ...schema, native: { ...schema.native!, inputs: { ...schema.native!.inputs, product: ['category'] } }, definitions: [{ ...schema.definitions[0], constraints: { key: 'category', values: ['aa-8'] } }] }

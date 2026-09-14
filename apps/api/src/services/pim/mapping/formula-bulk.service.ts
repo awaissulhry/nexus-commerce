@@ -21,7 +21,8 @@ const receiptId = (id: string, phase: string, position: number) => `formula:${di
 const receiptWhere = (id: string) => ({ entityType: 'FormulaOperation', entityId: id })
 const coordinate = (input: FormulaBatchInput, productId: string): CellCoordinate => ({ productId,
   fieldKey: input.fieldKey, scope: input.scope, channel: input.channel, marketplace: input.marketplace,
-  market: input.market, locale: input.locale, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey })
+  market: input.market, locale: input.locale, channelConnectionId: input.channelConnectionId, aliasKey: input.aliasKey,
+  contentAddress: input.contentAddress, contentAcknowledged: input.contentAcknowledged })
 
 function assertRecoveryDestination(recipe: Recipe) {
   if (recipe.input.scope === 'channel' && recipe.destinationVersion !== 1) throw new Error('This older operation has no recorded account destination. Its history is preserved; review and bind the original account before continuing or restoring it.')

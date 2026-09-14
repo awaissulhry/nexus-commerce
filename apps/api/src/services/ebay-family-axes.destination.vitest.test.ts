@@ -13,13 +13,13 @@ vi.mock('./pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: async (
 import { resolveFamilyAxes } from './ebay-family-axes.service'
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.parent.mockResolvedValue({ id: 'family', sku: 'parent', variationTheme: 'Colore,Taglia' })
+  mocks.parent.mockResolvedValue({ id: 'family', sku: 'parent', variationAxes: [], variationTheme: 'Colore,Taglia' })
   mocks.rows.mockResolvedValue([{ sku: 'child', _isParent: false }])
   mocks.resolve.mockReturnValue({ validSpecs: [], warnings: [], suppressed: [] })
 })
 describe('listing-specific family grouping', () => {
-  it('uses the selected alias theme ahead of the family default', async () => {
-    mocks.listing.mockResolvedValue({ variationTheme: 'Materiale', platformAttributes: {}, externalListingId: null })
+  it('uses the selected alias axis override ahead of the family default', async () => {
+    mocks.listing.mockResolvedValue({ variationTheme: 'Ignored old theme', platformAttributes: { _variationAxes: ['Materiale'] }, externalListingId: null })
     await resolveFamilyAxes('family', 'IT', { channelConnectionId: 'account-b', aliasKey: 'alias-2' })
     expect(mocks.listing).toHaveBeenCalledWith(expect.objectContaining({ where: { productId: 'family', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'account-b', aliasKey: 'alias-2' } }))
     expect(mocks.rows).toHaveBeenCalledWith('family', 'IT', { channelConnectionId: 'account-b', aliasKey: 'alias-2' })

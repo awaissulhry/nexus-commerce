@@ -26,6 +26,7 @@ vi.mock('../db.js', () => ({
     product: { findUnique: (...a: unknown[]) => productFindUnique(...a) },
     channelListing: { findFirst: (...a: unknown[]) => listingFindFirst(...a) },
     cellFormula: { findMany: async () => [], findUnique: async () => null },
+    marketplace: { findFirst: async () => ({ languages: ['it'] }) },
     auditLog: { findMany: async () => [] },
   },
 }))
@@ -80,7 +81,7 @@ const preview = (expr: string, over: Record<string, unknown> = {}) =>
       scope: 'master', market: 'DE', locale: 'de', ...over,
     },
   })
-const CHANNEL = { scope: 'channel', channel: 'AMAZON', marketplace: 'IT', market: 'IT', locale: 'it' }
+const CHANNEL = { channelConnectionId: 'account-a', scope: 'channel', channel: 'AMAZON', marketplace: 'IT', market: 'IT', locale: 'it' }
 
 describe('#782 preview parity — the option check runs on both scopes', () => {
   for (const [name, coord] of [['master', {}], ['channel Amazon·IT', CHANNEL]] as const) {

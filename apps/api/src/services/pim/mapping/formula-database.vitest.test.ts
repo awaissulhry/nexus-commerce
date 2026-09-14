@@ -101,12 +101,12 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
     expect((await post(`${result.operationId}/undo`)).status).toBe('UNDONE')
     expect((await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).manufacturer).toBe('CHANGED SOURCE')
   })
-  it('refuses legacy content formulas before changing inherited products or channel snapshots', async () => {
+  it('previews content without changing inherited products or channel snapshots', async () => {
     await prisma.product.update({ where: { id: 'one' }, data: { description: 'Original parent description' } })
     await prisma.product.update({ where: { id: 'two' }, data: { parentId: 'one', description: null, cascadedFields: ['description'] } })
     await prisma.channelListing.create({ data: { id: 'inherited-description', productId: 'two', channelMarket: 'AMAZON_IT', channel: 'AMAZON', region: 'EU', marketplace: 'IT', aliasKey: '', masterDescription: 'Original parent description', followMasterDescription: true } })
     const checked = (await preview(['two'], '"Temporary description"', 'description')).rows[0]
-    expect(checked).toMatchObject({ ok: false, error: expect.stringContaining('legacy and read-only') })
+    expect(checked).toMatchObject({ ok: true, value: 'Temporary description', error: null })
     expect(await prisma.product.findUniqueOrThrow({ where: { id: 'two' } })).toMatchObject({ description: null, cascadedFields: ['description'] })
     expect((await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).description).toBe('Original parent description')
     expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: 'inherited-description' } })).masterDescription).toBe('Original parent description')
@@ -170,32 +170,34 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
     const definition = JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../channel-specs/__tests__/fixtures/amazon-it-outerwear.trimmed.json', import.meta.url), 'utf8'))
     await prisma.categorySchema.create({ data: { channel: 'AMAZON', marketplace: 'IT', productType: 'OUTERWEAR', schemaVersion: 'formula-fixture', schemaDefinition: definition, expiresAt: new Date('2099-01-01') } })
     await prisma.product.update({ where: { id: 'one' }, data: { productType: 'OUTERWEAR' } })
+    await prisma.channelConnection.create({ data: { id: 'formula-amazon', channelType: 'AMAZON', isActive: true } as any })
     await prisma.channelListing.createMany({ data: [
-      { id: 'primary-title', productId: 'one', channelMarket: 'AMAZON_IT', channel: 'AMAZON', region: 'EU', marketplace: 'IT', aliasKey: '', title: 'Synced title', titleOverride: null, followMasterTitle: true },
-      { id: 'alias-title', productId: 'one', channelMarket: 'AMAZON_IT', channel: 'AMAZON', region: 'EU', marketplace: 'IT', aliasKey: 'another-alias', title: 'Alias title', titleOverride: 'Alias title', followMasterTitle: false },
+      { id: 'primary-title', productId: 'one', channelMarket: 'AMAZON_IT', channel: 'AMAZON', channelConnectionId: 'formula-amazon', region: 'EU', marketplace: 'IT', aliasKey: '', title: 'Synced title', titleOverride: null, followMasterTitle: true },
+      { id: 'alias-title', productId: 'one', channelMarket: 'AMAZON_IT', channel: 'AMAZON', channelConnectionId: 'formula-amazon', region: 'EU', marketplace: 'IT', aliasKey: 'another-alias', title: 'Alias title', titleOverride: 'Alias title', followMasterTitle: false },
     ] })
-    const scope = { scope: 'channel', channel: 'AMAZON', marketplace: 'IT', market: 'IT', locale: 'it', fieldKey: 'name' }
+    const scope = { contentAddress: { tier: 'pin', language: 'it', coordinate: { channel: 'AMAZON', market: 'IT', accountId: 'formula-amazon' } }, contentAcknowledged: true, channelConnectionId: 'formula-amazon', scope: 'channel', channel: 'AMAZON', marketplace: 'IT', market: 'IT', locale: 'it', fieldKey: 'name' }
     const checked = (await post('preview', { ...scope, expr: '"Channel title"', mode: 'once', rows: [{ productId: 'one' }] })).rows[0]
     expect(checked.ok, JSON.stringify(checked)).toBe(true)
     const input = { ...scope, expr: '"Channel title"', mode: 'once', operationId: crypto.randomUUID(), rows: [{ productId: 'one', expectedState: checked.expectedState, expectedValue: checked.value }] }
-    const rejected = await app.inject({ method: 'POST', url: '/api/pim/formulas/bulk/apply', payload: { ...input, aliasKey: 'another-alias' } })
-    expect(rejected.statusCode).toBe(400)
+    const rejected = await app.inject({ method: 'POST', url: '/api/pim/formulas/bulk/apply', payload: { ...input, operationId: crypto.randomUUID(), aliasKey: 'another-alias' } })
+    expect(rejected.statusCode, rejected.body).toBe(200)
+    expect(rejected.json(), rejected.body).toMatchObject({ status: 'FAILED', rows: [expect.objectContaining({ ok: false })] })
     const result = await post('apply', input)
     expect(result.status, JSON.stringify(result)).toBe('SUCCESS')
-    expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: 'primary-title' } })).toMatchObject({ titleOverride: 'Channel title', followMasterTitle: false })
+    expect(await prisma.channelListingTranslation.findFirstOrThrow({ where: { channelListingId: 'primary-title', language: 'it' } })).toMatchObject({ name: 'Channel title', follows: [] })
     expect((await prisma.channelListing.findUniqueOrThrow({ where: { id: 'alias-title' } })).titleOverride).toBe('Alias title')
     expect((await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })).name).toBe('one jacket')
     expect((await post(`${result.operationId}/undo`)).status).toBe('UNDONE')
     expect(await prisma.channelListing.findUniqueOrThrow({ where: { id: 'primary-title' } })).toMatchObject({ title: 'Synced title', titleOverride: null, followMasterTitle: true })
   })
-  it('refuses retired localized formula writes without changing native or other language values', async () => {
+  it('requires an address to save translated formulas and preserves legacy storage', async () => {
     const legacyContent = { de: { description: 'Vorher' }, it: { description: 'Italiano' } }
     await prisma.product.update({ where: { id: 'one' }, data: { localizedContent: legacyContent } })
     const input = { scope: 'master', market: 'IT', locale: 'de', fieldKey: 'description', expr: 'upper($brand)' }
     const checked = await app.inject({ method: 'POST', url: '/api/pim/formulas/preview', payload: { ...input, productId: 'one' } })
-    expect(checked.json()).toMatchObject({ ok: false, error: expect.stringContaining('legacy and read-only') })
+    expect(checked.json()).toMatchObject({ ok: true, value: 'NEXUS' })
     const saved = await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one', payload: input })
-    expect(saved.json()).toMatchObject({ error: expect.stringContaining('legacy and read-only') })
+    expect(saved.json()).toMatchObject({ error: expect.stringContaining('ContentAddress') })
     const product = await prisma.product.findUniqueOrThrow({ where: { id: 'one' } })
     expect(product.localizedContent).toEqual(legacyContent)
     expect(product.description).toBeNull()
@@ -206,7 +208,7 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
   })
   it('keeps two accounts, three listings and two languages independent through formula save and reload', async () => {
     await prisma.marketplace.upsert({ where: { channel_code: { channel: 'ETSY', code: 'GLOBAL' } } as any,
-      create: { id: 'etsy-market', channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', region: 'GLOBAL', currency: 'EUR', language: 'en' }, update: {} })
+      create: { id: 'etsy-market', channel: 'ETSY', code: 'GLOBAL', name: 'Etsy', region: 'GLOBAL', currency: 'EUR', language: 'en', languages: ['en', 'de'] }, update: { languages: ['en', 'de'] } })
     await prisma.channelConnection.createMany({ data: ['etsy-a', 'etsy-b'].map(id => ({ id, channelType: 'ETSY', isActive: true, isPrimary: id === 'etsy-a' })) })
     const targets = []
     for (const account of ['etsy-a', 'etsy-b']) {
@@ -217,7 +219,7 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
         for (const locale of ['en', 'de']) {
           const title = `${account} listing ${position} ${locale}`
           const coordinate = { scope: 'channel', channel: 'ETSY', marketplace: 'GLOBAL', market: 'GLOBAL', channelConnectionId: account, aliasKey, locale, fieldKey: 'name' }
-          const response = await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one', payload: { ...coordinate, expr: JSON.stringify(title) } })
+          const response = await app.inject({ method: 'PUT', url: '/api/pim/formulas/product/one', payload: { ...coordinate, contentAddress: { tier: 'pin', language: locale, coordinate: { channel: 'ETSY', market: 'GLOBAL', accountId: account, ...(aliasKey ? { aliasId: aliasKey } : {}) } }, contentAcknowledged: true, expr: JSON.stringify(title) } })
           expect(response.json().ok, `${JSON.stringify(coordinate)}: ${response.body}`).toBe(true)
           targets.push({ coordinate, title, listingId: `${account}-${position}` })
         }
@@ -228,7 +230,7 @@ describe('formula recovery through the real product API and PostgreSQL', () => {
       const response = await app.inject({ method: 'POST', url: '/api/pim/formulas/batch', payload: { ...coordinate, productIds: ['one'] } })
       expect(JSON.stringify(response.json())).toContain(title)
       const listing = await prisma.channelListing.findUniqueOrThrow({ where: { id: listingId } })
-      expect((listing.platformAttributes as any)._etsyInformationLocales[coordinate.locale].title).toBe(title)
+      expect(await prisma.channelListingTranslation.findFirstOrThrow({ where: { channelListingId: listingId, language: coordinate.locale } })).toMatchObject({ name: title })
       expect((listing.platformAttributes as any).title).toBe('Remote title')
     }
     expect(await prisma.product.count()).toBe(2)

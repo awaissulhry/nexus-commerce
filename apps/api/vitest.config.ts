@@ -33,8 +33,24 @@ const databaseTarget = applyTestDatabaseGuard()
 // eslint-disable-next-line no-console
 console.log(`[apps/api vitest config] ${databaseTarget.message}`)
 
+// These suites inspect or temporarily modify the shared local catalogue. Run
+// them after disposable regressions and one at a time so a characterization
+// read cannot observe another suite's temporary variation override.
+const catalogueSuites = [
+  'variation-ebay-precedence',
+  'variation-mapping-filter',
+  'variation-rule-view',
+  'variation-quality',
+].map(name => `src/services/pim/${name}.vitest.test.ts`)
+
 export default defineConfig({
   test: {
+    projects: [
+      { extends: true, test: { name: 'regressions', include: ['src/**/__tests__/*.test.ts', 'src/**/*.vitest.test.ts'], exclude: ['node_modules/**', 'dist/**', ...catalogueSuites] } },
+      ...catalogueSuites.map((file, index) => ({ extends: true as const, test: {
+        name: `catalogue-${index + 1}`, include: [file], sequence: { groupOrder: index + 1 }, testTimeout: 30_000,
+      } })),
+    ],
     // R-VT-12 — the guard, per worker, before the first test module is imported.
     setupFiles: ['./vitest.setup.ts'],
     // The legacy tests use `tests.push(...)` + a manual loop and
@@ -46,7 +62,6 @@ export default defineConfig({
     // via `npx tsx`. Vitest picks up only files explicitly opted in
     // by the patterns below — either an `__tests__/` directory or a
     // `.vitest.test.ts` suffix elsewhere.
-    include: ['src/**/__tests__/*.test.ts', 'src/**/*.vitest.test.ts'],
     exclude: ['node_modules/**', 'dist/**'],
     environment: 'node',
     // Per-test timeout: 10s default. DB-touching tests should bump

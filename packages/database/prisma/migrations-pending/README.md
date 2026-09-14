@@ -9,8 +9,6 @@ into `prisma/migrations/<name>/migration.sql` in the release that should carry i
 
 ## Presence — 20260913180000_pr_presence
 
-Status 2026-09-13T18:48:20.075463+00:00: LOCAL APPLIED at2026-09-13T18:43:58.441Z; verification68/68 and local grants gate0 (two known unrelated RLS gaps). Production NOT APPLIED; folder stays here. Receipt: docs/audits/2026-09-13-presence/measurements/migration-record.md.
+Promoted into `prisma/migrations/20260913180000_pr_presence` for the complete development release authorized on 2026-09-13. The forward migration and guarded rollback now have one source of truth there. Production deployment must follow the rehearsal of the workspace prerequisites included in that release.
 
-Staged 2026-09-13T18:43:30.045Z. Forward SQL adds 14 nullable/defaultless ChannelListing columns and the 21-field ListingIdentity registry, its two indexes, runtime CRUD grants and ENABLE/FORCE workspace RLS policy. No backfill or identity foreign key. Separate rollback refuses any populated presence field or retained identity.
-
-Apply this file alone to local Docker first; verify columns, grants, policy and indexes. Production additive apply is authorized in PR.5's ledger, but the separately reviewed missing workspace prerequisites must be resolved first (docs/audits/2026-09-13-presence/measurements/prerequisite-review.md). Only after both database applies are verified may this folder move into prisma/migrations and schema.prisma declare it. No migrate deploy, enum change, SaleStop table or variationExcluded declaration.
+The historical local apply and verification are recorded in `docs/audits/2026-09-13-presence/measurements/migration-record.md`; that receipt does not establish production status. Forward SQL adds 14 nullable/defaultless ChannelListing columns and the ListingIdentity registry, indexes, runtime grants, and workspace RLS. It performs no product or listing identity backfill.

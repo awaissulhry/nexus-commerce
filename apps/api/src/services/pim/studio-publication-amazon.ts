@@ -17,12 +17,15 @@ import { attributesFromCells } from './mapping/schema-requirements.js'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { publicationImages } from './studio-publication-media.js'
+import type { ResolvedCell } from './mapping/resolve-batch.service.js'
+import { amazonImageSlots } from '@nexus/shared/amazon-media'
+import { readAmazonMedia, desiredAmazonImages } from '../images/amazon-media-workspace.service.js'
 
 export interface AmazonPublication {
   kind: 'amazon'
   sellerId: string
   marketplaceId: string
-  feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; attributes?: Record<string, unknown>; patches?: any[] }> }
+  feed: { header: Record<string, unknown>; messages: Array<{ messageId: number; sku: string; operationType: string; productType: string; requirements?: string; attributes?: Record<string, unknown>; patches?: any[] }> }
 }
 
 export async function prepareAmazonPublication(facts: PublicationFacts): Promise<AmazonPublication> {
@@ -33,6 +36,10 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
   const closed = await closedMarketSet(products.map(p => p.id))
   if (products.some(p => closed.has(`${p.id}|${scope.marketplace}`))) throw new Error('An Amazon offer is closed. Reopen it before publishing.')
   const service = new AmazonFlatFileService(prisma, new CategorySchemaService(prisma, new AmazonService()))
+  const rootListing = listings.find(l => l.productId === parent.id)
+  const gallery = object(rootListing?.platformAttributes)._amazonMediaWorkspace && rootListing
+    ? await readAmazonMedia({ ...facts.destination, productId: parent.id, listing: { id: rootListing.id, productId: parent.id, aliasKey: rootListing.aliasKey, version: rootListing.version } }) : null
+  const stocks = await prisma.stockLevel.findMany({ where: { productId: { in: products.map(p => p.id) }, location: { type: 'WAREHOUSE' } }, select: { productId: true, available: true } })
   const sellerSkus = new Map(products.map(product => {
     const listing = listings.find(l => l.productId === product.id)
     const offers = [...new Set(listing?.offers.filter(o => o.isActive).map(o => o.sku) ?? [])]
@@ -62,6 +69,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const current = { ...listing, priceOverride: listing?.followMasterPrice !== false ? product.basePrice : listing.priceOverride ?? listing.price,
       quantityOverride: listing?.followMasterQuantity !== false ? product.totalStock : listing.quantityOverride ?? listing.quantity }
     const row = buildRow({ listing: current, product, marketplace: scope.marketplace, parentSku: sellerSkus.get(parent.id) })
+    row.purchasable_offer__currency = facts.destination.currency
     row.item_sku = sellerSkus.get(product.id)
     row.product_type = data.category.channelCategoryId ?? row.product_type
     row._isNew = !listing?.externalListingId
@@ -71,18 +79,31 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     const fulfillment = activeOffer?.fulfillmentMethod ?? listing?.fulfillmentMethod ?? product.fulfillmentMethod
     if (fulfillment) row.fulfillment_availability__fulfillment_channel_code = fulfillment === 'FBA' ? `AMAZON_${({ eu: 'EU', na: 'NA', fe: 'JP' } as const)[await getAmazonRegion(scope.accountId)]}` : 'DEFAULT'
     if (!product.isParent && !fulfillment && !row.fulfillment_availability__fulfillment_channel_code) throw new Error(`${product.sku}: choose a fulfillment method before publishing.`)
-    row.fulfillment_availability__quantity = Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0))
-    if (Number.isNaN(Number(row.fulfillment_availability__quantity))) throw new Error(`${product.sku}: quantity is invalid.`)
-    const images = publicationImages(facts, product)
-    if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
-    if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
-    row.main_product_image_locator = images[0]
-    for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+    const tracked = stocks.filter(s => s.productId === product.id)
+    const available = Math.max(0, (tracked.length ? tracked.reduce((n, s) => n + s.available, 0) : product.totalStock) - (listing?.stockBuffer ?? 0))
+    row.fulfillment_availability__quantity = Math.min(available, Math.max(0, Number(current.quantityOverride ?? 0) - (listing?.stockBuffer ?? 0)))
+    if (!Number.isSafeInteger(row.fulfillment_availability__quantity)) throw new Error(`${product.sku}: quantity is invalid.`)
+    if (gallery && listing) {
+      const { desired, problems } = desiredAmazonImages(gallery, listing.id)
+      if (problems.length) throw new Error(`${product.sku}: ${problems.join('; ')}`)
+      if (!desired.MAIN) throw new Error(`${product.sku}: choose a main image in Images before publishing.`)
+      for (const slot of amazonImageSlots) {
+        delete row[slot.attribute]
+        if (desired[slot.code]) row[slot.attribute] = desired[slot.code]
+      }
+    } else {
+      const images = publicationImages(facts, product)
+      if (!images.length) throw new Error(`${product.sku}: add a product image before publishing.`)
+      if (images.length > 9) throw new Error(`${product.sku}: choose at most nine images for the Amazon product gallery.`)
+      row.main_product_image_locator = images[0]
+      for (let i = 1; i < images.length; i++) row[`other_product_image_locator_${i}`] = images[i]
+    }
     const hints = await service.getFeedSchemaHints(scope.marketplace, String(row.product_type))
     const legacy = service.buildJsonFeedBody([row as any], scope.marketplace, sellerId, COCKPIT_EXPANDED_FIELDS, hints)
     const spec = await loadAmazonSpec(scope.marketplace, String(row.product_type), scope.accountId)
     const base = JSON.parse(legacy)
-    const values = Object.fromEntries(Object.entries(data.cells).map(([key, cell]) => [key, cell.value]))
+    const cells = data.cells as Record<string, ResolvedCell>
+    const values = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, cell.value]))
     for (const axis of projection?.axes.filter(a => a.included) ?? []) {
       const variant = variationInput?.family.variants?.find(v => v.id === product.id)
       if (variant && axis.target) values[axis.target] = variant.axisValues[axis.familyKey]
@@ -94,7 +115,7 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
     delete owned.child_parent_sku_relationship // parent identity is the selected alias's seller SKU
     delete owned.variation_theme // the shared variation resolver is authoritative
     Object.assign(base.messages[0].attributes, owned)
-    const mappedCells = Object.fromEntries(Object.entries(data.cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
+    const mappedCells = Object.fromEntries(Object.entries(cells).map(([key, cell]) => [key, { ...cell, value: values[key] }]))
     const mapped = applyResolvedMappingToAmazonFeed(JSON.stringify(base), { ...resolved[0], products: [{ ...data, cells: mappedCells }] }, spec)
     const envelope = JSON.parse(mapped)
     const message = envelope.messages[0]
@@ -118,22 +139,22 @@ export async function prepareAmazonPublication(facts: PublicationFacts): Promise
 /** Validate the complete family before submitting its single feed. An acknowledgement is not live status. */
 export async function sendAmazonPublication(plan: AmazonPublication, accountId: string) {
   let documentId: string
+  let sp: Awaited<ReturnType<typeof getAmazonSpClient>>
   try {
-  const client = new AmazonSpApiClient({ id: accountId, region: await getAmazonRegion(accountId) })
-  for (const message of plan.feed.messages) {
-    const checked = await client.validateListing({ sellerId: plan.sellerId, marketplaceId: plan.marketplaceId,
-      sku: message.sku, productType: message.productType,
-      ...(message.operationType === 'UPDATE' ? { attributes: message.attributes ?? {} } : { patches: message.patches ?? Object.entries(message.attributes ?? {}).map(([key, value]) => ({ op: 'replace' as const, path: `/attributes/${key}`, value })) }) })
-    if (!checked.available || !checked.ok) throw Object.assign(new Error(`${message.sku}: ${checked.available ? checked.errors : 'Amazon validation is unavailable. Nothing was submitted.'}`), { notSent: true })
-  }
-  const sp = await getAmazonSpClient(accountId)
-  const document = await sp.callAPI({ operation: 'createFeedDocument', endpoint: 'feeds', body: { contentType: 'application/json; charset=UTF-8' } })
-  const uploaded = await fetch(document.url, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
-    body: JSON.stringify(plan.feed), signal: AbortSignal.timeout(60_000) })
-  if (!uploaded.ok) throw new Error(`Amazon feed upload failed (${uploaded.status}).`)
-  documentId = document.feedDocumentId
+    const client = new AmazonSpApiClient({ id: accountId, region: await getAmazonRegion(accountId) })
+    for (const message of plan.feed.messages) {
+      const checked = await client.validateListing({ sellerId: plan.sellerId, marketplaceId: plan.marketplaceId,
+        sku: message.sku, productType: message.productType, requirements: message.requirements,
+        ...(message.operationType === 'UPDATE' ? { attributes: message.attributes ?? {} } : { patches: message.patches ?? Object.entries(message.attributes ?? {}).map(([key, value]) => ({ op: 'replace' as const, path: `/attributes/${key}`, value })) }) })
+      if (!checked.available || !checked.ok) throw Object.assign(new Error(`${message.sku}: ${checked.available ? checked.errors : 'Amazon validation is unavailable. Nothing was submitted.'}`), { notSent: true })
+    }
+    sp = await getAmazonSpClient(accountId)
+    const document = await sp.callAPI({ operation: 'createFeedDocument', endpoint: 'feeds', body: { contentType: 'application/json; charset=UTF-8' } })
+    const uploaded = await fetch(document.url, { method: 'PUT', headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify(plan.feed), signal: AbortSignal.timeout(60_000) })
+    if (!uploaded.ok) throw new Error(`Amazon feed upload failed (${uploaded.status}).`)
+    documentId = document.feedDocumentId
   } catch (error) { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
-  const sp = await getAmazonSpClient(accountId)
   const feed = await sp.callAPI({ operation: 'createFeed', endpoint: 'feeds', body: { feedType: 'JSON_LISTINGS_FEED', marketplaceIds: [plan.marketplaceId], inputFeedDocumentId: documentId } })
   if (typeof object(feed).feedId !== 'string') throw new Error('Amazon did not return a feed identifier. Check submission history before retrying.')
   return feed.feedId as string

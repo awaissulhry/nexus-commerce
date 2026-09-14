@@ -1,0 +1,15 @@
+Final verification
+
+API focused suite after the final transport changes: 31 passed, 5 files.
+Existing Amazon validation-preview suite: 8 passed, included in the earlier 38-test combined run.
+Web publication scope tests: 3 passed.
+Unique total: 42 passing tests.
+
+API TypeScript: exit 0.
+Web TypeScript: exit 0.
+Shared build: exit 0.
+Token consistency: exit 0.
+Design-system conformance --check: exit 0.
+Targeted git diff --check: exit 0.
+
+Browser: real studio publishing components, mocked API; light/dark, 390x844, keyboard focus/Escape, Master destination, selected alias, submission, pending status, interrupted response recovery, stale review refresh, mismatched response, unsaved state, publish permission, Shopify visibility/location. No actual marketplace writes.

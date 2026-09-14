@@ -44,6 +44,10 @@ jobs:
     name: Schema drift + i18n parity + API build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Disposable PostgreSQL tests provide their own sockets. The guard still
+      # requires an explicit local target; CI has no developer catalogue.
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
 
     steps:
       - name: Checkout
@@ -74,7 +78,7 @@ jobs:
         run: npm run build --workspace=@nexus/api
 
       - name: Product grid resolver, write contracts and disposable PostgreSQL regressions
-        run: npm run test --workspace=@nexus/api -- src/services/pim src/services/__tests__/pim src/routes/products-bulk src/routes/cell-formula
+        run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim src/services/__tests__/pim src/routes/products-bulk src/routes/cell-formula
 
       - name: Product grid editor regressions
         run: npm run test --workspace=@nexus/web -- src/design-system/grid 'src/app/products/[id]/edit' src/app/products/_sheet --exclude '**/live-channel-scope.vitest.test.ts'

@@ -35,6 +35,7 @@ function mkProduct(overrides: Partial<ProductLike> = {}): ProductLike {
 function mkChannelListing(overrides: Partial<ChannelListingLike> = {}): ChannelListingLike {
   return {
     id: 'cl_default',
+    coordinate: { channel: 'EBAY', market: 'IT' }, languages: ['it', 'en'],
     overrideData: null,
     ...overrides,
   }
@@ -160,6 +161,7 @@ describe('shadowCompareProductRead — SSOT fields', () => {
       product,
       parent: null,
       channelListings: [cl],
+      locale: 'it',
       logger: silentLogger,
     })
 
@@ -341,7 +343,7 @@ describe('shadowCompareProductRead — synthesized keys (A.4)', () => {
     expect(recorded).toBe(0)
   })
 
-  it('zero mismatch when JSONB localizedContent.en wins over synthesized column', () => {
+  it('ignores retired JSONB content when comparing the canonical native source', () => {
     const product = mkProduct({
       id: 'p1',
       name: 'Old Name',
@@ -355,17 +357,9 @@ describe('shadowCompareProductRead — synthesized keys (A.4)', () => {
       logger: silentLogger,
     })
 
-    // Shadow's "legacy expectation" is pickInheritedColumn(product, parent, 'name') = 'Old Name',
-    // but resolver returns 'New JSONB Title' from localizedContent.en. This SHOULD register
-    // as both_present_differ — it's a real signal that JSONB has diverged from the legacy
-    // column. Operator can decide whether to backfill or not. Recording is the right behavior.
-    expect(recorded).toBeGreaterThanOrEqual(1)
-
-    const stats = getShadowStats()
-    const titleMismatch = stats.recent.find((m) => m.key === 'title')
-    expect(titleMismatch).toBeDefined()
-    expect(titleMismatch!.category).toBe('both_present_differ')
-    expect(titleMismatch!.resolverSource).toBe('masterLocale')
+    // Retired JSON content cannot supersede the canonical native source.
+    expect(recorded).toBe(0)
+    expect(getShadowStats().totalMismatches).toBe(0)
   })
 
   it('bulletPoints array compared element-wise (no spurious mismatch)', () => {

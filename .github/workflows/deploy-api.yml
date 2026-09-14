@@ -27,8 +27,9 @@ on:
     branches: [main]
     paths:
       - 'apps/api/**'
-      - 'packages/database/prisma/migrations/**'
-      - 'packages/database/prisma/schema.prisma'
+      - 'packages/database/**'
+      - 'packages/shared/**'
+      - 'packages/events/**'
       - 'package.json'
       - 'package-lock.json'
       - 'railway.toml'
@@ -43,7 +44,9 @@ jobs:
   deploy:
     name: Migrate + ship to Railway
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/nexus_test
 
     steps:
       - name: Checkout
@@ -61,6 +64,9 @@ jobs:
       - name: Generate Prisma client
         working-directory: packages/database
         run: npx prisma generate
+
+      - name: Build API before changing production schema
+        run: npm run build --workspace=@nexus/api
 
       - name: Apply pending migrations against Neon
         # Run from packages/database so prisma resolves schema +
@@ -80,20 +86,17 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
           if [ -n "${{ secrets.RAILWAY_SERVICE }}" ]; then
-            railway up --service "${{ secrets.RAILWAY_SERVICE }}" --detach
+            railway up --service "${{ secrets.RAILWAY_SERVICE }}" --ci --message "GitHub ${{ github.sha }}"
           else
-            railway up --detach
+            railway up --ci --message "GitHub ${{ github.sha }}"
           fi
 
       - name: Smoke-test the new container
-        # Wait up to 3 minutes for Railway to pick up the new image
-        # and start serving. Looks for one of the IH endpoints I'd
-        # expect to be in the latest commit — adjust the grep target
-        # as the API surface grows.
+        # The build must finish before polling the public database health route.
         run: |
           set -e
           for i in $(seq 1 36); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://nexusapi-production-b7bb.up.railway.app/api/insights/ping")
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://nexusapi-production-b7bb.up.railway.app/api/health")
             if [ "$code" = "200" ]; then
               echo "✓ Railway is serving"
               exit 0

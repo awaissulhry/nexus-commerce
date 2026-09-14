@@ -56,6 +56,7 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
       if (controller.signal.aborted) return
       if (!matchesPublicationReview(data, product.id, scope)) throw new Error('The review does not match this product and destination. Refresh the review.')
       setReview(data)
+      if (data.previousPublicationId) setUncertain(true)
       if (data.locations?.length === 1) setLocationId(data.locations[0].id)
     }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!controller.signal.aborted) setBusy(null) })
@@ -63,8 +64,8 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
   }, [scope, base, product.id, blockedSave, saveRevision, canPublish, discoveryFailed, refresh])
 
   const acceptResult = (data: StudioPublishResult, id: string) => {
-    if (data.id !== id || !Array.isArray(data.results) || !['SUBMITTED', 'VERIFIED', 'PARTIAL', 'FAILED', 'PUBLISHING', 'UNVERIFIED'].includes(data.status)) throw new Error('The publication result could not be verified. Check its status.')
-    setResult(data); setUncertain(data.status === 'PUBLISHING' || data.status === 'UNVERIFIED')
+    if (data.id !== id || !Array.isArray(data.results) || !['SUBMITTED', 'ACCEPTED', 'VERIFIED', 'PARTIAL', 'FAILED', 'PUBLISHING', 'UNVERIFIED'].includes(data.status)) throw new Error('The publication result could not be verified. Check its status.')
+    setResult(data); setUncertain(['PUBLISHING', 'UNVERIFIED', 'SUBMITTED'].includes(data.status))
   }
   const send = async () => {
     if (sending.current || !review?.id || !scope || !canPublish || blockedSave || uncertain || result || review.issues.some(i => i.severity === 'error')) return
@@ -80,9 +81,10 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
     finally { sending.current = false; setBusy(null) }
   }
   const checkStatus = async () => {
-    if (!review?.id || sending.current) return
+    const id = review?.previousPublicationId ?? review?.id
+    if (!id || sending.current) return
     sending.current = true; setBusy('status'); setError(null)
-    try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(review.id)}`, 'GET'), review.id) }
+    try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(id)}`, 'GET'), id) }
     catch (e) { setError(e instanceof Error ? e.message : String(e)) }
     finally { sending.current = false; setBusy(null) }
   }
@@ -122,7 +124,9 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
           {review.rows.map(row => <div key={row.productId} className={styles.product}><strong>{row.sku}</strong><span>{row.title}</span><span>{row.existing ? 'Existing listing' : 'New listing'}</span></div>)}
         </div>
       </>}
-      {result && <Banner tone={result.status === 'VERIFIED' ? 'success' : ['SUBMITTED', 'PUBLISHING'].includes(result.status) ? 'info' : 'warning'} title={result.status === 'VERIFIED' ? 'Publication verified' : result.status === 'SUBMITTED' ? 'Submitted to the channel' : result.status === 'PUBLISHING' ? 'Publication in progress' : 'Publication needs attention'}>{result.message}</Banner>}
+      {result && <Banner tone={result.status === 'VERIFIED' ? 'success' : ['SUBMITTED', 'ACCEPTED', 'PUBLISHING'].includes(result.status) ? 'info' : 'warning'} title={result.status === 'VERIFIED' ? 'Publication verified' : result.status === 'ACCEPTED' ? 'Accepted by the channel' : result.status === 'SUBMITTED' ? 'Submitted to the channel' : result.status === 'PUBLISHING' ? 'Publication in progress' : 'Publication needs attention'}>{result.message}
+        {result.results.some(r => r.status === 'FAILED') && <ul className={styles.issues}>{result.results.filter(r => r.status === 'FAILED').map(r => <li key={r.sku}><strong>{r.sku}: </strong>{r.message}</li>)}</ul>}
+      </Banner>}
       {(error || blockers.length > 0) && !uncertain && !result && <div className={styles.actions}><Button size="sm" disabled={!!busy || blockedSave} onClick={() => setRefresh(n => n + 1)}>Refresh review</Button><Button size="sm" disabled={!!busy} onClick={onClose}>Back to editing</Button></div>}
     </div>
   </Modal>
