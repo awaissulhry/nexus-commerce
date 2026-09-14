@@ -1072,7 +1072,10 @@ if (RUN.includes('contract')) {
            row must never resolve to a shaped column of the same wire kind (`supplier_declared_dg_hz_regulation`
            is `kind: select, shape: list`; opening it for the `select` row would measure the wrong editor). */
         /* `shape: 'scalar'` is set EXPLICITLY on ordinary columns — a truthiness test excluded every one of them (run 2026-09-05 02:16). */
-        const kindMatches = (c) => (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind : c.kind === row.kind && (!c.shape || c.shape === 'scalar'))
+        // channelColumns promotes category identifiers to ChannelCategoryEditor.
+        // Their wire kind remains text, but their displayed editor is a select.
+        const editorKind = c => (scope.key === 'AMAZON·IT' && c.key === 'productType') || (scope.key === 'EBAY·IT' && c.key === 'categoryId') ? 'select' : c.kind
+        const kindMatches = (c) => (row.kind === 'list' || row.kind === 'measure' ? c.shape === row.kind : editorKind(c) === row.kind && (!c.shape || c.shape === 'scalar'))
         const declared = (scopeCols ?? []).filter((c) => kindMatches(c)
           && (row.state === 'locked' ? !editable(c)
             : row.state === 'fxblocked' ? c.formulaWritable === false
