@@ -38,7 +38,7 @@ import {
 
 import { planPin } from './pinValue'
 import type { ProjectionPage, ProjectionValue } from './types'
-import { projectionActionRow, type ProjectionRow } from './rows'
+import { projectionActionRow, projectionReadinessPill, type ProjectionRow } from './rows'
 
 /** What the cells need from the surface, read at paint time. */
 export interface ProjectionCellContext {
@@ -79,11 +79,12 @@ const IdentityCell = memo(function IdentityCell(p: ICellRendererParams<Projectio
   if (!source) return null
   const isParent = row.kind === 'parent'
   const actionRow = projectionActionRow(row, page)
+  const progress = projectionReadinessPill(source)
   return <VariantIdentity sku={source.sku} isParent={isParent} parentId={actionRow.parentId} childCount={page.children.length}
     image={source.image} inherited={row.child?.imageInherited} axes={(page.axes ?? []).map(axis => row.child?.sharedAxisValues?.[axis.key] ?? '—')}
-    suspect={row.child?.axisValuesSuspect} pct={source.completeness?.pct ?? null}
-    readiness={source.readiness?.state as import('@/design-system/grid/renderers/readiness').RowReadinessState | null}
-    completenessTip={source.completeness == null ? `${source.sku} — completeness was not reported.` : `${source.sku} — ${source.completeness.filled} of ${source.completeness.total} channel fields filled (including optional fields)${source.readiness?.state ? ` · ${source.readiness.state}` : ''}`}
+    suspect={row.child?.axisValuesSuspect} pct={progress.pct}
+    readiness={progress.state}
+    completenessTip={progress.tip}
     menuItems={rowMenu(actionRow)} />
 })
 

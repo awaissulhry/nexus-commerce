@@ -196,7 +196,7 @@ export interface ProjectionChild {
    */
   axisValuesSuspect?: Array<{ axisKey: string; reason: string }>
   completeness?: { pct: number | null; filled: number; total: number } | null
-  readiness?: { pct?: number | null; requiredPct?: number | null; state: string | null } | null
+  readiness?: { pct?: number | null; requiredPct?: number | null; state: string | null; note?: string | null } | null
 }
 
 /**
@@ -211,7 +211,7 @@ export interface ProjectionChild {
  * Filed to VP.2 as REQUEST A6.
  */
 export interface ProjectionParent {
-  readiness?: { state: string | null } | null
+  readiness?: { requiredPct?: number | null; state: string | null; note?: string | null } | null
   completeness?: { pct: number | null; filled: number; total: number } | null
   id: string
   sku: string

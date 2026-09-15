@@ -11,9 +11,12 @@
  * kind (reference_control_must_target_the_branch).
  */
 import { describe, expect, it } from 'vitest'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
-import type { ProjectionChild, ProjectionPage } from './types'
-import { axisRank, chipRowIds, matchesSearch, projectionCounts, projectionRows } from './rows'
+import type { ProjectionChild, ProjectionPage, ProjectionParent } from './types'
+import { projectionColumns, type ProjectionCellHost } from './projectionColumns'
+import { axisRank, chipRowIds, matchesSearch, projectionCounts, projectionRows, projectionReadinessPill } from './rows'
 import { parseProjection } from './source'
 import { planPin } from './pinValue'
 import {
@@ -21,6 +24,53 @@ import {
   splitHint, splitPerAxisLabel, splitSingleLabel, usedCount,
 } from './copy'
 import type { ProjectionVocabulary } from './types'
+
+describe('channel projection required-field progress', () => {
+  it('renders the required ratio in the actual identity column, bar and accessible label', () => {
+    const page = projectionFixture()
+    const child = { ...page.children[0], completeness: { pct: 26, filled: 64, total: 247 },
+      readiness: { requiredPct: 100, state: 'live' } }
+    const host: ProjectionCellHost = { get: () => ({ page, pending: new Set(), pinning: new Set(),
+      rowMenu: () => [], onValueChange: () => {}, onIncludedChange: () => {}, onPinToggle: () => {} }) }
+    const group = projectionColumns(host, page)[0]
+    if (!('children' in group)) throw new Error('Product identity group is missing')
+    const column = group.children[0]
+    if (!('cellRenderer' in column)) throw new Error('Product identity renderer is missing')
+    const html = renderToStaticMarkup(createElement(column.cellRenderer, {
+      ...column.cellRendererParams, data: { rowId: child.id, kind: 'variant', parent: null, child },
+    }))
+    expect(html).toContain('>100%</span>')
+    expect(html).toContain('style="width:100%"')
+    expect(html).toContain(`aria-label="${child.sku} — 100% of required channel fields filled · Listed"`)
+    expect(html).not.toContain('26%')
+  })
+
+  it('uses the measured required ratio for both parent and child, preserving listing state', () => {
+    const page = projectionFixture()
+    const parent: ProjectionParent = { id: 'parent', sku: 'GALE-JACKET', name: null, image: null,
+      listings: 1, listing: { state: 'listed', externalId: 'PARENT-ASIN' } }
+    for (const row of [parent, page.children[0]]) {
+      expect(projectionReadinessPill({ ...row, completeness: { pct: 26, filled: 64, total: 247 },
+        readiness: { requiredPct: 100, state: 'errors' } })).toEqual({
+        pct: 100, state: 'errors', tip: `${row.sku} — 100% of required channel fields filled · Errors`,
+      })
+    }
+  })
+
+  it('retains partial and zero scores without borrowing overall coverage', () => {
+    for (const pct of [97, 0]) expect(projectionReadinessPill({ ...projectionFixture().children[0],
+      completeness: { pct: 100, filled: 247, total: 247 }, readiness: { requiredPct: pct, state: 'missing' },
+    }).pct).toBe(pct)
+  })
+
+  it('relays the server reason for an unscorable contract, with no overall fallback', () => {
+    const child = { ...projectionFixture().children[0], completeness: { pct: 100, filled: 4, total: 4 } }
+    expect(projectionReadinessPill({ ...child, readiness: { requiredPct: null, state: 'errors', note: 'Category metadata is incomplete: OUTERWEAR' } })).toEqual({
+      pct: null, state: 'errors', tip: `${child.sku} — Category metadata is incomplete: OUTERWEAR`,
+    })
+    expect(projectionReadinessPill({ ...child, readiness: null }).pct).toBeNull()
+  })
+})
 
 /** The four channels' vocabularies, as VP.2's contract §1 table serves them. */
 const EBAY: ProjectionVocabulary = { axisNoun: 'specific', axisNounPlural: 'specifics', sectionTitle: 'Variation specifics' }
@@ -484,4 +534,3 @@ function projectionFixture(): ProjectionPage {
     ],
   }
 }
-

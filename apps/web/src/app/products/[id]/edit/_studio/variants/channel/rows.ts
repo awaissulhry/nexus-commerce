@@ -13,6 +13,16 @@
  */
 import type { ProjectionChild, ProjectionPage, ProjectionParent } from './types'
 import type { StudioRow } from '../../sheet/master/types'
+import { readinessMeta, type RowReadinessState } from '@/design-system/grid/renderers/readiness'
+
+/** Channel progress uses the server's required-field ratio, as the Information sheet does. */
+export function projectionReadinessPill(source: ProjectionChild | ProjectionParent) {
+  const pct = source.readiness?.requiredPct ?? null
+  const state = source.readiness?.state as RowReadinessState | null | undefined
+  return { pct, state, tip: pct === null
+    ? `${source.sku} — ${source.readiness?.note ?? 'Required-field completeness was not reported.'}`
+    : `${source.sku} — ${pct}% of required channel fields filled${state ? ` · ${readinessMeta(state, 'row').label}` : ''}` }
+}
 
 export interface ProjectionRow {
   /** AG's row id. The product id is unique within a coordinate, so it is the identity. */

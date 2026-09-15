@@ -18,6 +18,7 @@
  */
 
 import { writeGate as substrateWriteGate } from '@/design-system/grid/editors/writeGate'
+import { readinessMeta } from '@/design-system/grid/renderers/readiness'
 
 import { aliasKeyOf, studioRowId, type AliasGroup, type ChannelSheetRow, type StudioCellValue, type StudioRow } from './types'
 
@@ -394,11 +395,13 @@ export function crossChannelColumnCount(
   return Object.values(row.values).filter((c) => c?.affectsAllChannels && c.editable !== false && c.writable !== false).length
 }
 
-/** An unscorable alias makes every row pill unscorable, even if structural fields are filled. */
+/** Match the listing band: required fields, using this row's own resolved counts. */
 export function rowReadinessPill(row: StudioRow, alias: AliasGroup | undefined) {
-  const pct = alias?.readiness.percent == null ? null : row.completeness?.overall?.pct ?? null
+  const required = row.completeness?.required
+  // An unscorable alias must not inherit a score from filled structural fields.
+  const pct = alias?.readiness.percent == null || !required?.total ? null : Math.round(100 * required.filled / required.total)
   const reason = row.readiness.issues.find(issue => issue.label === 'Channel requirements')?.message
   return { pct, state: row.readiness.state, tip: pct === null
-    ? `${row.sku} — ${reason ?? 'Readiness cannot be scored until this coordinate’s requirements are available.'}`
-    : `${row.sku} — ${row.completeness.overall.filled} of ${row.completeness.overall.total} channel fields filled (including optional fields) · ${row.readiness.state}` }
+    ? `${row.sku} — ${reason ?? (required?.total === 0 ? 'No required attributes are defined for this row.' : 'Readiness cannot be scored until this coordinate’s requirements are available.')}`
+    : `${row.sku} — ${required!.filled} of ${required!.total} required channel fields filled · ${readinessMeta(row.readiness.state, 'row').label}` }
 }

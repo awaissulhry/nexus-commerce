@@ -356,9 +356,51 @@ describe('filtered rows keep the affected listing visible', () => {
 it('keeps every row unscorable when the server alias percentage is null', () => {
   const child = row(null, 'GALE-BLACK-M', 'variant')
   child.completeness.overall = { filled: 4, total: 4, pct: 100 }
+  child.completeness.required = { filled: 4, total: 4, missing: [] }
   child.readiness = { state: 'errors', issues: [{ key: 'productType', label: 'Channel requirements', severity: 'error', message: 'OUTERWEAR requirements on Amazon · BE are unavailable.' }] }
   const unscorable = alias(null, 0)
   unscorable.readiness.percent = null
   expect(rowReadinessPill(child, unscorable)).toEqual({ pct: null, state: 'errors', tip: 'GALE-BLACK-M — OUTERWEAR requirements on Amazon · BE are unavailable.' })
   expect(rowReadinessPill(child, alias(null, 0)).pct).toBe(100)
+})
+
+describe('channel progress measures required fields for each variant', () => {
+  it('reports 100% for the production GALE shape: 31/31 required, 64/247 overall', () => {
+    const child = row(null, 'GALE-JACKET-BLACK-MEN-3XL', 'variant')
+    child.completeness.overall = { filled: 64, total: 247, pct: 26 }
+    child.completeness.required = { filled: 31, total: 31, missing: [] }
+    child.readiness.state = 'live'
+    expect(rowReadinessPill(child, alias(null, 0))).toEqual({
+      pct: 100, state: 'live',
+      tip: 'GALE-JACKET-BLACK-MEN-3XL — 31 of 31 required channel fields filled · Listed',
+    })
+  })
+
+  it('uses the refreshed row count, independent of optional coverage and the alias average', () => {
+    const child = row('a1', 'GALE-BLACK-M', 'variant')
+    child.completeness.overall = { filled: 64, total: 247, pct: 26 }
+    child.completeness.required = { filled: 30, total: 31, missing: [{ key: 'brand', label: 'Brand' }] }
+    const listing = alias('a1', 1)
+    expect(rowReadinessPill(child, listing).pct).toBe(97)
+    const saved = { ...child, completeness: { ...child.completeness, required: { filled: 31, total: 31, missing: [] } } }
+    expect(rowReadinessPill(saved, listing).pct).toBe(100)
+    child.completeness.required.filled = 0
+    expect(rowReadinessPill(child, listing).pct).toBe(0)
+  })
+
+  it('preserves an error state when required fields are filled but validation fails', () => {
+    const child = row(null, 'GALE-BLACK-M', 'variant')
+    child.completeness.required = { filled: 31, total: 31, missing: [] }
+    child.readiness.state = 'errors'
+    expect(rowReadinessPill(child, alias(null, 0))).toMatchObject({ pct: 100, state: 'errors' })
+  })
+
+  it('does not borrow a score from the alias when the row has no required fields', () => {
+    const child = row(null, 'GALE-BLACK-M', 'variant')
+    child.completeness.overall = { filled: 4, total: 4, pct: 100 }
+    expect(rowReadinessPill(child, alias(null, 0))).toMatchObject({
+      pct: null, tip: 'GALE-BLACK-M — No required attributes are defined for this row.',
+    })
+    expect(rowReadinessPill(child, undefined).pct).toBeNull()
+  })
 })
