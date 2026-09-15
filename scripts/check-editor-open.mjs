@@ -1445,6 +1445,9 @@ if (RUN.includes('parity')) {
         ?? (matrix ? editable.find(c => !c.classList.contains('nds-cell-is-select')) : null)
       const cs = text ? getComputedStyle(text) : null
       const footer = (document.querySelector('.nds-grid-sheet-status .nds-grid-sheet-noteslot')?.innerText || '').replace(/\s+/g, ' ').trim()
+      const disabledScope = document.querySelector('[data-scope-id][role="radio"][aria-checked="true"][aria-disabled="true"]')
+      const availabilityReason = disabledScope?.getAttribute('aria-description')?.replace(/\s+/g, ' ').trim() || null
+      const availabilityNote = document.querySelector('.nds-grid-sheet-noteslot .nds-grid-sheet-note.provenance[role="status"]')
       const groupHeight = matrix ? document.querySelector('.ag-header-row-group')?.getBoundingClientRect().height ?? 0 : 0
       return {
         headerH: hdr ? Math.round(hdr.getBoundingClientRect().height - groupHeight) : null,
@@ -1454,6 +1457,10 @@ if (RUN.includes('parity')) {
         floatingFilterRow: !!document.querySelector('.ag-floating-filter'),
         /* The footer minus its row count — the hint, the `?`, whatever occupies the note slot. */
         footerNote: footer ? footer.replace(/^\d+ rows?\s*/, '') : null,
+        availabilityFooter: availabilityReason ? {
+          reason: availabilityReason,
+          announced: availabilityNote?.getAttribute('aria-live') === 'polite' && availabilityNote?.getAttribute('title') === availabilityReason,
+        } : null,
         identityHeader: document.querySelector('.ag-header-cell[col-id="ag-Grid-AutoColumn"] .ag-header-cell-text, .ag-header-cell[col-id="identity"] .ag-header-cell-text')?.textContent?.trim() ?? null,
         everyCellHasBase: editable.length ? editable.every((c) => c.classList.contains('nds-ag-cell')) : null,
         selectHasChevron: selectReading?.chevron ?? null,
@@ -1564,7 +1571,17 @@ if (RUN.includes('parity')) {
     for (const [key, r] of readings) {
       if (key === 'master') continue
       for (const k of Object.keys(ref)) {
+        if (k === 'availabilityFooter') continue // state evidence, not a shared geometry reading
         if (key === 'MATRIX' && ['variationTheme', 'footerNote'].includes(k)) continue // asserted against the Matrix design above
+        // Presence policy replaces keyboard hints with the selected disabled scope's
+        // explanation. Require that exact accessible reason in the shared status
+        // primitive; arbitrary footer differences still fail the comparison.
+        if (k === 'footerNote' && r.availabilityFooter) {
+          if (!r.availabilityFooter.announced || r.footerNote !== r.availabilityFooter.reason) {
+            failures.push(`parity ${key} · footerNote: disabled scope reason was not rendered and announced: ${JSON.stringify(r.availabilityFooter)}`)
+          } else parityChecked++
+          continue
+        }
         if (key === 'MATRIX' && k === 'parentBand' && ref[k] && r[k]) {
           for (const slot of ['pic', 'mark', 'trail']) {
             if (JSON.stringify(r[k][slot]) !== JSON.stringify(ref[k][slot])) failures.push(`parity MATRIX · parentBand.${slot}: ${JSON.stringify(r[k][slot])} — master reads ${JSON.stringify(ref[k][slot])}`)
