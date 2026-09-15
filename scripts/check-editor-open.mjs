@@ -617,37 +617,33 @@ async function fire(rowId, colId, gesture, spot) {
   // recheck the actual center/corner after any scrolling it performed.
   if (!(await loc.scrollIntoViewIfNeeded({ timeout: 2500 }).then(() => true).catch(() => false))) return { abstain: `column ${colId} did not stabilize` }
   if (!(await bringOnScreen(rowId, colId, spot))) return { abstain: `column ${colId} has no visible ${spot} after layout settled` }
-  const b = await loc.boundingBox()
-  if (!b) return { abstain: `column ${colId} has no box` }
-  let x = spot === 'corner' ? b.x + b.width - 3 : b.x + Math.min(b.width * 0.4, 40)
-  let y = spot === 'corner' ? b.y + b.height - 3 : b.y + b.height * 0.5
-  const aim = async (x, y) => page.evaluate(([x, y, colId]) => {
+  // Read the rectangle and hit-test in the same browser turn. On a fresh sheet the column model
+  // can move between a Playwright boundingBox() round trip and a separate elementFromPoint().
+  const aim = async () => page.evaluate(([rowId, colId, spot]) => {
+    const target = document.querySelector(`.ag-row[row-id="${rowId}"] .ag-cell[col-id="${colId}"]`)
+    if (!target) return { ok: false, why: `column ${colId} has no box` }
+    const b = target.getBoundingClientRect()
+    const x = spot === 'corner' ? b.right - 3 : b.left + Math.min(b.width * 0.4, 40)
+    const y = spot === 'corner' ? b.bottom - 3 : b.top + b.height * 0.5
     const e = document.elementFromPoint(x, y)
     if (!e) return { ok: false, why: 'the point is over nothing — off screen?' }
-    if ((e.className || '').toString().includes('ag-fill-handle')) return { ok: true, on: 'fill-handle' }
     const cell = e.closest('.ag-cell[col-id]')
     if (!cell) return { ok: false, why: `the point is over ${(e.className || e.tagName).toString().split(' ')[0]}, not a cell` }
     const got = cell.getAttribute('col-id')
-    return got === colId ? { ok: true, on: 'cell', target: { tag: e.tagName, className: (e.className || '').toString(), role: e.getAttribute('role'), label: e.getAttribute('aria-label'), x, y } } : { ok: false, why: `the point is over cell ${got}, not ${colId}` }
-  }, [x, y, colId])
-  let ctl = await aim(x, y)
-  /* 🔴 ONE re-aim, then abstain. `scrollIntoViewIfNeeded` parks a column at the viewport's left
-     edge, where the sheet's PINNED IDENTITY BAND covers it — UX.1 measured that the trailing panel
-     width of this sheet is permanently coverable, and the same is true of the leading pinned block.
-     A covered cell is "could not measure", not "does not open", and the two must never share an
-     appearance: so the grid is nudged clear and the control is asked AGAIN. It is the control that
-     decides, never the retry — a second failure still abstains, and an abstention still fails the
-     run. */
+    const gotRow = cell.closest('.ag-row')?.getAttribute('row-id')
+    if (got !== colId || gotRow !== rowId) return { ok: false, why: `the point is over cell ${gotRow}/${got}, not ${rowId}/${colId}` }
+    return { ok: true, x, y, on: e.classList.contains('ag-fill-handle') ? 'fill-handle' : 'cell', target: { tag: e.tagName, className: (e.className || '').toString(), role: e.getAttribute('role'), label: e.getAttribute('aria-label'), x, y } }
+  }, [rowId, colId, spot])
+  let ctl = await aim()
+  // One re-aim before any gesture. Re-establish visibility instead of blindly scrolling left,
+  // which moves an off-right target even farther out of view. Failure still abstains and fails
+  // the run; the gesture matrix and the 250 ms opening deadline below remain unchanged.
   if (!ctl.ok) {
-    await page.mouse.wheel(-320, 0)
-    await page.waitForTimeout(180)
-    const nb = await loc.boundingBox()
-    if (!nb) return { abstain: `${ctl.why}; after a nudge the cell had no box` }
-    x = spot === 'corner' ? nb.x + nb.width - 3 : nb.x + Math.min(nb.width * 0.4, 40)
-    y = spot === 'corner' ? nb.y + nb.height - 3 : nb.y + nb.height * 0.5
-    ctl = await aim(x, y)
+    if (!(await bringOnScreen(rowId, colId, spot))) return { abstain: `${ctl.why}; target could not be brought back on screen` }
+    ctl = await aim()
   }
   if (!ctl.ok) return { abstain: ctl.why }
+  const { x, y } = ctl
   if (gesture === 'dblclick') await page.mouse.dblclick(x, y)
   else {
     await page.mouse.click(x, y)
