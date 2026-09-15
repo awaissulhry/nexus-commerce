@@ -63,9 +63,11 @@ export function createProductsDatasource<TRow>({
   onUnsupported,
   onError,
 }: ProductsDatasourceOptions<TRow>): IServerSideDatasource<TRow> {
+  let rootRequest = 0
   return {
     getRows: async (params: IServerSideGetRowsParams<TRow>) => {
       const { request } = params
+      const rootVersion = request.groupKeys.length === 0 ? ++rootRequest : null
       // Under row grouping `groupKeys` is a group path, not a family; only the tree gets a footer.
       const grouped = (request.rowGroupCols?.length ?? 0) > 0
       const parentId = !grouped && request.groupKeys.length ? String(request.groupKeys[request.groupKeys.length - 1]) : null
@@ -84,10 +86,10 @@ export function createProductsDatasource<TRow>({
         const rowCount = data.rowCount ?? rowData.length
         // Reported on every answer, an empty list included, so a note about a filter that no
         // longer applies clears the moment the request stops carrying it.
-        onUnsupported?.(data.unsupported ?? [])
+        if (rootVersion === rootRequest) onUnsupported?.(data.unsupported ?? [])
         // The KPI tiles read only the ROOT request: a level inside a grouping or a family
         // reports its own stats, and opening "Xavia › Active" must not show 11 of 14 products.
-        if (request.groupKeys.length === 0) onTopLevel?.({ total: rowCount, stats: data.stats, response: data })
+        if (rootVersion === rootRequest) onTopLevel?.({ total: rowCount, stats: data.stats, response: data })
         if (parentId && rowCount > 0) {
           // The preview is capped on purpose; the footer sentinel closes the block and reports the
           // block as complete, so AG never asks for a second page of variations.
@@ -100,7 +102,7 @@ export function createProductsDatasource<TRow>({
       } catch (err) {
         // A thrown error here would be swallowed by AG, so it is reported twice on purpose: to
         // AG (failed-block state, retried on the next scroll into range) and to the page.
-        onError?.(err instanceof Error ? err.message : String(err))
+        if (rootVersion == null || rootVersion === rootRequest) onError?.(err instanceof Error ? err.message : String(err))
         params.fail()
       }
     },

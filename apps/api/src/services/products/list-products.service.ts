@@ -8,6 +8,7 @@ import { catalogLanguageValues, orderCatalogLanguage, restrictCatalogLanguage } 
  * a roll-up or a column exists for both or for neither.
  */
 import { Prisma } from '@prisma/client'
+import { orderInSalesWindow, salesRollupCte } from './sales-rollup.js'
 import prisma from '../../db.js'
 import { allowApiKeyScope } from '../../lib/api-key-hook.js'
 // PS.1 — the generic two-tier cache (L1 memory + L2 Redis, time-boxed, circuit-broken). Reused
@@ -50,26 +51,27 @@ import {
   isShadowEnabled,
 } from '../pim/resolver-shadow.js'
 
-let _cacheReady: boolean | null = null
-let _cacheReadyAt = 0
-/** A rebuild just finished: the next list may read the cache without re-checking. */
-export function markCacheReady(): void {
-  _cacheReady = true
-  _cacheReadyAt = Date.now()
-}
-
+/** A nonempty cache can still contain deleted products or omit newly created ones.
+ * Check source revisions before trusting it for rows, counts, filters and sorting. */
 export async function isCacheReady(): Promise<boolean> {
-  const now = Date.now()
-  if (_cacheReady !== null && now - _cacheReadyAt < 60_000) return _cacheReady
-  _cacheReady = await prisma.productReadCache
-    .count()
-    .then((c) => c > 0)
-    .catch(() => false)
-  _cacheReadyAt = now
-  return _cacheReady
+  const rows = await prisma.$queryRaw<Array<{ ready: boolean }>>`
+    SELECT EXISTS (SELECT 1 FROM "ProductReadCache")
+      AND NOT EXISTS (
+        SELECT 1 FROM "Product" p LEFT JOIN "ProductReadCache" c ON c.id = p.id
+        WHERE c.id IS NULL OR c."updatedAt" IS DISTINCT FROM p."updatedAt"
+          OR c."deletedAt" IS DISTINCT FROM p."deletedAt"
+          OR c."parentId" IS DISTINCT FROM p."parentId"
+          OR c.version IS DISTINCT FROM p.version
+      ) AND NOT EXISTS (
+        SELECT 1 FROM "ProductReadCache" c LEFT JOIN "Product" p ON p.id = c.id WHERE p.id IS NULL
+      ) AS ready
+  `.catch(() => [])
+  return rows[0]?.ready === true
 }
 
 export interface ProductListQuery {
+  /** Shared cutoff for every measure in one grid response. */
+  asOf?: Date
   /**
    * VT.1b (VX §11.4) — the catalogue's `Variation mapping` dimension:
    * `?variationMapping=derived|rule|overridden|unset|collides`, the same pipe-separated words the page's
@@ -89,6 +91,8 @@ export interface ProductListQuery {
   search?: string
   status?: string
   channels?: string
+  /** Actual listing presence, used by the grid's Channels column. */
+  listedChannels?: string
   stockLevel?: string
   sort?: string
   // W5.4 — multi-column sort. Comma-separated `field:dir` pairs:
@@ -190,16 +194,15 @@ export const NULL_FILTER_VALUE = '__null__'
 /**
  * AVAILABLE — the one measure. `Product.totalStock` is a maintained column that is stale in
  * practice (measured 2026-08-28: 0 on 11 of 14 families whose cells show hundreds of units, 10
- * on a standalone product holding 58), and it never includes a family's children. The cell has
- * always shown the stock-LEVEL roll-up — every StockLevel row of the product and of its
- * variations — so that roll-up is what sorting, the stock filters, the KPI counts and the group
- * totals read too. One CTE, used by all of them, so they cannot disagree.
+ * on a standalone product holding 58), and it never includes a family's children. The cell
+ * reads the stock-level available roll-up (on-hand minus reserved) for the product and its
+ * active variations. Sorting, stock filters, KPI counts and groups use that same CTE.
  */
 export const stockRollupCte = (ids: readonly string[]): Prisma.Sql => Prisma.sql`
   stockq AS (
-    SELECT own.id, COALESCE(SUM(sl.quantity), 0)::float AS qty
+    SELECT own.id, COALESCE(SUM(sl.available), 0)::float AS qty
     FROM unnest(${[...ids]}::text[]) AS own(id)
-    LEFT JOIN "Product" c ON c.id = own.id OR c."parentId" = own.id
+    LEFT JOIN "Product" c ON c.id = own.id OR (c."parentId" = own.id AND c."deletedAt" IS NULL)
     LEFT JOIN "StockLevel" sl ON sl."productId" = c.id
     GROUP BY own.id
   )`
@@ -216,15 +219,15 @@ export const stockRollupCte = (ids: readonly string[]): Prisma.Sql => Prisma.sql
  * and a family's Available is the whole family.
  */
 export function foldStockRollup(
-  stockRows: ReadonlyArray<{ productId: string; quantity: number }>,
+  stockRows: ReadonlyArray<{ productId: string; available: number }>,
   childToParent: ReadonlyMap<string, string>,
 ): Map<string, number> {
   const out = new Map<string, number>()
   const add = (id: string, qty: number) => out.set(id, (out.get(id) ?? 0) + qty)
   for (const s of stockRows) {
-    add(s.productId, s.quantity)
+    add(s.productId, s.available)
     const parentId = childToParent.get(s.productId)
-    if (parentId) add(parentId, s.quantity)
+    if (parentId) add(parentId, s.available)
   }
   return out
 }
@@ -246,7 +249,7 @@ export const stockMatches = (qty: number, p: StockPredicate): boolean => {
   if (p.min !== undefined && qty < p.min) return false
   if (p.max !== undefined && qty > p.max) return false
   if (p.levels.length === 0) return true
-  return (p.levels.includes('in') && qty > 0) || (p.levels.includes('low') && qty > 0 && qty <= 5) || (p.levels.includes('out') && qty === 0)
+  return (p.levels.includes('in') && qty > 0) || (p.levels.includes('low') && qty > 0 && qty <= 5) || (p.levels.includes('out') && qty <= 0)
 }
 
 /** Restrict `where` to the ids the roll-up admits. Candidates come from the base scope first. */
@@ -269,8 +272,7 @@ function applyInOrNull(target: any, field: string, list: string[]): void {
   const values = list.filter((v) => v !== NULL_FILTER_VALUE)
   const wantsNull = values.length !== list.length
   if (!wantsNull) { target[field] = { in: values }; return }
-  if (values.length === 0) { target[field] = null; return }
-  target.AND = [...(target.AND ?? []), { OR: [{ [field]: null }, { [field]: { in: values } }] }]
+  target.AND = [...(target.AND ?? []), { OR: [{ [field]: null }, { [field]: { in: ['', ...values] } }] }]
 }
 
 /**
@@ -298,7 +300,7 @@ const STATS_TTL_SEC = 15
  * insertion order, so two identical filters built by different code paths would otherwise hash
  * differently and quietly halve the hit rate.
  */
-function statsCacheKey(scope: { where: any; cacheWhere: any; useCache: boolean }): string {
+function statsCacheKey(scope: { where: any; cacheWhere: any; useCache: boolean; revision?: string }): string {
   const stable = (v: any): any =>
     v === null || typeof v !== 'object'
       ? v
@@ -307,7 +309,7 @@ function statsCacheKey(scope: { where: any; cacheWhere: any; useCache: boolean }
         : Object.keys(v)
             .sort()
             .reduce((o: any, k) => { o[k] = stable(v[k]); return o }, {})
-  const json = JSON.stringify({ w: stable(scope.where), c: stable(scope.cacheWhere), u: scope.useCache })
+  const json = JSON.stringify({ w: stable(scope.where), c: stable(scope.cacheWhere), u: scope.useCache, r: scope.revision })
   return 'products:stats:' + createHash('sha1').update(json).digest('hex').slice(0, 24)
 }
 
@@ -315,7 +317,7 @@ function statsCacheKey(scope: { where: any; cacheWhere: any; useCache: boolean }
 export const __statsCacheKeyForTest = statsCacheKey
 
 /** `countStatsTuple` behind the cache. The only entry point callers should use. */
-function cachedStatsTuple(scope: { where: any; cacheWhere: any; useCache: boolean }): Promise<[number, number, number, number, number]> {
+function cachedStatsTuple(scope: { where: any; cacheWhere: any; useCache: boolean; revision?: string }): Promise<[number, number, number, number, number]> {
   return cached(statsCacheKey(scope), STATS_TTL_SEC, () => countStatsTuple(scope))
 }
 
@@ -335,14 +337,14 @@ async function countStatsTuple(scope: { where: any; cacheWhere: any; useCache: b
   const [total, active, draft, [inStock, outOfStock]] = useCache
     ? await Promise.all([
         prisma.productReadCache.count({ where: cacheWhere }),
-        prisma.productReadCache.count({ where: { ...cacheWhere, status: 'ACTIVE' } }),
-        prisma.productReadCache.count({ where: { ...cacheWhere, status: 'DRAFT' } }),
+        prisma.productReadCache.count({ where: { AND: [cacheWhere, { status: 'ACTIVE' }] } }),
+        prisma.productReadCache.count({ where: { AND: [cacheWhere, { status: 'DRAFT' }] } }),
         stockCounts(),
       ])
     : await Promise.all([
         prisma.product.count({ where }),
-        prisma.product.count({ where: { ...where, status: 'ACTIVE' } }),
-        prisma.product.count({ where: { ...where, status: 'DRAFT' } }),
+        prisma.product.count({ where: { AND: [where, { status: 'ACTIVE' }] } }),
+        prisma.product.count({ where: { AND: [where, { status: 'DRAFT' }] } }),
         stockCounts(),
       ])
   return [total, active, draft, inStock, outOfStock]
@@ -351,7 +353,8 @@ async function countStatsTuple(scope: { where: any; cacheWhere: any; useCache: b
 /** The KPI counts for a query — what a grouped level reports beside its group rows. */
 export async function countProductStats(q: ProductListQuery): Promise<ProductListBody['stats']> {
   const scope = await resolveProductsScope(q)
-  const [total, active, draft, inStock, outOfStock] = await cachedStatsTuple(scope)
+  const { count, maxUpdatedAtMs } = await listEtag(prisma, { model: 'product', where: scope.where })
+  const [total, active, draft, inStock, outOfStock] = await (scope.includeSales ? countStatsTuple(scope) : cachedStatsTuple({ ...scope, revision: `${count}:${maxUpdatedAtMs}` }))
   return { total, active, draft, inStock, outOfStock }
 }
 
@@ -370,6 +373,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
     .split(',')
     .map((s) => s.trim().toUpperCase())
     .filter(Boolean)
+  const listedChannels = (q.listedChannels ?? '').split(',').map(value => value.trim().toUpperCase()).filter(Boolean)
   const productTypeList = (q.productTypes ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   const brandList = (q.brands ?? '').split(',').map((s) => s.trim()).filter(Boolean)
   // W2.12 — family filter. 'null' literal means "products with no
@@ -392,7 +396,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
   const includeTags = q.includeTags === 'true' || q.includeTags === '1'
   // Sales roll-up is opt-in and windowed. Off by default so the plain list stays one query.
   const includeSales = q.includeSales === 'true' || q.includeSales === '1'
-  const salesDays = Math.min(Math.max(Number(q.salesDays ?? 90), 1), 365)
+  const salesDays = Math.min(Math.max(Number(q.salesDays ?? 90) || 90, 1), 365)
 
   // Default scope: top-level rows only. Override with ?parentId=<id>
   // to fetch children of a specific parent (used by the grid's
@@ -412,6 +416,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
   if (channelList.length > 0) {
     where.syncChannels = { hasSome: channelList }
   }
+  if (listedChannels.length > 0) where.AND = [{ channelListings: { some: { channel: { in: listedChannels } } } }]
   applyInOrNull(where, 'productType', productTypeList)
   applyInOrNull(where, 'brand', brandList)
   // eBay LISTING SHELLS — extra eBay listings OF an existing product
@@ -422,7 +427,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
     q.listingShells === '1' || q.listingShells === 'true' ||
     productTypeList.includes('EBAY_LISTING_SHELL')
   if (!includeListingShells) {
-    where.NOT = [...(Array.isArray(where.NOT) ? where.NOT : where.NOT ? [where.NOT] : []), { productType: 'EBAY_LISTING_SHELL' }]
+    where.AND = [...(where.AND ?? []), { OR: [{ productType: null }, { productType: { not: 'EBAY_LISTING_SHELL' } }] }]
   }
   // W2.12 — family filter. families=null means "no family attached";
   // otherwise filter by familyId in the list.
@@ -464,8 +469,8 @@ export async function resolveProductsScope(q: ProductListQuery) {
       })).map((r) => r.productId),
     }
   }
-  if (q.hasPhotos === 'true') where.images = { some: {} }
-  if (q.hasPhotos === 'false') where.images = { none: {} }
+  if (q.hasPhotos === 'true') where.images = { some: { mediaType: 'IMAGE' } }
+  if (q.hasPhotos === 'false') where.images = { none: { mediaType: 'IMAGE' } }
   // Catalog hygiene tri-states. Treat empty strings as missing
   // (Postgres distinguishes NULL from '', but the operator wants
   // both classes flagged for cleanup). We push these into AND[]
@@ -509,7 +514,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
   stockPredicate.max = num(q.stockMax)
   // PN.1 — the "Needs attention" tile.
   if ((q.photos ?? '').toLowerCase() === 'none') {
-    where.AND = [...((where.AND as any[]) ?? []), { photoCount: 0 }]
+    where.images = { none: { mediaType: 'IMAGE' } }
   }
   // PN.1 — the grid's "clicked tile excludes every accordion status" case: an empty set,
   // stated as one, rather than a widened result.
@@ -523,8 +528,9 @@ export async function resolveProductsScope(q: ProductListQuery) {
   // ES.3 — Build ProductReadCache where + decide whether to use it.
   // Cache can only serve queries that don't need ChannelListing joins
   // (marketplaces= and missingChannels= filters require those).
-  const useCacheFilters = marketplaceList.length === 0 && missingChannelList.length === 0
-  const useCache = useCacheFilters && (await isCacheReady())
+  const useCacheFilters = marketplaceList.length === 0 && missingChannelList.length === 0 && listedChannels.length === 0
+  // Sales grids read changing relations directly; Product revisions cannot validate listing/image changes.
+  const useCache = !includeSales && !search && useCacheFilters && (await isCacheReady())
 
   const cacheWhere: any = q.parentId ? { parentId: q.parentId } : { parentId: null }
   if (useCache) {
@@ -541,7 +547,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
     applyInOrNull(cacheWhere, 'brand', brandList)
     // eBay listing shells — mirror the live-table default exclusion.
     if (!includeListingShells) {
-      cacheWhere.NOT = [...(Array.isArray(cacheWhere.NOT) ? cacheWhere.NOT : cacheWhere.NOT ? [cacheWhere.NOT] : []), { productType: 'EBAY_LISTING_SHELL' }]
+      cacheWhere.AND = [...(cacheWhere.AND ?? []), { OR: [{ productType: null }, { productType: { not: 'EBAY_LISTING_SHELL' } }] }]
     }
     if (familyFilterUnattached) cacheWhere.familyId = null
     else if (familyIdList.length > 0) cacheWhere.familyId = { in: familyIdList }
@@ -553,6 +559,7 @@ export async function resolveProductsScope(q: ProductListQuery) {
     // Hygiene flags — direct booleans in cache (no sub-clause needed).
     if (q.hasPhotos === 'true') cacheWhere.hasPhotos = true
     if (q.hasPhotos === 'false') cacheWhere.hasPhotos = false
+    if ((q.photos ?? '').toLowerCase() === 'none') cacheWhere.hasPhotos = false
     if (q.hasDescription === 'true') cacheWhere.hasDescription = true
     if (q.hasDescription === 'false') cacheWhere.hasDescription = false
     if (q.hasBrand === 'true') cacheWhere.hasBrand = true
@@ -811,60 +818,33 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   // the page slice in one statement over that id set. Nothing is sorted in JavaScript, and the
   // window stays a request parameter — a precomputed column would freeze it. A child's orders
   // land on its parent, exactly as the cells are rendered. Ties break on name, then id, so
-  // paging is stable. Only the leading sales/units sort is honoured.
-  const salesSort = sortsRaw
-    .map((pair) => pair.split(':').map((x) => x.trim()))
-    .find(([field]) => field === 'sales' || field === 'units')
-  // AVAILABLE sorts by the roll-up, never by the stale column — the family preview's
-  // `sort=stock-asc` included, so "lowest stock first" means what the cells show.
-  const lead = sortsRaw[0]?.split(':').map((x) => x.trim())
-  const stockSort: 'asc' | 'desc' | null =
-    lead && (lead[0] === 'totalStock' || lead[0] === 'stock') ? (lead[1] === 'desc' ? 'desc' : 'asc')
-    : sortsRaw.length === 0 && sort === 'stock-asc' ? 'asc'
-    : sortsRaw.length === 0 && sort === 'stock-desc' ? 'desc'
-    : null
-  if (preorderedIds === null && stockSort) {
-    const dir = stockSort === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`
+  // paging is stable. Every requested sort key retains its priority.
+  const metricFields = new Set(['sales', 'units', 'totalStock', 'stock'])
+  const metricSorts = sortsRaw.length ? sortsRaw : sort === 'stock-asc' ? ['stock:asc'] : sort === 'stock-desc' ? ['stock:desc'] : []
+  if (preorderedIds === null && metricSorts.some(pair => metricFields.has(pair.split(':')[0]))) {
     const candidates: Array<{ id: string }> = useCache
       ? await prisma.productReadCache.findMany({ where: cacheWhere, select: { id: true } })
       : await prisma.product.findMany({ where, select: { id: true } })
-    const ordered = candidates.length
-      ? await prisma.$queryRaw<Array<{ id: string }>>`
-          WITH ${stockRollupCte(candidates.map((c) => c.id))}
-          SELECT s.id FROM stockq s JOIN "Product" p ON p.id = s.id
-          ORDER BY s.qty ${dir}, p.name ASC, s.id ASC
-          LIMIT ${limit} OFFSET ${(page - 1) * limit}
-        `
-      : []
-    preorderedIds = ordered.map((row) => row.id)
-  }
-  if (preorderedIds === null && salesSort) {
-    const metric = salesSort[0] as 'sales' | 'units'
-    const dir = salesSort[1] === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`
-    const candidates: Array<{ id: string }> = useCache
-      ? await prisma.productReadCache.findMany({ where: cacheWhere, select: { id: true } })
-      : await prisma.product.findMany({ where, select: { id: true } })
-    const since = new Date()
-    since.setUTCDate(since.getUTCDate() - salesDays)
-    const measure = metric === 'sales'
-      ? Prisma.sql`SUM(CASE WHEN o.id IS NULL THEN 0 ELSE oi.quantity * oi.price END)`
-      : Prisma.sql`SUM(CASE WHEN o.id IS NULL THEN 0 ELSE oi.quantity END)`
-    const ordered = candidates.length
-      ? await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT own.id
-          FROM unnest(${candidates.map((c) => c.id)}::text[]) AS own(id)
-          JOIN "Product" p ON p.id = own.id
-          LEFT JOIN "Product" c ON c.id = own.id OR c."parentId" = own.id
-          LEFT JOIN "OrderItem" oi ON oi."productId" = c.id
-          LEFT JOIN "Order" o ON o.id = oi."orderId"
-            AND o."createdAt" >= ${since}
-            AND o.status <> 'CANCELLED'
-          GROUP BY own.id, p.name
-          ORDER BY COALESCE(${measure}, 0) ${dir}, p.name ASC, own.id ASC
-          LIMIT ${limit} OFFSET ${(page - 1) * limit}
-        `
-      : []
-    preorderedIds = ordered.map((row) => row.id)
+    const ids = candidates.map(c => c.id)
+    const until = q.asOf ?? new Date()
+    const since = new Date(until.getTime() - salesDays * 86_400_000)
+    const fields: Record<string, Prisma.Sql> = {
+      sales: Prisma.sql`s."revenueCents"`, units: Prisma.sql`s.units`, totalStock: Prisma.sql`st.qty`, stock: Prisma.sql`st.qty`,
+      sku: Prisma.sql`p.sku`, name: Prisma.sql`p.name`, brand: Prisma.sql`p.brand`, status: Prisma.sql`p.status`,
+      productType: Prisma.sql`p."productType"`, basePrice: Prisma.sql`p."basePrice"`, price: Prisma.sql`p."basePrice"`,
+      updatedAt: Prisma.sql`p."updatedAt"`, updated: Prisma.sql`p."updatedAt"`, createdAt: Prisma.sql`p."createdAt"`, created: Prisma.sql`p."createdAt"`,
+    }
+    const order = metricSorts.flatMap(pair => {
+      const [field, direction] = pair.split(':')
+      return fields[field] ? [Prisma.sql`${fields[field]} ${direction === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`} NULLS LAST`] : []
+    })
+    const ordered = ids.length ? await prisma.$queryRaw<Array<{ id: string }>>`
+      WITH ${stockRollupCte(ids)}, ${salesRollupCte(ids, since, until)}
+      SELECT p.id FROM "Product" p JOIN stockq st ON st.id = p.id JOIN salesq s ON s.id = p.id
+      ORDER BY ${Prisma.join(order, ', ')}, p.name ASC, p.id ASC
+      LIMIT ${limit} OFFSET ${(page - 1) * limit}
+    ` : []
+    preorderedIds = ordered.map(row => row.id)
   }
 
   if (q.language && q.languageSort) preorderedIds = await orderCatalogLanguage(q, where, (page - 1) * limit, limit)
@@ -872,20 +852,24 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   // Phase 10b — short-circuit with 304 when nothing has changed.
   // /products grid polls every 30s + on visibility-change; without
   // ETag every poll re-runs the heavy product list with relations.
-  const { etag, count: etagCount } = await listEtag(prisma, {
+  const { etag, count: etagCount, maxUpdatedAtMs } = await listEtag(prisma, {
     model: 'product',
     where,
     filterContext: {
       page,
       limit,
       sort: q.sort,
+      sorts: q.sorts,
+      includeSales,
+      salesDays,
       language: q.language, languageSort: q.languageSort,
       includeCoverage,
       includeTags,
       parentId: q.parentId ?? null,
     },
   })
-  if (!q.language && opts.etagMatches?.(etag)) {
+  // Orders and stock can change without touching Product.updatedAt.
+  if (!q.language && !includeSales && opts.etagMatches?.(etag)) {
     return { status: 304 as const, etag }
   }
 
@@ -954,19 +938,17 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
             },
             version: true,
             images: {
-              // PG.2 + PG.4 — fetch enough rows to apply the
-              // isPrimary → MAIN → sortOrder picker on the read
-              // side, matching the cache path. Direct path doesn't
-              // carry the parent→child fallback (the cache path
-              // does; this path is only used for marketplace /
-              // missing-channel filter modes which rarely hit
-              // unimaged parents).
+              where: { mediaType: 'IMAGE' },
               select: FACE_IMAGE_SELECT,
               orderBy: FACE_IMAGE_ORDER_BY,
-              take: 12,
+            },
+            children: {
+              where: { deletedAt: null, images: { some: { mediaType: 'IMAGE' } } },
+              orderBy: { sku: 'asc' }, take: 1,
+              select: { images: { where: { mediaType: 'IMAGE' }, select: FACE_IMAGE_SELECT, orderBy: FACE_IMAGE_ORDER_BY } },
             },
             _count: {
-              select: { images: true, channelListings: true, variations: true, children: true },
+              select: { images: { where: { mediaType: 'IMAGE' } }, channelListings: true, variations: true, children: { where: { deletedAt: null } } },
             },
             ...(includeCoverage
               ? {
@@ -985,7 +967,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         })
 
   // Stats reflect the FILTERED set — the same counts a grouped level reports for its scope.
-  const statsPromise = cachedStatsTuple({ where, cacheWhere, useCache })
+  const statsPromise = includeSales ? countStatsTuple({ where, cacheWhere, useCache }) : cachedStatsTuple({ where, cacheWhere, useCache, revision: `${etagCount}:${maxUpdatedAtMs}` })
 
   const [rawProducts, total, statsRows] = await Promise.all([
     rawProductsPromise,
@@ -1009,6 +991,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
     const productIds = sortedRawProducts.map((p) => p.id)
     const rows = await prisma.productTag.findMany({
       where: { productId: { in: productIds } },
+      orderBy: { tag: { name: 'asc' } },
       select: {
         productId: true,
         tag: { select: { id: true, name: true, color: true, icon: true } },
@@ -1029,7 +1012,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
   const stockByProduct = new Map<string, { fba: number; non: number }>()
   /** Available per row: the product's own StockLevels plus every variation's. */
   let rollupByProduct = new Map<string, number>()
-  const salesByProduct = new Map<string, { units: number; revenueCents: number }>()
+  const salesByProduct = new Map<string, { units: number; revenueCents: number | null }>()
   let salesUnattributed: Array<{ channel: string; orders: number; units: number; revenueCents: number }> = []
   if (pageProductIds.length > 0) {
     // Stock lives on the child (variation) products — a parent owns none
@@ -1037,7 +1020,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
     // children. Pull the children of any parents on this page so their
     // stock can be rolled up onto the parent row.
     const childRows = await prisma.product.findMany({
-      where: { parentId: { in: pageProductIds } },
+      where: { parentId: { in: pageProductIds }, deletedAt: null },
       select: { id: true, parentId: true },
     })
     const childToParent = new Map<string, string>(
@@ -1060,7 +1043,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         where: { productId: { in: stockIds } },
         select: {
           productId: true,
-          quantity: true,
+          available: true,
           location: { select: { type: true } },
         },
       }),
@@ -1076,60 +1059,21 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       // top-level product's own stock stays on itself.
       const ownerId = childToParent.get(s.productId) ?? s.productId
       const cur = stockByProduct.get(ownerId) ?? { fba: 0, non: 0 }
-      if (s.location.type === 'AMAZON_FBA') cur.fba += s.quantity
-      else cur.non += s.quantity
+      if (s.location.type === 'AMAZON_FBA') cur.fba += s.available
+      else cur.non += s.available
       stockByProduct.set(ownerId, cur)
     }
     rollupByProduct = foldStockRollup(stockRows, childToParent)
 
-    // Sales roll up exactly like stock, and for the same reason: measured on this
-    // database, ALL 859 ProductProfitDaily rows attach to a child and NONE to a parent, so
-    // a Sales column read straight off the product row would render 0.00 for every parent
-    // in the grid. `childToParent` is the same map the stock fold uses.
-    //
-    // 🔴 SOURCE IS ORDERS, NOT ProductProfitDaily — this is the whole point.
-    // `ProductProfitDaily.marketplace` holds IT/DE/FR/ES: those are Amazon COUNTRIES, not
-    // channels. The table is Amazon-only, so summing it gives a figure labelled "Sales"
-    // that silently means "Amazon sales", excludes the eBay orders that already exist, and
-    // contributes nothing for any channel connected later. `Order.channel` is an enum of
-    // AMAZON | EBAY | SHOPIFY | WOOCOMMERCE | ETSY | MANUAL, so orders are channel-agnostic
-    // by construction and a new channel counts the day it lands.
-    //
-    // Three filters, each load-bearing:
-    //   • status <> CANCELLED — 531 of 4,426 orders are cancelled; including them added
-    //     €124.84 of revenue that never happened to the 90-day window.
-    //   • productId IS NOT NULL — an unattributable line cannot be charged to a product.
-    //     This is not cosmetic: all four eBay orders are currently orphaned this way, so
-    //     eBay revenue is real, is NOT counted here, and `salesUnattributed` reports it
-    //     rather than letting it vanish.
-    //   • the window, shared with the label the client renders.
-    //
-    // Raw SQL because the figure is SUM(quantity × price) and Prisma's groupBy cannot
-    // aggregate an expression. Currency is EUR on all 4,426 orders today; if a second one
-    // ever appears this sum is wrong and `currencies` below is what will say so.
     if (includeSales) {
-      const since = new Date()
-      since.setUTCDate(since.getUTCDate() - salesDays)
-      const salesRows = await prisma.$queryRaw<
-        Array<{ productId: string; units: bigint | number; revenueCents: bigint | number }>
-      >`
-        SELECT oi."productId" AS "productId",
-               SUM(oi.quantity)::bigint AS units,
-               ROUND(SUM(oi.quantity * oi.price) * 100)::bigint AS "revenueCents"
-        FROM "OrderItem" oi
-        JOIN "Order" o ON o.id = oi."orderId"
-        WHERE oi."productId" IN (${Prisma.join(stockIds)})
-          AND o."createdAt" >= ${since}
-          AND o.status <> 'CANCELLED'
-        GROUP BY oi."productId"
+      const until = q.asOf ?? new Date()
+      const since = new Date(until.getTime() - salesDays * 86_400_000)
+      const salesRows = await prisma.$queryRaw<Array<{ id: string; units: bigint | number; revenueCents: bigint | number | null }>>`
+        WITH ${salesRollupCte(pageProductIds, since, until)} SELECT * FROM salesq
       `
-      for (const r of salesRows) {
-        const ownerId = childToParent.get(r.productId) ?? r.productId
-        const cur = salesByProduct.get(ownerId) ?? { units: 0, revenueCents: 0 }
-        cur.units += Number(r.units ?? 0)
-        cur.revenueCents += Number(r.revenueCents ?? 0)
-        salesByProduct.set(ownerId, cur)
-      }
+      for (const r of salesRows) salesByProduct.set(r.id, {
+        units: Number(r.units), revenueCents: r.revenueCents == null ? null : Number(r.revenueCents),
+      })
 
       // Revenue the column CANNOT show, reported rather than dropped. An order line with no
       // productId is a real sale that no product row can carry — measured over 90 days:
@@ -1146,8 +1090,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         FROM "OrderItem" oi
         JOIN "Order" o ON o.id = oi."orderId"
         WHERE oi."productId" IS NULL
-          AND o."createdAt" >= ${since}
-          AND o.status <> 'CANCELLED'
+          AND ${orderInSalesWindow(since, until)}
+          AND COALESCE(o."currencyCode", 'EUR') = 'EUR'
         GROUP BY 1
       `
       salesUnattributed = orphanRows.map((r) => ({
@@ -1264,7 +1208,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         syncChannels: p.syncChannels,
         updatedAt: p.updatedAt,
         createdAt: p.createdAt,
-        isParent: p.isParent,
+        isParent: !p.parentId && (p.isParent || (useCache ? p.childCount : p._count?.children) > 0),
         parentId: p.parentId,
         productType: p.productType,
         fulfillmentMethod: derivedFulfillment,
@@ -1310,8 +1254,8 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
         const c = (coverage[cl.channel] ??= { live: 0, draft: 0, error: 0, total: 0 })
         c.total++
         if (cl.listingStatus === 'ACTIVE' && cl.isPublished) c.live++
-        else if (cl.listingStatus === 'DRAFT') c.draft++
         else if (cl.listingStatus === 'ERROR' || cl.lastSyncStatus === 'FAILED') c.error++
+        else c.draft++
       }
     }
     return {
@@ -1319,7 +1263,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       sku: p.sku,
       name: p.name,
       brand: p.brand,
-      basePrice: Number(p.basePrice),
+      basePrice: p.basePrice != null ? Number(p.basePrice) : null,
       // AVAILABLE is the ROLL-UP, never the stale column (see `stockRollupCte` above). Filters,
       // sorting, the KPI counts and the group totals were moved onto it on 2026-08-28; the ROW's own
       // field was left behind, so `totalStock` still answered 0 for a family holding hundreds.
@@ -1331,7 +1275,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       syncChannels: p.syncChannels,
       updatedAt: p.updatedAt,
       createdAt: p.createdAt,
-      isParent: p.isParent,
+      isParent: !p.parentId && (p.isParent || (useCache ? p.childCount : p._count?.children) > 0),
       parentId: p.parentId,
       productType: p.productType,
       fulfillmentMethod: derivedFulfillment,
@@ -1340,7 +1284,7 @@ export async function listProducts(q: ProductListQuery, opts: ListProductsOption
       family: p.family ?? null,
       workflowStage: p.workflowStage ?? null,
       version: p.version,
-      imageUrl: pickFaceImage(p.images ?? []),
+      imageUrl: pickFaceImage(p.images ?? []) ?? pickFaceImage(p.children?.[0]?.images ?? []),
       amazonAsin: p.amazonAsin ?? null,
       photoCount,
       channelCount: p._count?.channelListings ?? 0,

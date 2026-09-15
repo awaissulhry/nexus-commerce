@@ -41,6 +41,7 @@ export type {
 } from './NexusGrid'
 export { workspaceGridTheme, HEADER_COLUMN_PARTITION } from './theme/theme'
 export { registerGridModules } from './modules'
+export { LoadedRowsSelectionHeader } from './renderers/LoadedRowsSelectionHeader'
 export { GridSetFilter, GridNumberRangeFilter, GridTextFilter, gridFilterDef, type SetFilterOption, type SetFilterParams, type NumberRangeFilterParams } from './filters/gridFilters'
 export { setFilterPasses, numberFilterPasses, textFilterPasses, BLANK_FILTER_VALUE } from './filters/filterPredicates'
 export { GridTextFloatingFilter, GridNumberRangeFloatingFilter, GridSetFloatingFilter } from './filters/gridFloatingFilters'

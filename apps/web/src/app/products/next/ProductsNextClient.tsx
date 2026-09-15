@@ -16,10 +16,11 @@ import { AlertTriangle, ArrowLeft, Copy, Download, MoreHorizontal, Plus, Search,
 import { getBackendUrl } from '@/lib/backend-url'
 import { emitInvalidation, useInvalidationChannel } from '@/lib/sync/invalidation-channel'
 import { useListingEvents } from '@/lib/sync/use-listing-events'
+import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
 import type { ProductRow, Tag as ProductTag } from '@/app/products/_types'
 
 import { Button, Input, Pill } from '@/design-system/primitives'
-import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric, useToast } from '@/design-system/components'
+import { Banner, EmptyState, Menu, MetricStrip, ToastProvider, type MenuItemDef, type Metric, useToast, useActionConfirm } from '@/design-system/components'
 import { FilterBar, GridToolbar, PageHeader, PreferencesModal, type FilterDimension, type PreferencesValue } from '@/design-system/patterns'
 import {
   VARIATION_MAPPING_LABELS,
@@ -36,7 +37,7 @@ import { eur0 } from '@/design-system/lib'
 // product owns around it: the theme and defaults (NexusGrid), the server contract
 // (productsServerContract), the Customise bridge (columnPrefs) and state persistence
 // (useGridViews). Nothing else.
-import { GridDensityProvider, NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
+import { GridDensityProvider, LoadedRowsSelectionHeader, NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
 import { createProductsDatasource, isFamilyFooter, type ProductsListStats } from '@/app/products/next/productsDatasource'
 import { gridFilterDef } from '@/design-system/grid/filters/gridFilters'
 import { GridSheetNote } from '@/design-system/grid/toolbars/GridSheetNote'
@@ -83,7 +84,7 @@ import { preferencesFromLayout, mergeVisibleColumnOrder } from '@/design-system/
 import { isGridStatePayload, type GridViewPayload, type SavedGridView } from '@/design-system/grid/hooks/useGridViews'
 import type { SheetLayoutPayload } from '@/design-system/grid/views/viewPayload'
 import type { PreferencesColumnSpec } from '@/design-system/patterns/PreferencesModal'
-import { buildProductsLayout, readProductsLayout } from './productsLayout'
+import { buildProductsLayout, readProductsLayout, withoutProductSelection } from './productsLayout'
 import { gridDensity, gridGeometry } from '@/design-system/tokens/grid'
 import { DEFAULT_DENSITY, type DensityMode } from './density'
 
@@ -221,7 +222,7 @@ function ProductsNextInner() {
   const [filters, setFilters] = useState<ProductFilters>(EMPTY_FILTERS)
   const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY)
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const deleteConfirm = useActionConfirm()
   const [modalRow, setModalRow] = useState<ProductRow | null>(null)
   const [bulkEditOpen, setBulkEditOpen] = useState(false)
   const [tagDialogOpen, setTagDialogOpen] = useState(false)
@@ -473,9 +474,29 @@ function ProductsNextInner() {
    */
   const refetch = useCallback(() => {
     setListError(null)
-    if (gridApi && !gridApi.isDestroyed()) gridApi.refreshServerSide({ purge: false })
+    if (gridApi && !gridApi.isDestroyed()) {
+      gridApi.refreshServerSide({ purge: false })
+      gridApi.forEachNode(node => {
+        if (node.group && node.expanded) {
+          const route = node.getRoute()
+          if (route?.length) gridApi.refreshServerSide({ route, purge: false })
+        }
+      })
+    }
     refreshFacets()
   }, [gridApi, refreshFacets])
+  // Orders can arrive without a product event. Revalidate visible rows periodically and on return.
+  useEffect(() => {
+    const refreshVisible = () => { if (document.visibilityState === 'visible') refetch() }
+    const timer = window.setInterval(refreshVisible, 30_000)
+    window.addEventListener('focus', refreshVisible)
+    document.addEventListener('visibilitychange', refreshVisible)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshVisible)
+      document.removeEventListener('visibilitychange', refreshVisible)
+    }
+  }, [refetch])
   /**
    * The SERVER's events, not just this tab's.
    *
@@ -488,13 +509,10 @@ function ProductsNextInner() {
    * It is self-contained — one `EventSource` per tab, auto-reconnecting — and dispatches into the
    * same invalidation channel subscribed to below, so nothing else here changes.
    *
-   * 🔴 `stock.adjusted` is NOT among the events it maps: every emitter of that type is a client
-   * file, so a server-side stock change still will not move the Available column. That needs the
-   * API to raise an inventory event onto this bus.
    */
-  useListingEvents()
+  useListingEvents(streamsEnabled())
   useInvalidationChannel(
-    ['product.updated', 'product.created', 'product.deleted', 'stock.adjusted', 'listing.updated'],
+    ['product.updated', 'product.created', 'product.deleted', 'stock.adjusted', 'listing.updated', 'listing.created', 'listing.deleted'],
     () => refetch(),
   )
 
@@ -523,7 +541,6 @@ function ProductsNextInner() {
   // One direction. The grid reports every change; "Clear" and every consuming bulk action ask
   // the grid to deselect, and the report comes back through the same event.
   const clearSelection = useCallback(() => {
-    setConfirmDelete(false)
     if (gridApi && !gridApi.isDestroyed()) gridApi.deselectAll()
   }, [gridApi])
   const onSelectionChanged = useCallback((e: { api: GridApi<ProductRow> }) => {
@@ -537,15 +554,30 @@ function ProductsNextInner() {
    * reach is stated instead of implied, and stated BEFORE the click rather than in the toast.
    */
   const selectionReach = useMemo(
-    () => selection.rows.filter((r) => r.parentId === null).reduce((n, r) => n + (r.childCount ?? 0), 0),
+    () => {
+      const parents = new Set(selection.rows.filter(row => row.parentId === null).map(row => row.id))
+      const children = selection.rows.filter(row => row.parentId !== null && parents.has(row.parentId)).length
+      return selection.rows.filter(row => parents.has(row.id)).reduce((n, row) => n + (row.childCount ?? 0), 0) - children
+    },
     [selection.rows],
   )
-  useEffect(() => {
-    if (selection.ids.length === 0 && confirmDelete) setConfirmDelete(false)
-  }, [selection.ids.length, confirmDelete])
 
   // ── Mutations ─────────────────────────────────────────────────
   const { busy, setStatusBulk, duplicateBulk, softDeleteBulk } = useBulkActions({ toast, onConsumed: clearSelection })
+  const deleteSelected = useCallback(async () => {
+    if (!gridApi || gridApi.isDestroyed() || busy) return
+    const reviewed = readSelection(gridApi)
+    if (!reviewed.ids.length) return
+    if (reviewed.ids.length > BULK_MAX) { toast(`Select ${BULK_MAX} or fewer products.`, 'danger'); return }
+    const children = reviewed.rows.filter(row => row.parentId === null).reduce((n, row) => n + (row.childCount ?? 0), 0)
+    const confirmed = await deleteConfirm.ask({
+      level: 'confirm', title: `Move ${reviewed.ids.length} selected ${reviewed.ids.length === 1 ? 'product' : 'products'} to the recycle bin?`,
+      reach: 'local-destructive', reversal: { verb: 'Restore from recycle bin', fidelity: 'exact' },
+      consequences: reviewed.rows.map(row => `${row.sku} — ${row.name}`),
+      ...(children > 0 ? { sideEffects: [`Includes ${children} variations belonging to the selected families.`] } : {}),
+    })
+    if (confirmed) await softDeleteBulk(reviewed.ids)
+  }, [gridApi, busy, deleteConfirm.ask, softDeleteBulk, toast])
   /**
    * One write per field that was ticked, in order, each reporting its own outcome — a status
    * flip that lands and a tag write that fails must not share one green toast.
@@ -914,7 +946,7 @@ function ProductsNextInner() {
     const isGrouped = !!payload.gridState.rowGroup?.groupColIds.length
     api.setGridOption('treeData', !isGrouped)
     setGrouped(isGrouped)
-    api.setState(payload.gridState)
+    api.setState(withoutProductSelection(payload.gridState), ['rowSelection'])
     restorePageState(payload.page)
     reconcileLocks(api, composeLocks(payload.page.lockedColumns ?? DEFAULT_LOCKED_COLUMNS))
     gridViews.markDirty()
@@ -1015,7 +1047,7 @@ function ProductsNextInner() {
       { tileKey: null, label: 'Total', value: stats?.total ?? '—', hint: 'all statuses', accent: 'var(--nds-primary)' },
       { tileKey: 'active', label: 'Active', value: stats?.active ?? '—', hint: 'live & selling', accent: 'var(--nds-success)' },
       { tileKey: 'out-of-stock', label: 'Out of stock', value: stats?.outOfStock ?? '—', hint: 'no available units', accent: 'var(--nds-danger)' },
-      { tileKey: 'attention', label: 'Needs attention', value: needsAttentionCount ?? '—', hint: 'photos · GTIN · description', accent: 'var(--nds-warning)' },
+      { tileKey: 'attention', label: 'Needs attention', value: needsAttentionCount ?? '—', hint: 'missing photos', accent: 'var(--nds-warning)' },
     ]
     return tiles.map((t) => ({
       label: t.label,
@@ -1225,12 +1257,11 @@ function ProductsNextInner() {
     () => ({
       mode: 'multiRow',
       checkboxes: true,
-      headerCheckbox: true,
+      headerCheckbox: false,
       enableClickSelection: false,
       // Select-all reaches what is LOADED on this page. Under SSRM the alternative — selecting every
       // row the query matches, loaded or not — is a larger promise that the bulk endpoints (capped
       // at 200) could not keep.
-      selectAll: 'currentPage',
       // A group row cannot be selected, and the footer is arithmetic, not a product.
       isRowSelectable: (n) => !isGroupRow(n.data) && !isFamilyFooter(n.data),
       hideDisabledCheckboxes: true,
@@ -1238,7 +1269,7 @@ function ProductsNextInner() {
     [],
   )
   // The DS grid's checkbox column measures 43px; AG's default is 50.
-  const selectionColumnDef = useMemo(() => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false }), [])
+  const selectionColumnDef = useMemo(() => ({ width: gridGeometry.selectColW, maxWidth: gridGeometry.selectColW, resizable: false, headerComponent: LoadedRowsSelectionHeader }), [])
   const columnDialog = useMemo(() => ({ customise: openCustomize, reset: resetColumns }), [openCustomize, resetColumns])
   // AG's own words for the aggregate submenu; the operator sees what it does.
   const localeText = useMemo(() => ({ valueAggregation: 'Total on group rows' }), [])
@@ -1268,10 +1299,10 @@ function ProductsNextInner() {
    */
   const initialState = useMemo<GridState>(
     () =>
-      initialPayloadRef.current?.gridState ?? gridViews.initialState ?? {
+      withoutProductSelection(initialPayloadRef.current?.gridState ?? gridViews.initialState ?? {
         sort: { sortModel: [{ colId: AG_AUTO_COL, sort: 'asc' }] },
         columnVisibility: { hiddenColIds: columns.filter((c) => c.defaultHidden).map((c) => c.key) },
-      },
+      }),
     [gridViews.initialState, columns, layoutBootstrapped],
   )
 
@@ -1442,15 +1473,9 @@ function ProductsNextInner() {
               <Button size="sm" disabled={busy} onClick={() => duplicateBulk(selection.ids)} title="Duplicate">
                 <Copy size={13} /> <SelectionLabel>Duplicate</SelectionLabel>
               </Button>
-              {confirmDelete ? (
-                <Button size="sm" variant="danger" disabled={busy} onClick={() => { setConfirmDelete(false); void softDeleteBulk(selection.ids) }}>
-                  Delete {selectedCount + selectionReach}
-                </Button>
-              ) : (
-                <Button size="sm" disabled={busy} onClick={() => setConfirmDelete(true)} title="Delete">
-                  <Trash2 size={13} /> <SelectionLabel>Delete</SelectionLabel>
-                </Button>
-              )}
+              <Button size="sm" disabled={busy} onClick={() => void deleteSelected()} title="Delete">
+                <Trash2 size={13} /> <SelectionLabel>Delete</SelectionLabel>
+              </Button>
               <Menu
                 label={<MoreHorizontal size={15} />}
                 items={moreActionItems}
@@ -1598,6 +1623,7 @@ function ProductsNextInner() {
       )}
 
       <BulkEditModal open={bulkEditOpen} onClose={() => setBulkEditOpen(false)} selection={selection.rows} busy={busy} onSubmit={applyBulkEdit} />
+      {deleteConfirm.element}
 
       {/* Tag dialog — the selection's tags, tri-state across the rows it covers. */}
       <TagDialog

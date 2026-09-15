@@ -144,7 +144,7 @@ export function groupRowLabel(g: ProductGroupRow, columns: readonly PageColumn[]
 }
 
 function channelsOf(row: ProductRow, activeChannels: readonly string[]): CoverageChannel[] {
-  return activeChannels.map((ch) => {
+  return [...new Set([...activeChannels, ...Object.keys(row.coverage ?? {})])].map((ch) => {
     const cov = row.coverage?.[ch as Channel] ?? null
     if (!cov || cov.total === 0) return { channel: ch, state: 'missing' as const, detail: 'not listed' }
     if (cov.error > 0) return { channel: ch, state: 'issues' as const, detail: `${cov.error} error${cov.error > 1 ? 's' : ''}` }
@@ -302,27 +302,30 @@ export function buildPageColumns({ activeChannels, onDuplicate, onOpenInventory,
       aggregate: ['sum', 'avg', 'min', 'max'],
       groupKey: 'products-next:commerce', group: 'Commerce',
       label: `Sales (${SALES_WINDOW_DAYS}d)`,
-      prefsLabel: 'Sales',
-      width: 110,
+      width: 144,
       sortable: true,
       value: (row) => row.sales?.revenueCents ?? null,
       // CENTS on the wire, euros on screen (`moneyColumn`). Without this the file says 15900 where
       // the grid says €159.00 — the unit trap this codebase has been bitten by before.
       exportValue: (row) => (row.sales?.revenueCents == null ? null : row.sales.revenueCents / 100),
       groupValue: (g) => g.sales?.revenueCents ?? null,
-      preset: moneyColumn<ProductRow>('sales.revenueCents', { zero: 'dash', zeroTitle: noSalesTitle }),
+      preset: {
+        ...moneyColumn<ProductRow>('sales.revenueCents', { zero: 'dash', zeroTitle: noSalesTitle }), minWidth: 144,
+        headerTooltip: 'Order line sales in EUR, by purchase date. Cancelled orders are excluded.',
+        tooltipValueGetter: p => p.data?.sales && p.data.sales.revenueCents == null
+          ? 'EUR total unavailable: this period includes orders in another currency.' : undefined,
+      },
     },
     {
       key: 'units',
       aggregate: ['sum', 'avg', 'min', 'max'],
       groupKey: 'products-next:commerce', group: 'Commerce',
       label: `Units (${SALES_WINDOW_DAYS}d)`,
-      prefsLabel: 'Units',
-      width: 92,
+      width: 128,
       sortable: true,
       value: (row) => row.sales?.units ?? null,
       groupValue: (g) => g.units ?? null,
-      preset: integerColumn<ProductRow>('sales.units', { zero: 'dash', zeroTitle: noUnitsTitle }),
+      preset: { ...integerColumn<ProductRow>('sales.units', { zero: 'dash', zeroTitle: noUnitsTitle }), minWidth: 128 },
     },
     {
       key: 'price',

@@ -52,6 +52,7 @@ export async function fetchAllRowsForExport<TRow>({
   const rows: TRow[] = []
   let total = 0
   let startRow = 0
+  const seen = new Set<unknown>()
 
   for (;;) {
     const body = buildGridRequest(context, {
@@ -77,13 +78,19 @@ export async function fetchAllRowsForExport<TRow>({
     const data = (await res.json()) as ProductsGridResponse<TRow>
 
     const batch = data.rows ?? []
-    total = data.rowCount ?? batch.length
+    const nextTotal = data.rowCount ?? batch.length
+    if (startRow > 0 && nextTotal !== total) throw new Error('The catalog changed during export. Please export again.')
+    total = nextTotal
+    for (const row of batch) {
+      const id = (row as { id: unknown }).id
+      if (seen.has(id)) throw new Error('The catalog changed during export. Please export again.')
+      seen.add(id)
+    }
     rows.push(...batch)
     onProgress?.(rows.length, total)
 
-    // Three ways to be done, and the short block is the authoritative one: a server that answers
-    // fewer rows than asked has no more to give, whatever its count said.
-    if (batch.length < CHUNK) break
+    // A short response with more advertised rows is incomplete, not a successful full export.
+    if (batch.length < CHUNK && rows.length < total) throw new Error('The export is incomplete. Please try again.')
     if (rows.length >= total) break
     if (rows.length >= EXPORT_ROW_CAP) return { rows: rows.slice(0, EXPORT_ROW_CAP), total, truncated: true }
 

@@ -97,11 +97,11 @@ export type ProductRow = {
    * window. Those are different answers and the grid renders them differently — a measured zero
    * is a fact about the product, an absent field is a fact about the request.
    *
-   * ROLLED UP on a parent row: every ProductProfitDaily row in this database attaches to a
-   * child, none to a parent, so a parent's figure is the sum across its variations. `days`
+   * ROLLED UP on a parent row: linked order lines include the parent and its variations.
+   * Revenue is null when a EUR total cannot be represented because another currency is present. `days`
    * travels with it so a column can label its own window.
    */
-  sales?: { units: number; revenueCents: number; days: number } | null
+  sales?: { units: number; revenueCents: number | null; days: number } | null
   coverage: Record<
     string,
     { live: number; draft: number; error: number; total: number }

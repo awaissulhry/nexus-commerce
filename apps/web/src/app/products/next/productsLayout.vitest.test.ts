@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { PreferencesColumnSpec, PreferencesValue } from '@/design-system/patterns/PreferencesModal'
 import { AG_AUTO_COL, AG_SELECTION_COL, type PrefsBridgeOptions } from '@/design-system/grid/columns/columnPrefs'
 import type { GridViewPayload } from '@/design-system/grid/hooks/useGridViews'
-import { buildProductsLayout, readProductsLayout } from './productsLayout'
+import { buildProductsLayout, readProductsLayout, withoutProductSelection } from './productsLayout'
 
 const specs: PreferencesColumnSpec[] = [
   { key: 'product', label: 'Product', group: 'Identity', groupKey: 'identity', defaultLocked: true },
@@ -61,6 +61,14 @@ function freeze<T>(value: T): T {
 }
 
 describe('buildProductsLayout', () => {
+  it('never restores previous bulk targets from legacy views', () => {
+    for (const rowSelection of [['old-product'], { selectAll: true, toggledNodes: ['old-exception'] }]) {
+      const state = { ...snapshot().gridState, rowSelection }
+      expect(withoutProductSelection(state).rowSelection).toBeUndefined()
+      expect(withoutProductSelection(state).sort).toEqual(state.sort)
+      expect(state.rowSelection).toEqual(rowSelection)
+    }
+  })
   it('stages a complete JSON-roundtrippable group layout without mutating grid, page or draft', () => {
     const before = freeze(snapshot())
     const preferences = freeze(draft({ rowGroups: [], aggregations: {} }))

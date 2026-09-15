@@ -20,6 +20,7 @@
  * a roll-up, paid only when a roll-up is asked for.
  */
 import { Prisma } from '@prisma/client'
+import { salesRollupCte } from './sales-rollup.js'
 import {
   GRID_VALUE_COLUMNS,
   NULL_GROUP_KEY,
@@ -62,6 +63,11 @@ export function needsRollup(g: GroupingRequest): boolean {
 }
 
 export async function listProductGroups(q: ProductListQuery, g: GroupingRequest): Promise<GroupLevelResult> {
+  // SQL coalesces empty and null labels into the same expandable "No value" group.
+  if (!needsRollup(g) && g.groupColId !== 'status') {
+    const { where } = await resolveProductsScope(q)
+    if (await prisma.product.count({ where: { AND: [where, { [g.groupColId]: '' }] } })) return listGroupsWithRollups(q, g)
+  }
   return needsRollup(g) ? listGroupsWithRollups(q, g) : listGroupsFromColumns(q, g)
 }
 
@@ -122,12 +128,12 @@ async function listGroupsFromColumns(q: ProductListQuery, g: GroupingRequest): P
 const MEASURE_SQL: Record<GridValueColumnId, Prisma.Sql> = {
   available: Prisma.sql`st.qty`,
   price: Prisma.sql`b."basePrice"`,
-  sales: Prisma.sql`s.revenue`,
+  sales: Prisma.sql`s."revenueCents"`,
   units: Prisma.sql`s.units`,
 }
 const GROUP_KEY_SQL: Record<GridGroupColumnId, Prisma.Sql> = {
-  brand: Prisma.sql`b.brand`,
-  productType: Prisma.sql`b."productType"`,
+  brand: Prisma.sql`NULLIF(b.brand, '')`,
+  productType: Prisma.sql`NULLIF(b."productType", '')`,
   status: Prisma.sql`b.status::text`,
 }
 
@@ -148,12 +154,17 @@ async function listGroupsWithRollups(q: ProductListQuery, g: GroupingRequest): P
     : await prisma.product.findMany({ where, select: { id: true } })
   if (candidates.length === 0) return { rows: [], rowCount: 0 }
   const ids = candidates.map((c) => c.id)
-  const since = new Date()
-  since.setUTCDate(since.getUTCDate() - salesDays)
+  const until = q.asOf ?? new Date()
+  const since = new Date(until.getTime() - salesDays * 86_400_000)
 
   // Every requested aggregate as its own column, named `<colId>_<func>` so the row can be read back.
   const aggregations = dedupe(g.aggregations)
-  const aggColumns = aggregations.map((a) => Prisma.sql`${aggSql(a.func, MEASURE_SQL[a.colId])} AS ${Prisma.raw(`"${a.colId}_${a.func}"`)}`)
+  const aggColumns = aggregations.map((a) => {
+    const aggregate = aggSql(a.func, MEASURE_SQL[a.colId])
+    const value = a.colId === 'sales' && a.func !== 'count'
+      ? Prisma.sql`CASE WHEN COUNT(*) FILTER (WHERE s."revenueCents" IS NULL) > 0 THEN NULL ELSE ${aggregate} END` : aggregate
+    return Prisma.sql`${value} AS ${Prisma.raw(`"${a.colId}_${a.func}"`)}`
+  })
   const selectAggs = aggColumns.length ? Prisma.sql`, ${Prisma.join(aggColumns, ', ')}` : Prisma.empty
   const keySql = GROUP_KEY_SQL[g.groupColId]
   const dir = g.sort.dir === 'desc' ? Prisma.sql`DESC` : Prisma.sql`ASC`
@@ -169,24 +180,13 @@ async function listGroupsWithRollups(q: ProductListQuery, g: GroupingRequest): P
       JOIN "Product" p ON p.id = own.id
     ),
     ${stockRollupCte(ids)},
-    sales AS (
-      SELECT own.id,
-             COALESCE(SUM(CASE WHEN o.id IS NULL THEN 0 ELSE oi.quantity * oi.price END), 0) AS revenue,
-             COALESCE(SUM(CASE WHEN o.id IS NULL THEN 0 ELSE oi.quantity END), 0) AS units
-      FROM unnest(${ids}::text[]) AS own(id)
-      LEFT JOIN "Product" c ON c.id = own.id OR c."parentId" = own.id
-      LEFT JOIN "OrderItem" oi ON oi."productId" = c.id
-      LEFT JOIN "Order" o ON o.id = oi."orderId"
-        AND o."createdAt" >= ${since}
-        AND o.status <> 'CANCELLED'
-      GROUP BY own.id
-    )
+    ${salesRollupCte(ids, since, until)}
     SELECT ${keySql} AS key,
            COUNT(*)::int AS child_count,
            COUNT(*) OVER ()::int AS total_groups
            ${selectAggs}
     FROM base b
-    LEFT JOIN sales s ON s.id = b.id
+    LEFT JOIN salesq s ON s.id = b.id
     LEFT JOIN stockq st ON st.id = b.id
     GROUP BY ${keySql}
     ORDER BY ${orderBy}
@@ -214,8 +214,8 @@ async function listGroupsWithRollups(q: ProductListQuery, g: GroupingRequest): P
     if (price !== undefined) row.basePrice = price
     const revenue = read('sales')
     const units = read('units')
-    // Revenue aggregates are in EUR (the SUM of quantity × price); the cells read cents.
-    if (revenue !== undefined) row.sales = { revenueCents: Math.round(revenue * 100), units: units ?? 0, days: salesDays }
+    // Aggregate the same cents the individual rows carry; do not drop unknown currency totals.
+    if (aggregations.some(a => a.colId === 'sales')) row.sales = { revenueCents: revenue ?? null, units: units ?? 0, days: salesDays }
     if (units !== undefined) row.units = units
     return row
   })

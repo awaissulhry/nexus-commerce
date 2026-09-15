@@ -4245,3 +4245,5 @@ Correction to the preceding open-gap note: the Owner approved the ScopeBar/ModeN
 
 ### PR.6 completed verification — 2026-09-13
 The approved accessibility follow-up is complete: held ScopeBar wrapper/ring is readable at390px in both themes, and compact PresenceMark/SheetStatuses retain canonical explanations. Final17 guards exit0, web/Factory tsc0, Node110files1367tests0, web260/260 and Factory191/191 declarations matched. No baseline increase. Full grounds/limitations, including the swatch checker’s21 reported but unenforced state-tint combinations, are recorded in docs/audits/2026-09-13-presence/pr6/README.md; historical open-gap paragraphs above are superseded by this receipt.
+
+- Resolved 2026-09-15: SSRM has no native current-page select-all; its global rule could add newly loaded products to destructive actions. Added `LoadedRowsSelectionHeader` using Checkbox, exported and catalogued in Web and mirrored in Factory.

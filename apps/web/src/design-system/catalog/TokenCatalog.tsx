@@ -15,7 +15,7 @@ import { PresenceExample } from './PresenceExample'
 import { ScrollingTabsExample } from './ScrollingTabsExample'
 import { MappingStatusExample } from './MappingStatusExample'
 import { useMemo, useState, type ComponentProps, type ReactNode } from 'react'
-import { GridCard, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
+import { GridCard, LoadedRowsSelectionHeader, NexusGrid, gridSelection, integerColumn, moneyColumn, percentColumn, statusColumn, textColumn, type ColDef } from '../grid'
 import { PROJECTION_STATES, ProjectionCell, projectionMeta } from '../grid/renderers'
 import { Search, Inbox, Home, Megaphone, BarChart3, Settings, Settings2, Filter, Download, Trash2, Columns } from 'lucide-react'
 import {
@@ -381,6 +381,7 @@ const GDS_ROWS: GdsRow[] = [
 ]
 const GDS_TOTALS: GdsRow[] = [{ id: '__total', campaign: 'Total', status: 'ACTIVE', spendCents: GDS_ROWS.reduce((a, r) => a + r.spendCents, 0), salesCents: GDS_ROWS.reduce((a, r) => a + r.salesCents, 0), acos: null, clicks: GDS_ROWS.reduce((a, r) => a + r.clicks, 0) }]
 const GDS_ROW_ID = (p: { data: GdsRow }) => p.data.id
+const GDS_SELECTION_COLUMN = { headerComponent: LoadedRowsSelectionHeader }
 const GDS_COLS: ColDef<GdsRow>[] = [
   { colId: 'campaign', headerName: 'Campaign', flex: 1, minWidth: 260, ...textColumn<GdsRow>('campaign') },
   { colId: 'status', headerName: 'Status', width: 96, ...statusColumn<GdsRow>('status', { tones: { ACTIVE: { tone: 'success', label: 'Active' }, PAUSED: { tone: 'neutral', label: 'Paused' } } }) },
@@ -957,7 +958,7 @@ export function TokenCatalog() {
         <FormulaEditorExample />
 
         <GridCard toolbar={<GridToolbar count={<><b>{GDS_ROWS.length}</b> campaigns</>} />}>
-          <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} pinnedBottomRowData={GDS_TOTALS} />
+          <NexusGrid<GdsRow> density="cozy" domLayout="autoHeight" rowData={GDS_ROWS} getRowId={GDS_ROW_ID} columnDefs={GDS_COLS} rowSelection={gdsSelection} selectionColumnDef={GDS_SELECTION_COLUMN} pinnedBottomRowData={GDS_TOTALS} />
         </GridCard>
       </section>
 

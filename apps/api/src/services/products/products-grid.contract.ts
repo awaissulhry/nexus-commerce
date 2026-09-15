@@ -197,7 +197,7 @@ export function gridRequestToListQuery(body: ProductsGridRequest | undefined, lo
   const status = set('status')
   if (tile === 'active' && status.length && !status.includes('ACTIVE')) q.status = '__none__'
   else list('status', tile === 'active' ? ['ACTIVE'] : status)
-  list('channels', set('channels'))
+  list('listedChannels', set('channels'))
   list('brands', set('brand'))
   list('productTypes', set('productType'))
   const tagIds: string[] = []

@@ -35,27 +35,25 @@ let scheduledTask: ReturnType<typeof cron.schedule> | null = null
 
 export async function runReadCacheReconcile(): Promise<string> {
   return recordCronRun(JOB, async () => {
-      const [liveProducts, cacheRows, listings] = await Promise.all([
+      const [products, cacheRows, listings] = await Promise.all([
         prisma.product.findMany({
-          where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, _count: { select: { children: true, channelListings: true } } },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, deletedAt: true, _count: { select: { children: true, channelListings: true } } },
         }),
         prisma.productReadCache.findMany({
-          where: { deletedAt: null },
-          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, childCount: true, channelCount: true, cacheRefreshedAt: true },
+          select: { id: true, totalStock: true, status: true, name: true, sku: true, basePrice: true, isParent: true, parentId: true, productType: true, version: true, updatedAt: true, deletedAt: true, childCount: true, channelCount: true, cacheRefreshedAt: true },
         }),
         prisma.channelListing.findMany({ where: { product: { deletedAt: null } }, select: { productId: true, updatedAt: true } }),
       ])
       const latestListing = new Map<string, Date>()
       for (const listing of listings) if (!latestListing.has(listing.productId) || latestListing.get(listing.productId)! < listing.updatedAt) latestListing.set(listing.productId, listing.updatedAt)
       const cacheById = new Map(cacheRows.map((c) => [c.id, c]))
-      const liveIds = new Set(liveProducts.map((p) => p.id))
+      const productIds = new Set(products.map((p) => p.id))
 
       // Products that are missing from the cache or whose projection drifted.
       const drifted: string[] = []
       let missing = 0
       let stale = 0
-      for (const p of liveProducts) {
+      for (const p of products) {
         const c = cacheById.get(p.id)
         if (!c) {
           missing++
@@ -65,29 +63,19 @@ export async function runReadCacheReconcile(): Promise<string> {
           drifted.push(p.id)
         }
       }
-      // Cache rows whose product is gone or soft-deleted — refresh() prunes them.
-      const orphans = cacheRows.filter((c) => !liveIds.has(c.id)).map((c) => c.id)
+      // Cache rows whose product was permanently removed; soft-deleted rows retain their projection.
+      const orphans = cacheRows.filter((c) => !productIds.has(c.id)).map((c) => c.id)
 
       const toHeal = [...drifted, ...orphans].slice(0, MAX_HEAL_PER_RUN)
       if (toHeal.length === 0) return 'ok — no drift'
 
-      // Bounded concurrency so we never burst the connection pool.
-      const CONCURRENCY = 10
+      // A single batch avoids serializable refreshes conflicting over shared parents.
+      const BATCH_SIZE = 100
       let healed = 0
-      for (let i = 0; i < toHeal.length; i += CONCURRENCY) {
-        const slice = toHeal.slice(i, i + CONCURRENCY)
-        await Promise.all(
-          slice.map((id) =>
-            productReadCacheService.refresh(id).then(
-              () => { healed++ },
-              (err) =>
-                logger.warn('read-cache-reconcile: refresh failed', {
-                  id,
-                  err: err instanceof Error ? err.message : String(err),
-                }),
-            ),
-          ),
-        )
+      for (let i = 0; i < toHeal.length; i += BATCH_SIZE) {
+        const slice = toHeal.slice(i, i + BATCH_SIZE)
+        await productReadCacheService.refreshMany(slice)
+        healed += slice.length
       }
 
       const capped = drifted.length + orphans.length > MAX_HEAL_PER_RUN

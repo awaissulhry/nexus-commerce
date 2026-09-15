@@ -11,6 +11,11 @@ import { describe, it, expect } from 'vitest'
 import { __statsCacheKeyForTest as key } from './list-products.service.js'
 
 describe('stats cache key', () => {
+  it('invalidates KPI totals immediately after a product deletion or restoration', () => {
+    const scope = { where: { deletedAt: null }, cacheWhere: {}, useCache: true }
+    expect(key({ ...scope, revision: '18:1000' })).not.toBe(key({ ...scope, revision: '14:1000' }))
+    expect(key({ ...scope, revision: '18:1000' })).not.toBe(key({ ...scope, revision: '18:2000' }))
+  })
   it('is independent of object key insertion order', () => {
     // The same filter built by two code paths must share one entry. JSON.stringify follows
     // insertion order, so this is exactly the case a naive key gets wrong.

@@ -69,7 +69,7 @@ describe("column filters — AG's filterModel", () => {
       productType: { filterType: 'set', values: ['COAT'] },
       tags: { filterType: 'set', values: ['Bestseller', 'Ghost'] },
     } } })
-    expect(query).toMatchObject({ status: 'ACTIVE,DRAFT', channels: 'AMAZON', brands: 'XAVIA', productTypes: 'COAT', tags: 'tag_1' })
+    expect(query).toMatchObject({ status: 'ACTIVE,DRAFT', listedChannels: 'AMAZON', brands: 'XAVIA', productTypes: 'COAT', tags: 'tag_1' })
     expect(unsupported).toEqual(['tag:Ghost'])
   })
   it('number filters become min/max in every form AG can send', () => {

@@ -1,3 +1,7 @@
+## Product selection — 2026-09-15
+
+Added `LoadedRowsSelectionHeader`: a shared Checkbox header that selects explicit loaded rows without an implicit server-wide selection. Checked/mixed state follows loaded rows as groups expand. Mirrored in Factory.
+
 ## VP.F Variants final pass — 2026-09-11
 
 Added SummaryTable for compact drawer comparisons and OrderedList.keyboardGrip/compact for 28px rows with drag plus keyboard order. BulkActionBar Clear now composes the shared sm Button. Sheet toolbars use one 40px band. Projection Needs a value uses the shared row missing/warning tone. Semantic tokens cover light/dark.

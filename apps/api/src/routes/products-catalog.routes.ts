@@ -42,16 +42,12 @@ const healthCache = new TtlCache<unknown>({
 async function refreshCacheRows(productIds: readonly string[]): Promise<void> {
   if (productIds.length === 0) return
   const unique = Array.from(new Set(productIds))
-  await Promise.all(
-    unique.map((id) =>
-      productReadCacheService.refresh(id).catch((err) => {
-        logger.warn('[products-catalog] cache refresh failed', {
-          productId: id,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }),
-    ),
-  )
+  await productReadCacheService.refreshMany(unique).catch((err) => {
+    logger.warn('[products-catalog] cache refresh failed', {
+      productIds: unique,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -166,12 +162,13 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         }>>`
           SELECT
             count(*)::bigint AS total,
-            count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id))::bigint AS missing_photos,
+            count(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM "ProductImage" i WHERE i."productId" = p.id AND i."mediaType" = 'IMAGE'))::bigint AS missing_photos,
             count(*) FILTER (WHERE p.description IS NULL OR p.description = '')::bigint AS missing_description,
             count(*) FILTER (WHERE p.brand IS NULL OR p.brand = '')::bigint AS missing_brand,
             count(*) FILTER (WHERE p.gtin IS NULL OR p.gtin = '')::bigint AS missing_gtin
           FROM "Product" p
           WHERE p."parentId" IS NULL AND p."deletedAt" IS NULL
+            AND p."productType" IS DISTINCT FROM 'EBAY_LISTING_SHELL'
         `,
         // W2.12 — Family facet. groupBy familyId on top-level non-soft-deleted
         // rows; null bucket counted separately so the FilterBar can show
@@ -1548,13 +1545,14 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     target: Date | null,
     request: any,
     reply: any,
+    maxProducts = 200,
   ) => {
     if (productIds.length === 0) {
       return reply.code(400).send({ error: 'productIds[] required' })
     }
-    if (productIds.length > 200) {
+    if (productIds.length > maxProducts) {
       return reply.code(400).send({
-        error: `max 200 products per call (got ${productIds.length})`,
+        error: `max ${maxProducts} products per call (got ${productIds.length})`,
       })
     }
     const actor = userIdFor(request)
@@ -1572,6 +1570,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
         target ? r.deletedAt === null : r.deletedAt !== null,
       )
       if (eligible.length === 0) {
+        await productReadCacheService.refreshInTransaction(tx, productIds)
         return { changed: 0, skipped: rows.length }
       }
       const updated = await tx.product.updateMany({
@@ -1591,8 +1590,11 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           metadata: { sku: r.sku, source: 'products-bulk' },
         })),
       })
+      // Commit the bin state and its grid projection together. Parallel per-row refreshes
+      // conflicted and left deleted rows visible while the live count had already shrunk.
+      await productReadCacheService.refreshInTransaction(tx, productIds)
       return { changed: updated.count, skipped: rows.length - updated.count }
-    })
+    }, { timeout: 30_000 })
 
     return result
   }
@@ -1603,6 +1605,7 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       const body = request.body as { productIds?: string[]; includeChildren?: boolean }
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
+      if (productIds.length > 200) return reply.code(400).send({ error: 'max 200 selected products per call' })
       // Without this a soft-deleted parent leaves its variations alive but unreachable: the grid
       // lists `parentId: null` only, so they vanish from view while still existing, still
       // counted, still syncing. Zero such rows exist today, which is luck rather than design.
@@ -1612,11 +1615,10 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
           error: `that selection expands to ${targetIds.length} products — work in smaller batches`,
         })
       }
-      const r = await flipDeletedAt(targetIds, new Date(), request, reply)
+      const r = await flipDeletedAt(targetIds, new Date(), request, reply, FAMILY_MAX)
       // The helper sends its own 400 on validation; if we got here with
       // an undefined return, the reply is already mailed.
       if (r === undefined) return
-      await refreshCacheRows(targetIds)
       return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1629,7 +1631,6 @@ const productsCatalogRoutes: FastifyPluginAsync = async (fastify) => {
       const productIds = Array.isArray(body.productIds) ? body.productIds : []
       const r = await flipDeletedAt(productIds, null, request, reply)
       if (r === undefined) return
-      await refreshCacheRows(productIds)
       return { ok: true, ...r }
     } catch (err: any) {
       return reply.code(500).send({ error: err?.message ?? String(err) })

@@ -168,7 +168,7 @@ export interface ProductGroupRow {
   totalStock?: number
   basePrice?: number
   /** Present only when a Sales aggregate was asked for; `units` inside is the units aggregate or 0. */
-  sales?: { revenueCents: number; units: number; days: number }
+  sales?: { revenueCents: number | null; units: number; days: number }
   /** Present only when a Units aggregate was asked for. */
   units?: number
   brand?: string

@@ -1,4 +1,4 @@
-type ProductTruth = { id: string; totalStock: number; status: string; name: string; sku: string; basePrice: unknown; isParent: boolean; parentId: string | null; productType: string | null; version: number; updatedAt: Date; _count: { children: number; channelListings: number } }
+type ProductTruth = { id: string; totalStock: number; status: string; name: string; sku: string; basePrice: unknown; isParent: boolean; parentId: string | null; productType: string | null; version: number; updatedAt: Date; deletedAt: Date | null; _count: { children: number; channelListings: number } }
 type CachedTruth = Omit<ProductTruth, '_count'> & { childCount: number; channelCount: number; cacheRefreshedAt: Date }
 
 /** Compare source timestamps too: a reference/alias edit may leave name, price and stock unchanged. */
@@ -8,6 +8,7 @@ export function productCacheDrifted(product: ProductTruth, cache: CachedTruth, l
     cache.isParent !== (!product.parentId && (product.isParent || product._count.children > 0)) ||
     cache.parentId !== product.parentId || cache.productType !== product.productType ||
     cache.version !== product.version || cache.updatedAt.getTime() !== product.updatedAt.getTime() ||
+    (cache.deletedAt?.getTime() ?? null) !== (product.deletedAt?.getTime() ?? null) ||
     cache.childCount !== product._count.children || cache.channelCount !== product._count.channelListings ||
     !!latestListingAt && latestListingAt > cache.cacheRefreshedAt
 }

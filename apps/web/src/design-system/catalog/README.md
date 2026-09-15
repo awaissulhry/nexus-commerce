@@ -225,3 +225,5 @@ With Owner approval, existing danger/warning/formula text tokens now clear 7:1 a
 SheetStatuses accepts compact=true from the host’s existing last toolbar tier: one +N control retains every detail and danger announcement; default rendering remains at most three Pills. It defines no breakpoint.
 
 PresenceMark axis=intent|fact|both (default both) separates adjacent columns; compact=true moves the full canonical explanation into a keyboard-reachable InfoTip. Fact keeps AsOf; no vocabulary or freshness logic is duplicated.
+
+`LoadedRowsSelectionHeader` composes Checkbox for explicit loaded-row selection. Use it as `selectionColumnDef.headerComponent`, with `rowSelection.headerCheckbox: false`, for server grids. It excludes pinned, unloaded and unselectable rows. The Web Grid catalog specimen demonstrates checked/mixed/unchecked states. Verify Space toggling, select/clear, sorting, and newly expanded rows remaining unselected in light/dark layouts.

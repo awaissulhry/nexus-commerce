@@ -7,6 +7,12 @@ import { layoutFromPreferences } from '@/design-system/grid/views/columnLayout'
 import { isColumnsViewPayload, type SheetLayoutPayload } from '@/design-system/grid/views/viewPayload'
 import { composeLocks, isStructuralColumn, withStructuralLocks } from './columnLocks'
 
+/** Older views may contain row IDs or a server-wide select-all rule. Neither is a layout. */
+export function withoutProductSelection(state: GridState): GridState {
+  const { rowSelection: _selection, ...layout } = state
+  return layout
+}
+
 /** Stage the modal's confirmed layout for persistence before changing the running grid. */
 export function buildProductsLayout<TPage extends { lockedColumns: string[] }>(
   snapshot: GridViewPayload<TPage>,

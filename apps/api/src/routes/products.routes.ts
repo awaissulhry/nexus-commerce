@@ -1,3 +1,4 @@
+import { inDatabaseTransaction } from '../lib/database-context.js'
 import { PRIMARY_CONTENT_LOCALE } from '../services/pim/content-locale.js'
 import { normalizeLanguage } from '../services/pim/content-language.js'
 import { workspaceKey } from '@nexus/database/workspace-context'
@@ -15,7 +16,7 @@ import { auditLogService } from '../services/audit-log.service.js'
 import { idempotencyService } from '../services/idempotency.service.js'
 import { applyStockMovement } from '../services/stock-movement.service.js'
 import { listEtag, matches } from '../utils/list-etag.js'
-import { countProductStats, listProducts, markCacheReady, type ProductListQuery } from '../services/products/list-products.service.js'
+import { countProductStats, listProducts, type ProductListQuery } from '../services/products/list-products.service.js'
 import { gridRequestToListQuery, resolveGridLookups, type ProductsGridRequest, type ProductsGridResponse } from '../services/products/products-grid.contract.js'
 import { listProductGroups } from '../services/products/products-grid-groups.service.js'
 import { productEventService } from '../services/product-event.service.js'
@@ -145,7 +146,7 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: allowApiKeyScope('products:read'),
   }, async (request, reply) => {
     try {
-      const result = await listProducts(request.query, { etagMatches: (etag) => matches(request, etag) })
+      const result = await inDatabaseTransaction(prisma, () => listProducts({ ...request.query, asOf: new Date() }, { etagMatches: (etag) => matches(request, etag) }))
       reply.header('ETag', result.etag)
       reply.header('Cache-Control', 'private, max-age=0, must-revalidate')
       if (result.status === 304) return reply.code(304).send()
@@ -168,20 +169,23 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     preHandler: allowApiKeyScope('products:read'),
   }, async (request, reply) => {
     try {
-      const body = request.body
-      const lookups = await resolveGridLookups(body)
-      const { query, unsupported, grouping } = gridRequestToListQuery(body, lookups)
-      if (grouping) {
-        // A grouped level: group rows over the same scope, and the KPI stats of that scope.
-        const [level, stats] = await Promise.all([listProductGroups(query, grouping), countProductStats(query)])
-        const response: ProductsGridResponse = { rows: level.rows, rowCount: level.rowCount, stats, salesUnattributed: null, unsupported }
+      return await inDatabaseTransaction(prisma, async () => {
+        const body = request.body
+        const lookups = await resolveGridLookups(body)
+        const { query, unsupported, grouping } = gridRequestToListQuery(body, lookups)
+        query.asOf = new Date()
+        if (grouping) {
+          // A grouped level: group rows over the same scope, and the KPI stats of that scope.
+          const [level, stats] = await Promise.all([listProductGroups(query, grouping), countProductStats(query)])
+          const response: ProductsGridResponse = { rows: level.rows, rowCount: level.rowCount, stats, salesUnattributed: null, unsupported }
+          return response
+        }
+        const result = await listProducts(query)
+        if (result.status !== 200) throw new Error('listProducts returned 304 without an ETag matcher')
+        const { products, total, stats, salesUnattributed } = result.body
+        const response: ProductsGridResponse = { rows: products, rowCount: total, stats, salesUnattributed, unsupported }
         return response
-      }
-      const result = await listProducts(query)
-      if (result.status !== 200) throw new Error('listProducts returned 304 without an ETag matcher')
-      const { products, total, stats, salesUnattributed } = result.body
-      const response: ProductsGridResponse = { rows: products, rowCount: total, stats, salesUnattributed, unsupported }
-      return response
+      })
     } catch (err: any) {
       fastify.log.error({ err }, '[products grid] failed')
       return reply.code(500).send({ error: err?.message ?? String(err) })
@@ -1198,9 +1202,6 @@ const productsRoutes: FastifyPluginAsync = async (fastify) => {
     async (_request, reply) => {
       try {
         const total = await productReadCacheService.backfillAll()
-        // Invalidate the module-level ready flag so the next request
-        // immediately uses the freshly populated cache.
-        markCacheReady()
         return { ok: true, total }
       } catch (err: any) {
         return reply.code(500).send({ error: err?.message ?? String(err) })
