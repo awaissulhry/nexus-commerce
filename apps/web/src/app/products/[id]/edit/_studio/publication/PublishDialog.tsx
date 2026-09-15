@@ -4,23 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { StudioPublishResult, StudioPublishReview, StudioPublishScope } from '@nexus/shared/studio-publication'
 import { Button, Select } from '@/design-system/primitives'
 import { Banner, Field, Modal, ProgressBar } from '@/design-system/components'
-import { getBackendUrl } from '@/lib/backend-url'
 import { usePermission } from '@/lib/auth/AuthProvider'
-import { useStudioProduct, useStudioSave, useStudioScope, useStudioDiscoveryFailure } from '../contracts'
-import { matchesPublicationReview, publicationDestinations, publicationScopeKey } from './model'
+import { useStudioProduct, usePublicationSave, useStudioScope, useStudioDiscoveryFailure } from '../contracts'
+import { matchesPublicationReview, publicationDestinations, publicationScopeKey, retainPublicationReceipt } from './model'
+import { publicationRequest as request } from './request'
 import styles from './publication.module.css'
 
-async function request<T>(path: string, method: 'GET' | 'POST', body?: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(`${getBackendUrl()}${path}`, { method, credentials: 'include', cache: 'no-store', signal,
-    ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) } : {}) })
-  const data = await response.json().catch(() => null)
-  if (!response.ok) throw Object.assign(new Error(data?.message ?? data?.error ?? `Publication request failed (${response.status}).`), { status: response.status })
-  if (!data) throw new Error('The publication response was empty. Check its status before trying again.')
-  return data as T
-}
-
-export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): void; unsavedEditor?: boolean }) {
-  const product = useStudioProduct(), studio = useStudioScope(), save = useStudioSave()
+export function PublishDialog({ onClose }: { onClose(): void }) {
+  const product = useStudioProduct(), studio = useStudioScope()
+  const { state: save, preparePublication, publicationBlocker } = usePublicationSave()
+  const canChangeEditor = studio.canChangeEditor
   const canPublish = usePermission('products.publish'), discoveryFailed = useStudioDiscoveryFailure()
   const current: StudioPublishScope | undefined = studio.scope !== 'master' && studio.market && studio.accountId
     ? { channel: studio.scope, marketplace: studio.market, accountId: studio.accountId, ...(studio.listingId ? { listingId: studio.listingId } : {}) } : undefined
@@ -34,7 +27,7 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
   const [locationId, setLocationId] = useState(''), [refresh, setRefresh] = useState(0)
   const [uncertain, setUncertain] = useState(false)
   const sending = useRef(false)
-  const blockedSave = unsavedEditor || save.kind === 'saving' || save.kind === 'error'
+  const blockedSave = save.kind === 'saving' || save.kind === 'error'
   const saveRevision = save.kind === 'saved' ? save.at : save.kind
   const base = `/api/products/${encodeURIComponent(product.id)}/studio-publication`
   const scopeKey = selectedScope ? publicationScopeKey(selectedScope) : null
@@ -52,7 +45,12 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
     if (!scope || blockedSave || !canPublish || discoveryFailed) { setBusy(null); return }
     const controller = new AbortController()
     setBusy('review')
-    void request<StudioPublishReview>(`${base}/preview`, 'POST', scope, controller.signal).then(data => {
+    void preparePublication(canChangeEditor).then(message => {
+      if (controller.signal.aborted) return null
+      if (message) throw new Error(message)
+      return request<StudioPublishReview>(`${base}/preview`, 'POST', scope, controller.signal)
+    }).then(data => {
+      if (!data) return
       if (controller.signal.aborted) return
       if (!matchesPublicationReview(data, product.id, scope)) throw new Error('The review does not match this product and destination. Refresh the review.')
       setReview(data)
@@ -61,14 +59,16 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
     }).catch(e => { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!controller.signal.aborted) setBusy(null) })
     return () => controller.abort()
-  }, [scope, base, product.id, blockedSave, saveRevision, canPublish, discoveryFailed, refresh])
+  }, [scope, base, product.id, blockedSave, saveRevision, canPublish, discoveryFailed, refresh, preparePublication, canChangeEditor])
 
   const acceptResult = (data: StudioPublishResult, id: string) => {
     if (data.id !== id || !Array.isArray(data.results) || !['SUBMITTED', 'ACCEPTED', 'VERIFIED', 'PARTIAL', 'FAILED', 'PUBLISHING', 'UNVERIFIED'].includes(data.status)) throw new Error('The publication result could not be verified. Check its status.')
-    setResult(data); setUncertain(['PUBLISHING', 'UNVERIFIED', 'SUBMITTED'].includes(data.status))
+    setResult(previous => retainPublicationReceipt(previous, data)); setUncertain(['PUBLISHING', 'UNVERIFIED', 'SUBMITTED'].includes(data.status))
   }
   const send = async () => {
     if (sending.current || !review?.id || !scope || !canPublish || blockedSave || uncertain || result || review.issues.some(i => i.severity === 'error')) return
+    const saveBlocker = publicationBlocker(canChangeEditor)
+    if (saveBlocker) { setReview(null); setError(saveBlocker); return }
     sending.current = true; setBusy('publish'); setError(null)
     const id = review.id
     try { acceptResult(await request<StudioPublishResult>(`${base}/${encodeURIComponent(id)}/submit`, 'POST', { locationId }), id) }
@@ -102,7 +102,7 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
     <div className={styles.body} aria-busy={!!busy}>
       {!canPublish && <Banner tone="warning" title="Publishing permission required">Your role needs product publishing access.</Banner>}
       {discoveryFailed && <Banner tone="danger" title="Destinations could not be loaded">Close this dialog and retry the studio’s connection read.</Banner>}
-      {blockedSave && <Banner tone={save.kind === 'error' ? 'danger' : 'info'} title={unsavedEditor || save.kind === 'error' ? 'Save your changes first' : 'Waiting for changes to save'}>{unsavedEditor ? 'Close this dialog and save or discard changes in the open editor, then publish again.' : save.kind === 'error' ? save.message : 'The review will load when autosave finishes.'}</Banner>}
+      {blockedSave && <Banner tone={save.kind === 'error' ? 'danger' : 'info'} title={save.kind === 'error' ? 'Save your changes first' : 'Waiting for changes to save'}>{save.kind === 'error' ? save.message : 'The review will load when autosave finishes.'}</Banner>}
       <Field label="Listing destination" hint="Choose the marketplace and connected account to receive this product.">
         <Select size="sm" value={selected} disabled={pending || uncertain || !!result} onChange={e => setSelected(e.target.value)}>
           <option value="">Choose a destination</option>
@@ -125,6 +125,7 @@ export function PublishDialog({ onClose, unsavedEditor = false }: { onClose(): v
         </div>
       </>}
       {result && <Banner tone={result.status === 'VERIFIED' ? 'success' : ['SUBMITTED', 'ACCEPTED', 'PUBLISHING'].includes(result.status) ? 'info' : 'warning'} title={result.status === 'VERIFIED' ? 'Publication verified' : result.status === 'ACCEPTED' ? 'Accepted by the channel' : result.status === 'SUBMITTED' ? 'Submitted to the channel' : result.status === 'PUBLISHING' ? 'Publication in progress' : 'Publication needs attention'}>{result.message}
+        {!!result.warnings?.length && <ul className={styles.issues}>{result.warnings.map(message => <li key={message}>{message}</li>)}</ul>}
         {result.results.some(r => r.status === 'FAILED') && <ul className={styles.issues}>{result.results.filter(r => r.status === 'FAILED').map(r => <li key={r.sku}><strong>{r.sku}: </strong>{r.message}</li>)}</ul>}
       </Banner>}
       {(error || blockers.length > 0) && !uncertain && !result && <div className={styles.actions}><Button size="sm" disabled={!!busy || blockedSave} onClick={() => setRefresh(n => n + 1)}>Refresh review</Button><Button size="sm" disabled={!!busy} onClick={onClose}>Back to editing</Button></div>}

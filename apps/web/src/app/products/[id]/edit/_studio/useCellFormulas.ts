@@ -25,6 +25,8 @@ import type { FormulaFunctionDoc, FormulaPreviewResponse } from '@/design-system
 import { getBackendUrl } from '@/lib/backend-url'
 import { columnLanguages, languageField } from './sheet/languages'
 import { formulaReadKey } from './sheet/formulaColumns'
+import { useSaveReporter } from './contracts'
+import { reportedFormulaWrite } from './formulaWrites'
 
 export interface CellFormulaRow {
   productId: string
@@ -111,6 +113,7 @@ export interface CellFormulas {
 const key = (rowId: string, fieldKey: string) => `${rowId}::${fieldKey}`
 
 export function useCellFormulas({ productId, scope = 'master', channel = null, marketplace = null, market, locale, channelConnectionId, aliasKey, rowIds, columnKeys, rowScopes, writeFacts, onSettled, onValueSaved }: UseCellFormulasInput): CellFormulas {
+  const reporter = useSaveReporter()
   const coord = useMemo(() => ({ scope, channel, marketplace, market, locale, channelConnectionId, aliasKey }), [scope, channel, marketplace, market, locale, channelConnectionId, aliasKey])
   const columnsKey = JSON.stringify(columnKeys ?? [])
   const keys = useMemo(() => JSON.parse(columnsKey) as string[], [columnsKey])
@@ -198,7 +201,7 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     return res.ok ? body : { ok: false, error: body?.error ?? 'Could not check the formula.' }
   }, [target])
 
-  const commit = useCallback((rowId: string, fieldKey: string, change: { expr: string } | { value: unknown }) => queue.enqueue(rowId, async () => {
+  const commit = useCallback((rowId: string, fieldKey: string, change: { expr: string } | { value: unknown }) => reportedFormulaWrite(reporter, rowId, fieldKey, () => queue.enqueue(rowId, async () => {
     const destination = target(rowId, fieldKey)
     const literal = 'value' in change
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(destination.productId)}${literal ? '/value' : ''}`, {
@@ -217,17 +220,17 @@ export function useCellFormulas({ productId, scope = 'master', channel = null, m
     const result = literal ? { ok: true } : formulaSaveOutcome(body)
     if (result.ok && live.current.coordinateKey === coordinateKey) live.current.onValueSaved?.(rowId, fieldKey, body.value)
     return result
-  }), [queue, target, coordinateKey, snapshotKey])
+  })), [reporter, queue, target, coordinateKey, snapshotKey])
   const save = useCallback((rowId: string, fieldKey: string, expr: string) => commit(rowId, fieldKey, { expr }), [commit])
   const replace = useCallback((rowId: string, fieldKey: string, value: unknown) => commit(rowId, fieldKey, { value }), [commit])
-  const pinOver = useCallback((rowId: string, fieldKey: string) => queue.enqueue(rowId, async () => {
+  const pinOver = useCallback((rowId: string, fieldKey: string) => reportedFormulaWrite(reporter, rowId, fieldKey, () => queue.enqueue(rowId, async () => {
     const { productId: canonicalId, ...destination } = target(rowId, fieldKey)
     const q = new URLSearchParams()
     for (const [name, value] of Object.entries(destination)) if (value != null) q.set(name, value)
     const res = await fetch(`${getBackendUrl()}/api/pim/formulas/product/${encodeURIComponent(canonicalId)}?${q}`, { method: 'DELETE', credentials: 'include' })
     const body = await res.json()
     return res.ok ? { ok: true } : { ok: false, error: body?.error ?? 'Could not remove the formula.' }
-  }), [queue, target])
+  })), [reporter, queue, target])
   void productId
   const sourceLabelFor = (fieldKey?: string) => {
     const language = languageField(fieldKey ?? '', locale).locale

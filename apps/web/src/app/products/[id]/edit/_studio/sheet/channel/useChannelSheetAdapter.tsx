@@ -3,6 +3,7 @@ import { describeValueSource } from './cellDetailsSource';
 import { reviewCopy } from './reviewCopy';
 import { classifyProvenance } from '@/design-system/grid/renderers/provenance';
 import { useSheetPreferences } from '../useSheetPreferences';
+import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
 import { useSheetChips } from '../useSheetChips';
 import { useSheetSaveStatus } from '../useSheetSaveStatus';
@@ -282,6 +283,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         });
     }
     const writer = writerRef.current;
+    useSheetPublicationGuard(writer, tracker, getGridApi);
     const { pending, refused, refusedRowIds, offline, saving, refreshCounts } = useSheetSaveStatus(writer, tracker, rows, data?.columns);
     useEffect(() => {
         writer.arm();

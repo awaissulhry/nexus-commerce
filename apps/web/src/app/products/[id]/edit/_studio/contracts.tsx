@@ -22,7 +22,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useId,
   useMemo,
   useRef,
   useState,
@@ -30,7 +29,6 @@ import {
 } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
-import { registerProfileChanges } from '@/lib/workspaces/unsaved-changes'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
@@ -43,14 +41,11 @@ import { connectionScopePolicy } from './presence/connection'
 import { channelLabel } from './scopes'
 import { primaryStudioAccount } from './accountScope'
 import { useWorkspaceDestination, type DestinationState } from './useWorkspaceDestination'
+import { closeStudioRecord } from './recordClose'
 import { createWorkspaceSaveStore } from './workspaceSave'
+import { useInFlightGuard } from './useInFlightGuard'
 import { studioChannelViewPatch } from './navigationHref'
 import { parseReadinessResponse, parseReadinessMatrix } from './readiness'
-import {
-  leaveConfirmMessage,
-  pendingWrites,
-  shouldInterceptLeave,
-} from './saveState'
 import { isViewChipVisible } from './viewChips'
 import {
   channelServesMarket,
@@ -275,6 +270,7 @@ interface SaveCtxValue {
   reporter: SaveReporter
   manualMessage: string | null
   setManualMessage(message: string | null): void
+  publication: Pick<ReturnType<typeof createWorkspaceSaveStore>, 'preparePublication' | 'publicationBlocker' | 'registerPublicationBarrier'> & { state: StudioSaveState }
 }
 
 const SaveCtx = createContext<SaveCtxValue | null>(null)
@@ -291,6 +287,13 @@ export function useStudioSave(): StudioSaveState {
   return v.state
 }
 
+/** Publication considers every destination edited in this product workspace. */
+export function usePublicationSave() {
+  const value = useContext(SaveCtx)
+  if (!value) throw new Error('usePublicationSave() outside <StudioStateProvider>')
+  return value.publication
+}
+
 /** What PES.2 / PES.3 call as each cell write leaves and lands. */
 export function useSaveReporter(): SaveReporter {
   const v = useContext(SaveCtx)
@@ -303,7 +306,9 @@ function useSaveMachine(scopeKey: string): SaveCtxValue {
   const [manualMessage, setManualMessage] = useState<string | null>(null)
   const store = useRef<ReturnType<typeof createWorkspaceSaveStore>>()
   if (!store.current) store.current = createWorkspaceSaveStore(() => redraw(n => n + 1))
-  return { ...store.current.forScope(scopeKey), manualMessage, setManualMessage }
+  return { ...store.current.forScope(scopeKey), manualMessage, setManualMessage,
+    publication: { preparePublication: store.current.preparePublication, publicationBlocker: store.current.publicationBlocker,
+      registerPublicationBarrier: store.current.registerPublicationBarrier, state: store.current.publicationState() } }
 }
 
 /* ── readiness ───────────────────────────────────────────────────────────────────────────── */
@@ -534,98 +539,6 @@ function useLiveRefresh(productId: string): number {
   )
 
   return nonce
-}
-
-/* ── in-flight write guard (parity 8.19) ─────────────────────────────────────────────────── */
-
-/**
- * 🔴 Autosave does NOT make a navigation guard unnecessary — it changes what is at risk.
- *
- * The old page guarded UNSAVED edits. There are none here. But a per-cell autosave means writes are
- * IN FLIGHT, and leaving mid-flight loses them with no prompt and no trace. The state that says so
- * already exists (`{kind:'saving', pending:N}`), so the guard is nearly free.
- *
- * Two exits, because they are genuinely different events: `beforeunload` catches closing the tab,
- * reloading and leaving the origin; a capture-phase click catches an in-app `<a>`, which never fires
- * `beforeunload` at all. Missing the second is how "it only loses work when I click Products" bugs
- * happen.
- */
-function useInFlightGuard(state: StudioSaveState): void {
-  const profileGuardId = useId()
-  // 🔴 `pendingWrites`, not `state.kind === 'saving'`. Found while extracting these decisions for
-  // test: an ERROR state carries its own `pending`, so after a refusal the writes still in flight
-  // were left unguarded by the original check — the moment an operator is most likely to navigate
-  // away is right after seeing something go red.
-  const pending = pendingWrites(state)
-  const pendingRef = useRef(pending)
-  pendingRef.current = pending
-  useEffect(() => registerProfileChanges(profileGuardId, {
-    isDirty: () => pendingRef.current > 0,
-    canDiscard: () => false,
-    discard: () => { throw new Error('Wait for the product changes already being saved before switching profiles.') },
-    save: async () => {
-      const deadline = Date.now() + 30_000
-      while (pendingRef.current > 0) {
-        if (Date.now() > deadline) throw new Error('Product changes are still saving. Stay here and check their status before switching profiles.')
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-    },
-  }), [profileGuardId])
-
-  useEffect(() => {
-    if (!pending) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      // Modern browsers show their own wording; returnValue is what still arms the prompt.
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [pending])
-
-  useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      // Let the operator's own modifiers through: a ⌘-click opens a new tab and leaves this one —
-      // and its in-flight writes — exactly where they are.
-      const anchor = (e.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null
-      let dest: { origin: string; pathname: string } | null = null
-      if (anchor) {
-        try {
-          const u = new URL(anchor.href, window.location.href)
-          dest = { origin: u.origin, pathname: u.pathname }
-        } catch {
-          dest = null
-        }
-      }
-      // Every exemption lives in `shouldInterceptLeave` (saveState.ts), where it is asserted.
-      if (
-        !shouldInterceptLeave({
-          pending: pendingRef.current,
-          defaultPrevented: e.defaultPrevented,
-          button: e.button,
-          metaKey: e.metaKey,
-          ctrlKey: e.ctrlKey,
-          shiftKey: e.shiftKey,
-          altKey: e.altKey,
-          anchorTarget: anchor?.target || null,
-          href: anchor ? (anchor.getAttribute('href') ?? '') : null,
-          dest,
-          currentOrigin: window.location.origin,
-          currentPathname: window.location.pathname,
-        })
-      ) {
-        return
-      }
-      const ok = window.confirm(leaveConfirmMessage(pendingRef.current))
-      if (!ok) {
-        e.preventDefault()
-        e.stopPropagation()
-      }
-    }
-    // Capture phase: Next's Link handles the click on bubble, so a listener there would run too late.
-    document.addEventListener('click', onClick, true)
-    return () => document.removeEventListener('click', onClick, true)
-  }, [])
 }
 
 /* ── the provider ────────────────────────────────────────────────────────────────────────── */
@@ -1006,15 +919,15 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     [pushHistory],
   )
   const closeRecord = useCallback(() => {
-    if (opened.current > 0) {
-      opened.current -= 1
-      router.back()
-      return
-    }
-    // Arrived with `?rec=` already in the URL (a shared link, a reload): there is no entry of ours
-    // to pop, so drop the keys in place.
-    push({ [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined })
-  }, [router, push])
+    opened.current = closeStudioRecord({
+      opened: opened.current,
+      canChangeEditor,
+      back: () => router.back(),
+      // Arrived with `?rec=` already in the URL (a shared link, a reload): there is no entry of ours
+      // to pop, so drop the keys in place.
+      clear: () => push({ [URL_KEYS.record]: undefined, [URL_KEYS.cell]: undefined }),
+    })
+  }, [router, push, canChangeEditor])
   const recordValue = useMemo<StudioRecordValue>(
     () => ({ rowId, colKey, open: openRecord, close: closeRecord }),
     [rowId, colKey, openRecord, closeRecord],
@@ -1062,7 +975,7 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
   )
 
   const save = useSaveMachine(JSON.stringify([product.id, scope, market, locale, accountId, listingId]))
-  useInFlightGuard(save.state)
+  useInFlightGuard(save.state, save.publication.publicationBlocker, canChangeEditor)
   const liveNonce = useLiveRefresh(product.id)
   const readiness = useReadinessQuery(product.id, scopeError || (scope !== MASTER_SCOPE && destination.status !== 'ready') ? null : market, liveNonce, scope === MASTER_SCOPE ? undefined : scope, accountId, listingId, locale)
 

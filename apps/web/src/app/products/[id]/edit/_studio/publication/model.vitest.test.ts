@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
-import { publicationDestinations, matchesPublicationReview } from './model'
+import { publicationDestinations, matchesPublicationReview, retainPublicationReceipt } from './model'
+import type { StudioPublishResult } from '@nexus/shared/studio-publication'
 
 const market = { id: 'a', channel: 'AMAZON', code: 'IT', name: 'Amazon Italy', language: 'it', accounts: [{ id: 'one', label: 'One', primary: true }, { id: 'two', label: 'Two', primary: false }] }
 it('keeps a selected alias only in its exact account and marketplace', () => {
@@ -17,4 +18,19 @@ it('rejects stale replies from another product, account, market or listing', () 
   expect(matchesPublicationReview(review, 'p', scope)).toBe(true)
   for (const wrong of [{ ...scope, accountId: 'one' }, { ...scope, marketplace: 'DE' }, { ...scope, listingId: 'different' }]) expect(matchesPublicationReview(review, 'p', wrong)).toBe(false)
   expect(matchesPublicationReview(review, 'other', scope)).toBe(false)
+})
+
+it('keeps an acknowledged receipt visible when status has not recorded it yet', () => {
+  const receipt: StudioPublishResult = { id: 'publish-1', status: 'UNVERIFIED', message: 'Keep this reference.', warnings: ['Channel warning'],
+    results: [{ sku: 'A', status: 'ACCEPTED', reference: '123', message: 'Acknowledged' }] }
+  for (const status of ['PUBLISHING', 'UNVERIFIED'] as const) {
+    const next: StudioPublishResult = { id: receipt.id, status, message: 'Check again.', results: [] }
+    const retained = retainPublicationReceipt(receipt, next)
+    expect(retained).toMatchObject({ status, results: receipt.results, warnings: receipt.warnings })
+    expect(retained.message).toContain('123')
+  }
+  const processed: StudioPublishResult = { id: receipt.id, status: 'FAILED', message: 'Rejected', results: [{ sku: 'A', status: 'FAILED', message: 'Invalid field', reference: '123' }] }
+  expect(retainPublicationReceipt(receipt, processed)).toBe(processed)
+  const different = { ...processed, id: 'publish-2', results: [] }
+  expect(retainPublicationReceipt(receipt, different)).toBe(different)
 })

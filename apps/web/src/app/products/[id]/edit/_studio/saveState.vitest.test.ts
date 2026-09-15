@@ -75,6 +75,14 @@ describe('which clicks are interrupted', () => {
     expect(shouldInterceptLeave({ ...leaving, pending: 0 })).toBe(false)
   })
 
+  it('interrupts for an unsaved editor draft even before it has started a request', () => {
+    expect(shouldInterceptLeave({ ...leaving, pending: 0, blocked: true })).toBe(true)
+    expect(leaveConfirmMessage(0, 'Save or discard changes in the open editor before publishing.'))
+      .toBe('Product changes are unsaved or unconfirmed. Leave anyway and lose them?')
+    expect(leaveConfirmMessage(0, 'Resolve unsaved changes before publishing: SKU is locked.'))
+      .toBe('Product changes are unsaved or unconfirmed. Leave anyway and lose them?')
+  })
+
   it.each(['metaKey', 'ctrlKey', 'shiftKey', 'altKey'] as const)(
     'lets a %s-click through — it opens a NEW tab and leaves this one, and its writes, alone',
     (mod) => expect(shouldInterceptLeave({ ...leaving, [mod]: true })).toBe(false),

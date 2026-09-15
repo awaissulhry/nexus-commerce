@@ -117,6 +117,8 @@ export function guardIsArmed(state: StudioSaveState): boolean {
 export interface LeaveAttempt {
   /** In-flight writes at the moment of the click. */
   pending: number
+  /** A live editor draft or refused write also blocks exit when no request is currently in flight. */
+  blocked?: boolean
   defaultPrevented: boolean
   /** 0 = primary button. */
   button: number
@@ -148,7 +150,7 @@ export interface LeaveAttempt {
  *   studio's own controls.
  */
 export function shouldInterceptLeave(a: LeaveAttempt): boolean {
-  if (a.pending <= 0) return false
+  if (a.pending <= 0 && !a.blocked) return false
   if (a.defaultPrevented) return false
   if (a.button !== 0) return false
   if (a.metaKey || a.ctrlKey || a.shiftKey || a.altKey) return false
@@ -162,7 +164,8 @@ export function shouldInterceptLeave(a: LeaveAttempt): boolean {
 }
 
 /** The sentence the guard asks. Plural-correct, and it names the number at stake. */
-export function leaveConfirmMessage(pending: number): string {
+export function leaveConfirmMessage(pending: number, blocker?: string | null): string {
+  if (pending <= 0 && blocker) return 'Product changes are unsaved or unconfirmed. Leave anyway and lose them?'
   return `${pending} ${pending === 1 ? 'change is' : 'changes are'} still saving. Leave anyway and lose ${pending === 1 ? 'it' : 'them'}?`
 }
 
@@ -187,7 +190,7 @@ export function describeSaveState(state: StudioSaveState, clock: (at: number) =>
       return {
         kind: 'idle',
         text: 'Autosave on',
-        title: 'Every cell saves on its own. There is no page Save.',
+        title: 'Apply an edit or leave its cell to save it in Nexus. Publish sends saved changes to a channel.',
       }
     case 'saving':
       return { kind: 'saving', text: `Saving ${state.pending}…` }

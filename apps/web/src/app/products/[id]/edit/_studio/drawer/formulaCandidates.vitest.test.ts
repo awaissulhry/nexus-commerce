@@ -128,7 +128,7 @@ describe('🔴 invariants the compiler cannot see', () => {
   it('entering formula mode cancels the idle autosave instead of scheduling one', () => {
     /* Without the early return the 900ms autosave fires on the mode switch itself and writes `=`,
        then `=u`, then `=up` into the cell as the rule is typed — each one a real write. */
-    expect(record).toContain('window.clearTimeout(timer.current)\n            setFormulaMode(true)\n            return')
+    expect(record).toContain('autosave.cancel()\n            setFormulaMode(true)\n            return')
     /* The ordinary path must still schedule one, or every plain edit stops saving. */
     expect(record).toContain('scheduleCommit(next)')
   })

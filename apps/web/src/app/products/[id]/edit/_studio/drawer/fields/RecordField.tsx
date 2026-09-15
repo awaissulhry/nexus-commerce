@@ -24,7 +24,7 @@ import { ImpactProtectorsInput } from '../../sheet/ImpactProtectorsInput'
 import { EbayPolicyInput, isEbayPolicyField } from '../../sheet/EbayPolicyInput'
 import ProductTypePicker from '@/components/products/ProductTypePicker'
 import { AttributeShapeInput } from '../../sheet/AttributeShapeInput'
-import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useState } from 'react'
 import { History, Pencil, Pin, RotateCcw } from 'lucide-react'
 import { Field } from '@/design-system/components/Field'
 import { Input } from '@/design-system/primitives/Input'
@@ -50,7 +50,13 @@ import {
 import { ProvenanceChip } from './ProvenanceChip'
 import { FormulaField } from './FormulaField'
 import { HtmlField } from './HtmlField'
+import { createIdleCommit } from '../idleCommit'
+import { usePublicationSave, useStudioScope } from '../../contracts'
 import { longTextState } from '@/design-system/grid/renderers/longTextState'
+import {
+  variationThemeText,
+  type VariationThemeCell,
+} from '@/design-system/grid/renderers/variationTheme'
 import { overCapNote } from '../format'
 import { PressableRow } from '@/design-system/components/PressableRow'
 import styles from '../drawer.module.css'
@@ -109,6 +115,11 @@ function asText(v: unknown): string {
   return String(v)
 }
 
+function asVariationThemeText(value: unknown): string {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as { axes?: unknown }).axes)) return '—'
+  return variationThemeText(value as VariationThemeCell) || 'No axes set'
+}
+
 function RecordFieldImpl({
   column,
   cell,
@@ -131,11 +142,18 @@ function RecordFieldImpl({
   // ever inferring it.
   const layer = resolveLayer(cell)
   const inherited = !isOwnValue(cell)
-  const effective = asText(cell?.value)
+  // An axes cell is a structured projection. `String(value)` prints `[object Object]` and, worse,
+  // routes it into the generic bulk text writer even though that writer explicitly refuses axes.
+  // The dedicated editor lives in the sheet, so the drawer gives the same canonical summary and
+  // remains read-only.
+  const isVariationTheme = column.kind === 'variationTheme' || column.shape === 'axes'
+  const effective = isVariationTheme ? asVariationThemeText(cell?.value) : asText(cell?.value)
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(effective)
-  const timer = useRef<number | undefined>(undefined)
+  const [autosave] = useState(() => createIdleCommit(IDLE_MS))
+  const { registerPublicationBarrier } = usePublicationSave()
+  const { registerScopeChangeGuard } = useStudioScope()
 
   // Repaint from the server's answer whenever it changes underneath — a 409 refetch, a copy-across
   // from the compare pane, a sibling's edit arriving on the sheet. Not while the operator is
@@ -144,11 +162,15 @@ function RecordFieldImpl({
     if (!editing) setDraft(effective)
   }, [effective, editing])
 
-  useEffect(() => () => window.clearTimeout(timer.current), [])
+  useEffect(() => {
+    const unregisterPublication = registerPublicationBarrier({ flush: async () => autosave.flush(), blocker: () => null })
+    const unregisterScope = registerScopeChangeGuard(() => { autosave.flush(); return true })
+    return () => { autosave.flush(); unregisterPublication(); unregisterScope() }
+  }, [autosave, registerPublicationBarrier, registerScopeChangeGuard])
 
   const commit = useCallback(
     (value: unknown) => {
-      window.clearTimeout(timer.current)
+      autosave.cancel()
       // An operator who clicked into a ghost and clicked out again changed nothing. Writing here
       // would pin an override with the master's own value — a divergence that then stops tracking
       // master, invisibly, because someone tabbed through the form.
@@ -159,15 +181,14 @@ function RecordFieldImpl({
       const canPin = (column.writeTarget ?? cell?.writeTarget) !== 'master'
       onWrite(column, value, inherited && canPin ? 'pin' : 'set')
     },
-    [column, effective, inherited, onWrite, cell?.writeTarget],
+    [autosave, column, effective, inherited, onWrite, cell?.writeTarget],
   )
 
   const scheduleCommit = useCallback(
     (value: unknown) => {
-      window.clearTimeout(timer.current)
-      timer.current = window.setTimeout(() => commit(value), IDLE_MS)
+      autosave.schedule(() => commit(value))
     },
-    [commit],
+    [autosave, commit],
   )
 
   // `cell.editable` is the server's answer for THIS coordinate; the column's is the family-wide
@@ -175,6 +196,7 @@ function RecordFieldImpl({
   // `writable: false` outranks everything — the server is saying this write cannot be made yet,
   // whatever the column, the layer or the scope think.
   const editable =
+    !isVariationTheme &&
     cell?.writable !== false &&
     (cell?.editable ?? column.editable) &&
     !lockedReason &&
@@ -356,7 +378,18 @@ function RecordFieldImpl({
 
   // ── The control ─────────────────────────────────────────────────────────
   let control: React.ReactNode
-  if (showFormula && formulaSeam && rowId) {
+  if (isVariationTheme) {
+    control = (
+      <Input
+        size="sm"
+        type="text"
+        value={effective}
+        readOnly
+        aria-label={column.label}
+        title="Edit the variation theme in the sheet."
+      />
+    )
+  } else if (showFormula && formulaSeam && rowId) {
     /* 🔴 FIRST in the chain, ahead of the ghost and ahead of every per-kind control. A cell holding
        a formula has an own value — the result the server wrote — so it is never `inherited`, and
        the kind-specific editors would offer to overwrite the RULE with a value typed over its
@@ -369,6 +402,7 @@ function RecordFieldImpl({
         storedExpr={storedExpr}
         candidates={candidates ?? []}
         originalText={effective}
+        initialText={draft}
         disabled={!editable || formulaWritesRefused}
         ariaLabel={column.label}
         onExit={(next) => {
@@ -469,7 +503,7 @@ function RecordFieldImpl({
              between a formula and its text that the separate formula write path exists to prevent.
              A pending commit from an earlier keystroke is cancelled for the same reason. */
           if (formulaSeam && !formulaWritesRefused && availability.kind === 'available' && isFormulaDraft(next)) {
-            window.clearTimeout(timer.current)
+            autosave.cancel()
             setFormulaMode(true)
             return
           }
@@ -484,6 +518,7 @@ function RecordFieldImpl({
             e.preventDefault()
             commit(draft)
           } else if (e.key === 'Escape') {
+            autosave.cancel()
             e.preventDefault()
             // The dock's Esc-to-close is listening on document. Abandoning an edit must not also
             // shut the record the operator is reading.
@@ -504,7 +539,13 @@ function RecordFieldImpl({
       data-field={column.key}
     >
       {head}
-      <Field label={column.label} required={required} hint={column.helpText}>
+      <Field
+        label={column.label}
+        required={required}
+        hint={isVariationTheme
+          ? [column.helpText, 'Edit the variation theme in the sheet.'].filter(Boolean).join(' ')
+          : column.helpText}
+      >
         {control}
       </Field>
 

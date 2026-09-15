@@ -1,5 +1,6 @@
 'use client';
 import { useSheetPreferences } from '../useSheetPreferences';
+import { useSheetPublicationGuard } from '../useSheetPublicationGuard';
 import { buildCompareTargets } from '../compareTargets';
 import { channelLabel, languageLabel } from '../../scopes';
 import { productSheetRowKey, filterProductSheetRows } from '../productSheetRows';
@@ -150,6 +151,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         onRefused: announceRefusals,
     });
     const sheet = useReferenceNames(loadedSheet, 'MASTER', market);
+    useSheetPublicationGuard(writer, tracker, getGridApi);
     const formulaRowIds = useMemo(() => (sheet?.rows ?? []).map((r) => r.id), [sheet]);
     const formulas = useCellFormulas({ writeFacts: (rowId, fieldKey) => sheet?.rows.find(row => row.id === rowId)?.values[fieldKey], productId, market, locale, columnKeys: sheet?.columns.map(column => column.key), rowIds: formulaRowIds, onSettled: refresh, onValueSaved: (rowId, fieldKey, value) => {
             const node = getGridApi()?.getRowNode(rowId);

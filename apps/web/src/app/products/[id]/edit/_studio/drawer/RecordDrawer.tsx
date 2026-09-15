@@ -39,6 +39,7 @@ import { useFieldHistory } from './useFieldHistory'
 import { useCompare } from './useCompare'
 import { matchesOpenRecord } from '../sheet/compareTargets'
 import { useRecordState } from './useRecordState'
+import { fieldHistorySelection } from './fieldHistorySelection'
 import { useRestorePoints } from './useRestorePoints'
 import { useRecordImages } from '../images/record'
 import { getBackendUrl } from '@/lib/backend-url'
@@ -192,7 +193,8 @@ export function RecordDrawer<R extends SheetRow = SheetRow>({
 
   // History is asked for by the COLUMN key (PES.5 §3.5 `fieldKey`), scoped to this row — a family
   // read covers parent and variations, and a variation's title has its own trail.
-  const history = useFieldHistory(row?.id ?? null, inspecting ? row?.values[inspecting.key]?.writeField ?? inspecting.key : null, scope, row?.id ?? null)
+  const historySelection = fieldHistorySelection(inspecting?.key ?? null, inspecting ? row?.values[inspecting.key]?.writeField : null, scope)
+  const history = useFieldHistory(row?.id ?? null, historySelection.fieldKey, historySelection.scope, row?.id ?? null)
   const recordState = useRecordState(scope.kind === 'master' ? row?.id ?? null : null)
   // The moments that hold changes (#366). Read only while the History tab is open — this is a
   // second audit scan and nobody needs it on a drawer opened to edit a field.
