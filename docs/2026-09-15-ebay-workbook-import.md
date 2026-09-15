@@ -108,9 +108,13 @@ manifest are in `outputs/gale-ebay-it-import-2026-09-15`. These database checks 
 using the updated application code; deployment status is reported separately in
 the final import report.
 
-Release status: the normal push of `0541e07af` was blocked by the open-gesture
-gate's unrelated Amazon footer parity comparison (disconnected account notice
-versus master keyboard help). The GALE data import is committed in production;
-the application release remains pending, with API `fc92f3d8` still deployed.
-The final report distinguishes production data validation using the updated
-code from the old live application's numeric validation.
+Release completed: `5fa63d310` is pushed to `main`, the Vercel production website
+is ready at that commit, and Railway serves healthy API build `5fa63d31`.
+GitHub CI and Deploy API both passed. The footer parity regression now requires
+the exact accessible reason when a disabled channel scope replaces keyboard help.
+
+The fresh production data read at 08:46 UTC again verified all 105 records and
+3,691 values with zero differences or issues. A signed-in browser check after
+deployment confirmed 100% readiness for the primary listing and all four aliases,
+with the previous false Decimal price errors absent. The deployment receipt is
+`outputs/gale-ebay-it-import-2026-09-15/release-status.json`.

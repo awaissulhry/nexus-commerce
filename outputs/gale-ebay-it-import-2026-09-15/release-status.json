@@ -1,11 +1,71 @@
 {
-  "status": "blocked",
-  "apiBuild": "fc92f3d8",
+  "status": "deployed",
+  "verifiedAt": "2026-09-15T08:56:08.564055+00:00",
+  "applicationCommit": "5fa63d310bc56f1f9fabc372537f650161ea0341",
+  "remoteHeadAtVerification": "5fa63d310bc56f1f9fabc372537f650161ea0341",
   "importSupportCommit": "6441275bc",
   "priceValidationCommit": "0541e07af",
-  "gate": "scripts/check-editor-open.mjs --strict",
-  "failure": "parity AMAZON\u00b7IT \u00b7 footerNote differs because the Amazon account is disconnected",
+  "api": {
+    "status": 200,
+    "region": "railway/europe-west4-drams3a",
+    "body": {
+      "status": "healthy",
+      "build": "5fa63d31",
+      "services": {
+        "database": "connected",
+        "api": "operational"
+      }
+    }
+  },
+  "website": {
+    "id": "dpl_2xfjztPwXe5n7m8V3hND9daPX9Gw",
+    "url": "nexus-commerce-q1dtalywc-awaissulhrys-projects.vercel.app",
+    "state": "READY",
+    "sha": "5fa63d310bc56f1f9fabc372537f650161ea0341",
+    "productionUrl": "https://nexus-commerce-three.vercel.app"
+  },
+  "actions": [
+    {
+      "id": 34948593130,
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/awaissulhry/nexus-commerce/actions/runs/34948593130"
+    },
+    {
+      "id": 34948593272,
+      "name": "Deploy API",
+      "status": "completed",
+      "conclusion": "success",
+      "url": "https://github.com/awaissulhry/nexus-commerce/actions/runs/34948593272"
+    }
+  ],
   "databaseImport": "completed",
+  "productionDataReadback": {
+    "at": "2026-09-15T08:46:58.519Z",
+    "targets": 105,
+    "fields": 3691,
+    "changes": 0,
+    "issues": 0
+  },
   "correctedWorkbookDryRun": "passed",
-  "scope": "Application release only; data import is committed"
+  "productionBrowser": {
+    "url": "https://nexus-commerce-three.vercel.app/products/cmokmy3a40078pm0p1fvnu523/edit",
+    "channel": "EBAY",
+    "market": "IT",
+    "account": "xaviaracing",
+    "listingGroups": 5,
+    "aliases": 4,
+    "allGroupsReadinessPercent": 100,
+    "falseAliasPriceErrors": 0
+  },
+  "validation": {
+    "webTestsPassed": 4479,
+    "webTestsSkipped": 1,
+    "securityTestsPassed": 134,
+    "webBuild": "passed",
+    "apiBuild": "passed",
+    "footerParityRegression": "passed; exact accessible account availability reason verified"
+  },
+  "scope": "Nexus application deployment and completed catalog import; no eBay publication or revision"
 }

@@ -64,18 +64,20 @@ The original workbook is unchanged. Uploading the original unchanged again will 
 flag its seven obsolete columns and non-exact season choice; those were explicit
 reviewed corrections in this import, not silent generic importer rules.
 
-**Application deployment is blocked.** The repository's release gate passed the
-GALE/eBay editor, price, stock-control and save-state checks, then failed one
-unrelated cross-channel footer comparison: the Amazon sheet correctly displayed
-“The Amazon account is disconnected. Reconnect it in Settings → Channels to work
-on this listing.” while the master sheet displayed keyboard help. The push did
-not complete. Import support and the numeric-validation correction are committed
-locally in `6441275bc` and `0541e07af`; production still serves API `fc92f3d8`.
-The data import and all catalog corrections are already committed in production.
-The 100% readiness check used the updated application code against that production
-data. The old deployed validator can still show the false Decimal price errors
-until the application release completes. The corrected workbook's dry run passed
-against the new importer; that importer also awaits the release.
+**Application deployed and verified.** Release `5fa63d310` is pushed to `main`.
+Vercel reports the production website ready at that commit, and Railway serves
+healthy API build `5fa63d31`. GitHub CI and the API deployment workflow both passed.
+The historical workbook importer and Decimal price correction are now live.
+
+A fresh production data check at 08:46 UTC verified 105 records and 3,691 values
+with zero differences or issues. After deployment, the signed-in production
+product page confirmed all five listing groups at 100% readiness; the false
+alias price errors are gone. See the [release receipt](release-status.json).
+
+The earlier footer test failure was resolved by requiring the exact accessible
+reason for a disabled channel scope. Account settings were unchanged. Release
+validation also passed both application builds, 4,479 web tests and 134 security
+tests.
 
 ## Source versus live values
 
