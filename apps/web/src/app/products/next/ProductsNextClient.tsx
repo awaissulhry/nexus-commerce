@@ -36,9 +36,10 @@ import { eur0 } from '@/design-system/lib'
 // product owns around it: the theme and defaults (NexusGrid), the server contract
 // (productsServerContract), the Customise bridge (columnPrefs) and state persistence
 // (useGridViews). Nothing else.
-import { GridDensityProvider, NexusGrid, SCOPE_READINESS_STATES, readinessMeta, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
+import { GridDensityProvider, NexusGrid, type ColDef, type GridApi, type GridReadyEvent, type GridState } from '@/design-system/grid'
 import { createProductsDatasource, isFamilyFooter, type ProductsListStats } from '@/app/products/next/productsDatasource'
 import { gridFilterDef } from '@/design-system/grid/filters/gridFilters'
+import { GridSheetNote } from '@/design-system/grid/toolbars/GridSheetNote'
 import {
   buildGridRequest,
   EMPTY_CONTEXT_FILTERS,
@@ -51,10 +52,6 @@ import { GridDensityToggle, GridPager, GridSearchSlot, GridSelectionActions, Sel
 import { AG_AUTO_COL, columnStateToPrefs, prefsToColumnState, type AgMenuItemDef, type DefaultMenuItem, type GetContextMenuItemsParams, type PrefsBridgeOptions } from '@/design-system/grid'
 
 import styles from './styles.module.css'
-import { languageColumns } from './languageColumns'
-import { TranslateDialog, useCatalogLanguages } from './TranslateDialog'
-import { Listbox } from '@/design-system/components/Listbox'
-import { catalogLanguageColumn } from '@nexus/shared/products-grid'
 import {
   buildPageColumns,
   columnLabel,
@@ -161,7 +158,6 @@ const EMPTY_FILTERS: ProductFilters = EMPTY_CONTEXT_FILTERS
 
 /** What a saved view stores BESIDE the grid state — the page's own knobs. */
 interface PageViewState {
-  language?: string
   filters: ProductFilters
   tile: KpiTileKey
   density: DensityMode
@@ -222,10 +218,6 @@ function ProductsNextInner() {
   const familyId = searchParams?.get('parent') ?? null
 
   // ── State ─────────────────────────────────────────────────────
-  const [language, setLanguage] = useState('')
-  const [translateOpen, setTranslateOpen] = useState(false)
-  const languages = useCatalogLanguages()
-  useEffect(() => { if (languages.sourceLanguage) setLanguage(prior => prior || languages.sourceLanguage!) }, [languages.sourceLanguage])
   const [filters, setFilters] = useState<ProductFilters>(EMPTY_FILTERS)
   const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY)
   const [activeTile, setActiveTile] = useState<KpiTileKey>(null)
@@ -375,10 +367,9 @@ function ProductsNextInner() {
     return () => { workingRequest.current += 1 }
   }, [loadSavedLayout])
 
-  const pageSnapshot = useCallback((): PageViewState => ({ language, filters, tile: activeTile, density, lockedColumns, pageSize, ...(columnLayoutRef.current ? { columnLayout: columnLayoutRef.current } : {}) }), [language, filters, activeTile, density, lockedColumns, pageSize])
+  const pageSnapshot = useCallback((): PageViewState => ({ filters, tile: activeTile, density, lockedColumns, pageSize, ...(columnLayoutRef.current ? { columnLayout: columnLayoutRef.current } : {}) }), [filters, activeTile, density, lockedColumns, pageSize])
   const restorePageState = useCallback((pg: PageViewState) => {
     columnLayoutRef.current = pg.columnLayout ?? null
-    if (pg.language) setLanguage(pg.language)
     /**
      * 🔴 VT.4b — MERGED over `EMPTY_FILTERS`, not assigned.
      *
@@ -421,7 +412,7 @@ function ProductsNextInner() {
   // What AG's state cannot hold — density, page size, the accordion, a tile, the padlocks — is the
   // page's; the state hook is told when it moves so the last-used state carries it too.
   const gridViewsMarkDirty = gridViews.markDirty
-  useEffect(() => { gridViewsMarkDirty() }, [gridViewsMarkDirty, filters, activeTile, density, lockedColumns, pageSize, language])
+  useEffect(() => { gridViewsMarkDirty() }, [gridViewsMarkDirty, filters, activeTile, density, lockedColumns, pageSize])
 
   // ── Data the page fetches itself ───────────────────────────────
   // The grid asks the server for blocks (see the datasource below). The page's own fetches are
@@ -606,8 +597,8 @@ function ProductsNextInner() {
   const columns = useMemo(
     // The Channels cell reads `activeChannels`; omitting it froze the column on the empty roster
     // it was built with, so every row read "no channels" while /api/connections answered 200.
-    () => { const base = buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }); return [...base.slice(0, 1), ...languageColumns(language), ...base.slice(1)] },
-    [activeChannels, onDuplicate, router, language],
+    () => buildPageColumns({ activeChannels, onDuplicate, onOpenInventory: setModalRow, navigate: (href) => router.push(href) }),
+    [activeChannels, onDuplicate, router],
   )
 
   const preferenceColumns = useMemo<PreferencesColumnSpec[]>(() => columns.map((c) => ({
@@ -622,9 +613,6 @@ function ProductsNextInner() {
    */
   const filterDefFor = useCallback(
     (key: string): Partial<ColDef<ProductRow>> => {
-      const local = catalogLanguageColumn(key)
-      if (local?.field === 'readiness') return gridFilterDef('set', { options: SCOPE_READINESS_STATES.map(state => ({ value: state, label: readinessMeta(state, 'scope').label })) })
-      if (local?.field === 'fallback') return gridFilterDef('set', { options: [{ value: 'true', label: 'Falls back to source' }, { value: 'false', label: 'Has requested language' }] })
       const kind = (GRID_FILTER_COLUMNS as Record<string, 'set' | 'number' | 'text' | undefined>)[key]
       if (!kind) return {}
       if (kind === 'text') return gridFilterDef('text')
@@ -714,8 +702,8 @@ function ProductsNextInner() {
     [variationMapping, urlVariationFilter.unknown],
   )
   const ctxFilters = useMemo(() => ({ ...filters, variationMapping: variationMappingRequest }), [filters, variationMappingRequest])
-  const ctxRef = useRef({ filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS, language })
-  ctxRef.current = { filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS, language }
+  const ctxRef = useRef({ filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS })
+  ctxRef.current = { filters: ctxFilters, tile: activeTile, familyId, salesDays: SALES_WINDOW_DAYS }
   const datasource = useMemo(
     () =>
       createProductsDatasource<ProductRow>({
@@ -743,7 +731,7 @@ function ProductsNextInner() {
     // ctxRef mirrors exactly these; listing them keeps the memo honest.
     // VT.4b: `ctxFilters` (which carries `variationMapping`) rather than `filters`, so a change to the
     // catalogue's Variation mapping term re-asks the server exactly as every other context filter does.
-    [ctxFilters, activeTile, familyId, language],
+    [ctxFilters, activeTile, familyId],
   )
   const lastSignature = useRef<string | null>(null)
   useEffect(() => {
@@ -1393,8 +1381,6 @@ function ProductsNextInner() {
         </Banner>
       )}
 
-      <TranslateDialog open={translateOpen} onClose={() => setTranslateOpen(false)} language={language} scope={{ kind: 'grid', grid: buildGridRequest(ctxRef.current, { sortModel: [], groupKeys: [], filterModel }) }} />
-      {languages.error && <div role="alert">{languages.error}</div>}
       {/* One card: toolbar + grid + pager share the grid rectangle (Ad-Manager parity). The grid
           is exactly as tall as the page of rows the footer selects — 50, 100, 200 or 500 — and
           the PAGE scrolls, as Seller Central's and Ad Manager's tables do. Expand a family and
@@ -1423,8 +1409,6 @@ function ProductsNextInner() {
           }
           right={
             <>
-              <Listbox size="sm" ariaLabel="Language" value={language} options={languages.options} onChange={setLanguage} width={160} />
-              <Button size="sm" disabled={!language} onClick={() => setTranslateOpen(true)}>Translate…</Button>
               {/* Density steps aside while rows are selected: the bulk actions need the room. */}
               {selectedCount === 0 && (
                 <GridDensityToggle value={density} onChange={setDensity} />
@@ -1493,7 +1477,11 @@ function ProductsNextInner() {
         {/* GridDensityProvider: the grid, the DS Thumbnail and the inventory editor all follow this
             one density (compact 32 / cozy 40 / spacious 56 thumbs; rows 52 / 68 / 85). */}
         <GridDensityProvider value={density}>
-          {!layoutBootstrapped ? <div role="status">Loading your saved layout…</div> : error ? (
+          {!layoutBootstrapped ? (
+            <div className={styles.layoutLoading}>
+              <GridSheetNote kind="slow">Loading your saved layout…</GridSheetNote>
+            </div>
+          ) : error ? (
             // A failed fetch is NOT an empty catalogue and NOT a slow one.
             <EmptyState
               icon={<AlertTriangle size={20} />}

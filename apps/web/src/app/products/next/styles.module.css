@@ -270,6 +270,7 @@
 .invManageLink { color: var(--nds-text-link); font-size: var(--nds-font-size-base); }
 
 /* ── Grid loading skeleton (shown while the initial product list loads) ── */
+.layoutLoading { display: flex; padding: var(--nds-space-12) var(--nds-space-16); }
 .gridSkel { display: flex; flex-direction: column; gap: 14px; width: 100%; padding: 6px 2px; }
 .gridSkelRow { display: flex; align-items: center; gap: 12px; }
 .gridSkelText { display: flex; flex-direction: column; gap: 7px; flex: 1; }
