@@ -2600,7 +2600,16 @@ export async function applyProductBulkEdits(input: ProductBulkInput, context: Pr
     const cacheRefreshIds = Array.from(
       new Set<string>([...productIds, ...allAffectedChildIds]),
     )
-    for (const id of cacheRefreshIds) await produceReadiness(id)
+    // Listing-only edits cannot affect another destination. Keep shared/mixed writes broad,
+    // and use the same routing predicate and resolved account as the mutation above.
+    const readinessScope = !hasMasterTargetedChange && effectiveContexts.length === 1
+      ? { channel: effectiveContexts[0].channel, market: effectiveContexts[0].marketplace,
+          accountId: connFor.get(effectiveContexts[0].channel) ?? null }
+      : undefined
+    for (const id of cacheRefreshIds) {
+      if (readinessScope) await produceReadiness(id, readinessScope)
+      else await produceReadiness(id)
+    }
     await afterDatabaseCommit(`product-cache:${cacheRefreshIds.slice().sort().join(',')}`, () => productReadCacheService.refreshMany(cacheRefreshIds)).catch(err => {
       context.logger.warn({ err, productIds: cacheRefreshIds }, '[products/bulk] cache refresh failed')
     })

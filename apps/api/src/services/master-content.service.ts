@@ -40,6 +40,8 @@ export interface MasterContentUpdateContext {
    * cascade exactly the provided fields.
    */
   masterAlreadyWritten?: boolean
+  /** Source values captured by the authoring boundary before its mutation. */
+  previousValues?: Record<string, unknown>
 }
 
 export interface MasterContentUpdateResult {
@@ -149,7 +151,8 @@ export class MasterContentService {
         }
       }
       const audit = await tx.auditLog.create({ data: { entityType: 'Product', entityId: productId, action: 'update', userId: ctx.actor ?? null,
-        before: {}, after: changes as Prisma.InputJsonValue, metadata: { fields, language, reason: ctx.reason ?? null, cascadedListingIds, queuedSyncIds } }, select: { id: true } })
+        before: (ctx.previousValues ?? {}) as Prisma.InputJsonValue, after: changes as Prisma.InputJsonValue,
+        metadata: { fields, language, contentTier: address.tier, layer: address.tier === 'source' ? 'master' : 'language-cascade', reason: ctx.reason ?? null, cascadedListingIds, queuedSyncIds } }, select: { id: true } })
       await produceReadiness(productId)
       return { changed: fields.length > 0, changedFields: fields, cascadedListingIds, snapshottedListingIds, queuedSyncIds, auditLogId: audit.id }
     }

@@ -41,6 +41,7 @@ const namedConnection = vi.fn()
 const aliasFindMany = vi.fn()
 const resolveBatch = vi.fn()
 const referenceThemes = vi.fn()
+const produceReadiness = vi.fn()
 vi.mock('../services/pim/mapping/resolve-batch.service.js', () => ({ resolveBatch: (...args: unknown[]) => resolveBatch(...args) }))
 // Persistence contracts run without Redis or background cache workers.
 // LX.F R-LX-13 — and that now includes the QUEUE: this file's 68 failures in this
@@ -86,7 +87,7 @@ vi.mock('../services/connection-resolver.service.js', () => ({
 // attr_* writes are gated on the per-marketplace registry; the channel case
 // below needs a definition that exists and is editable, nothing more.
 // Readiness production has its own PostgreSQL regressions; isolate that derived refresh here.
-vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: async () => {} }))
+vi.mock('../services/pim/readiness-index.service.js', () => ({ produceReadiness: (...args: unknown[]) => produceReadiness(...args) }))
 vi.mock('../services/pim/field-registry.service.js', () => ({
   getAvailableFields: async () => [],
   getFieldDefinition: async () => ({ id: 'attr_ceCertification', editable: true, type: 'text' }),
@@ -170,6 +171,7 @@ afterAll(async () => {
 })
 
 beforeEach(() => {
+  produceReadiness.mockReset().mockResolvedValue(undefined)
   // Persistence cases have no additional Information fields; specific resolver cases override this.
   resolveBatch.mockReset().mockResolvedValue({ products: [{ productId: PRODUCT_ID, cells: {} }] })
   referenceThemes.mockReset().mockResolvedValue([{ id: 'theme-id', name: 'Modern', active: true }])
@@ -335,6 +337,35 @@ const patch = (body: unknown) =>
 
 // CAS and routing use a factual listing column; content writes have a separate address contract.
 const ebayListing = (over: Record<string, unknown> = {}) => listingRow({ channel: 'EBAY', ...over })
+
+describe('autosave readiness follows the actual write destination', () => {
+  it.each([undefined, 'account-b'])('limits a listing edit to its resolved account and market (%s)', async accountId => {
+    const resolvedAccount = accountId ?? 'account-ebay'
+    namedConnection.mockResolvedValue({ id: resolvedAccount, channelType: 'EBAY', isActive: true })
+    channelListingFindMany.mockResolvedValue([ebayListing({ channelConnectionId: resolvedAccount })])
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'ebay_price', value: 120, target: 'channel' }],
+      marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT', ...(accountId ? { accountId } : {}) }], expectedVersion: 19 })
+    expect(result.statusCode, result.body).toBe(200)
+    expect(result.json().updated).toBe(1)
+    expect(produceReadiness.mock.calls).toEqual([[PRODUCT_ID, { channel: 'EBAY', market: 'IT', accountId: resolvedAccount }]])
+  })
+
+  it('keeps every dependent destination fresh when the edit writes shared product data', async () => {
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'manufacturer', value: 'Changed', target: 'channel' }],
+      marketplaceContexts: [{ channel: 'EBAY', marketplace: 'IT' }], expectedVersion: 26 })
+    expect(result.statusCode, result.body).toBe(200)
+    expect(result.json().updated).toBe(1)
+    // A context or target hint cannot change a Product column into a listing write.
+    expect(produceReadiness.mock.calls).toEqual([[PRODUCT_ID]])
+  })
+
+  it('does not rebuild readiness for a no-op', async () => {
+    const result = await patch({ changes: [{ id: PRODUCT_ID, field: 'manufacturer', value: '' }], expectedVersion: 26 })
+    expect(result.statusCode, result.body).toBe(200)
+    expect(result.json().unchanged).toBe(1)
+    expect(produceReadiness).not.toHaveBeenCalled()
+  })
+})
 
 describe('requested account resolution before bulk writes', () => {
   beforeEach(() => {

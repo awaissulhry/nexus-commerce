@@ -38,10 +38,14 @@ export async function writeContent(input: ContentWrite) {
         else delete attributes[field]
         values[field] = null
       }
+      const previousValues = Object.fromEntries(Object.keys(values).map(field => {
+        const column = CONTENT_COLUMNS[field as keyof typeof CONTENT_COLUMNS]
+        return [field, column ? product[column] ?? null : (product.categoryAttributes as Record<string, unknown> | null)?.[field] ?? null]
+      }))
       const updated = await prisma.product.updateMany({ where: { id: product.id, version: product.version }, data: { ...data, categoryAttributes: attributes as any, version: { increment: 1 } } })
       if (updated.count !== 1) throw refuse(input.label)
       const { masterContentService } = await import('../master-content.service.js')
-      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, tx: prisma as any })
+      await masterContentService.update(product.id, values, { address, locale: PRIMARY_CONTENT_LOCALE, actor: input.userId, reviewed: input.state !== 'draft', masterAlreadyWritten: true, previousValues, tx: prisma as any })
       return prisma.product.findUniqueOrThrow({ where: { id: product.id } })
     }
     const c = address.coordinate
