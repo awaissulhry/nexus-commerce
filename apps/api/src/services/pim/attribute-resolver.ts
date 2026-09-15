@@ -259,7 +259,8 @@ export function resolveAttributes(input: ResolveInput): ResolvedAttributes {
     applyLayer(acc, channelListing.overrideData, 'channelOverride', channelListing.id)
     for (const ssot of SSOT_FIELDS.filter(field => ['price', 'quantity'].includes(field.key))) {
       if ((channelListing as any)[ssot.followFlag] !== false) continue
-      const value = (channelListing as any)[ssot.overrideCol] ?? (ssot.directCol ? (channelListing as any)[ssot.directCol] : undefined)
+      let value = (channelListing as any)[ssot.overrideCol] ?? (ssot.directCol ? (channelListing as any)[ssot.directCol] : undefined)
+      if (value && typeof value === 'object' && typeof value.toNumber === 'function') value = value.toNumber()
       if (value !== undefined) acc[ssot.key] = { value, source: 'channelExplicit', inheritedFrom: channelListing.id }
     }
   }

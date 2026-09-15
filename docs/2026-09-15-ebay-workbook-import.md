@@ -78,3 +78,32 @@ it rejected Style even though the schema and import planner accepted it.
 After that fix, the workbook/product/source/HTTP suites passed 74 tests (three
 optional tests skipped). Alias, relationship and live-local variation checks also
 passed in the separate 83-test run. API type checking passed.
+
+## Completed production data import
+
+The 105 listing records were saved through the existing transfer job, with zero
+failed or unprocessed records. A second read verified all 3,607 supported source
+fields. The final quality pass added the common Italian description to 84 blank
+alias records and corrected 20 primary variant image lists: the German size chart
+was replaced by the existing Italian chart verified on eBay, and three 500px
+duplicates were removed in favor of their supplied 1600px originals.
+
+Final verification checked 3,691 values with zero differences, five groups of
+20 unique variations, and 100% readiness for every group under the corrected
+validator. All 100 variant identities, actual prices and stock quantities match
+the direct eBay GetItem reads at 08:06 UTC. The 59 corrected membership price
+references comprise 58 stale prices and one missing primary price. Historical
+snapshots now carry the correct title, description, specifics, images and identity.
+
+Prisma Decimal prices previously reached scalar validation as objects. Stored
+listing-column reads and the factual resolver now convert Decimal values before
+validation. The resolver/mapping/storage regression suites pass 75 tests,
+including real Decimal fractional and zero alias prices. API type checking passes.
+
+The final production snapshot confirms unchanged physical stock, original price
+and stock controls, all 84 other-channel listings, 159 product images, shared
+translations, and the outbound queue. No eBay listing was published or revised.
+The original workbook remains byte-identical. Data receipts and the verification
+manifest are in `outputs/gale-ebay-it-import-2026-09-15`. These database checks ran
+using the updated application code; deployment status is reported separately in
+the final import report.

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Prisma } from '@prisma/client'
 import { resolveAttributes, resolveAttributesFlat, resolveAttributesBySource, type ProductLike, type ResolveInput } from '../pim/attribute-resolver.js'
 import { PRIMARY_CONTENT_LOCALE } from '../pim/content-locale.js'
 
@@ -43,6 +44,8 @@ describe('attribute adapter: factual inheritance', () => {
   it.each([
     { followMasterPrice: false, priceOverride: 999, price: 875, expected: 999 },
     { followMasterPrice: false, priceOverride: null, price: 875, expected: 875 },
+    { followMasterPrice: false, priceOverride: new Prisma.Decimal('109.99'), price: 105, expected: 109.99 },
+    { followMasterPrice: false, priceOverride: null, price: new Prisma.Decimal('0'), expected: 0 },
     { followMasterPrice: true, priceOverride: 999, price: 875, expected: 850 },
     { priceOverride: 999, price: 875, expected: 850 },
   ])('respects price follow and legacy numeric fallback: %j', ({ expected, ...over }) => {

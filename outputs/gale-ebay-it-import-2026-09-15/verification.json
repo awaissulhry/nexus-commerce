@@ -1,0 +1,90 @@
+{
+  "at": "2026-09-15T08:09:51.188Z",
+  "sourceSha256": "6a13bb2f74ea90b2c529d2f9d9787ff7887ed3999d2a35751d656188c9c5affc",
+  "physicalProducts": 21,
+  "aliases": 4,
+  "listingGroups": 5,
+  "listingRows": 105,
+  "liveVariationIdentitiesVerified": 100,
+  "sourcePopulatedCells": 5902,
+  "sourceMappedFields": 3607,
+  "sourceAccountedExclusions": 2295,
+  "finalVerifiedFields": 3691,
+  "fieldMismatches": 0,
+  "variationCollisions": 0,
+  "readiness": [
+    {
+      "label": "Primary",
+      "externalListingId": "257584954808",
+      "readiness": {
+        "percent": 100,
+        "state": "ready",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      }
+    },
+    {
+      "label": "IT-GALE-JACKET",
+      "externalListingId": "256564203510",
+      "readiness": {
+        "percent": 100,
+        "state": "live",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      }
+    },
+    {
+      "label": "GALE-JACKET-ALT1",
+      "externalListingId": "256566101420",
+      "readiness": {
+        "percent": 100,
+        "state": "live",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      }
+    },
+    {
+      "label": "GALE-JACKET-ALT2",
+      "externalListingId": "256566102729",
+      "readiness": {
+        "percent": 100,
+        "state": "live",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      }
+    },
+    {
+      "label": "GALE-JACKET-ALT3",
+      "externalListingId": "256566103703",
+      "readiness": {
+        "percent": 100,
+        "state": "live",
+        "errors": 0,
+        "warnings": 0,
+        "rowsMissingRequired": 0
+      }
+    }
+  ],
+  "preserved": {
+    "otherChannelListings": 84,
+    "originalEbayPriceAndStockControls": 25,
+    "membershipsAndStockControls": 100,
+    "productImages": 159,
+    "outboundQueueRowsUnchanged": 69,
+    "physicalStock": true,
+    "originalWorkbook": true
+  },
+  "corrections": {
+    "at": "2026-09-15T08:09:27.056Z",
+    "descriptions": 84,
+    "galleries": 20,
+    "priceReferences": 59,
+    "listingSnapshots": 105,
+    "membershipSnapshots": 100
+  },
+  "apiBuildAtDataAudit": "fc92f3d8"
+}

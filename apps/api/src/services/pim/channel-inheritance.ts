@@ -13,7 +13,10 @@ export function readStoredChannelValue(store: ChannelStore | undefined, listing:
   if (store?.kind === 'listingColumn') {
     if (store.followFlag && row[store.followFlag] !== false) return undefined
     const override = CHANNEL_OVERRIDE_COLUMNS[store.column]
-    return override ? row[override] ?? row[store.column] : row[store.column]
+    const value = override ? row[override] ?? row[store.column] : row[store.column]
+    // Prisma Decimal values reach validation before JSON serialization.
+    return value && typeof value === 'object' && typeof (value as { toNumber?: unknown }).toNumber === 'function'
+      ? (value as { toNumber(): number }).toNumber() : value
   }
   // Stored-path inspection also captures existing writer/CAS state. Content readers use resolveContent.
   if (store?.kind === 'platformAttributes') {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Prisma } from '@prisma/client'
 
 const db = vi.hoisted(() => ({ products: vi.fn(), listings: vi.fn(), catalogue: vi.fn(), mapping: vi.fn() }))
 vi.mock('../../../db.js', () => ({ default: {
@@ -42,6 +43,14 @@ beforeEach(() => {
 })
 
 describe('editor, preview and validation share channel inheritance', () => {
+  it.each(['109.99', '0'])('validates an alias Decimal price %s before serialization', async amount => {
+    db.catalogue.mockResolvedValue({ schema: { present: true }, fields: [field('price', { kind: 'number', rule: { source: 'basePrice' },
+      channelStore: { kind: 'listingColumn', column: 'price', followFlag: 'followMasterPrice' } })] })
+    db.listings.mockResolvedValue([{ productId: 'p', channel: 'EBAY', marketplace: 'IT', aliasKey: 'alternate',
+      followMasterPrice: false, priceOverride: new Prisma.Decimal(amount), price: new Prisma.Decimal('105') }])
+    const result = await resolveBatch({ ...input, aliasKey: 'alternate' })
+    expect(result.products[0].cells.price).toMatchObject({ value: Number(amount), provenance: 'override', errors: [] })
+  })
   it('simulates imported storage patches without changing stored products or independent listing aliases', async () => {
     const stored = [{ productId: 'p', channel: 'EBAY', marketplace: 'IT', title: 'Pinned title', followMasterTitle: false }]
     db.listings.mockResolvedValue(stored)

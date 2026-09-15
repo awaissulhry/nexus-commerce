@@ -1,0 +1,13 @@
+{
+  "jobId": "cmu2dk2uv0000njyiw0o55teq",
+  "state": "COMPLETED",
+  "total": 105,
+  "processed": 105,
+  "receipt": {
+    "saved": 105,
+    "failed": 0,
+    "excluded": 0,
+    "unchanged": 0,
+    "unprocessed": 0
+  }
+}
