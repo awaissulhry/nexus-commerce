@@ -55,7 +55,12 @@ fixed. Workbook/product/source/HTTP suites passed 74 tests; additional alias and
 relationship checks passed in an 83-test run. Final numeric resolver/storage
 regressions passed 75 tests. API type checking passed.
 
-The original workbook is unchanged. Uploading it unchanged again will still
+**[Corrected template: GALE IT - VERIFIED.xlsx](GALE%20IT%20-%20VERIFIED.xlsx)**
+passed a fresh import dry run: all 105 records and 3,691 values unchanged, zero
+errors. It retains the source layout, uses the adopted listing IDs, includes the
+reviewed content and images, and carries current eBay price/quantity references.
+
+The original workbook is unchanged. Uploading the original unchanged again will still
 flag its seven obsolete columns and non-exact season choice; those were explicit
 reviewed corrections in this import, not silent generic importer rules.
 
@@ -76,6 +81,7 @@ without claiming that the import made all live content identical.
 ## Evidence
 
 - [Final verification](verification.json)
+- [Corrected workbook dry run](verified-workbook-readback.json)
 - [100 verified variant identities and live values](variant-identities.json)
 - [Import receipt](import-receipt.json)
 - [Quality correction receipt](quality-receipt.json)
