@@ -595,8 +595,9 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const blankCells = raw as 'ignore' | 'clear'
 
-      const { parse } = await import('csv-parse/sync')
-      const grid = parse(csv, { skip_empty_lines: true, relax_column_count: true }) as string[][]
+      // Same dialect rule as the catalog readers: the operator's spreadsheet chooses the separator.
+      const { parseCatalogCsv } = await import('../services/pim/catalog-csv-dialect.js')
+      const { grid } = parseCatalogCsv(csv)
       if (grid.length < 2) {
         return reply.code(400).send({ error: 'bad_request', message: 'the file needs a key row and at least one data row' })
       }

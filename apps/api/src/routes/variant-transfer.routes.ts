@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
-import { parse } from 'csv-parse/sync'
+import { assertCsvRectangle, parseCatalogCsv } from '../services/pim/catalog-csv-dialect.js'
 import { getFamilyRead, getProjectionRead, writeProjectionInclusion, type ProjectionRead } from '../services/pim/family-projection.service.js'
 import { getInformationSheet } from '../services/pim/information-sheet.js'
 import { canonicalVariantAxis } from '../services/pim/variant-attribute-keys.js'
@@ -94,7 +94,8 @@ export async function registerVariantTransfer(fastify: FastifyInstance) {
     const id = (request.params as { id: string }).id
     const state = await snapshot(scopeOf(id, fields))
     let grid: string[][]
-    try { grid = parse(csv, { skip_empty_lines: true, relax_column_count: false }) as string[][] }
+    // The separator is read from the file: a spreadsheet saves this template with `;` in many locales.
+    try { const read = parseCatalogCsv(csv); assertCsvRectangle(read.grid, read.delimiter); grid = read.grid }
     catch (error) { throw failure(`The CSV could not be read: ${error instanceof Error ? error.message : String(error)}`) }
     const keyIndex = grid[1]?.[0] === 'sku' ? 1 : 0
     const keys = grid[keyIndex]

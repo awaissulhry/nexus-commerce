@@ -1,6 +1,6 @@
 import { normalizeLanguage } from './content-language.js'
 import ExcelJS from 'exceljs'
-import { parse } from 'csv-parse/sync'
+import { assertCsvRectangle, parseCatalogCsv } from './catalog-csv-dialect.js'
 import { TRANSFER_CHANNELS, TRANSFER_COLUMNS, transferFileRow, type TransferRow, type TransferIssue, type TransferEntity } from '@nexus/shared/catalog-transfer'
 
 export const TRANSFER_MAX_ROWS = 50_000
@@ -70,7 +70,8 @@ export async function readTransferFile(buffer: Buffer, filename: string, options
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty CSV or XLSX file up to 10 MB')
   if (/\.csv$/i.test(filename)) {
     // A valid attribute value may occupy most of the already bounded upload.
-    const grid = parse(buffer, { bom: true, skip_empty_lines: true, max_record_size: TRANSFER_MAX_FILE_BYTES }) as string[][]
+    const { grid, delimiter } = parseCatalogCsv(buffer, TRANSFER_MAX_FILE_BYTES)
+    assertCsvRectangle(grid, delimiter)
     return parseTransferRecords(recordsOf(grid))
   }
   if (!/\.xlsx$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')

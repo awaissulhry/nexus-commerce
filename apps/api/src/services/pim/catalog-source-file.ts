@@ -2,6 +2,7 @@ import { Readable } from 'node:stream'
 import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { parse } from 'csv-parse'
+import { csvRowShapeError, readCsvDialect } from './catalog-csv-dialect.js'
 import { TRANSFER_MAX_FILE_BYTES, TRANSFER_MAX_ROWS } from './catalog-transfer-file.js'
 import type { SourceTable } from './catalog-source-mapping.js'
 
@@ -36,7 +37,14 @@ export async function readSourceFile(buffer: Buffer, filename: string): Promise<
   }
   if (/\.csv$/i.test(filename)) {
     // Bound the whole record by the upload; append validates each cell separately.
-    for await (const line of Readable.from(buffer).pipe(parse({ bom: true, skip_empty_lines: true, max_record_size: TRANSFER_MAX_FILE_BYTES }))) append(line)
+    // The separator comes from the file: a spreadsheet writes `;` or a tab in many locales.
+    const { body, delimiter } = readCsvDialect(buffer)
+    let row = 0
+    for await (const line of Readable.from(body).pipe(parse({ bom: true, delimiter, skip_empty_lines: true, relax_column_count: true, max_record_size: TRANSFER_MAX_FILE_BYTES }))) {
+      row++
+      if (row > 1 && line.length !== table.headers.length) throw csvRowShapeError(row, line.length, table.headers.length, delimiter)
+      append(line)
+    }
   } else if (/\.xlsx$/i.test(filename)) {
     await checkWorkbookSize(buffer)
     // Workbook parsing is bounded by both compressed and expanded archive sizes above.

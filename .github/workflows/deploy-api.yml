@@ -65,8 +65,8 @@ jobs:
       - name: Build API before changing production schema
         run: npm run build --workspace=@nexus/api
 
-      - name: Verify catalog CSV import size boundaries
-        run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim/catalog-csv-limits.vitest.test.ts
+      - name: Verify catalog CSV import size and dialect boundaries
+        run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim/catalog-csv-limits.vitest.test.ts src/services/pim/catalog-csv-dialect.vitest.test.ts
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
