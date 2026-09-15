@@ -19,6 +19,8 @@ import type { ChannelSheetRow, SheetColumn } from './types'
 export interface CascadeCellParams {
   tracker?: CellSaveTracker
   formattedPreview?: boolean
+  /** Dense marketplace sheets keep only source warnings visible; details retain every source. */
+  hideRoutineSourceIndicators?: boolean
   openEditor?: (row: ChannelSheetRow, column: SheetColumn, anchor: HTMLElement | null) => void
   column: SheetColumn
   /**
@@ -136,14 +138,14 @@ export const CascadeCell = memo(function CascadeCell(
       {p.openEditor && <CellAction label={`${p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Edit' : 'Details'}: ${row.sku}, ${column.label}`} description={cell?.writeBlockedReason != null ? cell.writeBlockedReason : p.api.getColumn(column.key)?.isCellEditable(p.node) ? 'Enter or F2 opens the editor.' : 'Read-only cell. The reason was not reported.'}
         onFocusCell={() => { if (p.node.rowIndex != null) { p.api.setFocusedCell(p.node.rowIndex, column.key); p.api.clearCellSelection(); p.api.addCellRange({ rowStartIndex: p.node.rowIndex, rowEndIndex: p.node.rowIndex, columns: [column.key] }) } }}
         onActivate={anchor => p.openEditor?.(row, column, anchor)} />}
-      <SourceIndicator
+      {(!p.hideRoutineSourceIndicators || source.kind === 'warning') && <SourceIndicator
         kind={source.kind}
         label={source.label}
         description={description}
         tooltip={provenance === 'refused' ? refusedReason ?? undefined : undefined}
         actionLabel={`Show cell details: ${row.sku}, ${column.label}`}
         onAction={() => onDetails(row, column)}
-      />
+      />}
       <CellSaveReason reason={save?.reason} />
       <CellSaveMark state={save?.state} />
     </span>

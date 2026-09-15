@@ -133,7 +133,8 @@ export function buildChannelColumns(options: BuildChannelColumnsOptions): ColDef
     },
     ...(Array.isArray(col.validation?.recordFields) ? { valueParser: (p: { newValue: unknown }) => parseRecordValue(p.newValue), valueFormatter: (p: { value: unknown }) => recordSummary(p.value, col.validation!.recordFields as any) } : {}),
     cellRenderer: CascadeCell,
-    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker },
+    cellRendererParams: { column: col, onDetails: openCellDetails, productLevelOnly, refusedReasonFor, tracker,
+      hideRoutineSourceIndicators: ['EBAY', 'AMAZON', 'SHOPIFY'].includes(data.scope.channel) },
     cellClassRules: composeSheetCellClassRules<ChannelSheetRow>({
       validation: channelValidation(col),
       // The tint is PES.2's too (hub ruling #11) — one definition of what "inherited" looks like.
