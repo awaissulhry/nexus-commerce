@@ -49,4 +49,12 @@ describe('information grid states', () => {
     expect(html).toContain('Try again</button>')
     expect(html).not.toMatch(/Failed to fetch|PES|deploy/)
   })
+
+  it('shows the actual read failure and keeps its recovery button', () => {
+    const message = 'Nexus took too long to load this information. Try again.'
+    const html = renderToStaticMarkup(createElement(SheetLoadError, { label: 'eBay · IT information', message, onRetry: vi.fn() }))
+    expect(html).toContain(message)
+    expect(html).toContain('Try again</button>')
+    expect(html).not.toContain('check your access')
+  })
 })

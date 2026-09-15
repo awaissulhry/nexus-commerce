@@ -25,6 +25,8 @@ import { inspectCatalogSource } from './catalog-source.service.js'
 import { getFieldCatalogue } from './mapping/field-catalogue.service.js'
 import { resolveCategoriesForProducts } from './mapping/category-mapping.service.js'
 import { transferContracts } from './catalog-transfer-plan.js'
+import * as channelSpecs from './channel-specs/index.js'
+import { ebaySpecFromCache } from './channel-specs/ebay.js'
 const app = Fastify()
 beforeAll(async () => {
   state.store = importTestStore()
@@ -67,6 +69,74 @@ async function upload(selection: ProductTransferSelection, bytes: Buffer) {
   return app.inject({ method: 'POST', url: `${url}/preview`, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
 }
 const uploadRows = async (selection: ProductTransferSelection, rows: TransferRow[]) => upload(selection, await writeTransferWorkbook(rows, []))
+
+function ebayInput() {
+  const book = new ExcelJS.Workbook(), sheet = book.addWorksheet('ebay_it')
+  sheet.addRow(['SKU', 'Parent/Child', 'Parent SKU', 'Item ID', 'Listing ID', 'Category ID', 'Title', 'Qty'])
+  const selection: ProductTransferSelection = { productIds: ['p0', 'p1'], listingIds: [], includeShared: false, locales: [] }
+  state.store.data.channelConnection.set('ebay-account', { id: 'ebay-account', channelType: 'EBAY', marketplace: null, displayName: 'Seller', isActive: true })
+  state.store.data.marketplace.set('EBAY_IT', { id: 'EBAY_IT', channel: 'EBAY', code: 'IT', name: 'Italy', languages: ['it'], isActive: true })
+  for (const [i, sourceParent] of ['000000', 'LEGACY-ALT1', 'LEGACY-ALT2'].entries()) {
+    const aliasKey = i ? `ebay-alias-${i}` : '', itemId = `25656610142${i}`
+    if (i) {
+      state.store.data.product.set(`shell-${i}`, { id: `shell-${i}`, sku: sourceParent, parentId: null, deletedAt: new Date() })
+      state.store.data.productListingAlias.set(aliasKey, { id: aliasKey, productId: 'p0', channel: 'EBAY', marketplace: 'IT', channelConnectionId: 'ebay-account', label: `Renamed listing ${i}`, status: 'ACTIVE', adoptedFromProductId: `shell-${i}` })
+    }
+    for (const productId of selection.productIds) {
+      const product = state.store.data.product.get(productId)!, id = `${productId}-ebay-${i}`
+      state.store.data.channelListing.set(id, { ...state.store.data.channelListing.get(`${productId}-account-a`), id, productId, channel: 'EBAY', channelMarket: 'EBAY_IT', marketplace: 'IT', channelConnectionId: 'ebay-account', aliasKey, aliasId: aliasKey || null, externalListingId: itemId, platformAttributes: { categoryId: '177104' } })
+      selection.listingIds.push(id)
+      sheet.addRow([productId === 'p0' ? sourceParent : product.sku, productId === 'p0' ? 'parent' : 'child', productId === 'p0' ? '' : sourceParent, itemId, '', '177104', `eBay title ${i}`, '0'])
+    }
+  }
+  return { book, sheet, selection }
+}
+
+it('imports a legacy eBay workbook through product HTTP review and preserves independently named aliases', async () => {
+  const input = ebayInput(), before = structuredClone([...state.store.data.product.values()])
+  input.sheet.getCell('I1').value = 'Stile (Style)'
+  for (let row = 2; row <= 7; row++) input.sheet.getCell(row, 9).value = `Stile ${Math.floor((row - 2) / 2)}`
+  const spec = vi.spyOn(channelSpecs, 'loadEbaySpec').mockResolvedValue(ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: [{ id: 'style', label: 'Stile', localizedName: 'Stile', englishName: 'Style' }] }))
+  vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: [{ ...fixtureFields[0], fieldKey: 'title' }, { ...fixtureFields[0], fieldKey: 'style', sheetKey: 'style', channelStore: { kind: 'platformAttributes', path: ['itemSpecifics', 'Stile'] } }], masterLocalizableKeys: ['style'], schema: { present: true } } as never)
+  try {
+    const response = await upload(input.selection, Buffer.from(await input.book.xlsx.writeBuffer()))
+    expect(response.statusCode, response.body).toBe(201)
+    const job = await review(response.json().jobId)
+    expect(job.state, JSON.stringify(job)).toBe('QUEUED')
+    expect(job.counts).toMatchObject({ listingsAffected: 6, productsAffected: 0, refused: 0 })
+    expect((await apply(job.jobId, job.reviewToken)).statusCode).toBe(202)
+    await vi.waitFor(async () => expect((await getJob(job.jobId)).state).toBe('COMPLETED'))
+    for (const i of [0, 1, 2]) for (const p of ['p0', 'p1']) {
+      expect([...state.store.data.channelListingTranslation.values()].find(t => t.channelListingId === `${p}-ebay-${i}`)).toMatchObject({ language: 'it', name: `eBay title ${i}`, attributes: { style: `Stile ${i}` } })
+      expect(state.store.data.channelListing.get(`${p}-ebay-${i}`)?.externalListingId).toBe(`25656610142${i}`)
+    }
+    expect([...state.store.data.product.values()]).toEqual(before)
+    expect(state.store.data.outboundSyncQueue.size).toBe(0)
+  } finally {
+    spec.mockRestore()
+    vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } } as never)
+  }
+})
+
+it('blocks the complete eBay import when an alternate has not been adopted into the product group', async () => {
+  const input = ebayInput()
+  state.store.data.productListingAlias.delete('ebay-alias-2')
+  input.selection.listingIds = input.selection.listingIds.filter(id => !id.endsWith('-2'))
+  const spec = vi.spyOn(channelSpecs, 'loadEbaySpec').mockResolvedValue(ebaySpecFromCache({ marketplace: 'IT', categoryId: '177104', aspects: [] }))
+  vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: [{ ...fixtureFields[0], fieldKey: 'title' }], schema: { present: true } } as never)
+  try {
+    const response = await upload(input.selection, Buffer.from(await input.book.xlsx.writeBuffer()))
+    expect(response.statusCode, response.body).toBe(201)
+    const job = await review(response.json().jobId)
+    expect(job.state).toBe('INVALID')
+    expect((await apply(job.jobId, job.reviewToken)).statusCode).toBe(409)
+    expect(state.store.data.channelListingTranslation.size).toBe(0)
+    expect(state.store.data.auditLog.size).toBe(0)
+  } finally {
+    spec.mockRestore()
+    vi.mocked(getFieldCatalogue).mockResolvedValue({ fields: fixtureFields, schema: { present: true, fetchedAt: '2026-01-01' } } as never)
+  }
+})
 async function exported(selection: ProductTransferSelection) {
   const response = await app.inject({ method: 'POST', url: `${url}/export`, payload: { market: 'IT', selection } })
   expect(response.statusCode, response.body.slice(0, 200)).toBe(200)

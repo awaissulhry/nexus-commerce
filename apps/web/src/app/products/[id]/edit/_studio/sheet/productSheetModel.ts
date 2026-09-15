@@ -19,6 +19,7 @@ export interface ProductSheetModel<Row, Page, DrawerRow extends SheetRow = Sheet
   unavailable: boolean
   backendMissing: boolean
   errorLabel: string
+  errorMessage?: string | null
   retry: () => void
   columns: SheetColumnsApi<Page>
   toolbar: Omit<SheetToolbarProps<Page>, CommonToolbarProps>

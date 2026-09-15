@@ -29,6 +29,7 @@ const getStudioColumns = vi.fn()
 
 vi.mock('../../db.js', () => ({
   default: {
+    $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
     product: { findFirst: (...a: unknown[]) => productFindFirst(...a), findMany: (...a: unknown[]) => productFindMany(...a) },
     channelListing: { findMany: (...a: unknown[]) => channelListingFindMany(...a) },
     productListingAlias: { findMany: (...a: unknown[]) => aliasFindMany(...a) },

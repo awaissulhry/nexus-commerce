@@ -481,6 +481,7 @@ const productStudioRoutes: FastifyPluginAsync = async (fastify) => {
       // The read reports its own duration, so a slow scope is visible rather
       // than being felt as "the grid is laggy".
       reply.header('Server-Timing', `studio;dur=${result.meta.tookMs}`)
+      reply.header('Cache-Control', 'no-store')
       return result
     } catch (err) {
       return sendError(reply, err, request.log, { id, market, scope: rawScope, channel })

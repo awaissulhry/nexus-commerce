@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { CellSaveTracker, SheetWriter, type GridApi, type SheetWriteRequest, type SheetWriteResult } from '@/design-system/grid'
 import { getBackendUrl } from '@/lib/backend-url'
+import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 
 import { adaptLegacySheet, type LegacySheetPage } from './adaptLegacy'
 import { recoverSheetRow } from '../sheetRecovery'
@@ -194,14 +195,14 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
     const legacyUrl = `${backend}/api/products/sheet?market=${encodeURIComponent(market)}&parentIds=${encodeURIComponent(productId)}&limit=1`
 
     const load = async (): Promise<StudioSheet> => {
-      const studio = await fetch(studioUrl, { credentials: 'include', cache: 'no-store', signal })
+      const studio = await fetchStudioRead(studioUrl, signal)
       if (studio && studio.ok) {
         const body = (await studio.json()) as StudioSheet
         return { ...body, meta: { ...body.meta, source: 'studio' } }
       }
       const failureBody: unknown = await studio?.json().catch(() => null)
       const failure = sheetReadFailure(studio?.status ?? 0, failureBody)
-      if (!failure.fallback) throw new Error(failure.message)
+      if (!failure.fallback) throw new StudioReadError(studio.status, failureBody)
       const res = await fetch(legacyUrl, { credentials: 'include', cache: 'no-store', signal })
       const body = await res.json().catch(() => null)
       if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`)
@@ -230,7 +231,7 @@ export function useMasterSheet(opts: UseMasterSheetOptions): MasterSheetState {
       })
       .catch((err: unknown) => {
         if (cancelled || mine !== requestRef.current) return
-        setError(err instanceof Error ? err.message : String(err))
+        setError(studioReadMessage(err))
       })
       .finally(() => {
         if (!cancelled && mine === requestRef.current) setLoading(false)

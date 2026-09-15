@@ -1,0 +1,113 @@
+{
+  "at": "2026-09-15T07:11:55.468Z",
+  "results": [
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820629/product-images/cmokmy3a40078pm0p1fvnu523/vohkt9vi8vbxxcdngide.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1597702"
+    },
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820606/product-images/cmokmy3a40078pm0p1fvnu523/flpf6ssrho4xsddnazcx.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1767153"
+    },
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820608/product-images/cmokmy3a40078pm0p1fvnu523/hhhzogbq9uy06z1hnr0f.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1347421"
+    },
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820612/product-images/cmokmy3a40078pm0p1fvnu523/vovwyklirnkmy6heqevl.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1704613"
+    },
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780820663/product-images/cmokmy3a40078pm0p1fvnu523/zfkmmtplsqis4ihkefyl.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1142358"
+    },
+    {
+      "url": "https://res.cloudinary.com/dvvcbo17o/image/upload/v1780823073/product-images/cmokmy3a40078pm0p1fvnu523/w1qje3tp3ceoxil30x6c.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "2135989"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/719YfFDNBOL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "231177"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/91H1cawzU6L.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "630628"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/91IAKoHCQtL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "828593"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/711EFrb6VAL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "223162"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/91mwV7ACzRL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "817659"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/51XaTLTVZOL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "54237"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/A1WgzcXIPUL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "1064786"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/41rem1s06zL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "26126"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/811HWZOl7TL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "285011"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/91aisNPM6aL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "794002"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/51Xx821TH9L.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "47427"
+    },
+    {
+      "url": "https://m.media-amazon.com/images/I/91+TNBtqhhL.jpg",
+      "status": 200,
+      "contentType": "image/jpeg",
+      "length": "631840"
+    }
+  ]
+}

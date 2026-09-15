@@ -60,7 +60,7 @@ export function ProductSheetSurface<Row, Page, DrawerRow extends SheetRow>(model
         </GridSheetStatus>
       </>}
     >
-      {model.unavailable ? <SheetLoadError label={model.errorLabel} unavailable={model.backendMissing} onRetry={model.retry} /> : <>
+      {model.unavailable ? <SheetLoadError label={model.errorLabel} message={model.errorMessage} unavailable={model.backendMissing} onRetry={model.retry} /> : <>
         {model.notice}
         {channel ? <>
           {drawer}

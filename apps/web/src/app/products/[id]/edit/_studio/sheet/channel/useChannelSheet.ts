@@ -24,6 +24,7 @@ import { commitLanguageGroups } from '../languageWrites'
 import { commitVariationTheme } from '../master/masterWrite'
 import { columnLanguages } from '../languages'
 import { getBackendUrl } from '@/lib/backend-url'
+import { fetchStudioRead, StudioReadError, studioReadMessage } from '../../studio-read'
 
 import type { SheetWriteRequest, SheetWriteResult } from '@/design-system/grid'
 
@@ -115,19 +116,10 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
 
     // Keep the current coordinate's schema during reload so AG retains column state.
     // `response.url === url` above already prevents another coordinate's data from showing.
-    fetch(url, {
-      credentials: 'include',
-      cache: 'no-store',
-      signal: AbortSignal.any([abort.signal, AbortSignal.timeout(30_000)]),
-    })
+    fetchStudioRead(url, abort.signal)
       .then(async (res) => {
         const body = await res.json().catch(() => null)
-        if (res.status === 404 || res.status === 501) {
-          const err = new Error(body?.message || body?.error || `HTTP ${res.status}`)
-          ;(err as Error & { backendMissing?: boolean }).backendMissing = true
-          throw err
-        }
-        if (!res.ok) throw new Error(body?.message || body?.error || `HTTP ${res.status}`)
+        if (!res.ok) throw new StudioReadError(res.status, body)
         return channelSheetResponse(body)
       })
       .then((body) => {
@@ -138,7 +130,7 @@ export function useChannelSheet(options: UseChannelSheetOptions): ChannelSheetSt
         if (cancelled || mine !== requestRef.current || activeUrl.current !== url) return
         setResponse(previous => previous?.url === url ? previous : { url, data: null })
         setBackendMissing(!!(err as { backendMissing?: boolean })?.backendMissing)
-        setError(err instanceof Error ? err.message : String(err))
+        setError(studioReadMessage(err))
       })
       .finally(() => {
         if (!cancelled && mine === requestRef.current && activeUrl.current === url) setLoading(false)

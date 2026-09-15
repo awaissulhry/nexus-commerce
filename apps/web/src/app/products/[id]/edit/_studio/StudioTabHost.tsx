@@ -63,7 +63,8 @@ export function StudioTabHost() {
   const { primary, selected } = studioAccountAccess(accounts, accountId)
   if (scopeError) return <Banner tone="neutral" title="Choose an available scope">{scopeError}</Banner>
   if (scope !== MASTER_SCOPE && destination.status === 'loading') return <ProgressBar indeterminate ariaLabel="Checking the selected destination" />
-  if (scope !== MASTER_SCOPE && destination.status === 'error') return <Banner tone="danger" title="This destination is unavailable">{destination.message}</Banner>
+  if (scope !== MASTER_SCOPE && destination.status === 'error') return <Banner tone="danger" title="This destination is unavailable"
+    action={destination.retry ? <Button size="sm" variant="secondary" onClick={destination.retry}>Try again</Button> : undefined}>{destination.message}</Banner>
   if (scope !== MASTER_SCOPE && !selected) return <Banner tone="neutral" title={accountId ? 'This account is unavailable' : 'Choose an account'}
     action={primary ? <Button onClick={() => setAccount(primary.id)}>Use {primary.label}</Button> : undefined}>
     Select a connected account in the scope controls to continue. Product values will load for that account.

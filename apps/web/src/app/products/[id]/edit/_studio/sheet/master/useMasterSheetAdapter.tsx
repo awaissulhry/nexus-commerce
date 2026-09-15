@@ -541,6 +541,7 @@ export function useMasterSheetAdapter({ productId, market, locale, variationAxes
         scope: 'master',
         loading, unavailable: !!error,
         errorLabel: 'shared product information',
+        errorMessage: error,
         backendMissing: false, retry: reload,
         columns: sheetColumns,
         toolbar: {

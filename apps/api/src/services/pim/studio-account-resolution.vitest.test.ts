@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ context: vi.fn(), listings: vi.fn(), aliases: vi.fn(), resolve: vi.fn(), formulas: vi.fn(), primary: vi.fn() }))
 const product = { id: 'p', sku: 'P', parentId: null, isParent: false, productType: 'OUTERWEAR', categoryAttributes: { material: 'Shared material' }, variantAttributes: {}, localizedContent: {}, variationAxes: [] }
 vi.mock('../../db.js', () => ({ default: {
+  $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
   product: { findFirst: async () => ({ id: 'p', parentId: null }), findMany: async () => [product] },
   channelListing: { findMany: mocks.listings }, productListingAlias: { findMany: mocks.aliases },
   fieldLinkGroup: { findMany: async () => [] }, cellFormula: { findMany: mocks.formulas },

@@ -1,0 +1,3924 @@
+{
+  "sourceSha256": "6a13bb2f74ea90b2c529d2f9d9787ff7887ed3999d2a35751d656188c9c5affc",
+  "sourceRows": 105,
+  "uniqueSkus": 25,
+  "parents": 5,
+  "listings": [
+    {
+      "parentSku": "GALE-JACKET",
+      "rows": [
+        2,
+        22
+      ],
+      "workbookVariants": 20,
+      "liveVariants": 20,
+      "itemId": "257584954808",
+      "seller": "xaviaracing",
+      "status": "Active",
+      "liveParentSku": "GALE-JACKET",
+      "liveTitle": "XAVIA GALE Giacca da Moto Uomo Impermeabile CE Livello 2 Protezioni Incluse",
+      "site": "Italy",
+      "categoryId": "177104",
+      "itemSpecifics": {
+        "Marca": [
+          "Xavia"
+        ]
+      },
+      "parentTitleLength": 75,
+      "descriptionEqual": false,
+      "fields": {
+        "Condition": {
+          "workbook": "NEW",
+          "live": "1000"
+        },
+        "Format": {
+          "workbook": "FIXED_PRICE",
+          "live": "FixedPriceItem"
+        },
+        "Duration": {
+          "workbook": "GTC",
+          "live": "GTC"
+        },
+        "VAT %": {
+          "workbook": "22",
+          "live": ""
+        },
+        "Handling Days": {
+          "workbook": "3",
+          "live": "0"
+        },
+        "Location": {
+          "workbook": "IT",
+          "live": "IT"
+        },
+        "Fulfillment Policy ID": {
+          "workbook": "244471597017",
+          "live": "244471597017"
+        },
+        "Payment Policy ID": {
+          "workbook": "244471571017",
+          "live": "244471571017"
+        },
+        "Return Policy ID": {
+          "workbook": "244471581017",
+          "live": "244471581017"
+        }
+      },
+      "aspectComparison": [
+        {
+          "header": "Marca (Brand) *",
+          "workbook": "Xavia Racing",
+          "live": [
+            "Xavia"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Adatto a ○",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Materiale (Material) ○",
+          "workbook": "Poliestere, Nylon",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Caratteristiche (Features)",
+          "workbook": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Stagione (Season)",
+          "workbook": "Tutte le stagioni",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Protezione (Protection)",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Stile (Style)",
+          "workbook": "Da motociclista",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Scollatura ↕",
+          "workbook": "Colletto alla coreana",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Quantità",
+          "workbook": "1",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Chiusura (Closure / Fastening)",
+          "workbook": "Cerniera",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Cura dell'indumento",
+          "workbook": "Lavabile in lavatrice",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di origine",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Genere ⚠",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Livello di protezione ⚠",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di fabbricazione ⚠",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Tipo di giacca ⚠",
+          "workbook": "Da moto",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "athlete ⚠",
+          "workbook": "Unisex",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "body type ⚠",
+          "workbook": "Regolare",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "team name ⚠",
+          "workbook": "Giacca",
+          "live": null,
+          "status": "not returned"
+        }
+      ]
+    },
+    {
+      "parentSku": "IT-GALE-JACKET",
+      "rows": [
+        23,
+        43
+      ],
+      "workbookVariants": 20,
+      "liveVariants": 20,
+      "itemId": "256564203510",
+      "seller": "xaviaracing",
+      "status": "Active",
+      "liveParentSku": "IT-GALE-JACKET",
+      "liveTitle": "Giacca Moto Xavia Gale Uomo- Giubbotto Impermeabile e Traspirante Con Protezione",
+      "site": "Italy",
+      "categoryId": "177104",
+      "itemSpecifics": {
+        "Cura dell'indumento": [
+          "Lavabile in lavatrice"
+        ],
+        "Stagione": [
+          "Tutte le stagione"
+        ],
+        "Materiale": [
+          "Tessuto"
+        ],
+        "Marca": [
+          "Xavia Racing"
+        ],
+        "Adatto a": [
+          "Adulto unisex",
+          "Ragazzi",
+          "Ragazzo",
+          "Uomo"
+        ],
+        "Caratteristiche": [
+          "Catarifrangente",
+          "Imbottita",
+          "Imobottitura rimovibile",
+          "Impermeabile",
+          "Protezione certificata CE",
+          "Protezione rimovibile",
+          "Regolabile",
+          "Resistente all'acqua",
+          "Traspirante",
+          "Ventilata",
+          "Zip completa"
+        ],
+        "Garanzia produttore": [
+          "2 anni"
+        ],
+        "Protezione": [
+          "Gomiti",
+          "Schiena",
+          "Spalle"
+        ],
+        "Paese di fabbricazione": [
+          "Pakistan"
+        ]
+      },
+      "parentTitleLength": 80,
+      "descriptionEqual": false,
+      "fields": {
+        "Condition": {
+          "workbook": "NEW",
+          "live": "1000"
+        },
+        "Format": {
+          "workbook": "FIXED_PRICE",
+          "live": "FixedPriceItem"
+        },
+        "Duration": {
+          "workbook": "GTC",
+          "live": "GTC"
+        },
+        "VAT %": {
+          "workbook": "22",
+          "live": ""
+        },
+        "Handling Days": {
+          "workbook": "3",
+          "live": "0"
+        },
+        "Location": {
+          "workbook": "IT",
+          "live": "IT"
+        },
+        "Fulfillment Policy ID": {
+          "workbook": "244471597017",
+          "live": "244471597017"
+        },
+        "Payment Policy ID": {
+          "workbook": "244471571017",
+          "live": "244471571017"
+        },
+        "Return Policy ID": {
+          "workbook": "244471581017",
+          "live": "244471581017"
+        }
+      },
+      "aspectComparison": [
+        {
+          "header": "Marca (Brand) *",
+          "workbook": "Xavia Racing",
+          "live": [
+            "Xavia Racing"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Adatto a ○",
+          "workbook": "Uomo",
+          "live": [
+            "Adulto unisex",
+            "Ragazzi",
+            "Ragazzo",
+            "Uomo"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Materiale (Material) ○",
+          "workbook": "Poliestere, Nylon",
+          "live": [
+            "Tessuto"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Caratteristiche (Features)",
+          "workbook": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "live": [
+            "Catarifrangente",
+            "Imbottita",
+            "Imobottitura rimovibile",
+            "Impermeabile",
+            "Protezione certificata CE",
+            "Protezione rimovibile",
+            "Regolabile",
+            "Resistente all'acqua",
+            "Traspirante",
+            "Ventilata",
+            "Zip completa"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stagione (Season)",
+          "workbook": "Tutte le stagioni",
+          "live": [
+            "Tutte le stagione"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Protezione (Protection)",
+          "workbook": "CE Livello 2",
+          "live": [
+            "Gomiti",
+            "Schiena",
+            "Spalle"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stile (Style)",
+          "workbook": "Da motociclista",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Scollatura ↕",
+          "workbook": "Colletto alla coreana",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Quantità",
+          "workbook": "1",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Chiusura (Closure / Fastening)",
+          "workbook": "Cerniera",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Cura dell'indumento",
+          "workbook": "Lavabile in lavatrice",
+          "live": [
+            "Lavabile in lavatrice"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Paese di origine",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Genere ⚠",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Livello di protezione ⚠",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di fabbricazione ⚠",
+          "workbook": "Pakistan",
+          "live": [
+            "Pakistan"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Tipo di giacca ⚠",
+          "workbook": "Da moto",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "athlete ⚠",
+          "workbook": "Unisex",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "body type ⚠",
+          "workbook": "Regolare",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "team name ⚠",
+          "workbook": "Giacca",
+          "live": null,
+          "status": "not returned"
+        }
+      ]
+    },
+    {
+      "parentSku": "GALE-JACKET-ALT1",
+      "rows": [
+        44,
+        64
+      ],
+      "workbookVariants": 20,
+      "liveVariants": 20,
+      "itemId": "256566101420",
+      "seller": "xaviaracing",
+      "status": "Active",
+      "liveParentSku": "GALE-JACKET-ALT1",
+      "liveTitle": "Giacca Moto Uomo- Giubbotto Impermeabile e Traspirante Con Protezione",
+      "site": "Italy",
+      "categoryId": "177104",
+      "itemSpecifics": {
+        "Cura dell'indumento": [
+          "Lavabile in lavatrice"
+        ],
+        "Stagione": [
+          "Tutte le stagione"
+        ],
+        "Materiale": [
+          "Tessuto"
+        ],
+        "Marca": [
+          "Xavia Racing"
+        ],
+        "Adatto a": [
+          "Adulto unisex",
+          "Ragazzi",
+          "Ragazzo",
+          "Uomo"
+        ],
+        "Caratteristiche": [
+          "Catarifrangente",
+          "Imbottita",
+          "Imobottitura rimovibile",
+          "Impermeabile",
+          "Protezione certificata CE",
+          "Protezione rimovibile",
+          "Regolabile",
+          "Resistente all'acqua",
+          "Traspirante",
+          "Ventilata",
+          "Zip completa"
+        ],
+        "Garanzia produttore": [
+          "2 anni"
+        ],
+        "Protezione": [
+          "Gomiti",
+          "Schiena",
+          "Spalle"
+        ],
+        "Paese di fabbricazione": [
+          "Pakistan"
+        ]
+      },
+      "parentTitleLength": 69,
+      "descriptionEqual": false,
+      "fields": {
+        "Condition": {
+          "workbook": "NEW",
+          "live": "1000"
+        },
+        "Format": {
+          "workbook": "FIXED_PRICE",
+          "live": "FixedPriceItem"
+        },
+        "Duration": {
+          "workbook": "GTC",
+          "live": "GTC"
+        },
+        "VAT %": {
+          "workbook": "22",
+          "live": ""
+        },
+        "Handling Days": {
+          "workbook": "3",
+          "live": "0"
+        },
+        "Location": {
+          "workbook": "IT",
+          "live": "IT"
+        },
+        "Fulfillment Policy ID": {
+          "workbook": "244471597017",
+          "live": "244471597017"
+        },
+        "Payment Policy ID": {
+          "workbook": "244471571017",
+          "live": "244471571017"
+        },
+        "Return Policy ID": {
+          "workbook": "244471581017",
+          "live": "244471581017"
+        }
+      },
+      "aspectComparison": [
+        {
+          "header": "Marca (Brand) *",
+          "workbook": "Xavia Racing",
+          "live": [
+            "Xavia Racing"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Adatto a ○",
+          "workbook": "Uomo",
+          "live": [
+            "Adulto unisex",
+            "Ragazzi",
+            "Ragazzo",
+            "Uomo"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Materiale (Material) ○",
+          "workbook": "Poliestere, Nylon",
+          "live": [
+            "Tessuto"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Caratteristiche (Features)",
+          "workbook": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "live": [
+            "Catarifrangente",
+            "Imbottita",
+            "Imobottitura rimovibile",
+            "Impermeabile",
+            "Protezione certificata CE",
+            "Protezione rimovibile",
+            "Regolabile",
+            "Resistente all'acqua",
+            "Traspirante",
+            "Ventilata",
+            "Zip completa"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stagione (Season)",
+          "workbook": "Tutte le stagioni",
+          "live": [
+            "Tutte le stagione"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Protezione (Protection)",
+          "workbook": "CE Livello 2",
+          "live": [
+            "Gomiti",
+            "Schiena",
+            "Spalle"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stile (Style)",
+          "workbook": "Da motociclista",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Scollatura ↕",
+          "workbook": "Colletto alla coreana",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Quantità",
+          "workbook": "1",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Chiusura (Closure / Fastening)",
+          "workbook": "Cerniera",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Cura dell'indumento",
+          "workbook": "Lavabile in lavatrice",
+          "live": [
+            "Lavabile in lavatrice"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Paese di origine",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Genere ⚠",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Livello di protezione ⚠",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di fabbricazione ⚠",
+          "workbook": "Pakistan",
+          "live": [
+            "Pakistan"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Tipo di giacca ⚠",
+          "workbook": "Da moto",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "athlete ⚠",
+          "workbook": "Unisex",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "body type ⚠",
+          "workbook": "Regolare",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "team name ⚠",
+          "workbook": "Giacca",
+          "live": null,
+          "status": "not returned"
+        }
+      ]
+    },
+    {
+      "parentSku": "GALE-JACKET-ALT2",
+      "rows": [
+        65,
+        85
+      ],
+      "workbookVariants": 20,
+      "liveVariants": 20,
+      "itemId": "256566102729",
+      "seller": "xaviaracing",
+      "status": "Active",
+      "liveParentSku": "GALE-JACKET-ALT2",
+      "liveTitle": "Giubbotto Impermeabile e Traspirante Con Protezione - Gale Giacca Moto Uomo",
+      "site": "Italy",
+      "categoryId": "177104",
+      "itemSpecifics": {
+        "Cura dell'indumento": [
+          "Lavabile in lavatrice"
+        ],
+        "Stagione": [
+          "Tutte le stagione"
+        ],
+        "Materiale": [
+          "Tessuto"
+        ],
+        "Marca": [
+          "Xavia Racing"
+        ],
+        "Adatto a": [
+          "Adulto unisex",
+          "Ragazzi",
+          "Ragazzo",
+          "Uomo"
+        ],
+        "Caratteristiche": [
+          "Catarifrangente",
+          "Imbottita",
+          "Imobottitura rimovibile",
+          "Impermeabile",
+          "Protezione certificata CE",
+          "Protezione rimovibile",
+          "Regolabile",
+          "Resistente all'acqua",
+          "Traspirante",
+          "Ventilata",
+          "Zip completa"
+        ],
+        "Garanzia produttore": [
+          "2 anni"
+        ],
+        "Protezione": [
+          "Gomiti",
+          "Schiena",
+          "Spalle"
+        ],
+        "Paese di fabbricazione": [
+          "Pakistan"
+        ]
+      },
+      "parentTitleLength": 75,
+      "descriptionEqual": false,
+      "fields": {
+        "Condition": {
+          "workbook": "NEW",
+          "live": "1000"
+        },
+        "Format": {
+          "workbook": "FIXED_PRICE",
+          "live": "FixedPriceItem"
+        },
+        "Duration": {
+          "workbook": "GTC",
+          "live": "GTC"
+        },
+        "VAT %": {
+          "workbook": "22",
+          "live": ""
+        },
+        "Handling Days": {
+          "workbook": "3",
+          "live": "0"
+        },
+        "Location": {
+          "workbook": "IT",
+          "live": "IT"
+        },
+        "Fulfillment Policy ID": {
+          "workbook": "244471597017",
+          "live": "244471597017"
+        },
+        "Payment Policy ID": {
+          "workbook": "244471571017",
+          "live": "244471571017"
+        },
+        "Return Policy ID": {
+          "workbook": "244471581017",
+          "live": "244471581017"
+        }
+      },
+      "aspectComparison": [
+        {
+          "header": "Marca (Brand) *",
+          "workbook": "Xavia Racing",
+          "live": [
+            "Xavia Racing"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Adatto a ○",
+          "workbook": "Uomo",
+          "live": [
+            "Adulto unisex",
+            "Ragazzi",
+            "Ragazzo",
+            "Uomo"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Materiale (Material) ○",
+          "workbook": "Poliestere, Nylon",
+          "live": [
+            "Tessuto"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Caratteristiche (Features)",
+          "workbook": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "live": [
+            "Catarifrangente",
+            "Imbottita",
+            "Imobottitura rimovibile",
+            "Impermeabile",
+            "Protezione certificata CE",
+            "Protezione rimovibile",
+            "Regolabile",
+            "Resistente all'acqua",
+            "Traspirante",
+            "Ventilata",
+            "Zip completa"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stagione (Season)",
+          "workbook": "Tutte le stagioni",
+          "live": [
+            "Tutte le stagione"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Protezione (Protection)",
+          "workbook": "CE Livello 2",
+          "live": [
+            "Gomiti",
+            "Schiena",
+            "Spalle"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stile (Style)",
+          "workbook": "Da motociclista",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Scollatura ↕",
+          "workbook": "Colletto alla coreana",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Quantità",
+          "workbook": "1",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Chiusura (Closure / Fastening)",
+          "workbook": "Cerniera",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Cura dell'indumento",
+          "workbook": "Lavabile in lavatrice",
+          "live": [
+            "Lavabile in lavatrice"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Paese di origine",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Genere ⚠",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Livello di protezione ⚠",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di fabbricazione ⚠",
+          "workbook": "Pakistan",
+          "live": [
+            "Pakistan"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Tipo di giacca ⚠",
+          "workbook": "Da moto",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "athlete ⚠",
+          "workbook": "Unisex",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "body type ⚠",
+          "workbook": "Regolare",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "team name ⚠",
+          "workbook": "Giacca",
+          "live": null,
+          "status": "not returned"
+        }
+      ]
+    },
+    {
+      "parentSku": "GALE-JACKET-ALT3",
+      "rows": [
+        86,
+        106
+      ],
+      "workbookVariants": 20,
+      "liveVariants": 20,
+      "itemId": "256566103703",
+      "seller": "xaviaracing",
+      "status": "Active",
+      "liveParentSku": "GALE-JACKET-ALT3",
+      "liveTitle": "Giubbotto Impermeabile e Traspirante Con Protezione Livello 2 | Giacca Moto Uomo",
+      "site": "Italy",
+      "categoryId": "177104",
+      "itemSpecifics": {
+        "Cura dell'indumento": [
+          "Lavabile in lavatrice"
+        ],
+        "Stagione": [
+          "Tutte le stagione"
+        ],
+        "Materiale": [
+          "Tessuto"
+        ],
+        "Marca": [
+          "Xavia Racing"
+        ],
+        "Adatto a": [
+          "Adulto unisex",
+          "Ragazzi",
+          "Ragazzo",
+          "Uomo"
+        ],
+        "Caratteristiche": [
+          "Catarifrangente",
+          "Imbottita",
+          "Imobottitura rimovibile",
+          "Impermeabile",
+          "Protezione certificata CE",
+          "Protezione rimovibile",
+          "Regolabile",
+          "Resistente all'acqua",
+          "Traspirante",
+          "Ventilata",
+          "Zip completa"
+        ],
+        "Garanzia produttore": [
+          "2 anni"
+        ],
+        "Protezione": [
+          "Gomiti",
+          "Schiena",
+          "Spalle"
+        ],
+        "Paese di fabbricazione": [
+          "Pakistan"
+        ]
+      },
+      "parentTitleLength": 80,
+      "descriptionEqual": false,
+      "fields": {
+        "Condition": {
+          "workbook": "NEW",
+          "live": "1000"
+        },
+        "Format": {
+          "workbook": "FIXED_PRICE",
+          "live": "FixedPriceItem"
+        },
+        "Duration": {
+          "workbook": "GTC",
+          "live": "GTC"
+        },
+        "VAT %": {
+          "workbook": "22",
+          "live": ""
+        },
+        "Handling Days": {
+          "workbook": "3",
+          "live": "0"
+        },
+        "Location": {
+          "workbook": "IT",
+          "live": "IT"
+        },
+        "Fulfillment Policy ID": {
+          "workbook": "244471597017",
+          "live": "244471597017"
+        },
+        "Payment Policy ID": {
+          "workbook": "244471571017",
+          "live": "244471571017"
+        },
+        "Return Policy ID": {
+          "workbook": "244471581017",
+          "live": "244471581017"
+        }
+      },
+      "aspectComparison": [
+        {
+          "header": "Marca (Brand) *",
+          "workbook": "Xavia Racing",
+          "live": [
+            "Xavia Racing"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Adatto a ○",
+          "workbook": "Uomo",
+          "live": [
+            "Adulto unisex",
+            "Ragazzi",
+            "Ragazzo",
+            "Uomo"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Materiale (Material) ○",
+          "workbook": "Poliestere, Nylon",
+          "live": [
+            "Tessuto"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Caratteristiche (Features)",
+          "workbook": "Ventilato, Imbottitura rimovibile, Leggero, Resistente all'abrasione, Impermeabile",
+          "live": [
+            "Catarifrangente",
+            "Imbottita",
+            "Imobottitura rimovibile",
+            "Impermeabile",
+            "Protezione certificata CE",
+            "Protezione rimovibile",
+            "Regolabile",
+            "Resistente all'acqua",
+            "Traspirante",
+            "Ventilata",
+            "Zip completa"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stagione (Season)",
+          "workbook": "Tutte le stagioni",
+          "live": [
+            "Tutte le stagione"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Protezione (Protection)",
+          "workbook": "CE Livello 2",
+          "live": [
+            "Gomiti",
+            "Schiena",
+            "Spalle"
+          ],
+          "status": "different"
+        },
+        {
+          "header": "Stile (Style)",
+          "workbook": "Da motociclista",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Scollatura ↕",
+          "workbook": "Colletto alla coreana",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Quantità",
+          "workbook": "1",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Chiusura (Closure / Fastening)",
+          "workbook": "Cerniera",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Cura dell'indumento",
+          "workbook": "Lavabile in lavatrice",
+          "live": [
+            "Lavabile in lavatrice"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Paese di origine",
+          "workbook": "Pakistan",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Genere ⚠",
+          "workbook": "Uomo",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Livello di protezione ⚠",
+          "workbook": "CE Livello 2",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "Paese di fabbricazione ⚠",
+          "workbook": "Pakistan",
+          "live": [
+            "Pakistan"
+          ],
+          "status": "equal"
+        },
+        {
+          "header": "Tipo di giacca ⚠",
+          "workbook": "Da moto",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "athlete ⚠",
+          "workbook": "Unisex",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "body type ⚠",
+          "workbook": "Regolare",
+          "live": null,
+          "status": "not returned"
+        },
+        {
+          "header": "team name ⚠",
+          "workbook": "Giacca",
+          "live": null,
+          "status": "not returned"
+        }
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "row": 3,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "257584954808",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "12",
+      "liveQty": 13
+    },
+    {
+      "row": 4,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "257584954808",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "5",
+      "liveQty": 5
+    },
+    {
+      "row": 5,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "257584954808",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 6,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "257584954808",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "34",
+      "liveQty": 34
+    },
+    {
+      "row": 7,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "257584954808",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "6",
+      "liveQty": 9
+    },
+    {
+      "row": 8,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "257584954808",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "53",
+      "liveQty": 53
+    },
+    {
+      "row": 9,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "257584954808",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "6",
+      "liveQty": 7
+    },
+    {
+      "row": 10,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "257584954808",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "42",
+      "liveQty": 42
+    },
+    {
+      "row": 11,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "257584954808",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "15",
+      "liveQty": 15
+    },
+    {
+      "row": 12,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "itemId": "257584954808",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "29",
+      "liveQty": 29
+    },
+    {
+      "row": 13,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "257584954808",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 14,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "257584954808",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "10",
+      "liveQty": 10
+    },
+    {
+      "row": 15,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "257584954808",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 16,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "257584954808",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 29
+    },
+    {
+      "row": 17,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "257584954808",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 18,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "257584954808",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "24",
+      "liveQty": 24
+    },
+    {
+      "row": 19,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "257584954808",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 27
+    },
+    {
+      "row": 20,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "257584954808",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 28
+    },
+    {
+      "row": 21,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "257584954808",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "11",
+      "liveQty": 11
+    },
+    {
+      "row": 22,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "itemId": "257584954808",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "31",
+      "liveQty": 31
+    },
+    {
+      "row": 24,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256564203510",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "12",
+      "liveQty": 13
+    },
+    {
+      "row": 25,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256564203510",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "5",
+      "liveQty": 5
+    },
+    {
+      "row": 26,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "256564203510",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 27,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256564203510",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "34",
+      "liveQty": 34
+    },
+    {
+      "row": 28,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256564203510",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "6",
+      "liveQty": 9
+    },
+    {
+      "row": 29,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256564203510",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "53",
+      "liveQty": 53
+    },
+    {
+      "row": 30,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256564203510",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "6",
+      "liveQty": 7
+    },
+    {
+      "row": 31,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "256564203510",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "42",
+      "liveQty": 42
+    },
+    {
+      "row": 32,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256564203510",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "15",
+      "liveQty": 15
+    },
+    {
+      "row": 33,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "itemId": "256564203510",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "29",
+      "liveQty": 29
+    },
+    {
+      "row": 34,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256564203510",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 35,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256564203510",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "10",
+      "liveQty": 10
+    },
+    {
+      "row": 36,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "256564203510",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 37,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256564203510",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "28",
+      "liveQty": 29
+    },
+    {
+      "row": 38,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256564203510",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 39,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256564203510",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "24",
+      "liveQty": 24
+    },
+    {
+      "row": 40,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256564203510",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "28",
+      "liveQty": 27
+    },
+    {
+      "row": 41,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "256564203510",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "28",
+      "liveQty": 28
+    },
+    {
+      "row": 42,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256564203510",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.99",
+      "sheetQty": "11",
+      "liveQty": 11
+    },
+    {
+      "row": 43,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "itemId": "256564203510",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "31",
+      "liveQty": 31
+    },
+    {
+      "row": 45,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566101420",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "12",
+      "liveQty": 13
+    },
+    {
+      "row": 46,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566101420",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "5",
+      "liveQty": 5
+    },
+    {
+      "row": 47,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "256566101420",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 48,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566101420",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "34",
+      "liveQty": 34
+    },
+    {
+      "row": 49,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566101420",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "6",
+      "liveQty": 9
+    },
+    {
+      "row": 50,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566101420",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "53",
+      "liveQty": 53
+    },
+    {
+      "row": 51,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566101420",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "6",
+      "liveQty": 7
+    },
+    {
+      "row": 52,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "256566101420",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "42",
+      "liveQty": 42
+    },
+    {
+      "row": 53,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566101420",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "15",
+      "liveQty": 15
+    },
+    {
+      "row": 54,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "itemId": "256566101420",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "29",
+      "liveQty": 29
+    },
+    {
+      "row": 55,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566101420",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 56,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566101420",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "10",
+      "liveQty": 10
+    },
+    {
+      "row": 57,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "256566101420",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 58,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566101420",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 29
+    },
+    {
+      "row": 59,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566101420",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 60,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566101420",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "24",
+      "liveQty": 24
+    },
+    {
+      "row": 61,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566101420",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 27
+    },
+    {
+      "row": 62,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "256566101420",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 28
+    },
+    {
+      "row": 63,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566101420",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "11",
+      "liveQty": 11
+    },
+    {
+      "row": 64,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "itemId": "256566101420",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "31",
+      "liveQty": 31
+    },
+    {
+      "row": 66,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566102729",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "12",
+      "liveQty": 13
+    },
+    {
+      "row": 67,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566102729",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "5",
+      "liveQty": 5
+    },
+    {
+      "row": 68,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "256566102729",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 69,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566102729",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "34",
+      "liveQty": 34
+    },
+    {
+      "row": 70,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566102729",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "6",
+      "liveQty": 9
+    },
+    {
+      "row": 71,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566102729",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "53",
+      "liveQty": 53
+    },
+    {
+      "row": 72,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566102729",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "6",
+      "liveQty": 7
+    },
+    {
+      "row": 73,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "256566102729",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "42",
+      "liveQty": 42
+    },
+    {
+      "row": 74,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566102729",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "15",
+      "liveQty": 15
+    },
+    {
+      "row": 75,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "itemId": "256566102729",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "29",
+      "liveQty": 29
+    },
+    {
+      "row": 76,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566102729",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 77,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566102729",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "10",
+      "liveQty": 10
+    },
+    {
+      "row": 78,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "256566102729",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 79,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566102729",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 29
+    },
+    {
+      "row": 80,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566102729",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 81,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566102729",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "24",
+      "liveQty": 24
+    },
+    {
+      "row": 82,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566102729",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 27
+    },
+    {
+      "row": 83,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "256566102729",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 28
+    },
+    {
+      "row": 84,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566102729",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "11",
+      "liveQty": 11
+    },
+    {
+      "row": 85,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "itemId": "256566102729",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "31",
+      "liveQty": 31
+    },
+    {
+      "row": 87,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566103703",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "12",
+      "liveQty": 13
+    },
+    {
+      "row": 88,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566103703",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "5",
+      "liveQty": 5
+    },
+    {
+      "row": 89,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "256566103703",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 90,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566103703",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "34",
+      "liveQty": 34
+    },
+    {
+      "row": 91,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566103703",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "6",
+      "liveQty": 9
+    },
+    {
+      "row": 92,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566103703",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "53",
+      "liveQty": 53
+    },
+    {
+      "row": 93,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566103703",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "6",
+      "liveQty": 7
+    },
+    {
+      "row": 94,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "256566103703",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "42",
+      "liveQty": 42
+    },
+    {
+      "row": 95,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566103703",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "15",
+      "liveQty": 15
+    },
+    {
+      "row": 96,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "itemId": "256566103703",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Nero",
+      "liveColor": [
+        "Nero"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "29",
+      "liveQty": 29
+    },
+    {
+      "row": 97,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566103703",
+      "sheetSize": "3XL",
+      "liveSize": [
+        "3XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 98,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566103703",
+      "sheetSize": "4XL",
+      "liveSize": [
+        "4XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "10",
+      "liveQty": 10
+    },
+    {
+      "row": 99,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "256566103703",
+      "sheetSize": "5XL",
+      "liveSize": [
+        "5XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "0",
+      "liveQty": 0
+    },
+    {
+      "row": 100,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566103703",
+      "sheetSize": "L",
+      "liveSize": [
+        "L"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 29
+    },
+    {
+      "row": 101,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566103703",
+      "sheetSize": "M",
+      "liveSize": [
+        "M"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "18",
+      "liveQty": 18
+    },
+    {
+      "row": 102,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566103703",
+      "sheetSize": "S",
+      "liveSize": [
+        "S"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "24",
+      "liveQty": 24
+    },
+    {
+      "row": 103,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566103703",
+      "sheetSize": "XL",
+      "liveSize": [
+        "XL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "28",
+      "liveQty": 27
+    },
+    {
+      "row": 104,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "256566103703",
+      "sheetSize": "XS",
+      "liveSize": [
+        "XS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "28",
+      "liveQty": 28
+    },
+    {
+      "row": 105,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566103703",
+      "sheetSize": "XXL",
+      "liveSize": [
+        "XXL"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "109.0",
+      "sheetQty": "11",
+      "liveQty": 11
+    },
+    {
+      "row": 106,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "itemId": "256566103703",
+      "sheetSize": "XXS",
+      "liveSize": [
+        "XXS"
+      ],
+      "sheetColor": "Giallo",
+      "liveColor": [
+        "Giallo"
+      ],
+      "sheetPrice": "105",
+      "livePrice": "105.0",
+      "sheetQty": "31",
+      "liveQty": 31
+    }
+  ],
+  "issues": [
+    {
+      "row": 3,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "257584954808",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 12,
+      "observed": 13
+    },
+    {
+      "row": 7,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "257584954808",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 9
+    },
+    {
+      "row": 9,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "257584954808",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 7
+    },
+    {
+      "row": 16,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "257584954808",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 29
+    },
+    {
+      "row": 19,
+      "parentSku": "GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "257584954808",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 27
+    },
+    {
+      "row": 24,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 24,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256564203510",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 12,
+      "observed": 13
+    },
+    {
+      "row": 25,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 26,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-5XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 27,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 28,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 28,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256564203510",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 9
+    },
+    {
+      "row": 29,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 30,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 30,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256564203510",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 7
+    },
+    {
+      "row": 31,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XS",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 32,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 34,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 35,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 36,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-5XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 37,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 37,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256564203510",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 29
+    },
+    {
+      "row": 38,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 39,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 40,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 40,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256564203510",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 27
+    },
+    {
+      "row": 41,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XS",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 42,
+      "parentSku": "IT-GALE-JACKET",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256564203510",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.99"
+    },
+    {
+      "row": 45,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 45,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566101420",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 12,
+      "observed": 13
+    },
+    {
+      "row": 46,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 48,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 49,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566101420",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 9
+    },
+    {
+      "row": 50,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 51,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 51,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566101420",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 7
+    },
+    {
+      "row": 53,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 55,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 56,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 58,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 58,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566101420",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 29
+    },
+    {
+      "row": 59,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 60,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 61,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 61,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566101420",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 27
+    },
+    {
+      "row": 63,
+      "parentSku": "GALE-JACKET-ALT1",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566101420",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 66,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 66,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566102729",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 12,
+      "observed": 13
+    },
+    {
+      "row": 67,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 69,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 70,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566102729",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 9
+    },
+    {
+      "row": 71,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 72,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 72,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566102729",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 7
+    },
+    {
+      "row": 74,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 76,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 77,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 79,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 79,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566102729",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 29
+    },
+    {
+      "row": 80,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 81,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 82,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 82,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566102729",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 27
+    },
+    {
+      "row": 84,
+      "parentSku": "GALE-JACKET-ALT2",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566102729",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 87,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 87,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-3XL",
+      "itemId": "256566103703",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 12,
+      "observed": 13
+    },
+    {
+      "row": 88,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-4XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 90,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-L",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 91,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 91,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-M",
+      "itemId": "256566103703",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 9
+    },
+    {
+      "row": 92,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-S",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 93,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 93,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XL",
+      "itemId": "256566103703",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 6,
+      "observed": 7
+    },
+    {
+      "row": 95,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-BLACK-MEN-XXL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 97,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-3XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 98,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-4XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 100,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 100,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-L",
+      "itemId": "256566103703",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 29
+    },
+    {
+      "row": 101,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-M",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 102,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-S",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 103,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    },
+    {
+      "row": 103,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XL",
+      "itemId": "256566103703",
+      "field": "Qty",
+      "kind": "live_quantity_drift",
+      "workbook": 28,
+      "observed": 27
+    },
+    {
+      "row": 105,
+      "parentSku": "GALE-JACKET-ALT3",
+      "sku": "GALE-JACKET-YELLOW-MEN-XXL",
+      "itemId": "256566103703",
+      "field": "Price (€)",
+      "kind": "live_price_drift",
+      "workbook": "105",
+      "observed": "109.0"
+    }
+  ],
+  "sharedCatalogIssues": [
+    {
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "field": "Size",
+      "expected": "XXS",
+      "stored": "XS",
+      "storedAttributes": {
+        "Size": "XS",
+        "Color": "Nero",
+        "variantAttributes": "[object Object]"
+      }
+    },
+    {
+      "sku": "GALE-JACKET-BLACK-MEN-XXS",
+      "field": "variantAttributes",
+      "issue": "Literal object-string corruption",
+      "storedAttributes": {
+        "Size": "XS",
+        "Color": "Nero",
+        "variantAttributes": "[object Object]"
+      }
+    },
+    {
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "field": "Size",
+      "expected": "XXS",
+      "stored": "XS",
+      "storedAttributes": {
+        "Size": "XS",
+        "Color": "Giallo",
+        "variantAttributes": "[object Object]"
+      }
+    },
+    {
+      "sku": "GALE-JACKET-YELLOW-MEN-XXS",
+      "field": "variantAttributes",
+      "issue": "Literal object-string corruption",
+      "storedAttributes": {
+        "Size": "XS",
+        "Color": "Giallo",
+        "variantAttributes": "[object Object]"
+      }
+    }
+  ],
+  "issueCounts": {
+    "live_quantity_drift": 25,
+    "live_price_drift": 58
+  },
+  "populatedColumns": {
+    "SKU": 105,
+    "Parent/Child": 105,
+    "Parent SKU": 100,
+    "Title": 105,
+    "Condition": 105,
+    "Category ID": 105,
+    "Variation Theme": 105,
+    "Shared-SKU (Trading API)": 105,
+    "Format": 105,
+    "Duration": 105,
+    "Description": 21,
+    "Best Offer": 105,
+    "BO Floor (EUR)": 105,
+    "BO Ceiling (EUR)": 105,
+    "VAT %": 105,
+    "Quantity": 105,
+    "Handling Days": 105,
+    "Location": 105,
+    "Weight": 105,
+    "Wt Unit": 105,
+    "Length": 105,
+    "Width": 105,
+    "Height": 105,
+    "Dim Unit": 105,
+    "Image 1": 21,
+    "Image 2": 21,
+    "Image 3": 21,
+    "Image 4": 21,
+    "Image 5": 21,
+    "Image 6": 21,
+    "Fulfillment Policy ID": 5,
+    "Payment Policy ID": 5,
+    "Return Policy ID": 5,
+    "Listing Status": 105,
+    "Last Pushed": 105,
+    "Sync Status": 105,
+    "Marca (Brand) *": 105,
+    "Adatto a ○": 105,
+    "Taglia (Size) ○ ↕": 100,
+    "Materiale (Material) ○": 105,
+    "Colore (Color) ↕": 100,
+    "Caratteristiche (Features)": 105,
+    "Stagione (Season)": 105,
+    "Protezione (Protection)": 105,
+    "Stile (Style)": 105,
+    "Scollatura ↕": 105,
+    "Quantità": 105,
+    "Colore specifico": 100,
+    "Chiusura (Closure / Fastening)": 105,
+    "Cura dell'indumento": 105,
+    "Paese di origine": 105,
+    "Colore esatto": 100,
+    "Genere ⚠": 105,
+    "Livello di protezione ⚠": 105,
+    "Paese di fabbricazione ⚠": 105,
+    "Tipo di giacca ⚠": 105,
+    "athlete ⚠": 105,
+    "body type ⚠": 105,
+    "team name ⚠": 105,
+    "Price (€)": 100,
+    "Qty": 100,
+    "Follow": 105,
+    "Buffer": 105,
+    "Item ID": 105,
+    "Status": 105
+  }
+}

@@ -44,6 +44,7 @@ vi.mock('../shopify/admin-client.js', async importOriginal => ({ ...await import
 vi.mock('../shopify/linked-products-gateway.js', async importOriginal => ({ ...await importOriginal<any>(), readLinkedStoreSchema: async () => (await import('../../test-support/information-shopify-fixture.js')).informationShopifySchema }))
 vi.mock('../shopify/information-gateway.js', async importOriginal => ({ ...await importOriginal<any>(), readInformation: async (_graphql: any, ids: string[], _schema: any, locale: string) => (await import('../../test-support/information-shopify-fixture.js')).shopifyFixtureSnapshot(ids, locale) }))
 import prisma from '../../db.js'
+import { inDatabaseReadTransaction } from '../../lib/database-context.js'
 import productRoutes from '../../routes/products.routes.js'
 import formulaRoutes from '../../routes/cell-formula.routes.js'
 import globalRoutes from '../../routes/pim-global.routes.js'
@@ -57,6 +58,14 @@ const sheet = async (channel?: string, accountId?: string, locale = 'it') => {
   expect(response.statusCode, response.body).toBe(200); return response.json()
 }
 const property = (id = 200, values = [{ value_id: 1, name: 'Black' }, { value_id: 2, name: 'Red' }]) => ({ property_id: id, name: 'color', display_name: 'Colour', is_required: true, supports_attributes: true, supports_variations: false, is_multivalued: true, max_values_allowed: 2, scales: [], selected_values: [], possible_values: values })
+it('the sheet snapshot enforces read-only access at the database', async () => {
+  const before = await prisma.product.findUniqueOrThrow({ where: { id: 'store-demo' } })
+  await expect(inDatabaseReadTransaction(prisma, async () => {
+    await prisma.product.findUniqueOrThrow({ where: { id: 'store-demo' } })
+    await prisma.product.update({ where: { id: 'store-demo' }, data: { name: 'must not be written' } })
+  })).rejects.toThrow(/read.only transaction/i)
+  expect((await prisma.product.findUniqueOrThrow({ where: { id: 'store-demo' } })).name).toBe(before.name)
+})
 beforeAll(async () => {
   await prisma.productFamily.create({ data: { id: 'information-family', code: 'information_jackets', label: 'Jackets' } })
   await prisma.attributeGroup.create({ data: { id: 'information-group', code: 'information_fixture', label: 'Specifications' } })

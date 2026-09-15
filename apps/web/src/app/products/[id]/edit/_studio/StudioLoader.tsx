@@ -1,23 +1,21 @@
 'use client'
 
 /**
- * PES.1 — the authenticated second pass.
+ * The authenticated editor load.
  *
- * Under RBAC enforce the Next server cannot read the API-origin session cookie, so the server-side
- * load in `page.tsx` comes back 401 for a user who is perfectly entitled to the record. Re-running
- * the identical loader in the browser lets the credentialed fetch wrapper attach the session and
- * CSRF header, so per-user RBAC is still what decides (reference_rbac_enforce_ssr). Same shape as
- * the old edit page's `ProductEditLoader`, minus its four extra fetches.
+ * The browser owns the API session cookie. Start the authenticated reads here and cancel them
+ * on navigation; the page can show its skeleton immediately without an unauthenticated pass.
  */
 
 import { useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 
-import { Button, Spinner } from '@/design-system/primitives'
+import { Button } from '@/design-system/primitives'
 import { EmptyState } from '@/design-system/components'
 
 import { StudioClient } from './StudioClient'
 import { loadStudioData, type StudioData } from './studio-data'
+import Loading from '../studio/loading'
 import styles from './studio.module.css'
 
 export function StudioLoader({ id }: { id: string }) {
@@ -28,9 +26,10 @@ export function StudioLoader({ id }: { id: string }) {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
     setState({ kind: 'loading' })
     void (async () => {
-      const result = await loadStudioData(id)
+      const result = await loadStudioData(id, controller.signal)
       if (cancelled) return
       if (result.kind === 'ok') {
         setState({ kind: 'ok', data: result.data })
@@ -49,17 +48,12 @@ export function StudioLoader({ id }: { id: string }) {
     })()
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [id, attempt])
 
   if (state.kind === 'loading') {
-    return (
-      <div className={styles.shell}>
-        <div className={styles.centered}>
-          <Spinner />
-        </div>
-      </div>
-    )
+    return <Loading />
   }
 
   if (state.kind === 'failed') {

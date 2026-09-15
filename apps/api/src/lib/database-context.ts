@@ -24,6 +24,16 @@ export function contextualDatabase(root: PrismaClient): PrismaClient {
 
 export const activeDatabaseTransaction = () => context.getStore()?.client
 
+/** A sheet reads many related tables. Configure workspace ownership once for its snapshot,
+ * rather than opening a new transaction for every query over the database connection. */
+export async function inDatabaseReadTransaction<T>(client: PrismaClient, work: () => Promise<T>): Promise<T> {
+  if (context.getStore()) return work()
+  return client.$transaction(async tx => {
+    await tx.$executeRaw`SET TRANSACTION READ ONLY`
+    return context.run({ client: tx, effects: new Map(), producers: new Map() }, work)
+  }, { isolationLevel: 'RepeatableRead', maxWait: 5_000, timeout: 20_000 })
+}
+
 /** Fastify injection starts a new async resource; carry only an internal context handle. */
 export function captureDatabaseContext() {
   const captured = context.getStore()

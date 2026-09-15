@@ -1,0 +1,50 @@
+{
+  "current": {
+    "attributes": 734,
+    "issues": 252,
+    "issueFields": {
+      "Stagione (Season)": 21,
+      "Genere ⚠": 21,
+      "Livello di protezione ⚠": 21,
+      "Paese di fabbricazione ⚠": 21,
+      "Tipo di giacca ⚠": 21,
+      "athlete ⚠": 21,
+      "body type ⚠": 21,
+      "team name ⚠": 21,
+      "Item ID": 84
+    },
+    "exclusions": 396
+  },
+  "hypotheticalAliasSetup": {
+    "attributes": 3502,
+    "issues": 840,
+    "issueFields": {
+      "Stagione (Season)": 105,
+      "Genere ⚠": 105,
+      "Livello di protezione ⚠": 105,
+      "Paese di fabbricazione ⚠": 105,
+      "Tipo di giacca ⚠": 105,
+      "athlete ⚠": 105,
+      "body type ⚠": 105,
+      "team name ⚠": 105
+    },
+    "exclusions": 1560,
+    "identities": 105
+  },
+  "hypotheticalCleanup": {
+    "removedColumns": [
+      "Genere ⚠",
+      "Livello di protezione ⚠",
+      "Paese di fabbricazione ⚠",
+      "Tipo di giacca ⚠",
+      "athlete ⚠",
+      "body type ⚠",
+      "team name ⚠"
+    ],
+    "seasonReplacement": "Tutte le stagione",
+    "attributes": 3607,
+    "issues": 0,
+    "exclusions": 1560,
+    "identities": 105
+  }
+}

@@ -40,6 +40,7 @@ const marketplaceFindMany = vi.fn()
 
 vi.mock('../../db.js', () => ({
   default: {
+    $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
     product: {
       findFirst: (...a: unknown[]) => productFindFirst(...a),
       findMany: (...a: unknown[]) => productFindMany(...a),

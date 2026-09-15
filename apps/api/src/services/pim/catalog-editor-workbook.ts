@@ -9,6 +9,8 @@ import { readTransferFile, TRANSFER_MAX_FILE_BYTES } from './catalog-transfer-fi
 import { checkWorkbookSize } from './catalog-source-file.js'
 import { checkProductTransferBoundary, productTransferOptions } from './catalog-product-transfer.js'
 import { TransferConflict } from './catalog-transfer.service.js'
+import { readProductEbayWorkbook } from './catalog-ebay-workbook.js'
+import type { SourceExclusion } from './catalog-source-mapping.js'
 
 const EXPORT_KIND = 'product-editing-export-v3'
 const INPUT_KIND = 'product-editing-input-v1'
@@ -16,7 +18,7 @@ export const PRODUCT_TRANSFER_MAX_BYTES = 50 * 1024 * 1024
 export const PRODUCT_TRANSFER_MAX_OUTCOMES = 250_000
 const json = (v: unknown) => JSON.parse(JSON.stringify(v)) as Prisma.InputJsonValue
 interface SavedExport extends EditingWorkbookBaseline { kind: typeof EXPORT_KIND; boundary: ProductTransferBoundary }
-interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[] }
+interface ParsedInput { rows: TransferRow[]; issues: TransferIssue[]; exclusions?: SourceExclusion[]; boundary?: ProductTransferBoundary; editing?: boolean; warnings?: string[] }
 
 /** The workbook is only a reference to this user-owned, immutable export snapshot. */
 export async function writeEditorWorkbook(scopes: WorkbookScope[], boundary: ProductTransferBoundary, userId: string | null) {
@@ -47,6 +49,8 @@ async function readEditorPart(buffer: Buffer, filename: string, productId: strin
     }
     const wide = readCatalogWorkbook(book)
     if (wide) return wide
+    const ebay = await readProductEbayWorkbook(book, productId)
+    if (ebay) return { ...ebay, editing: true }
   }
   return readTransferFile(buffer, filename)
 }
@@ -75,7 +79,7 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
     }
     if (entries.some(e => !names.has(e.name) && !['manifest.json', 'README.txt'].includes(e.name))) throw new Error('The archive contains an undeclared file')
   } else parts.push({ name: filename, bytes: buffer })
-  const out: ParsedInput = { rows: [], issues: [], editing: true }
+  const out: ParsedInput = { rows: [], issues: [], exclusions: [], editing: true, warnings: [] }
   const targets = new Set<string>()
   const expanded = { bytes: 0 }
   for (const part of parts) {
@@ -88,13 +92,15 @@ export async function readEditorTransfer(buffer: Buffer, filename: string, produ
     keys.forEach(k => targets.add(k))
     out.rows.push(...parsed.rows.map(r => ({ ...r, source: { ...r.source, file: part.name } })))
     out.issues.push(...parsed.issues.map(i => ({ ...i, source: { ...i.source, file: part.name } })))
-    if (out.rows.length + out.issues.length > PRODUCT_TRANSFER_MAX_OUTCOMES) throw new Error('Import at most 250,000 attribute outcomes in one batch')
+    out.exclusions!.push(...(parsed.exclusions ?? []).map(i => ({ ...i, source: { ...i.source, file: part.name } })))
+    out.warnings!.push(...(parsed.warnings ?? []))
+    if (out.rows.length + out.issues.length + out.exclusions!.length > PRODUCT_TRANSFER_MAX_OUTCOMES) throw new Error('Import at most 250,000 attribute outcomes in one batch')
     if (parsed.boundary) {
       if (out.boundary && JSON.stringify(out.boundary) !== JSON.stringify(parsed.boundary)) throw new Error('These workbooks have different export selections. Review each export separately.')
       out.boundary = parsed.boundary
     }
   }
-  if (!out.editing) out.warnings = ['This file includes a legacy workbook or attribute CSV. Its explicit SET, CLEAR and INHERIT actions determine changes; deleting a value beside SET can set empty text. Check every proposed change. Use a new editing workbook for blank cells to always preserve data.']
+  if (!out.editing) out.warnings!.push('This file includes a legacy workbook or attribute CSV. Its explicit SET, CLEAR and INHERIT actions determine changes; deleting a value beside SET can set empty text. Check every proposed change. Use a new editing workbook for blank cells to always preserve data.')
   return out
 }
 

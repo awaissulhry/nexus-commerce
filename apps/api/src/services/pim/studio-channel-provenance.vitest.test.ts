@@ -5,6 +5,7 @@ const product = { id: 'p', sku: 'P', parentId: null, isParent: false, productTyp
   categoryAttributes: { material: 'Master leather' }, variantAttributes: {}, localizedContent: {},
   bulletPoints: ['Master bullet'], variationAxes: [] }
 vi.mock('../../db.js', () => ({ default: {
+  $transaction: async (work: (tx: unknown) => Promise<unknown>) => work({ $executeRaw: async () => 0 }),
   product: { findFirst: async () => ({ id: 'p', parentId: null }), findMany: async () => [product] },
   channelListing: { findMany: mocks.listings }, productListingAlias: { findMany: async () => [] },
   fieldLinkGroup: { findMany: async () => [] }, cellFormula: { findMany: async () => [] },

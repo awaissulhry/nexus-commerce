@@ -79,7 +79,7 @@ const GROUP_FOR_LISTING_FIELD: Record<string, string> = {
   imageUrls: 'images', videoId: 'images',
   conditionId: 'offer', listingFormat: 'offer', listingDuration: 'offer',
   bestOffer: 'offer', bestOfferFloor: 'offer', bestOfferCeiling: 'offer', vatRate: 'offer',
-  dimensionUnit: 'shipping', handlingTime: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
+  dimensionUnit: 'shipping', handlingTime: 'shipping', itemLocationCountry: 'shipping', packageType: 'shipping', packageWeight: 'shipping',
   packageLength: 'shipping', packageWidth: 'shipping', packageHeight: 'shipping',
   paymentPolicyId: 'policies', returnPolicyId: 'policies', fulfillmentPolicyId: 'policies',
 }
@@ -119,6 +119,7 @@ export function ebaySpecFromCache(input: EbaySpecInput): ChannelSpec {
     listing('bestOfferFloor', 'Proposta minima accettata', 'Best offer auto-accept', { kind: 'number', channelStore: pa('bestOfferFloor') }),
     listing('bestOfferCeiling', 'Proposta rifiutata sotto', 'Best offer auto-decline', { kind: 'number', channelStore: pa('bestOfferCeiling') }),
     listing('handlingTime', 'Tempo di imballaggio', 'Handling time (days)', { kind: 'number', channelStore: pa('handlingTime') }),
+    listing('itemLocationCountry', 'Paese dell’oggetto', 'Item location country', { kind: 'text', maxLength: 2, channelStore: pa('itemLocationCountry'), helpText: 'Two-letter country code for the item location. The legacy eBay workbook labels this field Location.' }),
     listing('packageType', 'Tipo di pacco', 'Package type', { kind: 'select', mode: 'open', options: PACKAGE_TYPES, channelStore: pa('packageType') }),
     listing('packageWeight', 'Peso del pacco', 'Package weight', { kind: 'number', shape: 'measure', unitOptions: WEIGHT_UNITS, channelStore: { kind: 'platformAttributes', path: ['packageWeight'], unitPath: ['weightUnit'] } }),
     listing('packageLength', 'Lunghezza del pacco', 'Package length', { kind: 'number', channelStore: pa('packageLength'), helpText: 'Uses the shared package dimension unit.' }),

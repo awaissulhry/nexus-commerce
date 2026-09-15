@@ -1,0 +1,555 @@
+[
+  {
+    "header": "SKU",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Action",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Parent/Child",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Parent SKU",
+    "populated": 100,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 100
+  },
+  {
+    "header": "EAN",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "MPN",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Title",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Condition",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Category ID",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Variation Theme",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Shared-SKU (Trading API)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Subtitle",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Format",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Duration",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Description",
+    "populated": 21,
+    "mapped": 21,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Description Theme",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Best Offer",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "BO Floor (EUR)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "BO Ceiling (EUR)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "VAT %",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Quantity",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Handling Days",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Max Per Buyer",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Location",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Merchant Location",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Package Type",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Weight",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Wt Unit",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Length",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Width",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Height",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Dim Unit",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Image 1",
+    "populated": 21,
+    "mapped": 21,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Image 2",
+    "populated": 21,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 21
+  },
+  {
+    "header": "Image 3",
+    "populated": 21,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 21
+  },
+  {
+    "header": "Image 4",
+    "populated": 21,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 21
+  },
+  {
+    "header": "Image 5",
+    "populated": 21,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 21
+  },
+  {
+    "header": "Image 6",
+    "populated": 21,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 21
+  },
+  {
+    "header": "Video ID",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Fulfillment Policy ID",
+    "populated": 5,
+    "mapped": 5,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Payment Policy ID",
+    "populated": 5,
+    "mapped": 5,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Return Policy ID",
+    "populated": 5,
+    "mapped": 5,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Listing Status",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Last Pushed",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Sync Status",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Marca (Brand) *",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Adatto a ○",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Taglia (Size) ○ ↕",
+    "populated": 100,
+    "mapped": 100,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Materiale (Material) ○",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Colore (Color) ↕",
+    "populated": 100,
+    "mapped": 100,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Caratteristiche (Features)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Stagione (Season)",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "Protezione (Protection)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Stile (Style)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Lunghezza (Length)",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Larghezza (Width)",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Scollatura ↕",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Quantità",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Colore specifico",
+    "populated": 100,
+    "mapped": 100,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Chiusura (Closure / Fastening)",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Cura dell'indumento",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Garanzia produttore",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Paese di origine",
+    "populated": 105,
+    "mapped": 105,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Unità di misura",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Colore esatto",
+    "populated": 100,
+    "mapped": 100,
+    "issues": 0,
+    "excluded": 0
+  },
+  {
+    "header": "Genere ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "Livello di protezione ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "Paese di fabbricazione ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "Tipo di giacca ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "athlete ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "body type ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "team name ⚠",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 105,
+    "excluded": 0
+  },
+  {
+    "header": "Price (€)",
+    "populated": 100,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 100
+  },
+  {
+    "header": "Qty",
+    "populated": 100,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 100
+  },
+  {
+    "header": "Follow",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Buffer",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Item ID",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Status",
+    "populated": 105,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 105
+  },
+  {
+    "header": "Listing ID",
+    "populated": 0,
+    "mapped": 0,
+    "issues": 0,
+    "excluded": 0
+  }
+]

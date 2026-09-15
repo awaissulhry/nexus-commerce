@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getBackendUrl } from '@/lib/backend-url'
+import { fetchStudioRead, StudioReadError, studioReadMessage } from './studio-read'
 
 export interface WorkspaceDestination {
   productId: string
@@ -12,10 +13,12 @@ export interface WorkspaceDestination {
   aliasKey: string | null
   listing: { id: string; productId: string; aliasKey: string; version: number } | null
 }
-export type DestinationState = { status: 'idle' | 'loading' } | { status: 'error'; message: string } | { status: 'ready'; data: WorkspaceDestination }
+export type DestinationState = { status: 'idle' | 'loading' } | { status: 'error'; message: string; retry?: () => void } | { status: 'ready'; data: WorkspaceDestination }
 
 export function useWorkspaceDestination(productId: string, channel: string, market: string | null, accountId?: string, listingId?: string): DestinationState {
-  const key = JSON.stringify([productId, channel, market, accountId, listingId])
+  const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt(value => value + 1), [])
+  const key = JSON.stringify([productId, channel, market, accountId, listingId, attempt])
   const [result, setResult] = useState<{ key: string; state: DestinationState }>()
   const enabled = channel !== 'master' && !!market && (accountId !== undefined || listingId !== undefined)
   useEffect(() => {
@@ -24,16 +27,15 @@ export function useWorkspaceDestination(productId: string, channel: string, mark
     const query = new URLSearchParams({ channel, market: market! })
     if (accountId !== undefined) query.set('accountId', accountId)
     if (listingId !== undefined) query.set('listingId', listingId)
-    void fetch(`${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/studio/destination?${query}`, {
-      signal: controller.signal, credentials: 'include', cache: 'no-store',
-    }).then(async response => {
+    void fetchStudioRead(`${getBackendUrl()}/api/products/${encodeURIComponent(productId)}/studio/destination?${query}`, controller.signal).then(async response => {
       const body = await response.json()
       if (controller.signal.aborted) return
-      setResult({ key, state: response.ok ? { status: 'ready', data: body } : { status: 'error', message: body.message ?? body.error ?? 'The selected destination could not be read.' } })
+      setResult({ key, state: response.ok ? { status: 'ready', data: body } : { status: 'error', message: new StudioReadError(response.status, body).message } })
     }).catch(error => {
-      if (!controller.signal.aborted) setResult({ key, state: { status: 'error', message: error instanceof Error ? error.message : 'The selected destination could not be read.' } })
+      if (!controller.signal.aborted) setResult({ key, state: { status: 'error', message: studioReadMessage(error) } })
     })
     return () => controller.abort()
   }, [productId, channel, market, accountId, listingId, key, enabled])
-  return !enabled ? { status: 'idle' } : result?.key === key ? result.state : { status: 'loading' }
+  const state: DestinationState = !enabled ? { status: 'idle' } : result?.key === key ? result.state : { status: 'loading' }
+  return state.status === 'error' ? { ...state, retry } : state
 }

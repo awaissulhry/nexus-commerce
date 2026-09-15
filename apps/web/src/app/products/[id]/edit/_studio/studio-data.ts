@@ -1,20 +1,12 @@
 /**
- * PES.1 — the frame's data read. Isomorphic, and deliberately small.
- *
- * TWO fetches: the product's identity, and the marketplace table the scope bar is derived from.
- * It does NOT load attributes, children, listings, parent/siblings or images — the old edit page
- * blocks on five such calls before its first paint, and a frame that only draws a name, a SKU and
- * a row of chips has no business waiting for any of them. Each tab loads its own.
- *
- * It runs in BOTH contexts for the same reason `edit-data.ts` does: under RBAC enforce the Next
- * server cannot read the API-origin session cookie, so the server pass returns 401 and the client
- * re-runs the identical call where the credentialed fetch wrapper authenticates it
- * (reference_rbac_enforce_ssr). It never throws and never calls `notFound()` — it returns a tagged
- * result and each caller reacts in its own context.
+ * The frame reads the product, marketplaces and connected accounts concurrently in the browser.
+ * A variation also reads its parent identity. All requests share one cancellable deadline;
+ * an unavailable account inventory is reported separately from an empty one.
  */
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { connectionHealth } from './presence/connection'
+import { fetchStudioRead } from './studio-read'
 
 import { flattenGrouped, primaryLanguageFrom } from './scopes'
 import type { MarketplaceLite, StudioFamily, StudioProduct } from './types'
@@ -64,32 +56,22 @@ function toStudioProduct(raw: unknown): StudioProduct | null {
  * assumption. Without a bound, one hung read means `loadStudioData` never resolves: on the client
  * the frame renders a skeleton forever, and on the SERVER pass it holds the whole route open.
  *
- * This is a transport bound, not a performance target — it sits far above any healthy read of a
- * single product row. Timing out is SOFT: it returns `{ kind: 'error', code: null }`, which is the
- * result the client pass already retries, so a slow-but-alive backend degrades to "retried", never
- * to "broken". Deliberately much tighter than the readiness CEILING_MS in contracts.tsx, because
- * this reads an identity row rather than computing a per-market readiness score.
+ * This bounds the complete load, including retries and a variation's parent lookup. An error
+ * produces the loader's recovery state rather than leaving the frame pending indefinitely.
  */
 const LOAD_TIMEOUT_MS = 30_000
 
-export async function loadStudioData(id: string): Promise<StudioLoadResult> {
+export async function loadStudioData(id: string, signal?: AbortSignal): Promise<StudioLoadResult> {
   const backend = getBackendUrl()
+  const deadline = AbortSignal.timeout(LOAD_TIMEOUT_MS)
+  const readSignal = signal ? AbortSignal.any([signal, deadline]) : deadline
   try {
     // Settled, not `all`: an unreadable marketplace table must not turn a perfectly readable
     // product into a page that cannot render.
     const [productRes, marketsRes, connectionsRes] = await Promise.allSettled([
-      fetch(`${backend}/api/products/${encodeURIComponent(id)}`, {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(LOAD_TIMEOUT_MS),
-      }),
-      fetch(`${backend}/api/marketplaces/grouped`, {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(LOAD_TIMEOUT_MS),
-      }),
-      fetch(`${backend}/api/connections?all=true`, {
-        cache: 'no-store',
-        signal: AbortSignal.timeout(LOAD_TIMEOUT_MS),
-      }),
+      fetchStudioRead(`${backend}/api/products/${encodeURIComponent(id)}`, readSignal),
+      fetchStudioRead(`${backend}/api/marketplaces/grouped`, readSignal),
+      fetchStudioRead(`${backend}/api/connections?all=true`, readSignal),
     ])
 
     if (productRes.status === 'rejected') return { kind: 'error', code: null }
@@ -144,10 +126,7 @@ export async function loadStudioData(id: string): Promise<StudioLoadResult> {
     let family: StudioFamily | null = null
     if (product.parentId) {
       try {
-        const parentRes = await fetch(`${backend}/api/products/${encodeURIComponent(product.parentId)}`, {
-          cache: 'no-store',
-          signal: AbortSignal.timeout(LOAD_TIMEOUT_MS),
-        })
+        const parentRes = await fetchStudioRead(`${backend}/api/products/${encodeURIComponent(product.parentId)}`, readSignal)
         if (parentRes.ok) {
           const parent = toStudioProduct(await parentRes.json())
           if (parent) {

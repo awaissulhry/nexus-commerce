@@ -1,4 +1,5 @@
 import { offerActiveHonoured } from '@nexus/shared/listing-capabilities'
+import { inDatabaseReadTransaction } from '../../lib/database-context.js'
 import { studioContentFacts } from './studio-content-wire.js'
 import type { ResolvedContent as importResolvedContent } from '@nexus/shared/content-language'
 import type { ContentWriteFacts } from '@nexus/shared/content-language'
@@ -943,7 +944,10 @@ export async function ebayCategoryIdsFor(
  * regardless of `expiresAt`, per VT.1) — only a MISSING row is.
  */
 export async function getStudioSheet(input: GetStudioSheetInput): Promise<StudioSheet> {
-  return withCachedSchemas(() => studioSheetRead(input))
+  const started = Date.now()
+  const { default: prisma } = await import('../../db.js')
+  const sheet = await withCachedSchemas(() => inDatabaseReadTransaction(prisma, () => studioSheetRead(input)))
+  return { ...sheet, meta: { ...sheet.meta, tookMs: Date.now() - started } }
 }
 
 async function studioSheetRead(input: GetStudioSheetInput): Promise<StudioSheet> {

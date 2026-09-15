@@ -67,7 +67,7 @@ export async function enrichTransferEffects(jobId: string, plan: TransferPlan, c
         const owner = graph.get(product.id)!, parent = owner.parentId ? graph.get(owner.parentId) ?? owner.parent : null
         const listing = side === 'Before' ? target.before : projectContentWrites({ ...target.before, ...target.patch }, target.contentWrites ?? [])
         for (const cell of contentCells) {
-          const resolved = resolveContent({ product: owner as any, parent: parent as any, listing: contentListing(owner, listing, coordinate, languages), field: target.contentFields![cell.field], address: { requested: normalizeLanguage(cell.locale || languages[0]), coordinate } })
+          const resolved = resolveContent({ product: owner as any, parent: parent as any, listing: contentListing(owner, listing, coordinate, languages), field: target.contentFields![cell.field], localizableKeys: Object.values(target.contentFields ?? {}), address: { requested: normalizeLanguage(cell.locale || languages[0]), coordinate } })
           cell[`effective${side}`] = { value: resolved.value, source: `${resolved.language} · ${resolved.tier}${resolved.language !== (cell.locale || languages[0]) ? ' fallback' : ''}` }
         }
       }

@@ -729,6 +729,7 @@ export function useChannelSheetAdapter({ productId, channel, marketplace, locale
         scope: 'channel',
         loading, unavailable: unavailable,
         errorLabel: `${channelLabel(channel)} · ${marketplace} information`,
+        errorMessage: error,
         backendMissing: backendMissing, retry: reload,
         columns: sheetColumns,
         toolbar: {
