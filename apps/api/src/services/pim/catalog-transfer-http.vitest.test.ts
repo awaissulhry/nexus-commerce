@@ -121,3 +121,37 @@ it('applies one wide workbook to independent languages, accounts and marketplace
   const stale = await app.inject({ method: 'POST', url: '/api/catalog-transfer/preview', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
   await vi.waitFor(async () => expect((await get(`/api/catalog-transfer/jobs/${stale.json().jobId}`)).state).toBe('INVALID'))
 })
+
+it('uploads and applies an editing CSV description above 256 KB through the product editor', async () => {
+  const product = state.store.data.product.get('p2')!
+  const description = '<p>Long product description.</p>'.repeat(10_000)
+  const boundary = 'large-editing-csv'
+  const payload = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="editing.csv"\r\nContent-Type: text/csv\r\n\r\nentity,sku,field,action,value,version\nProducts,${product.sku},description,SET,${description},${product.version}\r\n--${boundary}--\r\n`
+  const inspected = await app.inject({ method: 'POST', url: '/api/catalog-transfer/products/p2/inspect', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
+  expect(inspected.statusCode, inspected.body).toBe(201)
+  const input = inspected.json()
+  expect(input).toMatchObject({ attributes: 1, issues: 0 })
+  const preview = await app.inject({ method: 'POST', url: '/api/catalog-transfer/products/p2/preview', payload: { inputId: input.inputId, selection: input.selection, market: 'IT' } })
+  expect(preview.statusCode, preview.body).toBe(201)
+  const path = `/api/catalog-transfer/jobs/${preview.json().jobId}`
+  let review: any
+  await vi.waitFor(async () => { review = await get(path); expect(review.state).toBe('QUEUED') })
+  expect(review.counts.changed).toBe(1)
+  expect(state.store.data.product.get('p2')?.description).toBeNull()
+  expect((await app.inject({ method: 'POST', url: `${path}/apply`, payload: { reviewToken: review.reviewToken } })).statusCode).toBe(202)
+  await vi.waitFor(async () => expect((await get(path)).state).toBe('COMPLETED'))
+  expect(state.store.data.product.get('p2')?.description).toBe(description)
+})
+
+it('inspects a source CSV row above 256 KB without truncating its cells', async () => {
+  const description = 'é'.repeat(150_000)
+  const boundary = 'large-source-csv'
+  const payload = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="source.csv"\r\nContent-Type: text/csv\r\n\r\nSKU,Description\n000000,${description}\r\n--${boundary}--\r\n`
+  const response = await app.inject({ method: 'POST', url: '/api/catalog-transfer/source/inspect', headers: { 'content-type': `multipart/form-data; boundary=${boundary}` }, payload })
+  expect(response.statusCode, response.body).toBe(201)
+  const source = response.json()
+  expect(source.total).toBe(1)
+  expect(source.sample).toHaveLength(1)
+  expect(source.sample[0].SKU).toBe('000000')
+  expect(source.sample[0].Description === description).toBe(true)
+})

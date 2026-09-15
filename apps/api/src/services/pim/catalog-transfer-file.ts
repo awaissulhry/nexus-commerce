@@ -69,7 +69,8 @@ function recordsOf(grid: string[][]): Record<string, string>[] {
 export async function readTransferFile(buffer: Buffer, filename: string, options: { blankPolicy?: 'ignore' | 'clear' } = {}) {
   if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty CSV or XLSX file up to 10 MB')
   if (/\.csv$/i.test(filename)) {
-    const grid = parse(buffer, { bom: true, skip_empty_lines: true, max_record_size: 256_000 }) as string[][]
+    // A valid attribute value may occupy most of the already bounded upload.
+    const grid = parse(buffer, { bom: true, skip_empty_lines: true, max_record_size: TRANSFER_MAX_FILE_BYTES }) as string[][]
     return parseTransferRecords(recordsOf(grid))
   }
   if (!/\.xlsx$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')

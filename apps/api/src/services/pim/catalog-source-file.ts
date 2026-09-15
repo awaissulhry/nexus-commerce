@@ -35,7 +35,8 @@ export async function readSourceFile(buffer: Buffer, filename: string): Promise<
     table.records.push(Object.fromEntries(table.headers.map((h, i) => [h, line[i] ?? ''])))
   }
   if (/\.csv$/i.test(filename)) {
-    for await (const line of Readable.from(buffer).pipe(parse({ bom: true, skip_empty_lines: true, max_record_size: 256_000 }))) append(line)
+    // Bound the whole record by the upload; append validates each cell separately.
+    for await (const line of Readable.from(buffer).pipe(parse({ bom: true, skip_empty_lines: true, max_record_size: TRANSFER_MAX_FILE_BYTES }))) append(line)
   } else if (/\.xlsx$/i.test(filename)) {
     await checkWorkbookSize(buffer)
     // Workbook parsing is bounded by both compressed and expanded archive sizes above.
