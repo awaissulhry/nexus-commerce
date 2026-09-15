@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const m = vi.hoisted(() => ({ facts: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
+const m = vi.hoisted(() => ({ facts: vi.fn(), amazon: vi.fn(), amazonStatus: vi.fn(), ebay: vi.fn(), ebayStatus: vi.fn(), mode: vi.fn(), rows: new Map<string, any>(), persistenceFailure: vi.fn(), persisted: vi.fn(), createListings: vi.fn(), updateListings: vi.fn(), locks: vi.fn(), shopPreview: vi.fn(), shopSend: vi.fn(), shopRead: vi.fn(), shopSave: vi.fn() }))
 vi.mock('./studio-publication-plan.js', async original => {
   const { createHash } = await import('node:crypto')
   return { readPublicationFacts: m.facts, publicationDigest: (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex'), object: (v: any) => v && typeof v === 'object' ? v : {} }
@@ -10,7 +10,7 @@ vi.mock('../amazon-publish-gate.service.js', () => ({ getAmazonPublishMode: m.mo
 vi.mock('../ebay-publish-gate.service.js', () => ({ getEbayPublishMode: m.mode }))
 vi.mock('../shopify-publish-gate.service.js', () => ({ getShopifyPublishMode: m.mode }))
 vi.mock('./studio-publication-amazon.js', () => ({ prepareAmazonPublication: async () => ({ kind: 'amazon', feed: { messages: [{ sku: 'SELLER-SKU' }, { sku: 'SELLER-CHILD' }] } }), sendAmazonPublication: m.amazon, readAmazonPublication: m.amazonStatus }))
-vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async () => ({ kind: 'ebay', xml: '<Item/>' }), sendEbayPublication: m.ebay }))
+vi.mock('./studio-publication-ebay.js', () => ({ prepareEbayPublication: async () => ({ kind: 'ebay', xml: '<Item/>' }), sendEbayPublication: m.ebay, readEbayPublication: m.ebayStatus }))
 vi.mock('../shopify/content-workspace.service.js', () => ({ getContentWorkspace: m.shopRead, saveContentWorkspace: m.shopSave }))
 vi.mock('../shopify/content-sync.service.js', () => ({ previewContentSync: m.shopPreview, synchronizeContent: m.shopSend }))
 vi.mock('./workspace-destination.js', () => ({ WorkspaceScopeError: class extends Error { statusCode: number; constructor(message: string, statusCode = 409) { super(message); this.statusCode = statusCode } } }))
@@ -22,9 +22,9 @@ vi.mock('../../db.js', () => {
   const db = { bulkOperation: {
     findFirst: async ({ where }: any) => [...m.rows.values()].find(row => matches(row, where)) ?? null,
     create: async ({ data }: any) => { m.rows.set(data.id, data); return data },
-    updateMany: async ({ where, data }: any) => { const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, { ...row, ...data }); return { count: rows.length } },
-    update: async ({ where, data }: any) => { const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, row); return row },
-  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
+    updateMany: async ({ where, data }: any) => { m.persistenceFailure(data); const rows = [...m.rows.values()].filter(row => matches(row, where)); for (const row of rows) m.rows.set(row.id, { ...row, ...data }); return { count: rows.length } },
+    update: async ({ where, data }: any) => { m.persistenceFailure(data); const row = { ...m.rows.get(where.id), ...data }; m.rows.set(where.id, row); await m.persisted(row); return row },
+  }, channelListing: { createMany: m.createListings, updateMany: m.updateListings, count: async () => 2 }, $queryRawUnsafe: m.locks, $transaction: async (fn: any) => fn(db) }
   return { default: db }
 })
 import { previewStudioPublication, submitStudioPublication, studioPublicationResult } from './studio-publication.service.js'
@@ -33,7 +33,70 @@ const scope = { channel: 'AMAZON', marketplace: 'IT', accountId: 'seller-b', lis
 const facts = () => ({ scope, destination: { familyId: 'parent', aliasKey: 'alias-b' }, account: { displayName: 'Store B' }, parent: { id: 'parent' },
   products: [{ id: 'parent', sku: 'SKU', name: 'Saved title' }, { id: 'child', sku: 'CHILD', name: 'Child' }], listings: [], resolved: [], issues: [], excluded: 1, aliasLabel: 'Second listing', revision: 'v1' })
 
-beforeEach(() => { vi.clearAllMocks(); m.rows.clear(); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue('123'); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+beforeEach(() => { vi.resetAllMocks(); m.rows.clear(); m.mode.mockReturnValue('live'); m.facts.mockImplementation(async () => facts()); m.amazon.mockResolvedValue('feed-42'); m.amazonStatus.mockResolvedValue(null); m.ebay.mockResolvedValue({ reference: '123', warnings: ['eBay adjusted the shipping value.'] }); m.ebayStatus.mockResolvedValue({ reference: '123', warnings: [], verified: true }); m.createListings.mockResolvedValue({ count: 2 }); m.updateListings.mockResolvedValue({ count: 2 }) })
+
+it('checkpoints eBay acknowledgement before read-back and recovers local persistence without resending', async () => {
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.facts.mockImplementation(async () => ({ ...facts(), scope: ebayScope }))
+  const review = await previewStudioPublication('parent', ebayScope, 'user')
+  m.ebayStatus.mockImplementation(async () => {
+    expect(m.rows.get(review.id!).changes.result.results[0].reference).toBe('123')
+    return { reference: '123', warnings: [], verified: true }
+  })
+  m.updateListings.mockRejectedValueOnce(new Error('Local connection lost'))
+  const pending = await submitStudioPublication('parent', review.id!, {}, 'user')
+  expect(pending).toMatchObject({ status: 'UNVERIFIED', warnings: ['eBay adjusted the shipping value.'], results: [expect.objectContaining({ reference: '123' }), expect.anything()] })
+  expect(await studioPublicationResult('parent', review.id!, 'user')).toMatchObject({ status: 'ACCEPTED', warnings: ['eBay adjusted the shipping value.'] })
+  expect(m.ebay).toHaveBeenCalledOnce()
+  expect(m.ebayStatus).toHaveBeenCalledWith('123', 'seller-b', 'IT')
+  expect(m.updateListings.mock.calls.at(-1)![0].where).toMatchObject({ channelConnectionId: 'seller-b', aliasKey: 'alias-b', marketplace: 'IT' })
+})
+
+it('keeps an acknowledged eBay item unresolved until the reviewed account confirms it', async () => {
+  const ebayScope = { ...scope, channel: 'EBAY' }
+  m.facts.mockImplementation(async () => ({ ...facts(), scope: ebayScope }))
+  m.ebayStatus.mockResolvedValue(null)
+  const review = await previewStudioPublication('parent', ebayScope, 'user')
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: 'UNVERIFIED', results: [expect.objectContaining({ reference: '123', status: 'ACCEPTED' }), expect.anything()] })
+  expect(m.updateListings).not.toHaveBeenCalled()
+  expect(await previewStudioPublication('parent', ebayScope, 'user')).toMatchObject({ id: null, previousPublicationId: review.id })
+})
+
+it('reports an interrupted send honestly after its deadline without blindly resubmitting', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  const row = m.rows.get(review.id!)
+  row.status = 'PUBLISHING'; row.changes.startedAt = new Date(Date.now() - 31 * 60_000).toISOString()
+  expect(await studioPublicationResult('parent', review.id!, 'user')).toMatchObject({ status: 'UNVERIFIED', message: expect.stringContaining('receipt') })
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: 'UNVERIFIED' })
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it('refuses edits that land while waiting to claim the publication', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  m.locks.mockImplementation(async () => { m.facts.mockResolvedValue({ ...facts(), revision: 'v2' }) })
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: 'FAILED', message: expect.stringContaining('changed') })
+  expect(m.amazon).not.toHaveBeenCalled()
+})
+
+it('does not overwrite a processing report that arrives before the submit response finishes', async () => {
+  const review = await previewStudioPublication('parent', scope, 'user')
+  m.amazonStatus.mockResolvedValue({ results: [{ sku: 'SELLER-SKU', failed: false }, { sku: 'SELLER-CHILD', failed: false }] })
+  m.persisted.mockImplementationOnce(async () => { await studioPublicationResult('parent', review.id!, 'user') })
+  expect(await submitStudioPublication('parent', review.id!, {}, 'user')).toMatchObject({ status: 'ACCEPTED' })
+  expect(m.rows.get(review.id!).status).toBe('ACCEPTED')
+})
+
+it.each(['AMAZON', 'EBAY'])('returns the known %s receipt if the database goes down immediately after acknowledgement', async channel => {
+  const selectedScope = { ...scope, channel }
+  m.facts.mockImplementation(async () => ({ ...facts(), scope: selectedScope }))
+  const review = await previewStudioPublication('parent', selectedScope, 'user')
+  m.persistenceFailure.mockImplementation(data => { if (data.status !== 'PUBLISHING') throw new Error('Database is unavailable') })
+  const result = await submitStudioPublication('parent', review.id!, {}, 'user')
+  expect(result).toMatchObject({ id: review.id, status: 'UNVERIFIED', message: expect.stringContaining('could not record'),
+    results: [expect.objectContaining({ reference: channel === 'AMAZON' ? 'feed-42' : '123' }), expect.anything()] })
+  expect(m.rows.get(review.id!).status).toBe('PUBLISHING')
+  expect(channel === 'AMAZON' ? m.amazon : m.ebay).toHaveBeenCalledOnce()
+})
 
 it('reviews saved family values and publishes directly to the exact account and alias, without marking an Amazon acknowledgement live', async () => {
   const review = await previewStudioPublication('parent', scope, 'user')
@@ -119,7 +182,7 @@ it('does not call a local draft write failure an uncertain channel send', async 
   expect(m.amazon).not.toHaveBeenCalled()
 })
 
-it('uses Shopify’s native family publisher with the saved visibility, both revisions and the selected store location', async () => {
+it.each([false, true])('uses Shopify’s native family publisher and retains its reference if final recording fails (%s)', async persistenceFails => {
   const shopScope = { channel: 'SHOPIFY', marketplace: 'GLOBAL', accountId: 'shop-b', listingId: 'shop-alias' }
   m.facts.mockResolvedValue({ ...facts(), scope: shopScope, excluded: 0 })
   m.shopRead.mockResolvedValue({ initialized: false, draft: { options: ['Size'] }, revision: 'uninitialized' })
@@ -131,6 +194,11 @@ it('uses Shopify’s native family publisher with the saved visibility, both rev
   expect(m.shopSave).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { draft: { options: ['Size'] }, expectedRevision: 'uninitialized' })
   await expect(submitStudioPublication('parent', review.id!, { locationId: 'other-store' }, 'user')).rejects.toThrow('inventory location')
   expect(m.shopSend).not.toHaveBeenCalled()
-  expect(await submitStudioPublication('parent', review.id!, { locationId: 'shop-location' }, 'user')).toMatchObject({ status: 'VERIFIED', message: expect.stringContaining('DRAFT') })
+  if (persistenceFails) m.persistenceFailure.mockImplementation(data => { if (data.status !== 'PUBLISHING') throw new Error('Database is unavailable') })
+  const result = await submitStudioPublication('parent', review.id!, { locationId: 'shop-location' }, 'user')
+  expect(result).toMatchObject({ status: persistenceFails ? 'UNVERIFIED' : 'VERIFIED',
+    message: expect.stringContaining(persistenceFails ? 'could not record' : 'DRAFT'),
+    results: [expect.objectContaining({ reference: 'gid://shopify/Product/42' }), expect.anything()] })
+  expect(m.shopSend).toHaveBeenCalledOnce()
   expect(m.shopSend).toHaveBeenCalledWith('parent', { accountId: 'shop-b', listingId: 'shop-alias', market: 'GLOBAL' }, { expectedRevision: 'draft-v1', expectedRemoteRevision: 'remote-v2', locationId: 'shop-location', confirmActive: true })
 })

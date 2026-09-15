@@ -4,7 +4,7 @@ import prisma from '../../db.js'
 import { loadEbaySpec } from './channel-specs/index.js'
 import { buildFlatRow } from '../ebay-variation-push.service.js'
 import { buildSharedListingInput } from '../ebay-shared-listing-push.service.js'
-import { buildAddFixedPriceItemXml, callTradingApi, escapeXml, siteIdForMarket, type AddFixedPriceItemInput } from '../ebay-trading-api.service.js'
+import { buildAddFixedPriceItemXml, callTradingApi, escapeXml, siteIdForMarket, TradingApiFailure, type AddFixedPriceItemInput, type TradingCallResult } from '../ebay-trading-api.service.js'
 import { loadStoredVariationProjection } from './stored-variation-projection.js'
 import { resolveVariationProjection, variationReadinessItems } from './variation-rules.service.js'
 import { renderListingDescriptionSafe } from '../ebay-description-theme.service.js'
@@ -15,6 +15,7 @@ import { readEbayMediaGallery } from '../images/ebay-media-workspace.service.js'
 import { inspectMediaDraft } from '@nexus/shared/ebay-media'
 
 export interface EbayPublication { kind: 'ebay'; marketplace: string; itemId: string | null; xml: string; liveRevision: string | null }
+export interface EbayPublicationReceipt { reference: string; warnings: string[]; verified?: boolean }
 
 function setPath(target: Record<string, any>, path: string[], value: unknown) {
   let node = target
@@ -43,15 +44,37 @@ export function ebayPublicationXml(input: AddFixedPriceItemInput, itemId: string
   return xml
 }
 
-async function liveItem(itemId: string, accountId: string, market: string) {
+async function requestLiveItem(itemId: string, accountId: string, market: string) {
   const oauthToken = await ebayAuthService.getValidToken(accountId)
-  const got = await callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`, { oauthToken, siteId: siteIdForMarket(market) })
+  return callTradingApi('GetItem', `<?xml version="1.0" encoding="UTF-8"?><GetItemRequest xmlns="urn:ebay:apis:eBLBaseComponents"><ItemID>${escapeXml(itemId)}</ItemID><DetailLevel>ReturnAll</DetailLevel><IncludeItemSpecifics>true</IncludeItemSpecifics></GetItemRequest>`, { oauthToken, siteId: siteIdForMarket(market) })
+}
+
+function liveItemReceipt(itemId: string, got: Awaited<ReturnType<typeof requestLiveItem>>): EbayPublicationReceipt {
   if (!got.raw || !['Success', 'Warning'].includes(got.ack)) throw new Error('The current eBay listing could not be verified.')
-  if (!/<ListingStatus>Active<\/ListingStatus>/.test(got.raw)) throw new Error('This eBay listing is not active. Review its ended status before relisting.')
-  if (/<InventoryTrackingMethod>SKU<\/InventoryTrackingMethod>/.test(got.raw) && /<InventoryModel>/.test(got.raw)) throw new Error('This listing uses the eBay Inventory model. Its Inventory publication workflow is required.')
-  // Exclude volatile clocks/counters. Protect editable content, identity and variation structure.
-  const fields = ['Title', 'Description', 'PrimaryCategory', 'ItemSpecifics', 'Variations', 'PictureDetails', 'SellerProfiles']
-  return publicationDigest(fields.map(key => got.raw.match(new RegExp(`<${key}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${key}>`))?.[0] ?? ''))
+  const warnings = [...(got.errors ?? [])]
+  if (!/<ListingStatus>Active<\/ListingStatus>/.test(got.raw)) return { reference: itemId, warnings: [...warnings, 'This eBay listing is not active.'], verified: false }
+  if (/<InventoryTrackingMethod>SKU<\/InventoryTrackingMethod>/.test(got.raw) && /<InventoryModel>/.test(got.raw)) return { reference: itemId, warnings: [...warnings, 'This listing uses the eBay Inventory model.'], verified: false }
+  return { reference: itemId, warnings, verified: true }
+}
+
+/** Read the acknowledged item through the same account and marketplace; null means the provider gave no usable answer. */
+export async function readEbayPublication(itemId: string, accountId: string, marketplace: string): Promise<EbayPublicationReceipt | null> {
+  try { return liveItemReceipt(itemId, await requestLiveItem(itemId, accountId, marketplace)) }
+  catch { return null }
+}
+
+async function liveItem(itemId: string, accountId: string, market: string) {
+  const got = await requestLiveItem(itemId, accountId, market)
+  const receipt = liveItemReceipt(itemId, got)
+  if (!receipt.verified) throw new Error(receipt.warnings.at(-1) ?? 'The current eBay listing could not be verified.')
+  // Exclude sold counters while protecting every editable field this publication
+  // sends. Item-level StartPrice/Quantity are the single-SKU equivalents of the
+  // price and quantity held inside Variations.
+  const stable = got.raw.replace(/<QuantitySold>[^<]*<\/QuantitySold>/g, '')
+  const fields = ['SKU', 'Title', 'SubTitle', 'Description', 'PrimaryCategory', 'ConditionID', 'Country', 'Currency', 'Location', 'PostalCode',
+    'ListingDuration', 'ItemSpecifics', 'StartPrice', 'Quantity', 'ProductListingDetails', 'Variations', 'PictureDetails', 'SellerProfiles',
+    'DispatchTimeMax', 'VATDetails', 'BestOfferDetails', 'QuantityRestrictionPerBuyer']
+  return publicationDigest(fields.map(key => stable.match(new RegExp(`<${key}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${key}>`))?.[0] ?? ''))
 }
 
 export async function prepareEbayPublication(facts: PublicationFacts): Promise<EbayPublication> {
@@ -173,25 +196,34 @@ export async function prepareEbayPublication(facts: PublicationFacts): Promise<E
   return { kind: 'ebay', marketplace: scope.marketplace, itemId, liveRevision, xml: ebayPublicationXml(shared as AddFixedPriceItemInput, itemId, products.length === 1, settings) }
 }
 
-export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string) {
+export async function sendEbayPublication(plan: EbayPublication, accountId: string, operationId: string): Promise<EbayPublicationReceipt> {
   if (getEbayPublishMode() !== 'live' || process.env.NEXUS_EBAY_REAL_API !== 'true' || process.env.EBAY_SANDBOX === 'true') throw Object.assign(new Error('Live eBay publication was disabled.'), { notSent: true })
   const beforeSend = (error: unknown): never => { throw Object.assign(error instanceof Error ? error : new Error(String(error)), { notSent: true }) }
   if (plan.itemId && await liveItem(plan.itemId, accountId, plan.marketplace).catch(beforeSend) !== plan.liveRevision) throw Object.assign(new Error('eBay changed after the review. Refresh the publication review.'), { notSent: true })
   const oauthToken = await ebayAuthService.getValidToken(accountId).catch(beforeSend)
   const ctx = { oauthToken, siteId: siteIdForMarket(plan.marketplace) }
+  let validationWarnings: string[] = []
   if (!plan.itemId) {
     const check = await callTradingApi('VerifyAddFixedPriceItem', plan.xml.replace(/AddFixedPriceItemRequest/g, 'VerifyAddFixedPriceItemRequest'), ctx)
       .catch(error => { throw Object.assign(error, { notSent: true }) })
     if (!check.raw || !['Success', 'Warning'].includes(check.ack)) throw Object.assign(new Error('eBay did not validate this listing. Nothing was submitted.'), { notSent: true })
+    validationWarnings = check.errors ?? []
   }
   const key = operationId.replace(/-/g, '').toUpperCase()
   const xml = plan.xml.replace('<Item>', `<Item><${plan.itemId ? 'InvocationID' : 'UUID'}>${key}</${plan.itemId ? 'InvocationID' : 'UUID'}>`)
-  const sent = await callTradingApi(plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem', xml, ctx).catch(error => {
+  let sent: TradingCallResult
+  try {
+    sent = await callTradingApi(plan.itemId ? 'ReviseFixedPriceItem' : 'AddFixedPriceItem', xml, ctx)
+  } catch (error) {
+    if (error instanceof TradingApiFailure && error.duplicateSubmission) {
+      if (error.priorItemId) return { reference: error.priorItemId, warnings: [...validationWarnings, error.message] }
+      throw error
+    }
     if (error instanceof Error && /^eBay (?:Add|Revise)FixedPriceItem Failure:/.test(error.message)) beforeSend(error)
     throw error
-  })
+  }
   const itemId = sent.itemId ?? plan.itemId
   if (!sent.raw || !['Success', 'Warning'].includes(sent.ack) || !itemId || !/^\d+$/.test(itemId)) throw new Error('eBay did not confirm the publication. Check the channel before retrying.')
-  await liveItem(itemId, accountId, plan.marketplace)
-  return itemId
+  const warnings = [...new Set([...validationWarnings, ...(sent.errors ?? [])])]
+  return { reference: itemId, warnings }
 }

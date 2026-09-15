@@ -102,9 +102,16 @@ function deriveLegacyFields(r: PerSkuResult): void {
 /**
  * Parse an Amazon feed processing report. `submittedSkus` lets us mark
  * issue-free SKUs as success (the report only lists SKUs that had issues).
+ * `submittedMessages` resolves reports that identify an issue only by the
+ * messageId Amazon received from the feed.
  */
-export function parseProcessingReport(reportText: string, submittedSkus?: string[]): ParsedReport {
+export function parseProcessingReport(
+  reportText: string,
+  submittedSkus?: string[],
+  submittedMessages?: ReadonlyArray<{ messageId: number; sku: string }>,
+): ParsedReport {
   const skus = (submittedSkus ?? []).filter(Boolean)
+  const skuByMessageId = new Map((submittedMessages ?? []).map(message => [message.messageId, message.sku]))
   const trimmed = (reportText ?? '').trim()
   // An empty report body = Amazon returned a terminal status before the report was
   // written. This is NOT success — signal pending so the caller re-polls instead
@@ -125,7 +132,10 @@ export function parseProcessingReport(reportText: string, submittedSkus?: string
     let feedError: string | undefined
     for (const iss of obj.issues) {
       const status = sevToStatus(iss?.severity)
-      const sku = typeof iss?.sku === 'string' ? iss.sku : ''
+      const messageId = Number(iss?.messageId)
+      const sku = typeof iss?.sku === 'string' && iss.sku
+        ? iss.sku
+        : (Number.isSafeInteger(messageId) ? skuByMessageId.get(messageId) ?? '' : '')
       const message = String(iss?.message ?? '')
       if (!sku) {
         // feed-level issue (no SKU) — surface the first error as the feed error

@@ -185,16 +185,28 @@ export async function readAmazonPublication(feedId: string, accountId: string, s
   const sp = await getAmazonSpClient(accountId)
   const feed = await sp.callAPI({ operation: 'getFeed', endpoint: 'feeds', path: { feedId } })
   if (!['DONE', 'CANCELLED', 'FATAL'].includes(feed.processingStatus)) return null
-  if (feed.processingStatus !== 'DONE') return { failed: true, results: skus.map(sku => ({ sku, failed: true, message: `Amazon feed ${feed.processingStatus.toLowerCase()}.` })) }
+  if (feed.processingStatus === 'CANCELLED') return { failed: true, results: skus.map(sku => ({ sku, failed: true, message: 'Amazon feed cancelled.' })) }
   if (!feed.resultFeedDocumentId) return null
   const document = await sp.callAPI({ operation: 'getFeedDocument', endpoint: 'feeds', path: { feedDocumentId: feed.resultFeedDocumentId } })
   const response = await fetch(document.url, { signal: AbortSignal.timeout(20_000) })
   if (!response.ok) throw new Error(`Amazon processing report is unavailable (${response.status}).`)
   const { decodeReportBytes, parseProcessingReport } = await import('../amazon-flat-file-feed.service.js')
-  const report = parseProcessingReport(decodeReportBytes(Buffer.from(await response.arrayBuffer()), document.compressionAlgorithm), skus)
+  const report = parseProcessingReport(
+    decodeReportBytes(Buffer.from(await response.arrayBuffer()), document.compressionAlgorithm),
+    skus,
+    skus.map((sku, index) => ({ messageId: index + 1, sku })),
+  )
   if (report.pending || (!report.feedError && skus.some(sku => !report.perSku.some(row => row.sku === sku)))) return null
-  return { failed: !!report.feedError, results: skus.map(sku => {
+  if (report.summary.messagesProcessed !== skus.length
+    || report.summary.messagesSuccessful + report.summary.messagesWithError !== skus.length) return null
+  const submitted = new Set(skus)
+  const mappedFailures = report.perSku.filter(row => submitted.has(row.sku) && row.status === 'error').length
+  const allMessagesFailed = report.summary.messagesWithError === skus.length
+  if (!allMessagesFailed && mappedFailures !== report.summary.messagesWithError) return null
+  const results = skus.map(sku => {
     const row = report.perSku.find(r => r.sku === sku)
-    return { sku, failed: !!report.feedError || row?.status === 'error', message: report.feedError ?? (row?.issues.map(i => i.message).join('; ') || 'Amazon processed this product.') }
-  }) }
+    const failed = allMessagesFailed || row?.status === 'error'
+    return { sku, failed, message: row?.issues.map(i => i.message).join('; ') || (failed ? report.feedError : undefined) || 'Amazon processed this product.' }
+  })
+  return { failed: results.every(result => result.failed), results }
 }

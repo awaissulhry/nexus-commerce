@@ -188,6 +188,30 @@ describe('callTradingApi', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body, { status: 200 }))
     await expect(callTradingApi('AddFixedPriceItem', '<x/>', ctx)).rejects.toThrow(/Bad category/)
   })
+
+  it.each([
+    ['1', '110040602158', '110040602158'],
+    ['0', '110040602158', undefined],
+    ['1', 'invalid', undefined],
+  ])('retains a duplicate UUID receipt only with same-app evidence (%s, %s)', async (sameApp, itemId, expected) => {
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    const body = `<R><Ack>Failure</Ack><Errors><ErrorCode>488</ErrorCode><ShortMessage>Duplicate UUID</ShortMessage><ErrorParameters ParamID="0"><Value>${sameApp}</Value></ErrorParameters><ErrorParameters ParamID="1"><Value>${itemId}</Value></ErrorParameters></Errors></R>`
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body))
+    await expect(callTradingApi('AddFixedPriceItem', '<Item><UUID>0123456789ABCDEF0123456789ABCDEF</UUID></Item>', ctx))
+      .rejects.toMatchObject({ duplicateSubmission: true, priorItemId: expected })
+  })
+
+  it.each([
+    ['Success', '0123456789ABCDEF0123456789ABCDEF', '110040602158'],
+    ['InProgress', '0123456789ABCDEF0123456789ABCDEF', undefined],
+    ['Success', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', undefined],
+  ])('correlates duplicate revise completion before retaining its item (%s, %s)', async (status, invocationId, expected) => {
+    process.env.NEXUS_EBAY_REAL_API = 'true'
+    const body = `<R><Ack>Failure</Ack><Errors><ErrorCode>21060</ErrorCode></Errors><DuplicateInvocationDetails><DuplicateInvocationID>${invocationId}</DuplicateInvocationID><Status>${status}</Status><InvocationTrackingID>999</InvocationTrackingID></DuplicateInvocationDetails></R>`
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(body))
+    await expect(callTradingApi('ReviseFixedPriceItem', '<Item><ItemID>110040602158</ItemID><InvocationID>0123456789ABCDEF0123456789ABCDEF</InvocationID></Item>', ctx))
+      .rejects.toMatchObject({ duplicateSubmission: true, priorItemId: expected })
+  })
 })
 
 import { addFixedPriceItem, reviseInventoryStatus } from './ebay-trading-api.service.js'

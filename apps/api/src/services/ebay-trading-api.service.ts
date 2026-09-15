@@ -231,6 +231,34 @@ export interface TradingCallResult {
   raw: string
 }
 
+/** A duplicate failure can describe a previously accepted write, not a rejected submission. */
+export class TradingApiFailure extends Error {
+  constructor(message: string, public readonly duplicateSubmission: boolean, public readonly priorItemId?: string) {
+    super(message)
+    this.name = 'TradingApiFailure'
+  }
+}
+
+function duplicateItemId(callName: string, request: string, response: string): string | undefined {
+  if (callName === 'AddFixedPriceItem' && /<UUID>[a-f0-9]{32}<\/UUID>/i.test(request)) {
+    const duplicate = [...response.matchAll(/<Errors>[\s\S]*?<\/Errors>/g)].map(match => match[0])
+      .find(error => /<ErrorCode>488<\/ErrorCode>/.test(error))
+    if (!duplicate) return undefined
+    const parameter = (id: string) => duplicate.match(new RegExp(`<ErrorParameters\\s+ParamID=["']${id}["']\\s*>\\s*<Value>([^<]+)<\\/Value>\\s*<\\/ErrorParameters>`))?.[1]
+    const itemId = parameter('1')
+    // Error 488 identifies the existing item and whether the same app created it.
+    if (parameter('0') === '1' && itemId && /^\d+$/.test(itemId)) return itemId
+  }
+  if (callName === 'ReviseFixedPriceItem') {
+    const key = request.match(/<InvocationID>([a-f0-9]{32})<\/InvocationID>/i)?.[1]
+    const details = response.match(/<DuplicateInvocationDetails>[\s\S]*?<\/DuplicateInvocationDetails>/)?.[0] ?? ''
+    const previousKey = details.match(/<DuplicateInvocationID>([^<]+)<\/DuplicateInvocationID>/)?.[1]
+    const itemId = request.match(/<ItemID>(\d+)<\/ItemID>/)?.[1]
+    if (key && previousKey?.toUpperCase() === key.toUpperCase() && /<Status>Success<\/Status>/.test(details)) return itemId
+  }
+  return undefined
+}
+
 function tradingEndpoint(): string {
   return process.env.EBAY_SANDBOX === 'true'
     ? 'https://api.sandbox.ebay.com/ws/api.dll'
@@ -284,10 +312,12 @@ export async function callTradingApi(
   // is invalid…"); ShortMessage alone ("Input data is invalid.") is useless to
   // the operator — never surface it when a LongMessage exists.
   const errors = longMessages.length ? longMessages : shortMessages
-  if (ack === 'Failure') {
+  const duplicateSubmission = errorCodes.some(code => code === '488' || code === '21060') || /<DuplicateInvocationDetails>/.test(raw)
+  if (ack === 'Failure' || duplicateSubmission) {
     const detail = errors.slice(0, 2).join(' | ') || 'unknown'
     const code = errorCodes.length ? ` (code ${errorCodes[0]})` : ''
-    throw new Error(`eBay ${callName} Failure: ${detail}${code}`)
+    throw new TradingApiFailure(`eBay ${callName} Failure: ${detail}${code}`, duplicateSubmission,
+      duplicateSubmission ? duplicateItemId(callName, xml, raw) : undefined)
   }
   return { ack, itemId, errors, raw }
 }

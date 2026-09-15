@@ -172,6 +172,19 @@ describe('parseProcessingReport — pending vs confirmed (false-positive guard)'
     expect(summary.messagesWithError).toBe(1)
     expect(summary.messagesSuccessful).toBe(0)
   })
+
+  it('uses the submitted messageId map when Amazon omits an issue SKU', () => {
+    const r = JSON.stringify({
+      issues: [{ messageId: 2, code: '90220', severity: 'ERROR', message: 'Invalid size' }],
+      summary: { errors: 1, warnings: 0, messagesProcessed: 2, messagesAccepted: 1, messagesInvalid: 1 },
+    })
+    const { perSku } = parseProcessingReport(r, ['PARENT', 'CHILD'], [
+      { messageId: 1, sku: 'PARENT' },
+      { messageId: 2, sku: 'CHILD' },
+    ])
+    expect(perSku.find(row => row.sku === 'PARENT')?.status).toBe('success')
+    expect(perSku.find(row => row.sku === 'CHILD')).toMatchObject({ status: 'error', message: 'Invalid size' })
+  })
 })
 
 // THE root cause: Amazon serves the processing report GZIP-compressed and we read
