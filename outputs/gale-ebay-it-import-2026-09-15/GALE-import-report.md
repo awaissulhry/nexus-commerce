@@ -64,9 +64,18 @@ The original workbook is unchanged. Uploading the original unchanged again will 
 flag its seven obsolete columns and non-exact season choice; those were explicit
 reviewed corrections in this import, not silent generic importer rules.
 
-**Application deployment:** pending final release verification. Database import
-and all data corrections are already committed in production. The 100% readiness
-check used the updated application code against that production data.
+**Application deployment is blocked.** The repository's release gate passed the
+GALE/eBay editor, price, stock-control and save-state checks, then failed one
+unrelated cross-channel footer comparison: the Amazon sheet correctly displayed
+“The Amazon account is disconnected. Reconnect it in Settings → Channels to work
+on this listing.” while the master sheet displayed keyboard help. The push did
+not complete. Import support and the numeric-validation correction are committed
+locally in `6441275bc` and `0541e07af`; production still serves API `fc92f3d8`.
+The data import and all catalog corrections are already committed in production.
+The 100% readiness check used the updated application code against that production
+data. The old deployed validator can still show the false Decimal price errors
+until the application release completes. The corrected workbook's dry run passed
+against the new importer; that importer also awaits the release.
 
 ## Source versus live values
 

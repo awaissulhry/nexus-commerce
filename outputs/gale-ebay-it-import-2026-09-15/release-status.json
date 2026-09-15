@@ -1,0 +1,11 @@
+{
+  "status": "blocked",
+  "apiBuild": "fc92f3d8",
+  "importSupportCommit": "6441275bc",
+  "priceValidationCommit": "0541e07af",
+  "gate": "scripts/check-editor-open.mjs --strict",
+  "failure": "parity AMAZON\u00b7IT \u00b7 footerNote differs because the Amazon account is disconnected",
+  "databaseImport": "completed",
+  "correctedWorkbookDryRun": "passed",
+  "scope": "Application release only; data import is committed"
+}

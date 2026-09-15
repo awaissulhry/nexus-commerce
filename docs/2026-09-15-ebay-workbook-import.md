@@ -107,3 +107,10 @@ The original workbook remains byte-identical. Data receipts and the verification
 manifest are in `outputs/gale-ebay-it-import-2026-09-15`. These database checks ran
 using the updated application code; deployment status is reported separately in
 the final import report.
+
+Release status: the normal push of `0541e07af` was blocked by the open-gesture
+gate's unrelated Amazon footer parity comparison (disconnected account notice
+versus master keyboard help). The GALE data import is committed in production;
+the application release remains pending, with API `fc92f3d8` still deployed.
+The final report distinguishes production data validation using the updated
+code from the old live application's numeric validation.
