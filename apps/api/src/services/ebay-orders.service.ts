@@ -40,6 +40,22 @@ import { recordOrderItem } from './sales-aggregate.service.js'
  *  older code/fixtures assumed bare strings. */
 export type EbayAmountLike = string | number | { value?: string | number; currency?: string } | null | undefined
 
+/**
+ * MAP.2 — the store an eBay order came from. Until 2026-09-16 `processOrder` received the
+ * connection id and ignored it, so every eBay order imported after the MAP.2 backfill was saved
+ * with no store link: invisible to per-account views and to the profile move guard.
+ * A new order takes the importing store. An existing order gains the link only when it has none —
+ * an eBay order id belongs to one seller, so a DIFFERENT existing link is a conflict to report,
+ * never one to overwrite. Pure; exported for tests.
+ */
+export function ebayOrderConnectionLink(
+  existingConnectionId: string | null | undefined,
+  importingConnectionId: string,
+): { data: { channelConnectionId?: string }; conflict: boolean } {
+  if (!existingConnectionId) return { data: { channelConnectionId: importingConnectionId }, conflict: false }
+  return { data: {}, conflict: existingConnectionId !== importingConnectionId }
+}
+
 /** Pure — returns a finite number or null (never NaN). Exported for tests. */
 export function parseEbayAmount(raw: EbayAmountLike): number | null {
   if (raw === null || raw === undefined) return null
@@ -324,7 +340,7 @@ export class EbayOrdersService {
    * inventory through applyStockMovement (so ChannelListing.master
    * Quantity and the cross-channel sync queue both update).
    */
-  private async processOrder(order: EbayOrder, _connectionId: string) {
+  private async processOrder(order: EbayOrder, connectionId: string) {
     const totalPrice = parseEbayAmount(order.pricingSummary.total)
     if (totalPrice === null) {
       throw new Error(
@@ -446,14 +462,22 @@ export class EbayOrdersService {
       && existing != null
       && existing.status !== 'CANCELLED'
 
+    const link = ebayOrderConnectionLink(existing ? existing.channelConnectionId : undefined, connectionId)
+    if (link.conflict) {
+      logger.warn('ebay-orders: order is already linked to a different store — link kept', {
+        orderId: order.orderId,
+        linkedConnectionId: existing?.channelConnectionId,
+        importingConnectionId: connectionId,
+      })
+    }
     if (existing) {
       dbOrder = await prisma.order.update({
         where: { id: existing.id },
-        data: orderData,
+        data: { ...orderData, ...link.data },
       })
       this.stats.ordersUpdated++
     } else {
-      dbOrder = await prisma.order.create({ data: orderData })
+      dbOrder = await prisma.order.create({ data: { ...orderData, ...link.data } })
       this.stats.ordersCreated++
     }
 
