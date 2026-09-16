@@ -367,6 +367,14 @@ node scripts/check-context-boundary.mjs --check || {
   echo "❌ context boundary FAILED — see message above"
   exit 1
 }
+# AE.1 (2026-09-16) — every StockLevel write takes the product stock lock first. Without it,
+# simultaneous sales lose updates (measured: 20 sales on 20 units left 19). Only the files in
+# scripts/stock-writer-lock.json may write stock, with exact counts. Mutation-tested (11 arms).
+echo "→ Checking stock writers take the stock lock (AE.1)..."
+node scripts/check-stock-writer-lock.mjs --check || {
+  echo "❌ stock-writer lock FAILED — see message above (rule + why: scripts/check-stock-writer-lock.mjs header)"
+  exit 1
+}
 # EV.4 — every scheduled job goes through the cluster-safe cron wrapper.
 # node-cron is per-process: a direct import means that job runs once per
 # replica, which is how 117 crons become 234.
@@ -459,6 +467,16 @@ npm run test:security --workspace=@nexus/api > /tmp/sec-tests.log 2>&1 || {
 }
 grep -E "Tests +[0-9]+ passed" /tmp/sec-tests.log | tail -1 || true
 echo "✓ Security tests passed"
+
+# AE.1 (2026-09-16) — the stock race test needs a MULTI-connection PostgreSQL (the normal test
+# database queues every transaction, so a race cannot happen there and the test would pass
+# regardless). The runner starts a throwaway container, fails if the suite skipped or any arm
+# failed, and prints a named SKIP (exit 0) only when Docker or a PostgreSQL 17 image is absent. ~5-30s.
+echo "→ Running the stock race test on a throwaway PostgreSQL (AE.1)..."
+node scripts/run-stock-race-test.mjs || {
+  echo "❌ stock race test FAILED — see message above"
+  exit 1
+}
 
 # 2026-09-16 — business profiles ON. Production will run with NEXUS_WORKSPACES_ENABLED=1, but the
 # default suite runs with it OFF (vitest.setup.ts), because every test predating that day assumed

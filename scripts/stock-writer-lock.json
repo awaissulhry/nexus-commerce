@@ -1,0 +1,25 @@
+{
+  "_rule": "Read scripts/check-stock-writer-lock.mjs. Every file that writes StockLevel is listed with its exact number of write sites. lock=true files must call lockProductStock( first in each writing transaction.",
+  "files": {
+    "apps/api/src/services/stock-movement.service.ts": {
+      "writes": 2,
+      "lock": true,
+      "why": "applyStockMovementInTx: the level update or create, after lockProductStock(tx, [productId])."
+    },
+    "apps/api/src/services/stock-level.service.ts": {
+      "writes": 3,
+      "lock": true,
+      "why": "reserveStockInTx, releaseReservation and consumeReservation: each locks the product before reading the level."
+    },
+    "apps/api/src/services/stock-import.service.ts": {
+      "writes": 2,
+      "lock": true,
+      "why": "Bulk import chunk: applyProducts locks the chunk's products, then plans and writes in the same transaction."
+    },
+    "apps/api/src/routes/stock.routes.ts": {
+      "writes": 2,
+      "lock": false,
+      "why": "Threshold-only writes (reorderThreshold / reorderQuantity). They never set quantity, reserved or available, so they cannot lose a stock update."
+    }
+  }
+}
