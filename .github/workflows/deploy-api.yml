@@ -58,6 +58,18 @@ jobs:
       - name: Install root + workspaces
         run: npm ci
 
+      - name: Check eBay accepts every consent scope
+        # 2026-09-16 — eBay refuses the WHOLE Connect request when one scope is outside the
+        # production app's keyset, and names none of them. Two were, so no eBay account could be
+        # connected. This asks eBay before shipping: exit 1 names the refused scopes, exit 2 means
+        # it could not measure (missing variables, wrong app ID, eBay unreachable). Both stop the
+        # deploy. Needs repository variables EBAY_CLIENT_ID and EBAY_RUNAME (production values).
+        working-directory: apps/api
+        env:
+          EBAY_CLIENT_ID: ${{ vars.EBAY_CLIENT_ID }}
+          EBAY_RUNAME: ${{ vars.EBAY_RUNAME }}
+        run: npx tsx scripts/check-ebay-consent-scopes.mts
+
       - name: Generate Prisma client
         working-directory: packages/database
         run: npx prisma generate

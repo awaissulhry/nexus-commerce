@@ -17,34 +17,9 @@ import { CredentialsDecryptError } from '../../../../lib/crypto.js'
 import { ChannelAppConfigurationError } from '../../app-configuration-error.js'
 import { RefreshFailed } from '../../token.service.js'
 import { ebaySignatureAppliesTo } from './signing.js'
+import { EBAY_REQUIRED_SCOPES, EBAY_SCOPE_BASE as S } from './scopes.js'
 
-const S = 'https://api.ebay.com/oauth/api_scope'
-
-/** Every scope an EU seller connector needs (research B1.3 / R2 §B). */
-export const EBAY_REQUIRED_SCOPES: string[] = [
-  S,
-  `${S}/sell.inventory`,
-  `${S}/sell.inventory.readonly`,
-  `${S}/sell.account`,
-  `${S}/sell.account.readonly`,
-  `${S}/sell.marketing`,
-  `${S}/sell.marketing.readonly`,
-  `${S}/sell.fulfillment`,
-  `${S}/sell.fulfillment.readonly`,
-  `${S}/sell.finances`,
-  `${S}/sell.payment.dispute`,
-  `${S}/sell.analytics.readonly`,
-  `${S}/sell.logistics`,
-  `${S}/sell.stores`,
-  `${S}/sell.stores.readonly`,
-  `${S}/commerce.identity.readonly`,
-  `${S}/commerce.notification.subscription`,
-  `${S}/commerce.notification.subscription.readonly`,
-  `${S}/commerce.catalog.readonly`,
-  `${S}/commerce.message`,
-  `${S}/commerce.feedback`,
-  `${S}/commerce.shipping`,
-]
+export { EBAY_REQUIRED_SCOPES }
 
 export const EBAY_HOSTS = {
   production: { auth: 'https://auth.ebay.com', api: 'https://api.ebay.com', apiz: 'https://apiz.ebay.com' },

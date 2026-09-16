@@ -4,7 +4,7 @@
  * exchanges the code, asks the channel who consented, places the grant and
  * records scope drift.
  *
- * The real eBay catalogue entry drives the eBay cases (22 scopes, prompt=login,
+ * The real eBay catalogue entry drives the eBay cases (20 scopes, prompt=login,
  * RuName redirect, Basic auth, no PKCE); a fake PKCE channel registered under
  * ETSY covers code_challenge / code_verifier / body auth / scope discovery.
  * prisma is an in-memory fake, fetch is stubbed and routed by URL, crypto runs
@@ -476,7 +476,7 @@ describe('start', () => {
     expect(s.cookie.value).toMatch(/^[A-Za-z0-9_-]{32}$/)
   })
 
-  it('the eBay authorize URL carries client_id, the RuName, all 22 scopes, state, response_type and prompt=login — no PKCE', async () => {
+  it('the eBay authorize URL carries client_id, the RuName, all 20 scopes, state, response_type and prompt=login — no PKCE', async () => {
     const s = await startEbay()
     const url = new URL(s.authorizeUrl)
     expect(`${url.origin}${url.pathname}`).toBe('https://auth.ebay.com/oauth2/authorize')
@@ -485,9 +485,9 @@ describe('start', () => {
     expect(url.searchParams.get('state')).toBe(s.state)
     expect(url.searchParams.get('response_type')).toBe('code')
     expect(url.searchParams.get('prompt')).toBe('login')
-    expect(EBAY_REQUIRED_SCOPES).toHaveLength(22)
+    expect(EBAY_REQUIRED_SCOPES).toHaveLength(20)
     expect(url.searchParams.get('scope')).toBe(EBAY_REQUIRED_SCOPES.join(' '))
-    expect(url.searchParams.get('scope')!.split(' ')).toHaveLength(22)
+    expect(url.searchParams.get('scope')!.split(' ')).toHaveLength(20)
     expect(url.searchParams.has('code_challenge')).toBe(false)
     expect(url.searchParams.has('code_challenge_method')).toBe(false)
     expect(ebaySpec.auth.promptParam).toEqual({ prompt: 'login' })
@@ -813,7 +813,7 @@ describe('complete — placement and storage', () => {
     expect(rtExp).toBeGreaterThan(Date.now() + 47_000_000 * 1000)
     expect(eventsOf('grant')).toHaveLength(1)
     expect(eventsOf('grant')[0]).toMatchObject({ connectionId: 'conn-1', channelKey: 'EBAY', actorUserId: 'user-1' })
-    expect(eventsOf('grant')[0].detail).toMatchObject({ scopes: 22, identity: 'seller1', actorKind: 'operator' })
+    expect(eventsOf('grant')[0].detail).toMatchObject({ scopes: 20, identity: 'seller1', actorKind: 'operator' })
     expect(eventsOf('status_change').find((e) => e.connectionId === 'conn-1')?.detail).toMatchObject({ from: 'unknown', to: 'connected', reason: 'grant' })
     expect(eventsOf('scope_drift')).toHaveLength(0)
     expect(sessions.get(s.state)).toMatchObject({ resultConnectionId: 'conn-1' })
@@ -886,7 +886,7 @@ describe('complete — placement and storage', () => {
     const s = await startEbay()
     const r = await completeEbay(s)
     const expected = scopeDriftOf(ebaySpec, granted)
-    expect(expected).toHaveLength(19) // 22 − 2 granted − the implied sell.inventory.readonly
+    expect(expected).toHaveLength(17) // 20 − 2 granted − the implied sell.inventory.readonly
     expect(r.grantedScopes).toEqual(granted)
     expect(r.scopeDrift).toEqual(expected)
     expect(eventsOf('scope_drift')).toHaveLength(1)
