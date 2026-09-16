@@ -22,7 +22,8 @@
  * Exit: 0 eBay accepts every scope · 1 eBay refuses the list · 2 could not measure.
  *
  * Run from apps/api:  npx tsx scripts/check-ebay-consent-scopes.mts
- * Runs in .github/workflows/deploy-api.yml before the Railway deploy.
+ * Runs in .github/workflows/deploy-api.yml before the Railway deploy, which reads both values from
+ * Railway (the one place production values live).
  */
 
 import { EBAY_REQUIRED_SCOPES, EBAY_SCOPE_BASE } from '../src/services/cx/connectors/ebay/scopes.js'

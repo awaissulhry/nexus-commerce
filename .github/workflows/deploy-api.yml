@@ -58,17 +58,31 @@ jobs:
       - name: Install root + workspaces
         run: npm ci
 
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
       - name: Check eBay accepts every consent scope
         # 2026-09-16 — eBay refuses the WHOLE Connect request when one scope is outside the
         # production app's keyset, and names none of them. Two were, so no eBay account could be
         # connected. This asks eBay before shipping: exit 1 names the refused scopes, exit 2 means
-        # it could not measure (missing variables, wrong app ID, eBay unreachable). Both stop the
-        # deploy. Needs repository variables EBAY_CLIENT_ID and EBAY_RUNAME (production values).
+        # it could not measure (missing values, wrong app ID, eBay unreachable). Both stop the
+        # deploy. The app ID and RuName are read from Railway, the one place production values
+        # live — never copy them into GitHub.
         working-directory: apps/api
         env:
-          EBAY_CLIENT_ID: ${{ vars.EBAY_CLIENT_ID }}
-          EBAY_RUNAME: ${{ vars.EBAY_RUNAME }}
-        run: npx tsx scripts/check-ebay-consent-scopes.mts
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_SERVICE: ${{ secrets.RAILWAY_SERVICE }}
+        run: |
+          set -euo pipefail
+          # The JSON holds EVERY Railway variable, secrets included: it goes straight into jq and
+          # only the two public eBay identifiers come out. Never print it.
+          pick='[.EBAY_CLIENT_ID // "", .EBAY_RUNAME // ""] | @tsv'
+          if [ -n "$RAILWAY_SERVICE" ]; then
+            ebay=$(railway variables list --service "$RAILWAY_SERVICE" --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
+          else
+            ebay=$(railway variables list --json | jq -r "$pick") || { echo "❌ could not read the eBay app values from Railway"; exit 2; }
+          fi
+          EBAY_CLIENT_ID=$(cut -f1 <<< "$ebay") EBAY_RUNAME=$(cut -f2 <<< "$ebay") npx tsx scripts/check-ebay-consent-scopes.mts
 
       - name: Generate Prisma client
         working-directory: packages/database
@@ -79,9 +93,6 @@ jobs:
 
       - name: Verify catalog CSV import size and dialect boundaries
         run: npm run test --workspace=@nexus/api -- --project regressions src/services/pim/catalog-csv-limits.vitest.test.ts src/services/pim/catalog-csv-dialect.vitest.test.ts
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
 
       - name: Trigger Railway deploy
         env:
