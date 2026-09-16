@@ -21,6 +21,7 @@ import { getBackendUrl } from '@/lib/backend-url'
 import { installAuthFetch } from './install-fetch'
 import { setCsrfToken } from './csrf-store'
 import { setBrowserUserId } from '../workspaces/browser-identity'
+import { isPublicPath } from './public-paths'
 
 export interface AuthUser {
   id: string
@@ -53,24 +54,8 @@ const AuthContext = createContext<AuthContextValue>({
 
 const ENFORCE = process.env.NEXT_PUBLIC_AUTH_ENFORCE === '1' || process.env.NEXT_PUBLIC_WORKSPACES_ENABLED === '1'
 
-// Routes reachable without a session. Keep in sync with the API manifest's
-// PUBLIC set + the auth pages.
-const PUBLIC_PREFIXES = [
-  '/login',
-  '/403',
-  '/accept-invite',
-  '/accept-workspace-invite',
-  '/reset-password',
-  '/forgot-password',
-  '/r/',
-  '/po/',
-  '/track/',
-  '/unsubscribed',
-  '/settings/channels/ebay-callback',
-]
-export function isPublicPath(path: string): boolean {
-  return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p))
-}
+// Routes reachable without a session live in ./public-paths — the profile routing reads the same list.
+export { isPublicPath }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading')
