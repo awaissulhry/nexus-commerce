@@ -26,6 +26,7 @@
 
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
+import { listInbox } from '../services/notification-inbox.service.js'
 
 /**
  * The session's user, or a 401. Never a fallback identity: a shared default id is how
@@ -51,28 +52,8 @@ const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
       Math.max(parseInt(request.query?.limit ?? '50', 10) || 50, 1),
       200,
     )
-    /*
-     * 🔴 UNREAD FIRST, from the query — not re-sorted afterwards.
-     *
-     * This returned the `limit` NEWEST rows. Measured 2026-09-16: `unreadCount: 1`,
-     * `unreadRowsReturned: 0`. The one unread notice, a `danger` automation-halt alarm,
-     * was older than all 30 rows returned, so the badge counted a row the list could
-     * never show — and no amount of client-side ordering can surface a row the client
-     * was never sent. The panel's own sort test passed throughout, because the test
-     * handed it the alarm.
-     *
-     * So every unread row is fetched first (bounded by the same limit), and read rows
-     * only fill whatever room is left.
-     */
-    const [unread, unreadCount] = await Promise.all([
-      prisma.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: 'desc' }, take: limit }),
-      prisma.notification.count({ where: { userId, readAt: null } }),
-    ])
-    const room = unreadOnly ? 0 : limit - unread.length
-    const read = room > 0
-      ? await prisma.notification.findMany({ where: { userId, readAt: { not: null } }, orderBy: { createdAt: 'desc' }, take: room })
-      : []
-    return { rows: [...unread, ...read], unreadCount }
+    // Unread first, then read rows fill the room left — see the service for why.
+    return listInbox(userId, { unreadOnly, limit })
   })
 
   fastify.post<{ Params: { id: string } }>(
