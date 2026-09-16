@@ -16,7 +16,7 @@ import type { FastifyInstance } from 'fastify'
 import { logger } from '../utils/logger.js'
 import { tryGetChannelSpec, type ChannelKey } from '../services/cx/catalog.js'
 import { complete, connectionReadiness, OAuthFlowError, start, type Intent } from '../services/cx/oauth.service.js'
-import { WorkspaceError, workspaceContext } from '../lib/workspace-context.js'
+import { WorkspaceError, withWorkspace, workspaceContext } from '../lib/workspace-context.js'
 import { oauthCallbackNonce } from '../lib/api-content-security-policy.js'
 import { recordConnectionEvent } from '../services/cx/events.service.js'
 import { connectionLabelById } from '../services/connection-label.js'
@@ -78,6 +78,25 @@ ${input.ok ? '' : `<p class="small"><a href="${esc(WEB_ORIGIN)}/settings/channel
   setTimeout(function(){ if(!acked) done(); },1500);
 })();
 </script></body></html>`
+}
+
+/**
+ * The name shown after a grant is STORED. This route is PUBLIC, so no profile is in scope: the lookup
+ * runs in the profile the sign-in completed into. And it cannot fail the connection — 2026-09-16 an
+ * eBay Reconnect was saved (Connected, 20/20 permissions) and this lookup, run with no profile, made
+ * the page say "was not connected — Select a business profile."
+ */
+async function storedGrantLabel(result: { workspaceId: string; connectionId: string }): Promise<string | null> {
+  try {
+    const scope = { workspaceId: result.workspaceId, actorUserId: null, membershipId: null, roleKeys: [] }
+    return (await withWorkspace(scope, () => connectionLabelById(result.connectionId))).label
+  } catch (err) {
+    logger.warn('[cx-connect] connected, but the account name could not be read', {
+      connectionId: result.connectionId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
 }
 
 export const __cxConnectTest = { callbackPage }
@@ -190,7 +209,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
         })
         // The cookie has done its job.
         reply.clearCookie(`nexus_oauth_${request.query.state ?? ''}`, { path: '/api/cx/callback' })
-        const who = (await connectionLabelById(result.connectionId)).label
+        const who = await storedGrantLabel(result)
         const drift = result.scopeDrift.length
         return reply.type('text/html').send(
           callbackPage({
@@ -198,7 +217,7 @@ export default async function cxConnectRoutes(app: FastifyInstance): Promise<voi
             ok: true,
             title: `${spec.displayName} connected`,
             body: `${who ? `Account: ${who}. ` : ''}${result.placement === 'new' ? 'A new account was added.' : result.placement === 'adopt' ? 'The grant was attached to the account you chose.' : 'The existing account was re-authorised.'}${drift ? ` ${drift} permission${drift === 1 ? '' : 's'} could not be granted — see the account card.` : ''}`,
-            payload: { state: request.query.state, workspaceId: result.workspaceId, channel: spec.channelType, channelKey: key, connectionId: result.connectionId, sellerName: who, placement: result.placement, scopeDrift: result.scopeDrift },
+            payload: { state: request.query.state, workspaceId: result.workspaceId, channel: spec.channelType, channelKey: key, connectionId: result.connectionId, ...(who ? { sellerName: who } : {}), placement: result.placement, scopeDrift: result.scopeDrift },
           }),
         )
       } catch (err) {

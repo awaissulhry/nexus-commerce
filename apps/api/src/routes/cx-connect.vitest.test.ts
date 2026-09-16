@@ -24,6 +24,7 @@ vi.mock('../services/cx/connectors/amazon-sp/self-authorization.js', () => ({
   importAmazonEnvironmentAuthorization: vi.fn(), AmazonSelfAuthorizationError: class extends Error {},
 }))
 import routes from './cx-connect.routes.js'
+import { WorkspaceError, workspaceContext } from '../lib/workspace-context.js'
 
 afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks() })
 
@@ -125,6 +126,51 @@ describe('connection callback page', () => {
         query: expect.objectContaining({ spapi_oauth_code: 'code-1', selling_partner_id: 'SELLERONE' }),
       }))
       expect(response.body).toContain('Amazon Seller connected')
+    } finally { await app.close() }
+  })
+})
+
+// 2026-09-16 — production: an eBay Reconnect from a business profile STORED the grant (Connected,
+// 20/20 permissions), then the page said "eBay was not connected — Select a business profile." The
+// callback route is PUBLIC, so no profile was in scope when it looked up the account's name, and the
+// profile-scoped client refuses a query without one. The mocked database above never refused.
+describe('connection callback after a stored grant', () => {
+  const profileScopedLookup = () => findConnection.mockImplementation(async () => {
+    const scope = workspaceContext()
+    if (!scope) throw new WorkspaceError('workspace_required', 'Select a business profile.', 400)
+    expect(scope.workspaceId).toBe('motovento-profile')
+    return { accountLabel: null, displayName: 'motovento', channelType: 'EBAY' }
+  })
+
+  it('reads the account name inside the profile that owns the connection, and reports success', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    profileScopedLookup()
+    complete.mockResolvedValue({ workspaceId: 'motovento-profile', connectionId: 'seller-2', identity: { username: 'motovento' }, placement: 'reconsent', scopeDrift: [] })
+    const app = Fastify()
+    await app.register(cookie)
+    await app.register(routes, { prefix: '/api' })
+    try {
+      const response = await app.inject({ url: '/api/cx/callback/ebay?state=attempt-2&code=fixture-code', headers: { cookie: 'nexus_oauth_attempt-2=fixture-nonce' } })
+      expect(response.statusCode).toBe(200)
+      expect(response.body).toContain('eBay connected')
+      expect(response.body).toContain('Account: motovento.')
+      expect(response.body).not.toContain('was not connected')
+      expect(findConnection).toHaveBeenCalledOnce()
+    } finally { await app.close() }
+  })
+
+  it('never reports a stored grant as a failure when only the name lookup fails', async () => {
+    vi.stubEnv('NEXUS_WORKSPACES_ENABLED', '1')
+    findConnection.mockRejectedValue(new Error('database unavailable'))
+    complete.mockResolvedValue({ workspaceId: 'motovento-profile', connectionId: 'seller-2', identity: { username: 'motovento' }, placement: 'reconsent', scopeDrift: [] })
+    const app = Fastify()
+    await app.register(cookie)
+    await app.register(routes, { prefix: '/api' })
+    try {
+      const response = await app.inject({ url: '/api/cx/callback/ebay?state=attempt-3&code=fixture-code', headers: { cookie: 'nexus_oauth_attempt-3=fixture-nonce' } })
+      expect(response.statusCode).toBe(200)
+      expect(response.body).toContain('eBay connected')
+      expect(response.body).not.toContain('was not connected')
     } finally { await app.close() }
   })
 })
