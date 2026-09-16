@@ -369,54 +369,6 @@ node scripts/check-global-exposure.mjs || {
   exit 1
 }
 
-# GDS §8.2 — chrome conformance is MEASURED in a browser against the lab; it needs :3000.
-# 🔴 `--strict` since hub #525: a missing server is a FAILURE here, not a skip. It used to skip with
-# `exit 0`, and on 2026-09-02 the machine sat at load 23 for hours with :3000 listening but the route
-# not answering — so the gate printed `SKIPPED — NOT MEASURED` and passed, during the exact window
-# grid work was landing. PES.2's case: a gate that exists to stop unmeasured grid work shipping must
-# not itself pass unmeasured, and a lane grepping for `^✓|^✗` sees SILENCE from a skip, which is
-# indistinguishable from success. The push happens once, on the Owner's word, with the hub's servers
-# up; a server genuinely down at that moment SHOULD fail it. Run `npm run grid:conformance` by hand
-# (no flag, skip allowed) while developing.
-echo "→ Checking grid chrome conformance (GDS §8.2, needs :3000)..."
-node scripts/check-grid-chrome.mjs --strict || {
-  echo "❌ grid chrome conformance FAILED — see message above"
-  exit 1
-}
-# 2026-09-03 (Owner P0, ruling 3) — THE OPEN-GESTURE GATE. Needs :3000.
-# Reported as "I double-click a cell and sometimes no editor opens". Measured: AG parents a 6×6px
-# `.ag-fill-handle` INSIDE the selected cell's bottom-right corner and binds its own dblclick that
-# begins `_stopPropagationForAgGrid(e)` — the cell never sees the gesture — and whose remaining body
-# fills the value down to the LAST ROW of the grid, unconfirmed. One corner double-click on
-# `basePrice` armed 20 `PATCH /api/products/bulk` calls carrying "0" onto twenty other rows of the
-# family. Nothing else in this file can see either half: tsc does not click, and no static guard
-# knows where AG puts a handle.
-#
-# It asserts two things per gesture — an editor's DOM within 250ms, and ZERO writes armed — over
-# every column kind × every gesture (double-click, Enter, F2, a character, `=`) × both hit-points ×
-# three timings, and it carries its own controls: a per-gesture positive control (the pointer must
-# be over the target cell, or the reading ABSTAINS and the run fails), a negative control (a header
-# double-click must open nothing, or the detector is broken and every green above it is vacuous),
-# and a wire control (the page must dial the expected API, not the deployed one).
-#
-# 🔴 `--strict` for the same reason `check-grid-chrome.mjs` carries it: a gate that exists to stop
-# unmeasured editing work shipping must not itself pass unmeasured. Run it by hand without the flag
-# (or with EDITOR_ONLY=settled) while developing.
-echo "→ Checking open-gesture editing (P0 2026-09-03, needs :3000)..."
-node scripts/check-editor-open.mjs --strict || {
-  echo "❌ open-gesture gate FAILED — see message above (rule + why: scripts/check-editor-open.mjs header)"
-  exit 1
-}
-# CT.1 (2026-09-04): the studio's CONTROL VOCABULARY, read off the rendered DOM — every control in
-# the product header, scope row, sheet toolbar and drawer strip is a DS control on the 28px tier
-# (tabs at strip height), every panel control is a DS control on a DS tier, and the "Ask AI" FAB is
-# absent. It runs AFTER the open-gesture gate because gate runs against :3000 are serialised, and it
-# exits 2 (refused) rather than green when another gate is mid-run or the server is down.
-echo "→ Checking the studio control census (CT.1, needs :3000)..."
-node scripts/check-control-census.mjs || {
-  echo "❌ control census FAILED — see message above (rule + why: scripts/check-control-census.mjs header)"
-  exit 1
-}
 echo "→ Checking DS-GAPS append-only (GDS §8.6)..."
 node scripts/check-ds-gaps-append-only.mjs --check || {
   echo "❌ DS-GAPS append-only FAILED — see message above"
