@@ -291,6 +291,31 @@ export interface HeartbeatOutcome {
 }
 
 /**
+ * The request for a Rename / colour / Make primary / Disconnect call. A JSON content type goes ONLY
+ * with a body: Fastify refuses `Content-Type: application/json` with an empty body (400
+ * `FST_ERR_CTP_EMPTY_JSON_BODY`) before the route runs. Make primary and Disconnect send no body, so
+ * both only ever answered "Bad Request" (measured on production 2026-09-16).
+ */
+export function accountMutationInit(init: RequestInit): RequestInit {
+  return init.body == null
+    ? { credentials: 'include', ...init }
+    : { credentials: 'include', headers: { 'Content-Type': 'application/json' }, ...init }
+}
+
+/**
+ * Why a mutation failed, in the server's own words. Nexus routes answer `{ error: <sentence> }`.
+ * Fastify's own refusals answer `{ statusCode, error: 'Bad Request', message: <the reason> }`, where
+ * `error` is only the HTTP phrase — showing it alone printed "Bad Request" and hid the reason.
+ */
+export function accountMutationError(body: unknown, status: number): string {
+  const b = (body ?? {}) as { statusCode?: unknown; error?: unknown; message?: unknown }
+  if (typeof b.statusCode === 'number' && typeof b.message === 'string' && b.message) return b.message
+  if (typeof b.error === 'string' && b.error) return b.error
+  if (typeof b.message === 'string' && b.message) return b.message
+  return `HTTP ${status}`
+}
+
+/**
  * The Test action: one real call to the purpose-built heartbeat endpoint. The server writes
  * `lastHeartbeatAt` and a ledger row; this only reports what came back, in the server's words.
  */

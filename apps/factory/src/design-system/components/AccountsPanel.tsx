@@ -31,6 +31,8 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button, Pill, Tag } from '../primitives'
 import {
+  accountMutationError,
+  accountMutationInit,
   authStatusPill,
   errorLineVisible,
   lastSyncText,
@@ -182,7 +184,7 @@ export function AccountsPanel({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [draftLabel, setDraftLabel] = useState('')
-  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string; accountId?: string } | null>(null)
   const [expandedScopes, setExpandedScopes] = useState<Record<string, boolean>>({})
   const [testResult, setTestResult] = useState<Record<string, HeartbeatOutcome>>({})
 
@@ -219,20 +221,18 @@ export function AccountsPanel({
       setBusyId(id)
       setNotice(null)
       try {
-        const res = await fetch(`${apiBase}/api/accounts/${id}${path}`, {
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          ...init,
-        })
-        const json = (await res.json().catch(() => ({}))) as { error?: string }
-        if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`)
+        const res = await fetch(`${apiBase}/api/accounts/${id}${path}`, accountMutationInit(init))
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(accountMutationError(json, res.status))
         await load()
         onChanged?.()
-        setNotice({ tone: 'ok', text: okText })
+        setNotice({ tone: 'ok', text: okText, accountId: id })
       } catch (err) {
         // The server's own words. A refusal that gets reworded here is a refusal
-        // the operator cannot act on.
-        setNotice({ tone: 'error', text: err instanceof Error ? err.message : 'Failed' })
+        // the operator cannot act on. On the ROW it concerns: a notice at the top
+        // of a long list is off-screen for every row below the fold, and the
+        // click reads as doing nothing (Disconnect, 2026-09-16).
+        setNotice({ tone: 'error', text: err instanceof Error ? err.message : 'Failed', accountId: id })
       } finally {
         setBusyId(null)
       }
@@ -341,7 +341,7 @@ export function AccountsPanel({
         </p>
       </div>
 
-      {notice && (
+      {notice && !notice.accountId && (
         <p className="nds-acctp-notice" data-tone={notice.tone} role="status">
           {notice.text}
         </p>
@@ -480,6 +480,11 @@ export function AccountsPanel({
                   {result && (
                     <span className="nds-acctp-test" data-tone={result.ok ? 'ok' : 'error'} role="status">
                       {result.text}
+                    </span>
+                  )}
+                  {notice?.accountId === a.id && (
+                    <span className="nds-acctp-test" data-tone={notice.tone} role="status">
+                      {notice.text}
                     </span>
                   )}
                 </div>

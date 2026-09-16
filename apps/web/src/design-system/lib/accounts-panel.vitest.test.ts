@@ -6,6 +6,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   NOT_TRACKED_REASON,
+  accountMutationError,
+  accountMutationInit,
   authStatusPill,
   errorLineVisible,
   lastSyncText,
@@ -323,5 +325,35 @@ describe('rowActions — a borrowed account', () => {
   it('an empty owner name is not a share — it would render "Shared by "', () => {
     expect(rowActions({ ...shared, sharedFromName: '' }, true).sharedNote).toBeNull()
     expect(rowActions({ ...shared, sharedFromName: null }, true).sharedNote).toBeNull()
+  })
+})
+
+// 2026-09-16 — Disconnect "did nothing" on production: the panel sent `Content-Type: application/json`
+// with no body, Fastify refused it (400 FST_ERR_CTP_EMPTY_JSON_BODY) before the route ran, and the
+// notice printed only "Bad Request".
+describe('account mutations', () => {
+  it('never labels a bodiless request as JSON (Disconnect, Make primary)', () => {
+    for (const init of [{ method: 'POST' }, { method: 'POST', body: null }] as RequestInit[]) {
+      const built = accountMutationInit(init)
+      expect(new Headers(built.headers).has('content-type')).toBe(false)
+      expect(built).toMatchObject({ method: 'POST', credentials: 'include' })
+    }
+  })
+
+  it('labels a request that carries a body as JSON (Rename, colour)', () => {
+    const built = accountMutationInit({ method: 'PATCH', body: JSON.stringify({ accountLabel: 'Shop' }) })
+    expect(new Headers(built.headers).get('content-type')).toBe('application/json')
+    expect(built.body).toBe('{"accountLabel":"Shop"}')
+  })
+
+  it('shows the reason, not the HTTP phrase, for a framework refusal', () => {
+    const fastify = { statusCode: 400, code: 'FST_ERR_CTP_EMPTY_JSON_BODY', error: 'Bad Request', message: "Body cannot be empty when content-type is set to 'application/json'" }
+    expect(accountMutationError(fastify, 400)).toBe("Body cannot be empty when content-type is set to 'application/json'")
+  })
+
+  it('keeps a Nexus route’s own sentence, and names the status when there is nothing to say', () => {
+    expect(accountMutationError({ success: false, error: 'Account not found' }, 404)).toBe('Account not found')
+    expect(accountMutationError({}, 502)).toBe('HTTP 502')
+    expect(accountMutationError(null, 500)).toBe('HTTP 500')
   })
 })
