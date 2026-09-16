@@ -47,6 +47,22 @@ node packages/database/scripts/check-column-drift.mjs || {
   exit 1
 }
 
+# 2026-09-16 — row-level security has TWO builders: the generator the test database
+# applies, and the migrations every deployed database applies. Both checks below exist
+# because each of these went wrong TWICE in one day and was caught only by counting by
+# hand. Mutation-tested: each goes red on its exact mistake (see the script headers).
+echo "→ Checking every model is classified for row-level security..."
+node packages/database/scripts/check-model-ownership.mjs || {
+  echo "❌ model-ownership check FAILED — an unclassified model gets no GRANT and no policy"
+  exit 1
+}
+
+echo "→ Checking shared policy files match their migrations..."
+node packages/database/scripts/check-policy-migration-parity.mjs || {
+  echo "❌ policy ⇄ migration parity FAILED — tests and production would enforce different rules"
+  exit 1
+}
+
 # W5.40 — i18n catalog parity + t()-ref check. Hard-fail since W5.42
 # cleared the 25 inherited bugs (organize.*, replenishment.automation.*,
 # stock.recallDetail.*, stock.serials.*). Race-losses like W5.34/W5.38
@@ -443,5 +459,19 @@ npm run test:security --workspace=@nexus/api > /tmp/sec-tests.log 2>&1 || {
 }
 grep -E "Tests +[0-9]+ passed" /tmp/sec-tests.log | tail -1 || true
 echo "✓ Security tests passed"
+
+# 2026-09-16 — business profiles ON. Production will run with NEXUS_WORKSPACES_ENABLED=1, but the
+# default suite runs with it OFF (vitest.setup.ts), because every test predating that day assumed
+# it. Measured with profiles ON: 42 files / 218 tests fail, recorded in
+# apps/api/scripts/profiles-on-baseline.json. This fails the push on ANY new profiles-ON failure,
+# any baselined file getting worse, or a fixed file left in the list — so the list only shrinks.
+# Runs here and not in CI: CI has no developer catalogue, so its numbers would differ. ~30s.
+echo "→ Checking the API suite with business profiles ON (ratchet)..."
+node apps/api/scripts/profiles-on-ratchet.mjs > /tmp/profiles-on-ratchet.log 2>&1 || {
+  echo "❌ profiles-ON ratchet FAILED — see below"
+  tail -40 /tmp/profiles-on-ratchet.log
+  exit 1
+}
+grep -E "profiles-ON ratchet:|Improved" /tmp/profiles-on-ratchet.log || true
 
 echo "✅ All workspaces build cleanly — pushing"

@@ -12,6 +12,26 @@ import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vites
 
 process.env.NEXUS_CREDENTIAL_ENC_KEY = randomBytes(32).toString('base64')
 delete process.env.NEXUS_KMS_KEY_ID
+/*
+ * Business profiles OFF for this file, stated rather than inherited.
+ *
+ * This suite tests refresh thresholds, the authStatus machine, leases and rotation — mechanics that do not depend
+ * on which business owns a connection. Its in-memory rows carry no `workspaceId` and its calls run with no
+ * business in context. With profiles ON, `assertCredentialOwner` (BP.S1b) correctly refuses such a call before any
+ * of those mechanics run, so all 54 arms would fail at the guard and test nothing they were written for.
+ *
+ * The guard's own behaviour, with profiles ON, is covered where it can be proven for real:
+ * `token-grant-ownership.vitest.test.ts` runs against PostgreSQL with the generated policies — owner gets a token,
+ * a read guest is refused, the env-managed Amazon branch is refused, a revoked share loses access.
+ */
+const workspacesFlagBefore = process.env.NEXUS_WORKSPACES_ENABLED
+process.env.NEXUS_WORKSPACES_ENABLED = '0'
+// Restored, because several files can share a worker: leaving '0' behind would turn a sibling file's explicit
+// profiles-ON run into a silent profiles-OFF run — a false green with nothing to show for it.
+afterAll(() => {
+  if (workspacesFlagBefore === undefined) delete process.env.NEXUS_WORKSPACES_ENABLED
+  else process.env.NEXUS_WORKSPACES_ENABLED = workspacesFlagBefore
+})
 
 // ── in-memory prisma ─────────────────────────────────────────────────────────
 
