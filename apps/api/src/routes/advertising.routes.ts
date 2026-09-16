@@ -1,4 +1,4 @@
-import { workspaceKey } from '@nexus/database/workspace-context'
+import { workspaceKey, workspaceContext } from '@nexus/database/workspace-context'
 /**
  * AD.1 — Trading Desk read-only API.
  *
@@ -142,8 +142,11 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
     if (request.method === 'GET' || request.method === 'HEAD') return
     if (reply.statusCode >= 400) return
     if (!request.url.includes('/advertising/')) return
+    // The cache is per business profile. A request with none (the PUBLIC AMS ingest) flushes inside
+    // each profile it wrote to; flushing here would reject `workspace_required` with no handler.
+    if (process.env.NEXUS_WORKSPACES_ENABLED === '1' && !workspaceContext()) return
     const { flushAdsCache } = await import('../services/advertising/ads-cache.js')
-    void flushAdsCache()
+    void flushAdsCache().catch((error: unknown) => request.log.warn({ err: error }, 'ads cache flush failed'))
   })
 
   // ── GET /advertising/campaigns ──────────────────────────────────────
@@ -8390,33 +8393,26 @@ const advertisingRoutes: FastifyPluginAsync = async (fastify) => {
      * Consequence beyond P6: the entity change-streams are the ONLY push signal that someone edited
      * in Seller Central, and they would have been discarded here too.
      */
-    const { ingestMarketingStream } = await import('../services/advertising/ads-marketing-stream.service.js')
-    const { routeRecords } = await import('../services/ads-core/ams-dataset.js')
-    const { ingestEntityChanges, ingestBudgetUsage } = await import('../services/advertising/ads-stream-change.service.js')
+    // 2026-09-16 — this route has no business profile; each record is saved in the profile that owns
+    // its Amazon Ads account (services/advertising/ams-ingest.service.ts).
+    const { ingestAmsBatch } = await import('../services/advertising/ams-ingest.service.js')
     try {
-      const routed = routeRecords(messages as Array<Record<string, unknown>>)
-      const perf = routed.performance.length ? await ingestMarketingStream(routed.performance as never) : null
-      const change = routed.change.length ? await ingestEntityChanges(routed.change) : null
-      const budget = routed.budget.length ? await ingestBudgetUsage(routed.budget) : null
-      if (routed.unknown.length) {
+      const result = await ingestAmsBatch(messages as Array<Record<string, unknown>>)
+      if (result.routed.unknownDataset) {
         // Visible, not invisible: an unrecognised dataset means Amazon added one, and we should
         // learn it from a log rather than from a hole in the data months later.
-        request.log.warn({ count: routed.unknown.length }, '[ADM-P6/B1] unrecognised AMS dataset(s) received')
+        request.log.warn({ count: result.routed.unknownDataset }, '[ADM-P6/B1] unrecognised AMS dataset(s) received')
       }
       // The performance shape is preserved at the top level so the forwarder and every existing
       // caller keep reading the same keys they always have.
       return {
-        received: messages.length,
-        upserted: perf?.upserted ?? 0,
-        skipped: perf?.skipped ?? 0,
-        routed: {
-          performance: routed.performance.length,
-          change: routed.change.length,
-          budget: routed.budget.length,
-          unknownDataset: routed.unknown.length,
-        },
-        ...(change ? { change } : {}),
-        ...(budget ? { budget } : {}),
+        received: result.received,
+        upserted: result.upserted,
+        skipped: result.skipped,
+        routed: result.routed,
+        ...(result.change ? { change: result.change } : {}),
+        ...(result.budget ? { budget: result.budget } : {}),
+        ...(result.unrouted ? { unrouted: result.unrouted } : {}),
       }
     } catch (e) { reply.status(500); return { error: (e as Error)?.message } }
   })

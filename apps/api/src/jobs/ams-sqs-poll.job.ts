@@ -15,7 +15,7 @@ import { verifiedChannelWorkspace, withIngressWorkspace } from '../lib/workspace
 import { logger } from '../utils/logger.js'
 import { recordCronRun } from '../utils/cron-observability.js'
 import { isAmsSqsConfigured, pollAmsRaw, deleteAmsMessage, parseAmsBody } from '../services/ams-sqs.service.js'
-import { routeRecords } from '../services/ads-core/ams-dataset.js'
+import { amsRecordAdvertiser, routeRecords } from '../services/ads-core/ams-dataset.js'
 import { ingestEntityChanges, ingestBudgetUsage } from '../services/advertising/ads-stream-change.service.js'
 
 let scheduledTask: ReturnType<typeof cron.schedule> | null = null
@@ -73,10 +73,9 @@ export async function runAmsSqsPoll(): Promise<void> {
               }
               }
               if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
-                const record = batchRecords[0]
-                const externalId = record.profileId ?? record.profile_id ?? record.advertiser_id ?? record.advertiserId
-                if (typeof externalId !== 'string' && typeof externalId !== 'number') throw new Error('AMS record does not identify an advertiser.')
-                const owner = await verifiedChannelWorkspace('AMAZON_ADS', String(externalId))
+                const externalId = amsRecordAdvertiser(batchRecords[0] as Record<string, unknown>)
+                if (!externalId) throw new Error('AMS record does not identify an advertiser.')
+                const owner = await verifiedChannelWorkspace('AMAZON_ADS', externalId)
                 await withIngressWorkspace(owner.workspaceId, ingest)
               } else await ingest()
               }

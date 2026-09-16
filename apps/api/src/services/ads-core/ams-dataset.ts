@@ -224,6 +224,18 @@ export function readEntityChange(datasetId: string, rec: Record<string, unknown>
   return { datasetId, entityType, externalId, changes, occurredAt }
 }
 
+/**
+ * The Amazon Ads account a Marketing Stream record belongs to — the ONE routing key both AMS paths use
+ * (the SQS poller and the forwarder's POST) to find the owning business profile through
+ * `verifiedChannelWorkspace('AMAZON_ADS', id)`. Live sp-traffic records carry `advertiser_id`
+ * (measured 2026-09-16). Undefined when the record names no account: it cannot be routed.
+ */
+export function amsRecordAdvertiser(record: Record<string, unknown>): string | undefined {
+  const id = record.profileId ?? record.profile_id ?? record.advertiser_id ?? record.advertiserId
+  if (typeof id === 'number' && Number.isFinite(id)) return String(id)
+  return typeof id === 'string' && id.trim() ? id.trim() : undefined
+}
+
 /** Split a mixed batch by family, so each can go to its own consumer. */
 export function routeRecords(records: Array<Record<string, unknown>>): {
   performance: Array<Record<string, unknown>>

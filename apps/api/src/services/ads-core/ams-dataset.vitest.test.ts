@@ -1,7 +1,7 @@
 /** AX-ZD.2 — dataset taxonomy, routing, and honest latency labelling. */
 import { describe, it, expect } from 'vitest'
 import {
-  familyOf, isRealTime, maxLatencyHours, adProductOf, routeRecords,
+  familyOf, isRealTime, maxLatencyHours, adProductOf, routeRecords, amsRecordAdvertiser,
   readBudgetUsage, readEntityChange,
   AMS_ALL_DATASETS, AMS_CHANGE_DATASETS, AMS_PERFORMANCE_DATASETS,
 } from './ams-dataset.js'
@@ -151,3 +151,19 @@ describe('routeRecords — three families, three consumers', () => {
     expect(adProductOf('campaigns')).toBeNull()
   })
 })
+
+describe('amsRecordAdvertiser — the one routing key both AMS paths use', () => {
+  it('reads the live sp-traffic field and the other spellings', () => {
+    expect(amsRecordAdvertiser({ dataset_id: 'sp-traffic', advertiser_id: 'A1VRHKTGYO1JNU' })).toBe('A1VRHKTGYO1JNU')
+    expect(amsRecordAdvertiser({ profileId: 123456789 })).toBe('123456789')
+    expect(amsRecordAdvertiser({ profile_id: ' 42 ' })).toBe('42')
+    expect(amsRecordAdvertiser({ advertiserId: 'ENTITY1' })).toBe('ENTITY1')
+  })
+  it('names no account for a record without one, rather than an empty key that matches every route', () => {
+    expect(amsRecordAdvertiser({ dataset_id: 'sp-traffic' })).toBeUndefined()
+    expect(amsRecordAdvertiser({ advertiser_id: '' })).toBeUndefined()
+    expect(amsRecordAdvertiser({ advertiser_id: '   ' })).toBeUndefined()
+    expect(amsRecordAdvertiser({ profileId: Number.NaN })).toBeUndefined()
+  })
+})
+
