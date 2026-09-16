@@ -47,7 +47,11 @@ const catalogTransferRoutes: FastifyPluginAsync = async fastify => {
     await productTransferOptions(productId)
     const part = await request.file({ limits: { files: 1, fileSize: PRODUCT_TRANSFER_MAX_BYTES } })
     if (!part) throw new Error('Choose a Nexus workbook, attribute CSV or editing ZIP')
-    return reply.code(201).send(await inspectEditorTransfer(await part.toBuffer(), part.filename, productId, actor(request)))
+    // 🔴 Every stage says how long it took and what the heap looked like. On 2026-09-16 this
+    // route's only trace was `incoming request`, and the reason it never completed had to be
+    // reconstructed from proxy timings and a memory graph instead of read off a log line.
+    return reply.code(201).send(await inspectEditorTransfer(await part.toBuffer(), part.filename, productId, actor(request),
+      (event, detail) => request.log.info({ productId, ...detail }, event)))
   })
   fastify.post('/catalog-transfer/products/:productId/preview', async (request, reply) => {
     const productId = (request.params as { productId: string }).productId

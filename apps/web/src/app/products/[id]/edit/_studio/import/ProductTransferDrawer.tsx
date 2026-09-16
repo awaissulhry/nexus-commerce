@@ -22,6 +22,25 @@ interface Props extends ProductTransferContext {
 }
 const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value]
 
+/**
+ * Longer than any file the server will now accept — its own parse budget is 90s — and far
+ * short of the five minutes Node takes to destroy a socket it never answered.
+ */
+const UPLOAD_DEADLINE_MS = 120_000
+
+/**
+ * `fetch` rejects with a bare `TypeError` when the request never reached a reply: the
+ * connection was refused, dropped, or timed out at a layer below HTTP. "Failed to fetch" is
+ * the browser's own wording for that and it reads, wrongly, like the operator did something.
+ * What they actually need to know is that no answer came back and nothing was written.
+ */
+function requestFailureMessage(error: unknown): string {
+  if (error instanceof TypeError) {
+    return 'The server did not answer this upload. Nothing has been imported. Check that you are still signed in, then try again — if it keeps happening the file may be too large for one import, so split it into smaller workbooks.'
+  }
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** The editor owns only selection and presentation; preview/apply use the catalog job engine. */
 export function ProductTransferDrawer(props: Props) {
   const { open, productId, market, channel, accountId, aliasKey, locale } = props
@@ -38,7 +57,7 @@ export function ProductTransferDrawer(props: Props) {
   const [mapping, setMapping] = useState<SourceMapping>(() => defaultSourceMapping([], market, 'update'))
   const [fieldMode, setFieldMode] = useState('all')
   const [jobId, setJobId] = useState(''), [file, setFile] = useState<File | null>(null), [error, setError] = useState(''), [note, setNote] = useState('')
-  const [busy, setBusy] = useState(''), [attempt, setAttempt] = useState(0)
+  const [busy, setBusy] = useState(''), [attempt, setAttempt] = useState(0), [elapsed, setElapsed] = useState(0)
   const [reviewBusy, setReviewBusy] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
   const completed = useRef('')
@@ -97,12 +116,33 @@ export function ProductTransferDrawer(props: Props) {
     setDestinationsMode(mode)
     if (mode !== 'custom') changeSelection(updateTransferProducts(options, props, selection, selection.productIds, mode))
   }
-  const run = async (kind: string, action: (signal: AbortSignal) => Promise<void>) => {
+  /*
+   * 🔴 An upload gets a deadline of its own, and a sentence for every way it can end.
+   *
+   * On 2026-09-16 this drawer sat on "Reading …" for five minutes and then showed the raw
+   * "Failed to fetch" — which is what the browser says when a request never reaches a reply,
+   * and tells an operator nothing about whether their catalog was touched. The five minutes
+   * were Node's default requestTimeout destroying the socket; the drawer had no deadline of
+   * its own and no elapsed time on screen, so there was nothing to distinguish "still
+   * working" from "already dead".
+   */
+  const run = async (kind: string, action: (signal: AbortSignal) => Promise<void>, deadlineMs?: number) => {
     if (busy || unsafe) return
     setBusy(kind); setError(''); setNote('')
     const abort = new AbortController(); abortRef.current = abort
-    try { await action(abort.signal) } catch (e) { if (!abort.signal.aborted) setError(e instanceof Error ? e.message : String(e)) } finally { if (abortRef.current === abort) setBusy('') }
+    let expired = false
+    const timer = deadlineMs ? setTimeout(() => { expired = true; abort.abort() }, deadlineMs) : undefined
+    try { await action(abort.signal) } catch (e) {
+      if (expired) setError(`The server did not answer within ${Math.round((deadlineMs ?? 0) / 1000)} seconds, so this upload was stopped. Nothing has been imported — an import only writes after you review and apply it. If the file is very large, split it into smaller workbooks or remove unused rows, columns and formatting, then try again.`)
+      else if (!abort.signal.aborted) setError(requestFailureMessage(e))
+    } finally { clearTimeout(timer); if (abortRef.current === abort) setBusy('') }
   }
+  useEffect(() => {
+    if (!busy) { setElapsed(0); return }
+    const started = Date.now()
+    const id = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000)
+    return () => clearInterval(id)
+  }, [busy])
   const download = () => run('export', async signal => {
     const response = await fetch(`${getBackendUrl()}/api/catalog-transfer/products/${encodeURIComponent(productId)}/export`, { method: 'POST', credentials: 'include', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ market, selection, fields: fieldMode === 'visible' ? [...new Set(props.visibleFields)] : undefined }) })
     if (!response.ok) throw new Error((await response.json()).error ?? 'The export could not be prepared')
@@ -125,7 +165,7 @@ export function ProductTransferDrawer(props: Props) {
       if (result.selection.productIds.length && (result.selection.includeShared || result.selection.listingIds.length)) { setSelection(result.selection); setProductsMode('custom'); setDestinationsMode('custom') }
       setNote(`File read${result.issues ? ` with ${result.issues} issues to inspect in the review` : ''}. Check the products, named listings and languages below. Every input is validated against this selection. ${(result.warnings ?? []).join(' ')}`)
     }
-  })
+  }, UPLOAD_DEADLINE_MS)
   const preview = () => run('preview', async signal => {
     if (!selection || (!inputId && !source)) return
     const path = `catalog-transfer/products/${encodeURIComponent(productId)}/${sourceMode ? 'source/preview' : 'preview'}`
@@ -161,7 +201,7 @@ export function ProductTransferDrawer(props: Props) {
             <option value="workbook">Nexus editing workbook or ZIP</option><option value="source">Map a supplier spreadsheet</option>
           </Select></Field>
           <FileDropzone accept={sourceMode ? '.xlsx,.csv,.json' : '.xlsx,.csv,.zip'} maxBytes={(sourceMode ? 10 : 50) * 1024 * 1024} disabled={!!busy || unsafe || !canImport} onFiles={files => { if (files[0]) void inspect(files[0]) }} hint={sourceMode ? 'Supplier CSV, single-sheet XLSX or JSON · up to 10 MB' : 'Nexus XLSX or attribute CSV · 10 MB per file · complete ZIP up to 50 MB'} />
-          {file && <p role="status">{busy === 'inspect' ? `Reading ${file.name}…` : file.name}</p>}
+          {file && <p role="status">{busy === 'inspect' ? `Reading ${file.name}…${elapsed > 3 ? ` ${elapsed}s` : ''}` : file.name}</p>}
         </>}
         <div className={styles.fields}>
           <Field label="Products"><Select value={productsMode} disabled={!!busy} onChange={e => chooseProducts(e.target.value)}>

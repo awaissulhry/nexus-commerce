@@ -143,7 +143,18 @@ export function mapEbayWorkbook(table: EbayWorkbookTable, targets: EbayWorkbookT
 
 export async function readProductEbayWorkbook(book: ExcelJS.Workbook, productId: string) {
   const table = readEbayWorkbook(book)
-  if (!table) return null
+  return table && resolveEbayWorkbook(table, productId)
+}
+
+/**
+ * The database half, given a table the parse already extracted.
+ *
+ * Split from `readProductEbayWorkbook` so the ExcelJS workbook stays inside the parse
+ * worker and only this compact table crosses back: the coordinates and specs below need
+ * Prisma, which the worker is not allowed to touch
+ * (`docs/2026-09-16-studio-import-wedged-production.md`).
+ */
+export async function resolveEbayWorkbook(table: EbayWorkbookTable, productId: string) {
   const [{ productTransferOptions }, { default: prisma }, { loadEbaySpec }] = await Promise.all([
     import('./catalog-product-transfer.js'), import('../../db.js'), import('./channel-specs/index.js'),
   ])

@@ -66,19 +66,16 @@ function recordsOf(grid: string[][]): Record<string, string>[] {
   })
 }
 
-export async function readTransferFile(buffer: Buffer, filename: string, options: { blankPolicy?: 'ignore' | 'clear' } = {}) {
-  if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty CSV or XLSX file up to 10 MB')
-  if (/\.csv$/i.test(filename)) {
-    // A valid attribute value may occupy most of the already bounded upload.
-    const { grid, delimiter } = parseCatalogCsv(buffer, TRANSFER_MAX_FILE_BYTES)
-    assertCsvRectangle(grid, delimiter)
-    return parseTransferRecords(recordsOf(grid))
-  }
-  if (!/\.xlsx$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')
-  const { checkWorkbookSize } = await import('./catalog-source-file.js')
-  await checkWorkbookSize(buffer)
-  const workbook = new ExcelJS.Workbook()
-  await workbook.xlsx.load(buffer as never)
+/**
+ * The XLSX half, given a workbook the caller has already loaded.
+ *
+ * Split out of `readTransferFile` so a caller that has paid for `xlsx.load` once does not
+ * pay for it again: `readEditorPart` reached this function through `readTransferFile` and
+ * re-parsed the same upload from bytes while its first workbook was still referenced,
+ * doubling the peak on exactly the files that fall furthest through the branches
+ * (`docs/2026-09-16-studio-import-wedged-production.md`).
+ */
+export async function readTransferWorkbook(workbook: ExcelJS.Workbook, options: { blankPolicy?: 'ignore' | 'clear' } = {}) {
   const { readCatalogWorkbook } = await import('./catalog-workbook.js')
   const wide = readCatalogWorkbook(workbook, undefined, options)
   if (wide) return wide
@@ -104,6 +101,22 @@ export async function readTransferFile(buffer: Buffer, filename: string, options
   }
   if (rows.length > TRANSFER_MAX_ROWS) throw new Error(`A workbook can contain at most ${TRANSFER_MAX_ROWS.toLocaleString()} attribute rows`)
   return { rows, issues }
+}
+
+export async function readTransferFile(buffer: Buffer, filename: string, options: { blankPolicy?: 'ignore' | 'clear' } = {}) {
+  if (!buffer.length || buffer.length > TRANSFER_MAX_FILE_BYTES) throw new Error('Choose a non-empty CSV or XLSX file up to 10 MB')
+  if (/\.csv$/i.test(filename)) {
+    // A valid attribute value may occupy most of the already bounded upload.
+    const { grid, delimiter } = parseCatalogCsv(buffer, TRANSFER_MAX_FILE_BYTES)
+    assertCsvRectangle(grid, delimiter)
+    return parseTransferRecords(recordsOf(grid))
+  }
+  if (!/\.xlsx$/i.test(filename)) throw new Error('Use CSV or XLSX. Other spreadsheet formats are not supported.')
+  const { checkWorkbookSize } = await import('./catalog-source-file.js')
+  await checkWorkbookSize(buffer)
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(buffer as never)
+  return readTransferWorkbook(workbook, options)
 }
 
 /** Excel stores all identities as text; JSON preserves lists, records and numeric zero. */
