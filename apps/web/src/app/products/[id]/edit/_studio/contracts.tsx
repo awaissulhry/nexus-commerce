@@ -29,6 +29,7 @@ import {
 } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { usePathname, useRouter } from '@/lib/workspaces/navigation'
+import { browserWorkspaceId, workspaceHref } from '@/lib/workspaces/paths'
 
 import { getBackendUrl } from '@/lib/backend-url'
 import { streamsEnabled } from '@/lib/sync/dev-stream-gate'
@@ -676,7 +677,16 @@ export function StudioStateProvider({ product, family = null, marketplaces, mark
     pendingIsHistory.current = false
     if (!patch || !alive.current) return
     const qs = patchSearch(new URLSearchParams(searchRef.current), patch)
-    const url = qs ? `${pathname}?${qs}` : pathname
+    /*
+     * The business profile lives in the VISIBLE path (`/w/<id>/…`), but `usePathname` here is the
+     * workspace-STRIPPED one from `lib/workspaces/navigation`. A raw history write bypasses the
+     * `useRouter` wrapper that re-adds the prefix, so writing `pathname` straight out dropped the
+     * profile on the studio's FIRST cursor write: the top bar fell back to "Business profiles"
+     * with no active profile, and the middleware then had only the referrer to recover from.
+     * Re-add it exactly the way `useRouter` does.
+     */
+    const base = workspaceHref(browserWorkspaceId(), pathname)
+    const url = qs ? `${base}?${qs}` : base
     /*
      * 🔴 `history.pushState`/`replaceState`, NOT `router.push`/`router.replace`.
      *
