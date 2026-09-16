@@ -28,6 +28,7 @@
  */
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
+import { workspaceContext } from '../../lib/workspace-context.js'
 
 export interface AutomationNotice {
   type: string
@@ -55,32 +56,83 @@ export interface NotifyResult {
  */
 const DEDUPE_WINDOW_MINUTES = Number(process.env.NEXUS_ADS_NOTIFY_DEDUPE_MINUTES ?? 360)
 
+/**
+ * WHO an automation notice is for.
+ *
+ * 🔴 2026-09-16 — this was `userProfile.findMany({ take: 100 })`: every login on the
+ * system, of any status, capped at the first hundred. Measured on the local database:
+ * `fulfillment-test@nexus.local` — DEACTIVATED, a member of ZERO businesses — had
+ * received 195,370 ads notices. Three separate defects in one line:
+ *
+ *   • deactivated people were notified (and could never read it);
+ *   • with business profiles on, people outside the business were addressed. Row-level
+ *     security kept them from READING those rows, so no screen leaked — but the rows
+ *     were written into a business the recipient does not belong to;
+ *   • `take: 100` silently dropped real members once a system passed a hundred users,
+ *     so the people who ran the automation could be the ones left out.
+ *
+ * Now: with business profiles on, the ACTIVE members of the business the automation
+ * ran in. With them off there is one business, so every ACTIVE user. No cap — a
+ * recipient list that truncates silently is the bug, and floods are what the caps and
+ * the dedupe below are for.
+ *
+ * Profiles on with NO business in context sends to nobody and says so. Every business
+ * sweep runs inside `withWorkspace`; a caller that does not is broken, and guessing an
+ * audience for it would be exactly the fan-out this replaces.
+ */
+async function recipients(): Promise<string[] | null> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED === '1') {
+    const context = workspaceContext()
+    if (!context) {
+      logger.warn('[ads-automation-notify] no business in context; notice not delivered')
+      return null
+    }
+    const members = await prisma.workspaceMembership.findMany({
+      where: { workspaceId: context.workspaceId, status: 'active', user: { status: 'active' } },
+      select: { userId: true },
+    })
+    return members.map((m) => m.userId)
+  }
+  const users = await prisma.userProfile.findMany({ where: { status: 'active' }, select: { id: true } })
+  return users.map((u) => u.id)
+}
+
 export async function notifyAutomationDetailed(n: AutomationNotice): Promise<NotifyResult> {
   try {
-    const users = await prisma.userProfile.findMany({ select: { id: true }, take: 100 })
-    if (users.length === 0) return { created: 0, deduped: false, wouldHaveReached: 0 }
+    const everyone = await recipients()
+    if (!everyone || everyone.length === 0) return { created: 0, deduped: false, wouldHaveReached: 0 }
 
     const severity = n.severity ?? 'info'
+    let targets = everyone
     if (severity !== 'danger' && DEDUPE_WINDOW_MINUTES > 0) {
       const since = new Date(Date.now() - DEDUPE_WINDOW_MINUTES * 60_000)
-      const existing = await prisma.notification.findFirst({
+      /*
+       * 🔴 PER PERSON. This used to ask "does an identical unread notice exist for
+       * anyone", so one person's unread copy suppressed the notice for everyone — and a
+       * deactivated account never reads anything, so its copies could have silenced the
+       * people still working. Each person now gets at most one unread copy of their own.
+       */
+      const already = await prisma.notification.findMany({
         where: {
           type: n.type,
           title: n.title,
           body: n.body ?? null,
           readAt: null,
           createdAt: { gte: since },
+          userId: { in: everyone },
         },
-        select: { id: true },
+        select: { userId: true },
       })
-      if (existing) {
-        return { created: 0, deduped: true, wouldHaveReached: users.length }
+      const holding = new Set(already.map((a) => a.userId))
+      targets = everyone.filter((id) => !holding.has(id))
+      if (targets.length === 0) {
+        return { created: 0, deduped: true, wouldHaveReached: everyone.length }
       }
     }
 
     await prisma.notification.createMany({
-      data: users.map((u) => ({
-        userId: u.id,
+      data: targets.map((userId) => ({
+        userId,
         type: n.type,
         severity,
         title: n.title,
@@ -89,7 +141,7 @@ export async function notifyAutomationDetailed(n: AutomationNotice): Promise<Not
         meta: (n.meta ?? undefined) as never,
       })),
     })
-    return { created: users.length, deduped: false, wouldHaveReached: users.length }
+    return { created: targets.length, deduped: false, wouldHaveReached: everyone.length }
   } catch (e) {
     logger.warn('[ads-automation-notify] failed', { error: String(e).slice(0, 140) })
     return { created: 0, deduped: false, wouldHaveReached: 0 }
