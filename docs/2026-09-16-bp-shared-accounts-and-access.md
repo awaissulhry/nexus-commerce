@@ -1465,6 +1465,7 @@ Nothing committed. Production untouched.
 | `4b868085d` | web: Share with a profile, borrowed-account rows, Account access |
 | `46a70bad3` | studio: keeps `/w/<id>` on the first cursor write |
 | `2c84f7e5e` | checks: test-mode pin, model-ownership, policy parity, profiles-ON ratchet |
+| `633dfc34e` | notifications: the inbox query moved from the route into a service |
 
 ### 23.1 Checked before committing
 
@@ -1487,6 +1488,11 @@ Nothing committed. Production untouched.
     08:26). **Not this work, and not reverted** — it is local data someone else changed.
 - No secrets, emails or debug output in any committed file. Not committed (not this work):
   `.githooks/pre-push.backup`, `.graphifyignore`, `graphify-out/`.
+
+🔴 **The first push was refused**, correctly, by the PH.4a route ratchet:
+`notifications.routes.ts` went from 5 to 6 direct database calls. The fix is `633dfc34e` —
+the query moved into `services/notification-inbox.service.ts` (route 6 → 3), with 5 tests
+proven by mutation. The baseline was not raised. Nothing reached GitHub or production.
 
 ### 23.2 What pushing does to production
 
