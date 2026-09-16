@@ -1,13 +1,18 @@
 # Assortment engine (AE): share products, settings and stock between business profiles
 
 Date: 2026-09-16
-Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…12). **AE.0 done (§12). AE.1 shipped (§13). AE.2 shipped (§14–15).** Later phases need their own yes.
+Status: **APPROVED 2026-09-16** (all six decisions, R-AE-1…17). **AE.0 done (§12). AE.1 shipped (§13). AE.2 shipped (§14–15). AE.3 built and proven, NOT committed (§16–17).** Later phases need their own yes.
 Programme code: **AE**
 
 ## Owner rulings (newest first)
 
 | When | Ruling | Decision |
 | --- | --- | --- |
+| 2026-09-17 | **R-AE-17** | Fix the transfer-engine defect (§17.3.1: inherited language rows refuse variations) as its own small task. |
+| 2026-09-17 | **R-AE-16** | Add the AE.3 end-to-end copy test to the push check that runs on a throwaway PostgreSQL. |
+| 2026-09-16 | **R-AE-15** | **Go:** build AE.3 (first copy). |
+| 2026-09-16 | **R-AE-14** | Images reach the follower by **copying the files** into its own storage. |
+| 2026-09-16 | **R-AE-13** | Families, attributes and categories missing in the follower are **created**, listed in the review first. |
 | 2026-09-16 | **R-AE-12** | Commit and push AE.2. |
 | 2026-09-16 | **R-AE-11** | **Go:** build AE.2 (sharing objects and their life cycle; no data moves). |
 | 2026-09-16 | **R-AE-10** | Commit and push AE.1. |
@@ -801,3 +806,228 @@ write takes `expectedVersion`; a stale one is refused (409) with the current sta
 - An unsigned probe of `/api/assortments` and `/api/assortment-shares` answered 401. So did a made-up
   route, because the sign-in check runs first, so the probe shows only that the API is up and refuses
   unsigned calls. It does not prove the routes exist. The deploy built from the commit is the evidence.
+
+---
+
+## 16. AE.3 — contract: the first copy (R-AE-13, R-AE-14, R-AE-15)
+
+### 16.1 Design: reuse the catalog transfer engine
+
+The product writer already exists: `services/pim/catalog-transfer-*` stages rows as a durable job,
+previews every cell against the destination's own field contracts, applies with snapshot conflict
+checks, writes translated content through `writeContent`, refreshes readiness and the read cache,
+audits, and recovers after a crash. It creates a missing SKU as **`DRAFT` with price 0**. AE.3 feeds
+that engine instead of writing products a second way.
+
+What the engine deliberately does not write, and what AE.3 does about it:
+
+| Not written by the engine | AE.3 |
+| --- | --- |
+| Images | Copied as files (R-AE-14), after the products exist |
+| Categories by id (ids differ per profile) | Matched by category path; missing paths created (R-AE-13) |
+| Families and attributes that do not exist in the follower | Created by code before rows are staged (R-AE-13) |
+| `productType`, `basePrice` and costs, `status` (owned by other services) | Set after apply through their owners, only for groups the share offers |
+| Channel listings | Never: each business lists with its own accounts |
+
+### 16.2 The flow (an OWNER of the follower, in the follower profile)
+
+1. **Review 1: what arrives.** Read-only. New products; products whose SKU already exists (each one:
+   link or skip, default **skip**); products already linked; families, attributes, options and
+   category paths that will be created; images to copy; fields not copied, and why.
+2. **Confirm.** Re-checks the review is still current, creates the definitions, maps the rows, and
+   stages a transfer job in the follower.
+3. **Review 2: every field.** The existing transfer review shows each cell before and after, including
+   what changes on linked products. Apply there.
+4. **Finish (automatic).** For every SKU the job saved: create the link; set the owner-managed fields
+   that are offered; copy the images. It is resumable, and each step is recorded on the copy run.
+
+### 16.3 Crossing the wall
+
+- **Which products may be read is decided by the database.** `nexus_assortment_copy_source(share_id)`
+  (SECURITY DEFINER) answers only for the follower business in context, an active share and an active
+  OWNER of the follower. It returns the owner business, the offered groups, and the product IDs the
+  assortment covers: the listed (or not excluded) top-level products that are not deleted, plus their
+  variations that are not deleted.
+- The data is then read in the owner's context **only for those IDs**, by one module. A follower
+  request never gets a read policy on the owner's product tables: such a policy would leak the
+  owner's products into every follower query that relies on row security as its filter.
+- **A link cannot point outside the assortment.** The `CatalogLink` insert trigger re-runs the same
+  membership resolution, and checks both products' businesses and the share's status.
+
+### 16.4 Tables
+
+| Table | Owner | Purpose |
+| --- | --- | --- |
+| `CatalogLink` | global | source product ↔ follower product for one share; `linkedBy` (created, matched); `status` (active, detached); never deleted; one active link per follower product and per (share, source product) |
+| `AssortmentCopyRun` | follower profile | one confirmed copy: share, review fingerprint, SKU choices, source map, definitions created, transfer job id, state, per-step counts, error |
+
+### 16.5 Sub-phases, each proven before the next
+
+- **AE.3a** — the database rules (source function, links, runs), the source read, field-group
+  classification with a completeness check, and Review 1. Read-only for both businesses.
+- **AE.3b** — confirm (definitions, row mapping, staging), finish (links, owner-managed fields), and
+  resume. Proven end to end on a disposable database: a family with variations, translations,
+  attributes, a category, and SKU link and skip.
+- **AE.3c** — image files. The upload is mocked in tests. The first real copy runs in production and is
+  checked there, because Cloudinary is a single production account.
+
+## 17. AE.3 — build record (2026-09-17). Built and proven locally. **Not committed.**
+
+### 17.1 What was built
+
+| Part | File |
+| --- | --- |
+| Tables `CatalogLink` (global) and `AssortmentCopyRun` (follower-owned) | `packages/database/prisma/schema.prisma`, `workspaces/model-ownership.json`, `scoped-keys.json` |
+| Database rules: which products a share covers, the follower's checked source read, link checks, one active link per follower product and per shared product, the link guard trigger, the detach-on-end trigger | `packages/database/workspaces/assortment-copy.sql` (+ `policy-migrations.json`, generator) |
+| Migration (additive: 2 tables, row security for the run table, the rules file byte for byte at the end) | `packages/database/prisma/migrations/20260916h_ae3_first_copy/migration.sql` |
+| Field groups: every one of the 92 `Product` columns is in a group or named as never shared, with its reason | `apps/api/src/services/assortment/field-groups.ts` |
+| The source read (the only code that enters the owner's context) | `apps/api/src/services/assortment/copy-source.service.ts` (+ 3 exports in `pim/catalog-transfer-export.ts`) |
+| Review 1 | `apps/api/src/services/assortment/copy-preview.service.ts` |
+| Confirm, row mapping, finish, retry | `apps/api/src/services/assortment/copy-run.service.ts` |
+| Image copy | `apps/api/src/services/assortment/copy-media.service.ts` |
+| Backstop job (once a minute, per business, only when a run is open) | `apps/api/src/jobs/assortment-copy.job.ts`, `apps/api/src/index.ts` (`NEXUS_ENABLE_ASSORTMENT_COPY_CRON=0` turns it off) |
+| Routes: `GET /api/assortment-shares/:id/copy/preview`, `POST /api/assortment-shares/:id/copy`, `GET /api/assortment-copy-runs/:id`, `POST /api/assortment-copy-runs/:id/advance` | `apps/api/src/routes/assortments.routes.ts`, `permissions-manifest.ts` |
+
+### 17.2 Proof
+
+1. **End to end on a real PostgreSQL, 8 of 8** (`copy-run.vitest.test.ts`; needs Docker, skips without
+   it). The real transfer engine, profiles ON: refusals; confirm creates the family, attribute, options
+   and category path; Review 2 applies; finish links 3 products (2 created, 1 matched), sets price,
+   status and type, copies images; one image upload fails, so the run is **partial** and names the
+   image; finishing again copies only that image and writes no product (versions unchanged); a
+   second copy brings 3 new variations (new; linked with its own translation; linked without one) and
+   every one inherits the parent's German title; a third Review 1 has nothing to copy; the follower
+   leaving detaches every link and keeps the products.
+2. **Database rules: 15 of 15** (`copy-preview.vitest.test.ts`) and **21 mutations** of the rules file,
+   each proven applied by a marker file. The first run caught 16. Three gaps were real and got tests
+   (a deleted variation, a second link to the same shared product, an archived owner business); now 19
+   are caught. The last 2 cannot be reached by the runtime role, because row security refuses the same
+   write first (the owner inserting a link; an outside business changing a link).
+3. **Images: 6 of 6** (`copy-media.vitest.test.ts`) and **8 of 8 mutations** caught (https only,
+   no redirects, content-hash reuse, the size ceiling while reading, MAIN placement, image-only,
+   address reuse, the Shopify route). The retry rules: **3 of 3 mutations** caught.
+4. **The migration builds what the tests test.** Throwaway databases: A = yesterday's schema and rules +
+   `20260916h`; B = today's schema and generator. **6,176 catalogue lines, identical.** Control: A
+   without the rules file differs by 44 lines.
+5. Gates run locally: api `tsc` (fresh, 0 errors); table and column drift (442 models); model ownership
+   (418 business, 24 global); policy ⇄ migration parity (8 files); RBAC coverage (2,711 routes, 0
+   unmapped); route-prisma ratchet (3,399, baseline 3,491); context boundary; stock-writer lock;
+   clustered cron; global exposure; event contract; graph contract; security suite 134/134;
+   profiles-ON ratchet (750 files, 42 known failing, none new, none worse).
+
+### 17.3 Defects found while building
+
+1. 🔴 **In the shared transfer engine.** *(Fixed 2026-09-17 under R-AE-17: §18.2.)* A variation whose language text is inherited
+   is exported with the parent's text (R-LX-8). The review plans that row against the whole file, but
+   the apply step plans it against one record. When the parent is in the file, the two plans differ
+   and the variation is refused: *"Catalog inputs or ownership changed since preview"*. **Measured on a
+   plain re-import too** (one business, parent and variation in the file, only the parent's description
+   changed): the parent saved, the variation was refused. A second defect sits behind it: "inherit"
+   counts as a change when the parent holds text, and clearing a translation that does not exist is
+   refused (*"has no de translation to review"*). The copy avoided both (§17.4). The engine fix needed
+   its own yes.
+2. The copy test's database stand-in lacked the transaction wrapper that `db.ts` uses, so a refused
+   record's checkpoint escaped its rollback and the job hung in RUNNING. Test harness only; fixed in
+   all three AE.3 test files.
+3. A literal zero byte in `copy-source.service.ts` made search tools treat the file as binary. Replaced
+   by its escape.
+
+### 17.4 Decisions made inside the contract
+
+- **Inherited language rows.** *(Superseded 2026-09-17 by the simpler rule in §18.3, after the engine
+  fix.)* A variation with its own translation in that language gets "inherit" with no text (its own
+  value is cleared, so it follows the owner). Without one, the row is not sent: it already inherits.
+  Proven by three mutations: keeping the export's text, always sending "inherit", and always dropping
+  each fail the end-to-end test.
+- **Images (R-AE-14).** A stored file (https, `res.cloudinary.com` or `cdn.shopify.com`) is downloaded
+  and uploaded through the follower's own image storage, chosen as a hand upload chooses it: its Shopify
+  store when one is connected, otherwise Cloudinary. An unclear Shopify choice is a refusal, never a
+  switch. An outside address (for example Amazon) is carried as the same address and **never
+  downloaded**, so a crafted address cannot make the server fetch an internal URL. Ceiling 20 MB, no
+  redirects, 30 s timeout. A copied MAIN becomes ALT when the product already has a MAIN; the hero flag
+  is copied only when the product has none.
+- **Videos, 3D models and documents are not copied.** Review 1 counts them (`mediaNotCopied`).
+- **A partial run can be finished again** (`POST /api/assortment-copy-runs/:id/advance`). Every step
+  skips what is done: links kept, managed fields written only when different, images reused by content
+  hash or address. The backstop job does not retry partial runs; a person does.
+
+### 17.5 Not done, and limits
+
+1. **No screens.** The UI lane needs its own yes.
+2. ~~The engine defect in §17.3.1 stays for normal imports.~~ Fixed under R-AE-17 (§18.2).
+3. **No real Cloudinary or Shopify upload has run.** The first real copy must be checked in production.
+4. The end-to-end test needs Docker. ~~It is not in the push gate yet.~~ In the push gate since R-AE-16 (§18.1).
+5. The source read calls the exporter once per product. Not measured on a large assortment.
+6. Categories match by slug path; two root categories with the same slug take the first.
+7. A Cloudinary upload whose row loses a race stays unreferenced, the same as a hand upload.
+8. The run table does not tie `shareId` to its own business. Harmless: the source read and the link
+   guard both check the share against the business in context.
+
+## 18. R-AE-16 and R-AE-17 — build record (2026-09-17). **Not committed.**
+
+### 18.1 R-AE-16: the copy test runs on every push
+
+- `scripts/run-stock-race-test.mjs` is **replaced** by `scripts/run-real-postgres-tests.mjs`, and
+  `.githooks/pre-push` calls it. One throwaway container runs both real-PostgreSQL suites: the AE.1
+  stock race test (10 tests) and the AE.3 copy test (8 tests). About 10 s.
+- **Counts are judged per file** from vitest's JSON report, so one file's passes cannot hide another's
+  skips. `REDIS_URL` is set to a dead port too: `apps/api/.env` names a production Redis.
+- **The files run one after another.** Measured: run together, both files create the same server-wide
+  role at once; the second fails at setup (*"duplicate key value violates unique constraint
+  pg_authid_rolname_index"*) and skips all 8 tests. The new runner caught that on its first run.
+- Branches witnessed: real tree → exit 0; a wrong count → exit 1; a file missing from the report →
+  exit 1 (vitest itself exited 0); a suite that skips cleanly → exit 1 (vitest exited 0); a real copy
+  defect (images not copied) → exit 1 (6 passed, 2 failed); Docker unreachable → named SKIP, exit 0. No
+  container was left behind by any branch.
+
+### 18.2 R-AE-17: the transfer engine fix
+
+Two defects, both fixed in `apps/api/src/services/pim/`:
+
+1. **Apply planned an inherited language row without knowing the job.** `buildTransferPlan` takes a new
+   option, `declaredProductSkus`: every shared product the job declares. Whether an inherited value's
+   owner is "in this transfer" (R-LX-8) is now answered for the whole job at apply, as the preview
+   answered it. Both apply paths pass it: the durable job (`catalog-transfer-jobs.ts`, read once per job
+   from its records) and the one-shot review used by presentation assignment
+   (`catalog-transfer.service.ts`, from the reviewed plan).
+2. **"Inherit" on a value that is already inherited counted as a change.** In `cell()`, inherited →
+   inherited is now unchanged. Every other inherited state is empty, so this changes only inherited
+   language values, which carry their owner's text since R-LX-8.
+
+Proof:
+
+- **Real PostgreSQL, real translation writer** (the re-import measured in §17.3.1, one business, parent
+  and variation in the file, only the parent's description changed): **before**, the variation was
+  refused in both forms (with the export's text: *"Catalog inputs or ownership changed since preview"*;
+  without: *"has no de translation to review"*). **After**, both jobs COMPLETED, and the variation still
+  has no translation of its own: it inherits.
+- 4 new tests, each red before the fix and green after: two plan tests (`catalog-transfer.vitest.test.ts`),
+  a re-import through the durable job and one through the one-shot review
+  (`catalog-transfer-jobs.vitest.test.ts`).
+- 4 mutations, each caught: `cell()` reverted; the option ignored; the durable job not passing it; the
+  one-shot review not passing it.
+- 🔴 Limit of the in-memory engine store: it never reaches the translation writer's refusal (the cell
+  revert failed only the plan test). The writer-level proof is the real-PostgreSQL run above.
+
+### 18.3 The copy rule, simplified
+
+With the engine fixed, `mapRows` (`copy-run.service.ts`) no longer looks up the follower's translations.
+It sends every inherited language row **without the export's text**: in a linked copy the parent is
+always in the follower, so the variation inherits, and one that had its own translation has it cleared.
+Keeping the export's text would store the parent's text on variations whose parent was linked by an
+earlier copy. Proven: end to end 8 of 8; keeping the text fails (3 variations got their own copy of the
+title); dropping the rows fails (the linked variation kept its own title).
+
+### 18.4 Checks run locally (after both tasks)
+
+- api `tsc` (fresh, 0 errors); the four database checks; route-prisma ratchet; context boundary;
+  stock-writer lock; clustered cron; event contract; global exposure; security suite 134/134.
+- `src/services/pim`, `src/services/assortment` and the assortment routes: 1,469 passed. 8 failed in 4
+  `variation-*` files that need a live database (their own message: *"no database — this suite proves
+  nothing in this run"*; the run points DATABASE_URL at a dead port on purpose). None of them uses the
+  transfer engine.
+- Real-PostgreSQL runner: stock 10/10, copy 8/8.
+- Profiles-ON ratchet: the first run flagged another session's untracked
+  `src/services/sync/data-validation.vitest.test.ts` ("fails to load"; load average 10). Alone with
+  profiles ON it passes 3/3. The rerun: **750 files, 42 known failing, none new, none worse.** That file
+  can refuse a push under load; it is not changed here.
