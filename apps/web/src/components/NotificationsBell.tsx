@@ -1,40 +1,43 @@
 'use client'
 
 /**
- * H.8 — topnav notification bell.
+ * The top bar's notification bell.
  *
- * Floating button in the top-right corner. Polls /api/notifications
- * every 30 seconds for the unread count, surfaces a red badge when
- * non-zero. Click opens a dropdown listing the most recent rows.
+ * Polls /api/notifications for the badge, and opens a panel listing recent notices.
+ * Clicking a notice marks it read and follows its link.
  *
- * Each row is severity-coloured (info/success/warn/danger), shows
- * title + body + relative time, and clicks through to the
- * notification's href (typically /products?<filters> for saved-view
- * alerts), marking it read in the same gesture.
+ * ── 2026-09-16 — rebuilt on the design system, and made to show anything at all ──────────
  *
- * Mark-all-read button at the top of the dropdown wipes the badge in
- * one click for users who triage in batches.
+ * Measured before this rebuild, all on the first day the bell returned real rows:
  *
- * 30-second poll cadence: alert cron is on a 5-minute tick, so faster
- * polling buys nothing. The endpoint is index-backed and small (50
- * rows max).
+ *   • It had NEVER shown a notification. The API read the literal user 'default-user'
+ *     while all 391,197 rows were addressed to real users (notifications.routes.ts).
+ *   • In dark mode the panel painted rgb(255,255,255), and "All read" / "Refresh" were
+ *     dark controls on that white panel. It was hand-written Tailwind, not the DS.
+ *   • The only unread notice — a `danger` automation-halt alarm — sat below read digests,
+ *     so the badge said "1 unread" about a row the list hid (`notifications-order.ts`).
+ *   • Rows were <div role="button"> with no tabIndex and no key handler: a keyboard user
+ *     could not open a single notification.
+ *   • "View all in inbox" was a raw <a href="/inbox"> that dropped the business profile
+ *     from the URL — the same defect as the studio's URL writes.
+ *   • The trigger never said it opened anything, or whether it was open.
+ *
+ * Structure now follows the DS `Menu`: the trigger is a `ToolbarButton` (the same control
+ * as the theme button beside it), and the panel is portalled to <body> and placed by
+ * `usePopoverPosition`, so no scrolling ancestor can clip it.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  Bell,
-  BellRing,
-  Check,
-  CheckCheck,
-  X,
-  AlertCircle,
-  CheckCircle2,
-  Info,
-  AlertTriangle,
-  ExternalLink,
-} from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { AlertCircle, AlertTriangle, Bell, BellRing, CheckCircle2, Info, RefreshCw, X } from 'lucide-react'
+import { ToolbarButton } from '@/design-system/components'
+import { usePopoverPosition } from '@/design-system/components/usePopoverPosition'
+import { Button } from '@/design-system/primitives'
+import Link from '@/lib/workspaces/Link'
 import { useRouter } from '@/lib/workspaces/navigation'
 import { getBackendUrl } from '@/lib/backend-url'
+import { orderNotifications } from './notifications-order'
+import styles from './NotificationsBell.module.css'
 
 interface NotificationRow {
   id: string
@@ -54,35 +57,15 @@ const POLL_MS = 30_000
 /** Shorter than POLL_MS, so a timed-out poll can never shadow the next tick. */
 const POLL_TIMEOUT_MS = 15_000
 
-const SEVERITY_STYLES: Record<
-  string,
-  { dot: string; bg: string; icon: typeof Info }
-> = {
-  info: {
-    dot: 'bg-sky-500',
-    bg: 'bg-sky-50',
-    icon: Info,
-  },
-  success: {
-    dot: 'bg-emerald-500',
-    bg: 'bg-emerald-50',
-    icon: CheckCircle2,
-  },
-  warn: {
-    dot: 'bg-amber-500',
-    bg: 'bg-amber-50',
-    icon: AlertTriangle,
-  },
-  danger: {
-    dot: 'bg-rose-500',
-    bg: 'bg-rose-50',
-    icon: AlertCircle,
-  },
-}
+type Tone = 'info' | 'success' | 'warn' | 'danger'
+const TONE_ICON: Record<Tone, typeof Info> = { info: Info, success: CheckCircle2, warn: AlertTriangle, danger: AlertCircle }
+/** Spoken with the title, because the icon and accent bar carry severity only by sight. */
+const TONE_WORD: Record<Tone, string> = { info: 'Information', success: 'Done', warn: 'Warning', danger: 'Alert' }
+const toneOf = (severity: string): Tone => (severity in TONE_ICON ? (severity as Tone) : 'info')
 
 function fmtRelative(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
-  if (diff < 60_000) return `${Math.max(1, Math.floor(diff / 1000))}s ago`
+  if (diff < 60_000) return 'just now'
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
   return `${Math.floor(diff / 86_400_000)}d ago`
@@ -90,23 +73,24 @@ function fmtRelative(iso: string): string {
 
 export default function NotificationsBell() {
   const router = useRouter()
+  const panelId = useId()
   const [open, setOpen] = useState(false)
   const [rows, setRows] = useState<NotificationRow[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const wrapRef = useRef<HTMLDivElement>(null)
+  const [mounted, setMounted] = useState(false)
+  const wrapRef = useRef<HTMLSpanElement>(null)
+  const { popRef, style: popStyle } = usePopoverPosition(open, wrapRef, { width: 'auto', align: 'end', offset: 8 })
+
+  useEffect(() => { setMounted(true) }, [])
+
   /*
-   * Never stack a poll on one still in flight (measured 2026-09-01: three copies pending at once
-   * against a local API). Each pending request holds one of the ~6 connections the browser allows
-   * per origin, so a poll whose interval outruns the backend starves the rest of the page —
-   * see lib/sync/dev-stream-gate.ts. Behaviour is otherwise unchanged: the interval, the initial
-   * fetch and the dropdown all still call this.
-   *
-   * The flag is only safe because the fetch below carries a timeout. It clears in `finally`, and a
-   * `finally` on a promise that never settles never runs — so without the timeout the first hung
-   * poll would latch this on and kill the badge for the life of the page, silently, under exactly
-   * the conditions the guard was written for.
+   * Never stack a poll on one still in flight (measured 2026-09-01: three copies pending at
+   * once against a local API). Each pending request holds one of the ~6 connections a browser
+   * allows per origin, so a poll that outruns the backend starves the rest of the page.
+   * Only safe because the fetch carries a timeout: `finally` on a promise that never settles
+   * never runs, and the first hung poll would latch this on for the life of the page.
    */
   const inFlightRef = useRef(false)
 
@@ -118,22 +102,17 @@ export default function NotificationsBell() {
     try {
       const res = await fetch(`${getBackendUrl()}/api/notifications?limit=30`, {
         cache: 'no-store',
-        // Must always settle — see the note on `inFlightRef`. Well under the 30s tick.
         signal: AbortSignal.timeout(POLL_TIMEOUT_MS),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      if (!res.ok) throw new Error(res.status === 401 ? 'Sign in to see your notifications.' : `Notifications could not be loaded (${res.status}).`)
       const json = await res.json()
       setRows(json.rows ?? [])
       setUnreadCount(json.unreadCount ?? 0)
     } catch (e) {
-      // A timeout rejects with a DOMException whose message ('signal timed out') means nothing to
-      // an operator. Say what actually happened.
       setError(
         e instanceof DOMException && e.name === 'TimeoutError'
-          ? `No answer in ${POLL_TIMEOUT_MS / 1000}s`
-          : e instanceof Error
-            ? e.message
-            : String(e),
+          ? `No answer in ${POLL_TIMEOUT_MS / 1000}s. Try again.`
+          : e instanceof Error ? e.message : String(e),
       )
     } finally {
       setLoading(false)
@@ -141,226 +120,160 @@ export default function NotificationsBell() {
     }
   }, [])
 
-  // Initial fetch + 30s poll. Always-on so the badge stays current
-  // even when the dropdown is closed.
   useEffect(() => {
     void refresh()
     const id = setInterval(() => void refresh(), POLL_MS)
     return () => clearInterval(id)
   }, [refresh])
 
-  // Click-outside to close.
+  const close = useCallback((returnFocus: boolean) => {
+    setOpen(false)
+    if (returnFocus) wrapRef.current?.querySelector('button')?.focus()
+  }, [])
+
+  // Click outside closes. The panel is portalled, so it is outside `wrapRef` in the DOM and
+  // must be checked on its own — without that, every click INSIDE the panel closed it.
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (
-        wrapRef.current &&
-        !wrapRef.current.contains(e.target as Node) &&
-        open
-      ) {
-        setOpen(false)
-      }
+    if (!open) return
+    const onPointer = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (wrapRef.current?.contains(target) || popRef.current?.contains(target)) return
+      close(false)
     }
-    document.addEventListener('mousedown', onClick)
-    return () => document.removeEventListener('mousedown', onClick)
-  }, [open])
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(true) }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, close, popRef])
 
   const markRead = async (id: string) => {
-    setRows((prev) =>
-      prev.map((r) =>
-        r.id === id && !r.readAt
-          ? { ...r, readAt: new Date().toISOString() }
-          : r,
-      ),
-    )
-    setUnreadCount((n) => Math.max(0, n - 1))
+    setRows(prev => prev.map(r => (r.id === id && !r.readAt ? { ...r, readAt: new Date().toISOString() } : r)))
+    setUnreadCount(n => Math.max(0, n - 1))
     try {
-      await fetch(`${getBackendUrl()}/api/notifications/${id}/read`, {
-        method: 'POST',
-      })
+      await fetch(`${getBackendUrl()}/api/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' })
     } catch {
-      // Silent: the optimistic update is already in place. Next poll
-      // will reconcile if the server didn't accept.
+      // The optimistic update stands; the next poll reconciles if the server did not accept.
     }
   }
 
   const markAllRead = async () => {
-    setRows((prev) =>
-      prev.map((r) =>
-        r.readAt ? r : { ...r, readAt: new Date().toISOString() },
-      ),
-    )
+    setRows(prev => prev.map(r => (r.readAt ? r : { ...r, readAt: new Date().toISOString() })))
     setUnreadCount(0)
     try {
-      await fetch(`${getBackendUrl()}/api/notifications/read-all`, {
-        method: 'POST',
-      })
+      await fetch(`${getBackendUrl()}/api/notifications/read-all`, { method: 'POST' })
     } catch {
       void refresh()
     }
   }
 
-  const onRowClick = (row: NotificationRow) => {
+  const openRow = (row: NotificationRow) => {
     if (!row.readAt) void markRead(row.id)
     if (row.href) {
       router.push(row.href)
-      setOpen(false)
+      close(false)
     }
   }
 
+  const ordered = orderNotifications(rows)
+  const label = unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
+
   return (
-    /* TB.2 — the bell no longer floats. It used to be `fixed top-14 md:top-3 right-3 z-40`
-       because the layout's `overlays` slot WAS the desktop top-right chrome; now it is placed
-       by `AppTopBar`. `relative` is still required — the panel below is `absolute top-10
-       right-0` and positions against this wrapper. */
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="Notifications"
-        aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-        className="relative inline-flex items-center justify-center w-8 h-8 rounded-full bg-white border border-default hover:bg-slate-50 shadow-sm"
-      >
-        {unreadCount > 0 ? (
-          <BellRing className="w-4 h-4 text-slate-700" />
-        ) : (
-          <Bell className="w-4 h-4 text-slate-500" />
-        )}
-        {unreadCount > 0 && (
-          <span
-            className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold inline-flex items-center justify-center tabular-nums"
-            aria-hidden
-          >
-            {unreadCount > 99 ? '99+' : unreadCount}
-          </span>
-        )}
-      </button>
+    <span ref={wrapRef} className="nds-menu-wrap">
+      <ToolbarButton
+        icon={unreadCount > 0 ? <BellRing size={16} aria-hidden /> : <Bell size={16} aria-hidden />}
+        label={label}
+        badge={unreadCount}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? panelId : undefined}
+        onClick={() => setOpen(v => !v)}
+      />
 
-      {open && (
-        <div className="absolute top-10 right-0 w-[380px] max-h-[70vh] bg-white rounded-lg border border-default shadow-xl flex flex-col">
-          <div className="px-3 py-2 border-b border-subtle flex items-center justify-between gap-2 flex-shrink-0">
-            <div className="text-md font-semibold text-slate-900">
+      {open && mounted && createPortal(
+        <div
+          id={panelId}
+          ref={popRef}
+          style={popStyle}
+          className={styles.panel}
+          role="dialog"
+          aria-label="Notifications"
+        >
+          <div className={styles.header}>
+            <h2 className={styles.heading}>
               Notifications
+              {unreadCount > 0 && <span className={styles.count}>· {unreadCount} unread</span>}
+            </h2>
+            <div className={styles.headerActions}>
               {unreadCount > 0 && (
-                <span className="ml-1.5 text-sm text-slate-500 font-normal">
-                  · {unreadCount} unread
-                </span>
+                <Button size="xs" variant="quiet" onClick={() => void markAllRead()}>Mark all read</Button>
               )}
-            </div>
-            <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllRead}
-                  title="Mark all read"
-                  className="h-6 px-2 text-sm text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded inline-flex items-center gap-1"
-                >
-                  <CheckCheck className="w-3 h-3" />
-                  All read
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="h-6 w-6 inline-flex items-center justify-center text-tertiary hover:text-slate-700 hover:bg-slate-100 rounded"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+              <ToolbarButton icon={<X size={14} aria-hidden />} label="Close notifications" onClick={() => close(true)} />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            {error && (
-              <div className="px-3 py-2 text-base text-rose-700 bg-rose-50 border-b border-rose-200">
-                {error}
-              </div>
-            )}
-            {loading && rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-base text-tertiary italic">
-                Loading…
-              </div>
-            ) : rows.length === 0 ? (
-              <div className="px-3 py-8 text-center text-base text-tertiary">
-                <Bell className="w-5 h-5 mx-auto mb-1 text-slate-300" />
-                No notifications yet
-              </div>
-            ) : (
-              rows.map((r) => {
+          {error && <p className={styles.error} role="alert">{error}</p>}
+
+          {loading && rows.length === 0 ? (
+            <p className={styles.state} role="status">Loading notifications…</p>
+          ) : ordered.length === 0 ? (
+            <p className={styles.state} role="status">You are all caught up.</p>
+          ) : (
+            <ul className={styles.list}>
+              {ordered.map(r => {
                 const unread = !r.readAt
-                const sev = SEVERITY_STYLES[r.severity] ?? SEVERITY_STYLES.info
-                const Icon = sev.icon
-                return (
-                  <div
-                    key={r.id}
-                    role={r.href ? 'button' : undefined}
-                    onClick={r.href ? () => onRowClick(r) : undefined}
-                    className={`px-3 py-2 border-b border-subtle last:border-b-0 flex items-start gap-2 ${
-                      r.href ? 'cursor-pointer hover:bg-slate-50' : ''
-                    } ${unread ? '' : 'opacity-70'}`}
-                  >
-                    <div
-                      className={`mt-0.5 w-6 h-6 rounded-full ${sev.bg} inline-flex items-center justify-center flex-shrink-0`}
-                    >
-                      <Icon className={`w-3.5 h-3.5 ${sev.dot.replace('bg-', 'text-')}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start gap-1">
-                        <div className="text-base text-slate-900 font-medium leading-snug flex-1 min-w-0">
-                          {r.title}
-                        </div>
-                        {unread && (
-                          <span
-                            className={`mt-1 w-1.5 h-1.5 rounded-full ${sev.dot} flex-shrink-0`}
-                            aria-label="unread"
-                          />
-                        )}
-                      </div>
-                      {r.body && (
-                        <div className="text-sm text-slate-600 mt-0.5 leading-snug">
-                          {r.body}
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 mt-1 text-xs text-tertiary">
-                        <span>{fmtRelative(r.createdAt)}</span>
-                        {r.href && (
-                          <span className="inline-flex items-center gap-0.5">
-                            Open <ExternalLink className="w-2.5 h-2.5" />
-                          </span>
-                        )}
-                        {!r.readAt && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              void markRead(r.id)
-                            }}
-                            className="ml-auto inline-flex items-center gap-0.5 hover:text-slate-700"
-                          >
-                            <Check className="w-2.5 h-2.5" /> Mark read
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                const tone = toneOf(r.severity)
+                const Icon = TONE_ICON[tone]
+                const content = (
+                  <>
+                    <span className={styles.accent} data-tone={tone} aria-hidden />
+                    <span className={styles.icon} data-tone={tone} aria-hidden><Icon size={13} /></span>
+                    <span className={styles.text}>
+                      <span className={styles.title}>
+                        <span className={styles.srOnly}>{unread ? 'Unread. ' : ''}{TONE_WORD[tone]}: </span>
+                        {r.title}
+                      </span>
+                      {r.body && <span className={styles.body}>{r.body}</span>}
+                      <span className={styles.meta}>
+                        <time dateTime={r.createdAt}>{fmtRelative(r.createdAt)}</time>
+                        {r.href && <span aria-hidden>· Open</span>}
+                      </span>
+                    </span>
+                  </>
                 )
-              })
-            )}
-          </div>
+                return (
+                  <li key={r.id} className={`${styles.item}${unread ? ` ${styles.unread}` : ''}`}>
+                    {r.href ? (
+                      <button type="button" className={styles.row} onClick={() => openRow(r)}>{content}</button>
+                    ) : (
+                      <div className={`${styles.row} ${styles.rowStatic}`}>{content}</div>
+                    )}
+                    {unread && (
+                      <div className={styles.markRead}>
+                        <Button size="xs" variant="quiet" onClick={() => void markRead(r.id)} aria-label={`Mark "${r.title}" as read`}>
+                          Mark read
+                        </Button>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
 
-          <div className="px-3 py-2 border-t border-subtle flex-shrink-0 text-sm text-slate-500 flex items-center justify-between">
-            <a href="/inbox" className="text-blue-600 hover:text-blue-700 font-medium">
-              View all in inbox →
-            </a>
-            <button
-              type="button"
-              onClick={() => void refresh()}
-              disabled={loading}
-              className="text-slate-600 hover:text-slate-900 disabled:opacity-50"
-            >
-              Refresh
-            </button>
+          <div className={styles.footer}>
+            <Button asChild size="xs" variant="link">
+              <Link href="/inbox" onClick={() => close(false)}>View all in inbox</Link>
+            </Button>
+            <Button size="xs" variant="quiet" disabled={loading} onClick={() => void refresh()}>
+              <RefreshCw size={12} aria-hidden /> {loading ? 'Refreshing…' : 'Refresh'}
+            </Button>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
-    </div>
+    </span>
   )
 }

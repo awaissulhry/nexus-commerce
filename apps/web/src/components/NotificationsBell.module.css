@@ -1,0 +1,206 @@
+/*
+ * The notification bell — design-system tokens only.
+ *
+ * It was hand-written Tailwind (`bg-white`, `text-slate-900`, `bg-rose-50`). Measured
+ * 2026-09-16 in dark mode: the panel painted rgb(255,255,255) against a dark app, and
+ * "All read" and "Refresh" rendered as dark controls on that white panel, barely
+ * legible. Every colour below is an `--nds-*` token, so the panel follows the theme the
+ * rest of the top bar already follows, with no second palette to keep in step.
+ *
+ * The floating surface deliberately copies `.nds-menu` (components.css) — same surface,
+ * border, radius, shadow and z-index — so the bell reads as the same kind of object as
+ * the profile menu sitting beside it.
+ */
+
+.panel {
+  position: fixed;
+  z-index: var(--nds-z-popover);
+  inline-size: min(24rem, calc(100vw - 32px));
+  max-block-size: min(70vh, 40rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-xl);
+  box-shadow: var(--nds-shadow-menu);
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-block-end: 1px solid var(--nds-border-subtle);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.count {
+  margin-inline-start: 6px;
+  font-weight: 400;
+  color: var(--nds-text-2);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.list {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  border-block-end: 1px solid var(--nds-border-subtle);
+}
+.item:last-child {
+  border-block-end: 0;
+}
+
+/* The whole row is ONE real control, so it is reachable and operable by keyboard. It
+   was a <div role="button"> with no tabIndex and no key handler — unreachable without
+   a mouse. */
+.row {
+  display: grid;
+  grid-template-columns: 4px 22px 1fr;
+  column-gap: 10px;
+  inline-size: 100%;
+  padding: 10px 12px 10px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--nds-surface-hover);
+}
+.row:focus-visible {
+  outline: 2px solid var(--nds-focus-ring, var(--nds-text-link));
+  outline-offset: -2px;
+}
+.rowStatic {
+  cursor: default;
+}
+.rowStatic:hover {
+  background: none;
+}
+
+/* Unread is carried by the accent bar AND the heavier title AND visually hidden text —
+   never by colour alone. Read rows keep the bar's space so nothing shifts on read. */
+.accent {
+  align-self: stretch;
+  border-radius: 0 2px 2px 0;
+}
+.unread .accent[data-tone='danger'] { background: var(--nds-danger); }
+.unread .accent[data-tone='warn'] { background: var(--nds-warning); }
+.unread .accent[data-tone='success'] { background: var(--nds-success); }
+.unread .accent[data-tone='info'] { background: var(--nds-info); }
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 22px;
+  block-size: 22px;
+  margin-block-start: 1px;
+  border-radius: 999px;
+}
+.icon[data-tone='danger'] { background: var(--nds-danger-soft); color: var(--nds-danger-text); }
+.icon[data-tone='warn'] { background: var(--nds-warning-soft); color: var(--nds-warning-text); }
+.icon[data-tone='success'] { background: var(--nds-success-soft); color: var(--nds-success-text); }
+.icon[data-tone='info'] { background: var(--nds-info-soft); color: var(--nds-info-text); }
+
+.text {
+  min-inline-size: 0;
+}
+
+.title {
+  display: block;
+  font-size: var(--nds-font-size-sm-plus);
+  line-height: 1.35;
+  color: var(--nds-text-2);
+}
+.unread .title {
+  font-weight: 600;
+  color: var(--nds-text-strong);
+}
+
+.body {
+  display: block;
+  margin-block-start: 2px;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 4px;
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+}
+
+/* Mark-read is its own control, OUTSIDE the row button — a button cannot contain a
+   button, and nesting them is how the old version made this action unreachable. */
+.markRead {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 12px 8px 36px;
+}
+
+.state {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+}
+
+.error {
+  margin: 0;
+  padding: 8px 12px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+  background: var(--nds-danger-soft);
+  border-block-end: 1px solid var(--nds-border-subtle);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-block-start: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm);
+}
+
+.srOnly {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

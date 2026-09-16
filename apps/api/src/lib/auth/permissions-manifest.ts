@@ -492,7 +492,12 @@ export const ENTRIES: Entry[] = [
   RW(F.adminView, F.jobsManage, pfx('/api/outbound-latency')),
   RW(F.adminView, F.jobsManage, pfx('/api/inventory-sync-diagnostics')),
   RW(F.adminView, F.syncManage, pfx('/api/inbox')),
-  RW(F.adminView, F.settingsNotificationsEdit, pfx('/api/notifications')),
+  // 2026-09-16 — was RW(adminView, settingsNotificationsEdit). The bell renders for
+  // EVERY signed-in person (AppTopBar), so a non-admin got a 403 and an empty bell.
+  // Reading and dismissing your OWN notifications is not an admin act, and it is safe
+  // at dashboard level because the route scopes every query to the session's user id
+  // and the Notification isolation policy scopes it to the business in context.
+  RW(PG.dashboard, PG.dashboard, pfx('/api/notifications')),
   RW(F.adminView, F.settingsNotificationsEdit, pfx('/api/saved-view-alerts')),
   RW(F.adminView, F.jobsManage, pfx('/api/cockpit-telemetry')),
 

@@ -12,46 +12,75 @@
  *
  *   DELETE /api/notifications/:id
  *
- * Single-user pre-auth (default-user) — when real auth lands, this
- * endpoint will scope on session.userId.
+ * Scoped to the SIGNED-IN user, and — through the Notification isolation policy —
+ * to the business profile in context.
+ *
+ * 🔴 2026-09-16 — this used to return the literal 'default-user' for every request,
+ * with a note that it would scope on the session "when real auth lands". Real auth
+ * landed; this never followed. Measured on the local database: 391,197 notifications,
+ * EVERY one addressed to a real user id, ZERO to 'default-user'. The bell had shown
+ * nothing, ever — 195,806 unread for one owner alone, including a `danger`
+ * automation-halt alarm. Anything written to a person was written where no person
+ * could see it.
  */
 
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import prisma from '../db.js'
 
-function userIdFor(_req: FastifyRequest): string {
-  return 'default-user'
+/**
+ * The session's user, or a 401. Never a fallback identity: a shared default id is how
+ * every notification became invisible, and it would also let one person read another's.
+ */
+function userIdFor(request: FastifyRequest, reply: FastifyReply): string | null {
+  const id = request.authUser?.id
+  if (!id) {
+    void reply.code(401).send({ error: 'Sign in to see your notifications.', code: 'unauthenticated' })
+    return null
+  }
+  return id
 }
 
 const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
     Querystring: { unread?: string; limit?: string }
-  }>('/notifications', async (request) => {
-    const userId = userIdFor(request)
+  }>('/notifications', async (request, reply) => {
+    const userId = userIdFor(request, reply)
+    if (!userId) return reply
     const unreadOnly = request.query?.unread === 'true'
     const limit = Math.min(
       Math.max(parseInt(request.query?.limit ?? '50', 10) || 50, 1),
       200,
     )
-    const [rows, unreadCount] = await Promise.all([
-      prisma.notification.findMany({
-        where: {
-          userId,
-          ...(unreadOnly ? { readAt: null } : {}),
-        },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-      }),
+    /*
+     * 🔴 UNREAD FIRST, from the query — not re-sorted afterwards.
+     *
+     * This returned the `limit` NEWEST rows. Measured 2026-09-16: `unreadCount: 1`,
+     * `unreadRowsReturned: 0`. The one unread notice, a `danger` automation-halt alarm,
+     * was older than all 30 rows returned, so the badge counted a row the list could
+     * never show — and no amount of client-side ordering can surface a row the client
+     * was never sent. The panel's own sort test passed throughout, because the test
+     * handed it the alarm.
+     *
+     * So every unread row is fetched first (bounded by the same limit), and read rows
+     * only fill whatever room is left.
+     */
+    const [unread, unreadCount] = await Promise.all([
+      prisma.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: 'desc' }, take: limit }),
       prisma.notification.count({ where: { userId, readAt: null } }),
     ])
-    return { rows, unreadCount }
+    const room = unreadOnly ? 0 : limit - unread.length
+    const read = room > 0
+      ? await prisma.notification.findMany({ where: { userId, readAt: { not: null } }, orderBy: { createdAt: 'desc' }, take: room })
+      : []
+    return { rows: [...unread, ...read], unreadCount }
   })
 
   fastify.post<{ Params: { id: string } }>(
     '/notifications/:id/read',
     async (request, reply) => {
       const { id } = request.params
-      const userId = userIdFor(request)
+      const userId = userIdFor(request, reply)
+      if (!userId) return reply
       const result = await prisma.notification.updateMany({
         where: { id, userId, readAt: null },
         data: { readAt: new Date() },
@@ -65,8 +94,9 @@ const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
     },
   )
 
-  fastify.post('/notifications/read-all', async (request) => {
-    const userId = userIdFor(request)
+  fastify.post('/notifications/read-all', async (request, reply) => {
+    const userId = userIdFor(request, reply)
+    if (!userId) return reply
     const result = await prisma.notification.updateMany({
       where: { userId, readAt: null },
       data: { readAt: new Date() },
@@ -76,9 +106,10 @@ const notificationsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.delete<{ Params: { id: string } }>(
     '/notifications/:id',
-    async (request) => {
+    async (request, reply) => {
       const { id } = request.params
-      const userId = userIdFor(request)
+      const userId = userIdFor(request, reply)
+      if (!userId) return reply
       const result = await prisma.notification.deleteMany({
         where: { id, userId },
       })
