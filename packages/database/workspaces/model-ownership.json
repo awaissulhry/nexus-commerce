@@ -17,6 +17,10 @@
     "OAuthSession",
     "ChannelApp",
     "ChannelAccountRoute",
+    "ChannelListingClaim",
+    "WorkspaceMemberAccountLimit",
+    "WorkspaceMemberAccount",
+    "ChannelAccountGrant",
     "ChannelAccountOwnership"
   ],
   "workspaceModels": [

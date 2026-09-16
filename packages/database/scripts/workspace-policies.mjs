@@ -21,23 +21,9 @@ export function workspacePolicySql() {
     END $$;`,
     'GRANT nexus_workspace_runtime TO CURRENT_USER;',
     'GRANT USAGE ON SCHEMA public TO nexus_workspace_runtime;',
-    `CREATE OR REPLACE FUNCTION nexus_workspace_reference_guard() RETURNS trigger LANGUAGE plpgsql AS $$
-    DECLARE relation jsonb; foreign_value text; parent_workspace text;
-    BEGIN
-      IF TG_OP = 'UPDATE' AND OLD."workspaceId" IS DISTINCT FROM NEW."workspaceId" THEN
-        RAISE EXCEPTION 'Business ownership cannot be reassigned' USING ERRCODE = '23514';
-      END IF;
-      FOR relation IN SELECT * FROM jsonb_array_elements(TG_ARGV[0]::jsonb) LOOP
-        foreign_value := to_jsonb(NEW)->>(relation->>'from');
-        IF foreign_value IS NULL THEN CONTINUE; END IF;
-        EXECUTE format('SELECT "workspaceId" FROM %I.%I WHERE %I::text = $1', TG_TABLE_SCHEMA, relation->>'model', relation->>'to')
-          INTO parent_workspace USING foreign_value;
-        IF parent_workspace IS DISTINCT FROM NEW."workspaceId" THEN
-          RAISE EXCEPTION 'Related record is unavailable in this business profile' USING ERRCODE = '23503';
-        END IF;
-      END LOOP;
-      RETURN NEW;
-    END $$;`,
+    // The reference guard now lives in one file shared with its migrations. BP.S3 added
+    // its single exception (publish grants); see the file header for exactly what.
+    readFileSync(new URL('../workspaces/reference-guard.sql', import.meta.url), 'utf8'),
   ]
   for (const model of [...ownership.globalModels, ...ownership.workspaceModels]) {
     sql.push(`GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quote(model)} TO nexus_workspace_runtime;`)
@@ -104,5 +90,15 @@ export function workspacePolicySql() {
   sql.push('REVOKE INSERT, UPDATE, DELETE ON "ChannelAccountRoute" FROM nexus_workspace_runtime;')
   sql.push('REVOKE INSERT, UPDATE, DELETE ON "ChannelAccountOwnership" FROM nexus_workspace_runtime;')
   sql.push(readFileSync(new URL('../workspaces/account-assignment.sql', import.meta.url), 'utf8'))
+  // BP.S1a — the read-only share. Byte-for-byte the tail of migration
+  // 20260916a; kept in one file so the disposable test database and every
+  // deployed database cannot disagree about who may read a shared account.
+  sql.push(readFileSync(new URL('../workspaces/account-grant.sql', import.meta.url), 'utf8'))
+  // BP.S2 — per-person account access. Byte-for-byte the tail of migration 20260916b.
+  sql.push(readFileSync(new URL('../workspaces/account-restriction.sql', import.meta.url), 'utf8'))
+  // BP.S3 — the listing claim. Byte-for-byte the tail of migration 20260916c.
+  sql.push(readFileSync(new URL('../workspaces/listing-claim.sql', import.meta.url), 'utf8'))
+  // L1 — membership/role write protection. Byte-for-byte the tail of 20260916d.
+  sql.push(readFileSync(new URL('../workspaces/membership-write-guard.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

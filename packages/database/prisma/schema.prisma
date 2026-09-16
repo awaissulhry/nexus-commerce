@@ -1509,6 +1509,7 @@ model VariantChannelListing {
 
 model ChannelListing {
   translations ChannelListingTranslation[]
+  listingClaims ChannelListingClaim[]
   // Business ownership comes from verified database context.
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   id String @id @default(cuid())
@@ -6589,6 +6590,9 @@ model FinancialTransaction {
 
 model ChannelConnection {
   ingressRoute ChannelAccountRoute?
+  grants ChannelAccountGrant[]
+  memberAccess WorkspaceMemberAccount[]
+  listingClaims ChannelListingClaim[]
   workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   @@index([workspaceId, channelType])
@@ -18957,6 +18961,9 @@ model MasterFieldRuleRevision {
 model Workspace {
   accountOwnership ChannelAccountOwnership[]
   ingressRoutes ChannelAccountRoute[]
+  guestAccountGrants ChannelAccountGrant[] @relation("GrantGuest")
+  listingClaims ChannelListingClaim[]
+  sharedAccountGrants ChannelAccountGrant[] @relation("GrantOwner")
   automationResumedAt DateTime?
   isLegacy Boolean @default(false)
   id String @id @default(cuid())
@@ -18989,6 +18996,13 @@ model WorkspaceMembership {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   roles WorkspaceMemberRole[]
+  /// BP.S2 — see WorkspaceMemberAccountLimit. The "is this person restricted" flag
+  /// is deliberately NOT a column here: this table has no row-level security at all
+  /// (measured 2026-09-16 — a non-owner can UPDATE their own membership row), so a
+  /// flag here would be guarded only by the service layer while the allow-list beside
+  /// it is guarded by the database.
+  accountLimit WorkspaceMemberAccountLimit?
+  accounts WorkspaceMemberAccount[]
   @@unique([workspaceId, userId])
   @@index([userId, status])
   @@index([userId, status, createdAt, id], map: "WorkspaceMembership_profile_page_idx")
@@ -19039,6 +19053,118 @@ model ChannelAccountOwnership {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
   @@id([channelType, environment, externalAccountId])
   @@index([workspaceId])
+}
+
+// ── BP.S1a — one owner, many guests ────────────────────────────────────────────
+// ChannelAccountOwnership above says a seller account has exactly ONE owning
+// business, by primary key, and workspace-ingress.ts depends on that: a verified
+// notification that resolves to more than one business is refused (503). So a
+// second business does not become a co-owner — it receives a READ-ONLY grant.
+// Enforcement is the `nexus_workspace_grant_read` FOR SELECT policy, never
+// application discipline; see docs/2026-09-16-bp-shared-accounts-and-access.md §3.2.
+// ── BP.S2 — which accounts one PERSON may reach inside one business ───────────
+// MAP.8's `UserRole.channelScope` was stored, passed and displayed but never
+// enforced, and it is global rather than per-business. This replaces it.
+// Enforcement is the RESTRICTIVE policy `nexus_account_restriction` on
+// ChannelConnection, which ANDs with every permissive policy, so it applies to
+// owned accounts, shared accounts, reads and writes alike — with no call site.
+/// BP.S2 — the PRESENCE of a row means this membership is restricted to the accounts
+/// listed in WorkspaceMemberAccount. Its absence means unrestricted, which is every
+/// existing member. A row rather than a boolean so that both halves of the rule live
+/// in one place, under one owner-only policy, and so that removing the last allowed
+/// account CANNOT silently promote someone back to seeing everything.
+model WorkspaceMemberAccountLimit {
+  membershipId String @id
+  membership   WorkspaceMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  setByUserId  String
+  createdAt    DateTime @default(now())
+}
+
+model WorkspaceMemberAccount {
+  membershipId String
+  membership   WorkspaceMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  /// CASCADE on purpose: an account that no longer exists must not linger in
+  /// someone's allow-list, where re-using its id would silently re-grant access.
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  grantedByUserId String
+  createdAt       DateTime @default(now())
+
+  @@id([membershipId, connectionId])
+  @@index([connectionId])
+}
+
+// ── BP.S3 — one seller coordinate, one owning business ────────────────────────
+// A seller account identifies a listing by the seller's own SKU (eBay custom
+// label, Amazon SKU) within that account and marketplace. Two businesses sharing
+// one account therefore share ONE namespace: without this, both could publish SKU
+// "ABC" to the same seller and the second would overwrite or duplicate the first,
+// and each would push its own quantity against one physical listing.
+//
+// The primary key IS the exclusivity. A claim is a LOCK, not history: it is
+// deleted on release, and WorkspaceAudit carries who held it and when.
+model ChannelListingClaim {
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  /// "IT" / "DE" / "GLOBAL" — the same coordinate ChannelListing.marketplace uses.
+  marketplace  String
+  /// The identity WITHIN that seller account. Derived by `sellerSkuForDelist`,
+  /// which returns null when a listing carries two seller identities — a null
+  /// cannot be claimed, so publishing it to a SHARED account is refused.
+  sellerSku    String
+
+  /// The business that holds this coordinate. RESTRICT: an outstanding claim is
+  /// released deliberately, never swept by deleting a business.
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  /// The row that acquired it, for the operator-facing explanation. Nullable and
+  /// SET NULL: the claim outlives a re-created listing row, because the coordinate
+  /// on the marketplace outlives it too.
+  channelListingId String?
+  channelListing   ChannelListing? @relation(fields: [channelListingId], references: [id], onDelete: SetNull)
+
+  claimedByUserId String?
+  claimedAt       DateTime @default(now())
+
+  @@id([connectionId, marketplace, sellerSku])
+  @@index([workspaceId])
+  @@index([channelListingId])
+}
+
+model ChannelAccountGrant {
+  connectionId String
+  connection   ChannelConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  /// The GUEST business. Deliberately NOT defaulted from request context like
+  /// other tenant rows: this row is WRITTEN in the owner's context and READ in
+  /// the guest's, so a context default would be wrong on one of the two paths.
+  workspaceId String
+  workspace   Workspace @relation("GrantGuest", fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  /// The owner at grant time. Denormalised so the owner can list and revoke its
+  /// own grants, and so an audit names both sides without joining a row the
+  /// reader may not be able to see.
+  ownerWorkspaceId String
+  ownerWorkspace   Workspace @relation("GrantOwner", fields: [ownerWorkspaceId], references: [id], onDelete: Restrict)
+
+  /// "read" | "publish". BP.S1 honours ONLY "read"; "publish" is refused until
+  /// BP.S3 ships its listing-claim index, because two businesses publishing into
+  /// one seller account collide on listings and oversell one stock number. The
+  /// column exists now so the API and UI contract do not change shape later.
+  mode String @default("read")
+
+  /// Empty = every marketplace the account carries. Non-empty = that subset.
+  marketplaces String[] @default([])
+
+  grantedByUserId String
+  grantedAt       DateTime  @default(now())
+  revokedAt       DateTime?
+  revokedByUserId String?
+
+  @@id([connectionId, workspaceId])
+  @@index([workspaceId])
+  @@index([ownerWorkspaceId])
 }
 
 model ChannelAccountRoute {
