@@ -1,4 +1,5 @@
 import prisma from "../../db.js";
+import { visitActiveWorkspaces } from "../../lib/workspace-sweep.js";
 
 export interface ValidationReport {
   isValid: boolean;
@@ -25,11 +26,42 @@ export interface RepairResult {
  * DataValidationService
  * Validates relational integrity of parent-child product structure
  */
+/** A report whose check could not run. It must never be read as healthy. */
+export function validationDidNotRun(report: ValidationReport): boolean {
+  return report.issues.some((issue) => issue.type === "VALIDATION_ERROR");
+}
+
+/** Sums per-profile reports. Profiles off, or one profile in scope, is a single report. */
+export function mergeValidationReports(reports: ValidationReport[]): ValidationReport {
+  return reports.reduce<ValidationReport>(
+    (all, report) => ({
+      isValid: all.isValid && report.isValid,
+      orphanedVariants: all.orphanedVariants + report.orphanedVariants,
+      inconsistentThemes: all.inconsistentThemes + report.inconsistentThemes,
+      missingAttributes: all.missingAttributes + report.missingAttributes,
+      invalidChannelListings: all.invalidChannelListings + report.invalidChannelListings,
+      issues: [...all.issues, ...report.issues],
+    }),
+    { isValid: true, orphanedVariants: 0, inconsistentThemes: 0, missingAttributes: 0, invalidChannelListings: 0, issues: [] },
+  );
+}
+
 export class DataValidationService {
   /**
-   * Validate all products follow Rithum parent-child structure
+   * Validate all products follow Rithum parent-child structure.
+   *
+   * Every table read here is profile-scoped, and the PUBLIC /admin/health and /monitoring routes call
+   * this with no profile — so it runs once per active profile and merges (a single pass when a profile
+   * is already in scope or profiles are off). Until 2026-09-16 it threw `workspace_required` there, and
+   * the catch below turned that into a report the health routes printed as "healthy, 0 issues".
    */
   async validateAllProducts(): Promise<ValidationReport> {
+    const reports: ValidationReport[] = [];
+    await visitActiveWorkspaces(async () => { reports.push(await this.validateProductsInScope()); });
+    return mergeValidationReports(reports);
+  }
+
+  private async validateProductsInScope(): Promise<ValidationReport> {
     const report: ValidationReport = {
       isValid: true,
       orphanedVariants: 0,
@@ -40,23 +72,9 @@ export class DataValidationService {
     };
 
     try {
-      // Check for orphaned variants (variants without parent)
-      const orphanedVariants = await (prisma as any).productVariation.findMany({
-        where: {
-          product: null,
-        },
-      });
-
-      if (orphanedVariants.length > 0) {
-        report.orphanedVariants = orphanedVariants.length;
-        report.isValid = false;
-        report.issues.push({
-          type: "ORPHANED_VARIANTS",
-          severity: "ERROR",
-          message: `Found ${orphanedVariants.length} variants without parent product`,
-          affectedIds: orphanedVariants.map((v: any) => v.id),
-        });
-      }
+      // Orphaned variants cannot exist: ProductVariation.productId is a required foreign key with
+      // ON DELETE CASCADE. The old `where: { product: null }` query was rejected by Prisma on every
+      // run ("Argument `product` must not be null"), so this check never ran — orphanedVariants stays 0.
 
       // Check for inconsistent variation themes
       const productsWithVariants = await (prisma as any).product.findMany({

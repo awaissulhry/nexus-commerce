@@ -9,7 +9,7 @@ import { getAmazonSellerId } from '../lib/amazon-sp-client.js'
  */
 
 import type { FastifyInstance } from 'fastify'
-import { DataValidationService } from '../services/sync/data-validation.service.js'
+import { DataValidationService, validationDidNotRun } from '../services/sync/data-validation.service.js'
 import { BatchRepairService } from '../services/sync/batch-repair.service.js'
 import { auditSalesDrift } from '../services/revenue/drift-audit.service.js'
 import { syncFinancialEvents } from '../services/amazon-financial-events.service.js'
@@ -432,6 +432,12 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get('/admin/health', async (request, reply) => {
     try {
       const report = await validationService.validateAllProducts()
+      // A check that could not run is not "0 issues". This route printed "healthy" for months while
+      // every run failed (an invalid query, then `workspace_required`). Details stay in the logs.
+      if (validationDidNotRun(report)) {
+        request.log.error({ issues: report.issues.filter((i) => i.type === 'VALIDATION_ERROR').map((i) => i.message) }, 'admin health: product validation could not run')
+        return reply.status(503).send({ status: 'unhealthy', error: 'Product validation could not run' })
+      }
 
       const health = {
         status: 'healthy',

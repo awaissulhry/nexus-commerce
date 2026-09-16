@@ -5,7 +5,9 @@
  * Tracks metrics and provides health insights.
  */
 
-import { DataValidationService } from '../sync/data-validation.service.js'
+import prisma from '../../db.js'
+import { visitActiveWorkspaces } from '../../lib/workspace-sweep.js'
+import { DataValidationService, validationDidNotRun } from '../sync/data-validation.service.js'
 import { AlertService, AlertType, AlertSeverity } from './alert.service.js'
 
 export interface MonitoringMetrics {
@@ -87,9 +89,14 @@ export class MonitoringService {
     validationReport: any,
     duration: number
   ): Promise<MonitoringMetrics> {
-    // Get total product and variation counts
-    const totalProducts = await (global as any).prisma?.product?.count?.() || 0
-    const totalVariations = await (global as any).prisma?.productVariation?.count?.() || 0
+    // Get total product and variation counts, across every active profile (these routes are PUBLIC and
+    // run with none). `(global as any).prisma` was never set, so both counts were always 0.
+    let totalProducts = 0
+    let totalVariations = 0
+    await visitActiveWorkspaces(async () => {
+      totalProducts += await prisma.product.count()
+      totalVariations += await prisma.productVariation.count()
+    })
 
     // Calculate health score (0-100)
     const totalIssues =
@@ -98,7 +105,8 @@ export class MonitoringService {
       validationReport.missingAttributes +
       validationReport.invalidChannelListings
 
-    const healthScore = Math.max(
+    // A validation that could not run scores 0, never a perfect 100 from zero counted issues.
+    const healthScore = validationDidNotRun(validationReport) ? 0 : Math.max(
       0,
       100 - (totalIssues / Math.max(totalVariations, 1)) * 100
     )

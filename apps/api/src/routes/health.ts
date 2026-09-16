@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { createHash } from 'node:crypto'
 import prisma from '../db.js'
 import { getRedisRuntimeStatus } from '../lib/queue.js'
+import { visitActiveWorkspaces } from '../lib/workspace-sweep.js'
 import { checkDatabaseReadiness, servingBuild } from '../services/health.service.js'
 
 // AS.0 debugging — a stable, non-reversible fingerprint of the Amazon refresh
@@ -51,37 +52,58 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       // 2026-07-20 403 outage was invisible outside the DB. Fail-open: alert
       // lookup errors never break health.
       let alerts: Record<string, number> | undefined
+      let alertsError: string | undefined
       let adsIntegrity: { severity: string; findings: Array<{ code: string; severity: string; message: string; action: string }> } | undefined
+      let adsIntegrityError: string | undefined
       try {
         const dayAgo = new Date(Date.now() - 24 * 3600e3)
-        const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h] = await Promise.all([
-          prisma.syncHealthLog.count({
-            where: { conflictType: 'CHANNEL_AUTH_FAILURE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
-          }),
-          prisma.syncHealthLog.count({
-            where: { conflictType: 'PUBLISH_FAILURE_RATE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
-          }),
-          prisma.syncHealthLog.count({
-            where: { conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
-          }),
-          // SC.5-fix — ads-lane corpses (AD_* syncTypes, e.g. bid updates for
-          // Amazon-deleted entities) are not inventory risk: count separately
-          // so the inventory dead-letter tripwire stays meaningful.
-          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, NOT: { syncType: { startsWith: 'AD_' } } } }),
-          prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, syncType: { startsWith: 'AD_' } } }),
-        ])
-        alerts = { authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h }
-        // AX2.9 — the ads spine self-reports so nobody has to check it daily.
+        // Business profiles: this route is PUBLIC and runs with no profile, and every table below is
+        // profile-scoped — so each count is summed across active profiles. Until 2026-09-16 these threw
+        // `workspace_required` and the catch made the whole alarm block vanish from production health.
+        const totals = { authFailures: 0, publishFailureRate: 0, qtyMismatches: 0, deadLetters24h: 0, adsDeadLetters24h: 0 }
+        await visitActiveWorkspaces(async () => {
+          const [authFailures, publishFailureRate, qtyMismatches, deadLetters24h, adsDeadLetters24h] = await Promise.all([
+            prisma.syncHealthLog.count({
+              where: { conflictType: 'CHANNEL_AUTH_FAILURE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+            }),
+            prisma.syncHealthLog.count({
+              where: { conflictType: 'PUBLISH_FAILURE_RATE', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+            }),
+            prisma.syncHealthLog.count({
+              where: { conflictType: 'CHANNEL_QTY_READBACK', resolutionStatus: 'UNRESOLVED', createdAt: { gte: dayAgo } },
+            }),
+            // SC.5-fix — ads-lane corpses (AD_* syncTypes, e.g. bid updates for
+            // Amazon-deleted entities) are not inventory risk: count separately
+            // so the inventory dead-letter tripwire stays meaningful.
+            prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, NOT: { syncType: { startsWith: 'AD_' } } } }),
+            prisma.outboundSyncQueue.count({ where: { isDead: true, diedAt: { gte: dayAgo }, syncType: { startsWith: 'AD_' } } }),
+          ])
+          totals.authFailures += authFailures
+          totals.publishFailureRate += publishFailureRate
+          totals.qtyMismatches += qtyMismatches
+          totals.deadLetters24h += deadLetters24h
+          totals.adsDeadLetters24h += adsDeadLetters24h
+        })
+        alerts = totals
+        // AX2.9 — the ads spine self-reports so nobody has to check it daily. Per profile; the worst wins.
         try {
           const { runSyncIntegrityCheck } = await import('../services/advertising/ads-sync-integrity.service.js')
-          const integrity = await runSyncIntegrityCheck()
-          adsIntegrity = {
-            severity: integrity.severity,
-            findings: integrity.findings.map((f) => ({ code: f.code, severity: f.severity, message: f.message, action: f.action })),
-          }
-        } catch { adsIntegrity = undefined }
+          const rank = { OK: 0, WARN: 1, CRITICAL: 2 } as const
+          let severity: keyof typeof rank = 'OK'
+          const findings: Array<{ code: string; severity: string; message: string; action: string }> = []
+          await visitActiveWorkspaces(async () => {
+            const integrity = await runSyncIntegrityCheck()
+            if (rank[integrity.severity] > rank[severity]) severity = integrity.severity
+            findings.push(...integrity.findings.map((f) => ({ code: f.code, severity: f.severity, message: f.message, action: f.action })))
+          })
+          adsIntegrity = { severity, findings }
+        } catch {
+          // Fail-open for health, but never silently: an absent block used to read as "nothing wrong".
+          adsIntegrityError = 'Ads sync integrity could not be checked'
+        }
       } catch {
         alerts = undefined
+        alertsError = 'Alarm counts could not be read'
       }
 
       return {
@@ -100,10 +122,12 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         timestamp: new Date().toISOString(),
         // AS.2-lite — non-zero numbers here mean "open the sync-health data".
         ...(alerts ? { alerts } : {}),
+        ...(alertsError ? { alertsError } : {}),
         // AX2.9 — the Amazon ads spine self-reports. severity 'OK' with no
         // findings is the steady state; anything else names the problem AND the
         // next step, so this never needs a daily manual check.
         ...(adsIntegrity ? { adsIntegrity } : {}),
+        ...(adsIntegrityError ? { adsIntegrityError } : {}),
         services: {
           database: 'connected',
           redis: redisConnected
