@@ -26,6 +26,7 @@ import { sellingRisk } from '@nexus/shared/listing-risk'
 import { whereCoordinate, type ListingCoordinate } from '../lib/listing-coordinate.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
+import { sellerSkuForClaim } from './listing-claim-identity.js'
 
 /** Capture before deletion: Listings Items is keyed by seller SKU, never ASIN. */
 export function sellerSkuForDelist(
@@ -241,6 +242,82 @@ export async function fireOutboundJobs(
   }
 }
 
+/** One coordinate the BP.S3 preflight refused, and the sentence that says why. */
+export interface BlockedCoordinate {
+  channelListingId: string
+  sellerSku: string | null
+  marketplace: string
+  reason: string
+  heldByWorkspaceName?: string
+}
+
+/**
+ * BP.S3 — the publish preflight for a SHARED seller account.
+ *
+ * Two businesses behind one account share one SKU namespace, so before either may
+ * push into a coordinate it must hold `ChannelListingClaim` for it. This is the one
+ * place that check can live: every OutboundSyncQueue row in the instant lane is
+ * created here, and it runs BEFORE the rows exist, so a refused coordinate never
+ * becomes a durable job someone has to cancel.
+ *
+ * 🔴 It is a NO-OP unless the account is shared. `sharedConnectionIds` is one
+ * indexed read, and an account with a single business behind it takes the early
+ * return — so nothing about existing publishing changes, which is what keeps the
+ * blast radius of this feature at zero for every account nobody has shared.
+ *
+ * Returns the rows that may proceed, plus a refusal per coordinate that may not.
+ * Refusals are collected rather than thrown: a bulk publish must report every
+ * blocked coordinate at once, not stop on the first.
+ */
+export async function reserveSharedCoordinates(
+  db: OutboundEnqueueDb,
+  rows: Array<Record<string, unknown>>,
+): Promise<{ allowed: Array<Record<string, unknown>>; blocked: BlockedCoordinate[] }> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return { allowed: rows, blocked: [] }
+  const listingIds = [...new Set(rows.map(r => r.channelListingId).filter((id): id is string => typeof id === 'string' && !!id))]
+  if (listingIds.length === 0) return { allowed: rows, blocked: [] }
+  /*
+   * Imported HERE, past the flag check, on purpose. This module is on the hot path
+   * of every outbound push; the claim service pulls in the prisma client, and a
+   * single-business install never reaches this line. It also keeps that client out
+   * of the import graph of callers that mock `@nexus/database` partially —
+   * `channel-delist.vitest.test.ts` mocks it with no default export, which a
+   * top-level import here turned into a suite-load failure.
+   */
+  const { claimCoordinate, sharedConnectionIds } = await import('./listing-claim.service.js')
+
+  const listings = await (db as unknown as { channelListing: { findMany: (a: unknown) => Promise<Array<Record<string, unknown>>> } }).channelListing.findMany({
+    where: { id: { in: listingIds } },
+    select: {
+      id: true, marketplace: true, channelConnectionId: true,
+      product: { select: { sku: true } },
+      offers: { select: { sku: true, fulfillmentMethod: true, isActive: true } },
+    },
+  })
+  const byId = new Map(listings.map(l => [l.id as string, l]))
+  const shared = await sharedConnectionIds(listings.map(l => l.channelConnectionId as string).filter(Boolean))
+  if (shared.size === 0) return { allowed: rows, blocked: [] }
+
+  const blocked: BlockedCoordinate[] = []
+  const refusedListingIds = new Set<string>()
+  for (const id of listingIds) {
+    const listing = byId.get(id)
+    const connectionId = listing?.channelConnectionId as string | undefined
+    if (!listing || !connectionId || !shared.has(connectionId)) continue
+    const marketplace = (listing.marketplace as string) ?? 'DEFAULT'
+    const sellerSku = sellerSkuForClaim(listing as never)
+    const outcome = await claimCoordinate({ connectionId, marketplace, sellerSku, channelListingId: id })
+    if (outcome.result === 'blocked') {
+      refusedListingIds.add(id)
+      blocked.push({ channelListingId: id, sellerSku, marketplace, reason: outcome.reason ?? 'That coordinate belongs to another business profile.', heldByWorkspaceName: outcome.heldBy?.workspaceName })
+    }
+  }
+  if (blocked.length > 0) {
+    logger.warn('BP.S3 publish refused: coordinate held by another business profile', { count: blocked.length, coordinates: blocked.map(b => `${b.marketplace}/${b.sellerSku}`) })
+  }
+  return { allowed: rows.filter(r => !refusedListingIds.has(r.channelListingId as string)), blocked }
+}
+
 /**
  * createMany the rows + fire instant-lane jobs for them. Returns the created
  * entries. `rows` are OutboundSyncQueue create-inputs (payload may be absent).
@@ -248,8 +325,36 @@ export async function fireOutboundJobs(
 export async function enqueueOutboundRowsInstant(
   db: OutboundEnqueueDb,
   rows: Array<Record<string, unknown> & { payload?: Record<string, unknown> | null }>,
-  opts?: { source?: string; skipDuplicates?: boolean },
+  opts?: { source?: string; skipDuplicates?: boolean; onBlocked?: (blocked: BlockedCoordinate[]) => void },
 ): Promise<OutboundJobEntry[]> {
+  if (rows.length === 0) return []
+  /*
+   * BP.S3 — a coordinate another business already publishes never becomes a job.
+   *
+   * 🔴 If EVERY row was refused, this throws rather than returning an empty list.
+   * The caller asked to publish and nothing will be published; returning `[]` would
+   * make that indistinguishable from "there was nothing to do", and the operator
+   * would watch a Publish button succeed and change nothing. A partial refusal
+   * proceeds with the rest, reports through `onBlocked`, and is always logged.
+   */
+  const { allowed, blocked } = await reserveSharedCoordinates(db, rows)
+  if (blocked.length > 0) {
+    opts?.onBlocked?.(blocked)
+    /*
+     * Surfaced HERE, once, for all six callers. Several are background paths that
+     * swallow errors (`content-auto-publish` logs them "non-fatal"), so a refusal that
+     * only threw would reach nobody. The notice lands in the bell of this business's
+     * owners and the actor; it is deduped per listing, so auto-publish re-firing on
+     * every edit cannot flood it. Awaited, but it never throws.
+     */
+    const { notifyPublishRefused } = await import('./publish-refusal-notify.service.js')
+    await notifyPublishRefused(blocked)
+  }
+  if (blocked.length > 0 && allowed.length === 0) {
+    const { WorkspaceError } = await import('../lib/workspace-context.js')
+    throw new WorkspaceError('listing_coordinate_claimed', blocked[0].reason, 409)
+  }
+  rows = allowed
   if (rows.length === 0) return []
   const tag = randomUUID()
   const tagged = rows.map((r) => ({

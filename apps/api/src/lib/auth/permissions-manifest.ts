@@ -135,6 +135,13 @@ export const ENTRIES: Entry[] = [
   // WRITE is a different question — relabelling an account, moving the primary or
   // disconnecting one is integration management, and MAP.8 will narrow it further
   // to per-account scope.
+  // BP.S1c — sharing an account with another business. BEFORE the broad
+  // /api/accounts entry (first match wins), because that one reads at
+  // PG.dashboard and these lists NAME other business profiles. Reading and
+  // writing both sit at integration management; the OWNER-of-both-sides rule
+  // lives in channel-account-grant.service.ts, which the manifest cannot express.
+  P(F.settingsIntegrationsManage, (_m, p) => /^\/api\/accounts\/[^/]+\/grants(?:\/|$)/.test(p)),
+  P(F.settingsIntegrationsManage, pfx('/api/accounts/shared-with-me')),
   RW(PG.dashboard, F.settingsIntegrationsManage, pfx('/api/accounts')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),

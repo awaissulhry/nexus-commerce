@@ -1,8 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import prisma from '../db.js'
 import { requireAuth, requireCsrf } from '../lib/auth/guards.js'
-import { WorkspaceError } from '../lib/workspace-context.js'
+import { WorkspaceError, withWorkspace } from '../lib/workspace-context.js'
 import { createWorkspaceService, type WorkspaceListQuery } from '../services/workspace.service.js'
+import { listMemberAccountAccess, setMemberAccountAccess } from '../services/member-account-access.service.js'
 
 const workspacesRoutes: FastifyPluginAsync = async app => {
   const service = createWorkspaceService(prisma)
@@ -50,6 +51,39 @@ const workspacesRoutes: FastifyPluginAsync = async app => {
   app.patch<{ Params: { id: string; memberId: string }; Body: { roleIds: string[]; status: 'active' | 'revoked'; version: number } }>('/workspaces/:id/members/:memberId', async request => {
     return service.changeMember(request.authUser!.id, request.params.id, request.params.memberId, request.body ?? {})
   })
+
+  /*
+   * BP.S2 — which accounts one PERSON may reach in this business.
+   *
+   * These live HERE and not on /api/team, which the workspace hook retires with a 410
+   * the moment business profiles are on (team.routes.ts:38) — a route added there
+   * would be unreachable in exactly the configuration it exists for.
+   *
+   * 🔴 `/api/workspaces/*` is a CONTROL path: the hook returns before it establishes
+   * a workspace context (workspace-hook.ts:51), so every other route in this file
+   * takes its workspace from the URL and passes the actor explicitly. The access
+   * service reads `requireWorkspace()` because it must be scoped by RLS, so the
+   * context is opened here, from live membership, never from the caller's word.
+   */
+  const inWorkspace = async <T>(userId: string, workspaceId: string, work: () => Promise<T>): Promise<T> => {
+    const access = await service.membership(userId, workspaceId)
+    return withWorkspace(access.context, work)
+  }
+
+  app.get<{ Params: { id: string } }>('/workspaces/:id/account-access', async request =>
+    inWorkspace(request.authUser!.id, request.params.id, async () => ({ members: await listMemberAccountAccess() })),
+  )
+
+  app.put<{ Params: { id: string; memberId: string }; Body: { restricted?: boolean; connectionIds?: string[] } }>(
+    '/workspaces/:id/members/:memberId/account-access',
+    async request => inWorkspace(request.authUser!.id, request.params.id, async () => ({
+      member: await setMemberAccountAccess({
+        membershipId: request.params.memberId,
+        restricted: request.body?.restricted === true,
+        connectionIds: request.body?.connectionIds,
+      }),
+    })),
+  )
 }
 
 export default workspacesRoutes

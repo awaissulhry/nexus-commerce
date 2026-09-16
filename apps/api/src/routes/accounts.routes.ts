@@ -34,7 +34,7 @@ import { listManagedConnections } from '../services/connection-resolver.service.
  *    this phase exists to retire. An empty array means the UI renders nothing.
  */
 
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import prisma from "../db.js";
 import { logger } from "../utils/logger.js";
 import {
@@ -45,6 +45,8 @@ import {
 import { scopeDriftOf, tryGetChannelSpec, channelKeyOf } from "../services/cx/catalog.js";
 import { revoke } from "../services/cx/token.service.js";
 import { connectionLabel } from "../services/connection-label.js";
+import { listSharesFor, listSharedWithCurrent, revokeShare, shareAccount } from "../services/channel-account-grant.service.js";
+import { WorkspaceError } from "../lib/workspace-context.js";
 
 type Channel = "AMAZON" | "AMAZON_ADS" | "EBAY" | "SHOPIFY" | "WOOCOMMERCE" | "ETSY";
 
@@ -476,7 +478,74 @@ const accountsRoutes: FastifyPluginAsync = async (fastify) => {
     logger.info("MAP.4 account disconnected", { channel: row.channelType, accountId: row.id, revokedAtChannel });
     return reply.send({ success: true, revokedAtChannel, blastRadius: await blastRadius(row.id) });
   });
+
+  // ── BP.S1c/BP.S3 — sharing an account with another business, read-only or to publish ──
+  //
+  // These live under /api/accounts deliberately: the operator manages them on the
+  // same Accounts tab, and the prefix is already mapped in permissions-manifest.ts.
+  // The manifest entry for `/api/accounts/:id/grants` sits BEFORE the broad
+  // `/api/accounts` one (first match wins) so the READ is not merely dashboard-level
+  // — the list names other businesses.
+  //
+  // Authority is NOT in the route permission, which is role-based and knows nothing
+  // about businesses. It is in the service (OWNER of both sides, re-read from live
+  // membership) with RLS as the backstop.
+
+  fastify.get<{ Params: { id: string } }>("/accounts/:id/grants", async (request, reply) =>
+    respond(reply, async () => ({ success: true, grants: await listSharesFor(request.params.id) })),
+  );
+
+  /** Which of the accounts on this page belong to someone else. */
+  fastify.get("/accounts/shared-with-me", async (_request, reply) =>
+    respond(reply, async () => ({ success: true, shared: await listSharedWithCurrent() })),
+  );
+
+  fastify.post<{
+    Params: { id: string };
+    Body: { destinationWorkspaceId?: string; mode?: string; marketplaces?: unknown };
+  }>("/accounts/:id/grants", async (request, reply) =>
+    respond(reply, async () => ({
+      success: true,
+      grant: await shareAccount({
+        connectionId: request.params.id,
+        destinationWorkspaceId: String(request.body?.destinationWorkspaceId ?? ""),
+        mode: request.body?.mode,
+        marketplaces: request.body?.marketplaces,
+      }),
+    })),
+  );
+
+  // POST, not DELETE: revoking writes `revokedAt` and keeps the row, so the record
+  // of who had access survives. A DELETE verb would promise otherwise.
+  fastify.post<{ Params: { id: string; workspaceId: string } }>(
+    "/accounts/:id/grants/:workspaceId/revoke",
+    async (request, reply) =>
+      respond(reply, async () => {
+        const result = await revokeShare({ connectionId: request.params.id, workspaceId: request.params.workspaceId });
+        // 404 rather than a silent success: "already revoked" and "no such grant"
+        // look identical to the caller otherwise, and the UI would show a
+        // confirmation for something it did not do.
+        if (!result.revoked) throw new WorkspaceError("grant_not_found", "That share has already been revoked.", 404);
+        return { success: true, revoked: true };
+      }),
+  );
 };
+
+/**
+ * WorkspaceError carries the status and a sentence written for the operator.
+ * Rethrowing anything else keeps an unexpected fault a 500 with a stack, rather
+ * than a tidy 400 that hides it.
+ */
+async function respond<T extends object>(reply: FastifyReply, work: () => Promise<T>) {
+  try {
+    return reply.send(await work());
+  } catch (error) {
+    if (error instanceof WorkspaceError) {
+      return reply.code(error.statusCode).send({ success: false, error: error.message, code: error.code });
+    }
+    throw error;
+  }
+}
 
 function hasAnyChannelWithTwo(accounts: AccountRow[]): boolean {
   const counts = new Map<string, number>();

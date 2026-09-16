@@ -326,6 +326,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const roleKey = (req.body?.roleKey ?? '').trim()
       if (!EMAIL_RE.test(email)) return reply.code(400).send({ error: 'Valid email required', code: 'bad_email' })
 
+      // 🔴 BP.S2 — see team.routes.ts. `channelScope` has never been enforced; it is
+      // refused rather than stored, so an invitation cannot promise an account limit
+      // that nothing applies. Per-account limits are set after the person joins.
+      if (req.body?.channelScope != null) {
+        return reply.code(400).send({
+          error: 'Per-account access is set under Account access after the invitation is accepted.',
+          code: 'channel_scope_retired',
+        })
+      }
+
       const role = await (prisma as any).role.findUnique({ where: { key: roleKey }, select: { id: true, name: true, key: true } })
       if (!role) return reply.code(400).send({ error: `Unknown role "${roleKey}"`, code: 'bad_role' })
 
@@ -340,7 +350,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const invite = await (prisma as any).invitation.create({
         data: {
           email, roleId: role.id, tokenHash: hashToken(raw),
-          channelScope: (req.body?.channelScope as any) ?? undefined,
           invitedByUserId: req.authUser!.id, expiresAt,
         },
         select: { id: true, email: true, expiresAt: true },

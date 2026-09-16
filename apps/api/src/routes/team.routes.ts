@@ -126,10 +126,26 @@ const teamRoutes: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const roleKey = (req.body?.roleKey ?? '').trim()
       if (!roleKey) return reply.code(400).send({ error: 'roleKey required', code: 'bad_request' })
+      /*
+       * 🔴 BP.S2 — `channelScope` is refused rather than stored.
+       *
+       * MAP.8 measured it as inert: stored, passed and displayed, enforced NOWHERE.
+       * That was harmless while nothing limited account access. It stops being
+       * harmless now that `nexus_account_restriction` does, because an administrator
+       * could set it, be told it saved, and believe someone was limited when they
+       * were not. Two access fields where one works is exactly the lie an honest UI
+       * forbids. Per-account limits live in `member-account-access.service.ts`.
+       */
+      if (req.body?.channelScope != null) {
+        return reply.code(400).send({
+          error: 'Per-account access is set under Account access, not with a role.',
+          code: 'channel_scope_retired',
+        })
+      }
       const done = await guard(reply, () =>
         assignRole({
           actorIsOwner: actorIsOwner(req), actorUserId: req.authUser!.id,
-          targetUserId: req.params.id, roleKey, channelScope: req.body?.channelScope,
+          targetUserId: req.params.id, roleKey,
         }),
       )
       if (done === undefined && reply.sent) return

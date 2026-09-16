@@ -26,6 +26,7 @@ import type { Prisma } from '@prisma/client'
 import prisma from '../../db.js'
 import { logger } from '../../utils/logger.js'
 import { encryptCredentials, decryptCredentials, isCredentialsBlob, onCredentialsKmsFallback } from '../../lib/crypto.js'
+import { workspaceIdForQuery, WorkspaceError } from '../../lib/workspace-context.js'
 import { recordConnectionEvent, SYSTEM_ACTOR, type Actor } from './events.service.js'
 import { getChannelApp } from './apps.service.js'
 import {
@@ -120,8 +121,56 @@ onCredentialsKmsFallback((reason) => {
 
 type ConnRow = NonNullable<Awaited<ReturnType<typeof prisma.channelConnection.findUnique>>>
 
+/**
+ * BP.S1b — a READ grant must never yield a usable credential.
+ *
+ * Until migration `20260916a` a connection row was visible only to its owning
+ * business, so "I am holding this row" implied "I own it" and nothing here had to
+ * check. `nexus_workspace_grant_read` breaks that implication: a guest business can
+ * now SELECT a shared account.
+ *
+ * RLS cannot close this one. Owner and guest share the single database role
+ * `nexus_workspace_runtime`, so a column-level GRANT cannot tell them apart, and
+ * row access therefore carries the credential columns with it. That leaves exactly
+ * one place to refuse — this module, the only one that decrypts (see the file
+ * header). `CONNECTION_PUBLIC_SELECT` keeps credentials out of what every other
+ * caller reads; this keeps them out of what a guest can USE.
+ *
+ * Fail-closed deliberately. With business profiles on and NO context the adapter
+ * sets `nexus.workspace_id` to '' (packages/database/workspace-adapter.ts:18), so
+ * RLS returns no rows and this cannot be reached today; `workspaceIdForQuery()`
+ * throws there rather than passing, so a future unscoped caller is refused instead
+ * of silently trusted.
+ *
+ * BP.S3 — a `mode = 'publish'` grant now admits a guest as well, because publishing
+ * IS reaching the channel and a publish grant that could not mint a token would be a
+ * button that never works. A `read` grant still cannot, and that is the whole
+ * difference between the two modes.
+ *
+ * 🔴 This is the one place a guest's right to the channel is decided, so it is also
+ * the one place that must stay async-safe: the grant is re-read on every call rather
+ * than cached, so a revoked share stops working on the next push and not at the next
+ * restart.
+ */
+async function assertCredentialOwner(row: Pick<ConnRow, 'id' | 'workspaceId'>): Promise<void> {
+  if (process.env.NEXUS_WORKSPACES_ENABLED !== '1') return
+  const current = workspaceIdForQuery()
+  if (row.workspaceId === current) return
+  const publishGrant = await prisma.channelAccountGrant.findFirst({
+    where: { connectionId: row.id, workspaceId: current, mode: 'publish', revokedAt: null },
+    select: { connectionId: true },
+  })
+  if (publishGrant) return
+  throw new WorkspaceError(
+    'account_not_owned',
+    'This seller account is shared with your business for reading only. Ask its owner for permission to publish.',
+    403,
+  )
+}
+
 /** Read credentials: the envelope first, the legacy plaintext columns as fallback until the backfill nulls them. */
 async function readCredentials(row: ConnRow): Promise<Credentials | null> {
+  await assertCredentialOwner(row)
   if (row.credentialsEnc && isCredentialsBlob(row.credentialsEnc)) {
     const c = (await decryptCredentials(row.credentialsEnc)) as unknown as Credentials
     return c.accessToken ? c : null
@@ -251,6 +300,9 @@ export async function getAccessToken(connectionId: string, opts: { forceRefresh?
   const row = await prisma.channelConnection.findUnique({ where: { id: connectionId } })
   if (!row) throw new Error(`ChannelConnection not found: ${connectionId}`)
   if (row.isActive === false) throw new ConnectionNeedsReauth(connectionId, 'disconnected')
+  // Checked HERE and not only in readCredentials: the env-managed Amazon branch
+  // below mints a token from the environment and never reaches the decrypt path.
+  await assertCredentialOwner(row)
   if (row.managedBy === 'env' && row.channelType === 'AMAZON') return (await import('../../lib/amazon-sp-client.js')).getAmazonAccessToken(row.id)
   if (row.managedBy === 'env') {
     throw new Error(`Connection ${connectionId} is env-managed; its token is minted by the channel client from env until CX.3.`)
