@@ -19,6 +19,8 @@ import {
 } from '../services/assortment/assortment.service.js'
 import { followerDecision, listShares, offerShare, ownerAction } from '../services/assortment/assortment-share.service.js'
 import { isFollowerDecision, isOwnerAction } from '../services/assortment/share-rules.js'
+import { previewCopy } from '../services/assortment/copy-preview.service.js'
+import { advanceCopyRun, confirmCopy, getCopyRun } from '../services/assortment/copy-run.service.js'
 
 type Body = Record<string, unknown> | undefined
 
@@ -59,6 +61,25 @@ const assortmentsRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{ Body: Body }>('/assortment-shares', async (request, reply) =>
     respond(reply, async () => ({ success: true, share: await offerShare(request.body ?? {}) }), 201),
+  )
+
+  // AE.3 — Review 1 of a copy: what would arrive in this (the follower) business. Read-only.
+  fastify.get<{ Params: { id: string }; Querystring: { market?: string } }>('/assortment-shares/:id/copy/preview', async (request, reply) =>
+    respond(reply, async () => ({ success: true, preview: (await previewCopy({ shareId: request.params.id, market: request.query.market ?? '' })).preview })),
+  )
+
+  // AE.3 — confirm a copy: re-checks Review 1, creates the definitions, stages the product review.
+  fastify.post<{ Params: { id: string }; Body: Body }>('/assortment-shares/:id/copy', async (request, reply) =>
+    respond(reply, async () => ({ success: true, run: await confirmCopy({ shareId: request.params.id, ...(request.body ?? {}) }) }), 201),
+  )
+
+  fastify.get<{ Params: { id: string } }>('/assortment-copy-runs/:id', async (request, reply) =>
+    respond(reply, async () => ({ success: true, run: await getCopyRun(request.params.id) })),
+  )
+
+  // Idempotent: finishes the run if its product review has been applied, otherwise reports where it is.
+  fastify.post<{ Params: { id: string } }>('/assortment-copy-runs/:id/advance', async (request, reply) =>
+    respond(reply, async () => ({ success: true, run: await advanceCopyRun(request.params.id) })),
   )
 
   // One route per side keeps the manifest and the audit readable: the owner pauses, resumes and

@@ -147,6 +147,7 @@ export const ENTRIES: Entry[] = [
   // sit at the business-settings bar; the OWNER checks for both sides are in assortment-share.service.
   RW(F.productsView, F.productsEdit, pfx('/api/assortments')),
   P(F.settingsWorkspaceEdit, pfx('/api/assortment-shares')),
+  P(F.settingsWorkspaceEdit, pfx('/api/assortment-copy-runs')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, pfx('/api/connections')),
   RW(F.settingsIntegrationsManage, F.settingsIntegrationsManage, (_m, p) => p.includes('/setup') && p.startsWith('/api/shopify')),
 

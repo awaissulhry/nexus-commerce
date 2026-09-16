@@ -6187,5 +6187,10 @@
         ]
       }
     ]
+  },
+  "AssortmentCopyRun": {
+    "scalar": {},
+    "compound": {},
+    "relations": []
   }
 }

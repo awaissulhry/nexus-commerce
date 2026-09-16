@@ -268,6 +268,7 @@ import { startForecastAccuracyCron } from "./jobs/forecast-accuracy.job.js";
 import { startAutoPoCron } from "./jobs/auto-po-replenishment.job.js";
 import { startLeadTimeStatsCron } from "./jobs/lead-time-stats.job.js";
 import { startStockoutDetectorCron } from "./jobs/stockout-detector.job.js";
+import { startAssortmentCopyCron } from "./jobs/assortment-copy.job.js";
 import { startAbcClassificationCron } from "./jobs/abc-classification.job.js";
 import { startListingQualityKeeperCron } from "./jobs/listing-quality-keeper.job.js";
 import { startPricingWatchdogCron } from "./jobs/pricing-watchdog.job.js";
@@ -1469,6 +1470,12 @@ async function start() {
       // NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON=0.
       if (process.env.NEXUS_ENABLE_STOCKOUT_DETECTOR_CRON !== '0') {
         startStockoutDetectorCron();
+      }
+
+      // AE.3 — finish first copies of shared products whose review was applied while nobody
+      // watched. Every minute, per business, idempotent. Opt out via NEXUS_ENABLE_ASSORTMENT_COPY_CRON=0.
+      if (process.env.NEXUS_ENABLE_ASSORTMENT_COPY_CRON !== '0') {
+        startAssortmentCopyCron();
       }
 
       // R.8 — FBA Restock Inventory Recommendations ingestion. Daily

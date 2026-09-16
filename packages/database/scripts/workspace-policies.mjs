@@ -115,5 +115,7 @@ export function workspacePolicySql() {
   sql.push(readFileSync(new URL('../workspaces/membership-write-guard.sql', import.meta.url), 'utf8'))
   // AE.2 — assortment shares between businesses. Byte-for-byte the tail of 20260916g.
   sql.push(readFileSync(new URL('../workspaces/assortment-share.sql', import.meta.url), 'utf8'))
+  // AE.3 — which products a share covers, and catalog links. Byte-for-byte the tail of 20260916h.
+  sql.push(readFileSync(new URL('../workspaces/assortment-copy.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

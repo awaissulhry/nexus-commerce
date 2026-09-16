@@ -96,10 +96,11 @@ export async function catalogTransferTemplate(market: string, familyId: string, 
   return writeTransferWorkbook(rows, dictionary)
 }
 
-type ExportInput = { skus?: string[]; familyId?: string; market: string; marketplaces?: string[]; effective?: boolean; layout?: 'wide' | 'attributes'; boundary?: ProductTransferBoundary; fields?: string[]; workbookWriter?: (scopes: import('./catalog-workbook.js').WorkbookScope[]) => Promise<Buffer> }
-const productInclude = { translations: true, categories: { select: { categoryId: true, isPrimary: true } }, parent: { include: { translations: true } } } as const
+export type ExportInput = { skus?: string[]; familyId?: string; market: string; marketplaces?: string[]; effective?: boolean; layout?: 'wide' | 'attributes'; boundary?: ProductTransferBoundary; fields?: string[]; workbookWriter?: (scopes: import('./catalog-workbook.js').WorkbookScope[]) => Promise<Buffer> }
+export const productInclude = { translations: true, categories: { select: { categoryId: true, isPrimary: true } }, parent: { include: { translations: true } } } as const
 
-async function catalogRows(
+/** Exported for AE.3 (services/assortment/copy-source.service.ts): the same rows, read in the lending business. */
+export async function catalogRows(
   products: Prisma.ProductGetPayload<{ include: typeof productInclude }>[],
   input: ExportInput,
   contracts: ReturnType<typeof transferContracts>,

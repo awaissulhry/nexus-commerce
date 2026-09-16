@@ -18969,6 +18969,9 @@ model Workspace {
   /// AE.2 — assortments this business offers to others, and those offered to it.
   assortmentSharesOffered AssortmentShare[] @relation("AssortmentShareOwner")
   assortmentSharesReceived AssortmentShare[] @relation("AssortmentShareFollower")
+  /// AE.3 — products this business shares out (source) and follows (target).
+  catalogLinksAsSource CatalogLink[] @relation("CatalogLinkSource")
+  catalogLinksAsTarget CatalogLink[] @relation("CatalogLinkTarget")
   automationResumedAt DateTime?
   isLegacy Boolean @default(false)
   id String @id @default(cuid())
@@ -19261,9 +19264,90 @@ model AssortmentShare {
   endedAt           DateTime?
   updatedAt         DateTime @updatedAt
 
+  links CatalogLink[]
+  copyRuns AssortmentCopyRun[]
+
   @@index([ownerWorkspaceId, status])
   @@index([workspaceId, status])
   @@index([assortmentId])
+}
+
+/// AE.3 — a follower product that follows a source product through one assortment share.
+///
+/// GLOBAL model: it links two businesses. No foreign key to either product — a hard delete of a
+/// product must not erase the record that the link existed. Integrity is a trigger instead
+/// (packages/database/workspaces/assortment-copy.sql): both products belong to the share's two
+/// businesses, the share is active, and the source product is part of the shared assortment.
+/// Never deleted: a link is detached, and an ended share detaches its links.
+model CatalogLink {
+  id String @id @default(cuid())
+
+  shareId String
+  share   AssortmentShare @relation(fields: [shareId], references: [id], onDelete: Restrict)
+
+  sourceWorkspaceId String
+  sourceWorkspace   Workspace @relation("CatalogLinkSource", fields: [sourceWorkspaceId], references: [id], onDelete: Restrict)
+  sourceProductId   String
+
+  targetWorkspaceId String
+  targetWorkspace   Workspace @relation("CatalogLinkTarget", fields: [targetWorkspaceId], references: [id], onDelete: Restrict)
+  targetProductId   String
+
+  /// "created" (the copy made the follower product) or "matched" (an existing product with the same SKU).
+  linkedBy String
+  /// "active" or "detached". Checked in the database.
+  status   String @default("active")
+  /// The source product version the follower product was last brought up to.
+  sourceVersion Int
+
+  createdByUserId String?
+  createdAt       DateTime  @default(now())
+  detachedAt      DateTime?
+  detachedReason  String?
+  updatedAt       DateTime  @updatedAt
+
+  @@index([shareId])
+  @@index([sourceWorkspaceId, sourceProductId])
+  @@index([targetWorkspaceId, targetProductId])
+}
+
+/// AE.3 — one confirmed first copy, in the FOLLOWER business: what was agreed in Review 1, the
+/// definitions it created, the transfer job that carries the product rows (Review 2), and how the
+/// finish step went. Plan: docs/2026-09-16-assortment-engine-plan.md §16.
+model AssortmentCopyRun {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String @id @default(cuid())
+
+  shareId String
+  share   AssortmentShare @relation(fields: [shareId], references: [id], onDelete: Restrict)
+  market  String
+
+  /// preparing | reviewing | finishing | done | partial | failed | abandoned
+  state String @default("preparing")
+  /// The Review 1 fingerprint the owner confirmed.
+  reviewFingerprint String
+  /// For each product whose SKU already existed: "link" or "skip".
+  skuChoices Json
+  /// The products this run copies, with their source ids and versions and owner-managed fields.
+  plan Json
+  /// The families, attributes, options and category paths this run created.
+  definitionsCreated Json?
+  /// The catalog-transfer job (BulkOperation id) that carries the product rows.
+  transferJobId String?
+  /// Finish-step counts: linked, alreadyLinked, notSaved, linkRefused, managedApplied, managedFailed.
+  counts Json?
+  error  String?
+
+  version         Int       @default(1)
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  finishedAt      DateTime?
+
+  @@index([shareId])
+  @@index([state])
+  @@index([workspaceId])
 }
 
 model ChannelAccountRoute {

@@ -21,6 +21,13 @@ vi.mock('../services/assortment/assortment.service.js', () => ({
   }),
   removeMembers: record('removeMembers', { removed: 1, version: 3 }),
 }))
+vi.mock('../services/assortment/copy-preview.service.js', () => ({
+  previewCopy: vi.fn(async (input: { shareId: string; market: string }) => {
+    calls.push({ fn: 'previewCopy', args: [input] })
+    if (!input.market) throw new WorkspaceError('invalid_market', 'Choose the marketplace whose attribute dictionary the copy uses.', 400)
+    return { preview: { shareId: input.shareId, counts: { new: 1 } }, catalog: { rows: ['must not be sent'] } }
+  }),
+}))
 vi.mock('../services/assortment/assortment-share.service.js', () => ({
   listShares: record('listShares', { outgoing: [], incoming: [] }),
   offerShare: record('offerShare', { id: 's1', status: 'pending' }),
@@ -55,6 +62,7 @@ describe('AE.2 routes', () => {
       ['GET', '/api/assortment-shares', 'settings.workspace.edit'],
       ['POST', '/api/assortment-shares', 'settings.workspace.edit'],
       ['POST', '/api/assortment-shares/:id/:action', 'settings.workspace.edit'],
+      ['GET', '/api/assortment-shares/:id/copy/preview', 'settings.workspace.edit'],
     ]
     for (const [method, pattern, permission] of expected) expect(permissionForRoute(method, pattern), `${method} ${pattern}`).toBe(permission)
     // Positive control: each of these patterns is really registered by the plugin, so the mapping
@@ -77,6 +85,15 @@ describe('AE.2 routes', () => {
     const notMine = await app.inject({ method: 'POST', url: '/api/assortment-shares/not-mine/pause', payload: { expectedVersion: 1 } })
     expect(notMine.statusCode).toBe(403)
     expect(notMine.json().code).toBe('share_owner_only')
+  })
+
+  it('the copy preview returns only the review, never the source rows, and needs a market', async () => {
+    const ok = await app.inject({ method: 'GET', url: '/api/assortment-shares/s1/copy/preview?market=IT' })
+    expect(ok.statusCode).toBe(200)
+    expect(ok.json()).toEqual({ success: true, preview: { shareId: 's1', counts: { new: 1 } } })
+    const missing = await app.inject({ method: 'GET', url: '/api/assortment-shares/s1/copy/preview' })
+    expect(missing.statusCode).toBe(400)
+    expect(missing.json().code).toBe('invalid_market')
   })
 
   it('actions route to the right side; an unknown action — including a prototype name — is a 404 that calls nothing', async () => {

@@ -22,7 +22,8 @@
     "WorkspaceMemberAccount",
     "ChannelAccountGrant",
     "ChannelAccountOwnership",
-    "AssortmentShare"
+    "AssortmentShare",
+    "CatalogLink"
   ],
   "workspaceModels": [
     "Product",
@@ -441,6 +442,7 @@
     "ReadinessIndex",
     "SellerReferenceLabel",
     "Assortment",
-    "AssortmentMember"
+    "AssortmentMember",
+    "AssortmentCopyRun"
   ]
 }
