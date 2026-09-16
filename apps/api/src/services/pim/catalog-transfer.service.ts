@@ -257,6 +257,8 @@ async function runCatalogTransfer(jobId: string) {
     // Reload schema contracts after a deployment/schema edit. Target snapshots still guard data.
     clearSheetColumnCache(); clearFieldCatalogueCache()
     const contracts = transferContracts(payload.market)
+    // R-AE-17 — each target is re-planned alone; its inherited language rows must see the whole plan's products.
+    const declaredProductSkus = new Set(payload.plan.targets.filter(t => t.identity.entity === 'Products').map(t => t.identity.sku))
     for (let index = job.processed ?? 0; index < payload.plan.targets.length; index++) {
       const target = payload.plan.targets[index]
       let issue: TransferIssue | null = null
@@ -264,7 +266,7 @@ async function runCatalogTransfer(jobId: string) {
         const context = await loadTransferContext(target.rows)
         // Use upsert for validation: this target's creation/update decision was fixed at preview.
         // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
-        const checked = await buildTransferPlan(target.rows, 'upsert', context, contracts, undefined, { revalidateDeclaredVersion: false })
+        const checked = await buildTransferPlan(target.rows, 'upsert', context, contracts, undefined, { revalidateDeclaredVersion: false, declaredProductSkus })
         const current = checked.targets[0]
         // A newly imported parent can make a formerly missing parent available; the stored patch
         // still names its SKU. All field requirements and write shapes must remain identical.

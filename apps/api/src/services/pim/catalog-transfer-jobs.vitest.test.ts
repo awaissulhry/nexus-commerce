@@ -24,6 +24,7 @@ import { readSourceFile } from './catalog-source-file.js'
 import { mapSourceTable } from './catalog-source-mapping.js'
 import { stageTransferJob, readTransferJob, transferJobStatus, applyTransferJob, transferJobOutcomes, retryTransferJob, recoverTransferJobs } from './catalog-transfer-jobs.js'
 import { inspectCatalogSource, previewCatalogSource, saveSourcePreset } from './catalog-source.service.js'
+import { previewCatalogTransfer, readCatalogTransfer, startCatalogTransfer } from './catalog-transfer.service.js'
 import { ImportWizardService } from '../import-wizard.service.js'
 import type { TransferRow } from '@nexus/shared/catalog-transfer'
 import type { SourceMapping } from './catalog-source-mapping.js'
@@ -240,6 +241,39 @@ describe('durable unified catalog workflow', () => {
     expect(state.store.queries.filter(q => q.model === 'importJobRow' && q.method === 'findMany' && q.args.where?.rowIndex).every(q => q.args.take <= 100)).toBe(true)
     await writeFile('/tmp/nexus-session-two-preview-metrics.json', JSON.stringify({ fixture: '2500 variants / 5000 listings, in-memory query instrumentation', previewMs: Math.round(performance.now() - start), heapDeltaMiB: Math.round((heapAfter - heapBefore) / 1024 / 1024), productReadQueries: productQueries.length, maxProductsPerRead: Math.max(...productQueries.map(q => q.returned)) }, null, 2))
   }, 60_000)
+  it('R-AE-17 — re-imports a family as exported: a variation that inherits its parent\'s German title is saved, not refused', async () => {
+    state.store.seed(2) // p0 = parent 000000, p1 = its variation 000001
+    state.store.data.productTranslation.set('t0', { id: 't0', productId: 'p0', language: 'de', name: 'Deutscher Titel', version: 1, attributes: {}, follows: [] })
+    const review = await stage([
+      row({ sku: '000000', field: 'name', value: 'Changed parent', row: 2 }),
+      row({ sku: '000000', field: 'name', locale: 'de', value: 'Deutscher Titel', row: 3 }),
+      row({ sku: '000001', field: 'name', locale: 'de', action: 'INHERIT', value: 'Deutscher Titel', row: 4 }),
+    ])
+    expect(review.state).toBe('QUEUED')
+    const result = await apply(review.jobId, review.reviewToken!)
+    const outcomes = [...state.store.data.importJobRow.values()].filter(r => r.jobId === review.jobId).map(r => [r.targetId, r.status, r.errorMessage ?? null])
+    expect(outcomes).toEqual([['["Products","000000"]', 'SUCCESS', null], ['["Products","000001"]', 'SUCCESS', null]])
+    expect(result.state).toBe('COMPLETED')
+    expect(state.store.data.product.get('p0')!.name).toBe('Changed parent')
+    // The variation still has no translation of its own: it inherits.
+    expect([...state.store.data.productTranslation.values()].filter(t => t.productId === 'p1')).toEqual([])
+  })
+  it('R-AE-17 — the one-shot review path (presentation assignment) saves the inheriting variation too', async () => {
+    state.store.seed(2)
+    state.store.data.productTranslation.set('t0', { id: 't0', productId: 'p0', language: 'de', name: 'Deutscher Titel', version: 1, attributes: {}, follows: [] })
+    const preview = await previewCatalogTransfer({ rows: [
+      row({ sku: '000000', field: 'name', value: 'Changed parent', row: 2 }),
+      row({ sku: '000000', field: 'name', locale: 'de', value: 'Deutscher Titel', row: 3 }),
+      row({ sku: '000001', field: 'name', locale: 'de', action: 'INHERIT', value: 'Deutscher Titel', row: 4 }),
+    ], issues: [], mode: 'update', market: 'IT', filename: 'assignment.csv', userId: 'owner' })
+    expect(preview.state).toBe('QUEUED')
+    await startCatalogTransfer(preview.jobId, 'owner')
+    let loaded: NonNullable<Awaited<ReturnType<typeof readCatalogTransfer>>>
+    await vi.waitFor(async () => { loaded = (await readCatalogTransfer(preview.jobId, 'owner'))!; expect(['COMPLETED', 'PARTIAL']).toContain(loaded.job.status) }, { timeout: 30_000, interval: 10 })
+    expect(loaded!.job.errors).toEqual([])
+    expect(loaded!.job.status).toBe('COMPLETED')
+    expect(state.store.data.product.get('p0')!.name).toBe('Changed parent')
+  })
   it('orders existing parents before variants across preview pages even when the source is reversed', async () => {
     state.store.seed(130)
     const rows = Array.from({ length: 130 }, (_, i) => row({ sku: String(129 - i).padStart(6, '0'), row: i + 2 }))

@@ -124,6 +124,7 @@ export async function runTransferJob(id: string) {
   if (running.has(id)) return
   running.add(id)
   let autoApply: { userId: string | null; token: string } | undefined
+  let declaredProductSkus: Set<string> | undefined
   try {
     const job = await prisma.bulkOperation.findUnique({ where: { id } }), payload = payloadOf(job?.changes)
     if (!job || !payload || !['PREVIEWING', 'RUNNING'].includes(job.status)) return
@@ -199,6 +200,7 @@ export async function runTransferJob(id: string) {
         Object.assign(payload, next)
         processed = batch[batch.length - 1].rowIndex
       } else {
+        declaredProductSkus ??= await jobProductSkus(id)
         const referenceRows = batch.flatMap(item => (item.parsedValues as unknown as RecordPayload).rows)
         const reference = referenceRows.length ? await loadTransferContext(referenceRows) : undefined
         for (const item of batch) {
@@ -224,7 +226,7 @@ export async function runTransferJob(id: string) {
                 }
                 const context = await loadTransferContext(target.rows, tx as typeof prisma, reference)
                 // LX.F2 R-LX-21 — see `buildTransferPlan`'s `revalidateDeclaredVersion`.
-                const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false })
+                const check = await buildTransferPlan(target.rows, payload.boundary ? 'update' : 'upsert', context, contracts, payload.mapping?.policy, { revalidateDeclaredVersion: false, declaredProductSkus })
                 const current = check.targets[0]
                 if (current?.create && current.identity.entity === 'Products' && record.declaredParent) current.patch.isParent = true
                 if (!current || check.issues.length || current.contractHash !== target.contractHash || fingerprint([current.patch, current.contentWrites]) !== fingerprint([target.patch, target.contentWrites])) throw new TransferConflict(check.issues[0]?.message ?? 'Catalog inputs or ownership changed since preview; review this record again')
@@ -296,6 +298,17 @@ export async function runTransferJob(id: string) {
       })
     }
   }
+}
+/** R-AE-17 — every shared product this job declares, whatever its outcome (see `buildTransferPlan`). */
+async function jobProductSkus(jobId: string) {
+  const skus = new Set<string>()
+  for (const { targetId } of await prisma.importJobRow.findMany({ where: { jobId }, select: { targetId: true } })) {
+    try {
+      const key = JSON.parse(targetId ?? '')
+      if (Array.isArray(key) && key[0] === 'Products' && typeof key[1] === 'string') skus.add(key[1])
+    } catch { /* a record without a destination declares nothing */ }
+  }
+  return skus
 }
 async function transferReceipt(jobId: string, total: number) {
   const [saved, unchanged, failed, excluded] = await Promise.all([

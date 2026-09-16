@@ -297,6 +297,32 @@ describe('LX.F P1-8 / R-LX-8 — an inherited language value on transfer', () =>
   })
 })
 
+describe('R-AE-17 — an inherited language value on the parent\'s own text: preview and apply agree', () => {
+  // The parent HOLDS the German title, so the variation's inherited state carries that text (R-LX-8).
+  const parent = product({ id: 'root', sku: 'PARENT', isParent: true, translations: [{ id: 't1', productId: 'root', language: 'de', name: 'Deutscher Titel', version: 1 }] })
+  const ctx = () => context({ products: new Map([['00123', product({ parentId: 'root', parent })], ['PARENT', parent]]) })
+  const inherited = row({ field: 'name', locale: 'de', action: 'INHERIT', value: 'Deutscher Titel' })
+  const parentTitle = row({ row: 3, sku: 'PARENT', field: 'name', locale: 'de', action: 'SET', value: 'Deutscher Titel' })
+
+  it('inheriting what it already inherits changes nothing: no cell change, no content write', async () => {
+    const plan = await buildTransferPlan([inherited, parentTitle], 'update', ctx(), contracts)
+    expect(plan.issues).toEqual([])
+    const child = plan.targets.find(target => target.identity.sku === '00123')!
+    expect(child.cells.at(-1)).toMatchObject({ beforeState: 'inherited', afterState: 'inherited', verdict: 'unchanged' })
+    expect(child.contentWrites ?? []).toEqual([])
+  })
+
+  it('at apply the record is planned ALONE: an owner declared in the job still counts as in the transfer', async () => {
+    const preview = (await buildTransferPlan([inherited, parentTitle], 'update', ctx(), contracts)).targets.find(target => target.identity.sku === '00123')!
+    const alone = await buildTransferPlan(preview.rows, 'update', ctx(), contracts, undefined, { revalidateDeclaredVersion: false, declaredProductSkus: new Set(['00123', 'PARENT']) })
+    expect(alone.issues).toEqual([])
+    expect([alone.targets[0].patch, alone.targets[0].contentWrites]).toEqual([preview.patch, preview.contentWrites])
+    // CONTROL — without the job's declared SKUs the lone record materialises the text: the plans differ.
+    const unaware = await buildTransferPlan(preview.rows, 'update', ctx(), contracts, undefined, { revalidateDeclaredVersion: false })
+    expect(unaware.targets[0].contentWrites).toMatchObject([{ address: { tier: 'language', language: 'de' }, values: { title: 'Deutscher Titel' } }])
+  })
+})
+
 describe('LX.F F4 — the empty locale on a two-language market says what to do', () => {
   it('names the market and its languages instead of throwing the normaliser sentence', async () => {
     const { transferContentAddress } = await import('./catalog-transfer-content.js')

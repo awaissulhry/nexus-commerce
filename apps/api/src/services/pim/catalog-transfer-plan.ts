@@ -137,8 +137,12 @@ function nativeConstraint(key: string, value: unknown): string | null {
 }
 
 function cell(row: TransferRow, before: { state: 'stored' | 'inherited'; value: unknown }, after: unknown, state: 'stored' | 'inherited'): TransferCell {
-  return { ...row, before: before.value, after, beforeState: before.state, afterState: state,
-    verdict: before.state === state && transferCanonical(before.value) === transferCanonical(after) ? 'unchanged' : 'changed' }
+  // R-AE-17 — an inherited value is not stored on this record, so inheriting it again changes nothing
+  // here. Since R-LX-8 an inherited LANGUAGE state carries its owner's text while the inherit action
+  // carries none; comparing the two called a no-op a change, and the apply then cleared a translation
+  // the variation never had ("… has no de translation to review"). Every other inherited state is null.
+  const unchanged = before.state === state && (state === 'inherited' || transferCanonical(before.value) === transferCanonical(after))
+  return { ...row, before: before.value, after, beforeState: before.state, afterState: state, verdict: unchanged ? 'unchanged' : 'changed' }
 }
 
 /**
@@ -156,7 +160,17 @@ function cell(row: TransferRow, before: { state: 'stored' | 'inherited'; value: 
  * `version` + `updatedAt`. The preview keeps the check (a re-uploaded stale workbook still
  * reads INVALID).
  */
-export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode, context: TransferContext, contracts: TransferContracts, policy?: SourceMapping['policy'], options?: { revalidateDeclaredVersion?: boolean }): Promise<TransferPlan> {
+export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode, context: TransferContext, contracts: TransferContracts, policy?: SourceMapping['policy'], options?: {
+  revalidateDeclaredVersion?: boolean
+  /**
+   * R-AE-17 — the shared products the WHOLE job declares. An apply plans each record alone, but
+   * whether an inherited language value's owner is "in this transfer" (R-LX-8) was answered at
+   * preview for the whole file. Without this the lone record materialises the text, its plan no
+   * longer matches the reviewed one, and the variation is refused ("Catalog inputs or ownership
+   * changed since preview"). The preview needs none: its rows already hold every declared owner.
+   */
+  declaredProductSkus?: ReadonlySet<string>
+}): Promise<TransferPlan> {
   const resolveReference = contracts.reference ?? createReferenceResolver()
   const issues: TransferIssue[] = [], warnings = new Set<string>(), targets: TransferTarget[] = []
   const exclusions: SourceExclusion[] = []
@@ -277,7 +291,8 @@ export async function buildTransferPlan(rows: TransferRow[], mode: TransferMode,
           const inheritedOwnerSku = row.locale && row.action === 'INHERIT' && row.value !== undefined && row.value !== null
             ? [...context.products.values()].find(p => p.id === existingProduct?.parentId)?.sku ?? target.parentSku ?? null
             : null
-          const action = inheritedOwnerSku && !productRows.has(inheritedOwnerSku) ? 'SET' as const : row.action
+          const ownerInTransfer = !!inheritedOwnerSku && (productRows.has(inheritedOwnerSku) || !!options?.declaredProductSkus?.has(inheritedOwnerSku))
+          const action = inheritedOwnerSku && !ownerInTransfer ? 'SET' as const : row.action
           let value = action === 'SET' ? row.value : null
           if (action === 'INHERIT' && old.state !== 'inherited' && !row.locale && col.storage !== 'categoryAttributes' && !existingProduct?.parentId && !target.parentSku) { error(row, 'A root product has no parent value to inherit; use CLEAR for an optional field'); continue }
           // Native fields that have no distinct clear marker must not claim to suppress a parent.
