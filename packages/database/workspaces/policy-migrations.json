@@ -5,5 +5,6 @@
   "account-restriction.sql": "20260916b_bps2_member_account_access",
   "listing-claim.sql": "20260916c_bps3_listing_claim",
   "membership-write-guard.sql": "20260916d_l1_membership_write_guard",
-  "reference-guard.sql": "20260916e_bps3_publish_reference_guard"
+  "reference-guard.sql": "20260916e_bps3_publish_reference_guard",
+  "assortment-share.sql": "20260916g_ae2_assortments"
 }

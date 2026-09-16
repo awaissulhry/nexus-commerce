@@ -428,6 +428,8 @@ model Product {
 
   /// PES.6 wave-4 — operator-authored per-cell formulas.
   cellFormulas CellFormula[]
+  /// AE.2 — assortments this product is a member of (source profile only).
+  assortmentMembers AssortmentMember[]
   @@index([gtin])
   @@index([abcClass])
   @@index([deletedAt])
@@ -18964,6 +18966,9 @@ model Workspace {
   guestAccountGrants ChannelAccountGrant[] @relation("GrantGuest")
   listingClaims ChannelListingClaim[]
   sharedAccountGrants ChannelAccountGrant[] @relation("GrantOwner")
+  /// AE.2 — assortments this business offers to others, and those offered to it.
+  assortmentSharesOffered AssortmentShare[] @relation("AssortmentShareOwner")
+  assortmentSharesReceived AssortmentShare[] @relation("AssortmentShareFollower")
   automationResumedAt DateTime?
   isLegacy Boolean @default(false)
   id String @id @default(cuid())
@@ -19165,6 +19170,100 @@ model ChannelAccountGrant {
   @@id([connectionId, workspaceId])
   @@index([workspaceId])
   @@index([ownerWorkspaceId])
+}
+
+/// AE.2 — a named set of products one business may offer to another business profile.
+/// Plan: docs/2026-09-16-assortment-engine-plan.md §4 and §14.
+model Assortment {
+  // Business ownership comes from verified database context.
+  workspaceId String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  /// "list": the members are the products. "all": every top-level product except the members.
+  /// Values checked in the database (packages/database/workspaces/assortment-share.sql).
+  selection   String  @default("list")
+  /// Bumped on every change; a write naming an older version is refused.
+  version     Int     @default(1)
+  createdByUserId String?
+  /// Archived, never deleted: a share that pointed at it keeps its history.
+  archivedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members AssortmentMember[]
+  shares  AssortmentShare[]
+
+  @@unique([workspaceId, name], name: "workspace_name", map: "Assortment_workspace_name_key")
+  /// Target of AssortmentShare's composite key: a share names the assortment AND its owner,
+  /// so an assortment can only ever be offered by the business it belongs to.
+  @@unique([id, workspaceId], name: "id_workspaceId", map: "Assortment_id_workspaceId_key")
+  @@index([workspaceId])
+}
+
+/// AE.2 — one product in an assortment. Top-level products only: a family's variations follow
+/// their parent (plan §3.3).
+model AssortmentMember {
+  // Business ownership comes from verified database context.
+  workspaceId  String @default(dbgenerated("NULLIF(current_setting('nexus.workspace_id', true), '')"))
+  id           String @id @default(cuid())
+  assortmentId String
+  assortment   Assortment @relation(fields: [assortmentId], references: [id], onDelete: Cascade)
+  productId    String
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// "include" in a "list" assortment, "exclude" in an "all" one. Checked in the database.
+  mode         String @default("include")
+  addedByUserId String?
+  createdAt    DateTime @default(now())
+
+  @@unique([workspaceId, assortmentId, productId], name: "assortmentId_productId", map: "AssortmentMember_assortmentId_productId_key")
+  @@index([productId])
+  @@index([workspaceId])
+}
+
+/// AE.2 — an assortment offered by one business (the owner) to another (the follower).
+///
+/// GLOBAL model: the row links two businesses, so the generated one-business isolation policy
+/// would be wrong for it. Its policies, status guard and answer function live in
+/// packages/database/workspaces/assortment-share.sql, byte-identical to the tail of the
+/// migration named in policy-migrations.json. Never deleted: revoking keeps the row.
+model AssortmentShare {
+  id String @id @default(cuid())
+
+  assortmentId     String
+  /// The OWNER business. Part of the composite key to Assortment(id, workspaceId).
+  ownerWorkspaceId String
+  assortment       Assortment @relation(fields: [assortmentId, ownerWorkspaceId], references: [id, workspaceId], onDelete: Restrict)
+  ownerWorkspace   Workspace  @relation("AssortmentShareOwner", fields: [ownerWorkspaceId], references: [id], onDelete: Restrict)
+
+  /// The FOLLOWER business. Written in the owner's context; answered in the follower's.
+  workspaceId String
+  workspace   Workspace @relation("AssortmentShareFollower", fields: [workspaceId], references: [id], onDelete: Restrict)
+
+  /// pending | active | paused | declined | revoked. Transitions are validated in the database by
+  /// which business is acting (plan §14.3).
+  status String @default("pending")
+  /// Which product fields follow (plan §3.4). Fixed at offer time.
+  fieldGroups String[]
+  /// Whether mapping settings follow too (plan §3.8, AE.5). Fixed at offer time.
+  followSettings Boolean @default(false)
+  version Int @default(1)
+
+  createdByUserId   String
+  createdAt         DateTime @default(now())
+  respondedByUserId String?
+  respondedAt       DateTime?
+  pausedByUserId    String?
+  pausedAt          DateTime?
+  /// "owner" or "follower" — who ended it (a revoke, a withdrawal, a decline or a leave).
+  endedBySide       String?
+  endedByUserId     String?
+  endedAt           DateTime?
+  updatedAt         DateTime @updatedAt
+
+  @@index([ownerWorkspaceId, status])
+  @@index([workspaceId, status])
+  @@index([assortmentId])
 }
 
 model ChannelAccountRoute {

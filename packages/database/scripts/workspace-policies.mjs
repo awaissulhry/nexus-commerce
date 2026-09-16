@@ -7,6 +7,38 @@ const quote = name => {
   return `"${name}"`
 }
 
+/**
+ * The isolation policy and reference-guard trigger for ONE business-owned model, exactly as the
+ * full script emits it. Exported so a migration adding a business-owned table can carry the same
+ * bytes the disposable test database gets (AE.2: 20260916g) instead of a hand-copied policy.
+ */
+export function workspaceModelSql(model) {
+  const tenantModels = new Set(ownership.workspaceModels)
+  if (!tenantModels.has(model)) throw new Error(`${model} is not a business-owned model in model-ownership.json`)
+  const out = []
+  const table = quote(model)
+  const scope = `"workspaceId" = NULLIF(current_setting('nexus.workspace_id', true), '')`
+  // The continuation lines keep their original indentation: it is inside the SQL string, and the
+  // policy text of every business-owned table must stay byte-identical to what was deployed.
+  const access = `EXISTS (SELECT 1 FROM "Workspace" w WHERE w.id = "${model}"."workspaceId" AND w.status = 'active'
+      AND (NULLIF(current_setting('nexus.actor_id', true), '') IS NULL OR EXISTS (
+        SELECT 1 FROM "WorkspaceMembership" m JOIN "UserProfile" u ON u.id = m."userId"
+        WHERE m."workspaceId" = w.id AND m."userId" = current_setting('nexus.actor_id', true)
+          AND m.status = 'active' AND u.status = 'active')))`
+  const condition = model === 'AuditLog'
+    ? `((${scope} AND ${access}) OR ("workspaceId" IS NULL AND NULLIF(current_setting('nexus.workspace_id', true), '') IS NULL))`
+    : `(${scope} AND ${access})`
+  out.push(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`)
+  out.push(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;`)
+  out.push(`DROP POLICY IF EXISTS nexus_workspace_isolation ON ${table};`)
+  out.push(`CREATE POLICY nexus_workspace_isolation ON ${table} FOR ALL TO nexus_workspace_runtime USING (${condition}) WITH CHECK (${condition});`)
+  const relations = keys[model].relations.filter(relation => tenantModels.has(relation.model) && relation.from.length === 1 && relation.to.length === 1)
+    .map(relation => ({ model: relation.model, from: relation.from[0], to: relation.to[0] }))
+  out.push(`DROP TRIGGER IF EXISTS nexus_workspace_references ON ${table};`)
+  out.push(`CREATE TRIGGER nexus_workspace_references BEFORE INSERT OR UPDATE ON ${table} FOR EACH ROW EXECUTE FUNCTION nexus_workspace_reference_guard('${JSON.stringify(relations)}');`)
+  return out
+}
+
 /** Also applied by the disposable database tests; includes real policies and triggers. */
 export function workspacePolicySql() {
   const tenantModels = new Set(ownership.workspaceModels)
@@ -29,26 +61,7 @@ export function workspacePolicySql() {
     sql.push(`GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quote(model)} TO nexus_workspace_runtime;`)
   }
   sql.push('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexus_workspace_runtime;')
-  for (const model of ownership.workspaceModels) {
-    const table = quote(model)
-    const scope = `"workspaceId" = NULLIF(current_setting('nexus.workspace_id', true), '')`
-    const access = `EXISTS (SELECT 1 FROM "Workspace" w WHERE w.id = "${model}"."workspaceId" AND w.status = 'active'
-      AND (NULLIF(current_setting('nexus.actor_id', true), '') IS NULL OR EXISTS (
-        SELECT 1 FROM "WorkspaceMembership" m JOIN "UserProfile" u ON u.id = m."userId"
-        WHERE m."workspaceId" = w.id AND m."userId" = current_setting('nexus.actor_id', true)
-          AND m.status = 'active' AND u.status = 'active')))`
-    const condition = model === 'AuditLog'
-      ? `((${scope} AND ${access}) OR ("workspaceId" IS NULL AND NULLIF(current_setting('nexus.workspace_id', true), '') IS NULL))`
-      : `(${scope} AND ${access})`
-    sql.push(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`)
-    sql.push(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY;`)
-    sql.push(`DROP POLICY IF EXISTS nexus_workspace_isolation ON ${table};`)
-    sql.push(`CREATE POLICY nexus_workspace_isolation ON ${table} FOR ALL TO nexus_workspace_runtime USING (${condition}) WITH CHECK (${condition});`)
-    const relations = keys[model].relations.filter(relation => tenantModels.has(relation.model) && relation.from.length === 1 && relation.to.length === 1)
-      .map(relation => ({ model: relation.model, from: relation.from[0], to: relation.to[0] }))
-    sql.push(`DROP TRIGGER IF EXISTS nexus_workspace_references ON ${table};`)
-    sql.push(`CREATE TRIGGER nexus_workspace_references BEFORE INSERT OR UPDATE ON ${table} FOR EACH ROW EXECUTE FUNCTION nexus_workspace_reference_guard('${JSON.stringify(relations)}');`)
-  }
+  for (const model of ownership.workspaceModels) sql.push(...workspaceModelSql(model))
   sql.push(`CREATE OR REPLACE FUNCTION nexus_channel_route_sync() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
     BEGIN
       IF TG_OP = 'DELETE' THEN DELETE FROM "ChannelAccountRoute" WHERE "connectionId" = OLD.id; RETURN OLD; END IF;
@@ -100,5 +113,7 @@ export function workspacePolicySql() {
   sql.push(readFileSync(new URL('../workspaces/listing-claim.sql', import.meta.url), 'utf8'))
   // L1 — membership/role write protection. Byte-for-byte the tail of 20260916d.
   sql.push(readFileSync(new URL('../workspaces/membership-write-guard.sql', import.meta.url), 'utf8'))
+  // AE.2 — assortment shares between businesses. Byte-for-byte the tail of 20260916g.
+  sql.push(readFileSync(new URL('../workspaces/assortment-share.sql', import.meta.url), 'utf8'))
   return sql.join('\n') + '\n' 
 }

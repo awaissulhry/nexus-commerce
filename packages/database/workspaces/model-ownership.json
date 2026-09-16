@@ -21,7 +21,8 @@
     "WorkspaceMemberAccountLimit",
     "WorkspaceMemberAccount",
     "ChannelAccountGrant",
-    "ChannelAccountOwnership"
+    "ChannelAccountOwnership",
+    "AssortmentShare"
   ],
   "workspaceModels": [
     "Product",
@@ -438,6 +439,8 @@
     "MarketplaceTaxonomyNode",
     "ChannelListingTranslation",
     "ReadinessIndex",
-    "SellerReferenceLabel"
+    "SellerReferenceLabel",
+    "Assortment",
+    "AssortmentMember"
   ]
 }

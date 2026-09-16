@@ -187,6 +187,7 @@ import reviewSendWindowsRoutes from "./routes/review-send-windows.routes.js";
 import connectionsRoutes from "./routes/connections.routes.js";
 // MAP.0/MAP.1 — uncollapsed account list + the single-account diagnostics proof.
 import accountsRoutes from "./routes/accounts.routes.js";
+import assortmentsRoutes from "./routes/assortments.routes.js";
 // CX.1 — connection core
 import "./services/cx/connectors/index.js";
 import cxConnectRoutes from "./routes/cx-connect.routes.js";
@@ -829,6 +830,8 @@ app.register(reviewInsertsRoutes, { prefix: '/api' });
 app.register(reviewSendWindowsRoutes, { prefix: '/api' });
 app.register(connectionsRoutes, { prefix: '/api' });
 app.register(accountsRoutes, { prefix: '/api' });
+// AE.2 — assortments and assortment shares between business profiles.
+app.register(assortmentsRoutes, { prefix: '/api' });
 app.register(cxConnectRoutes, { prefix: '/api' });
 app.register(cxConnectionsRoutes, { prefix: '/api' });
 app.register(reconciliationRoutes, { prefix: '/api' });

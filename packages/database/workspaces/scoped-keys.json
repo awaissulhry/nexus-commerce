@@ -6149,5 +6149,43 @@
       ]
     },
     "relations": []
+  },
+  "Assortment": {
+    "scalar": {
+      "name": "workspace_name"
+    },
+    "compound": {},
+    "relations": []
+  },
+  "AssortmentMember": {
+    "scalar": {},
+    "compound": {
+      "assortmentId_productId": [
+        "assortmentId",
+        "productId"
+      ]
+    },
+    "relations": [
+      {
+        "field": "assortment",
+        "model": "Assortment",
+        "from": [
+          "assortmentId"
+        ],
+        "to": [
+          "id"
+        ]
+      },
+      {
+        "field": "product",
+        "model": "Product",
+        "from": [
+          "productId"
+        ],
+        "to": [
+          "id"
+        ]
+      }
+    ]
   }
 }
