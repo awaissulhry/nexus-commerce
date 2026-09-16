@@ -14,6 +14,7 @@ import { loadChannelPolicies, policyFor } from './sync-control-policy.service.js
 import { coalescePendingQuantityRows } from './sync-coalesce.js'
 import { outboundEnqueuePriority } from './sync-priority.js'
 import { productReadCacheService } from './product-read-cache.service.js'
+import { lockProductStock } from './stock-lock.js'
 
 // S.20 — reasons that consume cost layers (decrease quantity AND
 // realise COGS). Manual-adjustment subtractions also consume; the
@@ -314,7 +315,24 @@ async function resolveLocationId(
  *
  * Returns the StockMovement row.
  */
-export async function applyStockMovement(input: StockMovementInput) {
+export interface StockMovementTxResult {
+  movement: any
+  cascade: CascadeResult
+  /** R.12 — stockout transition snapshot for the post-commit hook. */
+  stockout: { resolvedLocationId: string; prevAvailable: number; nextAvailable: number }
+}
+
+/**
+ * The movement itself, inside a transaction the caller owns: lock, level, audit row, totalStock,
+ * cost layers, lot, cascade and the `inventory.stock_changed` fact. Nothing leaves the database.
+ *
+ * A caller that owns the transaction runs `afterStockMovementCommit` with the result once its
+ * own transaction has committed — otherwise the cascade's queue rows wait for the drain cron.
+ */
+export async function applyStockMovementInTx(
+  tx: Prisma.TransactionClient,
+  input: StockMovementInput,
+): Promise<StockMovementTxResult> {
   const {
     productId,
     variationId,
@@ -331,243 +349,253 @@ export async function applyStockMovement(input: StockMovementInput) {
     returnId,
     reservationId,
     lotId,
-    tx: outerTx,
   } = input
   if (change === 0) throw new Error('applyStockMovement: change must be non-zero')
 
-  // P0/B4 — single transaction body. When the caller supplies an outer
-  // tx (e.g. PATCH /api/products/:id wanting basePrice + totalStock +
-  // direct-fields atomic) we run inside it; otherwise we open our own.
-  // The runner closes over every step including the cascade.
-  const runner = async (
-    tx: Prisma.TransactionClient,
-  ): Promise<{ movement: any; cascade: CascadeResult; stockout: { resolvedLocationId: string; prevAvailable: number; nextAvailable: number } }> => {
-    // H.2 — every movement now resolves to a StockLocation. Legacy
-    // (no locationId, no warehouseId) callers transparently land on
-    // IT-MAIN.
-    const resolvedLocationId = await resolveLocationId(tx, {
-      locationId,
-      warehouseId,
-    })
+  // AE.1 — lock the product BEFORE reading its stock. Every stock writer takes this lock first,
+  // so two writers can never read the same level and both write it (see stock-lock.ts).
+  await lockProductStock(tx, [productId])
 
-    const existing = await tx.stockLevel.findFirst({
-      where: {
-        locationId: resolvedLocationId,
-        productId,
-        variationId: variationId ?? null,
-      },
-      select: { id: true, quantity: true, reserved: true },
-    })
+  // H.2 — every movement now resolves to a StockLocation. Legacy
+  // (no locationId, no warehouseId) callers transparently land on
+  // IT-MAIN.
+  const resolvedLocationId = await resolveLocationId(tx, {
+    locationId,
+    warehouseId,
+  })
 
-    const quantityBefore = existing?.quantity ?? 0
-    const newQuantity = quantityBefore + change
-    if (newQuantity < 0) {
-      throw new Error(
-        `applyStockMovement: would drive StockLevel quantity negative ` +
-          `(product=${productId} location=${resolvedLocationId} ` +
-          `before=${quantityBefore} change=${change})`,
-      )
-    }
-    const reserved = existing?.reserved ?? 0
-    const newAvailable = newQuantity - reserved
-
-    if (existing) {
-      await tx.stockLevel.update({
-        where: { id: existing.id },
-        data: {
-          quantity: newQuantity,
-          available: newAvailable,
-          lastSyncedAt: new Date(),
-        },
-      })
-    } else {
-      await tx.stockLevel.create({
-        data: {
-          locationId: resolvedLocationId,
-          productId,
-          variationId: variationId ?? null,
-          quantity: newQuantity,
-          reserved: 0,
-          available: newAvailable,
-          syncStatus: 'SYNCED',
-          lastSyncedAt: new Date(),
-        },
-      })
-    }
-
-    const balanceAfter = newQuantity
-
-    // P.1 — ProductVariation writes deprecated. The canonical variant
-    // mechanism is Product.parentId; the PV table has zero rows and
-    // the wizard / catalog edit paths that produced mirror rows are
-    // also disabled in this commit. If a caller still passes a
-    // variationId, log a warning so we can find them — but do not
-    // attempt the update (would fail since no PV rows exist anyway).
-    if (variationId) {
-      logger.warn(
-        'applyStockMovement: variationId supplied but ProductVariation writes are deprecated (P.1)',
-        { productId, variationId, change },
-      )
-    }
-
-    // Product.totalStock as cached SUM(StockLevel.quantity) over WAREHOUSE
-    // (FBM / own-shippable) locations only — the merchant pool. FBA and other
-    // channel-mirror locations are excluded (see recomputeProductTotalStock).
-    const newTotalStock = await recomputeProductTotalStock(tx, productId)
-
-    // S.20 — cost-layer hook. Subtractive movements consume layers
-    // (FIFO/LIFO/WAC per Product.costingMethod) and capture COGS on
-    // the audit row. Additive movements that represent receives
-    // create a fresh layer using Product.costPrice as the unit cost
-    // (operator can edit later via the drawer). Variant-only paths
-    // and pure ledger ops (RESERVATION_*, SYNC_RECONCILIATION,
-    // STOCKLEVEL_BACKFILL, PARENT_PRODUCT_CLEANUP) are skipped —
-    // they don't represent real receive/consume events.
-    let cogsCents: number | null = null
-    if (change < 0 && CONSUME_REASONS.has(reason as string)) {
-      try {
-        const r = await consumeLayersInTx(tx, { productId, units: -change })
-        cogsCents = r.cogsCents
-      } catch (err) {
-        logger.warn('applyStockMovement: cost-layer consume failed (continuing without COGS)', {
-          productId, change, reason,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-
-    // T.5 part 1 — stop writing the legacy warehouseId column on new
-    // movements. The argument is still accepted (and used above to
-    // resolve a StockLocation), but the on-row column is set to NULL
-    // so the field can eventually be dropped without a backfill.
-    // Historical rows preserve their warehouseId for audit continuity.
-    const movement = await tx.stockMovement.create({
-      data: {
-        productId,
-        variationId: variationId ?? null,
-        warehouseId: null,
-        locationId: resolvedLocationId,
-        change,
-        balanceAfter,
-        quantityBefore,
-        reason,
-        referenceType: referenceType ?? null,
-        referenceId: referenceId ?? null,
-        notes: notes ?? null,
-        actor: actor ?? null,
-        orderId: orderId ?? null,
-        shipmentId: shipmentId ?? null,
-        returnId: returnId ?? null,
-        reservationId: reservationId ?? null,
-        cogsCents,
-        // L.2 — lot linkage on the audit row. When change < 0 we ALSO
-        // decrement the lot's unitsRemaining below (atomic with the
-        // movement insert).
-        lotId: lotId ?? null,
-      },
-    })
-
-    // L.2 — when a consume movement carries a lotId, decrement that
-    // lot's unitsRemaining inside the same tx. Throws (rolling back
-    // the movement) if the decrement would breach the CHECK or exceed
-    // remaining. Receives don't decrement — the lot is created
-    // separately via createLot which sets unitsRemaining = unitsReceived.
-    if (lotId && change < 0) {
-      const { decrementLotInTx } = await import('./lot.service.js')
-      await decrementLotInTx(tx, lotId, Math.abs(change))
-    }
-
-    // S.20 — receive auto-layer. Fires after the movement row
-    // exists so the layer can carry the stockMovementId backref.
-    // Cost source: Product.costPrice snapshot at receive time.
-    if (change > 0 && RECEIVE_AUTO_LAYER_REASONS.has(reason as string)) {
-      try {
-        const product = await tx.product.findUnique({
-          where: { id: productId },
-          select: { costPrice: true },
-        })
-        const unitCostCents = product?.costPrice == null
-          ? 0
-          : Math.round(Number(product.costPrice) * 100)
-        await receiveLayerInTx(tx, {
-          productId,
-          variationId: variationId ?? undefined,
-          locationId: resolvedLocationId,
-          unitsReceived: change,
-          unitCostCents,
-          stockMovementId: movement.id,
-          notes: `auto-layer: ${reason}`,
-        })
-      } catch (err) {
-        logger.warn('applyStockMovement: cost-layer receive failed (continuing)', {
-          productId, change, reason,
-          error: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
-
-    // Phase 13 — atomic cascade to ChannelListing.
-    //
-    // The product's totalStock just changed; every linked ChannelListing
-    // needs its masterQuantity snapshot updated, and listings that follow
-    // the master need their `quantity` (after stockBuffer subtraction)
-    // updated and flagged for marketplace re-push. We do all of this in
-    // the same transaction as the stock write — failures roll back the
-    // whole movement rather than leaving listings out of date with the
-    // ledger. The previous best-effort/swallow approach masked exactly
-    // the silent-drift bug TECH_DEBT #42 flagged.
-    const cascadeResult = await cascadeQuantityToListings(tx, {
-      productId,
-      newTotalStock,
-      reason,
-      change,
-      referenceType,
-      referenceId,
-      actor,
-    })
-
-    // EV.2 — the fact, recorded in the SAME transaction as the movement it
-    // describes. Not after the commit: a crash in that window would leave the
-    // stock changed with nothing anywhere recording that it had. Rolls back
-    // with the movement, so a failed cascade publishes nothing.
-    //
-    // This does NOT replace the OutboundSyncQueue push path — that stays
-    // exactly as it is. It adds the fact that anything else can subscribe to,
-    // which is what did not exist: every consumer until now had to be wired
-    // into cascadeQuantityToListings by hand.
-    await publishEvent(tx, 'inventory.stock_changed', {
-      productId,
+  const existing = await tx.stockLevel.findFirst({
+    where: {
       locationId: resolvedLocationId,
-      movementId: movement.id,
-      change,
-      quantityBefore,
-      quantityAfter: newQuantity,
-      available: newAvailable,
-      poolTotal: newTotalStock,
-      reason: String(reason),
-      orderId: orderId ?? null,
-    })
+      productId,
+      variationId: variationId ?? null,
+    },
+    select: { id: true, quantity: true, reserved: true },
+  })
 
-    return {
-      movement,
-      cascade: cascadeResult,
-      // R.12 — stockout transition snapshot for the post-tx hook
-      stockout: {
-        resolvedLocationId,
-        prevAvailable: quantityBefore - reserved,
-        nextAvailable: newAvailable,
+  const quantityBefore = existing?.quantity ?? 0
+  const newQuantity = quantityBefore + change
+  if (newQuantity < 0) {
+    throw new Error(
+      `applyStockMovement: would drive StockLevel quantity negative ` +
+        `(product=${productId} location=${resolvedLocationId} ` +
+        `before=${quantityBefore} change=${change})`,
+    )
+  }
+  const reserved = existing?.reserved ?? 0
+  const newAvailable = newQuantity - reserved
+
+  if (existing) {
+    await tx.stockLevel.update({
+      where: { id: existing.id },
+      data: {
+        quantity: newQuantity,
+        available: newAvailable,
+        lastSyncedAt: new Date(),
       },
+    })
+  } else {
+    await tx.stockLevel.create({
+      data: {
+        locationId: resolvedLocationId,
+        productId,
+        variationId: variationId ?? null,
+        quantity: newQuantity,
+        reserved: 0,
+        available: newAvailable,
+        syncStatus: 'SYNCED',
+        lastSyncedAt: new Date(),
+      },
+    })
+  }
+
+  const balanceAfter = newQuantity
+
+  // P.1 — ProductVariation writes deprecated. The canonical variant
+  // mechanism is Product.parentId; the PV table has zero rows and
+  // the wizard / catalog edit paths that produced mirror rows are
+  // also disabled in this commit. If a caller still passes a
+  // variationId, log a warning so we can find them — but do not
+  // attempt the update (would fail since no PV rows exist anyway).
+  if (variationId) {
+    logger.warn(
+      'applyStockMovement: variationId supplied but ProductVariation writes are deprecated (P.1)',
+      { productId, variationId, change },
+    )
+  }
+
+  // Product.totalStock as cached SUM(StockLevel.quantity) over WAREHOUSE
+  // (FBM / own-shippable) locations only — the merchant pool. FBA and other
+  // channel-mirror locations are excluded (see recomputeProductTotalStock).
+  const newTotalStock = await recomputeProductTotalStock(tx, productId)
+
+  // S.20 — cost-layer hook. Subtractive movements consume layers
+  // (FIFO/LIFO/WAC per Product.costingMethod) and capture COGS on
+  // the audit row. Additive movements that represent receives
+  // create a fresh layer using Product.costPrice as the unit cost
+  // (operator can edit later via the drawer). Variant-only paths
+  // and pure ledger ops (RESERVATION_*, SYNC_RECONCILIATION,
+  // STOCKLEVEL_BACKFILL, PARENT_PRODUCT_CLEANUP) are skipped —
+  // they don't represent real receive/consume events.
+  let cogsCents: number | null = null
+  if (change < 0 && CONSUME_REASONS.has(reason as string)) {
+    try {
+      const r = await consumeLayersInTx(tx, { productId, units: -change })
+      cogsCents = r.cogsCents
+    } catch (err) {
+      logger.warn('applyStockMovement: cost-layer consume failed (continuing without COGS)', {
+        productId, change, reason,
+        error: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 
-  // Run inside the caller's tx if supplied; otherwise open our own.
+  // T.5 part 1 — stop writing the legacy warehouseId column on new
+  // movements. The argument is still accepted (and used above to
+  // resolve a StockLocation), but the on-row column is set to NULL
+  // so the field can eventually be dropped without a backfill.
+  // Historical rows preserve their warehouseId for audit continuity.
+  const movement = await tx.stockMovement.create({
+    data: {
+      productId,
+      variationId: variationId ?? null,
+      warehouseId: null,
+      locationId: resolvedLocationId,
+      change,
+      balanceAfter,
+      quantityBefore,
+      reason,
+      referenceType: referenceType ?? null,
+      referenceId: referenceId ?? null,
+      notes: notes ?? null,
+      actor: actor ?? null,
+      orderId: orderId ?? null,
+      shipmentId: shipmentId ?? null,
+      returnId: returnId ?? null,
+      reservationId: reservationId ?? null,
+      cogsCents,
+      // L.2 — lot linkage on the audit row. When change < 0 we ALSO
+      // decrement the lot's unitsRemaining below (atomic with the
+      // movement insert).
+      lotId: lotId ?? null,
+    },
+  })
+
+  // L.2 — when a consume movement carries a lotId, decrement that
+  // lot's unitsRemaining inside the same tx. Throws (rolling back
+  // the movement) if the decrement would breach the CHECK or exceed
+  // remaining. Receives don't decrement — the lot is created
+  // separately via createLot which sets unitsRemaining = unitsReceived.
+  if (lotId && change < 0) {
+    const { decrementLotInTx } = await import('./lot.service.js')
+    await decrementLotInTx(tx, lotId, Math.abs(change))
+  }
+
+  // S.20 — receive auto-layer. Fires after the movement row
+  // exists so the layer can carry the stockMovementId backref.
+  // Cost source: Product.costPrice snapshot at receive time.
+  if (change > 0 && RECEIVE_AUTO_LAYER_REASONS.has(reason as string)) {
+    try {
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { costPrice: true },
+      })
+      const unitCostCents = product?.costPrice == null
+        ? 0
+        : Math.round(Number(product.costPrice) * 100)
+      await receiveLayerInTx(tx, {
+        productId,
+        variationId: variationId ?? undefined,
+        locationId: resolvedLocationId,
+        unitsReceived: change,
+        unitCostCents,
+        stockMovementId: movement.id,
+        notes: `auto-layer: ${reason}`,
+      })
+    } catch (err) {
+      logger.warn('applyStockMovement: cost-layer receive failed (continuing)', {
+        productId, change, reason,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Phase 13 — atomic cascade to ChannelListing.
+  //
+  // The product's totalStock just changed; every linked ChannelListing
+  // needs its masterQuantity snapshot updated, and listings that follow
+  // the master need their `quantity` (after stockBuffer subtraction)
+  // updated and flagged for marketplace re-push. We do all of this in
+  // the same transaction as the stock write — failures roll back the
+  // whole movement rather than leaving listings out of date with the
+  // ledger. The previous best-effort/swallow approach masked exactly
+  // the silent-drift bug TECH_DEBT #42 flagged.
+  const cascadeResult = await cascadeQuantityToListings(tx, {
+    productId,
+    newTotalStock,
+    reason,
+    change,
+    referenceType,
+    referenceId,
+    actor,
+  })
+
+  // EV.2 — the fact, recorded in the SAME transaction as the movement it
+  // describes. Not after the commit: a crash in that window would leave the
+  // stock changed with nothing anywhere recording that it had. Rolls back
+  // with the movement, so a failed cascade publishes nothing.
+  //
+  // This does NOT replace the OutboundSyncQueue push path — that stays
+  // exactly as it is. It adds the fact that anything else can subscribe to,
+  // which is what did not exist: every consumer until now had to be wired
+  // into cascadeQuantityToListings by hand.
+  await publishEvent(tx, 'inventory.stock_changed', {
+    productId,
+    locationId: resolvedLocationId,
+    movementId: movement.id,
+    change,
+    quantityBefore,
+    quantityAfter: newQuantity,
+    available: newAvailable,
+    poolTotal: newTotalStock,
+    reason: String(reason),
+    orderId: orderId ?? null,
+  })
+
+  return {
+    movement,
+    cascade: cascadeResult,
+    // R.12 — stockout transition snapshot for the post-tx hook
+    stockout: {
+      resolvedLocationId,
+      prevAvailable: quantityBefore - reserved,
+      nextAvailable: newAvailable,
+    },
+  }
+}
+
+export async function applyStockMovement(input: StockMovementInput) {
+  if (input.change === 0) throw new Error('applyStockMovement: change must be non-zero')
+  // P0/B4 — run inside the caller's tx if supplied; otherwise open our own.
   // When using the outer tx, the BullMQ enqueue is suppressed — the
   // caller is responsible for adding sync jobs after their own
   // commit completes (otherwise we'd post jobs for a transaction
   // that may roll back). Same shape MasterPriceService uses.
-  const transactionResult = outerTx
-    ? await runner(outerTx)
-    : await prisma.$transaction(runner)
+  if (input.tx) return (await applyStockMovementInTx(input.tx, input)).movement
+  const transactionResult = await prisma.$transaction((tx) => applyStockMovementInTx(tx, input))
+  await afterStockMovementCommit(input, transactionResult)
+  return transactionResult.movement
+}
+
+/**
+ * Post-commit work for one movement: the instant-lane BullMQ push, the stockout hook and the
+ * read-cache refresh. Call it only after the transaction that wrote the movement has committed.
+ */
+export async function afterStockMovementCommit(
+  input: Pick<StockMovementInput, 'productId' | 'reason'>,
+  transactionResult: StockMovementTxResult,
+): Promise<void> {
+  const { productId, reason } = input
 
   // Step 6: BullMQ enqueue happens AFTER the DB transaction commits. If
   // Redis is down, the OutboundSyncQueue rows stay PENDING and the next
@@ -579,7 +607,7 @@ export async function applyStockMovement(input: StockMovementInput) {
   // channels. Manual + system-adjusted edits keep the DEFAULT_HOLD_MS
   // grace for operator "undo" patterns.
   const enqueueDelay = ORDER_DRIVEN_REASONS.has(reason) ? 0 : DEFAULT_HOLD_MS
-  if (!outerTx && transactionResult.cascade.queuedSyncIds.length > 0) {
+  if (transactionResult.cascade.queuedSyncIds.length > 0) {
     const priority =
       process.env.NEXUS_OUTBOUND_PRIORITY === '0' ? undefined : outboundEnqueuePriority(reason)
     for (const queueId of transactionResult.cascade.queuedSyncIds) {
@@ -607,48 +635,44 @@ export async function applyStockMovement(input: StockMovementInput) {
   // R.12 — stockout detection hook. Runs AFTER the transaction
   // commits so we don't open events for movements that get rolled
   // back. Failures must not block the movement; logged + ignored.
-  if (!outerTx) {
-    try {
-      const product = await prisma.product.findUnique({
-        where: { id: productId },
-        select: { sku: true },
-      })
-      if (product) {
-        await handleMovementStockoutTransition({
-          productId,
-          sku: product.sku,
-          locationId: transactionResult.stockout.resolvedLocationId,
-          prevAvailable: transactionResult.stockout.prevAvailable,
-          nextAvailable: transactionResult.stockout.nextAvailable,
-        })
-      }
-    } catch (err) {
-      logger.warn('applyStockMovement: stockout hook failed', {
+  try {
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { sku: true },
+    })
+    if (product) {
+      await handleMovementStockoutTransition({
         productId,
-        err: err instanceof Error ? err.message : String(err),
+        sku: product.sku,
+        locationId: transactionResult.stockout.resolvedLocationId,
+        prevAvailable: transactionResult.stockout.prevAvailable,
+        nextAvailable: transactionResult.stockout.nextAvailable,
       })
     }
-
-    // ES.4 — refresh the ProductReadCache so the product LIST reflects the new
-    // stock. This is the ONLY place every stock change funnels through (bulk
-    // import, orders, returns, manual adjustments), and it was missing: stock
-    // movements never emitted a cache-refresh, so the /products list showed
-    // stock frozen at the last product *edit* — a SET-import looked like it did
-    // nothing. refresh() is a direct DB upsert (no Redis/worker dependency), so
-    // it can't be silently dropped like the BullMQ readCacheQueue path. Fire-
-    // and-forget + fail-open so it never blocks or breaks the movement; the
-    // read-cache reconcile cron is the backstop for any refresh that still fails.
-    void productReadCacheService
-      .refresh(productId)
-      .catch((err) =>
-        logger.warn('applyStockMovement: read-cache refresh failed (reconcile cron will heal)', {
-          productId,
-          err: err instanceof Error ? err.message : String(err),
-        }),
-      )
+  } catch (err) {
+    logger.warn('applyStockMovement: stockout hook failed', {
+      productId,
+      err: err instanceof Error ? err.message : String(err),
+    })
   }
 
-  return transactionResult.movement
+  // ES.4 — refresh the ProductReadCache so the product LIST reflects the new
+  // stock. This is the ONLY place every stock change funnels through (bulk
+  // import, orders, returns, manual adjustments), and it was missing: stock
+  // movements never emitted a cache-refresh, so the /products list showed
+  // stock frozen at the last product *edit* — a SET-import looked like it did
+  // nothing. refresh() is a direct DB upsert (no Redis/worker dependency), so
+  // it can't be silently dropped like the BullMQ readCacheQueue path. Fire-
+  // and-forget + fail-open so it never blocks or breaks the movement; the
+  // read-cache reconcile cron is the backstop for any refresh that still fails.
+  void productReadCacheService
+    .refresh(productId)
+    .catch((err) =>
+      logger.warn('applyStockMovement: read-cache refresh failed (reconcile cron will heal)', {
+        productId,
+        err: err instanceof Error ? err.message : String(err),
+      }),
+    )
 }
 
 interface CascadeArgs {
@@ -1026,6 +1050,9 @@ export async function recascadeProduct(
   }
 
   const result = await prisma.$transaction(async (tx) => {
+    // AE.1 — the cascade reads stock and writes listing quantities; without the lock a
+    // recascade racing a sale can publish the quantity from before the sale.
+    await lockProductStock(tx, [productId])
     const newTotalStock = await recomputeProductTotalStock(tx, productId)
     const cascade = await cascadeQuantityToListings(tx, {
       productId,

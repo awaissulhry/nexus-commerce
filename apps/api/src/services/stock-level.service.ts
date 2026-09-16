@@ -25,7 +25,9 @@ import { workspaceKey } from '@nexus/database/workspace-context'
  */
 
 import prisma from '../db.js'
-import { applyStockMovement } from './stock-movement.service.js'
+import type { Prisma } from '@prisma/client'
+import { afterStockMovementCommit, applyStockMovement } from './stock-movement.service.js'
+import { lockProductStock } from './stock-lock.js'
 // EV.2 — reservation facts, published inside each reservation's own transaction.
 import { publishEvent } from '../lib/events/publish.js'
 
@@ -70,6 +72,12 @@ export interface ReserveStockArgs {
 
 /** Reserve N units. Throws if available < quantity. */
 export async function reserveStock(args: ReserveStockArgs) {
+  if (args.quantity <= 0) throw new Error('reserveStock: quantity must be positive')
+  return await prisma.$transaction((tx) => reserveStockInTx(tx, args))
+}
+
+/** reserveStock inside a transaction the caller owns. Takes the product stock lock first. */
+async function reserveStockInTx(tx: Prisma.TransactionClient, args: ReserveStockArgs) {
   const {
     productId,
     variationId,
@@ -83,81 +91,82 @@ export async function reserveStock(args: ReserveStockArgs) {
   } = args
   if (quantity <= 0) throw new Error('reserveStock: quantity must be positive')
 
-  return await prisma.$transaction(async (tx) => {
-    const sl = await tx.stockLevel.findFirst({
-      where: { productId, locationId, variationId: variationId ?? null },
-      select: { id: true, quantity: true, reserved: true, available: true },
-    })
-    if (!sl) {
-      throw new Error(
-        `reserveStock: no StockLevel for product=${productId} location=${locationId}`,
-      )
-    }
-    if (sl.available < quantity) {
-      throw new Error(
-        `reserveStock: insufficient available (need=${quantity} have=${sl.available} ` +
-          `productId=${productId} locationId=${locationId})`,
-      )
-    }
+  // AE.1 — lock before reading `available`: two buyers must not both see the last unit.
+  await lockProductStock(tx, [productId])
 
-    // RV.1 — only HARD reservations decrement StockLevel.reserved.
-    // SOFT is visible in the StockReservation table but doesn't
-    // affect available calculations.
-    let availableAfter = sl.available
-    if (kind === 'HARD') {
-      const newReserved = sl.reserved + quantity
-      const newAvailable = sl.quantity - newReserved
-      availableAfter = newAvailable
-      await tx.stockLevel.update({
-        where: { id: sl.id },
-        data: { reserved: newReserved, available: newAvailable },
-      })
-    }
-
-    const reservation = await tx.stockReservation.create({
-      data: {
-        stockLevelId: sl.id,
-        quantity,
-        orderId: orderId ?? null,
-        reason,
-        kind,
-        expiresAt: new Date(Date.now() + ttlMs),
-      },
-    })
-
-    // Audit row — quantity unchanged so change=0 would fail the
-    // applyStockMovement guard. Emit directly.
-    await tx.stockMovement.create({
-      data: {
-        productId,
-        variationId: variationId ?? null,
-        locationId,
-        change: 0,
-        balanceAfter: sl.quantity,
-        quantityBefore: sl.quantity,
-        reason: 'RESERVATION_CREATED',
-        referenceType: 'StockReservation',
-        referenceId: reservation.id,
-        orderId: orderId ?? null,
-        reservationId: reservation.id,
-        notes: `Reserved ${quantity} for ${reason}${orderId ? ` (order ${orderId})` : ''}`,
-        actor: actor ?? null,
-      },
-    })
-
-    // EV.2 — same transaction as the reservation itself.
-    await publishEvent(tx, 'inventory.reserved', {
-      productId,
-      reservationId: reservation.id,
-      locationId,
-      quantity,
-      kind: kind === 'SOFT' ? 'SOFT' : 'HARD',
-      availableAfter,
-      orderId: orderId ?? null,
-    })
-
-    return reservation
+  const sl = await tx.stockLevel.findFirst({
+    where: { productId, locationId, variationId: variationId ?? null },
+    select: { id: true, quantity: true, reserved: true, available: true },
   })
+  if (!sl) {
+    throw new Error(
+      `reserveStock: no StockLevel for product=${productId} location=${locationId}`,
+    )
+  }
+  if (sl.available < quantity) {
+    throw new Error(
+      `reserveStock: insufficient available (need=${quantity} have=${sl.available} ` +
+        `productId=${productId} locationId=${locationId})`,
+    )
+  }
+
+  // RV.1 — only HARD reservations decrement StockLevel.reserved.
+  // SOFT is visible in the StockReservation table but doesn't
+  // affect available calculations.
+  let availableAfter = sl.available
+  if (kind === 'HARD') {
+    const newReserved = sl.reserved + quantity
+    const newAvailable = sl.quantity - newReserved
+    availableAfter = newAvailable
+    await tx.stockLevel.update({
+      where: { id: sl.id },
+      data: { reserved: newReserved, available: newAvailable },
+    })
+  }
+
+  const reservation = await tx.stockReservation.create({
+    data: {
+      stockLevelId: sl.id,
+      quantity,
+      orderId: orderId ?? null,
+      reason,
+      kind,
+      expiresAt: new Date(Date.now() + ttlMs),
+    },
+  })
+
+  // Audit row — quantity unchanged so change=0 would fail the
+  // applyStockMovement guard. Emit directly.
+  await tx.stockMovement.create({
+    data: {
+      productId,
+      variationId: variationId ?? null,
+      locationId,
+      change: 0,
+      balanceAfter: sl.quantity,
+      quantityBefore: sl.quantity,
+      reason: 'RESERVATION_CREATED',
+      referenceType: 'StockReservation',
+      referenceId: reservation.id,
+      orderId: orderId ?? null,
+      reservationId: reservation.id,
+      notes: `Reserved ${quantity} for ${reason}${orderId ? ` (order ${orderId})` : ''}`,
+      actor: actor ?? null,
+    },
+  })
+
+  // EV.2 — same transaction as the reservation itself.
+  await publishEvent(tx, 'inventory.reserved', {
+    productId,
+    reservationId: reservation.id,
+    locationId,
+    quantity,
+    kind: kind === 'SOFT' ? 'SOFT' : 'HARD',
+    availableAfter,
+    orderId: orderId ?? null,
+  })
+
+  return reservation
 }
 
 /** Release a reservation without consuming. Decrements StockLevel.reserved. */
@@ -166,6 +175,14 @@ export async function releaseReservation(
   opts: { actor?: string; reason?: string } = {},
 ) {
   return await prisma.$transaction(async (tx) => {
+    const target = await tx.stockReservation.findUnique({
+      where: { id: reservationId },
+      select: { stockLevel: { select: { productId: true } } },
+    })
+    if (!target) throw new Error(`releaseReservation: not found ${reservationId}`)
+    // AE.1 — lock, THEN read the reservation and its level: a concurrent release or
+    // consume may have settled it while this call waited for the lock.
+    await lockProductStock(tx, [target.stockLevel.productId])
     const r = await tx.stockReservation.findUnique({
       where: { id: reservationId },
       include: { stockLevel: true },
@@ -225,69 +242,82 @@ export async function releaseReservation(
 }
 
 /** Consume a reservation (order shipped). Decrements both reserved and
- *  quantity. Emits RESERVATION_CONSUMED audit row. */
+ *  quantity. Emits RESERVATION_CONSUMED audit row.
+ *
+ *  AE.1 — ONE transaction under the product stock lock. Before AE.1 the "already consumed"
+ *  check ran outside any transaction and the stock left in one transaction while `reserved`
+ *  dropped in a second: two concurrent calls both passed the check and took the stock twice
+ *  (measured), and a crash between the two left `reserved` inflated for good. */
 export async function consumeReservation(
   reservationId: string,
   opts: { actor?: string } = {},
 ) {
-  const r = await prisma.stockReservation.findUnique({
-    where: { id: reservationId },
-    include: { stockLevel: true },
-  })
-  if (!r) throw new Error(`consumeReservation: not found ${reservationId}`)
-  if (r.releasedAt) {
-    throw new Error(`consumeReservation: already released ${reservationId}`)
-  }
-  if (r.consumedAt) {
-    return r // idempotent
-  }
-
-  // L.13 — route through consumeWithFefo so lot-tracked products
-  // automatically pick FEFO lots at consume time. Reservations stay
-  // at the StockLevel grain (no lotId on reservation rows) — the
-  // FEFO pick happens at consume time so a recall opened between
-  // reserve and ship transparently re-routes consumption to a
-  // different lot. allowShortfall=true so partial lot coverage
-  // doesn't fail the consume; remainder logs as non-lot stock.
-  //
-  // For untracked products, the wrapper degrades to a single
-  // applyStockMovement — identical to the prior code path.
-  const { consumeWithFefo } = await import('./lot.service.js')
-  await consumeWithFefo({
-    productId: r.stockLevel.productId,
-    variationId: r.stockLevel.variationId ?? undefined,
-    locationId: r.stockLevel.locationId,
-    quantity: r.quantity,
-    reason: 'RESERVATION_CONSUMED',
-    referenceType: 'StockReservation',
-    referenceId: reservationId,
-    orderId: r.orderId ?? undefined,
-    reservationId,
-    actor: opts.actor,
-    allowShortfall: true,
-  })
-
-  return await prisma.$transaction(async (tx) => {
-    const sl = await tx.stockLevel.findUnique({
-      where: { id: r.stockLevelId },
-      select: { quantity: true, reserved: true },
+  const outcome = await prisma.$transaction(async (tx) => {
+    const target = await tx.stockReservation.findUnique({
+      where: { id: reservationId },
+      select: { stockLevel: { select: { productId: true } } },
     })
-    if (!sl) throw new Error('consumeReservation: stockLevel vanished')
-    const newReserved = Math.max(0, sl.reserved - r.quantity)
-    const newAvailable = sl.quantity - newReserved
-    await tx.stockLevel.update({
-      where: { id: r.stockLevelId },
-      data: { reserved: newReserved, available: newAvailable },
+    if (!target) throw new Error(`consumeReservation: not found ${reservationId}`)
+    await lockProductStock(tx, [target.stockLevel.productId])
+
+    const r = await tx.stockReservation.findUnique({
+      where: { id: reservationId },
+      include: { stockLevel: true },
     })
+    if (!r) throw new Error(`consumeReservation: not found ${reservationId}`)
+    if (r.releasedAt) {
+      throw new Error(`consumeReservation: already released ${reservationId}`)
+    }
+    if (r.consumedAt) {
+      return { consumed: r, committed: [] } // idempotent
+    }
+
+    // Settle `reserved` BEFORE the stock leaves, so the cascade inside the movement below
+    // computes available from the final state (quantity − 3 and reserved − 3 together)
+    // instead of publishing a quantity 3 too low. RV.1 — only HARD reservations ever
+    // added to `reserved`.
+    if ((r.kind ?? 'HARD') === 'HARD') {
+      const newReserved = Math.max(0, r.stockLevel.reserved - r.quantity)
+      await tx.stockLevel.update({
+        where: { id: r.stockLevelId },
+        data: { reserved: newReserved, available: r.stockLevel.quantity - newReserved },
+      })
+    }
+
+    // L.13 — route through consumeWithFefo so lot-tracked products
+    // automatically pick FEFO lots at consume time. Reservations stay
+    // at the StockLevel grain (no lotId on reservation rows) — the
+    // FEFO pick happens at consume time so a recall opened between
+    // reserve and ship transparently re-routes consumption to a
+    // different lot. allowShortfall=true so partial lot coverage
+    // doesn't fail the consume; remainder logs as non-lot stock.
+    //
+    // For untracked products, the wrapper degrades to a single
+    // movement — identical to the prior code path.
+    const { consumeWithFefo } = await import('./lot.service.js')
+    const fefo = await consumeWithFefo({
+      productId: r.stockLevel.productId,
+      variationId: r.stockLevel.variationId ?? undefined,
+      locationId: r.stockLevel.locationId,
+      quantity: r.quantity,
+      reason: 'RESERVATION_CONSUMED',
+      referenceType: 'StockReservation',
+      referenceId: reservationId,
+      orderId: r.orderId ?? undefined,
+      reservationId,
+      actor: opts.actor,
+      allowShortfall: true,
+      tx,
+    })
+
     const consumed = await tx.stockReservation.update({
       where: { id: reservationId },
       data: { consumedAt: new Date() },
     })
 
     // The stock leaving was already published as inventory.stock_changed by
-    // consumeWithFefo → applyStockMovement above. This records that the
-    // RESERVATION settled, which is a different fact: it is what closes the
-    // promise made to a buyer.
+    // the movement above. This records that the RESERVATION settled, which is
+    // a different fact: it is what closes the promise made to a buyer.
     await publishEvent(tx, 'inventory.reservation_consumed', {
       productId: r.stockLevel.productId,
       reservationId,
@@ -296,8 +326,13 @@ export async function consumeReservation(
       orderId: r.orderId ?? null,
     })
 
-    return consumed
+    return { consumed, committed: fefo.committed }
   })
+
+  for (const committed of outcome.committed) {
+    await afterStockMovementCommit({ productId: committed.movement.productId, reason: 'RESERVATION_CONSUMED' }, committed)
+  }
+  return outcome.consumed
 }
 
 export interface TransferStockArgs {
@@ -391,29 +426,35 @@ export async function reserveOpenOrder(args: {
   quantity: number
   actor?: string
 }) {
-  const existing = await prisma.stockReservation.findFirst({
-    where: {
-      orderId: args.orderId,
-      releasedAt: null,
-      consumedAt: null,
-      stockLevel: {
-        productId: args.productId,
-        variationId: args.variationId ?? null,
+  return await prisma.$transaction(async (tx) => {
+    // AE.1 — the "already reserved?" check runs under the same lock as the reservation.
+    // Checked outside it, a webhook and a poll for one order both found nothing and both
+    // reserved (measured: two reservations for one order).
+    await lockProductStock(tx, [args.productId])
+    const existing = await tx.stockReservation.findFirst({
+      where: {
+        orderId: args.orderId,
+        releasedAt: null,
+        consumedAt: null,
+        stockLevel: {
+          productId: args.productId,
+          variationId: args.variationId ?? null,
+        },
       },
-    },
-    select: { id: true, quantity: true },
-  })
-  if (existing) return existing
+      select: { id: true, quantity: true },
+    })
+    if (existing) return existing
 
-  return await reserveStock({
-    productId: args.productId,
-    variationId: args.variationId,
-    locationId: args.locationId,
-    quantity: args.quantity,
-    orderId: args.orderId,
-    reason: 'OPEN_ORDER',
-    ttlMs: OPEN_ORDER_TTL_MS,
-    actor: args.actor,
+    return await reserveStockInTx(tx, {
+      productId: args.productId,
+      variationId: args.variationId,
+      locationId: args.locationId,
+      quantity: args.quantity,
+      orderId: args.orderId,
+      reason: 'OPEN_ORDER',
+      ttlMs: OPEN_ORDER_TTL_MS,
+      actor: args.actor,
+    })
   })
 }
 

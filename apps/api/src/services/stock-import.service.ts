@@ -38,6 +38,7 @@ import { computeAvailableToPublish } from './available-to-publish.service.js'
 import { buildSharedFanoutRows, type SharedMembershipRow } from './ebay-shared-fanout.service.js'
 import { handleMovementStockoutTransition } from './stockout-detector.service.js'
 import { productReadCacheService } from './product-read-cache.service.js'
+import { lockProductStock } from './stock-lock.js'
 import { outboundSyncQueue, addJobSafely } from '../lib/queue.js'
 import { logger } from '../utils/logger.js'
 
@@ -598,16 +599,21 @@ export async function ensureDraftImportJob(opts: {
 // The IM.1/IM.2 engine applied rows one at a time: each row opened its own
 // transaction and re-ran the full per-product cascade (~15-17 queries/row —
 // a 500-row file cost ~8,500 sequential queries inside one HTTP request).
-// This engine plans everything in memory from batched pre-reads, then writes
-// in chunked transactions with set-based (unnest) updates:
+// This engine works in chunks of NEXUS_IMPORT_CHUNK_PRODUCTS products
+// (default 50). Each chunk is ONE transaction that locks, reads, plans and
+// writes with set-based (unnest) updates:
 //
-//   plan  — per-product movement chains (dup-SKU rows stay sequentially
-//           correct), negative guards, channel-listing arithmetic, and ONE
-//           cascade per product computed at FINAL state (not one per row).
-//   write — chunks of NEXUS_IMPORT_CHUNK_PRODUCTS products (default 50);
-//           per chunk one transaction. A failed chunk falls back to
-//           per-product transactions so one bad product fails alone and
-//           per-row error reporting survives.
+//   lock  — AE.1: lockProductStock for the chunk's products, the lock every
+//           stock writer takes first, so no sale interleaves with the chunk.
+//   plan  — from batched reads taken UNDER that lock: per-product movement
+//           chains (dup-SKU rows stay sequentially correct), negative guards,
+//           channel-listing arithmetic, and ONE cascade per product computed
+//           at FINAL state (not one per row). (Before AE.1 every product was
+//           planned up front and written seconds later, overwriting any sale
+//           committed in between.)
+//   write — the plan, in the same transaction. A failed chunk falls back to
+//           per-product transactions (lock, plan, write again) so one bad
+//           product fails alone and per-row error reporting survives.
 //   after — one BullMQ enqueue pass, one stockout check and one read-cache
 //           refresh per product (not per row).
 //
@@ -830,414 +836,444 @@ async function executeApplyImport(args: {
   const wantsWarehouse = target !== 'CHANNEL'
   const wantsChannel = target !== 'WAREHOUSE'
 
-  // ── Batched pre-reads (fixed query count regardless of row count) ───────────
-  const [locLevels, allLevels, productMeta, allListings, memberships] = await Promise.all([
-    wantsWarehouse && productIds.length > 0
-      ? prisma.stockLevel.findMany({
-          where: { locationId: location.id, productId: { in: productIds }, variationId: null },
-          select: { id: true, productId: true, quantity: true, reserved: true },
-        })
-      : [],
-    // IM.3.3 — loaded for CHANNEL targets too: the explicit writer needs the
-    // per-product FBA bucket to resolve (and exclude) FBA-backed listings.
-    productIds.length > 0
-      ? prisma.stockLevel.findMany({
-          where: { productId: { in: productIds } },
-          select: {
-            id: true, productId: true, locationId: true, variationId: true,
-            quantity: true, available: true,
-            location: { select: { type: true, code: true, syncRoutes: true } },
-          },
-        })
-      : [],
-    productIds.length > 0
-      ? prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, sku: true, fulfillmentMethod: true },
-        })
-      : [],
-    productIds.length > 0
-      ? prisma.channelListing.findMany({
-          where: { productId: { in: productIds } },
-          select: {
-            id: true, productId: true, channel: true, region: true, marketplace: true,
-            externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
-            followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
-            listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
-          },
-        })
-      : [],
-    wantsWarehouse && productIds.length > 0
-      ? prisma.sharedListingMembership.findMany({
-          where: { productId: { in: productIds }, status: 'ACTIVE' },
-          select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
-        })
-      : [],
-  ])
-
-  const locLevelByProduct = new Map(locLevels.map((l) => [l.productId, l] as const))
-  const metaByProduct = new Map(productMeta.map((p) => [p.id, p] as const))
-  const levelsByProduct = new Map<string, typeof allLevels>()
-  for (const lvl of allLevels) {
-    const arr = levelsByProduct.get(lvl.productId)
-    if (arr) arr.push(lvl)
-    else levelsByProduct.set(lvl.productId, [lvl])
-  }
-  const listingsByProduct = new Map<string, typeof allListings>()
-  for (const cl of allListings) {
-    const arr = listingsByProduct.get(cl.productId)
-    if (arr) arr.push(cl)
-    else listingsByProduct.set(cl.productId, [cl])
-  }
-  const membershipsByProduct = new Map<string, typeof memberships>()
-  for (const m of memberships) {
-    if (!m.productId) continue
-    const arr = membershipsByProduct.get(m.productId)
-    if (arr) arr.push(m)
-    else membershipsByProduct.set(m.productId, [m])
-  }
-  // IM.3.3 — per-product FBA bucket for listing-method resolution in the
-  // explicit channel path (cascade computes its own inline, unchanged).
-  const fbaBucketByProduct = new Map<string, number>()
-  for (const lvl of allLevels) {
-    if (lvl.location?.type === 'AMAZON_FBA') {
-      fbaBucketByProduct.set(lvl.productId, (fbaBucketByProduct.get(lvl.productId) ?? 0) + lvl.quantity)
-    }
-  }
-
-  // ── Plan: per-product movement chains + channel arithmetic (in memory) ──────
-  const plans = new Map<string, ProductPlan>()
-  const planFor = (productId: string): ProductPlan => {
-    let plan = plans.get(productId)
-    if (!plan) {
-      const lvl = locLevelByProduct.get(productId)
-      plan = {
-        productId,
-        sku: metaByProduct.get(productId)?.sku ?? '?',
-        rowSlots: [],
-        movements: [],
-        stockLevelId: lvl?.id ?? null,
-        baseQty: lvl?.quantity ?? 0,
-        reserved: lvl?.reserved ?? 0,
-        finalQty: lvl?.quantity ?? 0,
-        newTotalStock: null,
-        cascadeWrites: [],
-        snapshotWrites: [],
-        explicitWrites: [],
-        queueRows: [],
-      }
-      plans.set(productId, plan)
-    }
-    return plan
-  }
-
-  // Explicit CHANNEL/BOTH targets: listingId → owning plan + listing row.
-  // Populated in file order; the FINAL effective value per listing is what
-  // gets written and enqueued (the per-row engine wrote every intermediate
-  // value and coalesced the queue rows — same net outcome, one write).
-  const listingEffectiveQty = new Map<string, number>()
-  const explicitTargets = new Map<string, { plan: ProductPlan; listing: (typeof allListings)[number] }>()
-
-  for (const slot of slots) {
-    if (slot.skipped || slot.error) continue
-    const row = slot.row
-    const productId = row.productId as string
-
-    // IM.3.3 — server-side identity re-validation. Apply consumes the
-    // client's preview rows; the (productId, resolvedSku) pair must still
-    // match the live catalog or the row is refused (tampered payload, or a
-    // product renamed/deleted since preview).
-    const identity = metaByProduct.get(productId)
-    if (!identity || identity.sku !== row.resolvedSku) {
-      slot.error = identity
-        ? `Row identity mismatch (SKU is now '${identity.sku}') — re-run Preview`
-        : 'Product no longer exists — re-run Preview'
-      continue
-    }
-
-    const plan = planFor(productId)
-    plan.rowSlots.push(slot)
-
-    // ── Warehouse chain (dup-SKU rows stay sequentially correct) ──
-    if (wantsWarehouse) {
-      if (mode === 'SET') {
-        const delta = row.quantity - plan.finalQty
-        if (row.quantity < 0) {
-          slot.error =
-            `applyStockMovement: would drive StockLevel quantity negative ` +
-            `(product=${productId} location=${location.id} ` +
-            `before=${plan.finalQty} change=${delta})`
-          continue
-        }
-        if (delta !== 0) {
-          plan.movements.push({
-            change: delta,
-            quantityBefore: plan.finalQty,
-            balanceAfter: row.quantity,
-            notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
-          })
-          plan.finalQty = row.quantity
-        }
-        slot.warehouseApplied = true
-      } else if (row.quantity !== 0) {
-        const next = plan.finalQty + row.quantity
-        if (next < 0) {
-          slot.error =
-            `applyStockMovement: would drive StockLevel quantity negative ` +
-            `(product=${productId} location=${location.id} ` +
-            `before=${plan.finalQty} change=${row.quantity})`
-          continue
-        }
-        plan.movements.push({
-          change: row.quantity,
-          quantityBefore: plan.finalQty,
-          balanceAfter: next,
-          notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
-        })
-        plan.finalQty = next
-        slot.warehouseApplied = true
-      }
-      // ADJUST of 0 is a valid no-op (parity: no movement, row still succeeds)
-    }
-
-    // ── Channel listing arithmetic (explicit CHANNEL/BOTH writes) ──
-    if (wantsChannel) {
-      const cls = (listingsByProduct.get(productId) ?? [])
-        .filter((cl) => cl.listingStatus !== 'ENDED')
-        .filter((cl) => EXPLICIT_CHANNELS.has(cl.channel))
-        // IM.3.3 — FBA-backed listings are Amazon-managed: never write their
-        // local quantity (the old engine wrote it and relied on the dispatch
-        // guard to block only the marketplace push).
-        .filter((cl) => resolveListingFulfillmentMethod({
-          listingFulfillmentMethod: cl.fulfillmentMethod,
-          channel: cl.channel,
-          fbaBucket: fbaBucketByProduct.get(productId) ?? 0,
-          productFulfillmentMethod: metaByProduct.get(productId)?.fulfillmentMethod ?? null,
-        }) === 'FBM')
-        .filter((cl) => !row.channel || cl.channel === row.channel)
-        .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
-      if (cls.length === 0) {
-        const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
-        const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
-        if (target === 'CHANNEL') slot.error = msg
-        // BOTH: warehouse already applied — surfaced via channelApplied=false
-      } else {
-        for (const cl of cls) {
-          const current = listingEffectiveQty.get(cl.id) ?? cl.quantityOverride ?? cl.quantity ?? 0
-          const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
-          listingEffectiveQty.set(cl.id, newQty)
-          explicitTargets.set(cl.id, { plan, listing: cl })
-        }
-        slot.channelApplied = true
-      }
-    }
-  }
-
-  // Per-product explicit-listing id set (the cascade must not double-write
-  // these — the explicit channel value wins, exactly like the old engine's
-  // channel block overwriting the cascade's value).
-  const explicitIdsByProduct = new Map<string, Set<string>>()
-  for (const [listingId, t] of explicitTargets) {
-    const set = explicitIdsByProduct.get(t.plan.productId) ?? new Set<string>()
-    set.add(listingId)
-    explicitIdsByProduct.set(t.plan.productId, set)
-  }
-
+  // SC.1b — channel policies once per apply run. The hold window is fixed at apply start.
+  const scPoliciesImport = await loadChannelPolicies()
   const holdUntil = new Date(Date.now() + IMPORT_HOLD_MS)
 
-  // SC.1b — channel policies once per apply run.
-  const scPoliciesImport = await loadChannelPolicies()
+  // AE.1 — applicable row slots per product, in file order.
+  const slotsByProduct = new Map<string, RowSlot[]>()
+  for (const slot of applicable) {
+    const productId = slot.row.productId as string
+    const arr = slotsByProduct.get(productId)
+    if (arr) arr.push(slot)
+    else slotsByProduct.set(productId, [slot])
+  }
 
-  // ── Plan: ONE cascade per product at FINAL state ────────────────────────────
-  for (const plan of plans.values()) {
-    if (!wantsWarehouse || plan.movements.length === 0) continue
-    const { productId } = plan
-    const meta = metaByProduct.get(productId)
-    const explicitIds = explicitIdsByProduct.get(productId) ?? new Set<string>()
+  /**
+   * AE.1 — plan a set of products from stock read INSIDE the caller's transaction, after
+   * `lockProductStock`. Before AE.1 every product was planned up front from reads taken
+   * before any write, then written chunk by chunk seconds later with absolute values — a
+   * sale committed in between was overwritten (measured: ADJUST +5 on 10 with one sale in
+   * the window wrote 15, not 14). Reading under the lock closes that window.
+   *
+   * Row slots are reset first, so a chunk that rolled back and is retried per product
+   * never keeps a verdict computed from the discarded attempt.
+   */
+  const planProducts = async (db: Prisma.TransactionClient, chunkProductIds: string[]): Promise<ProductPlan[]> => {
+    const chunkSlots = chunkProductIds.flatMap((id) => slotsByProduct.get(id) ?? [])
+    for (const slot of chunkSlots) {
+      slot.error = undefined
+      slot.warehouseApplied = false
+      slot.channelApplied = false
+    }
 
-    // Recompute totalStock + pools in memory, substituting this import's
-    // final qty for the import-location row (recomputeProductTotalStock /
-    // cascadeQuantityToListings parity: WAREHOUSE-only pool, FBA bucket).
-    let total = 0
-    let warehouseAvailable = 0
-    let fbaBucket = 0
-    // SC.1b — routed-ledger rows (import-substituted) for the derivation core.
-    const scLedger: { locationCode: string; available: number; syncRoutes: string[] }[] = []
-    let sawImportRow = false
-    for (const lvl of levelsByProduct.get(productId) ?? []) {
-      const isImportRow = lvl.locationId === location.id && lvl.variationId === null
-      if (isImportRow) sawImportRow = true
-      const qty = isImportRow ? plan.finalQty : lvl.quantity
-      const avail = isImportRow ? plan.finalQty - plan.reserved : lvl.available
-      if (lvl.location?.type === 'WAREHOUSE') {
-        total += qty
-        warehouseAvailable += avail
-        scLedger.push({
-          locationCode: (lvl.location as { code?: string })?.code ?? '?',
-          available: avail,
-          syncRoutes: (lvl.location as { syncRoutes?: string[] })?.syncRoutes ?? [],
-        })
-      } else if (lvl.location?.type === 'AMAZON_FBA') {
-        fbaBucket += lvl.quantity
+    // ── Batched pre-reads (fixed query count regardless of row count) ───────────
+    const [locLevels, allLevels, productMeta, allListings, memberships] = await Promise.all([
+      wantsWarehouse && chunkProductIds.length > 0
+        ? db.stockLevel.findMany({
+            where: { locationId: location.id, productId: { in: chunkProductIds }, variationId: null },
+            select: { id: true, productId: true, quantity: true, reserved: true },
+          })
+        : [],
+      // IM.3.3 — loaded for CHANNEL targets too: the explicit writer needs the
+      // per-product FBA bucket to resolve (and exclude) FBA-backed listings.
+      chunkProductIds.length > 0
+        ? db.stockLevel.findMany({
+            where: { productId: { in: chunkProductIds } },
+            select: {
+              id: true, productId: true, locationId: true, variationId: true,
+              quantity: true, available: true,
+              location: { select: { type: true, code: true, syncRoutes: true } },
+            },
+          })
+        : [],
+      chunkProductIds.length > 0
+        ? db.product.findMany({
+            where: { id: { in: chunkProductIds } },
+            select: { id: true, sku: true, fulfillmentMethod: true },
+          })
+        : [],
+      chunkProductIds.length > 0
+        ? db.channelListing.findMany({
+            where: { productId: { in: chunkProductIds } },
+            select: {
+              id: true, productId: true, channel: true, region: true, marketplace: true,
+              externalListingId: true, quantity: true, masterQuantity: true, stockBuffer: true,
+              followMasterQuantity: true, fulfillmentMethod: true, quantityOverride: true,
+              listingStatus: true, syncPaused: true, sourceLocationCodes: true, offerClosedAt: true,
+            },
+          })
+        : [],
+      wantsWarehouse && chunkProductIds.length > 0
+        ? db.sharedListingMembership.findMany({
+            where: { productId: { in: chunkProductIds }, status: 'ACTIVE' },
+            select: { sku: true, itemId: true, marketplace: true, productId: true, lastQtyPushed: true, followPool: true, stockBuffer: true },
+          })
+        : [],
+    ])
+
+    const locLevelByProduct = new Map(locLevels.map((l) => [l.productId, l] as const))
+    const metaByProduct = new Map(productMeta.map((p) => [p.id, p] as const))
+    const levelsByProduct = new Map<string, typeof allLevels>()
+    for (const lvl of allLevels) {
+      const arr = levelsByProduct.get(lvl.productId)
+      if (arr) arr.push(lvl)
+      else levelsByProduct.set(lvl.productId, [lvl])
+    }
+    const listingsByProduct = new Map<string, typeof allListings>()
+    for (const cl of allListings) {
+      const arr = listingsByProduct.get(cl.productId)
+      if (arr) arr.push(cl)
+      else listingsByProduct.set(cl.productId, [cl])
+    }
+    const membershipsByProduct = new Map<string, typeof memberships>()
+    for (const m of memberships) {
+      if (!m.productId) continue
+      const arr = membershipsByProduct.get(m.productId)
+      if (arr) arr.push(m)
+      else membershipsByProduct.set(m.productId, [m])
+    }
+    // IM.3.3 — per-product FBA bucket for listing-method resolution in the
+    // explicit channel path (cascade computes its own inline, unchanged).
+    const fbaBucketByProduct = new Map<string, number>()
+    for (const lvl of allLevels) {
+      if (lvl.location?.type === 'AMAZON_FBA') {
+        fbaBucketByProduct.set(lvl.productId, (fbaBucketByProduct.get(lvl.productId) ?? 0) + lvl.quantity)
       }
     }
-    if (!sawImportRow && location.type === 'WAREHOUSE') {
-      // Level row doesn't exist yet — the chunk write will create it.
-      total += plan.finalQty
-      warehouseAvailable += plan.finalQty
-      scLedger.push({
-        locationCode: (location as { code?: string })?.code ?? '?',
-        available: plan.finalQty,
-        syncRoutes: (location as { syncRoutes?: string[] })?.syncRoutes ?? [],
-      })
-    }
-    plan.newTotalStock = total
-    const netChange = plan.finalQty - plan.baseQty
 
-    for (const listing of listingsByProduct.get(productId) ?? []) {
-      if (explicitIds.has(listing.id)) continue // explicit value wins (BOTH)
-      // AS.5 — cascade parity: same dispatch-guard-aligned resolver as
-      // cascadeQuantityToListings (FBA-signal veto for AMAZON listings).
-      const method = resolveCascadePushMethod({
-        listingFulfillmentMethod: listing.fulfillmentMethod,
-        channel: listing.channel,
-        fbaBucket,
-        productFulfillmentMethod: meta?.fulfillmentMethod ?? null,
-      })
-      // SC.1b — the derivation core is the quantity authority here too
-      // (routing + pause + policy + pin + FBA precedence, import-substituted
-      // ledger). PAUSED/UNCOUNTED/PINNED/FBA → no cascade write from import.
-      const scRes = resolveIntendedQuantity({
-        channel: listing.channel,
-        marketplace: listing.marketplace,
-        isFba: method === 'FBA',
-        offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
-        followMasterQuantity: listing.followMasterQuantity,
-        syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
-        pinnedQuantity: listing.quantity,
-        stockBuffer: listing.stockBuffer ?? 0,
-        sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
-        channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace),
-        ledger: scLedger,
-      })
-      const newListingQty = scRes.kind === 'FOLLOW' ? scRes.quantity : null
-      if (newListingQty != null && newListingQty !== listing.quantity) {
-        plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: total, quantity: newListingQty })
-        if (VALID_SYNC_TARGETS.has(listing.channel)) {
+    // ── Plan: per-product movement chains + channel arithmetic (in memory) ──────
+    const plans = new Map<string, ProductPlan>()
+    const planFor = (productId: string): ProductPlan => {
+      let plan = plans.get(productId)
+      if (!plan) {
+        const lvl = locLevelByProduct.get(productId)
+        plan = {
+          productId,
+          sku: metaByProduct.get(productId)?.sku ?? '?',
+          rowSlots: [],
+          movements: [],
+          stockLevelId: lvl?.id ?? null,
+          baseQty: lvl?.quantity ?? 0,
+          reserved: lvl?.reserved ?? 0,
+          finalQty: lvl?.quantity ?? 0,
+          newTotalStock: null,
+          cascadeWrites: [],
+          snapshotWrites: [],
+          explicitWrites: [],
+          queueRows: [],
+        }
+        plans.set(productId, plan)
+      }
+      return plan
+    }
+
+    // Explicit CHANNEL/BOTH targets: listingId → owning plan + listing row.
+    // Populated in file order; the FINAL effective value per listing is what
+    // gets written and enqueued (the per-row engine wrote every intermediate
+    // value and coalesced the queue rows — same net outcome, one write).
+    const listingEffectiveQty = new Map<string, number>()
+    const explicitTargets = new Map<string, { plan: ProductPlan; listing: (typeof allListings)[number] }>()
+
+    for (const slot of chunkSlots) {
+      if (slot.skipped || slot.error) continue
+      const row = slot.row
+      const productId = row.productId as string
+
+      // IM.3.3 — server-side identity re-validation. Apply consumes the
+      // client's preview rows; the (productId, resolvedSku) pair must still
+      // match the live catalog or the row is refused (tampered payload, or a
+      // product renamed/deleted since preview).
+      const identity = metaByProduct.get(productId)
+      if (!identity || identity.sku !== row.resolvedSku) {
+        slot.error = identity
+          ? `Row identity mismatch (SKU is now '${identity.sku}') — re-run Preview`
+          : 'Product no longer exists — re-run Preview'
+        continue
+      }
+
+      const plan = planFor(productId)
+      plan.rowSlots.push(slot)
+
+      // ── Warehouse chain (dup-SKU rows stay sequentially correct) ──
+      if (wantsWarehouse) {
+        if (mode === 'SET') {
+          const delta = row.quantity - plan.finalQty
+          if (row.quantity < 0) {
+            slot.error =
+              `applyStockMovement: would drive StockLevel quantity negative ` +
+              `(product=${productId} location=${location.id} ` +
+              `before=${plan.finalQty} change=${delta})`
+            continue
+          }
+          if (delta !== 0) {
+            plan.movements.push({
+              change: delta,
+              quantityBefore: plan.finalQty,
+              balanceAfter: row.quantity,
+              notes: row.notes ?? `[SET ${row.quantity}] ${row.raw}`,
+            })
+            plan.finalQty = row.quantity
+          }
+          slot.warehouseApplied = true
+        } else if (row.quantity !== 0) {
+          const next = plan.finalQty + row.quantity
+          if (next < 0) {
+            slot.error =
+              `applyStockMovement: would drive StockLevel quantity negative ` +
+              `(product=${productId} location=${location.id} ` +
+              `before=${plan.finalQty} change=${row.quantity})`
+            continue
+          }
+          plan.movements.push({
+            change: row.quantity,
+            quantityBefore: plan.finalQty,
+            balanceAfter: next,
+            notes: row.notes ?? `[ADJUST ${row.quantity > 0 ? '+' : ''}${row.quantity}] ${row.raw}`,
+          })
+          plan.finalQty = next
+          slot.warehouseApplied = true
+        }
+        // ADJUST of 0 is a valid no-op (parity: no movement, row still succeeds)
+      }
+
+      // ── Channel listing arithmetic (explicit CHANNEL/BOTH writes) ──
+      if (wantsChannel) {
+        const cls = (listingsByProduct.get(productId) ?? [])
+          .filter((cl) => cl.listingStatus !== 'ENDED')
+          .filter((cl) => EXPLICIT_CHANNELS.has(cl.channel))
+          // IM.3.3 — FBA-backed listings are Amazon-managed: never write their
+          // local quantity (the old engine wrote it and relied on the dispatch
+          // guard to block only the marketplace push).
+          .filter((cl) => resolveListingFulfillmentMethod({
+            listingFulfillmentMethod: cl.fulfillmentMethod,
+            channel: cl.channel,
+            fbaBucket: fbaBucketByProduct.get(productId) ?? 0,
+            productFulfillmentMethod: metaByProduct.get(productId)?.fulfillmentMethod ?? null,
+          }) === 'FBM')
+          .filter((cl) => !row.channel || cl.channel === row.channel)
+          .filter((cl) => !row.marketplace || cl.marketplace === row.marketplace)
+        if (cls.length === 0) {
+          const filterDesc = [row.channel, row.marketplace].filter(Boolean).join('/')
+          const msg = `No active channel listing matches${filterDesc ? ` (${filterDesc})` : ''}`
+          if (target === 'CHANNEL') slot.error = msg
+          // BOTH: warehouse already applied — surfaced via channelApplied=false
+        } else {
+          for (const cl of cls) {
+            const current = listingEffectiveQty.get(cl.id) ?? cl.quantityOverride ?? cl.quantity ?? 0
+            const newQty = Math.max(0, mode === 'SET' ? row.quantity : current + row.quantity)
+            listingEffectiveQty.set(cl.id, newQty)
+            explicitTargets.set(cl.id, { plan, listing: cl })
+          }
+          slot.channelApplied = true
+        }
+      }
+    }
+
+    // Per-product explicit-listing id set (the cascade must not double-write
+    // these — the explicit channel value wins, exactly like the old engine's
+    // channel block overwriting the cascade's value).
+    const explicitIdsByProduct = new Map<string, Set<string>>()
+    for (const [listingId, t] of explicitTargets) {
+      const set = explicitIdsByProduct.get(t.plan.productId) ?? new Set<string>()
+      set.add(listingId)
+      explicitIdsByProduct.set(t.plan.productId, set)
+    }
+
+
+
+    // ── Plan: ONE cascade per product at FINAL state ────────────────────────────
+    for (const plan of plans.values()) {
+      if (!wantsWarehouse || plan.movements.length === 0) continue
+      const { productId } = plan
+      const meta = metaByProduct.get(productId)
+      const explicitIds = explicitIdsByProduct.get(productId) ?? new Set<string>()
+
+      // Recompute totalStock + pools in memory, substituting this import's
+      // final qty for the import-location row (recomputeProductTotalStock /
+      // cascadeQuantityToListings parity: WAREHOUSE-only pool, FBA bucket).
+      let total = 0
+      let warehouseAvailable = 0
+      let fbaBucket = 0
+      // SC.1b — routed-ledger rows (import-substituted) for the derivation core.
+      const scLedger: { locationCode: string; available: number; syncRoutes: string[] }[] = []
+      let sawImportRow = false
+      for (const lvl of levelsByProduct.get(productId) ?? []) {
+        const isImportRow = lvl.locationId === location.id && lvl.variationId === null
+        if (isImportRow) sawImportRow = true
+        const qty = isImportRow ? plan.finalQty : lvl.quantity
+        const avail = isImportRow ? plan.finalQty - plan.reserved : lvl.available
+        if (lvl.location?.type === 'WAREHOUSE') {
+          total += qty
+          warehouseAvailable += avail
+          scLedger.push({
+            locationCode: (lvl.location as { code?: string })?.code ?? '?',
+            available: avail,
+            syncRoutes: (lvl.location as { syncRoutes?: string[] })?.syncRoutes ?? [],
+          })
+        } else if (lvl.location?.type === 'AMAZON_FBA') {
+          fbaBucket += lvl.quantity
+        }
+      }
+      if (!sawImportRow && location.type === 'WAREHOUSE') {
+        // Level row doesn't exist yet — the chunk write will create it.
+        total += plan.finalQty
+        warehouseAvailable += plan.finalQty
+        scLedger.push({
+          locationCode: (location as { code?: string })?.code ?? '?',
+          available: plan.finalQty,
+          syncRoutes: (location as { syncRoutes?: string[] })?.syncRoutes ?? [],
+        })
+      }
+      plan.newTotalStock = total
+      const netChange = plan.finalQty - plan.baseQty
+
+      for (const listing of listingsByProduct.get(productId) ?? []) {
+        if (explicitIds.has(listing.id)) continue // explicit value wins (BOTH)
+        // AS.5 — cascade parity: same dispatch-guard-aligned resolver as
+        // cascadeQuantityToListings (FBA-signal veto for AMAZON listings).
+        const method = resolveCascadePushMethod({
+          listingFulfillmentMethod: listing.fulfillmentMethod,
+          channel: listing.channel,
+          fbaBucket,
+          productFulfillmentMethod: meta?.fulfillmentMethod ?? null,
+        })
+        // SC.1b — the derivation core is the quantity authority here too
+        // (routing + pause + policy + pin + FBA precedence, import-substituted
+        // ledger). PAUSED/UNCOUNTED/PINNED/FBA → no cascade write from import.
+        const scRes = resolveIntendedQuantity({
+          channel: listing.channel,
+          marketplace: listing.marketplace,
+          isFba: method === 'FBA',
+          offerClosed: !!(listing as { offerClosedAt?: Date | null }).offerClosedAt,
+          followMasterQuantity: listing.followMasterQuantity,
+          syncPaused: (listing as { syncPaused?: boolean }).syncPaused ?? false,
+          pinnedQuantity: listing.quantity,
+          stockBuffer: listing.stockBuffer ?? 0,
+          sourceLocationCodes: (listing as { sourceLocationCodes?: string[] }).sourceLocationCodes ?? [],
+          channelPolicy: policyFor(scPoliciesImport, listing.channel, listing.marketplace),
+          ledger: scLedger,
+        })
+        const newListingQty = scRes.kind === 'FOLLOW' ? scRes.quantity : null
+        if (newListingQty != null && newListingQty !== listing.quantity) {
+          plan.cascadeWrites.push({ listingId: listing.id, masterQuantity: total, quantity: newListingQty })
+          if (VALID_SYNC_TARGETS.has(listing.channel)) {
+            plan.queueRows.push({
+              id: randomUUID(),
+              kind: 'CASCADE',
+              productId,
+              data: {
+                productId,
+                channelListingId: listing.id,
+                targetChannel: listing.channel as any,
+                targetRegion: listing.region,
+                syncStatus: 'PENDING' as any,
+                syncType: 'QUANTITY_UPDATE',
+                holdUntil,
+                externalListingId: listing.externalListingId,
+                maxRetries: 3,
+                payload: {
+                  source: 'STOCK_MOVEMENT',
+                  productId,
+                  channel: listing.channel,
+                  marketplace: listing.marketplace,
+                  quantity: newListingQty,
+                  oldQuantity: listing.quantity,
+                  masterQuantity: total,
+                  stockBuffer: listing.stockBuffer ?? 0,
+                  reason: 'MANUAL_ADJUSTMENT',
+                  change: netChange,
+                  referenceType: 'BulkImport',
+                  referenceId: jobId,
+                },
+              },
+            })
+          }
+        } else if (listing.masterQuantity !== total) {
+          plan.snapshotWrites.push({ listingId: listing.id, masterQuantity: total })
+        }
+      }
+
+      // Shared-SKU eBay fan-out — once per product at the final pool value (the
+      // per-row engine enqueued one batch per row; the dispatcher's no-op guard
+      // made the extras harmless but wasteful).
+      const shared = membershipsByProduct.get(productId) ?? []
+      if (shared.length > 0) {
+        // SC.1b — per-membership derivation (followPool / routing / buffer /
+        // policy); non-FOLLOW members never fan out from imports either.
+        const scQty = new Map<string, number>()
+        const scEligible = shared.filter((m) => {
+          const r = resolveMembershipIntended({
+            marketplace: (m as { marketplace: string }).marketplace,
+            followPool: (m as { followPool?: boolean }).followPool ?? true,
+            stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
+            channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace),
+            ledger: scLedger,
+          })
+          if (r.kind !== 'FOLLOW') return false
+          scQty.set(`${(m as { itemId: string }).itemId} ${(m as { sku: string }).sku}`, r.quantity)
+          return true
+        })
+        for (const fanoutRow of buildSharedFanoutRows(scEligible as Array<SharedMembershipRow & { lastQtyPushed: number | null }>, (m) => scQty.get(`${m.itemId} ${m.sku}`) ?? 0, holdUntil)) {
           plan.queueRows.push({
             id: randomUUID(),
             kind: 'CASCADE',
             productId,
-            data: {
-              productId,
-              channelListingId: listing.id,
-              targetChannel: listing.channel as any,
-              targetRegion: listing.region,
-              syncStatus: 'PENDING' as any,
-              syncType: 'QUANTITY_UPDATE',
-              holdUntil,
-              externalListingId: listing.externalListingId,
-              maxRetries: 3,
-              payload: {
-                source: 'STOCK_MOVEMENT',
-                productId,
-                channel: listing.channel,
-                marketplace: listing.marketplace,
-                quantity: newListingQty,
-                oldQuantity: listing.quantity,
-                masterQuantity: total,
-                stockBuffer: listing.stockBuffer ?? 0,
-                reason: 'MANUAL_ADJUSTMENT',
-                change: netChange,
-                referenceType: 'BulkImport',
-                referenceId: jobId,
-              },
-            },
+            data: { ...fanoutRow, payload: fanoutRow.payload as unknown as Prisma.InputJsonValue } as Prisma.OutboundSyncQueueCreateManyInput,
           })
         }
-      } else if (listing.masterQuantity !== total) {
-        plan.snapshotWrites.push({ listingId: listing.id, masterQuantity: total })
       }
     }
 
-    // Shared-SKU eBay fan-out — once per product at the final pool value (the
-    // per-row engine enqueued one batch per row; the dispatcher's no-op guard
-    // made the extras harmless but wasteful).
-    const shared = membershipsByProduct.get(productId) ?? []
-    if (shared.length > 0) {
-      // SC.1b — per-membership derivation (followPool / routing / buffer /
-      // policy); non-FOLLOW members never fan out from imports either.
-      const scQty = new Map<string, number>()
-      const scEligible = shared.filter((m) => {
-        const r = resolveMembershipIntended({
-          marketplace: (m as { marketplace: string }).marketplace,
-          followPool: (m as { followPool?: boolean }).followPool ?? true,
-          stockBuffer: (m as { stockBuffer?: number }).stockBuffer ?? 0,
-          channelPolicy: policyFor(scPoliciesImport, 'EBAY', (m as { marketplace: string }).marketplace),
-          ledger: scLedger,
-        })
-        if (r.kind !== 'FOLLOW') return false
-        scQty.set(`${(m as { itemId: string }).itemId} ${(m as { sku: string }).sku}`, r.quantity)
-        return true
-      })
-      for (const fanoutRow of buildSharedFanoutRows(scEligible as Array<SharedMembershipRow & { lastQtyPushed: number | null }>, (m) => scQty.get(`${m.itemId} ${m.sku}`) ?? 0, holdUntil)) {
-        plan.queueRows.push({
-          id: randomUUID(),
-          kind: 'CASCADE',
-          productId,
-          data: { ...fanoutRow, payload: fanoutRow.payload as unknown as Prisma.InputJsonValue } as Prisma.OutboundSyncQueueCreateManyInput,
-        })
-      }
-    }
-  }
-
-  // ── Plan: explicit CHANNEL/BOTH writes — final effective value per listing ──
-  for (const [listingId, t] of explicitTargets) {
-    const finalQty = listingEffectiveQty.get(listingId)
-    if (finalQty === undefined) continue
-    // BOTH folds the cascade's masterQuantity snapshot into the explicit
-    // write; CHANNEL-only never touches masterQuantity (parity with IM.2).
-    const masterQuantity = target === 'BOTH' ? t.plan.newTotalStock : null
-    t.plan.explicitWrites.push({ listingId, quantity: finalQty, masterQuantity })
-    t.plan.queueRows.push({
-      id: randomUUID(),
-      kind: 'IMPORT',
-      productId: t.plan.productId,
-      data: {
+    // ── Plan: explicit CHANNEL/BOTH writes — final effective value per listing ──
+    for (const [listingId, t] of explicitTargets) {
+      const finalQty = listingEffectiveQty.get(listingId)
+      if (finalQty === undefined) continue
+      // BOTH folds the cascade's masterQuantity snapshot into the explicit
+      // write; CHANNEL-only never touches masterQuantity (parity with IM.2).
+      const masterQuantity = target === 'BOTH' ? t.plan.newTotalStock : null
+      t.plan.explicitWrites.push({ listingId, quantity: finalQty, masterQuantity })
+      t.plan.queueRows.push({
+        id: randomUUID(),
+        kind: 'IMPORT',
         productId: t.plan.productId,
-        channelListingId: listingId,
-        targetChannel: t.listing.channel as any,
-        targetRegion: t.listing.region,
-        syncStatus: 'PENDING' as any,
-        syncType: 'QUANTITY_UPDATE',
-        holdUntil,
-        externalListingId: t.listing.externalListingId,
-        maxRetries: 3,
-        payload: {
-          source: 'STOCK_IMPORT',
+        data: {
           productId: t.plan.productId,
-          channel: t.listing.channel,
-          marketplace: t.listing.marketplace,
-          quantity: finalQty,
-          oldQuantity: t.listing.quantity,
-          pinOverride,
-          reason: 'MANUAL_ADJUSTMENT',
-          referenceType: 'BulkImport',
-          referenceId: jobId,
-          // IM.3.4 — full before-state so a batch revert can restore the
-          // listing exactly (incl. pin state) instead of guessing.
-          prior: {
-            quantity: t.listing.quantity,
-            quantityOverride: t.listing.quantityOverride,
-            followMasterQuantity: t.listing.followMasterQuantity,
+          channelListingId: listingId,
+          targetChannel: t.listing.channel as any,
+          targetRegion: t.listing.region,
+          syncStatus: 'PENDING' as any,
+          syncType: 'QUANTITY_UPDATE',
+          holdUntil,
+          externalListingId: t.listing.externalListingId,
+          maxRetries: 3,
+          payload: {
+            source: 'STOCK_IMPORT',
+            productId: t.plan.productId,
+            channel: t.listing.channel,
+            marketplace: t.listing.marketplace,
+            quantity: finalQty,
+            oldQuantity: t.listing.quantity,
+            pinOverride,
+            reason: 'MANUAL_ADJUSTMENT',
+            referenceType: 'BulkImport',
+            referenceId: jobId,
+            // IM.3.4 — full before-state so a batch revert can restore the
+            // listing exactly (incl. pin state) instead of guessing.
+            prior: {
+              quantity: t.listing.quantity,
+              quantityOverride: t.listing.quantityOverride,
+              followMasterQuantity: t.listing.followMasterQuantity,
+            },
           },
         },
-      },
-    })
+      })
+    }
+
+    return [...plans.values()]
   }
 
   // ── Write: chunked transactions with set-based updates ──────────────────────
-  const planList = [...plans.values()]
   const failedProducts = new Set<string>()
   const CHUNK_PRODUCTS = Math.max(1, Math.min(200, Number(process.env.NEXUS_IMPORT_CHUNK_PRODUCTS) || 50))
 
@@ -1376,12 +1412,21 @@ async function executeApplyImport(args: {
     }
   }
 
+  // AE.1 — lock, read, plan and write one set of products in ONE transaction. The lock is
+  // the same one every stock writer takes first (stock-lock.ts), so a sale for a product in
+  // this chunk either commits before the chunk reads its stock or waits until it commits.
+  const applyProducts = async (tx: Prisma.TransactionClient, ids: string[]): Promise<ProductPlan[]> => {
+    await lockProductStock(tx, ids)
+    const chunkPlans = await planProducts(tx, ids)
+    await writeChunk(tx, chunkPlans)
+    return chunkPlans
+  }
+
   const skippedCount = slots.filter((s) => s.skipped).length
-  // Rows rejected by the integer precheck never enter a plan, so the chunk
-  // loop can't count them — fold them into the baseline so progress reaches
-  // total. (Planning-stage errors DO sit inside plan.rowSlots.)
-  const plannedSlots = new Set(planList.flatMap((p) => p.rowSlots))
-  const precheckFailed = slots.filter((s) => !s.skipped && s.error && !plannedSlots.has(s)).length
+  // Rows rejected by the integer precheck never reach a product plan, so the chunk
+  // loop can't count them — fold them into the baseline so progress reaches total.
+  // (Planning-stage errors are counted with their product's chunk.)
+  const precheckFailed = slots.filter((s) => !s.skipped && s.error).length
   let processedRows = skippedCount + precheckFailed
   let doneSucceeded = 0
   let doneFailed = precheckFailed
@@ -1402,44 +1447,47 @@ async function executeApplyImport(args: {
   await report()
 
   let cancelled = false
-  const writtenPlans = new Set<ProductPlan>()
-  for (let i = 0; i < planList.length; i += CHUNK_PRODUCTS) {
+  const committedPlans: ProductPlan[] = []
+  const doneProducts = new Set<string>()
+  for (let i = 0; i < productIds.length; i += CHUNK_PRODUCTS) {
     if (shouldAbort?.()) {
       cancelled = true
       break
     }
-    const chunk = planList.slice(i, i + CHUNK_PRODUCTS)
+    const chunkIds = productIds.slice(i, i + CHUNK_PRODUCTS)
     try {
-      await prisma.$transaction((tx) => writeChunk(tx, chunk), { timeout: 30_000, maxWait: 10_000 })
+      committedPlans.push(...await prisma.$transaction((tx) => applyProducts(tx, chunkIds), { timeout: 30_000, maxWait: 10_000 }))
     } catch (chunkErr) {
       // Isolate: retry each product alone so one bad product fails alone and
       // per-row error reporting survives (the batch tx rolled back atomically).
       logger.warn('stock-import: chunk write failed — retrying per product', {
-        products: chunk.length,
+        products: chunkIds.length,
         error: chunkErr instanceof Error ? chunkErr.message : String(chunkErr),
       })
-      for (const plan of chunk) {
+      for (const productId of chunkIds) {
         try {
-          await prisma.$transaction((tx) => writeChunk(tx, [plan]), { timeout: 15_000, maxWait: 10_000 })
+          committedPlans.push(...await prisma.$transaction((tx) => applyProducts(tx, [productId]), { timeout: 15_000, maxWait: 10_000 }))
         } catch (productErr) {
           const msg = productErr instanceof Error ? productErr.message : String(productErr)
-          failedProducts.add(plan.productId)
-          for (const slot of plan.rowSlots) {
+          failedProducts.add(productId)
+          const productSlots = slotsByProduct.get(productId) ?? []
+          for (const slot of productSlots) {
             if (!slot.error) {
               slot.error = msg
               slot.warehouseApplied = false
               slot.channelApplied = false
             }
           }
-          logger.error('stock-import: product write failed', { productId: plan.productId, sku: plan.sku, error: msg })
+          logger.error('stock-import: product write failed', { productId, sku: productSlots[0]?.row.resolvedSku ?? '?', error: msg })
         }
       }
     }
-    for (const plan of chunk) {
-      writtenPlans.add(plan)
-      processedRows += plan.rowSlots.length
-      doneSucceeded += plan.rowSlots.filter((s) => !s.error).length
-      doneFailed += plan.rowSlots.filter((s) => Boolean(s.error)).length
+    for (const productId of chunkIds) {
+      doneProducts.add(productId)
+      const productSlots = slotsByProduct.get(productId) ?? []
+      processedRows += productSlots.length
+      doneSucceeded += productSlots.filter((s) => !s.error).length
+      doneFailed += productSlots.filter((s) => Boolean(s.error)).length
     }
     await report()
     // Durable live progress — the poll endpoint reads this row when the
@@ -1453,10 +1501,10 @@ async function executeApplyImport(args: {
   }
   if (cancelled) {
     // Committed chunks stay committed; unwritten rows are closed honestly.
-    for (const plan of planList) {
-      if (writtenPlans.has(plan)) continue
-      failedProducts.add(plan.productId)
-      for (const slot of plan.rowSlots) {
+    for (const productId of productIds) {
+      if (doneProducts.has(productId)) continue
+      failedProducts.add(productId)
+      for (const slot of slotsByProduct.get(productId) ?? []) {
         if (!slot.error) {
           slot.error = 'Cancelled before write'
           slot.warehouseApplied = false
@@ -1468,7 +1516,7 @@ async function executeApplyImport(args: {
 
   // ── After: BullMQ enqueue (bounded + circuit-broken adds; DB rows stay
   // PENDING for the drain cron when Redis is down — work is never lost) ──────
-  const enqueueable = planList
+  const enqueueable = committedPlans
     .filter((p) => !failedProducts.has(p.productId))
     .flatMap((p) => p.queueRows)
   const ENQUEUE_BATCH = 25
@@ -1494,7 +1542,7 @@ async function executeApplyImport(args: {
 
   // ── After: stockout transitions — once per product (initial → final
   // available); a momentary mid-file dip no longer opens a phantom stockout.
-  for (const plan of planList) {
+  for (const plan of committedPlans) {
     if (failedProducts.has(plan.productId) || plan.movements.length === 0) continue
     try {
       await handleMovementStockoutTransition({
@@ -1514,7 +1562,7 @@ async function executeApplyImport(args: {
 
   // ── After: read-cache refresh — once per product, bounded concurrency,
   // fire-and-forget (ES.4 parity: the reconcile cron heals any miss). ────────
-  const refreshIds = planList
+  const refreshIds = committedPlans
     .filter((p) => !failedProducts.has(p.productId) && p.movements.length > 0)
     .map((p) => p.productId)
   if (refreshIds.length > 0) {
