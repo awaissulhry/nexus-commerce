@@ -6,7 +6,7 @@
  * end-to-end data path — everything except pixels.
  *
  * SKIPS (never fails) when no local API is reachable, so it is safe in CI and for a lane that has
- * not started one. Point it with `PES3_API` (default http://localhost:8090) and `PES3_SKU`.
+ * not started one — and when the API refuses it as NOT SIGNED IN, which it cannot fix (see beforeAll). Point it with `PES3_API` (default http://localhost:8090) and `PES3_SKU`.
  * Read-only: it issues one GET and writes nothing.
  */
 import { beforeAll, describe, expect, it } from 'vitest'
@@ -32,6 +32,8 @@ let page: ChannelScopePage | null = null
 let rows: ChannelSheetRow[] = []
 /** Set when the API answered at all. Distinguishes "nothing to test against" from "it is broken". */
 let apiReachable = false
+/** Set when the API answered 401 `unauthenticated`: reachable, but this suite has no session. */
+let signInRequired = false
 
 beforeAll(async () => {
   // 1. Is there an API here at all? Short timeout, and the ONLY condition that may skip.
@@ -62,6 +64,23 @@ beforeAll(async () => {
   const look = await fetch(`${API}/api/products/search?q=${encodeURIComponent(SKU)}&limit=200&sort=sku`, {
     signal: AbortSignal.timeout(20000),
   })
+  /*
+   * 2026-09-16 — a 401 `unauthenticated` is "cannot measure here", not "broken".
+   *
+   * With business profiles on (NEXUS_WORKSPACES_ENABLED=1) the API refuses every request that
+   * carries no session, by design, and this suite has no way to sign in. Thrown, it failed every
+   * push from a machine whose local API had profiles on — for every session, whatever they
+   * changed. So that ONE answer skips, loudly and with its reason; every other refusal, including
+   * a 401 with any other code, still throws below.
+   */
+  if (look.status === 401) {
+    const refusal = (await look.clone().json().catch(() => ({}))) as { code?: string }
+    if (refusal.code === 'unauthenticated') {
+      signInRequired = true
+      console.warn(`[pes3 live] ${API} requires sign-in (business profiles on) — skipping; this suite cannot sign in. Run it against an API started without NEXUS_WORKSPACES_ENABLED=1.`)
+      return
+    }
+  }
   if (!look.ok) throw new Error(`product lookup failed: HTTP ${look.status}`)
   // `/api/products/search` answers `{items}`; `/api/products` answers `{products}`. Reading the
   // wrong key does not throw — it silently finds nothing, which used to read as "no local API"
@@ -97,6 +116,7 @@ function live(name: string, fn: (ctx: import('vitest').TestContext) => void | Pr
     // Only a genuinely absent API skips. If the API answered but the read failed, `beforeAll`
     // already threw and this never runs — a broken read must never report as a tidy skip.
     if (!apiReachable) return ctx.skip(`No local API is reachable at ${API}`)
+    if (signInRequired) return ctx.skip(`The API at ${API} requires sign-in (business profiles on); this suite cannot sign in`)
     return fn(ctx)
   })
 }
