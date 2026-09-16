@@ -1466,6 +1466,7 @@ Nothing committed. Production untouched.
 | `46a70bad3` | studio: keeps `/w/<id>` on the first cursor write |
 | `2c84f7e5e` | checks: test-mode pin, model-ownership, policy parity, profiles-ON ratchet |
 | `633dfc34e` | notifications: the inbox query moved from the route into a service |
+| `431856f0e` | studio live test: skips when the local API needs sign-in (Owner's decision) |
 
 ### 23.1 Checked before committing
 
@@ -1493,6 +1494,19 @@ Nothing committed. Production untouched.
 `notifications.routes.ts` went from 5 to 6 direct database calls. The fix is `633dfc34e` —
 the query moved into `services/notification-inbox.service.ts` (route 6 → 3), with 5 tests
 proven by mutation. The baseline was not raised. Nothing reached GitHub or production.
+
+🔴 **The second push was refused too**, by `apps/web` unit tests:
+`live-channel-scope.vitest.test.ts` calls the local API without a session, and the local API
+has business profiles ON, so it answered 401 `unauthenticated` and the suite threw. That
+blocked every push from this machine, for every session. Owner's decision: that one answer
+means "cannot measure here" — `431856f0e` skips with a named reason, exactly as it already did
+with no API running. Proven on a stub API: 401 `unauthenticated` skips; 401 with another code
+fails; 403 fails; no API skips. ⚠ On a machine with profiles on, that suite now verifies
+nothing until it can sign in.
+
+Everything after the web tests was then run on its own before pushing again: web build, API
+build, RBAC coverage (2,697 routes, 0 unmapped), security tests 134/134, profiles-ON ratchet
+(739 files, none new, none worse) — all pass.
 
 ### 23.2 What pushing does to production
 
