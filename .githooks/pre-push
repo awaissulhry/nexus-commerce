@@ -468,13 +468,15 @@ npm run test:security --workspace=@nexus/api > /tmp/sec-tests.log 2>&1 || {
 grep -E "Tests +[0-9]+ passed" /tmp/sec-tests.log | tail -1 || true
 echo "✓ Security tests passed"
 
-# AE.1 (2026-09-16) — the stock race test needs a MULTI-connection PostgreSQL (the normal test
-# database queues every transaction, so a race cannot happen there and the test would pass
-# regardless). The runner starts a throwaway container, fails if the suite skipped or any arm
-# failed, and prints a named SKIP (exit 0) only when Docker or a PostgreSQL 17 image is absent. ~5-30s.
-echo "→ Running the stock race test on a throwaway PostgreSQL (AE.1)..."
-node scripts/run-stock-race-test.mjs || {
-  echo "❌ stock race test FAILED — see message above"
+# AE.1 (2026-09-16) + AE.3 (2026-09-17, R-AE-16) — two suites need a MULTI-connection PostgreSQL (the
+# normal test database queues every transaction): the stock race test (a race cannot happen on one
+# connection, so it would pass regardless) and the end-to-end shared-product copy (the transfer engine's
+# apply needs a second connection). The runner starts one throwaway container, runs both files one after
+# another, and fails if either file skipped, failed, or passed a different number of tests. It prints a
+# named SKIP (exit 0) only when Docker or a PostgreSQL 17 image is absent. ~10-40s.
+echo "→ Running the real-PostgreSQL tests on a throwaway container (AE.1 stock race, AE.3 copy)..."
+node scripts/run-real-postgres-tests.mjs || {
+  echo "❌ real-PostgreSQL tests FAILED — see message above"
   exit 1
 }
 
